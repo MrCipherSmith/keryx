@@ -3,17 +3,46 @@
   "id": "154",
   "slug": "opentui-reusable-modal-and-tab-host",
   "title": "OpenTUI reusable modal and tab host",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-15T18:55:25.962Z",
-  "updatedAt": "2026-08-15T19:11:49.394Z",
+  "updatedAt": "2026-08-15T19:13:50.334Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:646712fbbb4c62afb3742e45a953c6e0085f941531e19173d5aa9a52a88eed07",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-15T19:13:49.853Z",
+      "note": "bun test src/tui/modal-host.test.ts AC1: titled panel+dim backdrop (opacity<1, width/height < renderer), slash menu stays closed on / while overlayActive"
+    },
+    "AC2": {
+      "at": "2026-08-15T19:13:49.942Z",
+      "note": "AC2 test: initialTab b mounts only b; left arrow unmounts b (cleanup runs) and mounts a"
+    },
+    "AC3": {
+      "at": "2026-08-15T19:13:50.020Z",
+      "note": "AC3 test: sequential openModal reuses one modal-backdrop instance; previous onClose runs; countById backdrop/panel === 1"
+    },
+    "AC4": {
+      "at": "2026-08-15T19:13:50.098Z",
+      "note": "AC4 test: Esc runs onClose once, restores composer focus+draft, overlayActive false, backdrop hidden"
+    },
+    "AC5": {
+      "at": "2026-08-15T19:13:50.177Z",
+      "note": "AC5 test always runs without OpenTUI: openModal(undefined) returns undefined and does not call renderTab"
+    },
+    "AC6": {
+      "at": "2026-08-15T19:13:50.258Z",
+      "note": "7 headless tests in src/tui/modal-host.test.ts via createTestRenderer; no TTY required"
+    },
+    "AC7": {
+      "at": "2026-08-15T19:13:50.334Z",
+      "note": "static scan of modal-host.ts + agent-commands.ts: no from '@opentui/core', no session-info; no-optional-imports.test.ts pass"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/289"
   },
   "tasks": [
     {
@@ -95,7 +124,7 @@
       "id": "T6",
       "title": "code-verifier + review-orchestrator; fix until clean",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -103,13 +132,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Open draft PR feat/tui-modal-tabs that can pass review",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -117,7 +147,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -173,6 +204,56 @@
       "at": "2026-08-15T19:11:49.394Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-15T19:13:36.890Z",
+      "event": "task-done",
+      "detail": "T6: code-verifier + review-orchestrator; fix until clean"
+    },
+    {
+      "at": "2026-08-15T19:13:36.965Z",
+      "event": "task-done",
+      "detail": "T7: Open draft PR feat/tui-modal-tabs that can pass review"
+    },
+    {
+      "at": "2026-08-15T19:13:39.793Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/289"
+    },
+    {
+      "at": "2026-08-15T19:13:49.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/tui/modal-host.test.ts AC1: titled panel+dim backdrop (opacity<1, width/height < renderer), slash menu stays closed on / while overlayActive"
+    },
+    {
+      "at": "2026-08-15T19:13:49.942Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: AC2 test: initialTab b mounts only b; left arrow unmounts b (cleanup runs) and mounts a"
+    },
+    {
+      "at": "2026-08-15T19:13:50.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: AC3 test: sequential openModal reuses one modal-backdrop instance; previous onClose runs; countById backdrop/panel === 1"
+    },
+    {
+      "at": "2026-08-15T19:13:50.098Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: AC4 test: Esc runs onClose once, restores composer focus+draft, overlayActive false, backdrop hidden"
+    },
+    {
+      "at": "2026-08-15T19:13:50.177Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: AC5 test always runs without OpenTUI: openModal(undefined) returns undefined and does not call renderTab"
+    },
+    {
+      "at": "2026-08-15T19:13:50.258Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: 7 headless tests in src/tui/modal-host.test.ts via createTestRenderer; no TTY required"
+    },
+    {
+      "at": "2026-08-15T19:13:50.334Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: static scan of modal-host.ts + agent-commands.ts: no from '@opentui/core', no session-info; no-optional-imports.test.ts pass"
     }
   ]
 }

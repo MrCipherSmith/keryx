@@ -13,3 +13,13 @@
 - 2026-08-15T19:11:49.223Z - task-done: T2: Implement per plan
 - 2026-08-15T19:11:49.306Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-15T19:11:49.394Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-15T19:13:36.890Z - task-done: T6: code-verifier + review-orchestrator; fix until clean
+- 2026-08-15T19:13:36.965Z - task-done: T7: Open draft PR feat/tui-modal-tabs that can pass review
+- 2026-08-15T19:13:39.793Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/289
+- 2026-08-15T19:13:49.854Z - ac-confirmed: AC1: bun test src/tui/modal-host.test.ts AC1: titled panel+dim backdrop (opacity<1, width/height < renderer), slash menu stays closed on / while overlayActive
+- 2026-08-15T19:13:49.942Z - ac-confirmed: AC2: AC2 test: initialTab b mounts only b; left arrow unmounts b (cleanup runs) and mounts a
+- 2026-08-15T19:13:50.020Z - ac-confirmed: AC3: AC3 test: sequential openModal reuses one modal-backdrop instance; previous onClose runs; countById backdrop/panel === 1
+- 2026-08-15T19:13:50.098Z - ac-confirmed: AC4: AC4 test: Esc runs onClose once, restores composer focus+draft, overlayActive false, backdrop hidden
+- 2026-08-15T19:13:50.177Z - ac-confirmed: AC5: AC5 test always runs without OpenTUI: openModal(undefined) returns undefined and does not call renderTab
+- 2026-08-15T19:13:50.258Z - ac-confirmed: AC6: 7 headless tests in src/tui/modal-host.test.ts via createTestRenderer; no TTY required
+- 2026-08-15T19:13:50.334Z - ac-confirmed: AC7: static scan of modal-host.ts + agent-commands.ts: no from '@opentui/core', no session-info; no-optional-imports.test.ts pass
