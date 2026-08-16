@@ -3,9 +3,9 @@
   "id": "162",
   "slug": "tui-clickable-subagent-list-and-inspecto",
   "title": "TUI: clickable subagent list and inspector modal",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-16T16:01:00.065Z",
-  "updatedAt": "2026-08-16T16:48:31.967Z",
+  "updatedAt": "2026-08-16T16:55:47.491Z",
   "source": {
     "type": "description",
     "ref": null
@@ -195,6 +195,29 @@
       "at": "2026-08-16T16:48:31.967Z",
       "event": "ac-confirmed",
       "detail": "AC6: Headless tests for store/list/inspector/spawn; no-optional-imports passes on new modules."
+    },
+    {
+      "at": "2026-08-16T16:55:16.478Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T16:55:19.484Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-16T16:55:45.211Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/303 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-16T16:55:45.301Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T16:55:47.491Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
