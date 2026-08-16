@@ -3,17 +3,38 @@
   "id": "161",
   "slug": "slate-phase-3-consult-surface-and-determ",
   "title": "Slate Phase 3: Consult surface and deterministic entry",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-16T14:38:57.193Z",
-  "updatedAt": "2026-08-16T17:12:36.002Z",
+  "updatedAt": "2026-08-16T18:35:16.422Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:c5fc9de73f164cc6b97ad78d90e51544d8bad10cf6a11825892b680a8471c5a2",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T18:34:32.500Z",
+      "note": "goal-command.test.ts: 'AC1: /goal --workspace <invalid id> rejects fail-closed' — no slate created, turn never runs, provider never called"
+    },
+    "AC2": {
+      "at": "2026-08-16T18:34:32.601Z",
+      "note": "goal-command.test.ts: 'AC2: /goal with no --workspace never creates a workspace' — slate opens, workspaceId unset, no workspaces dir created"
+    },
+    "AC3": {
+      "at": "2026-08-16T18:34:32.692Z",
+      "note": "agent.test.ts SLATE-11 block: unattended ask_user/budget-exhaustion emits TerminalState (reason ask_user_unanswerable/budget_exhausted) and stops cleanly; F-003 fix confirmed batch-stop on first ask_user in multi-call round"
+    },
+    "AC4": {
+      "at": "2026-08-16T18:34:32.786Z",
+      "note": "agent.test.ts: Anchors block injected into history on fresh slate open transition (false->true), mid-session, with no explicit model tool call — verified end-to-end via runAgentTurnCore's open-trigger path"
+    },
+    "AC5": {
+      "at": "2026-08-16T18:34:32.874Z",
+      "note": "slate-tool.test.ts: Course/Seeds reachable only via slate_read/slate_write_seed tool invocations; renderAnchorsBlock injection carries only Anchors, never Course/Seeds content"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/304"
   },
   "tasks": [
     {
@@ -310,6 +331,45 @@
       "at": "2026-08-16T17:12:36.002Z",
       "event": "task-done",
       "detail": "T12: code-verifier + review-orchestrator; remediate; draft PR"
+    },
+    {
+      "at": "2026-08-16T18:34:32.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: goal-command.test.ts: 'AC1: /goal --workspace <invalid id> rejects fail-closed' — no slate created, turn never runs, provider never called"
+    },
+    {
+      "at": "2026-08-16T18:34:32.601Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: goal-command.test.ts: 'AC2: /goal with no --workspace never creates a workspace' — slate opens, workspaceId unset, no workspaces dir created"
+    },
+    {
+      "at": "2026-08-16T18:34:32.692Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent.test.ts SLATE-11 block: unattended ask_user/budget-exhaustion emits TerminalState (reason ask_user_unanswerable/budget_exhausted) and stops cleanly; F-003 fix confirmed batch-stop on first ask_user in multi-call round"
+    },
+    {
+      "at": "2026-08-16T18:34:32.786Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agent.test.ts: Anchors block injected into history on fresh slate open transition (false->true), mid-session, with no explicit model tool call — verified end-to-end via runAgentTurnCore's open-trigger path"
+    },
+    {
+      "at": "2026-08-16T18:34:32.874Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: slate-tool.test.ts: Course/Seeds reachable only via slate_read/slate_write_seed tool invocations; renderAnchorsBlock injection carries only Anchors, never Course/Seeds content"
+    },
+    {
+      "at": "2026-08-16T18:35:13.767Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/304 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-16T18:35:13.864Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T18:35:16.422Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
