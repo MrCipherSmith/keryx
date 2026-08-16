@@ -5,6 +5,27 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.38] — 2026-08-16
+
+### Added
+
+- **Managed flow PR completion lifecycle.** The flow orchestrator now offers a
+  complete PR path: create the PR, run review and fix iterations, merge into
+  the recorded base branch, and close the flow only after the merge.
+- **Bounded review recovery.** After six unsuccessful review/fix attempts, the
+  orchestrator must enrich context, diagnose the cycle, and choose a materially
+  different fix strategy or split the work into narrower tasks.
+- **Clickable TUI subagent inspector (flow 162, #303).** The sidebar lists
+  every spawned child for the session (running / done / failed) with no
+  `… +N more`. Clicking a row opens the shared modal host on Work + Meta:
+  task, live tool/reasoning/text log, model, status, and elapsed. Finished
+  children stay inspectable until the TUI session ends.
+
+### Changed
+
+- Flow completion is now explicitly PR-and-merge-gated; an unmerged PR or a
+  direct commit without a PR cannot transition a managed flow to `done`.
+
 ### Fixed
 
 - **TUI/readline tool and approval parity.** One factory builds the

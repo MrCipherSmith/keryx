@@ -81,12 +81,17 @@ flowchart TD
   G --> H{"All tasks, checks, review OK?"}
   H -- "no" --> F
   H -- "yes" --> I{"Ask user how to finish"}
-  I -- "draft PR" --> J["create or confirm draft PR"]
-  J --> K["keryx flow implemented --pr"]
-  K --> L["confirm AC evidence"]
-  L --> M["keryx flow complete"]
-  I -- "verified handoff" --> N["report completion; keep flow in-progress"]
-  I -- "keep open" --> O["journal next steps; keep flow in-progress"]
+  I -- "create PR" --> J["create PR and run review/fix loop"]
+  J --> K{"review clean, PR mergeable?"}
+  K -- "no, attempts < 6" --> J
+  K -- "no, attempts = 6" --> R["enrich context and change fix strategy"]
+  R --> J
+  K -- "yes" --> L["merge PR into recorded base branch"]
+  L --> M["keryx flow implemented --pr"]
+  M --> N["confirm AC evidence"]
+  N --> O["keryx flow complete"]
+  I -- "verified handoff" --> P["report completion; keep flow in-progress"]
+  I -- "keep open" --> Q["journal next steps; keep flow in-progress"]
 ```
 
 ## Phase 0: Route And Resume
@@ -107,6 +112,9 @@ keryx flow init --title "<short formalized problem>"
 ```
 
 5. Run `keryx flow status <id>` and read the flow package.
+6. Record the git base branch from which the flow branch was created in
+   `context.md` and `journal.md`; the PR must later be merged into this exact
+   branch.
 
 ## Phase 1: Initialize The Flow Package
 
@@ -288,7 +296,7 @@ When tasks, verification and review are complete:
 ```text
 How should this flow end?
 
-  A) Create a draft PR and complete the managed flow
+  A) Create a PR, review it, merge it into the flow's base branch, and complete the managed flow
   B) Finish with a verified handoff and no PR
   C) Keep the flow open for more work
 
@@ -297,11 +305,34 @@ How should this flow end?
 
 3. Follow the selected outcome:
 
-- **A - Draft PR:** create or confirm a draft PR in the author's name, then
-  record it through the CLI:
+- **A - Create PR and merge:** create or confirm a PR in the author's name.
+  Preserve the base branch recorded during initialization. Do not mark the
+  flow implemented or complete before the PR is merged into that branch.
+
+### PR review/fix loop
+
+1. Run the relevant `review-orchestrator` checks against the PR and current
+   branch state.
+2. If findings or required check failures remain, create or update a flow fix
+   task, dispatch `task-implementer`, push the fix, and run review again.
+3. Allow at most six review/fix attempts for the current approach. Count an
+   attempt when review/check results are available, including a clean result.
+4. If attempt six is not clean, do not blindly repeat the same loop. Enrich
+   context from the findings, affected graph, relevant wiki, and
+   health/testing artifacts; identify the likely cycle cause; choose a
+   materially different fix strategy or split the work into narrower tasks;
+   record the decision in `journal.md`; then continue with the enriched
+   context.
+5. Never merge while findings or required checks remain unresolved. If the
+   re-planned approach still cannot produce a mergeable PR, leave the flow
+   `in-progress` and report the blocker instead of forcing completion.
+
+When the PR is mergeable and required checks are green, merge it into the
+recorded base branch (the branch from which the flow branch was created),
+verify that the merge completed, and only then record it through the CLI:
 
 ```bash
-keryx flow implemented <id> --pr <draft-pr-url>
+keryx flow implemented <id> --pr <pr-url>
 ```
 
 - **B - Verified handoff without PR:** do not create a PR and do not run
@@ -313,7 +344,8 @@ keryx flow implemented <id> --pr <draft-pr-url>
 - **C - Keep open:** record remaining or deferred work in `journal.md`, report
   the current verification state, and leave the flow `in-progress` for resume.
 
-Only continue to Phase 5 after the user selects A and the draft PR is recorded.
+Only continue to Phase 5 after the user selects A, the review/fix loop is
+clean, and the merge into the recorded base branch is confirmed.
 
 ## Phase 5: Complete The Flow
 
@@ -330,6 +362,10 @@ Then run:
 ```bash
 keryx flow complete <id>
 ```
+
+Completion is allowed only after the PR merge has been confirmed. The merge
+target must be the base branch captured when the flow was created; do not
+silently retarget or close against another branch.
 
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.

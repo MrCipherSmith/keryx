@@ -24,8 +24,8 @@ data and status.
 6. Hand off to flow-complete (complete.md).
 
 Completion is strictly PR-and-merge-gated - there is **no bypass**. Work that
-shipped straight to the default branch (direct commits, no PR) **cannot be
-completed through the flow**. A PR that exists but has not been merged also
+shipped straight to the default branch (direct commits, no PR) **cannot** be
+completed through the flow. A PR that exists but has not been merged also
 cannot be completed. A flow whose implementation already merged without a PR
 stays open by design; record it as a legacy exception in journal.md rather than
 forcing a status change.
