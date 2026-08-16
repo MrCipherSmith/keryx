@@ -794,6 +794,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
   });
 
   expect(toolNames).toContain("web_search");
+  expect(toolNames).toContain("web_fetch");
 });
 
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----

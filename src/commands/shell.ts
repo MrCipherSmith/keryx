@@ -28,17 +28,11 @@ import type {
   ProviderPort,
 } from "../harness/provider/types";
 import { buildOrientation } from "../ctx/orient";
-import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
-import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
-import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
-import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
-import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
-import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
-import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builtin/workspace-context-tool";
+import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -54,6 +48,7 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { loadShellPermissions, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import {
   collapseToolOutput,
   colorEnabled,
@@ -118,6 +113,7 @@ const CONNECT_GUIDANCE = [
 const HELP_TEXT = [
   renderCommandHelp("chat"),
   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
+  "Context counter is an estimate (~4 chars/token); chat has no provider usage hook.",
   "",
 ].join("\n");
 
@@ -144,7 +140,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
 export function readlineAgentHelpText(): string {
   return (
     "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-    "graph_affected, memory_search, shell_exec (approval).\n" +
+    "graph_affected, memory_search, web_fetch, web_search, shell_exec (approval).\n" +
     renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
@@ -830,6 +826,10 @@ async function runAgentRepl(
     }
   };
   const searchProviderController = createDefaultSearchProviderController();
+  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  const fingerprintAtStart = shellPermissionsFingerprint();
+  let permissionMigrationShown = false;
+  let permissionTamperShown = false;
 
   // A SINGLE line consumer shared by the main loop and the approval prompt, so an
   // approval read (mid-turn, while the main loop is suspended) never races it.
@@ -913,28 +913,68 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input) => {
+    requestApproval: async (_tool, input, meta) => {
       stopSpinner();
-      let command = input;
-      try {
-        const parsed: unknown = JSON.parse(input);
-        if (parsed !== null && typeof parsed === "object" && typeof (parsed as { command?: unknown }).command === "string") {
-          command = (parsed as { command: string }).command;
+      const evaled = evaluateShellApproval({
+        inputJson: input,
+        ...(meta !== undefined ? { meta } : {}),
+        sessionAllow: sessionShellAllow,
+        fingerprintAtStart,
+      });
+      if (!permissionMigrationShown && evaled.rejected.length > 0) {
+        permissionMigrationShown = true;
+        out(
+          `${GUTTER}${style.yellow(
+            `⚠ ${evaled.rejected.length} saved shell permission(s) are no longer honoured`,
+          )}\n`,
+        );
+        for (const rej of evaled.rejected) {
+          out(`${GUTTER}${style.dim(`    “${rej.pattern}” — ${rej.reason}`)}\n`);
         }
-      } catch {
-        // show the raw input if it is not JSON
       }
-      // MP-6: advisory metaproject context (blast radius + related memory) before
-      // the prompt. Best-effort — never blocks or changes the default-deny gate.
-      const context = await buildApprovalContext(metaprojectPort, command);
+      if (!permissionTamperShown && evaled.tampered) {
+        permissionTamperShown = true;
+        out(
+          `${GUTTER}${style.red(
+            "⚠ saved shell permissions changed outside this approval UI — review before trusting auto-approve",
+          )}\n`,
+        );
+      }
+      if (evaled.autoApprove) {
+        out(`${GUTTER}${style.dim(`✓ auto-approved shell: ${evaled.command}`)}\n`);
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
+      const context = await buildApprovalContext(metaprojectPort, evaled.command);
       if (context.length > 0) {
         out(`\n${indentBlock(style.dim(context), GUTTER)}`);
       }
-      out(`\n${GUTTER}${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
-      const answer = (await readLine()) ?? "";
-      const approved = /^y(es)?$/i.test(answer.trim());
-      out(approved ? style.green("approved\n") : style.red("denied\n"));
-      return approved;
+      for (const hint of formatShellApprovalHints(evaled)) {
+        out(`${GUTTER}${style.yellow(hint)}\n`);
+      }
+      const rememberable = !evaled.destructive && !evaled.credentials;
+      const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
+      out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
+      const answer = ((await readLine()) ?? "").trim();
+      const always = rememberable && /^a(lways)?$/i.test(answer);
+      const approved = always || /^y(es)?$/i.test(answer);
+      if (always && approved) {
+        const stored = rememberExactShellGrant(evaled.command, sessionShellAllow);
+        out(
+          stored.length > 0
+            ? style.green(`approved · remembered “${stored}”\n`)
+            : style.yellow("approved once · pattern cannot be remembered\n"),
+        );
+      } else {
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+      }
+      if (!approved) {
+        return false;
+      }
+      return meta?.fingerprint !== undefined
+        ? { approved: true, fingerprint: meta.fingerprint }
+        : true;
     },
     onToolCall: (name, input) => {
       stopSpinner();
@@ -1502,17 +1542,12 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools: [
-          ...builtinReadOnlyTools(cwd),
-          ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
-          webFetchTool(),
-          webSearchTool(searchProviderController),
-          shellExecTool(cwd),
-          workspaceOverviewTool(cwd),
-          workspaceReadTool(cwd),
-          createAskUserTool(invokeAskUserHost),
+        tools: buildInteractiveAgentTools({
+          cwd,
+          metaprojectPort,
+          searchController: searchProviderController,
           spawnTool,
-        ],
+        }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,
@@ -1687,16 +1722,12 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: [
-          ...builtinReadOnlyTools(agentCwd),
-          ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
-          webSearchTool(searchProviderController),
-          shellExecTool(agentCwd),
-          workspaceOverviewTool(agentCwd),
-          workspaceReadTool(agentCwd),
-          createAskUserTool(invokeAskUserHost),
+        tools: buildInteractiveAgentTools({
+          cwd: agentCwd,
+          metaprojectPort,
+          searchController: searchProviderController,
           spawnTool,
-        ],
+        }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,

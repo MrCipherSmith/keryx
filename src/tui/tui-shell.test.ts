@@ -24,6 +24,7 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
   selectBoxHeight,
@@ -450,10 +451,21 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   setup.renderer.destroy();
 });
 
+test("resolveSidebarMetadata reads branch via the injected git runner", () => {
+  const git = (args: string[], _cwd: string): string | undefined => {
+    if (args[0] === "rev-parse") {
+      return "feature/sidebar-ui";
+    }
+    return undefined;
+  };
+  expect(resolveSidebarMetadata("/tmp/unused", git).branch).toBe("feature/sidebar-ui");
+  expect(resolveSidebarMetadata("/tmp/unused", () => undefined).branch).toBeUndefined();
+  expect(resolveSidebarMetadata("/tmp/unused", () => "HEAD").branch).toBeUndefined();
+});
+
 otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-tui-git-"));
-  Bun.spawnSync(["git", "init", "-q"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "checkout", "-b", "feature/sidebar-ui"], { cwd, stdout: "ignore", stderr: "ignore" });
+  Bun.spawnSync(["git", "init", "-q", "-b", "feature/sidebar-ui"], { cwd, stdout: "ignore", stderr: "ignore" });
   Bun.spawnSync(["git", "config", "user.name", "Keryx Test"], { cwd, stdout: "ignore", stderr: "ignore" });
   Bun.spawnSync(["git", "config", "user.email", "test@example.com"], { cwd, stdout: "ignore", stderr: "ignore" });
   await writeFile(join(cwd, "readme.md"), "hello", "utf8");
