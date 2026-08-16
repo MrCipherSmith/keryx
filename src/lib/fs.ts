@@ -11,6 +11,11 @@ export async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+/** Generic Node fs-error predicate: true when `error` is an ENOENT (not found). */
+export function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
 export function toPosix(value: string): string {
   return value.replace(/\\/g, "/");
 }

@@ -2,9 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FwkReadService, resolvePolicySelectionSafely, diagnosePolicyReadiness } from "./fwk-service";
+import { FwkReadService, createLocalFwkReadService, resolvePolicySelectionSafely, diagnosePolicyReadiness } from "./fwk-service";
 import { createSacAuthorizationServer, type SacVerifiedPrincipal } from "./index";
 import { verifyAccessReceiptLedger } from "./receipt-integrity";
+import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 
 const stamp = "2026-08-11T00:00:00Z";
 const source = async () => ({
@@ -446,4 +447,115 @@ test("phase-6b readiness: a pinned-digest mismatch fails the artifact gate, not 
   expect(report.candidateWouldActivate).toBe(false);
   expect(report.steps.some((step) => step.step === "digest-format" && step.status === "pass")).toBe(true);
   expect(report.steps.some((step) => step.step === "baseline-artifact" && step.status === "fail")).toBe(true);
+});
+
+// SLATE-3 bundled fix / AC-5: a flow-read failure inside
+// createLocalFwkReadService's `source` composition (deleted/malformed/
+// permission-denied flow resource) must yield `work.state === "unbound"`,
+// never an uncaught rejection. This exercises the real local composition end
+// to end (real WorkspaceService + real workspace.json on disk), not a
+// synthetic `source` stub, since the bug lived specifically inside
+// fwk-service.ts's own `work` IIFE.
+test("a malformed-JSON flow resource yields work.state \"unbound\" from createLocalFwkReadService.overview, not an uncaught rejection", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-local-flow-"));
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const strictGuard = { mode: "strict" as const, availability: "available" as const, decision: "pass" as const, policyRevision: "local-offline-v1" };
+  const workspaces = new WorkspaceService({ workspaceRoot: root, authorizationServer, strictGuard });
+  await workspaces.create({ request: undefined, requestCorrelationId: "fwk-local-flow-correlation-0001", id: "workspace-a", title: "Local flow read" });
+  await mkdir(path.join(root, "flows"), { recursive: true });
+  // Not valid JSON: JSON.parse throws inside the `work` IIFE's try/catch.
+  await writeFile(path.join(root, "flows", "broken.json"), "{ this is not valid json");
+  await workspaces.addResource({ request: undefined, requestCorrelationId: "fwk-local-flow-correlation-0001", workspaceId: "workspace-a", resource: { kind: "flow", uri: "./flows/broken.json" } });
+
+  const service = createLocalFwkReadService(root);
+  const result = await service.overview({ workspaceId: "workspace-a", request: undefined, requestCorrelationId: "fwk-local-flow-correlation-0002", budget: { maxItems: 10, maxTokens: 1000 } });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.manifest.work).toEqual({ state: "unbound" });
+});
+
+test("a flow resource deleted after registration also yields work.state \"unbound\", never an uncaught rejection", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-local-flow-deleted-"));
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const strictGuard = { mode: "strict" as const, availability: "available" as const, decision: "pass" as const, policyRevision: "local-offline-v1" };
+  const workspaces = new WorkspaceService({ workspaceRoot: root, authorizationServer, strictGuard });
+  await workspaces.create({ request: undefined, requestCorrelationId: "fwk-local-flow-deleted-correlation-0001", id: "workspace-a", title: "Local flow read" });
+  await mkdir(path.join(root, "flows"), { recursive: true });
+  const flowPath = path.join(root, "flows", "gone.json");
+  await writeFile(flowPath, JSON.stringify({ id: "flow-1", status: "in-progress", updatedAt: stamp, tasks: [] }));
+  await workspaces.addResource({ request: undefined, requestCorrelationId: "fwk-local-flow-deleted-correlation-0001", workspaceId: "workspace-a", resource: { kind: "flow", uri: "./flows/gone.json" } });
+  await unlink(flowPath);
+
+  const service = createLocalFwkReadService(root);
+  const result = await service.overview({ workspaceId: "workspace-a", request: undefined, requestCorrelationId: "fwk-local-flow-deleted-correlation-0002", budget: { maxItems: 10, maxTokens: 1000 } });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.manifest.work).toEqual({ state: "unbound" });
+});
+
+// Review finding 2: the actor's role being revoked strictly between the
+// manifest read and a resource's re-authorization-at-use
+// (`WorkspaceService.readResourceForActor`'s own documented TOCTOU-closing
+// re-check) must deny the WHOLE overview, never surface as a partial
+// disclosure where facts/knowHow already resolved successfully stay visible
+// and only `work` quietly becomes "unbound". `beforeResourceOpen` fires once
+// per `readResourceForActor` call, in the exact gap between its first and
+// second (re-)authorization check — the real window the finding names. The
+// facts read (the 1st call) is left untouched so it legitimately succeeds;
+// revoking the actor's membership on the 2nd call (the flow resource)
+// reproduces the race precisely where the bug lived: inside the local
+// `work` IIFE's own catch, which used to swallow `WorkspaceServiceError`
+// unconditionally instead of only content-class failures.
+test("an actor's role revoked strictly between the flow resource's two re-authorization checks denies the whole overview, not just \"work: unbound\"", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-local-flow-revoked-"));
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const actor = await authorizationServer.actorContextFor(undefined, "fwk-local-flow-revoked-correlation-0000");
+  if (!actor) throw new Error("test setup: local authorization server did not issue an actor");
+
+  await mkdir(path.join(root, "evidence"), { recursive: true });
+  await writeFile(path.join(root, "evidence", "a.md"), "evidence content");
+  await mkdir(path.join(root, "flows"), { recursive: true });
+  await writeFile(path.join(root, "flows", "revoke.json"), JSON.stringify({ id: "flow-1", status: "in-progress", updatedAt: stamp, tasks: [] }));
+
+  const manifestPath = path.join(root, ".metaproject", "workspaces", "workspace-a", "workspace.json");
+  let opens = 0;
+  const service = createLocalFwkReadService(root, {
+    beforeResourceOpen: async () => {
+      opens += 1;
+      // 1st call = the evidence fact (left alone, so facts legitimately
+      // succeed). 2nd call = the flow resource: revoke here, strictly
+      // between its own two re-authorization checks. Only the actor's own
+      // membership is removed — a second, permanent owner is kept in place
+      // so the manifest stays schema-valid (a workspace always needs an
+      // owner) and this is a genuine per-actor revocation, not a workspace
+      // wipe.
+      if (opens === 2) {
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { members: Array<{ subject: string }> };
+        manifest.members = manifest.members.filter((member) => member.subject !== actor.subject);
+        await writeFile(manifestPath, JSON.stringify(manifest));
+      }
+    },
+  });
+
+  // Registered through a plain WorkspaceService using the SAME authorization
+  // server/actor as the service under test, so `service.overview` below
+  // authenticates as the same actor whose role gets revoked mid-flight.
+  const setupWorkspaces = new WorkspaceService({ workspaceRoot: root, authorizationServer, strictGuard: { mode: "strict" as const, availability: "available" as const, decision: "pass" as const, policyRevision: "local-offline-v1" } });
+  await setupWorkspaces.create({ request: undefined, requestCorrelationId: "fwk-local-flow-revoked-correlation-0001", id: "workspace-a", title: "Revoked role" });
+  // Resources are registered while the actor still holds "owner" (write-rank
+  // required by addResource); the actor is demoted to "viewer" (still enough
+  // for the read-only overview below) and a distinct permanent owner is added
+  // only afterward, so `beforeResourceOpen`'s later membership removal above
+  // leaves a schema-valid, non-empty, single-owner manifest behind.
+  await setupWorkspaces.addResource({ request: undefined, requestCorrelationId: "fwk-local-flow-revoked-correlation-0001", workspaceId: "workspace-a", resource: { kind: "evidence", uri: "./evidence/a.md" } });
+  await setupWorkspaces.addResource({ request: undefined, requestCorrelationId: "fwk-local-flow-revoked-correlation-0001", workspaceId: "workspace-a", resource: { kind: "flow", uri: "./flows/revoke.json" } });
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { members: Array<{ subject: string; role: string }> };
+  manifest.members = [{ subject: "user:fwk-revoked-permanent-owner", role: "owner" }, { subject: actor.subject, role: "viewer" }];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+
+  const result = await service.overview({ workspaceId: "workspace-a", request: undefined, requestCorrelationId: "fwk-local-flow-revoked-correlation-0002", budget: { maxItems: 10, maxTokens: 1000 } });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(opens).toBe(2);
+  // The full denied() shape: facts: [] and knowHow: [] too, not merely
+  // work: { state: "unbound" } with facts still populated (the old bug).
+  expect(result.manifest).toEqual({ facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" });
+  expect(result.receipt.decision).toBe("denied");
 });
