@@ -48,6 +48,18 @@ type TextNode = { content: string };
 
 type OtuiLike = {
   TextRenderable?: new (renderer: unknown, opts: { id: string; content: string; onMouseDown?: () => void }) => TextNode;
+  ScrollBoxRenderable?: new (
+    renderer: unknown,
+    opts: {
+      id: string;
+      flexGrow?: number;
+      minHeight?: number;
+      scrollY?: boolean;
+      stickyScroll?: boolean;
+      stickyStart?: string;
+      contentOptions?: { flexDirection: string };
+    },
+  ) => { content?: { add?: (child: unknown) => void }; add?: (child: unknown) => void };
 };
 
 function paintContent(otui: unknown, renderer: unknown, body: unknown, content: string): TextNode | undefined {
@@ -55,12 +67,32 @@ function paintContent(otui: unknown, renderer: unknown, body: unknown, content: 
     return undefined;
   }
   const parent = body as { add?: (child: unknown) => void };
-  const ctor = (otui as OtuiLike).TextRenderable;
-  if (parent.add === undefined || ctor === undefined) {
+  const textCtor = (otui as OtuiLike).TextRenderable;
+  if (parent.add === undefined || textCtor === undefined) {
     return undefined;
   }
-  const node = new ctor(renderer, { id: "subagent-inspector-body", content });
-  parent.add(node);
+  const scrollCtor = (otui as OtuiLike).ScrollBoxRenderable;
+  let target: { add?: (child: unknown) => void } = parent;
+  if (scrollCtor !== undefined) {
+    const scroll = new scrollCtor(renderer, {
+      id: "subagent-inspector-scroll",
+      flexGrow: 1,
+      minHeight: 0,
+      scrollY: true,
+      stickyScroll: true,
+      stickyStart: "bottom",
+      contentOptions: { flexDirection: "column" },
+    });
+    parent.add(scroll);
+    if (scroll.content !== undefined) {
+      target = scroll.content;
+    }
+  }
+  if (target.add === undefined) {
+    return undefined;
+  }
+  const node = new textCtor(renderer, { id: "subagent-inspector-body", content });
+  target.add(node);
   return node;
 }
 

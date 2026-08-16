@@ -1409,14 +1409,14 @@ export async function launchTuiAgentShell(opts: {
       content: otui.t`${otui.dim("○ Ready")}`,
     });
     sidebar.add(sbWorkers);
-    const sbSubagents = new otui.ScrollBoxRenderable(r, {
+    // Hug-content box, not a flexGrow ScrollBox: a growing viewport inside
+    // flexShrink-0 sidebarTop covers the Model/Tools labels on a real pty
+    // (shell-pty-launch O-6). Empty list is zero height; rows add as children spawn.
+    const sbSubagents = new otui.BoxRenderable(r, {
       id: "sb-subagents",
-      flexGrow: 1,
-      flexShrink: 1,
-      minHeight: 3,
+      flexDirection: "column",
+      flexShrink: 0,
       marginTop: 1,
-      scrollY: true,
-      contentOptions: { flexDirection: "column" },
     });
     sidebar.add(sbSubagents);
     const fleet = new WorkerFleet();
@@ -1437,7 +1437,7 @@ export async function launchTuiAgentShell(opts: {
       if (hint?.kind === "log") {
         return;
       }
-      paintSubagentSidebar(otui, r, sbSubagents.content, sessions.list(), {
+      paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
         width: SIDEBAR_TEXT_WIDTH,
         onOpen: (id) => {
           openSubagentInspector(otui, chrome, { store: sessions, id, renderer: r });
