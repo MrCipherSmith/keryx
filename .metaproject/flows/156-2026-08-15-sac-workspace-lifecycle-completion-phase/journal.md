@@ -133,3 +133,18 @@ all green, including 2 new tests). `keryx health run`: PASS, score 93.
 - 2026-08-16T10:17:25.945Z - task-done: T9: Fix5: evaluate centralizing archived-write guard; document decision
 - 2026-08-16T10:17:26.023Z - task-done: T10: Fix6: evaluate archive/rename dedup into shared helper; document decision
 - 2026-08-16T10:17:26.111Z - task-done: T11: Fix7: reduce redundant manifest reads in withAuthorizedActor
+- 2026-08-16T11:05:34.414Z - completing
+- 2026-08-16T11:05:37.360Z - completion-failed: acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10
+- 2026-08-16T11:06:17.357Z - ac-confirmed: AC1: workspace-service.test.ts: archive() denies editor/viewer with access_denied, allows owner (33/33 pass)
+- 2026-08-16T11:06:17.459Z - ac-confirmed: AC2: workspace.test.ts + workspace-service.test.ts: list() excludes archived unless --include-archived; show() still succeeds for archived id
+- 2026-08-16T11:06:17.543Z - ac-confirmed: AC3: proposal-lifecycle.test.ts: addResource/create() against archived workspace rejected with guard_denied, never silently accepted
+- 2026-08-16T11:06:17.620Z - ac-confirmed: AC4: proposal-lifecycle.test.ts: review() of a pre-archival proposal completes; archive never blocks in-flight review
+- 2026-08-16T11:06:24.671Z - ac-confirmed: AC5: workspace-service.test.ts: list({includeArchived:true}) surfaces archived workspaces identically to active ones for a role-visible actor
+- 2026-08-16T11:06:24.747Z - ac-confirmed: AC6: proposal-lifecycle.test.ts: removeResource never breaks resolveWorkspaceReference/targetWriteOrStale for pending or accepted proposals
+- 2026-08-16T11:06:24.825Z - ac-confirmed: AC7: src/commands/workspace.ts + workspace-service.ts: no addMember/removeMember/updateRole method or CLI subcommand exists in this package
+- 2026-08-16T11:06:24.915Z - ac-confirmed: AC8: workspace-service.ts: only archive() mutates status; no code path deletes workspace.json or its directory
+- 2026-08-16T11:06:30.520Z - ac-confirmed: AC9: workspace-service.test.ts: removeResource/rename both requireOwner via withAuthorizedActor, denied for editor/viewer identically to archive; addResource unchanged (editor+)
+- 2026-08-16T11:06:30.621Z - ac-confirmed: AC10: workspace-service.test.ts: rename() updates title+updatedAt only; id/resources/members unaffected; subsequent show/list reflects new title
+- 2026-08-16T11:06:44.126Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/296 (warning: PR is not a draft)
+- 2026-08-16T11:06:48.420Z - completing
+- 2026-08-16T11:06:50.676Z - done: all gates passed

@@ -3,15 +3,56 @@
   "id": "156",
   "slug": "sac-workspace-lifecycle-completion-phase",
   "title": "SAC Workspace Lifecycle Completion — Phase 1: Archive, resource removal, rename",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-15T21:42:48.961Z",
-  "updatedAt": "2026-08-16T10:17:26.111Z",
+  "updatedAt": "2026-08-16T11:06:50.676Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:621dece35ae2c47dd0b8aee742767de7f82741c6c2dca8186638b65c15b8dfa9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T11:06:17.357Z",
+      "note": "workspace-service.test.ts: archive() denies editor/viewer with access_denied, allows owner (33/33 pass)"
+    },
+    "AC2": {
+      "at": "2026-08-16T11:06:17.459Z",
+      "note": "workspace.test.ts + workspace-service.test.ts: list() excludes archived unless --include-archived; show() still succeeds for archived id"
+    },
+    "AC3": {
+      "at": "2026-08-16T11:06:17.543Z",
+      "note": "proposal-lifecycle.test.ts: addResource/create() against archived workspace rejected with guard_denied, never silently accepted"
+    },
+    "AC4": {
+      "at": "2026-08-16T11:06:17.620Z",
+      "note": "proposal-lifecycle.test.ts: review() of a pre-archival proposal completes; archive never blocks in-flight review"
+    },
+    "AC5": {
+      "at": "2026-08-16T11:06:24.671Z",
+      "note": "workspace-service.test.ts: list({includeArchived:true}) surfaces archived workspaces identically to active ones for a role-visible actor"
+    },
+    "AC6": {
+      "at": "2026-08-16T11:06:24.747Z",
+      "note": "proposal-lifecycle.test.ts: removeResource never breaks resolveWorkspaceReference/targetWriteOrStale for pending or accepted proposals"
+    },
+    "AC7": {
+      "at": "2026-08-16T11:06:24.825Z",
+      "note": "src/commands/workspace.ts + workspace-service.ts: no addMember/removeMember/updateRole method or CLI subcommand exists in this package"
+    },
+    "AC8": {
+      "at": "2026-08-16T11:06:24.915Z",
+      "note": "workspace-service.ts: only archive() mutates status; no code path deletes workspace.json or its directory"
+    },
+    "AC9": {
+      "at": "2026-08-16T11:06:30.520Z",
+      "note": "workspace-service.test.ts: removeResource/rename both requireOwner via withAuthorizedActor, denied for editor/viewer identically to archive; addResource unchanged (editor+)"
+    },
+    "AC10": {
+      "at": "2026-08-16T11:06:30.621Z",
+      "note": "workspace-service.test.ts: rename() updates title+updatedAt only; id/resources/members unaffected; subsequent show/list reflects new title"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/296"
   },
@@ -290,6 +331,79 @@
       "at": "2026-08-16T10:17:26.111Z",
       "event": "task-done",
       "detail": "T11: Fix7: reduce redundant manifest reads in withAuthorizedActor"
+    },
+    {
+      "at": "2026-08-16T11:05:34.414Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T11:05:37.360Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10"
+    },
+    {
+      "at": "2026-08-16T11:06:17.357Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: workspace-service.test.ts: archive() denies editor/viewer with access_denied, allows owner (33/33 pass)"
+    },
+    {
+      "at": "2026-08-16T11:06:17.459Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: workspace.test.ts + workspace-service.test.ts: list() excludes archived unless --include-archived; show() still succeeds for archived id"
+    },
+    {
+      "at": "2026-08-16T11:06:17.543Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: proposal-lifecycle.test.ts: addResource/create() against archived workspace rejected with guard_denied, never silently accepted"
+    },
+    {
+      "at": "2026-08-16T11:06:17.620Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: proposal-lifecycle.test.ts: review() of a pre-archival proposal completes; archive never blocks in-flight review"
+    },
+    {
+      "at": "2026-08-16T11:06:24.671Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: workspace-service.test.ts: list({includeArchived:true}) surfaces archived workspaces identically to active ones for a role-visible actor"
+    },
+    {
+      "at": "2026-08-16T11:06:24.747Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: proposal-lifecycle.test.ts: removeResource never breaks resolveWorkspaceReference/targetWriteOrStale for pending or accepted proposals"
+    },
+    {
+      "at": "2026-08-16T11:06:24.825Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/commands/workspace.ts + workspace-service.ts: no addMember/removeMember/updateRole method or CLI subcommand exists in this package"
+    },
+    {
+      "at": "2026-08-16T11:06:24.915Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: workspace-service.ts: only archive() mutates status; no code path deletes workspace.json or its directory"
+    },
+    {
+      "at": "2026-08-16T11:06:30.520Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: workspace-service.test.ts: removeResource/rename both requireOwner via withAuthorizedActor, denied for editor/viewer identically to archive; addResource unchanged (editor+)"
+    },
+    {
+      "at": "2026-08-16T11:06:30.621Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: workspace-service.test.ts: rename() updates title+updatedAt only; id/resources/members unaffected; subsequent show/list reflects new title"
+    },
+    {
+      "at": "2026-08-16T11:06:44.126Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/296 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-16T11:06:48.420Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T11:06:50.676Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
