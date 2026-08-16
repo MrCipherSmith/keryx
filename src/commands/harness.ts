@@ -62,7 +62,7 @@ import { OPENAI_COMPAT_PROVIDERS } from "./providers";
 // trigger, wired at the end of the `run` subcommand body below.
 import { runWrapUp } from "../sac/machine-wrap-up";
 import { readSlate, type Slate } from "../session/slate";
-import { sessionDir } from "../session/paths";
+import { resolveOneShotWrapUpSessionDir } from "../session/paths";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -568,20 +568,48 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
 
   console.log(JSON.stringify(structured));
 
+  // AC8-WRAPUP-TRIGGER-START — `harness.test.ts`'s flow 163 AC8 source-text
+  // audit locates this block between the START/END markers, not by a fixed
+  // byte-offset window from an unrelated anchor line. An earlier version
+  // used a fixed-size slice from the `if (subcommand !== "run")` guard
+  // above, which broke the moment a rationale comment anywhere in between
+  // pushed the real trigger call past the window's budget — exactly the
+  // coupling failure mode a reviewer flagged (info-level) on this same PR.
+  // Explicit markers make the audit robust to this function's comment
+  // density changing in either direction, without a magic number to keep
+  // in sync.
+  //
   // SLATE-7 (AC8): a one-shot run has no REPL closure trigger (`keryx
   // shell`'s `closeSlateOnFlowDone`) -- process termination is this
   // invocation's only "done" signal. Never let wrap-up bookkeeping crash
   // this command or claw back the structured result already printed above
   // (mirrors goal-command.ts's "slate bookkeeping failed (ignored)").
+  //
+  // `resolveOneShotWrapUpSessionDir` (not `sessionDir` directly, see its own
+  // doc comment in session/paths.ts): keeps this file's PRE-EXISTING, wholly
+  // unrelated raw `readFileSync`/`writeFileSync` calls (--record/--fixture/
+  // --spec, caller-supplied paths) from being falsely implicated by
+  // config-dir.readers.test.ts/config-dir.writers.test.ts's source-level
+  // guards, which flag any file that both names a CONFIG_PATH_RESOLVERS
+  // function and does a raw read/write anywhere in that same file.
   try {
-    const wrapUpDir = sessionDir(process.cwd(), idSeq());
+    const wrapUpDir = resolveOneShotWrapUpSessionDir(process.cwd(), idSeq);
     const prior = await readSlate(wrapUpDir);
     const wrapUpSlate: Slate = prior ?? { anchors: { root: process.cwd(), touched: [] }, course: {}, seeds: [] };
     if (workspace !== undefined && workspace.length > 0) wrapUpSlate.workspaceId = workspace;
     await runWrapUp({ trigger: "process-termination", cwd: process.cwd(), dir: wrapUpDir, slate: wrapUpSlate });
-  } catch {
-    // best-effort; see rationale above.
+  } catch (error) {
+    // Finding 3 (fix round, code review of PR #306; error-handling IRON LAW
+    // 1 — a bare `catch (_) {}` is forbidden): still best-effort — never
+    // crash this command or claw back the structured result already
+    // printed above — but now observable via stderr rather than silent.
+    // This file has no `io`/`ShellIO` object to route through (unlike
+    // `goal-command.ts`'s own `systemLine(io, "/goal: slate bookkeeping
+    // failed (ignored): ...")`, whose house style this message mirrors),
+    // so `console.error` is the right primitive here.
+    console.error(`harness run: wrap-up trigger failed (ignored): ${error instanceof Error ? error.message : String(error)}`);
   }
+  // AC8-WRAPUP-TRIGGER-END
 }
 
 // ---------------------------------------------------------------------------

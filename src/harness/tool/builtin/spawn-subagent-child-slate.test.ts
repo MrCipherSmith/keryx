@@ -26,6 +26,20 @@
 // tempdir cleanup by diffing `os.tmpdir()`'s listing before/after rather than
 // asserting a specific directory name.
 //
+// FIX ROUND UPDATE (Finding 1, code review of PR #306): the deps/type
+// surface described above as "none deviation" DID later change —
+// `SpawnSubagentToolDeps.slateSession?: SlateSessionRef` (a static
+// snapshot) was replaced with `getSlateSession?: () => SlateSessionRef |
+// undefined` (a live getter, read at fold time) because the static-snapshot
+// shape meant BOTH real production call sites (`commands/shell.ts`'s TUI
+// `makeAgentDeps` closure and its readline REPL call site), which construct
+// `createSpawnSubagentTool` before the session's slate is actually
+// opened/resolved, could never populate it — SLATE-6's fold mechanism
+// silently never fired in any real `keryx shell` session. Every
+// `toolDeps({ ..., getSlateSession: () => ({...}) })` call below reflects
+// that getter shape, not the original static field this comment block was
+// written against.
+//
 // AC2/AC3 RIGOR (per the launch brief): "unreachable after dispatch returns"
 // is proven by ACTIVELY trying several other paths to reach the child's Seed
 // text (the parent's own `slate.seeds`, a fresh `readSlate` on the parent
@@ -194,7 +208,11 @@ test("AC2: a child's Seed lands only in parent.slate.childDispatches[dispatchId]
     toolDeps({
       makeProvider: () => seedWritingProvider(marker, captured),
       cwd: parentCwd,
-      slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+      // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
     }),
   );
 
@@ -237,7 +255,11 @@ test("AC3: after the dispatch returns, the child's Seed is unreachable through e
     toolDeps({
       makeProvider: () => seedWritingProvider(marker, captured),
       cwd: parentCwd,
-      slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+      // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
     }),
   );
   const result = await tool.invoke({ task: "record a follow-up seed", mode: "general" });
@@ -284,7 +306,11 @@ test("AC3: on a child timeout, the fold still happens with status 'incomplete' a
       toolDeps({
         makeProvider: () => hangingProvider(),
         cwd: parentCwd,
-        slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+        // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
       }),
     );
     const result = await tool.invoke({ task: "hang forever", mode: "general" });
@@ -322,7 +348,11 @@ test("two spawns against the same parent slateSession fold into two distinct chi
     toolDeps({
       makeProvider: () => seedWritingProvider(markerA, capturedA),
       cwd: parentCwd,
-      slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+      // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
     }),
   );
   await tool.invoke({ task: "first dispatch", mode: "general", label: "first" });
@@ -335,7 +365,11 @@ test("two spawns against the same parent slateSession fold into two distinct chi
     toolDeps({
       makeProvider: () => seedWritingProvider(markerB, capturedB),
       cwd: parentCwd,
-      slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+      // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
     }),
   );
   await tool2.invoke({ task: "second dispatch", mode: "general", label: "second" });
@@ -354,6 +388,68 @@ test("with no slateSession configured, the tool still completes normally and nev
   const tool = createSpawnSubagentTool(toolDeps({ makeProvider: () => plainProvider("ok", []) }));
   const result = await tool.invoke({ task: "no parent slate available", mode: "read_only" });
   expect(result.isError).toBe(false);
+});
+
+// --- Finding 1 fix (fix round, code review of PR #306) end-to-end
+// regression: `SpawnSubagentToolDeps.getSlateSession` must be read LIVE, at
+// fold time — never captured once when `createSpawnSubagentTool` is
+// constructed. This mirrors the REAL production shape the bug was found in:
+// BOTH `commands/shell.ts` call sites (its TUI `makeAgentDeps` closure and
+// its readline REPL call site) construct the spawn tool BEFORE the
+// session's slate is opened, threading a getter that reads a mutable "box"
+// (`slateSessionBox`/`slateSession`) by reference. This test builds that
+// SAME shape directly: construct the tool against a getter reading an
+// initially-empty box, THEN open the parent slate and populate the box
+// AFTER construction, THEN dispatch — and proves the child's Seed still
+// reaches `parent.slate.childDispatches`. Pre-fix (a static `slateSession?:
+// SlateSessionRef` field captured once at construction time, per the
+// original plan.md Track A step 4 shape), this would have silently folded
+// nowhere: the field would have been `undefined` forever, having been read
+// before the box was ever populated — which is exactly why SLATE-6 never
+// actually fired in any real `keryx shell` session before this fix. -----
+test("Finding 1: getSlateSession is read LIVE at fold time — a slate opened AFTER createSpawnSubagentTool is constructed still receives the fold", async () => {
+  const parentDir = await tempParentDir();
+  const parentCwd = process.cwd();
+
+  // Mirrors `commands/shell.ts`'s `slateSessionBox` / `tui-shell.ts`'s
+  // `slateSession` local: a mutable reference the getter reads BY
+  // REFERENCE, never a value captured once.
+  const sessionBox: { current: { dir: string; cwd: string; opened: boolean } | undefined } = { current: undefined };
+
+  const marker = "CHILD-SEED-MARKER-FINDING1-LIVE-GETTER";
+  const captured: NormalizedRequest[] = [];
+
+  // Construct the tool FIRST — exactly like both real production call
+  // sites do — while `sessionBox.current` is still `undefined`. Reading the
+  // getter right now would return `undefined`; only a LIVE read at fold
+  // time (not a snapshot taken here) can possibly observe the slate opened
+  // below.
+  const tool = createSpawnSubagentTool(
+    toolDeps({
+      makeProvider: () => seedWritingProvider(marker, captured),
+      cwd: parentCwd,
+      getSlateSession: () => sessionBox.current,
+    }),
+  );
+
+  // NOW open the parent's slate and populate the box — strictly AFTER the
+  // tool was already constructed above, mirroring `runAgentRepl`'s / the
+  // TUI's own `slateSession = await ...` assignment happening well after
+  // `createSpawnSubagentTool` is called at those real call sites.
+  await openSlate({ dir: parentDir, cwd: parentCwd, mintAttemptId: () => "parent-open-1" });
+  sessionBox.current = { dir: parentDir, cwd: parentCwd, opened: true };
+
+  const result = await tool.invoke({ task: "record a follow-up seed after the slate opened", mode: "general" });
+  expect(result.isError).toBe(false);
+
+  const parentSlate = await readSlate(parentDir);
+  expect(parentSlate).toBeDefined();
+  if (!parentSlate) return;
+  const dispatchIds = Object.keys(parentSlate.childDispatches ?? {});
+  expect(dispatchIds).toHaveLength(1);
+  const dispatch = parentSlate.childDispatches![dispatchIds[0]!]!;
+  expect(dispatch.status).toBe("completed");
+  expect(dispatch.seeds.some((seed) => seed.text.includes(marker))).toBe(true);
 });
 
 // --- F-001 fix regression test (flow 163 fix round, logic reviewer MAJOR
@@ -416,7 +512,11 @@ test("F-001: a slate_write_seed write that arrives after timeout-driven cleanup 
       toolDeps({
         makeProvider: () => gatedSeedWritingProvider(marker, gate),
         cwd: parentCwd,
-        slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+        // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
       }),
     );
 
@@ -496,7 +596,11 @@ test("F-003: a slateSession dir with no live slate.json never gets a synthesized
     toolDeps({
       makeProvider: () => seedWritingProvider(marker, captured),
       cwd: parentCwd,
-      slateSession: { dir: parentDir, cwd: parentCwd, opened: true },
+      // Fix round (Finding 1): a fixed-return `getSlateSession` getter is
+      // adequate coverage here — the "live, not snapshotted" property is
+      // exercised separately below by a getter that changes what it returns
+      // between tool construction and dispatch.
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
     }),
   );
 

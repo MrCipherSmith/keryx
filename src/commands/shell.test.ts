@@ -841,7 +841,17 @@ test("shellCommand's makeAgentDeps threads a supplied getSessionDir through to s
       source: "cache",
     }),
     launchAgent: async (opts) => {
-      const deps = await opts.makeAgentDeps({ provider: "fake", model: "fixture-model" }, () => sessionDir);
+      // Fix round (Finding 1, code review of PR #306): `opts.makeAgentDeps`'s
+      // second parameter widened from `getSessionDir: () => string |
+      // undefined` to `getSlateSession: () => SlateSessionRef | undefined` —
+      // `shell.ts`'s own `makeAgentDeps` now derives `getSessionDir` locally
+      // from this getter's `.dir` (see that file), so this test still
+      // exercises the same `slate_read`/`slate_write_seed` wiring via the
+      // full ref shape.
+      const deps = await opts.makeAgentDeps(
+        { provider: "fake", model: "fixture-model" },
+        () => ({ dir: sessionDir, cwd: process.cwd(), opened: true }),
+      );
       tools = deps.tools;
       return true;
     },

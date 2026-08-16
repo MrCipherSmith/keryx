@@ -72,7 +72,17 @@ function slatePath(dir: string): string {
   return path.join(dir, "slate.json");
 }
 
-function slateLockPath(dir: string): string {
+/**
+ * Exported (fix round, code review of PR #306, Finding 2): the exact lock
+ * path `writeSlate`/`appendSeed` already take for every read-modify-write
+ * against a slate dir. `spawn-subagent-tool.ts`'s `foldChildSlateAndCleanup`
+ * reuses this SAME path (via `withFileLock`, also exported from
+ * `src/lib/fs.ts`) to serialize its own final read-back + `rm` of the
+ * child's ephemeral dir against any write that is already holding, or about
+ * to request, this lock — rather than inventing a second, parallel
+ * synchronization mechanism for the same directory.
+ */
+export function slateLockPath(dir: string): string {
   return `${slatePath(dir)}.lock`;
 }
 

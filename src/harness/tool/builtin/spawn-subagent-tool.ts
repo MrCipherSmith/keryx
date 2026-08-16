@@ -24,9 +24,17 @@ import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/prof
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../../commands/agent";
 import type { ProviderPort } from "../../provider/types";
-import { readSlate, renderAnchorsBlock, writeSlate, type Slate, type SlateChildDispatch } from "../../../session/slate";
+import {
+  readSlate,
+  renderAnchorsBlock,
+  slateLockPath,
+  writeSlate,
+  type Slate,
+  type SlateChildDispatch,
+} from "../../../session/slate";
 import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycle";
 import { emitSubagentFleet } from "../../../tui/subagent-bridge";
+import { withFileLock } from "../../../lib/fs";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -90,19 +98,35 @@ export interface SpawnSubagentToolDeps {
   parentRunId?: string;
   parentSessionId?: string;
   /**
-   * SLATE-6 (flow 163 Track A): the PARENT's own open slate, when this run
-   * has one. Optional — every existing call site (tests, and any production
-   * surface that predates Slate Phase 4) that omits this keeps working
-   * unchanged: the child still gets its own ephemeral slate to write Seeds
-   * into (see `invoke()` below), but nothing is folded anywhere afterward,
-   * since there is no parent `childDispatches` map to fold into. Threading a
-   * real `SlateSessionRef` through from `keryx shell`/the TUI's own
-   * `slateSession` (mirroring how `runAgentTurn`'s `RunAgentTurnOptions.
-   * slateSession` is already wired at those call sites) is intentionally
-   * left to a later integration task — this flow's scope is `spawn-subagent-
-   * tool.ts` itself, not `commands/shell.ts`/`tui/tui-shell.ts`.
+   * SLATE-6 (flow 163 Track A) — a LIVE getter, not a static snapshot
+   * (fix-round Finding 1, code review of PR #306): the PARENT's own open
+   * slate, when this run has one, read AT FOLD TIME (inside
+   * `foldChildSlateAndCleanup`'s async closure below), never captured once
+   * up front. This matters because BOTH real production call sites —
+   * `commands/shell.ts`'s TUI `makeAgentDeps` closure (around line 1590) and
+   * its readline REPL call site (around line 1785) — construct THIS tool
+   * BEFORE the session's slate is actually opened/resolved: a plain
+   * `slateSession?: SlateSessionRef` field snapshotted at
+   * `createSpawnSubagentTool()` construction time can never observe a slate
+   * that opens later, so with that shape a dispatched subagent's
+   * Anchors/Seeds were silently never folded anywhere in any real `keryx
+   * shell` session — the whole point of SLATE-6 never actually fired in
+   * production. This mirrors the exact reason this codebase already uses a
+   * live "box read by reference" pattern for `getSessionDir` at those same
+   * two call sites: `shell.ts`'s readline path declares `const
+   * slateSessionBox: { current: SlateSessionRef | undefined } = { current:
+   * undefined }` and passes a getter that reads `slateSessionBox.current` by
+   * reference, then hands `slateSessionBox` itself to `runAgentRepl` so it
+   * can mutate `.current` once the session's real slate ref is known (see
+   * that file's own SLATE-3a comment). `getSlateSession` here is the same
+   * idiom applied to this tool's deps. Optional — every existing call site
+   * (tests, and any production surface that predates Slate Phase 4) that
+   * omits this keeps working unchanged: the child still gets its own
+   * ephemeral slate to write Seeds into (see `invoke()` below), but nothing
+   * is folded anywhere afterward, since there is no parent `childDispatches`
+   * map to fold into.
    */
-  slateSession?: SlateSessionRef;
+  getSlateSession?: () => SlateSessionRef | undefined;
 }
 
 function sha256(text: string): string {
@@ -269,8 +293,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
       // under `sessionDir()`/the project's real session store (plan.md's
       // Risks section: a stray `slate.json` there could later be mistaken by
       // `listSessions()`/a future catch-up UI for a genuine session). This
-      // happens UNCONDITIONALLY — regardless of whether `deps.slateSession`
-      // (the PARENT's own slate) is even configured — because the child's
+      // happens UNCONDITIONALLY — regardless of whether `deps.getSlateSession`
+      // (the PARENT's own slate getter) is even configured — because the child's
       // own ability to call `slate_write_seed` during its turn does not
       // depend on whether anyone will fold the result anywhere afterward;
       // only the fold step (`foldChildSlateAndCleanup` below) is
@@ -375,7 +399,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         // `foldChildSlateAndCleanup` (which owns cleanup) is never reached
         // on this path. Only the temp-dir removal is duplicated here, never
         // the fold itself (there is no child turn output to fold yet, and
-        // no `deps.slateSession` write should be attempted for a dispatch
+        // no parent-slate write should be attempted for a dispatch
         // that never even reached the provider) — this is deliberately NOT
         // routed through `foldChildSlateAndCleanup` to keep this a small,
         // additive fix rather than a restructuring of that function's
@@ -482,7 +506,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
 
       /**
        * SLATE-6/AC2/AC3: read the child's ephemeral slate back, fold it into
-       * `deps.slateSession`'s (the parent's) `childDispatches[dispatchId]` as
+       * `deps.getSlateSession()`'s (the parent's) `childDispatches[dispatchId]` as
        * a tagged, structurally separate entry, then delete the ephemeral dir
        * — called on ALL THREE exit paths below (success/timeout/error) so a
        * hung or failed child still leaves an "incomplete" snapshot of
@@ -505,67 +529,163 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
        * deliberately no fallback that fabricates a `prev` when none exists
        * (F-003 fix, see the `writeSlate` callback below) — a missing parent
        * slate at fold time is a caller bug, not a shape to paper over.
+       *
+       * Finding 2 (fix round, code review of PR #306 — "narrower F-001 race
+       * window"): flipping `closing` (below) only stops a NEW
+       * `slate_write_seed` call from starting once this function has been
+       * entered — it does nothing for a write whose `invoke()` already read
+       * the dir-getter (observed `closing === false`) moments earlier and is
+       * now mid-flight through `writeSlate`'s own `await mkdir(dir, ...)` →
+       * `withFileLock(slateLockPath(dir), ...)` → read → `writeFileAtomic`
+       * chain. Without further synchronization, this function's own final
+       * `rm(dirToClean, ...)` could complete WHILE that write is still
+       * between its `mkdir` and its lock acquire; `writeSlate`'s
+       * unconditional recursive `mkdir` would then silently RECREATE
+       * `dirToClean` once it finally gets its turn — the same "permanent
+       * leak" the original F-001 fix targeted, just reached through a
+       * different interleaving than the one the existing F-001 regression
+       * test drives (that test gates the write so it only starts AFTER
+       * cleanup has already fully finished; this one is about a write that
+       * starts BEFORE cleanup begins and is still in flight when cleanup
+       * runs). The fix below acquires the SAME `slateLockPath(dirToClean)`
+       * mutex `writeSlate`/`appendSeed` already take for every
+       * read-modify-write against this dir, and does the final read-back
+       * AND the `rm` INSIDE that one lock hold — reusing the exact
+       * synchronization primitive this file's own writes already go
+       * through, not a bespoke new one. This fully serializes cleanup
+       * against any write that is already holding the lock or is about to
+       * request it: that write's own `mkdir(lockPath)` (a plain,
+       * non-`recursive` call — see `withFileLock`, `src/lib/fs.ts`) throws
+       * ENOENT once `dirToClean` is gone rather than silently recreating
+       * anything, since only the ONE unconditional recursive `mkdir` issued
+       * before the lock request can resurrect the dir — and holding this
+       * lock while we clean up gives that call a real chance to have
+       * already landed (or to fail outright) before we ever touch the
+       * filesystem. Doing the read-back inside the same hold is a
+       * deliberate bonus, not just a side effect of convenience: it means a
+       * Seed a write manages to commit right before losing the lock race is
+       * captured in `dispatch.seeds` instead of silently dropped by an
+       * earlier, unlocked read.
        */
       const foldChildSlateAndCleanup = async (status: "completed" | "incomplete"): Promise<void> => {
-        // F-001 fix: flip BEFORE the `rm(ephemeralDir, ...)` below (and
-        // before the fold itself) so an in-flight `slate_write_seed` call
-        // racing this cleanup sees `getSessionDir() -> undefined` rather
-        // than a directory that is about to be (or already was) removed.
+        // F-001 fix: flip BEFORE any lock acquisition/rm below (and before
+        // the fold itself) so an in-flight `slate_write_seed` call that
+        // hasn't yet read the dir-getter sees `getSessionDir() -> undefined`
+        // rather than a directory that is about to be (or already was)
+        // removed. See the Finding 2 paragraph above for the narrower
+        // window this alone does not close, and the lock hold below that
+        // does.
         closing = true;
+        if (ephemeralDir === undefined) {
+          // `mkdtemp` itself never succeeded — there is nothing to fold or
+          // clean up (the child never got an ephemeral slate at all).
+          return;
+        }
+        const dirToClean = ephemeralDir;
         try {
-          if (ephemeralDir !== undefined && openedChildSlate !== undefined && deps.slateSession !== undefined) {
+          await withFileLock(slateLockPath(dirToClean), async () => {
             try {
-              const childSlate = await readSlate(ephemeralDir);
-              const dispatch: SlateChildDispatch = {
-                anchors: childSlate?.anchors ?? openedChildSlate.anchors,
-                course: childSlate?.course ?? openedChildSlate.course,
-                seeds: childSlate?.seeds ?? [],
-                status,
-              };
-              const parentDir = deps.slateSession.dir;
-              await writeSlate(parentDir, (prev) => {
-                // F-003 fix (flow 163 fix round, logic reviewer MAJOR
-                // finding): the previous "defensive fallback" here
-                // literally synthesized the PARENT's OWN `.anchors` field
-                // from the CHILD's freshly-computed Anchors when
-                // `deps.slateSession.dir` had no live `slate.json` yet — a
-                // real AC2 violation if ever hit ("A subagent's
-                // Seeds/Anchors/Course never appear in the parent's own
-                // slate.anchors/.course/.seeds fields"). `prev === undefined`
-                // here can only mean a caller wired a `slateSession` ref
-                // WITHOUT ever calling `openSlate` on it first — a
-                // caller-contract violation, not a runtime condition to
-                // paper over with plausible-but-wrong data. This matches
-                // this codebase's own convention for exactly this class of
-                // bug: `appendSeed` (slate.ts) throws `"appendSeed: no open
-                // slate in <dir>"` rather than fabricating a placeholder
-                // slate. Safe to throw here: this callback runs inside the
-                // inner try/catch above, which already documents itself as
-                // "best-effort fold; never mask the dispatch outcome" — a
-                // thrown error degrades silently, exactly like every other
-                // fold failure, and the caller's already-computed
-                // success/timeout/error result is never touched.
-                if (prev === undefined) {
-                  throw new Error(`foldChildSlateAndCleanup: no open parent slate in ${parentDir}`);
+              // Read the parent's slate ref LIVE, at fold time — Finding 1: a
+              // plain `deps.slateSession` field captured once at the top of
+              // `invoke()` (or, worse, at `createSpawnSubagentTool()`
+              // construction time) can never observe a slate that the caller
+              // opens AFTER this tool instance was built, which is exactly what
+              // both real production call sites do. Calling the getter here,
+              // inside the fold closure that only runs once the dispatch is
+              // actually settling, is what makes this reflect reality.
+              const slateSession = deps.getSlateSession?.();
+              if (openedChildSlate !== undefined && slateSession !== undefined) {
+                try {
+                  const childSlate = await readSlate(dirToClean);
+                  const dispatch: SlateChildDispatch = {
+                    anchors: childSlate?.anchors ?? openedChildSlate.anchors,
+                    course: childSlate?.course ?? openedChildSlate.course,
+                    seeds: childSlate?.seeds ?? [],
+                    status,
+                  };
+                  const parentDir = slateSession.dir;
+                  await writeSlate(parentDir, (prev) => {
+                    // F-003 fix (flow 163 fix round, logic reviewer MAJOR
+                    // finding): the previous "defensive fallback" here
+                    // literally synthesized the PARENT's OWN `.anchors` field
+                    // from the CHILD's freshly-computed Anchors when
+                    // `deps.slateSession.dir` had no live `slate.json` yet — a
+                    // real AC2 violation if ever hit ("A subagent's
+                    // Seeds/Anchors/Course never appear in the parent's own
+                    // slate.anchors/.course/.seeds fields"). `prev === undefined`
+                    // here can only mean a caller wired a `slateSession` ref
+                    // WITHOUT ever calling `openSlate` on it first — a
+                    // caller-contract violation, not a runtime condition to
+                    // paper over with plausible-but-wrong data. This matches
+                    // this codebase's own convention for exactly this class of
+                    // bug: `appendSeed` (slate.ts) throws `"appendSeed: no open
+                    // slate in <dir>"` rather than fabricating a placeholder
+                    // slate. Safe to throw here: this callback runs inside the
+                    // inner try/catch above, which already documents itself as
+                    // "best-effort fold; never mask the dispatch outcome" — a
+                    // thrown error degrades silently, exactly like every other
+                    // fold failure, and the caller's already-computed
+                    // success/timeout/error result is never touched.
+                    if (prev === undefined) {
+                      throw new Error(`foldChildSlateAndCleanup: no open parent slate in ${parentDir}`);
+                    }
+                    return {
+                      ...prev,
+                      childDispatches: { ...(prev.childDispatches ?? {}), [dispatchId]: dispatch },
+                    };
+                  });
+                } catch (foldCause) {
+                  // Best-effort fold; never mask the dispatch outcome the caller
+                  // already computed (success text / timeout message / error
+                  // message) with a fold-specific failure. Finding 3 (fix round,
+                  // error-handling IRON LAW 1 — a bare `catch {}` is forbidden):
+                  // still log the failure so it is at least observable, via this
+                  // file's own established `emitSubagentFleet({ kind: "log",
+                  // ... })` diagnostics channel (same one every other
+                  // `invoke()` branch already uses for the parent-facing Workers
+                  // panel/inspector) rather than a fresh `console.error` seam.
+                  const foldMsg = foldCause instanceof Error ? foldCause.message : String(foldCause);
+                  emitSubagentFleet({
+                    kind: "log",
+                    id: workerId,
+                    entry: { kind: "system", text: `slate fold failed (ignored): ${foldMsg}` },
+                  });
                 }
-                return {
-                  ...prev,
-                  childDispatches: { ...(prev.childDispatches ?? {}), [dispatchId]: dispatch },
-                };
+              }
+            } finally {
+              // Still inside the lock hold: per the Finding 2 rationale
+              // above, no writer can be mid-write past this point without
+              // having already lost the `mkdir(lockPath)` race to us.
+              // `withFileLock`'s own release check (`ownsLock`/`owner.json`
+              // in `src/lib/fs.ts`) degrades to a silent no-op once this
+              // `rm` has already deleted the whole tree — including the
+              // lock dir itself — which is the intended outcome here, not a
+              // bug to work around.
+              await rm(dirToClean, { recursive: true, force: true }).catch(() => {
+                // Best-effort cleanup; a failed rm must not mask the
+                // dispatch result either.
               });
-            } catch {
-              // Best-effort fold; never mask the dispatch outcome the caller
-              // already computed (success text / timeout message / error
-              // message) with a fold-specific failure.
             }
-          }
-        } finally {
-          if (ephemeralDir !== undefined) {
-            await rm(ephemeralDir, { recursive: true, force: true }).catch(() => {
-              // Best-effort cleanup; a failed rm must not mask the dispatch
-              // result either.
-            });
-          }
+          });
+        } catch (lockCause) {
+          // `withFileLock` itself can throw — most plausibly its own 5s
+          // default timeout waiting for a writer that is unexpectedly slow
+          // to release the lock, or an unrelated fs error acquiring it.
+          // Finding 3 (no bare `catch {}`): log it, then fall back to a
+          // direct, unlocked `rm` so a stuck/failed lock attempt never
+          // leaks `dirToClean` forever — this reopens the ORIGINAL (wider)
+          // F-001 window only in this already-abnormal fallback path, never
+          // on the common path above.
+          const lockMsg = lockCause instanceof Error ? lockCause.message : String(lockCause);
+          emitSubagentFleet({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "system", text: `slate cleanup lock failed (ignored): ${lockMsg}` },
+          });
+          await rm(dirToClean, { recursive: true, force: true }).catch(() => {
+            // Best-effort cleanup; a failed rm must not mask the dispatch
+            // result either.
+          });
         }
       };
 

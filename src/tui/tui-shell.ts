@@ -1336,7 +1336,21 @@ export function pickSessionInTui(
 export async function launchTuiAgentShell(opts: {
   detected: DetectedProvider[];
   initial?: TuiSelection;
-  makeAgentDeps: (sel: TuiSelection, getSessionDir: () => string | undefined) => Promise<AgentDeps>;
+  /**
+   * Widened from a bare `getSessionDir: () => string | undefined` (fix
+   * round, code review of PR #306, Finding 1): `createSpawnSubagentTool`'s
+   * `SpawnSubagentToolDeps.getSlateSession` needs the FULL live
+   * `SlateSessionRef`, not just its `.dir` string, to fold a dispatched
+   * child's ephemeral slate into `parent.slate.childDispatches`. Exposing
+   * only `.dir` here (the old shape) meant `commands/shell.ts`'s
+   * `makeAgentDeps` closure had no way to hand a real `SlateSessionRef`
+   * through to `createSpawnSubagentTool` at all — SLATE-6's fold mechanism
+   * silently never fired for any real `keryx shell` TUI session. Both real
+   * call sites below (around lines 1419/2203) already hold the full
+   * `slateSession` local — this just widens the contract to pass it
+   * through instead of narrowing it to `.dir` first.
+   */
+  makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
@@ -1416,7 +1430,12 @@ export async function launchTuiAgentShell(opts: {
     // declaration has run, so referencing it here (textually earlier) is
     // safe — TDZ is a call-time concern for a closure, not a
     // closure-creation-time one.
-    let deps = await opts.makeAgentDeps(sel, () => slateSession?.dir);
+    // Finding 1 fix: pass the FULL live `slateSession` ref through, not just
+    // `.dir` — `makeAgentDeps`'s widened contract (see `opts.makeAgentDeps`
+    // doc comment above) needs it to wire `createSpawnSubagentTool`'s new
+    // `getSlateSession` getter so a dispatched subagent's Seeds actually
+    // fold into this session's slate once it opens.
+    let deps = await opts.makeAgentDeps(sel, () => slateSession);
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -2200,7 +2219,9 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
-      deps = await opts.makeAgentDeps(ns, () => slateSession?.dir);
+      // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
+      // call above — pass the live `slateSession` ref, not just `.dir`.
+      deps = await opts.makeAgentDeps(ns, () => slateSession);
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
@@ -2321,7 +2342,10 @@ export async function launchTuiAgentShell(opts: {
 
           let answer = "";
           try {
-            const base = await opts.makeAgentDeps(currentSel, () => slateSession?.dir);
+            // Finding 1 fix: same widened contract as the other two
+            // `opts.makeAgentDeps` call sites in this file — pass the live
+            // `slateSession` ref, not just `.dir`.
+            const base = await opts.makeAgentDeps(currentSel, () => slateSession);
             // Read-only: never allow shell/mutations from a side worker.
             const tools = base.tools.filter((t) => t.definition.risk === "read");
             const sideDeps: AgentDeps = {

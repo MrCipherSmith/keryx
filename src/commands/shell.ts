@@ -1576,8 +1576,19 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     const searchProviderController = createDefaultSearchProviderController();
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
-      getSessionDir: () => string | undefined,
+      getSlateSession: () => SlateSessionRef | undefined,
     ): Promise<AgentDeps> => {
+      // Finding 1 fix (fix round, code review of PR #306): this parameter
+      // used to be `getSessionDir: () => string | undefined`, matching only
+      // what `buildInteractiveAgentTools` needs — but `createSpawnSubagentTool`
+      // below never received ANY slate ref at all, so SLATE-6's child-slate
+      // fold mechanism silently never fired for a real `keryx shell` TUI
+      // session (there was no `slateSession`/`getSlateSession` field passed
+      // to it whatsoever). Widened to match `tui-shell.ts`'s own widened
+      // `opts.makeAgentDeps` contract (see that file's doc comment); the
+      // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
+      // locally right below, not threaded in from the caller.
+      const getSessionDir = (): string | undefined => getSlateSession()?.dir;
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient = "";
       try {
@@ -1603,6 +1614,13 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           }
           return [...names].map((name) => ({ name }));
         },
+        // Finding 1 fix: thread the LIVE getter through so a dispatched
+        // subagent's Seeds/Anchors actually fold into this TUI session's
+        // slate once it opens — `createSpawnSubagentTool` calls this at fold
+        // time, not once at construction, so it correctly observes a slate
+        // that opens AFTER this tool instance is built (see that file's own
+        // `SpawnSubagentToolDeps.getSlateSession` doc comment).
+        getSlateSession,
       });
       return {
         provider: agentProvider,
@@ -1792,6 +1810,15 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
+        // Finding 1 fix (fix round, code review of PR #306): read
+        // `slateSessionBox.current` BY REFERENCE, at fold time — same
+        // "live box" idiom this exact call site already uses for
+        // `getSessionDir` below (`slateSessionBox` is only populated once
+        // `runAgentRepl` opens/resumes a session, well after this tool is
+        // constructed). Before this fix, this call passed no slate ref at
+        // all, so a dispatched subagent's Seeds/Anchors silently never
+        // folded anywhere in a real readline `keryx shell` agent session.
+        getSlateSession: () => slateSessionBox.current,
       });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
