@@ -27,7 +27,7 @@ export type OwnerWriteAdapter = (input: OwnerWriteIntent & { owner: TargetOwner 
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
-  constructor(readonly code: "access_denied" | "guard_denied" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
+  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
 }
 
 /**
@@ -119,7 +119,7 @@ export class ProposalLifecycleService {
     } });
   }
 
-  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string }): Promise<{ event: Transition }> {
+  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string; interactive: boolean }): Promise<{ event: Transition }> {
     const actor = await this.actor(input.request, input.requestCorrelationId); const policyRevision = await this.strict();
     return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId: input.workspaceId, action: "review", execute: async (manifest) => {
       const proposal = await this.loadProposal(input.workspaceId, input.proposalId);
@@ -129,8 +129,46 @@ export class ProposalLifecycleService {
         const records = (await this.records(ledger)).filter((record) => record.proposalId === proposal.id);
         const events = records.filter((record): record is Transition => record.recordType === "proposal-transition");
         const replay = events.find((event) => event.idempotencyKey === input.idempotencyKey);
+        // Idempotency replay is checked BEFORE the SLATE-8 interactive gate
+        // below. A replay is not a fresh authorization decision — it returns
+        // an outcome this exact idempotency key already committed to the
+        // ledger — so it must short-circuit regardless of the *current*
+        // call's `interactive` value. Without this ordering, a legitimate
+        // retry of an already-accepted transition that happens to arrive
+        // with a different `interactive` value than the original request
+        // (e.g. a crash-recovery replay issued from a different boundary)
+        // would be wrongly denied instead of replayed.
         if (replay) return { event: replay };
         if (events.length > 0) throw new ProposalLifecycleError("conflict", "proposal already has a terminal transition");
+        // SLATE-8 unattended checkpoint. Mirrors `checkApproval` rule (h)
+        // (src/harness/mutation/approval.ts:148-149, `interactive === false ->
+        // invalid`): a genuinely NEW `accept` decision (i.e. not a replay —
+        // the replay short-circuit above already returned) is denied
+        // whenever the caller-supplied `interactive` context field is
+        // `false`. `propose`/`create()` and any decision other than
+        // "accepted" (e.g. "rejected"/"dismissed") never reach this branch
+        // (AC6). `interactive` is REQUIRED on `input` and consulted exactly
+        // as the caller passed it — never derived from `actor`,
+        // `clientClaims`, or any proposal-authored content — so a session
+        // cannot flip its own `interactive` field at runtime (AC5); the real
+        // CLI/MCP boundaries (`src/commands/workspace.ts`'s `review`
+        // handler, `src/mcp/tools.ts`'s `sac.review` handler) are the only
+        // real call sites and both pass `interactive: true`, matching
+        // current human-at-the-terminal trust posture. This check runs
+        // before any reviewer-role resolution below (`authorityFor`) and
+        // before any write action, so the denial is unconditional on role or
+        // `PolicyProfile` (AC4) — every `keryx serve` session resolves
+        // `interactive: false` here via the same honest value
+        // `runRemoteTurn` already hardcodes for every remote turn
+        // (src/lib/serve-turn.ts:605, `deps.interactive = false`). It does
+        // run after `withAuthorizedActor`'s own actor/workspace-access
+        // authorization (which only decides whether this actor may call
+        // `review` at all, never whether an accept is honored) — that
+        // authorization outcome is orthogonal to, and never a substitute
+        // for, this gate.
+        if (input.decision === "accepted" && input.interactive === false) {
+          throw new ProposalLifecycleError("non_interactive_accept_denied", "accept is denied for a non-interactive session (interactive: false) — SLATE-8 unattended checkpoint; propose remains available, retry review from a session where interactive is honestly true");
+        }
         const reviewerAuthority = authorityFor(manifest, actor.subject);
         const approval = input.decision === "accepted" ? await this.writeApproval(proposal, actor, reviewerAuthority, input, policyRevision) : undefined;
         // The intent is durable before crossing into the owning subsystem. A

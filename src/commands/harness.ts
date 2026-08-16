@@ -233,13 +233,31 @@ interface StructuredResult {
   evidence: string[];
 }
 
-interface ParsedArgs {
+// Exported so tests can assert a parsed value directly (e.g. `unattended`)
+// rather than only inferring it indirectly through `harnessCommand`'s
+// end-to-end output, which does not currently surface it.
+export interface ParsedArgs {
   provider: string;
   model: string;
   baseUrl?: string;
   prompt: string;
   /** `--record <path>`: write the run's replayable hash surface to a file. */
   record?: string;
+  /**
+   * `--unattended`: operator-set signal (SLATE-8) that this run has no human
+   * present, forcing `interactive: false` semantics for that invocation. A
+   * plain boolean, deliberately not a `--profile <name>` selector — kept as
+   * a separate axis from `PolicyProfile` (see
+   * docs/requirements/slate/specification.md's "Permission model" section).
+   * Slate Phase 2 scope is parse-and-store only: `RunDeps.interactive` is
+   * already unconditionally `false` for every `harness run` invocation
+   * (the policy-engine headless fail-closed posture, unrelated to this
+   * flag), and no `harness run` → `workspace review` pipe exists yet for
+   * this flag to gate — that wiring is deferred to a later phase once such
+   * a call path exists. This field exists now so callers can start setting
+   * it ahead of that wiring landing.
+   */
+  unattended?: boolean;
 }
 
 /** The usage text, printed on an unknown subcommand or invalid args. */
@@ -269,12 +287,13 @@ const denyingExecutor: ToolExecutorPort = {
   },
 };
 
-/** Parse `run --provider <p> --model <m> [--base-url <url>] "<prompt>"`. */
-function parseArgs(args: string[]): ParsedArgs {
+/** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] "<prompt>"`. */
+export function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
   let record: string | undefined;
+  let unattended: boolean | undefined;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -288,6 +307,8 @@ function parseArgs(args: string[]): ParsedArgs {
       baseUrl = args[++i];
     } else if (arg === "--record") {
       record = args[++i];
+    } else if (arg === "--unattended") {
+      unattended = true;
     } else if (arg !== undefined) {
       positional.push(arg);
     }
@@ -296,6 +317,7 @@ function parseArgs(args: string[]): ParsedArgs {
   const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
   if (record !== undefined) parsed.record = record;
+  if (unattended !== undefined) parsed.unattended = unattended;
   return parsed;
 }
 
@@ -336,7 +358,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, unattended } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running

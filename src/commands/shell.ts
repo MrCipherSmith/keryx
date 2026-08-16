@@ -84,6 +84,7 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
+import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -1024,6 +1025,13 @@ async function runAgentRepl(
   let archive: NormalizedMessage[] = [];
   let nextArchiveIndex = 0;
   let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * SLATE-5 open/close wiring: a fresh, never-opened ref per live session dir
+   * (reassigned on `/new`; see below). `undefined` whenever `live` is —
+   * sessions disabled, no dir to anchor a slate to, so `runAgentTurn` skips
+   * all slate lifecycle work (see `RunAgentTurnOptions.slateSession`).
+   */
+  let slateSession: SlateSessionRef | undefined;
   if (sessionsOn) {
     try {
       let resumeId = sessionOpts?.resumeId;
@@ -1064,6 +1072,7 @@ async function runAgentRepl(
       );
     }
   }
+  slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
 
   const save = (): void => {
     if (live === undefined) {
@@ -1115,6 +1124,8 @@ async function runAgentRepl(
   for (;;) {
     const line = await readLine();
     if (line === undefined) {
+      // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
+      await closeSlateSession(slateSession, mintTimestampAttemptId);
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -1123,6 +1134,8 @@ async function runAgentRepl(
       const command = parts[0] ?? "";
       const rest = parts.slice(1).join(" ").trim();
       if (command === "/exit" || command === "/quit") {
+        // SLATE-5 close trigger: shell exit (explicit command).
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
         return;
       }
       if (command === "/help") {
@@ -1166,6 +1179,11 @@ async function runAgentRepl(
           agentIo.onSystem?.("Nothing to expand — no tool output yet.\n");
         }
       } else if (command === "/new" || command === "/clear") {
+        // SLATE-5 close trigger: `/new` (and `/clear`, which is the same
+        // command under sessions-off — no session dir there, so nothing to
+        // close). Archive whatever slate the ABOUT-TO-BE-ABANDONED session
+        // was building before switching away from it.
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
         if (sessionsOn) {
           live = createSession({
             cwd: sessionCwd,
@@ -1175,6 +1193,7 @@ async function runAgentRepl(
           history = [];
           archive = [];
           nextArchiveIndex = 0;
+          slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );
@@ -1284,7 +1303,7 @@ async function runAgentRepl(
     lastUsage = undefined;
     startSpinner();
     try {
-      await runAgentTurn(agentIo, deps, history, line);
+      await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});
     } finally {
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();

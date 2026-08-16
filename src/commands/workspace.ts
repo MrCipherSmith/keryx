@@ -124,7 +124,10 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       // Same composition as `propose`: an accept for any proposal kind must
       // see the real owner writer (memory/wiki/skill), or it lands in
       // "stale" for no real reason.
-      const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
+      // `interactive: true` — a human is directly invoking `keryx workspace
+      // review` at the terminal (SLATE-8's unattended checkpoint; see
+      // ProposalLifecycleService.review()'s gate).
+      const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}) });
       console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
     }
     if (subcommand === "collaboration") {

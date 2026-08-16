@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 2,
+  "id": "160",
+  "slug": "slate-phase-2-anchors-course-seeds-the-u",
+  "title": "Slate Phase 2: Anchors, Course, Seeds & the unattended checkpoint",
+  "status": "in-progress",
+  "createdAt": "2026-08-16T11:56:44.340Z",
+  "updatedAt": "2026-08-16T13:22:26.910Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:bb53bcf7d723bc6f1b059bec3beefe736a5c690781772bf795f522eabba88918",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Course + Seeds (SLATE-3 feature half, SLATE-4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Unattended checkpoint interactive gate (SLATE-8, security-sensitive)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "unattended boolean flag on keryx harness run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Fix review findings: shell.ts slate open/close test coverage, finally-block error masking, --unattended parse assertion",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Fix round: remediate 5 major + 5 minor review findings (F-001..F-010)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-16T11:56:44.340Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-16T12:05:15.442Z",
+      "event": "task-added",
+      "detail": "T5: Course + Seeds (SLATE-3 feature half, SLATE-4)"
+    },
+    {
+      "at": "2026-08-16T12:05:15.520Z",
+      "event": "task-added",
+      "detail": "T6: Unattended checkpoint interactive gate (SLATE-8, security-sensitive)"
+    },
+    {
+      "at": "2026-08-16T12:05:25.069Z",
+      "event": "task-added",
+      "detail": "T7: unattended boolean flag on keryx harness run"
+    },
+    {
+      "at": "2026-08-16T12:05:46.039Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-16T12:05:54.089Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-16T12:05:54.189Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-16T12:13:27.709Z",
+      "event": "task-done",
+      "detail": "T7: unattended boolean flag on keryx harness run"
+    },
+    {
+      "at": "2026-08-16T12:15:16.991Z",
+      "event": "task-done",
+      "detail": "T6: Unattended checkpoint interactive gate (SLATE-8, security-sensitive)"
+    },
+    {
+      "at": "2026-08-16T12:17:09.715Z",
+      "event": "task-done",
+      "detail": "T5: Course + Seeds (SLATE-3 feature half, SLATE-4)"
+    },
+    {
+      "at": "2026-08-16T12:37:27.852Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-16T12:39:07.598Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-16T12:58:52.263Z",
+      "event": "task-added",
+      "detail": "T8: Fix review findings: shell.ts slate open/close test coverage, finally-block error masking, --unattended parse assertion"
+    },
+    {
+      "at": "2026-08-16T13:02:28.424Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-16T13:02:28.611Z",
+      "event": "task-added",
+      "detail": "T9: Fix round: remediate 5 major + 5 minor review findings (F-001..F-010)"
+    },
+    {
+      "at": "2026-08-16T13:22:26.813Z",
+      "event": "task-done",
+      "detail": "T8: Fix review findings: shell.ts slate open/close test coverage, finally-block error masking, --unattended parse assertion"
+    },
+    {
+      "at": "2026-08-16T13:22:26.910Z",
+      "event": "task-done",
+      "detail": "T9: Fix round: remediate 5 major + 5 minor review findings (F-001..F-010)"
+    }
+  ]
+}

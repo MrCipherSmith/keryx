@@ -11,6 +11,8 @@ import {
   validateSacContract,
 } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
+import { deriveFlowWork, migrateFlow } from "../flow/store";
+import type { FlowState } from "../flow/types";
 import { withFileLock } from "../lib/fs";
 import {
   resolvePolicyExperiment,
@@ -612,9 +614,15 @@ export function createLocalFwkReadService(
         // `work.state === "unbound"` rather than throwing.
         try {
           const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
-          const snapshot = JSON.parse(raw) as { id?: string; status?: string; updatedAt?: string; tasks?: Array<{ id: string; status: string }> };
+          const snapshot = JSON.parse(raw) as FlowState;
           if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
-          return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
+          // Same read-time normalization `src/flow/store.ts`'s `readFlow` applies
+          // (v1 -> v2 in-memory only) before handing off to the shared
+          // completed/next/blocked formula (`deriveFlowWork`) — the same one
+          // `src/session/slate-course.ts`'s `readCourse` uses. An unsupported/
+          // missing schemaVersion throws here and is swallowed by the catch
+          // below exactly like malformed JSON already is.
+          return deriveFlowWork(migrateFlow(snapshot), flow.uri);
         } catch (error) {
           // Only a content-unreadable/malformed failure collapses to
           // "unbound" here: a deleted flow resource entry (`not_found`), a

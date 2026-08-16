@@ -135,7 +135,11 @@ export function buildToolRegistry(): ToolEntry[] {
         const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
         // Same composition as sac.propose: an accept must see the real owner
         // writer (memory/wiki/skill), or it lands in "stale" for no real reason.
-        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
+        // `interactive: true` — matches current MCP trust posture (a human is
+        // driving this tool call; SLATE-8's spec explicitly scopes the
+        // stdio-transport trust gap as a separate, not-fixed-here concern, so
+        // this does not invent a stricter MCP-specific policy).
+        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}) });
         return normalizeProposalLifecycleResult(result);
       },
     },
