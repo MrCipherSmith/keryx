@@ -35,9 +35,10 @@
 // has had a chance to clear an old `terminal-state.json`).
 
 import { randomUUID } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isLockHeld, pathExists } from "../lib/fs";
+import { readConfigFile } from "../lib/config-dir";
 import { sessionDir } from "../session/paths";
 import { readSlate, slateLockPath, type Slate } from "../session/slate";
 import type { TerminalState } from "../session/slate-terminal-state";
@@ -215,9 +216,16 @@ async function safeReadSlate(dir: string): Promise<Slate | undefined> {
 }
 
 async function readTerminalState(dir: string): Promise<TerminalState | undefined> {
+  // Review finding (CI guard): every reader of the shared config directory
+  // must go through readConfigFile/readTranscriptFile — this file also
+  // resolves paths via `sessionDir(...)` elsewhere, which is what put it in
+  // config-dir.readers.test.ts's numerator once a raw read sat beside it.
+  const result = readConfigFile(path.join(dir, "terminal-state.json"));
+  if (!result.ok) {
+    return undefined;
+  }
   try {
-    const raw = await readFile(path.join(dir, "terminal-state.json"), "utf8");
-    return JSON.parse(raw) as TerminalState;
+    return JSON.parse(result.text) as TerminalState;
   } catch {
     return undefined;
   }
@@ -243,12 +251,16 @@ async function readNewestUnboundCandidate(dir: string): Promise<{ evidencePath: 
   entries.sort();
   for (let i = entries.length - 1; i >= 0; i--) {
     const evidencePath = path.join(archiveDir, entries[i]!);
+    const result = readConfigFile(evidencePath);
+    if (!result.ok) {
+      continue; // malformed/partial/oversized entry — try the next-newest, never throw
+    }
     try {
-      const parsed = JSON.parse(await readFile(evidencePath, "utf8")) as UnboundCandidateContent;
+      const parsed = JSON.parse(result.text) as UnboundCandidateContent;
       if (parsed.recordType !== "unbound-candidate") continue;
       return { evidencePath, summary: summarizeUnboundCandidate(parsed.groups) };
     } catch {
-      continue; // malformed/partial entry — try the next-newest, never throw
+      continue;
     }
   }
   return undefined;
