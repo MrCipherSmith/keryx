@@ -43,3 +43,11 @@
 - 2026-08-16T16:10:20.056Z - task-done: T10: Failing tests: SLATE-11 TerminalState + SLATE-15 /goal (AC1/AC2/AC3)
 - 2026-08-16T16:32:13.564Z - task-done: T11: Implement SLATE-11 TerminalState + SLATE-15 /goal
 - 2026-08-16T17:12:36.002Z - task-done: T12: code-verifier + review-orchestrator; remediate; draft PR
+- 2026-08-16T18:34:32.500Z - ac-confirmed: AC1: goal-command.test.ts: 'AC1: /goal --workspace <invalid id> rejects fail-closed' — no slate created, turn never runs, provider never called
+- 2026-08-16T18:34:32.601Z - ac-confirmed: AC2: goal-command.test.ts: 'AC2: /goal with no --workspace never creates a workspace' — slate opens, workspaceId unset, no workspaces dir created
+- 2026-08-16T18:34:32.692Z - ac-confirmed: AC3: agent.test.ts SLATE-11 block: unattended ask_user/budget-exhaustion emits TerminalState (reason ask_user_unanswerable/budget_exhausted) and stops cleanly; F-003 fix confirmed batch-stop on first ask_user in multi-call round
+- 2026-08-16T18:34:32.786Z - ac-confirmed: AC4: agent.test.ts: Anchors block injected into history on fresh slate open transition (false->true), mid-session, with no explicit model tool call — verified end-to-end via runAgentTurnCore's open-trigger path
+- 2026-08-16T18:34:32.874Z - ac-confirmed: AC5: slate-tool.test.ts: Course/Seeds reachable only via slate_read/slate_write_seed tool invocations; renderAnchorsBlock injection carries only Anchors, never Course/Seeds content
+- 2026-08-16T18:35:13.767Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/304 (warning: PR is not a draft)
+- 2026-08-16T18:35:13.864Z - completing
+- 2026-08-16T18:35:16.422Z - done: all gates passed
