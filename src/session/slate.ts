@@ -20,6 +20,7 @@ import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assembleContext, type ContextCandidate } from "../ctx/assembly";
 import { estimateTokens } from "../gdgraph/repomap";
+import { redactSensitiveText } from "../security/redact";
 
 /**
  * Mirrors `ProposalKind` from `src/sac/proposal-lifecycle.ts`. Duplicated
@@ -228,6 +229,61 @@ export function dedupeSeeds(seeds: SlateSeed[]): SlateSeed[] {
 const DEFAULT_RENDER_MAX_TOKENS = 2000;
 
 /**
+ * Shared touched-array redaction + token-bounding core (review finding 1 /
+ * finding 7). `renderAnchorsBlock` (below) and `slate-terminal-state.ts`'s
+ * `boundedRedactedAnchorsSnapshot` both need to turn a raw, append-only
+ * `SlateAnchors.touched` array into a redacted, budget-bounded, readable-order
+ * subset — this is the ONE shared implementation of that logic, extracted so
+ * the two never again drift the way they did before this fix: review finding
+ * 1 found that `renderAnchorsBlock` never redacted `touched` at all, while a
+ * near-identical inline copy of this same algorithm in
+ * `slate-terminal-state.ts` DID redact — because the two were separately
+ * hand-maintained copies with no shared source of truth.
+ *
+ * Every `touched` entry is redacted via `redactSensitiveText`
+ * (`src/security/redact.ts`) BEFORE token estimation or selection — so a raw
+ * secret's true length never buys it a bigger token cost than what actually
+ * survives into the render, and a dropped-for-budget entry was never
+ * un-redacted in the first place. Selection is most-recent-first (index 0 of
+ * the reversed array is `touched`'s LAST/newest entry) via `assembleContext`,
+ * so a tight `budget` drops the OLDEST entries, never the newest; survivors
+ * are then restored to chronological (oldest-survivor-first) order for
+ * readability. `budget` is entirely the caller's own concern — each of the
+ * two call sites computes its own touched-only token budget differently (see
+ * each one's own doc comment), this helper only owns what happens to
+ * `touched` once a budget is known.
+ */
+export function redactAndBoundTouched(
+  touched: readonly string[],
+  budget: number,
+  ctx: { traceRef: string; configurationRevision: string; policyRef: string; policyRevision: string },
+): string[] {
+  // Most-recent-first: index 0 here is `touched`'s LAST (newest) entry.
+  const recentFirstRedacted = [...touched].reverse().map((entry) => redactSensitiveText(entry));
+  const candidates: ContextCandidate[] = recentFirstRedacted.map((text, i) => ({
+    id: `touched:${i}`,
+    required: false,
+    tokens: estimateTokens(text),
+  }));
+
+  const assembly = assembleContext({
+    candidates,
+    maxItems: candidates.length,
+    maxTokens: Math.max(0, budget),
+    ...ctx,
+  });
+  // No candidate above is `required`, so `assembleContext` never returns the
+  // `context_overflow` shape for this call — it only ever omits optionally.
+  const selectedIds = new Set("code" in assembly ? [] : assembly.selected);
+
+  return recentFirstRedacted
+    .map((text, i) => ({ id: `touched:${i}`, text }))
+    .filter((entry) => selectedIds.has(entry.id))
+    .reverse() // restore oldest-survivor-first order among the survivors
+    .map((entry) => entry.text);
+}
+
+/**
  * SLATE-2a (Anchors auto-inject, AC4/AC5): render `anchors.root`/`tree`/
  * `runtime`/`touched` as a plain-text block suitable for a harness-written
  * `{role:"user", provenance:"project"}` history message. Bounded via the
@@ -245,14 +301,20 @@ const DEFAULT_RENDER_MAX_TOKENS = 2000;
  * survives" is this function's own contract, not something a caller should
  * have to special-case).
  *
- * `touched` entries are fed to `assembleContext` MOST-RECENT-FIRST (the
- * reverse of `anchors.touched`'s append-only storage order): `assembleContext`
- * greedily accepts candidates in the order given and starts omitting once the
- * budget is spent, so feeding recent-first means a tight budget drops the
- * OLDEST entries, not the newest — the plan.md Risks section's explicit
- * requirement ("keep the freshest situational awareness, not the earliest").
- * Once selection is decided, surviving `touched` lines are rendered back in
- * chronological (oldest-survivor-first) order for readability.
+ * `root`/`tree`/`runtime` are assembled FIRST, in their own `assembleContext`
+ * call (root required, tree/runtime optional) — exactly the same greedy,
+ * in-order selection `assembleContext` would perform if they were mixed into
+ * one call with `touched` (each candidate's fit check only ever depends on
+ * cumulative tokens consumed by candidates BEFORE it in the list, so
+ * splitting "head" candidates from `touched` into two sequential calls is
+ * behaviorally identical to one combined call, provided `touched` is always
+ * considered after root/tree/runtime — which it always was). What remains of
+ * `maxTokens` after the head is selected becomes `touched`'s own budget,
+ * handed to the shared {@link redactAndBoundTouched} helper (review finding
+ * 1 / finding 7), which redacts every `touched` entry via
+ * `redactSensitiveText` (`src/security/redact.ts`) BEFORE any selection
+ * happens — this function previously never redacted `touched` at all before
+ * pushing it into shared, provider-bound `history`.
  *
  * Defensive structural guard for AC5 ("Course/Seeds content is reachable
  * only through slate_read/slate_write_seed, never silently injected"): this
@@ -269,26 +331,21 @@ export function renderAnchorsBlock(anchors: SlateAnchors, opts?: { maxTokens?: n
   const treeLine = anchors.tree !== undefined ? `tree: ${anchors.tree}` : undefined;
   const runtimeLine =
     anchors.runtime !== undefined ? `runtime: ${anchors.runtime.provider}/${anchors.runtime.model}` : undefined;
-  // Most-recent-first: index 0 here is `anchors.touched`'s LAST (newest) entry.
-  const touchedRecentFirst = [...anchors.touched].reverse();
 
   type Entry = { id: string; text: string; required: boolean };
-  const entries: Entry[] = [{ id: "root", text: rootLine, required: true }];
-  if (treeLine !== undefined) entries.push({ id: "tree", text: treeLine, required: false });
-  if (runtimeLine !== undefined) entries.push({ id: "runtime", text: runtimeLine, required: false });
-  touchedRecentFirst.forEach((text, i) => {
-    entries.push({ id: `touched:${i}`, text, required: false });
-  });
+  const headEntries: Entry[] = [{ id: "root", text: rootLine, required: true }];
+  if (treeLine !== undefined) headEntries.push({ id: "tree", text: treeLine, required: false });
+  if (runtimeLine !== undefined) headEntries.push({ id: "runtime", text: runtimeLine, required: false });
 
-  const candidates: ContextCandidate[] = entries.map((entry) => ({
+  const headCandidates: ContextCandidate[] = headEntries.map((entry) => ({
     id: entry.id,
     required: entry.required,
     tokens: estimateTokens(entry.text),
   }));
 
-  const assembly = assembleContext({
-    candidates,
-    maxItems: candidates.length,
+  const headAssembly = assembleContext({
+    candidates: headCandidates,
+    maxItems: headCandidates.length,
     maxTokens,
     traceRef: "slate-anchors",
     configurationRevision: "slate-anchors-v1",
@@ -299,18 +356,24 @@ export function renderAnchorsBlock(anchors: SlateAnchors, opts?: { maxTokens?: n
   // `assembleContext` returning a `context_overflow` shape (via `"code" in
   // assembly`) means even `root` alone did not fit `maxTokens` — force it in
   // anyway (required candidates always survive per this function's own
-  // contract) and drop every optional line rather than guess a partial fit.
-  const selectedIds = "code" in assembly ? new Set<string>(["root"]) : new Set(assembly.selected);
+  // contract), drop tree/runtime, and leave no budget for `touched`.
+  const headSelectedIds = "code" in headAssembly ? new Set<string>(["root"]) : new Set(headAssembly.selected);
+  const headTokensUsed =
+    "code" in headAssembly
+      ? 0
+      : headCandidates.filter((c) => headSelectedIds.has(c.id)).reduce((sum, c) => sum + c.tokens, 0);
+  const touchedBudget = "code" in headAssembly ? 0 : Math.max(0, maxTokens - headTokensUsed);
+
+  const touchedLines = redactAndBoundTouched(anchors.touched, touchedBudget, {
+    traceRef: "slate-anchors-touched",
+    configurationRevision: "slate-anchors-v1",
+    policyRef: "slate-anchors",
+    policyRevision: "v1",
+  }).map((text) => `- ${text}`);
 
   const lines: string[] = ["Anchors:", rootLine];
-  if (treeLine !== undefined && selectedIds.has("tree")) lines.push(treeLine);
-  if (runtimeLine !== undefined && selectedIds.has("runtime")) lines.push(runtimeLine);
-
-  const touchedLines = touchedRecentFirst
-    .map((text, i) => ({ id: `touched:${i}`, text }))
-    .filter((entry) => selectedIds.has(entry.id))
-    .reverse() // restore oldest-survivor-first order among the survivors
-    .map((entry) => `- ${entry.text}`);
+  if (treeLine !== undefined && headSelectedIds.has("tree")) lines.push(treeLine);
+  if (runtimeLine !== undefined && headSelectedIds.has("runtime")) lines.push(runtimeLine);
   if (touchedLines.length > 0) {
     lines.push("touched:", ...touchedLines);
   }

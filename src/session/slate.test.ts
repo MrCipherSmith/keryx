@@ -228,6 +228,30 @@ test("renderAnchorsBlock always includes root even under a very small maxTokens 
   expect(block).toContain("/project/root");
 });
 
+test("review finding 1: renderAnchorsBlock redacts a secret-shaped touched entry before it ever reaches the rendered block (mirrors slate-terminal-state.test.ts's own F-004 redaction test)", () => {
+  const token = `ghp_${"A".repeat(36)}`;
+  const anchors: SlateAnchors = { root: "/project/root", touched: [`src/config-with-token=${token}.ts`] };
+
+  const block = renderAnchorsBlock(anchors);
+
+  expect(block).not.toContain(token);
+  expect(block).toContain("[REDACTED:");
+});
+
+test("review finding 1: renderAnchorsBlock still redacts a secret-shaped touched entry that survives a tight maxTokens budget", () => {
+  const token = `ghp_${"A".repeat(36)}`;
+  const anchors: SlateAnchors = {
+    root: "/project/root",
+    touched: ["src/old-file.ts", `src/config-with-token=${token}.ts`],
+  };
+
+  // Tight enough to drop the older entry but keep the most-recent one.
+  const block = renderAnchorsBlock(anchors, { maxTokens: 30 });
+
+  expect(block).not.toContain(token);
+  expect(block).toContain("[REDACTED:");
+});
+
 test("renderAnchorsBlock never contains the literal substrings 'course' or 'seeds' (case-insensitive) — defensive structural guard for AC5", () => {
   const anchors: SlateAnchors = {
     root: "/project/root",

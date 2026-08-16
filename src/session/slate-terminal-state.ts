@@ -8,10 +8,9 @@
 // mirroring `slate.ts`/`slate-lifecycle.ts`/`slate-course.ts`'s own
 // one-concept-per-file convention and layering.
 
-import { assembleContext, type ContextCandidate } from "../ctx/assembly";
 import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
-import type { SlateAnchors, SlateCourse } from "./slate";
+import { redactAndBoundTouched, type SlateAnchors, type SlateCourse } from "./slate";
 
 /** Why an unattended turn stopped. `"other"` is reserved for a future caller. */
 export type TerminalStateReason = "ask_user_unanswerable" | "budget_exhausted" | "other";
@@ -52,6 +51,11 @@ const DEFAULT_TERMINAL_STATE_MAX_TOKENS = 2000;
  * (oldest-survivor-first) order, and `root`/`tree`/`runtime` (small,
  * fixed-size fields) always kept in full — only `touched` can grow
  * unboundedly across a long session, so only `touched` is ever trimmed.
+ * `touched`'s own redaction + bounding is delegated to `slate.ts`'s shared
+ * `redactAndBoundTouched` (review finding 1 / finding 7) — the SAME
+ * implementation `renderAnchorsBlock` itself now uses, so the two can no
+ * longer independently drift the way they did before this fix (this
+ * module's `touched` redaction predates `renderAnchorsBlock`'s own).
  *
  * Redaction happens BEFORE token-budgeting (not after) so a raw secret's
  * length never buys it a bigger token cost than what actually survives —
@@ -74,32 +78,12 @@ function boundedRedactedAnchorsSnapshot(anchors: SlateAnchors, maxTokens: number
   const baseTokens = estimateTokens(JSON.stringify(base));
   const touchedBudget = Math.max(0, maxTokens - baseTokens);
 
-  // Most-recent-first: index 0 here is `anchors.touched`'s LAST (newest) entry.
-  const touchedRecentFirstRedacted = [...anchors.touched].reverse().map((entry) => redactSensitiveText(entry));
-  const candidates: ContextCandidate[] = touchedRecentFirstRedacted.map((text, i) => ({
-    id: `touched:${i}`,
-    required: false,
-    tokens: estimateTokens(text),
-  }));
-
-  const assembly = assembleContext({
-    candidates,
-    maxItems: candidates.length,
-    maxTokens: touchedBudget,
+  const touched = redactAndBoundTouched(anchors.touched, touchedBudget, {
     traceRef: "slate-terminal-state-anchors",
     configurationRevision: "slate-terminal-state-anchors-v1",
     policyRef: "slate-terminal-state-anchors",
     policyRevision: "v1",
   });
-  // No candidate above is `required`, so `assembleContext` never returns the
-  // `context_overflow` shape for this call — it only ever omits optionally.
-  const selectedIds = new Set("code" in assembly ? [] : assembly.selected);
-
-  const touched = touchedRecentFirstRedacted
-    .map((text, i) => ({ id: `touched:${i}`, text }))
-    .filter((entry) => selectedIds.has(entry.id))
-    .reverse() // restore oldest-survivor-first order among the survivors
-    .map((entry) => entry.text);
 
   return { ...base, touched };
 }
@@ -117,8 +101,9 @@ function boundedRedactedAnchorsSnapshot(anchors: SlateAnchors, maxTokens: number
  * whole point is to surface `courseSnapshot` — so `courseSnapshot` is always
  * rendered as its full, untouched JSON serialization (not summarized,
  * bounded, or redacted). `anchorsSnapshot`, however, gets the same two
- * safeguards `renderAnchorsBlock` already applies to Anchors elsewhere
- * (F-004, review remediation): `touched`/`fence` entries are redacted via
+ * safeguards `renderAnchorsBlock` ALSO applies to Anchors elsewhere (F-004 /
+ * review finding 1, both fixed via the shared `redactAndBoundTouched`
+ * helper in `slate.ts`): `touched`/`fence` entries are redacted via
  * {@link boundedRedactedAnchorsSnapshot}, and `touched` is token-bounded via
  * `opts.maxTokens` (default {@link DEFAULT_TERMINAL_STATE_MAX_TOKENS}) —
  * applied HERE, inside this function, so it holds regardless of which caller
