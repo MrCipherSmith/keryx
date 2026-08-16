@@ -44,3 +44,11 @@
   environment gotchas); zero failures in any file this flow touched. T4
   (review) marked done; proceeding to draft PR against main.
 - 2026-08-16T22:52:57.877Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-17 - Committed (17d05fb) and pushed feat/slate-phase5. Opened draft
+  PR #308 against main: https://github.com/MrCipherSmith/keryx/pull/308.
+  Left the orphaned, never-frozen duplicate flow 164
+  (.metaproject/flows/164-2026-08-16-slate-phase-5-catch-up-review-and-genera/)
+  uncommitted/untouched — stray artifact from a concurrent process before
+  this flow started, 0 tasks done, no AC frozen, no CLI delete command
+  exists; harmless to leave in place. Next: /code-review high effort
+  against PR #308 as independent second review layer.

@@ -331,3 +331,19 @@ test("listForActor never re-derives an actor from a `request` — it trusts the 
   const ownerActor = await server("user:owner").actorContextFor(request, "listforactor-noreauth-actor-0001");
   expect((await owner.listForActor({ actorContext: ownerActor! })).map((w) => w.id)).toEqual([created.id]);
 });
+
+// --- Flow 165 fix (finding A): listForActor must verify a genuinely -------
+// --- server-issued actorContext, not merely an object shaped like one -----
+
+test("listForActor rejects a plain object literal shaped exactly like TrustedActorContext (not obtained via a real actorContextFor() call) with access_denied — proving it verifies trust, not just object shape", async () => {
+  const workspaceRoot = await root();
+  const owner = service(workspaceRoot);
+  await owner.create({ request, requestCorrelationId: "listforactor-untrusted-create-0001", id: "workspace-lfa-untrusted", title: "Untrusted" });
+  const forgedActorContext = {
+    subject: "user:owner",
+    authenticationMethod: "local-os",
+    issuedRoleRevision: "roles-v1",
+    requestCorrelationId: "listforactor-untrusted-forged-0001",
+  };
+  await expect(owner.listForActor({ actorContext: forgedActorContext as unknown as Parameters<typeof owner.listForActor>[0]["actorContext"] })).rejects.toMatchObject({ code: "access_denied" });
+});

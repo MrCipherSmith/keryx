@@ -39,9 +39,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isLockHeld, pathExists } from "../lib/fs";
 import { sessionDir } from "../session/paths";
-import { readSlate, slateLockPath } from "../session/slate";
+import { readSlate, slateLockPath, type Slate } from "../session/slate";
 import type { TerminalState } from "../session/slate-terminal-state";
-import { listSessions } from "../session/store";
+import { listSessions, type SessionSummary } from "../session/store";
 import { createLocalProposalLifecycleService, type ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
 
@@ -97,16 +97,20 @@ async function collectProposals(cwd: string, workspaceId: string | undefined): P
   const groups = await proposalService.listVisibleProposedProposals(actor);
   const scoped = workspaceId === undefined ? groups : groups.filter((group) => group.workspace.id === workspaceId);
 
-  const items: CatchUpProposalItem[] = [];
-  for (const group of scoped) {
-    for (const proposal of group.proposals) {
+  // Flattened once, up front, so the per-proposal freshness re-check below can
+  // run concurrently via `Promise.all` (flow 165 fix, cheap performance
+  // improvement) — independent per-item I/O, order preserved by `flatMap`'s
+  // own group/proposal iteration order, so this is behavior-preserving, not a
+  // classification change.
+  const flattened = scoped.flatMap((group) => group.proposals.map((proposal) => ({ group, proposal })));
+  return Promise.all(
+    flattened.map(async ({ group, proposal }) => {
       // Re-checked HERE, per item, right before display (AC3) — never a
       // cached/creation-time value.
       const fresh = await proposalService.isEvidenceFresh(proposal, actor);
-      items.push({ type: "proposal", workspaceId: group.workspace.id, proposalId: proposal.id, fresh });
-    }
-  }
-  return items;
+      return { type: "proposal" as const, workspaceId: group.workspace.id, proposalId: proposal.id, fresh };
+    }),
+  );
 }
 
 type SessionCategories = {
@@ -115,53 +119,69 @@ type SessionCategories = {
   unknown: CatchUpUnknownItem[];
 };
 
+type ClassifiedSession =
+  | { kind: "blocked"; item: CatchUpBlockedItem }
+  | { kind: "unbound-candidate"; item: CatchUpUnboundCandidateItem }
+  | { kind: "unknown"; item: CatchUpUnknownItem }
+  | undefined;
+
+/**
+ * Classifies exactly one session into (at most) one of the three
+ * session-derived categories, same priority order and semantics the previous
+ * sequential loop body used — extracted so `collectSessionCategories` can run
+ * every session's independent I/O concurrently via `Promise.all` (flow 165
+ * fix, cheap performance improvement; classification outcome unchanged).
+ */
+async function classifySession(session: SessionSummary): Promise<ClassifiedSession> {
+  const dir = sessionDir(session.projectPath, session.id);
+
+  // Still-running: excluded from every category entirely (AC5), checked
+  // FIRST (flow 165 review fix, F-002) — a fresh lock held means this
+  // session is actively running RIGHT NOW, regardless of what else is on
+  // disk (in particular, a stale `terminal-state.json` predating a resume
+  // must never still classify a running session as "blocked").
+  if (await isLockHeld(slateLockPath(dir))) return undefined;
+
+  const terminalState = await readTerminalState(dir);
+  if (terminalState !== undefined) {
+    // Best-effort: a blocked session's `slate.json` is typically still
+    // unclosed (writeTerminalState never archives/removes it), so its
+    // `workspaceId`, if ever bound, is readable straight off it. `undefined`
+    // (no slate.json, or no workspaceId ever bound) is a valid outcome.
+    const workspaceId = (await safeReadSlate(dir))?.workspaceId;
+    return { kind: "blocked", item: { type: "blocked", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), terminalState } };
+  }
+
+  const unboundCandidate = await readNewestUnboundCandidate(dir);
+  if (unboundCandidate !== undefined) {
+    return {
+      kind: "unbound-candidate",
+      item: { type: "unbound-candidate", sessionId: session.id, evidencePath: unboundCandidate.evidencePath, summary: unboundCandidate.summary },
+    };
+  }
+
+  // Neither signal fired. Only a session that shows SOME slate engagement
+  // is considered further — an ordinary session that never opened a slate
+  // at all is silently excluded, never surfaced as "unknown" noise.
+  if (!(await isSlateEngaged(dir))) return undefined;
+
+  const workspaceId = (await safeReadSlate(dir))?.workspaceId;
+  return { kind: "unknown", item: { type: "unknown", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), lastSeenAt: session.updatedAt } };
+}
+
 async function collectSessionCategories(cwd: string): Promise<SessionCategories> {
+  // `listSessions` is already `cwd`-scoped by construction (AC4).
+  const classified = await Promise.all(listSessions(cwd).map((session) => classifySession(session)));
+
   const blocked: CatchUpBlockedItem[] = [];
   const unboundCandidates: CatchUpUnboundCandidateItem[] = [];
   const unknown: CatchUpUnknownItem[] = [];
-
-  // `listSessions` is already `cwd`-scoped by construction (AC4).
-  for (const session of listSessions(cwd)) {
-    const dir = sessionDir(session.projectPath, session.id);
-
-    // Still-running: excluded from every category entirely (AC5), checked
-    // FIRST (flow 165 review fix, F-002) — a fresh lock held means this
-    // session is actively running RIGHT NOW, regardless of what else is on
-    // disk (in particular, a stale `terminal-state.json` predating a resume
-    // must never still classify a running session as "blocked").
-    if (await isLockHeld(slateLockPath(dir))) continue;
-
-    const terminalState = await readTerminalState(dir);
-    if (terminalState !== undefined) {
-      // Best-effort: a blocked session's `slate.json` is typically still
-      // unclosed (writeTerminalState never archives/removes it), so its
-      // `workspaceId`, if ever bound, is readable straight off it. `undefined`
-      // (no slate.json, or no workspaceId ever bound) is a valid outcome.
-      const workspaceId = (await readSlate(dir))?.workspaceId;
-      blocked.push({ type: "blocked", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), terminalState });
-      continue;
-    }
-
-    const unboundCandidate = await readNewestUnboundCandidate(dir);
-    if (unboundCandidate !== undefined) {
-      unboundCandidates.push({
-        type: "unbound-candidate",
-        sessionId: session.id,
-        evidencePath: unboundCandidate.evidencePath,
-        summary: unboundCandidate.summary,
-      });
-      continue;
-    }
-
-    // Neither signal fired. Only a session that shows SOME slate engagement
-    // is considered further — an ordinary session that never opened a slate
-    // at all is silently excluded, never surfaced as "unknown" noise.
-    if (!(await isSlateEngaged(dir))) continue;
-
-    const workspaceId = (await readSlate(dir))?.workspaceId;
-    unknown.push({ type: "unknown", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), lastSeenAt: session.updatedAt });
+  for (const category of classified) {
+    if (category === undefined) continue;
+    if (category.kind === "blocked") blocked.push(category.item);
+    else if (category.kind === "unbound-candidate") unboundCandidates.push(category.item);
+    else unknown.push(category.item);
   }
-
   return { blocked, unboundCandidates, unknown };
 }
 
@@ -173,6 +193,24 @@ async function isSlateEngaged(dir: string): Promise<boolean> {
     return entries.length > 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Flow 165 fix (finding B): `readSlate` rethrows any non-ENOENT error (e.g. a
+ * `SyntaxError` from a corrupted `slate.json`), but this whole module is a
+ * discovery/listing surface — every OTHER reader here (`readTerminalState`,
+ * `readNewestUnboundCandidate`, the proposal `JSON.parse`) is deliberately
+ * lenient and never throws. One session's corrupted `slate.json` must not
+ * crash the entire `keryx workspace catch-up` command and hide every other
+ * proposal/blocked/unbound-candidate/unknown item. `undefined` on any read
+ * failure, same posture as `readSlate`'s own ENOENT case.
+ */
+async function safeReadSlate(dir: string): Promise<Slate | undefined> {
+  try {
+    return await readSlate(dir);
+  } catch {
+    return undefined;
   }
 }
 

@@ -423,6 +423,32 @@ test("F-003 fix: blocked items populated with workspaceId from slate.json when b
   expect(item?.workspaceId).toBe(workspaceId);
 });
 
+// --- Flow 165 fix (finding B): a corrupted slate.json must never crash the ---
+// --- whole catch-up command, and must not hide any OTHER session's item ------
+
+test("finding B fix: a corrupted (non-JSON) slate.json does not crash buildCatchUp, and another session's item in the SAME call still appears correctly — proving isolation, not just that the corrupted session is silently skipped", async () => {
+  const cwd = await tempCwd("keryx-catchup-corrupt-slate-");
+  const corrupted = await makeBlockedSession(cwd, "blocked session with a corrupted slate.json");
+  await writeFile(path.join(corrupted.dir, "slate.json"), "{not valid json");
+  const healthyBlocked = await makeBlockedSession(cwd, "healthy blocked session, same call");
+
+  const report = await buildCatchUp({ cwd });
+
+  // The corrupted session's own item still appears (classified "blocked" off
+  // its terminal-state.json, same as before) — just without a workspaceId,
+  // since safeReadSlate degrades to undefined instead of throwing.
+  const corruptedItem = report.blocked.find((item) => item.sessionId === corrupted.sessionId);
+  expect(corruptedItem).toBeDefined();
+  expect(corruptedItem?.workspaceId).toBeUndefined();
+
+  // The OTHER, healthy session in the same buildCatchUp call is completely
+  // unaffected — this is the actual isolation guarantee finding B requires,
+  // not merely that the corrupted session itself degrades gracefully.
+  const healthyItem = report.blocked.find((item) => item.sessionId === healthyBlocked.sessionId);
+  expect(healthyItem).toBeDefined();
+  expect(healthyItem?.terminalState).toMatchObject({ status: "blocked", reason: "budget_exhausted" });
+});
+
 test("F-003 fix: unknown items populated with workspaceId from slate.json when bound", async () => {
   const cwd = await tempCwd("keryx-catchup-f003-unknown-");
   const handle = await makeUnknownSession(cwd, "unknown with workspace binding");

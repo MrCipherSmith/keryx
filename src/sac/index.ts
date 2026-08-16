@@ -566,6 +566,22 @@ export function createSacAuthorizationServer(input: { authenticateRequest: (requ
   } });
 }
 
+/**
+ * Flow 165 fix (finding A): the ONLY runtime way to verify a caller-supplied
+ * `actorContext` is a genuine, server-issued `TrustedActorContext` rather than
+ * a structurally similar object literal — checks the same module-private
+ * `trustedActors` WeakSet `authorizeSacUse` above already consults, populated
+ * exclusively inside `createSacAuthorizationServer`'s `actorContextFor`. Every
+ * other actor-accepting entry point (`showForActor`, `withAuthorizedActor`,
+ * `reauthorizeAtUse`, `resolveResourceForActor`, and `authorizeSacUse` itself)
+ * already re-verifies trust this way before honoring an `actorContext`;
+ * `WorkspaceService.listForActor` did not, and is the caller this helper was
+ * added for.
+ */
+export function isTrustedActorContext(actorContext: unknown): actorContext is TrustedActorContext {
+  return isRecord(actorContext) && trustedActors.has(actorContext);
+}
+
 type CurrentRole = { role: SacRole; revision: string; workspaceId: string };
 type AuthorizationResult = { allowed: boolean; code: "allowed" | "untrusted_actor" | "workspace_access_denied" | "role_revoked" | "insufficient_role" | "authorization_changed"; authorizeAtUse: (resolve: () => Promise<CurrentRole>) => Promise<AuthorizationResult> };
 const roleRank: Record<Exclude<SacRole, "revoked">, number> = { viewer: 1, editor: 2, owner: 3 };

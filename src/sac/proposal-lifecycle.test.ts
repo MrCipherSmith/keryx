@@ -554,3 +554,23 @@ test("isEvidenceFresh never mutates lifecycle state — no activity.jsonl ledger
   const ledgerPath = path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl");
   expect(await pathExists(ledgerPath)).toBe(false);
 });
+
+// --- Flow 165 fix (finding C): isEvidenceFresh is a read-only DISPLAY check,
+// --- so a plain viewer-role actor must not be internally re-authorized at
+// --- review-level (editor/owner) just to see a true freshness signal --------
+
+test("isEvidenceFresh: a plain VIEWER-role actor (not editor/owner) gets true for genuinely unmodified evidence — proves the fix actually removes the review-level authorization requirement, not just that some other case still returns true", async () => {
+  const { service, manifestPath } = await setup(); // default role: workspace-a's sole member ("user:reviewer") is owner
+  const proposal = await propose(service);
+
+  // A DIFFERENT member, added as viewer-rank only (rank 1) — below the
+  // review-level rank (2) `readEvidenceAtUse` used to require internally.
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.members.push({ subject: "user:viewer-flow165", role: "viewer" });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+
+  const viewerServer = createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:viewer-flow165", authenticationMethod: "local-os" as const, roleRevision: "roles-r1" }) });
+  const viewerActor = await viewerServer.actorContextFor(undefined, "finding-c-viewer-0001");
+
+  await expect(service.isEvidenceFresh(proposal, viewerActor!)).resolves.toBe(true);
+});

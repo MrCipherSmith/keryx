@@ -7,6 +7,7 @@ import {
   authorizeSacUse,
   createSacAuthorizationServer,
   evaluateStrictSacGuard,
+  isTrustedActorContext,
   isWorkspaceOwner,
   resolveWorkspaceReference,
   validateSacContract,
@@ -98,6 +99,12 @@ export class WorkspaceService {
    */
   async listForActor(input: { actorContext: TrustedActorContext; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
     await this.requireStrict("read");
+    // Flow 165 fix (finding A): unlike every other actor-accepting method on
+    // this class, `listForActor` receives an already-issued `TrustedActorContext`
+    // with no separate `requireAuthorization`/`authorizeSacUse` call downstream
+    // to catch an untrusted, merely object-shaped caller — verify trust here,
+    // before it is ever used for visibility filtering.
+    if (!isTrustedActorContext(input.actorContext)) throw new WorkspaceServiceError("access_denied", "untrusted actor");
     return this.enumerateVisible(input.actorContext, input.includeArchived);
   }
 

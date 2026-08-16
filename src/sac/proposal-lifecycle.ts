@@ -246,23 +246,45 @@ export class ProposalLifecycleService {
   /**
    * Track B's evidence-freshness read-only re-check (plan.md item 6),
    * implemented here alongside the other new listing methods since it lives
-   * in this same class and shares `validateEvidence`'s existing
-   * revision-hash comparison. Runs the SAME hash-compare
-   * `targetWriteOrStale` already does at write-time
-   * (`validateEvidence(evidence, true, actor, workspaceId)`), but is safe to
-   * call BEFORE any review/accept: it never throws and never attempts a
-   * write. `true` iff every evidence item's current on-disk content still
-   * hashes to its pinned `revision`; `false` on the first mismatch or read
-   * failure — same "fail toward stale, not toward fresh" posture
-   * `targetWriteOrStale`'s own `catch` block already takes.
+   * in this same class and shares the same hash-compare posture
+   * `targetWriteOrStale`/`scanEvidenceSecurityGate` already use. Safe to call
+   * BEFORE any review/accept: it never throws and never attempts a write.
+   * `true` iff every evidence item's current on-disk content still hashes to
+   * its pinned `revision`; `false` on the first mismatch or read failure —
+   * same "fail toward stale, not toward fresh" posture `targetWriteOrStale`'s
+   * own `catch` block already takes.
+   *
+   * Flow 165 fix (finding C): this method is a read-only DISPLAY check
+   * (catch-up's per-proposal freshness re-check, AC3), not a write-path
+   * authorization gate — unlike `targetWriteOrStale`'s real accept-time
+   * evidence check, which legitimately still calls
+   * `validateEvidence(evidence, true, actor, workspaceId)` ->
+   * `workspaces.readEvidenceAtUse`, requiring review-level (editor/owner)
+   * authorization because it gates a real write. Routing THIS method through
+   * that same review-gated path meant a plain viewer-role actor — who
+   * `listVisibleProposedProposals` already deemed allowed to SEE this
+   * proposal at all — got `access_denied` internally on every call, which
+   * this method's `catch` then silently turned into a false "stale" signal
+   * regardless of the evidence's real state. Reads evidence the same
+   * action-agnostic way `scanEvidenceSecurityGate` already does
+   * (`resolveWorkspaceReference` + `readWorkspaceFileNoFollow`, no
+   * `workspaces.readEvidenceAtUse` involved) instead. `actor` is kept in the
+   * signature for call-site compatibility (catch-up.ts's caller already has
+   * one in hand) but is intentionally unused here — visibility was already
+   * established by the caller's own `listVisibleProposedProposals` filter.
    */
-  async isEvidenceFresh(proposal: Proposal, actor: TrustedActorContext): Promise<boolean> {
-    try {
-      await this.validateEvidence(proposal.evidence, true, actor, proposal.workspaceId);
-      return true;
-    } catch {
-      return false;
+  async isEvidenceFresh(proposal: Proposal, _actor: TrustedActorContext): Promise<boolean> {
+    const readEvidenceFile = this.options.readEvidenceFile ?? readWorkspaceFileNoFollow;
+    for (const item of proposal.evidence) {
+      try {
+        const resolved = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri });
+        const content = readEvidenceFile(this.root, resolved).toString("utf8");
+        if (hash(content) !== item.revision) return false;
+      } catch {
+        return false;
+      }
     }
+    return true;
   }
 
   private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, reviewerAuthority: ReviewerAuthority, input: { requestCorrelationId: string; idempotencyKey: string }, approvalRef: string, writeIntent: { intentRef: string }, policyRevision: string): Promise<TargetWriteAttempt> {
