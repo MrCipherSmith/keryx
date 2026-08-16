@@ -1148,6 +1148,8 @@ where tools actually run: the non-interactive harness paths register none.
 | `sessions export <id>` | Markdown transcript |
 | `sessions path` | the on-disk sessions directory |
 | `shell /sessions` | interactive session picker + live switch in TUI |
+| `shell /status` | session inspector (TUI modal; readline text dump). `/session-info` / `/info` are not aliases |
+| `shell /flows [id]` | browse project flows; optional one-package detail |
 | `shell /interrupt` | hard-stop main turn in TUI |
 
 `session` is a singular alias for `sessions`.

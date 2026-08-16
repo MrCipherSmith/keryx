@@ -128,7 +128,7 @@ Two invariants define the system and recur across every module:
 
 | **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation. See "The agent harness" above, and [the feature-level tour](./harness.md). |
 | **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |
-| **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. |
+| **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. Slash inspectors: `/status`, `/flows`. |
 | **session** | `src/session/`, `src/commands/sessions.ts` | `sessions` | Per-project append-only agent sessions: list, fork (branch with `parentSessionId` ancestry), export, locate. |
 | **serve** | `src/commands/serve.ts`, `src/lib/serve-*.ts` | `serve` | Loopback-bound HTTP entry over the harness. Not a module in the manifest sense — a command. |
 | **projects** | `src/lib/project-registry.ts` | `projects` | The user-global project registry that remote entry addresses projects by. |

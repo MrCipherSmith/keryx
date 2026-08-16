@@ -145,6 +145,19 @@ holds and what forking copies.
 
 ### Interactive behavior
 
+- `/help` lists every slash command available in the current mode
+  (`agent` vs `chat`). The registry is `AGENT_SLASH_COMMANDS`.
+- `/status` (chat and agent) opens a read-only inspector. The TUI modal
+  always has **Status** and **Context** (last-turn tokens plus a labelled
+  estimate — never a guessed window). **Workspaces** and **Flow** tabs
+  appear only when the session actually referenced a SAC workspace or a
+  flow (`runLink.sessionId` or an explicit `flow 154` / `/flows 154`
+  mention). `c` copies the session id. Readline / `--no-tui` prints the
+  same rows. `/session-info` and `/info` are **not** aliases.
+- `/flows` lists project flows. In the TUI `↑/↓` selects a row; Enter or
+  `→` opens Detail (status, dir, tasks, PR). `/flows 154` (id, padded id,
+  or slug) opens one package. Readline prints the list, or one package
+  when given an argument.
 - `/sessions` opens an interactive session picker in the TUI and switches the
   live shell to the chosen session.
 - `/search-provider` configures and tests web search providers for `web_search`:

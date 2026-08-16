@@ -1,11 +1,11 @@
 # Keryx OpenTUI Modal and Tabs — PRD
-Version: 0.1.0
+Version: 0.1.1
 
 ## Problem
 
 Grok Build's TUI opens most operator surfaces as **one reusable modal** with
 tabs. `/hooks`, `/plugins`, `/marketplace`, and `/skills` are the same
-extensions modal, just a different starting tab. `/session-info` is a tabbed
+extensions modal, just a different starting tab. `/status` is a tabbed
 inspector. `/model` and `/settings` are the same overlay class.
 
 Keryx's TUI has no such host. Overlays are one-off full-screen `overlayBox`
@@ -19,7 +19,7 @@ Ship a reusable OpenTUI **modal host + tab strip** that:
 
 1. Owns presentation (backdrop, title, tabs, focus trap, Esc, overlay guard).
 2. Does **not** own feature content — callers mount a body per tab.
-3. Is the required substrate for `/session-info` and a later model picker.
+3. Is the required substrate for `/status`, `/flows`, and a later model picker.
 
 ## Users
 
@@ -45,8 +45,7 @@ Ship a reusable OpenTUI **modal host + tab strip** that:
 
 ## Success criteria
 
-- Two independent callers (session-info in the sibling package; a fixture /
-  stub second tab or a documented model-picker adapter) can open the same
+- Two independent callers (`/status` and `/flows`) can open the same
   host with different titles, tab lists, and bodies.
 - While the modal is open, typing `/` does not reopen the slash menu.
 - Esc from the top of the modal returns to the composer with the draft
@@ -62,12 +61,11 @@ Ship a reusable OpenTUI **modal host + tab strip** that:
   100% replacement of chrome).
 - Tab bodies that open nested pickers can deadlock focus if they do not
   participate in steal-Esc. Document the nesting contract.
-- Migrating `/model` in this package would block session-info; migration is
-  a later consumer, not a v1 requirement.
+- Migrating `/model` in this package would block `/status`; migration is
+  a later consumer, not a host-package requirement.
 
 ## Recommendation
 
-Implement the host first, behind no user-facing slash command except a
-dev/test harness if needed. Do not ship `/session-info` until this package
-is accepted. Keep `selectProviderModelInTui` as-is until a follow-up flow
-remounts it inside the host.
+The host is shipped. Callers are `/status` and `/flows`. Keep
+`selectProviderModelInTui` as-is until a follow-up remounts it inside
+the host.

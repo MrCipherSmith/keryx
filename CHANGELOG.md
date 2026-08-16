@@ -5,6 +5,14 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **TUI/readline tool and approval parity.** One factory builds the
+  interactive tool set for both surfaces, so `web_fetch` is no longer
+  TUI-only. Approval policy (allowlist, tamper check, no auto-approve for
+  destructive or credential commands) lives in one module. Readline prints
+  those hints and can remember an exact `shell_exec` grant.
+
 ## [0.2.37] — 2026-08-16
 
 ### Added
