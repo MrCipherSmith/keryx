@@ -1,0 +1,12 @@
+# Tasks
+
+Task definitions live here; task **statuses** live in flow.json and are managed
+only via `keryx flow task done <id> <taskId>`.
+
+| ID | Kind | Title | Notes |
+|----|------|-------|-------|
+| T1 | context | Collect remaining context | Done inline by flow-orchestrator: read specification.md, agent-protocol.md, slate.ts/slate-lifecycle.ts/slate-course.ts/slate-terminal-state.ts, proposal-lifecycle.ts, trusted-wrap-up.ts, single-turn.ts, spawn-subagent-tool.ts, goal-command.ts, agent.ts (slate wiring sections), harness.ts (`--goal`/`--unattended` parsing + `runOffline` path), workspace.ts (`propose`/`review` CLI shape). Findings folded into plan.md/description.md. |
+| T2 | implement | Track A: SLATE-6 child slate in spawn-subagent-tool.ts | Fresh child Anchors assembly + injection, ephemeral child slate for Seeds, fold into `parent.slate.childDispatches[dispatchId]` (never merged), destroy child slate after handoff. Covers AC1 (this file's slice), AC2, AC3. Dispatch to task-implementer, Sonnet (two-channel handoff invariant = real design judgment). |
+| T3 | test | Write failing tests for AC1-AC8 | tests-creator, Sonnet. Must include: AC4 real-concurrency race (two composer calls racing `Promise.all`, not sequential), AC2/AC3 negative test (actively try to reach a child's slate through the parent post-dispatch and assert unreachable except via `childDispatches`), AC5/AC6/AC7 evidence-shape assertions, AC8 source-level audit that the wrap-up trigger never appears in `shell.ts`/`tui-shell.ts` plus a positive test that it fires at the end of `harnessCommand`'s `run` branch. |
+| T5 | implement | Track B: SLATE-7 wrap-up composer + AC8 harness wiring | New `src/sac/machine-wrap-up.ts` (`resolveMachineWrapUp`, `runWrapUp`), wired as the `WrapUpSource === "flow"` case, deterministic proposal-id for AC4, workspaceId-gated propose-vs-unbound-candidate (AC6), kind-grouping (AC7), evidence shape (AC5), model-summary fail-closed/timeout-fallback, plus the one-shot trigger call site at the end of `harnessCommand`'s `run` branch (AC8). Dispatch to task-implementer, Sonnet (fail-closed/timeout-fallback logic + dedup invariant = real design judgment). |
+| T4 | review | Internal verification, review, and PR prep | code-verifier (scoped to touched files + typecheck + `health run --changed` during iteration, one full-suite run right before PR per the speed instruction) + review-orchestrator; fix loop; then draft PR. |

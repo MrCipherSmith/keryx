@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "id": "163",
+  "slug": "slate-phase-4-ephemeral-subagent-slate-a",
+  "title": "Slate Phase 4: Ephemeral subagent slate and wrap-up composer",
+  "status": "in-progress",
+  "createdAt": "2026-08-16T18:53:47.460Z",
+  "updatedAt": "2026-08-16T20:12:18.985Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:107bed83d5969ec04aa4e26d88217e1c76e15bf1cd64f49047a2f2da3e4601ec",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Track B: machine wrap-up composer (resolveMachineWrapUp) + AC8 one-shot harness run trigger wiring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-16T18:53:47.460Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-16T18:56:26.765Z",
+      "event": "task-added",
+      "detail": "T5: Track B: machine wrap-up composer (resolveMachineWrapUp) + AC8 one-shot harness run trigger wiring"
+    },
+    {
+      "at": "2026-08-16T18:57:11.691Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-16T18:57:19.702Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-16T18:57:19.797Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-16T20:12:18.807Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-16T20:12:18.900Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-16T20:12:18.985Z",
+      "event": "task-done",
+      "detail": "T5: Track B: machine wrap-up composer (resolveMachineWrapUp) + AC8 one-shot harness run trigger wiring"
+    }
+  ]
+}

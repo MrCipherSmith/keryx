@@ -2068,3 +2068,21 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
     expect(branchBlock).toContain("mintTimestampAttemptId");
   });
 });
+
+// --- flow 163 AC8: the TUI's OpenTUI REPL never triggers the Track B
+// wrap-up composer this way either — the same invariant shell.test.ts's own
+// "flow 163 AC8" source-text audit proves for the readline REPL, mirrored
+// here for `launchTuiAgentShell` (the OpenTUI equivalent). The trigger call
+// site exists ONLY in the one-shot `keryx harness run` path (harness.test.ts's
+// own positive-half audit). Source-text audit, following the exact
+// precedent this file already sets above (SLATE-2a/SLATE-3a audits):
+// `launchTuiAgentShell` has no headless injection seam, so this is proven by
+// reading the real source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 163 AC8 — tui-shell.ts's OpenTUI REPL never triggers the wrap-up composer (source-text audit)", () => {
+  const tuiSourceAc8 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("tui-shell.ts never imports or calls the Track B wrap-up composer", () => {
+    expect(tuiSourceAc8).not.toContain("runWrapUp");
+    expect(tuiSourceAc8).not.toMatch(/machine-wrap-up/);
+  });
+});

@@ -428,14 +428,32 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
  */
 export function createHarnessProposalLifecycleService(
   cwd: string,
-  opts: { workspaceId: string; note?: string },
+  opts: {
+    workspaceId: string;
+    note?: string;
+    /**
+     * Test-only clock override (flow 163 Track B). `machine-wrap-up.ts`'s
+     * `proposeOneGroup` threads its OWN injected `now` here so the SERVICE's
+     * internal wrap-up authority's freshness check (`verify()`'s `expiresAt
+     * <= now()`) uses the SAME clock as the provenance it is verifying was
+     * issued under — without this, a test-injected `now` far from the real
+     * wall clock would make every machine-issued provenance look expired (or
+     * never expired) purely by accident of when the test happened to run.
+     * Optional and unused by every existing real call site
+     * (`workspace.ts`'s `propose`/`review` handlers never pass it), so this
+     * is a non-breaking addition.
+     */
+    now?: () => Date;
+  },
 ): { service: ProposalLifecycleService; wrapUpAuthority: TrustedWrapUpAuthority; authorizationServer: SacAuthorizationServer } {
   const authorizationServer = localWorkspaceAuthorizationServer();
-  const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });
+  const nowOpt = opts.now !== undefined ? { now: opts.now } : {};
+  const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, ...nowOpt });
   const wrapUpAuthority = createTrustedWrapUpAuthority({
+    ...nowOpt,
     resolveExplicitWrapUp: async (request) => {
       if (request.source !== "session") throw new Error(`this composition only resolves "session" wrap-ups, got "${request.source}"`);
-      return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef });
+      return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef, ...nowOpt });
     },
   });
   const noteOpt = opts.note !== undefined ? { note: opts.note } : {};
@@ -445,7 +463,7 @@ export function createHarnessProposalLifecycleService(
     wiki: createWikiGuardedTargetWriter(createRealWikiOwnerWriter(cwd, noteOpt)),
     skill: createSkillGuardedTargetWriter(createRealSkillOwnerWriter(cwd, noteOpt)),
   };
-  const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority });
+  const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority, ...nowOpt });
   return { service, wrapUpAuthority, authorizationServer };
 }
 
