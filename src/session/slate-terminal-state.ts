@@ -8,6 +8,8 @@
 // mirroring `slate.ts`/`slate-lifecycle.ts`/`slate-course.ts`'s own
 // one-concept-per-file convention and layering.
 
+import path from "node:path";
+import { writeFileAtomic } from "../lib/fs";
 import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
 import { redactAndBoundTouched, type SlateAnchors, type SlateCourse } from "./slate";
@@ -120,4 +122,21 @@ export function renderTerminalStateBlock(state: TerminalState, opts?: { maxToken
     `courseSnapshot: ${JSON.stringify(state.courseSnapshot)}`,
     `anchorsSnapshot: ${JSON.stringify(anchorsSnapshot)}`,
   ].join("\n");
+}
+
+/**
+ * Flow 165 (Slate Phase 5), Track A item 4: persist `state` as a sibling of
+ * `slate.json` in the session dir — the gap found while grounding that flow
+ * (`TerminalState` was built and emitted, but never written to disk anywhere,
+ * so a future SLATE-10 catch-up's "blocked" category had no durable data to
+ * read). Uses `writeFileAtomic` (`../lib/fs`), the SAME primitive
+ * `slate.ts`'s own storage functions use, so a crash mid-write can never
+ * leave a partial `terminal-state.json` behind. The raw, unredacted `state`
+ * is written verbatim (not the token-bounded/redacted rendering
+ * `renderTerminalStateBlock` produces) — a future catch-up reader needs the
+ * true on-disk shape, matching this module's own doc comment on
+ * `anchorsSnapshot`.
+ */
+export async function writeTerminalState(dir: string, state: TerminalState): Promise<void> {
+  await writeFileAtomic(path.join(dir, "terminal-state.json"), `${JSON.stringify(state, null, 2)}\n`);
 }

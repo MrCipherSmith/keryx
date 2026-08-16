@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
-import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
+import { WorkspaceService, localWorkspaceAuthorizationServer, type WorkspaceManifest } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 import { resolveSessionWrapUp } from "./session-wrap-up";
@@ -187,6 +187,104 @@ export class ProposalLifecycleService {
         return { event };
       });
     } });
+  }
+
+  /**
+   * SLATE-10 (flow 165, T2): list every proposal still in `"proposed"`
+   * status for one workspace's `proposals/` dir — a listing/discovery path,
+   * not a load path, so it is lenient where `loadProposal` legitimately is
+   * not: ENOENT on the dir itself is `[]` (matching every other optional-dir
+   * read in this file), and a malformed/partial JSON entry is skipped rather
+   * than thrown (a crash mid-write, though `writeFileAtomic` should prevent
+   * this in practice).
+   *
+   * Sidecars (`<id>.<hash>.decision.json` / `.approval.json` /
+   * `.write-result.json` / `.write-intent.json`) share the real proposal
+   * file's `.json` suffix but are filtered out by parsed `recordType !==
+   * "proposal-created"` — more robust than a filename regex, which would
+   * need to know every current AND future sidecar suffix shape.
+   *
+   * Terminal proposals are subtracted via `activity.jsonl`'s own
+   * `proposal-transition` records (`toStatus` in `accepted | rejected |
+   * dismissed | stale`), not by re-deriving status from the proposal file
+   * itself (which never changes after creation).
+   */
+  async listProposedProposals(workspaceId: string): Promise<Proposal[]> {
+    const proposalsDir = path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals");
+    let entries: string[];
+    try { entries = (await readdir(proposalsDir)).filter((name) => name.endsWith(".json")); }
+    catch (error) { if (isNotFound(error)) return []; throw error; }
+    const proposals: Proposal[] = [];
+    for (const entry of entries) {
+      try {
+        const parsed = JSON.parse(await readFile(path.join(proposalsDir, entry), "utf8")) as Record<string, unknown>;
+        if (parsed.recordType === "proposal-created") proposals.push(parsed as Proposal);
+      } catch { /* malformed/partial entry — listing is lenient, unlike loadProposal */ }
+    }
+    const terminalIds = new Set((await this.records(this.ledgerPath(workspaceId))).filter((record): record is Transition => record.recordType === "proposal-transition").map((record) => record.proposalId));
+    return proposals.filter((proposal) => !terminalIds.has(proposal.id));
+  }
+
+  /**
+   * SLATE-10 (flow 165, T2): every visible workspace's pending proposals,
+   * grouped by workspace. `includeArchived: true` is HARDCODED here — never
+   * a caller-toggle — because WSL-2/AC1 requires archival to never silently
+   * remove proposal discoverability. A visible workspace with zero pending
+   * proposals is omitted entirely (an empty per-workspace group is not
+   * itself an item).
+   */
+  async listVisibleProposedProposals(actor: TrustedActorContext): Promise<Array<{ workspace: WorkspaceManifest; proposals: Proposal[] }>> {
+    const workspaces = await this.options.workspaces.listForActor({ actorContext: actor, includeArchived: true });
+    const groups: Array<{ workspace: WorkspaceManifest; proposals: Proposal[] }> = [];
+    for (const workspace of workspaces) {
+      const proposals = await this.listProposedProposals(workspace.id);
+      if (proposals.length > 0) groups.push({ workspace, proposals });
+    }
+    return groups;
+  }
+
+  /**
+   * Track B's evidence-freshness read-only re-check (plan.md item 6),
+   * implemented here alongside the other new listing methods since it lives
+   * in this same class and shares the same hash-compare posture
+   * `targetWriteOrStale`/`scanEvidenceSecurityGate` already use. Safe to call
+   * BEFORE any review/accept: it never throws and never attempts a write.
+   * `true` iff every evidence item's current on-disk content still hashes to
+   * its pinned `revision`; `false` on the first mismatch or read failure —
+   * same "fail toward stale, not toward fresh" posture `targetWriteOrStale`'s
+   * own `catch` block already takes.
+   *
+   * Flow 165 fix (finding C): this method is a read-only DISPLAY check
+   * (catch-up's per-proposal freshness re-check, AC3), not a write-path
+   * authorization gate — unlike `targetWriteOrStale`'s real accept-time
+   * evidence check, which legitimately still calls
+   * `validateEvidence(evidence, true, actor, workspaceId)` ->
+   * `workspaces.readEvidenceAtUse`, requiring review-level (editor/owner)
+   * authorization because it gates a real write. Routing THIS method through
+   * that same review-gated path meant a plain viewer-role actor — who
+   * `listVisibleProposedProposals` already deemed allowed to SEE this
+   * proposal at all — got `access_denied` internally on every call, which
+   * this method's `catch` then silently turned into a false "stale" signal
+   * regardless of the evidence's real state. Reads evidence the same
+   * action-agnostic way `scanEvidenceSecurityGate` already does
+   * (`resolveWorkspaceReference` + `readWorkspaceFileNoFollow`, no
+   * `workspaces.readEvidenceAtUse` involved) instead. `actor` is kept in the
+   * signature for call-site compatibility (catch-up.ts's caller already has
+   * one in hand) but is intentionally unused here — visibility was already
+   * established by the caller's own `listVisibleProposedProposals` filter.
+   */
+  async isEvidenceFresh(proposal: Proposal, _actor: TrustedActorContext): Promise<boolean> {
+    const readEvidenceFile = this.options.readEvidenceFile ?? readWorkspaceFileNoFollow;
+    for (const item of proposal.evidence) {
+      try {
+        const resolved = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri });
+        const content = readEvidenceFile(this.root, resolved).toString("utf8");
+        if (hash(content) !== item.revision) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
   }
 
   private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, reviewerAuthority: ReviewerAuthority, input: { requestCorrelationId: string; idempotencyKey: string }, approvalRef: string, writeIntent: { intentRef: string }, policyRevision: string): Promise<TargetWriteAttempt> {

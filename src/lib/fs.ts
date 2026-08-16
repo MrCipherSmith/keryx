@@ -38,6 +38,14 @@ export async function writeFileAtomic(filePath: string, content: string): Promis
   }
 }
 
+/**
+ * Single source of truth for the stale-lock reclaim threshold `withFileLock`'s
+ * `removeStaleLock` uses, and the default `isLockHeld` mirrors it with (flow
+ * 165 AC5) — was an inline `30000` literal duplicated nowhere else; now both
+ * consult this one constant so the two never drift apart.
+ */
+export const DEFAULT_LOCK_STALE_MS = 30000;
+
 export async function withFileLock<T>(
   lockPath: string,
   fn: () => Promise<T>,
@@ -45,7 +53,7 @@ export async function withFileLock<T>(
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? 5000;
   const retryMs = options.retryMs ?? 25;
-  const staleMs = options.staleMs ?? 30000;
+  const staleMs = options.staleMs ?? DEFAULT_LOCK_STALE_MS;
   const heartbeatMs = options.heartbeatMs ?? Math.max(100, Math.floor(staleMs / 3));
   const startedAt = Date.now();
   const owner = { pid: process.pid, token: randomUUID() };
@@ -86,6 +94,30 @@ export async function withFileLock<T>(
     if (await ownsLock(ownerPath, owner.token)) {
       await rm(lockPath, { recursive: true, force: true });
     }
+  }
+}
+
+/**
+ * Read-only mirror of `removeStaleLock`'s own staleness/aliveness rule (flow
+ * 165 AC5, `src/sac/catch-up.ts`'s classifier is the intended caller): a
+ * fresh-mtime lock (age <= `staleMs`) is always held, unconditionally, even
+ * before an `owner.json` sidecar exists yet — this is what keeps the narrow
+ * `mkdir(lockPath)` / `writeFile(ownerPath, ...)` acquisition window in
+ * `withFileLock` from ever reading as "not held". Past `staleMs`, held iff
+ * the recorded owner pid is still alive (aliveness wins over age, exactly
+ * like `removeStaleLock`). Unlike `removeStaleLock`, this function never
+ * mutates or removes the lock directory — a missing lock dir or any other
+ * read failure (ENOENT, ENOTDIR, ...) degrades to "not held" rather than
+ * throwing.
+ */
+export async function isLockHeld(lockPath: string, staleMs = DEFAULT_LOCK_STALE_MS): Promise<boolean> {
+  try {
+    const stats = await stat(lockPath);
+    if (Date.now() - stats.mtimeMs <= staleMs) return true;
+    const owner = await readLockOwner(path.join(lockPath, "owner.json"));
+    return owner !== undefined && processIsAlive(owner.pid);
+  } catch {
+    return false;
   }
 }
 

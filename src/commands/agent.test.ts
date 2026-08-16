@@ -1876,3 +1876,141 @@ test("SLATE-11 regression: unattended undefined/false — ask_user behaves exact
   expect(history.some((m) => m.role === "tool" && m.content.includes("User selected"))).toBe(true);
   expect(terminalStates.length).toBe(0);
 });
+
+// --- flow 165 (Slate Phase 5), Track A item 4: TerminalState persistence --
+//
+// RED: `writeTerminalState` does not exist in `../session/slate-terminal-state`
+// yet, and `emitTerminalState` (agent.ts) does not call it yet — every test
+// below currently finds no `terminal-state.json` on disk. Per plan.md this is
+// wired at `emitTerminalState`'s EXISTING call site (no new trigger): a real
+// unattended turn that hits budget-exhaustion or ask_user-unanswerable must
+// leave `terminal-state.json` as a sibling of `slate.json` in the session
+// dir — not merely testing a `writeTerminalState` function in isolation, per
+// the launch brief's "verify by grep, not assumption" instruction.
+
+test("flow 165: unattended budget exhaustion with an OPEN slateSession persists terminal-state.json as a sibling of slate.json in the real session dir", async () => {
+  const OCCURRED_AT = "2026-08-16T05:00:00.000Z";
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    unattended: true,
+    now: fixedNow(OCCURRED_AT),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests", { slateSession });
+
+  expect(terminalStates.length).toBe(1);
+  const persistedRaw = await readFile(path.join(dir, "terminal-state.json"), "utf8");
+  const persisted = JSON.parse(persistedRaw) as TerminalState;
+  expect(persisted.status).toBe("blocked");
+  expect(persisted.reason).toBe("budget_exhausted");
+  expect(persisted.occurredAt).toBe(OCCURRED_AT);
+  // The persisted record is the SAME TerminalState that was emitted via
+  // io.onTerminalState — a durable copy, not an independently-derived one.
+  expect(persisted).toEqual(terminalStates[0]!);
+});
+
+test("flow 165: unattended ask_user interception with an OPEN slateSession ALSO persists terminal-state.json — same emitTerminalState call site, not a second trigger", async () => {
+  const OCCURRED_AT = "2026-08-16T06:00:00.000Z";
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const ask: AskUserFn = async () => "opt-a";
+  const askUserInput = JSON.stringify({
+    question: "Which approach?",
+    options: [
+      { id: "opt-a", label: "A" },
+      { id: "opt-b", label: "B" },
+    ],
+  });
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "a1", toolName: "ask_user" },
+      { kind: "tool_call_end", toolCallId: "a1", input: askUserInput },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [createAskUserTool(ask)],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    unattended: true,
+    now: fixedNow(OCCURRED_AT),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "pick one", { slateSession });
+
+  expect(terminalStates.length).toBe(1);
+  const persisted = JSON.parse(await readFile(path.join(dir, "terminal-state.json"), "utf8")) as TerminalState;
+  expect(persisted.reason).toBe("ask_user_unanswerable");
+  expect(persisted.occurredAt).toBe(OCCURRED_AT);
+});
+
+test("flow 165: a slateSession that was never opened (ref.opened === false) writes NO terminal-state.json — mirrors resolveTerminalStateSnapshots' own opened guard, and the turn must not throw over it", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false }; // never actually opened
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    unattended: true,
+    now: fixedNow("2026-08-16T07:00:00.000Z"),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  // NOT "run the tests": that phrase contains the "run" action-intent token
+  // (`isActionRequest`, agent.ts) and would itself trigger `ensureSlateOpened`
+  // at the top of the turn, flipping `slateSession.opened` to `true` before
+  // `emitTerminalState` ever runs — exactly the SLATE-5 behavior asserted by
+  // the "an action-intent turn opens a fresh slate" test above, which would
+  // silently defeat this test's own "never actually opened" premise. A
+  // non-action-intent phrase keeps `ref.opened` genuinely false for the
+  // whole turn, so this test exercises the guard it claims to.
+  await expect(runAgentTurn(io, deps, history, "no changes needed here", { slateSession })).resolves.toBeUndefined();
+
+  expect(terminalStates.length).toBe(1); // io.onTerminalState still fires — only the disk write is guarded
+  await expect(readFile(path.join(dir, "terminal-state.json"), "utf8")).rejects.toThrow();
+});

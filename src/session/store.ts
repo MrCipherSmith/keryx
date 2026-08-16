@@ -49,6 +49,10 @@ export interface SessionSummary {
   provider?: string;
   model?: string;
   parentSessionId?: string;
+  /** Flow 165 (Slate Phase 5) catch-up field: how this session was driven. */
+  runMode?: "interactive" | "unattended";
+  /** Flow 165 (Slate Phase 5) catch-up field: this session's Course lifecycle state. */
+  courseStatus?: "unbound" | "active" | "blocked" | "done";
 }
 
 export interface SessionHandle {
@@ -214,6 +218,8 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       ...(typeof o.provider === "string" ? { provider: o.provider } : {}),
       ...(typeof o.model === "string" ? { model: o.model } : {}),
       ...(typeof o.parentSessionId === "string" ? { parentSessionId: o.parentSessionId } : {}),
+      ...(o.runMode === "interactive" || o.runMode === "unattended" ? { runMode: o.runMode } : {}),
+      ...(o.courseStatus === "unbound" || o.courseStatus === "active" || o.courseStatus === "blocked" || o.courseStatus === "done" ? { courseStatus: o.courseStatus } : {}),
     };
   } catch {
     return undefined;

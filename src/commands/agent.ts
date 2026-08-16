@@ -27,7 +27,7 @@ import {
   recordSlateTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { renderTerminalStateBlock, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
+import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
 /**
  * Extra context handed to an approver alongside the raw tool input.
@@ -712,6 +712,21 @@ async function emitTerminalState(
     occurredAt: now(),
   };
   io.onTerminalState?.(state);
+  // Flow 165 (Slate Phase 5), Track A item 4: persist a durable copy as a
+  // sibling of slate.json, the same open-guard `resolveTerminalStateSnapshots`
+  // above already applies (no open slate dir -> nothing to write next to).
+  // A persistence failure must never throw the turn over a bookkeeping
+  // write — swallow-and-degrade, matching this file's existing convention at
+  // `resolveTerminalStateSnapshots`.
+  const ref = options.slateSession;
+  if (ref !== undefined && ref.opened) {
+    try {
+      await writeTerminalState(ref.dir, state);
+    } catch {
+      // Degrade silently; io.onTerminalState/the rendered block above already
+      // delivered this TerminalState to the caller.
+    }
+  }
   const block = renderTerminalStateBlock(state);
   if (io.onSystem !== undefined) {
     io.onSystem(`\n${block}\n`);

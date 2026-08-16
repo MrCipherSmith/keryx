@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isNotFound } from "../lib/fs";
 import {
   appendSeed,
   archiveSlate,
   dedupeSeeds,
+  openSlateAtomic,
   readSlate,
   renderAnchorsBlock,
   writeSlate,
@@ -105,6 +107,50 @@ test("archiveSlate on a session dir with no slate.json yet is a no-op, not an er
   const dir = await tempDir();
   await expect(archiveSlate(dir, "attempt-never-written")).resolves.toBeUndefined();
   expect(await readSlate(dir)).toBeUndefined();
+});
+
+async function terminalStateExists(dir: string): Promise<boolean> {
+  try {
+    await readFile(path.join(dir, "terminal-state.json"), "utf8");
+    return true;
+  } catch (error) {
+    if (isNotFound(error)) return false;
+    throw error;
+  }
+}
+
+// --- F-002 review fix (flow 165): openSlateAtomic clears a stale sibling ---
+// --- terminal-state.json on every (re-)open ---------------------------------
+
+test("F-002 fix: openSlateAtomic removes a sibling terminal-state.json on a fresh (re-)open, since a re-open supersedes any prior stop record", async () => {
+  const dir = await tempDir();
+  await writeFile(path.join(dir, "terminal-state.json"), `${JSON.stringify({ status: "blocked", reason: "budget_exhausted" })}\n`);
+  expect(await terminalStateExists(dir)).toBe(true);
+
+  const fresh = await openSlateAtomic(dir, () => "resume-attempt-1", () => baseSlate({ seeds: [{ id: "seed-1", text: "fresh attempt", ts: time }] }));
+
+  expect(await terminalStateExists(dir)).toBe(false);
+  expect(await readSlate(dir)).toEqual(fresh);
+});
+
+test("F-002 fix: openSlateAtomic with no terminal-state.json on disk is unaffected — clearing is a no-op, not an error", async () => {
+  const dir = await tempDir();
+  expect(await terminalStateExists(dir)).toBe(false);
+  await expect(openSlateAtomic(dir, () => "attempt-1", () => baseSlate())).resolves.toBeDefined();
+  expect(await terminalStateExists(dir)).toBe(false);
+});
+
+test("F-002 fix: openSlateAtomic still archives an unclosed prior slate.json exactly as before, in addition to clearing terminal-state.json", async () => {
+  const dir = await tempDir();
+  await writeSlate(dir, () => baseSlate({ seeds: [{ id: "old-seed", text: "unclosed prior attempt", ts: time }] }));
+  await writeFile(path.join(dir, "terminal-state.json"), `${JSON.stringify({ status: "blocked", reason: "ask_user_unanswerable" })}\n`);
+
+  const fresh = await openSlateAtomic(dir, () => "attempt-archive-check", () => baseSlate({ seeds: [{ id: "new-seed", text: "fresh attempt", ts: time }] }));
+
+  const archived = JSON.parse(await readFile(path.join(dir, "slate-archive", "attempt-archive-check.json"), "utf8"));
+  expect((archived.seeds ?? []).map((seed: SlateSeed) => seed.id)).toEqual(["old-seed"]);
+  expect((fresh.seeds ?? []).map((seed) => seed.id)).toEqual(["new-seed"]);
+  expect(await terminalStateExists(dir)).toBe(false);
 });
 
 test("appendSeed appends to an already-open slate's seeds array, append-only", async () => {

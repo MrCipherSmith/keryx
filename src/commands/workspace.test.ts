@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { WorkspaceManifest } from "../sac/workspace-service";
 
 const cli = path.join(import.meta.dir, "..", "cli.ts");
 async function invoke(cwd: string, args: string[]) {
@@ -108,4 +109,29 @@ test("workspace CLI ships no member-management or delete subcommand (AC-7, AC-8)
   expect((await invoke(cwd, ["add-member", manifest.id, "--subject", "user:other", "--role", "editor"])).exitCode).toBe(1);
   expect((await invoke(cwd, ["remove-member", manifest.id, "--subject", "user:other"])).exitCode).toBe(1);
   expect((await invoke(cwd, ["delete", manifest.id])).exitCode).toBe(1);
+});
+
+test("F-001 fix: workspace list-proposals denies access for actor with no role in that workspace", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-listproposals-norole-"));
+  const created = await invoke(cwd, ["create", "--title", "List Proposals Test"]);
+  expect(created.exitCode).toBe(0);
+  const manifest = JSON.parse(created.stdout) as WorkspaceManifest;
+
+  // Manually remove the local actor from the workspace manifest to simulate
+  // "no role" — the actor created it but is no longer in the members list.
+  const workspaceDir = path.join(cwd, ".metaproject", "workspaces", manifest.id);
+  const manifestPath = path.join(workspaceDir, "workspace.json");
+  const manifestContent = await Bun.file(manifestPath).text();
+  const currentManifest = JSON.parse(manifestContent) as WorkspaceManifest;
+  const noActorManifest: WorkspaceManifest = { ...currentManifest, members: [], updatedAt: new Date().toISOString() };
+  // Restore one owner (required by schema) that is not the local actor
+  noActorManifest.members.push({ subject: "user:other-owner", role: "owner" });
+  await Bun.write(manifestPath, JSON.stringify(noActorManifest, null, 2) + "\n");
+
+  // Now try to list-proposals for this workspace — should fail with authorization error
+  const listResult = await invoke(cwd, ["list-proposals", manifest.id]);
+  expect(listResult.exitCode).toBe(1);
+  // The authorization gate throws WorkspaceServiceError with code "access_denied",
+  // but the message is the authorization result code ("role_revoked" for no role)
+  expect(listResult.stderr).toContain("role_revoked");
 });

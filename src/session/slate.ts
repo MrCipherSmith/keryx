@@ -178,6 +178,16 @@ async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<vo
  * found on disk (never speculatively), matching
  * `OpenSlateOptions.mintAttemptId`'s existing contract — `build` is called
  * unconditionally to produce the fresh slate to persist.
+ *
+ * Also clears any `terminal-state.json` sibling (flow 165 review fix, F-002):
+ * a fresh slate open is exactly the signal that whatever `terminal-state.json`
+ * may be sitting on disk (written by `writeTerminalState` when a PRIOR
+ * unattended attempt hit `ask_user`/budget-exhaustion) is superseded by a new
+ * attempt — the session is being (re)opened, not still stalled. Done inside
+ * this same lock hold (not a separate unlocked `rm`) so it can never race a
+ * concurrent `openSlateAtomic`/read of the same dir. `{ force: true }` makes
+ * the removal a no-op when no `terminal-state.json` exists, which is the
+ * common case (most opens follow a clean close, never a blocked stop).
  */
 export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: () => Slate): Promise<Slate> {
   await mkdir(dir, { recursive: true });
@@ -188,6 +198,7 @@ export async function openSlateAtomic(dir: string, mintAttemptId: () => string, 
     }
     const next = build();
     await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    await rm(path.join(dir, "terminal-state.json"), { force: true });
     return next;
   });
 }
