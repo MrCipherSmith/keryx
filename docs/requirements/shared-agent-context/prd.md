@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — PRD
-Version: 1.1.0
+Version: 1.2.0
 
 ## Problem
 
@@ -42,10 +42,12 @@ runtime, но у межкомпонентной работы нет единог
   быть returned as Know-how. Результат retrieval сохраняет source, revision,
   trust, applicability и stale status.
 - **SAC-6 — Progressive context.** Initial overview включает identity, scope,
-  mandatory policies и bounded FWK summary. Детали выдаются future MCP/CLI по
-  запросу с trace и budget accounting. Невместившийся mandatory context даёт
-  typed `context_overflow`, а не частичный успешный manifest; опциональные
-  omissions допустимы только в ответе `partial` с `omittedOptional` IDs.
+  mandatory policies и bounded FWK summary. Детали выдаются текущими MCP/CLI
+  адаптерами (`sac.read` / `keryx workspace read`) и harness-tools
+  (`workspace_read`) по запросу с trace и budget accounting. Невместившийся
+  mandatory context даёт typed `context_overflow`, а не частичный успешный
+  manifest; опциональные omissions допустимы только в ответе `partial` с
+  `omittedOptional` IDs.
 - **SAC-7 — Access policy and receipt.** Детерминированная policy учитывает
   remaining budget, task phase, source trust, freshness и role. Каждый доступ
   создаёт receipt с request, allowed/denied decision, cost и outcome signal.
@@ -98,9 +100,12 @@ runtime, но у межкомпонентной работы нет единог
   redaction, security gate, review и no automatic promotion.
 - Local ACL не заменяет filesystem/OS permissions. Runtime обязан fail closed,
   если requested reference нельзя safely resolve/read.
-- Текущий runtime ещё не реализует SAC contracts. До delivery утверждения о
-  CLI/MCP, schema enforcement, security или retention являются future design,
-  а не свойствами существующего кода.
+- Документация может отстать от runtime (это уже случалось: versioned
+  заголовки `future/planned` и фраза «runtime ещё не реализует SAC» жили
+  после появления `src/sac/`). Mitigation: этот PRD и specification 1.2.0
+  описывают текущий код; satellite RP-пакеты остаются future и не отменяют
+  shipped SAC-1…SAC-12. Валидатор должен сверять implementation-claims с
+  `src/sac/`, CLI и тестами, а не с устаревшими `future`-заголовками.
 - Receipts могут превратиться в лишние логи. Схема ограничивает поля,
   lifecycle задаёт retention, а raw content не пишется.
 - Оптимизация retrieval только по success score стимулирует небезопасный или
@@ -109,7 +114,8 @@ runtime, но у межкомпонентной работы нет единог
 
 ## Recommendation
 
-Начать с offline, read-first vertical slice: schemas, manifest validation,
-Flow-derived Work, evidence-linked Facts, accepted Know-how и read-only
-CLI/MCP parity. Затем добавить proposals и review. UI, external sync и learned
-policy допустимы только после validation gates из этого пакета.
+Read-first slice, proposals/review и opt-in policy guard (фазы 0–5 и 6a)
+уже поставлены. Дальше не переоткрывать shipped surface как «future design».
+Оставшаяся работа — 6b (real-data readiness / re-ingestion) и satellite
+RP-01…RP-12. UI, external sync и learned policy по-прежнему только после
+validation gates из этого пакета.

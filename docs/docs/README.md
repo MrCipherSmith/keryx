@@ -29,6 +29,7 @@ keryx init
 - **[modules.md](./modules.md)** — One section per module: purpose, CLI surface, key files, mechanics, the `.metaproject/` paths it reads/writes, and integrations.
 - **[cli-reference.md](./cli-reference.md)** — Complete reference for every command, subcommand, flag, and exit code.
 - **[workspace-and-lifecycle.md](./workspace-and-lifecycle.md)** — The `.metaproject/` directory contract, source-of-truth vs generated `data/`, the manifest, agent entrypoints, and the `init`/`update` lifecycle.
+- **[guides/shared-agent-context.md](./guides/shared-agent-context.md)** — Shared Agent Context: `keryx workspace`, FWK reads, propose/review, MCP `sac.*`, harness `workspace_*`.
 
 ## Modules at a glance
 
@@ -46,7 +47,7 @@ The nine product modules enabled by default at `init` (disable any with `--no-<m
 | tasks (flow) | `keryx flow` | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
 | security | `keryx security` | Deterministic content scanning, redaction, policy gates, incidents, and merge-safe runtime hooks. |
 
-The opt-in MCP module exposes read-only services over stdio or isolated localhost HTTP/SSE. The `rules`, `agents`, `orient`, and managed `review` command surfaces are cross-cutting rather than default data-producing modules.
+The opt-in MCP module exposes Metaproject facades over stdio or isolated localhost HTTP/SSE. SAC tools on that server (`sac.overview` / `sac.read` / `sac.collaboration` / `sac.propose` / `sac.review`) run on **local stdio only**; HTTP returns `sac_transport_denied`. The `rules`, `agents`, `orient`, managed `review`, and `workspace` (SAC) command surfaces are cross-cutting rather than default data-producing modules.
 
 ---
 

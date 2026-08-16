@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { ProposalLifecycleService } from "./proposal-lifecycle";
+import { ProposalLifecycleError, ProposalLifecycleService } from "./proposal-lifecycle";
 import { createGuardedOwnerWriter } from "./guarded-owner-writer";
 import { createSacAuthorizationServer, validateSacLedger } from "./index";
 import { WorkspaceService } from "./workspace-service";
@@ -24,7 +24,7 @@ async function setup(role = "owner", writer: { owner: string; write: (input: { c
   const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async ({ sourceRef }) => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: sourceRef.includes("flow") ? "separate explicit wrap-up" : "explicit wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
   const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", recover: async () => writer.recover ? writer.recover() : undefined, persist: (intent: { correlationId: string }) => writer.write({ correlationId: intent.correlationId }) };
   const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { [writer.owner]: createGuardedOwnerWriter({ owner: writer.owner as any, ...writerComposition }) } as any, wrapUpAuthority, now: () => new Date(time) });
-  return { root, service, manifestPath, server, wrapUpAuthority };
+  return { root, service, manifestPath, server, wrapUpAuthority, workspaces };
 }
 
 async function wrapUp(service: ProposalLifecycleService, overrides: Partial<TrustedWrapUpProvenance> = {}) {
@@ -152,4 +152,40 @@ test("a skill owner receipt is REJECTED (lands as stale) when targetRef uses the
   await propose(service, { kind: "decision" });
   const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
   expect(result.event.toStatus).toBe("stale");
+});
+
+// --- WSL-1/WSL-3 interaction with proposal lifecycle (AC-3, AC-4, AC-6) ---
+// `WorkspaceService.archive`/`removeResource` do not exist yet (see
+// workspace-service.test.ts and docs/requirements/sac-workspace-lifecycle/).
+// These tests are expected to fail red until task-implementer lands WSL-1..4
+// AND wires the archived-workspace guard into ProposalLifecycleService.create.
+
+test("propose (create) against an archived workspace is rejected with a typed guard_denied ProposalLifecycleError (AC-3)", async () => {
+  const { service, workspaces } = await setup();
+  await (workspaces as any).archive({ request: undefined, requestCorrelationId: "workspace-archive-before-propose-0001", workspaceId: "workspace-a" });
+  await expect(propose(service)).rejects.toBeInstanceOf(ProposalLifecycleError);
+  await expect(propose(service)).rejects.toMatchObject({ code: "guard_denied" });
+});
+
+test("review of a proposal that predates its workspace's archival completes normally — archive never blocks in-flight review (AC-4)", async () => {
+  const { service, workspaces } = await setup();
+  await propose(service);
+  await (workspaces as any).archive({ request: undefined, requestCorrelationId: "workspace-archive-after-propose-0001", workspaceId: "workspace-a" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  expect(result.event.toStatus).toBe("accepted");
+});
+
+test("removeResource never causes a pending/accepted proposal's evidence resolution to fail — resources and evidence are independent (AC-6)", async () => {
+  const { root, service, workspaces } = await setup();
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "a.ts"), "export {};\n");
+  await (workspaces as any).addResource({ request: undefined, requestCorrelationId: "workspace-addresource-0001", workspaceId: "workspace-a", resource: { kind: "component", uri: "./src/a.ts" } });
+  // Evidence resolves via ./evidence/e.md (set up by `setup()`/`propose()`), a
+  // path entirely independent of the ./src/a.ts workspace resource below —
+  // this is the fact AC-6 depends on (targetWriteOrStale never resolves
+  // evidence via manifest.resources[] membership).
+  await propose(service);
+  await (workspaces as any).removeResource({ request: undefined, requestCorrelationId: "workspace-removeresource-0001", workspaceId: "workspace-a", uri: "./src/a.ts" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  expect(result.event.toStatus).toBe("accepted");
 });

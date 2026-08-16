@@ -589,6 +589,19 @@ export async function authorizeSacUse(input: { actorContext: TrustedActorContext
   return authorizationResult(allowed, allowed ? "allowed" : "insufficient_role", current, required, input.workspaceId);
 }
 
+export type SacMemberRole = { subject: string; role: string };
+/**
+ * Shared owner-only local gate. Not part of `authorizeSacUse`'s rank system —
+ * both call sites (`workspace-service.ts`'s `requireOwner`,
+ * `collaboration-service.ts`'s `record()`) use it as an additional in-process
+ * check inside an already-authorized `write` execution, matching
+ * `docs/requirements/sac-workspace-lifecycle/specification.md`'s "local gate
+ * inside `execute(manifest)`" description.
+ */
+export function isWorkspaceOwner(members: readonly SacMemberRole[], subject: string): boolean {
+  return members.find((member) => member.subject === subject)?.role === "owner";
+}
+
 export type StrictSacGuard = { mode: "strict"; availability: "available" | "unavailable" | "error" | "indeterminate"; decision?: "pass" | "fail" | "error"; policyRevision?: string } | { mode: "disabled" | "advisory"; decision?: string };
 export async function evaluateStrictSacGuard(input: { guard: StrictSacGuard; operation: "read" | "egress" | "write" }): Promise<{ allowed: boolean; disclose: boolean; allowWrite: boolean; code: "strict_guard_pass" | "strict_guard_denied" }> {
   const allowed = input.guard.mode === "strict" && input.guard.availability === "available" && input.guard.decision === "pass" && typeof input.guard.policyRevision === "string" && input.guard.policyRevision.length > 0;

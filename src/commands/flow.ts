@@ -20,6 +20,18 @@ import {
 } from "../lib/ui";
 import type { FlowService, FlowStatus, TaskDisposition, TaskKind } from "../flow/types";
 
+const VALID_TASK_KINDS: readonly TaskKind[] = ["context", "implement", "test", "verify", "review", "docs"];
+
+function parseTaskKind(raw: string | undefined): TaskKind | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!(VALID_TASK_KINDS as readonly string[]).includes(raw)) {
+    throw new Error(`Invalid --kind "${raw}". Expected one of: ${VALID_TASK_KINDS.join(", ")}`);
+  }
+  return raw as TaskKind;
+}
+
 // Colorize a flow status: terminal states green/red, active states cyan,
 // pre-work states yellow.
 function flowStatusLabel(status: FlowStatus): string {
@@ -257,7 +269,7 @@ async function runTask(args: string[]): Promise<void> {
       cwd: process.cwd(),
       id,
       title,
-      kind: optionValue(args, "--kind") as TaskKind | undefined,
+      kind: parseTaskKind(optionValue(args, "--kind")),
       dependsOn,
     });
     console.log(`  ${style.green(symbols.ok)} Added ${style.bold(flow.tasks[flow.tasks.length - 1]?.id ?? "task")} to flow ${flow.id}`);

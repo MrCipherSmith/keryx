@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 2,
+  "id": "156",
+  "slug": "sac-workspace-lifecycle-completion-phase",
+  "title": "SAC Workspace Lifecycle Completion — Phase 1: Archive, resource removal, rename",
+  "status": "implemented",
+  "createdAt": "2026-08-15T21:42:48.961Z",
+  "updatedAt": "2026-08-16T10:17:26.111Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:621dece35ae2c47dd0b8aee742767de7f82741c6c2dca8186638b65c15b8dfa9",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/296"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Fix1: --include-archived=value silently ignored in keryx workspace list",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Fix2: decide/document archive() re-archive idempotency",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Fix3: refactor removeResource to use withAuthorizedActor",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Fix4: extract shared owner-role gate (workspace-service + collaboration-service)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Fix5: evaluate centralizing archived-write guard; document decision",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Fix6: evaluate archive/rename dedup into shared helper; document decision",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Fix7: reduce redundant manifest reads in withAuthorizedActor",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-15T21:42:48.961Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-15T21:44:10.643Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-15T21:44:12.958Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-15T21:44:17.737Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-15T21:49:04.309Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-15T21:57:21.147Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-15T22:07:17.902Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-15T22:15:32.472Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/296"
+    },
+    {
+      "at": "2026-08-16T10:13:32.700Z",
+      "event": "task-added",
+      "detail": "T5: Fix1: --include-archived=value silently ignored in keryx workspace list"
+    },
+    {
+      "at": "2026-08-16T10:13:32.783Z",
+      "event": "task-added",
+      "detail": "T6: Fix2: decide/document archive() re-archive idempotency"
+    },
+    {
+      "at": "2026-08-16T10:13:32.908Z",
+      "event": "task-added",
+      "detail": "T7: Fix3: refactor removeResource to use withAuthorizedActor"
+    },
+    {
+      "at": "2026-08-16T10:13:33.056Z",
+      "event": "task-added",
+      "detail": "T8: Fix4: extract shared owner-role gate (workspace-service + collaboration-service)"
+    },
+    {
+      "at": "2026-08-16T10:13:33.158Z",
+      "event": "task-added",
+      "detail": "T9: Fix5: evaluate centralizing archived-write guard; document decision"
+    },
+    {
+      "at": "2026-08-16T10:13:33.302Z",
+      "event": "task-added",
+      "detail": "T10: Fix6: evaluate archive/rename dedup into shared helper; document decision"
+    },
+    {
+      "at": "2026-08-16T10:13:33.409Z",
+      "event": "task-added",
+      "detail": "T11: Fix7: reduce redundant manifest reads in withAuthorizedActor"
+    },
+    {
+      "at": "2026-08-16T10:17:25.621Z",
+      "event": "task-done",
+      "detail": "T5: Fix1: --include-archived=value silently ignored in keryx workspace list"
+    },
+    {
+      "at": "2026-08-16T10:17:25.709Z",
+      "event": "task-done",
+      "detail": "T6: Fix2: decide/document archive() re-archive idempotency"
+    },
+    {
+      "at": "2026-08-16T10:17:25.783Z",
+      "event": "task-done",
+      "detail": "T7: Fix3: refactor removeResource to use withAuthorizedActor"
+    },
+    {
+      "at": "2026-08-16T10:17:25.864Z",
+      "event": "task-done",
+      "detail": "T8: Fix4: extract shared owner-role gate (workspace-service + collaboration-service)"
+    },
+    {
+      "at": "2026-08-16T10:17:25.945Z",
+      "event": "task-done",
+      "detail": "T9: Fix5: evaluate centralizing archived-write guard; document decision"
+    },
+    {
+      "at": "2026-08-16T10:17:26.023Z",
+      "event": "task-done",
+      "detail": "T10: Fix6: evaluate archive/rename dedup into shared helper; document decision"
+    },
+    {
+      "at": "2026-08-16T10:17:26.111Z",
+      "event": "task-done",
+      "detail": "T11: Fix7: reduce redundant manifest reads in withAuthorizedActor"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 # Shared Agent Context — Phase Execution Prompts
+Version: 1.0.0
 
 This file preserves the approved prompts for executing the Shared Agent Context
 implementation roadmap. Each phase is a separate managed Flow. Phases 1–5 run
