@@ -5,7 +5,7 @@
   "title": "Slate Phase 1: Skeleton and bundled SAC hardening",
   "status": "implemented",
   "createdAt": "2026-08-15T22:34:47.121Z",
-  "updatedAt": "2026-08-15T23:51:12.467Z",
+  "updatedAt": "2026-08-16T10:37:41.859Z",
   "source": {
     "type": "description",
     "ref": null
@@ -75,6 +75,66 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Fix finding 1+4: scanEvidenceSecurityGate fail-open on platform-unavailable read; replace detectSecrets/detectPii with guardOutput()",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Fix finding 3: close TOCTOU window between security gate scan and writeFileAtomic in proposal-lifecycle create()",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Fix finding 2: narrow fwk-service.ts local flow-read catch so access_denied propagates as full denial, not partial unbound disclosure",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Add regression tests for all 4 findings and verify typecheck/tests/health",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -115,6 +175,46 @@
       "at": "2026-08-15T23:51:12.467Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/297"
+    },
+    {
+      "at": "2026-08-16T10:33:13.768Z",
+      "event": "task-added",
+      "detail": "T5: Fix finding 1+4: scanEvidenceSecurityGate fail-open on platform-unavailable read; replace detectSecrets/detectPii with guardOutput()"
+    },
+    {
+      "at": "2026-08-16T10:33:21.418Z",
+      "event": "task-added",
+      "detail": "T6: Fix finding 3: close TOCTOU window between security gate scan and writeFileAtomic in proposal-lifecycle create()"
+    },
+    {
+      "at": "2026-08-16T10:33:32.394Z",
+      "event": "task-added",
+      "detail": "T7: Fix finding 2: narrow fwk-service.ts local flow-read catch so access_denied propagates as full denial, not partial unbound disclosure"
+    },
+    {
+      "at": "2026-08-16T10:33:39.551Z",
+      "event": "task-added",
+      "detail": "T8: Add regression tests for all 4 findings and verify typecheck/tests/health"
+    },
+    {
+      "at": "2026-08-16T10:33:47.527Z",
+      "event": "task-done",
+      "detail": "T5: Fix finding 1+4: scanEvidenceSecurityGate fail-open on platform-unavailable read; replace detectSecrets/detectPii with guardOutput()"
+    },
+    {
+      "at": "2026-08-16T10:33:47.610Z",
+      "event": "task-done",
+      "detail": "T6: Fix finding 3: close TOCTOU window between security gate scan and writeFileAtomic in proposal-lifecycle create()"
+    },
+    {
+      "at": "2026-08-16T10:33:47.698Z",
+      "event": "task-done",
+      "detail": "T7: Fix finding 2: narrow fwk-service.ts local flow-read catch so access_denied propagates as full denial, not partial unbound disclosure"
+    },
+    {
+      "at": "2026-08-16T10:37:41.859Z",
+      "event": "task-done",
+      "detail": "T8: Add regression tests for all 4 findings and verify typecheck/tests/health"
     }
   ]
 }

@@ -11,8 +11,7 @@ import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 import { createRealSkillOwnerWriter } from "./skill-owner-writer";
 import { readWorkspaceFileNoFollow } from "./secure-resource-read";
-import { detectSecrets } from "../security/detect/secrets";
-import { detectPii } from "../security/detect/pii";
+import { guardOutput } from "../security/guard";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -51,6 +50,21 @@ export class ProposalLifecycleService {
     now?: () => Date;
     /** Test seam that simulates an evidence/ACL change immediately before write. */
     beforeTargetWrite?: () => Promise<void> | void;
+    /**
+     * Test seam: fires once, inside the proposal's own file lock, immediately
+     * before the security gate is (re)scanned and the record is persisted —
+     * lets tests simulate an evidence swap landing in the TOCTOU window
+     * between `create()`'s early phases (authorization, wrap-up consumption,
+     * lock acquisition) and the actual write.
+     */
+    beforeCreateWrite?: () => Promise<void> | void;
+    /**
+     * Test seam: swaps the safe descriptor-chain evidence read
+     * (`readWorkspaceFileNoFollow` by default). Overridden by tests to force
+     * a specific error class out of the read step — e.g. a platform-
+     * unavailable safe-read bridge — without needing a real non-POSIX host.
+     */
+    readEvidenceFile?: (workspaceRoot: string, absolutePath: string) => Buffer;
   }) { this.root = path.resolve(options.workspaceRoot); this.now = options.now ?? (() => new Date()); }
 
   async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; wrapUp: TrustedWrapUpProvenance }): Promise<Proposal> {
@@ -59,8 +73,16 @@ export class ProposalLifecycleService {
     const wrapUp = this.options.wrapUpAuthority.verify(input.wrapUp, { actor, workspaceId: input.workspaceId });
     if (wrapUp !== "ok") throw new ProposalLifecycleError("trusted_wrap_up_required", `trusted wrap-up ${wrapUp}`);
     const createdAt = this.timestamp();
-    const gate = await this.scanEvidenceSecurityGate(input.wrapUp.evidence);
-    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: "trusted wrap-up reference", evidence: [...input.wrapUp.evidence], wrapUp: { id: input.wrapUp.id, source: input.wrapUp.source, sourceRef: input.wrapUp.sourceRef, sourceRevision: input.wrapUp.sourceRevision, issuedAt: input.wrapUp.issuedAt, expiresAt: input.wrapUp.expiresAt }, author: actor.subject, security: { gate, redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
+    // `security.gate` is deliberately NOT computed here. Scanning this early
+    // would leave a wide TOCTOU window before the persisted write —
+    // authorization, workspace lock acquisition, wrap-up consumption, the
+    // proposal-already-exists check — during which evidence could be swapped
+    // without ever being rescanned (finding 3). The real gate is computed at
+    // write-time instead, immediately before `writeFileAtomic`, inside the
+    // already-acquired file lock, below. "needs-approval" here is only a
+    // fail-closed placeholder for the pre-lock schema validation a few lines
+    // down; it is always overwritten before the record is ever persisted.
+    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: "trusted wrap-up reference", evidence: [...input.wrapUp.evidence], wrapUp: { id: input.wrapUp.id, source: input.wrapUp.source, sourceRef: input.wrapUp.sourceRef, sourceRevision: input.wrapUp.sourceRevision, issuedAt: input.wrapUp.issuedAt, expiresAt: input.wrapUp.expiresAt }, author: actor.subject, security: { gate: "needs-approval", redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
     // The workspace is derived from the caller's explicit workspace-bound evidence
     // request in v1. The public operation accepts it through a separate field to
     // keep the stored record exactly schema-shaped.
@@ -85,6 +107,12 @@ export class ProposalLifecycleService {
         if (consume !== "ok") throw new ProposalLifecycleError("trusted_wrap_up_required", `trusted wrap-up ${consume}`);
         try { await readFile(file, "utf8"); throw new ProposalLifecycleError("conflict", "proposal already exists"); }
         catch (error) { if (error instanceof ProposalLifecycleError) throw error; if (!isNotFound(error)) throw error; }
+        await this.options.beforeCreateWrite?.();
+        // Scanned here, not at the top of `create()`: this is the last point
+        // before the bytes are persisted, inside the same file lock the write
+        // itself uses, so nothing can swap the evidence out from under the
+        // recorded gate between the scan and the write (finding 3).
+        proposal.security.gate = await this.scanEvidenceSecurityGate(proposal.evidence);
         await writeFileAtomic(file, `${JSON.stringify(proposal, null, 2)}\n`);
         return proposal;
       });
@@ -191,12 +219,41 @@ export class ProposalLifecycleService {
   private async strict(expected?: string): Promise<string> { const gate = await evaluateStrictSacGuard({ guard: this.options.guard, operation: "write" }); const revision = this.options.guard.mode === "strict" ? this.options.guard.policyRevision : undefined; if (!gate.allowed || !revision || revision !== this.options.policyRevision || (expected && revision !== expected)) throw new ProposalLifecycleError("guard_denied", "strict SAC guard/policy revision denied lifecycle write"); return revision; }
   private async validateEvidence(evidence: Evidence[], requireRevision = false, actor?: TrustedActorContext, workspaceId?: string): Promise<void> { for (const item of evidence) { if (requireRevision) { if (!actor || !workspaceId) throw new ProposalLifecycleError("stale", "missing owner-use actor"); const content = await this.options.workspaces.readEvidenceAtUse({ actorContext: actor, workspaceId, uri: item.uri }); if (hash(content.toString("utf8")) !== item.revision) throw new ProposalLifecycleError("stale", "evidence revision changed"); } else await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri }); } }
   /**
-   * `security.gate` set at proposal creation (SLATE-12): a real detectSecrets/
-   * detectPii scan of each evidence item's content, resolved the same
-   * containment-checked way `validateEvidence`'s non-revision branch does —
-   * never `workspaces.readEvidenceAtUse`, which requires `action: "review"`
-   * authorization `create()`'s actor (authorized for `"write"`) may not hold.
-   * Content is read through `readWorkspaceFileNoFollow` (descriptor-chain,
+   * `security.gate` set at proposal creation (SLATE-12), computed at
+   * write-time (finding 3) via `guardOutput()` — the same shared write-seam
+   * (src/security/guard.ts) `wiki-owner-writer.ts`/`memory-owner-writer.ts`
+   * already run before their own writes, instead of calling
+   * `detectSecrets`/`detectPii` directly (finding 4/1). That gives evidence
+   * scanning the full `runDetectors`/`runDetectorsAsync` pipeline (secrets +
+   * entropy + PII + prompt-injection + egress, not just two hand-picked
+   * detectors), and it respects `config.policies.*.enabled` toggles the same
+   * way every other guarded write in this codebase does. `target: "unknown"`
+   * is used because evidence content isn't bound for any of
+   * `SecurityTarget`'s real destinations (memory/wiki/skill/report/model/
+   * external/task) — it is scanned here for gate purposes only and is never
+   * written anywhere by this call.
+   *
+   * Escalation reads `guard.decision.findings.length > 0`, deliberately NOT
+   * `guard.decision.gate`/`.allowed`. `.allowed` only reflects whether the
+   * *current* security mode would block a write (advisory never blocks,
+   * `guardOutput` also swallows an internal analysis error to `allowed:
+   * true`), and `.decision.gate` is weighted by each policy's configured
+   * `action` (e.g. the default PII policy action is `"redact"`, which alone
+   * never reaches `"needs-approval"`/`"fail"`). This method's own contract —
+   * unchanged since SLATE-12 — is "any detector match on the pinned evidence
+   * escalates for reviewer visibility", the same confidence/severity/action-
+   * agnostic check the old direct `detectSecrets(...).length > 0 ||
+   * detectPii(...).length > 0` performed. `findings` is built from every raw
+   * match regardless of action/severity, so this is a strict superset of the
+   * old check (same secrets/PII sensitivity, plus entropy/prompt-injection/
+   * egress) rather than a downgrade gated behind each policy's write-time
+   * action.
+   *
+   * Evidence content is resolved the same containment-checked way
+   * `validateEvidence`'s non-revision branch does — never
+   * `workspaces.readEvidenceAtUse`, which requires `action: "review"`
+   * authorization `create()`'s actor (authorized for `"write"`) may not hold
+   * — and is read through `readWorkspaceFileNoFollow` (descriptor-chain,
    * O_NOFOLLOW at every path component) rather than a plain `readFile`, to
    * close the same TOCTOU/symlink-follow gap `readEvidenceAtUse` already
    * closes for its own read.
@@ -222,14 +279,27 @@ export class ProposalLifecycleService {
    * separately by `validateEvidence()` right after this call. This is
    * distinct from — and unaffected by — the revision-mismatch case above,
    * which only applies once content was read successfully.
+   *
+   * The ONE read/resolve failure that is NOT folded into "nothing scannable"
+   * (finding 1): `readWorkspaceFileNoFollow`'s own safe descriptor-chain
+   * bridge being unavailable on this host (no Bun/POSIX FFI bridge — e.g.
+   * Windows, or musl/Alpine Linux). `secure-resource-read.ts` documents that
+   * SAC is "deliberately fail-closed" on such hosts; a blanket `catch {
+   * continue }` would instead make every evidence item look unscannable and
+   * silently fall through to `"pass"`, which is the opposite of fail-closed.
+   * That one error is distinguished by message and escalates straight to
+   * `"needs-approval"` — it is host-wide, so every remaining item would fail
+   * identically anyway.
    */
   private async scanEvidenceSecurityGate(evidence: readonly Evidence[]): Promise<"pass" | "needs-approval"> {
+    const readEvidenceFile = this.options.readEvidenceFile ?? readWorkspaceFileNoFollow;
     for (const item of evidence) {
       let content: string;
       try {
         const resolved = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri });
-        content = readWorkspaceFileNoFollow(this.root, resolved).toString("utf8");
-      } catch {
+        content = readEvidenceFile(this.root, resolved).toString("utf8");
+      } catch (error) {
+        if (isPlatformUnavailableSecureReadError(error)) return "needs-approval";
         // Couldn't read/resolve this item at all (binary, ENOENT, containment
         // failure, etc.) — "nothing scannable" for this item, not a finding.
         // validateEvidence() re-checks containment/existence right after this
@@ -237,7 +307,8 @@ export class ProposalLifecycleService {
         continue;
       }
       if (hash(content) !== item.revision) return "needs-approval";
-      if (detectSecrets(content).length > 0 || detectPii(content).length > 0) return "needs-approval";
+      const guard = await guardOutput({ cwd: this.root, content, target: "unknown", source: "tool-output" });
+      if (guard.decision.findings.length > 0) return "needs-approval";
     }
     return "pass";
   }
@@ -264,6 +335,17 @@ export class ProposalLifecycleService {
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function eventHash(value: Transition): string { return hash(JSON.stringify(value)); }
 function recordHash(value: LedgerRecord): string { return hash(JSON.stringify(value)); }
+
+/**
+ * True only for `readWorkspaceFileNoFollow`'s own "the safe descriptor-chain
+ * bridge is unavailable on this host" failure (secure-resource-read.ts) —
+ * never for an ordinary per-item read/resolve failure (ENOENT, containment,
+ * binary content, a bad component). Matched by exact message because that
+ * function throws a plain `Error` with no dedicated error class/code.
+ */
+function isPlatformUnavailableSecureReadError(error: unknown): boolean {
+  return error instanceof Error && error.message === "safe descriptor source reads are unavailable on this platform";
+}
 
 /**
  * NOT a self-accept protection in the real request path: `src/commands/workspace.ts`

@@ -14,6 +14,15 @@ async function setup(role = "owner", writer: { owner: string; write: (input: { c
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-proposal-"));
   await mkdir(path.join(root, "evidence"), { recursive: true }); await mkdir(path.join(root, "wiki"), { recursive: true });
   await writeFile(path.join(root, "evidence", "e.md"), "evidence"); await writeFile(path.join(root, "wiki", "accepted.md"), "accepted");
+  // scanEvidenceSecurityGate scans through guardOutput() (src/security/guard.ts),
+  // the same shared write-seam every other guarded owner-writer runs before its
+  // write. That seam is a zero-cost no-op unless `modules.security.enabled` is
+  // true in metaproject.json (guard.ts's `isSecurityEnabled`) — without this,
+  // every scan below would short-circuit to a hardcoded "pass" regardless of
+  // evidence content, and the secret/PII detection tests further down would be
+  // testing nothing.
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }));
   const server = createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:reviewer", authenticationMethod: "local-os" as const, roleRevision: "roles-r1" }) });
   const workspaces = new WorkspaceService({ workspaceRoot: root, authorizationServer: server, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, now: () => new Date(time) });
   await workspaces.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", id: "workspace-a", title: "Proposal" });
@@ -251,6 +260,74 @@ test("evidence content with a detectable PII pattern but no secret pattern flips
   const provenance = await piiWrapUpAuthority.issue({ actor, source: "session", sourceRef: "./evidence/e.md" });
   const proposal = await piiService.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-pii", proposalRevision: "r1", kind: "wiki-update", wrapUp: provenance });
   expect(proposal.security.gate).toBe("needs-approval");
+});
+
+// Review finding 1: `readWorkspaceFileNoFollow`'s own "safe descriptor source
+// reads are unavailable on this platform" failure (secure-resource-read.ts's
+// documented fail-closed contract on hosts without the Bun/POSIX FFI bridge —
+// Windows, musl/Alpine Linux) must escalate to "needs-approval", never fall
+// through the old blanket `catch { continue }` into a silent "pass". Uses the
+// `readEvidenceFile` test seam rather than a real non-POSIX host.
+test("a platform-unavailable safe-read bridge fails closed to \"needs-approval\", never silently \"pass\"", async () => {
+  const { service } = await setup();
+  (service as any).options.readEvidenceFile = () => { throw new Error("safe descriptor source reads are unavailable on this platform"); };
+  const proposal = await propose(service);
+  expect(proposal.security.gate).toBe("needs-approval");
+});
+
+// Companion to the platform-unavailable test above: an ORDINARY per-item read
+// failure (binary content, containment failure, ENOENT, etc. — anything other
+// than the platform-unavailable bridge error) must still be "nothing
+// scannable" for that item, not an auto-escalation. This is what proves the
+// fix distinguishes the one error class it must fail closed on from every
+// other read/resolve failure, rather than making everything fail closed.
+test("an ordinary (non-platform) evidence read failure is treated as \"nothing scannable\", not escalated", async () => {
+  const { service } = await setup();
+  (service as any).options.readEvidenceFile = () => { throw new Error("boom: simulated per-item read failure, unrelated to platform availability"); };
+  const proposal = await propose(service);
+  expect(proposal.security.gate).toBe("pass");
+});
+
+// Review finding 4: scanEvidenceSecurityGate must genuinely call the shared
+// `guardOutput()` write seam (src/security/guard.ts) rather than a private
+// detectSecrets/detectPii call running in parallel to it. `guardOutput` is a
+// no-op unless `modules.security.enabled` is true in metaproject.json — a
+// private detector call would never have cared about that toggle. Disabling
+// the module here and still seeing secret-shaped evidence resolve to "pass"
+// is the one observation a private-detector implementation could not produce.
+test("scanEvidenceSecurityGate genuinely calls the shared guardOutput() seam: disabling the security module makes secret-shaped evidence resolve to \"pass\"", async () => {
+  const { root, service } = await setup();
+  const awsExampleKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+  await writeFile(path.join(root, "evidence", "e.md"), awsExampleKey);
+  await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: false } } }));
+  // Pin the wrap-up's revision to the exact secret content on disk, isolating
+  // this from the revision-mismatch branch (same technique as the detectPii
+  // isolation test above).
+  const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async () => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: "secret wrap-up summary, module disabled", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update(awsExampleKey).digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
+  const disabledService = new ProposalLifecycleService({ workspaceRoot: root, workspaces: (service as any).options.workspaces, authorizationServer: (service as any).options.authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: (service as any).options.targetWriters, wrapUpAuthority, now: () => new Date(time) });
+  const actor = await (disabledService as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0001");
+  const provenance = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: "./evidence/e.md" });
+  const proposal = await disabledService.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-secret-module-off", proposalRevision: "r1", kind: "wiki-update", wrapUp: provenance });
+  expect(proposal.security.gate).toBe("pass");
+});
+
+// Review finding 3: `security.gate` used to be computed at the very top of
+// `create()`, long before the authorization/lock-acquisition/wrap-up-consume
+// sequence that precedes the actual write — a TOCTOU window an evidence swap
+// could sail through unscanned. `beforeCreateWrite` fires deep inside that
+// sequence, inside the file lock, immediately before the (fixed) write-time
+// scan. If the gate were still computed early, this swap — which happens
+// strictly after `create()` begins — could not possibly be seen by it, and
+// the persisted gate would stay "pass" (the original evidence is clean).
+test("evidence swapped inside create()'s TOCTOU window (after authorization/lock begin, before persist) is still scanned fresh at write-time", async () => {
+  const { root, service } = await setup();
+  (service as any).options.beforeCreateWrite = async () => {
+    await writeFile(path.join(root, "evidence", "e.md"), "swapped after create() began, inside the file lock, before persist");
+  };
+  const proposal = await propose(service);
+  expect(proposal.security.gate).toBe("needs-approval");
+  const persisted = JSON.parse(await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals", "proposal-a.json"), "utf8"));
+  expect(persisted.security.gate).toBe("needs-approval");
 });
 
 // SLATE-14 / AC-4 (cheap regression guard): the misleading self-accept claim

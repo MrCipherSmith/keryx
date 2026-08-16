@@ -64,3 +64,90 @@
   implemented`/`flow complete` not run, AC confirmation not run (Phase 5 is
   downstream of the stop point). Flow left `in-progress`.
 - 2026-08-15T23:51:12.467Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/297
+- 2026-08-16T10:33:13.768Z - task-added: T5: Fix finding 1+4: scanEvidenceSecurityGate fail-open on platform-unavailable read; replace detectSecrets/detectPii with guardOutput()
+- 2026-08-16T10:33:21.418Z - task-added: T6: Fix finding 3: close TOCTOU window between security gate scan and writeFileAtomic in proposal-lifecycle create()
+- 2026-08-16T10:33:32.394Z - task-added: T7: Fix finding 2: narrow fwk-service.ts local flow-read catch so access_denied propagates as full denial, not partial unbound disclosure
+- 2026-08-16T10:33:39.551Z - task-added: T8: Add regression tests for all 4 findings and verify typecheck/tests/health
+- 2026-08-16T10:33:47.527Z - task-done: T5: Fix finding 1+4: scanEvidenceSecurityGate fail-open on platform-unavailable read; replace detectSecrets/detectPii with guardOutput()
+- 2026-08-16T10:33:47.610Z - task-done: T6: Fix finding 3: close TOCTOU window between security gate scan and writeFileAtomic in proposal-lifecycle create()
+- 2026-08-16T10:33:47.698Z - task-done: T7: Fix finding 2: narrow fwk-service.ts local flow-read catch so access_denied propagates as full denial, not partial unbound disclosure
+- 2026-08-16T10:37:41.859Z - task-done: T8: Add regression tests for all 4 findings and verify typecheck/tests/health
+- Independent code-review round 2 on PR #297 raised 4 new findings, fixed in
+  this pass:
+  - F1 (critical, src/sac/proposal-lifecycle.ts `scanEvidenceSecurityGate`):
+    a blanket `catch { continue }` around the evidence read also swallowed
+    `readWorkspaceFileNoFollow`'s "safe descriptor source reads are
+    unavailable on this platform" error (secure-resource-read.ts's
+    documented fail-closed contract), silently degrading to `"pass"` on
+    hosts without the Bun/POSIX FFI bridge (Windows, musl/Alpine). Fixed:
+    that one error message is now distinguished (`isPlatformUnavailableSecureReadError`)
+    and escalates straight to `"needs-approval"`; every other per-item
+    read/resolve failure still falls through to "nothing scannable", as
+    before.
+  - F4 (src/sac/proposal-lifecycle.ts, tied to F1): `scanEvidenceSecurityGate`
+    called `detectSecrets`/`detectPii` directly instead of the shared
+    `guardOutput()` write seam (src/security/guard.ts) every other guarded
+    owner-writer (wiki/memory/skill) already runs. Fixed: evidence content is
+    now scanned through `guardOutput()` (full `runDetectors`/`runDetectorsAsync`
+    pipeline — secrets/entropy/PII/prompt-injection/egress — and respects
+    `config.policies.*.enabled`), escalating on `guard.decision.findings.length
+    > 0` (not `.gate`/`.allowed`, which are weighted by each policy's
+    configured `action` and would let the default "redact" PII policy pass
+    through undetected) — preserving the exact "any detector match escalates"
+    contract this method has always had, now over a strict superset of
+    categories. `target: "unknown"` used (documented inline) since evidence
+    isn't bound for any of SecurityTarget's real destinations.
+  - F3 (src/sac/proposal-lifecycle.ts `create()`): `security.gate` used to be
+    computed at the top of `create()`, long before authorization, workspace
+    lock acquisition, wrap-up consumption, and the proposal-already-exists
+    check — a TOCTOU window an evidence swap could sail through unscanned.
+    Fixed: the scan now runs immediately before `writeFileAtomic`, inside the
+    already-acquired file lock.
+  - F2 (src/sac/fwk-service.ts, local flow-read IIFE inside
+    `createLocalFwkReadService`): its local `catch` swallowed ANY error from
+    `workspaces.readResourceForActor`, including `WorkspaceServiceError`
+    `access_denied` thrown by a role revoked between manifest read and
+    resource re-authorization-at-use — silently downgrading a full
+    authorization denial into a partial disclosure (facts/knowHow still
+    returned, only `work` hidden as "unbound"). Fixed: the local catch now
+    only swallows content-class failures (not_found/invalid_reference/
+    malformed JSON); `access_denied` re-throws and propagates to
+    `FwkReadService.resolve()`'s existing catch, which already maps it to a
+    full `denied()` receipt.
+  - Test seams added to support regression coverage without needing a real
+    non-POSIX host or a second process: `ProposalLifecycleService`'s
+    `readEvidenceFile`/`beforeCreateWrite` (constructor options), and
+    `createLocalFwkReadService(cwd, opts?)`'s `beforeResourceOpen` passthrough
+    to its internal `WorkspaceService`.
+  - New regression tests (6 total): platform-unavailable → needs-approval;
+    ordinary read failure → still "nothing scannable"; guardOutput genuinely
+    wired (disabling `modules.security` makes secret-shaped evidence resolve
+    to "pass", which a private detector call could not produce); TOCTOU
+    window closed (evidence swapped via `beforeCreateWrite` is scanned
+    fresh, not using a stale pre-lock result); and access_denied propagates
+    as a full `denied()` receipt (not partial "work: unbound") when an
+    actor's role is revoked strictly between a resource's two
+    re-authorization checks.
+  - `proposal-lifecycle.test.ts`'s `setup()` now writes a `.metaproject/
+    metaproject.json` enabling the security module — required for
+    `guardOutput()` to actually run detectors instead of no-op'ing; without
+    it the existing PII-detection test would silently test nothing.
+  - Side fix: `keryx flow task add 157 --kind fix` (as instructed) was
+    accepted uncritically by the CLI (`--kind` is cast, not validated) but
+    "fix" is not in `TaskKind`'s schema enum (context/implement/test/verify/
+    review/docs), which broke `flowStateSchema validates EVERY on-disk
+    flow.json`. Corrected T5-T8's `kind` to `"implement"` directly in
+    flow.json/tasks.md (no CLI command exists to edit a task's kind after
+    add) — this only touches non-frozen task metadata, not `acChecksum`/
+    `acConfirmed`.
+  - Verification: `bun run typecheck` clean; targeted suite
+    (`proposal-lifecycle.test.ts` + `fwk-service.test.ts` +
+    `proposal-lifecycle-parity.test.ts`) 44/44 green; `src/sac` + `src/security`
+    247/247 green; `keryx health run` PASS (score 93, 0 gate conditions). A
+    full repo-wide `bun test` run also surfaced pre-existing, unrelated
+    failures in `src/commands/sessions.fork.test.ts` and
+    `src/commands/serve.process.test.ts` (session-fork store/process-port-
+    binding flakes) — confirmed unrelated: neither file is touched by this
+    change (`git status` scope: proposal-lifecycle.ts/.test.ts,
+    fwk-service.ts/.test.ts, and this flow's own bookkeeping only).
+  - Left uncommitted per instruction: calling agent reviews and commits.
