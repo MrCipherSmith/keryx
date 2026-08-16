@@ -39,7 +39,7 @@ import path from "node:path";
 import { describe, expect, test } from "bun:test";
 // PINNED API (RED: module does not exist until T6).
 import type { HarnessCommandDeps } from "./harness";
-import { harnessCommand } from "./harness";
+import { harnessCommand, parseArgs } from "./harness";
 
 /** Records call count and always throws — proves a code path never reaches the network. */
 function makeThrowingFetch(): { fetch: typeof fetch; callCount: () => number } {
@@ -212,6 +212,60 @@ describe("AC4 (flow 021, T5) — `keryx harness run` UX fix: empty/missing --pro
     const combined = logs.join("\n");
     expect(combined).toContain("Usage: keryx harness run");
     expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+  });
+});
+
+describe("SLATE-8 — keryx harness run --unattended flag parses correctly", () => {
+  // Direct `parseArgs` assertions (review finding: the end-to-end tests below
+  // assert identical CLI output whether or not `--unattended` is passed, so
+  // they would still pass unchanged even if the flag were silently dropped —
+  // these prove the actual `ParsedArgs.unattended` value).
+  test("parseArgs sets unattended: true when --unattended is present", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "--unattended", "hello"]);
+    expect(parsed.unattended).toBe(true);
+  });
+
+  test("parseArgs leaves unattended undefined when --unattended is absent", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "hello"]);
+    expect(parsed.unattended).toBeUndefined();
+  });
+
+  test("--unattended flag parses to true when present", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--unattended", "hello"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    expect(logs.length).toBeGreaterThan(0);
+    const result = lastJson(logs);
+    expect(Array.isArray(result.events)).toBe(true);
+  });
+
+  test("--unattended flag has falsy default when absent", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "hello"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    expect(logs.length).toBeGreaterThan(0);
+    const result = lastJson(logs);
+    expect(Array.isArray(result.events)).toBe(true);
   });
 });
 

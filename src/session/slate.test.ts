@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { archiveSlate, readSlate, writeSlate, type Slate } from "./slate";
+import { appendSeed, archiveSlate, dedupeSeeds, readSlate, writeSlate, type Slate, type SlateSeed } from "./slate";
 
 const time = "2026-08-15T00:00:00.000Z";
 
@@ -95,4 +95,76 @@ test("archiveSlate on a session dir with no slate.json yet is a no-op, not an er
   const dir = await tempDir();
   await expect(archiveSlate(dir, "attempt-never-written")).resolves.toBeUndefined();
   expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("appendSeed appends to an already-open slate's seeds array, append-only", async () => {
+  const dir = await tempDir();
+  await writeSlate(dir, () => baseSlate({ seeds: [{ id: "seed-1", text: "first seed", ts: time }] }));
+  const updated = await appendSeed(dir, { id: "seed-2", text: "second seed", ts: time });
+  expect(updated.seeds.map((seed) => seed.id)).toEqual(["seed-1", "seed-2"]);
+  const persisted = await readSlate(dir);
+  expect(persisted?.seeds.map((seed) => seed.id)).toEqual(["seed-1", "seed-2"]);
+});
+
+test("appendSeed preserves an optional kind tag", async () => {
+  const dir = await tempDir();
+  await writeSlate(dir, () => baseSlate());
+  const updated = await appendSeed(dir, { id: "seed-1", text: "tagged seed", ts: time, kind: "risk" });
+  expect(updated.seeds[0]?.kind).toBe("risk");
+});
+
+test("appendSeed throws when no slate is open in the session dir (caller bug, not a runtime condition to swallow)", async () => {
+  const dir = await tempDir();
+  await expect(appendSeed(dir, { id: "seed-1", text: "orphan seed", ts: time })).rejects.toThrow();
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("dedupeSeeds collapses two Seeds with identical trimmed text to one", () => {
+  const seeds: SlateSeed[] = [
+    { id: "a", text: "the cache invalidates too eagerly", ts: time },
+    { id: "b", text: "the cache invalidates too eagerly", ts: time },
+  ];
+  const result = dedupeSeeds(seeds);
+  expect(result.map((seed) => seed.id)).toEqual(["a"]);
+});
+
+test("dedupeSeeds keeps a Seed whose only difference from an existing one is leading/trailing whitespace, deduped to the first occurrence", () => {
+  const seeds: SlateSeed[] = [
+    { id: "a", text: "  the cache invalidates too eagerly  ", ts: time },
+    { id: "b", text: "the cache invalidates too eagerly", ts: time },
+  ];
+  const result = dedupeSeeds(seeds);
+  expect(result.map((seed) => seed.id)).toEqual(["a"]);
+});
+
+test("dedupeSeeds keeps two Seeds whose texts differ only by internal whitespace, since trim() does not normalize internal whitespace", () => {
+  const seeds: SlateSeed[] = [
+    { id: "a", text: "foo  bar", ts: time },
+    { id: "b", text: "foo bar", ts: time },
+  ];
+  const result = dedupeSeeds(seeds);
+  expect(result.map((seed) => seed.id).sort()).toEqual(["a", "b"]);
+});
+
+test("dedupeSeeds keeps two Seeds with genuinely different text", () => {
+  const seeds: SlateSeed[] = [
+    { id: "a", text: "first distinct seed", ts: time },
+    { id: "b", text: "second distinct seed", ts: time },
+  ];
+  const result = dedupeSeeds(seeds);
+  expect(result.map((seed) => seed.id).sort()).toEqual(["a", "b"]);
+});
+
+test("dedupeSeeds on an empty array returns an empty array", () => {
+  expect(dedupeSeeds([])).toEqual([]);
+});
+
+test("dedupeSeeds does not mutate its input array", () => {
+  const seeds: SlateSeed[] = [
+    { id: "a", text: "same text", ts: time },
+    { id: "b", text: "same text", ts: time },
+  ];
+  const snapshot = JSON.parse(JSON.stringify(seeds));
+  dedupeSeeds(seeds);
+  expect(seeds).toEqual(snapshot);
 });

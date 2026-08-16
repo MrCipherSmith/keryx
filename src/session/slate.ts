@@ -117,17 +117,100 @@ export async function writeSlate(dir: string, update: (prev: Slate | undefined) 
 export async function archiveSlate(dir: string, attemptId: string): Promise<void> {
   if (!/^[A-Za-z0-9._-]+$/.test(attemptId)) throw new Error(`invalid attemptId: ${JSON.stringify(attemptId)}`);
   await mkdir(dir, { recursive: true });
+  return withFileLock(slateLockPath(dir), () => archiveIfExistsLocked(dir, attemptId));
+}
+
+/**
+ * Same "archive whatever is live, if anything" behavior as `archiveSlate`,
+ * but assumes the caller already holds `slateLockPath(dir)`'s lock (used by
+ * `openSlateAtomic` below to fold archive-then-write into one lock hold).
+ * Not exported: re-entering `withFileLock` on the same lock path from inside
+ * itself would deadlock (the lock is a non-reentrant `mkdir`-based mutex),
+ * so this must only ever run already-inside a hold, never acquire its own.
+ */
+async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<void> {
+  let raw: string;
+  try {
+    raw = await readFile(slatePath(dir), "utf8");
+  } catch (error) {
+    if (isNotFound(error)) return;
+    throw error;
+  }
+  const archiveDir = path.join(dir, "slate-archive");
+  await mkdir(archiveDir, { recursive: true });
+  await writeFileAtomic(path.join(archiveDir, `${attemptId}.json`), raw);
+  await rm(slatePath(dir), { force: true });
+}
+
+/**
+ * Atomic "archive an unclosed prior slate, then write a fresh one" primitive
+ * for `openSlate` (`slate-lifecycle.ts`), fixing a concurrency bug (F-001):
+ * `openSlate` used to be three SEPARATE lock holds — an unlocked `readSlate`,
+ * then a separately-locked `archiveSlate`, then a separately-locked
+ * `writeSlate` whose update callback ignored `prev` entirely. Between the
+ * archive lock's release and the write lock's re-acquire there was a real
+ * window where two concurrent `openSlate` calls against the same session dir
+ * could interleave: the second caller's own freshly-archived-and-written
+ * slate could be silently clobbered by the first caller's later write, with
+ * no archive step ever having seen the discarded state.
+ *
+ * Folding the "is there an unclosed prior slate?" check, the conditional
+ * archive, and the fresh write into ONE `withFileLock` hold closes that
+ * window — a second concurrent caller blocks on lock acquisition until the
+ * first caller's archive+write has fully committed, then sees the first
+ * caller's just-written slate as the "existing" slate it must itself archive
+ * (never silently overwrite).
+ *
+ * `mintAttemptId` is still invoked only when an existing slate is actually
+ * found on disk (never speculatively), matching
+ * `OpenSlateOptions.mintAttemptId`'s existing contract — `build` is called
+ * unconditionally to produce the fresh slate to persist.
+ */
+export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: () => Slate): Promise<Slate> {
+  await mkdir(dir, { recursive: true });
   return withFileLock(slateLockPath(dir), async () => {
-    let raw: string;
-    try {
-      raw = await readFile(slatePath(dir), "utf8");
-    } catch (error) {
-      if (isNotFound(error)) return;
-      throw error;
+    const existing = await readSlate(dir);
+    if (existing !== undefined) {
+      await archiveIfExistsLocked(dir, mintAttemptId());
     }
-    const archiveDir = path.join(dir, "slate-archive");
-    await mkdir(archiveDir, { recursive: true });
-    await writeFileAtomic(path.join(archiveDir, `${attemptId}.json`), raw);
-    await rm(slatePath(dir), { force: true });
+    const next = build();
+    await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    return next;
   });
+}
+
+/**
+ * Append-only Seed write (SLATE-4) on top of `writeSlate`'s already-locked
+ * read-modify-write. `seed` is a fully-formed `SlateSeed` — this module has
+ * no clock/RNG dependency of its own (see the module doc comment), so id/ts
+ * minting is the caller's responsibility, not this helper's.
+ *
+ * Requires an already-open slate: appending a Seed to a session dir with no
+ * live `slate.json` is a caller bug (the lifecycle layer must open a slate
+ * before any Seed can be written), so this throws rather than silently
+ * fabricating a slate with placeholder Anchors.
+ */
+export async function appendSeed(dir: string, seed: SlateSeed): Promise<Slate> {
+  return writeSlate(dir, (prev) => {
+    if (!prev) throw new Error(`appendSeed: no open slate in ${dir}`);
+    return { ...prev, seeds: [...prev.seeds, seed] };
+  });
+}
+
+/**
+ * Pure Seed dedup for the wrap-up composer (SLATE-4, spec AC-23): two Seeds
+ * are duplicates only when their `text` fields are identical after
+ * `.trim()` — no similarity/embedding model in v1. Keeps the first
+ * occurrence of each distinct trimmed text; does not mutate `seeds`.
+ */
+export function dedupeSeeds(seeds: SlateSeed[]): SlateSeed[] {
+  const seen = new Set<string>();
+  const result: SlateSeed[] = [];
+  for (const seed of seeds) {
+    const key = seed.text.trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(seed);
+  }
+  return result;
 }

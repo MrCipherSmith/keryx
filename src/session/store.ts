@@ -584,6 +584,19 @@ export class UnknownSessionError extends Error {
  * `context` and `archive` come across, because a fork that resumed with the
  * model window but lost the pre-compact history would silently be a different
  * conversation from the one it claims to branch.
+ *
+ * `slate.json` is deliberately NEVER part of this copy (SLATE-1/SLATE-2, AC-1
+ * / AC-2, `docs/requirements/slate/specification.md`'s "Future storage
+ * structure": "`keryx sessions fork` ... creates no `slate.json` for the new
+ * session — the fork opens with a fresh, empty slate, exactly as a
+ * brand-new session would... No code path may special-case fork to carry
+ * `slate.json` across."). This mirrors the same principle already applied to
+ * `messageCount` etc. below: only raw transcript (`context`/`archive`) and
+ * explicit identity fields (`title`/`provider`/`model`) are copied, never
+ * derived/computed session state — and Anchors/Course/Seeds are exactly
+ * that. `createSession` below never writes a `slate.json` on its own, so
+ * simply not touching `slate.ts` here is sufficient; see
+ * `src/session/store.test.ts` for the regression assertion.
  */
 export function forkSession(opts: {
   cwd: string;

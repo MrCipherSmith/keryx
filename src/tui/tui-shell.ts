@@ -41,6 +41,7 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import { buildApprovalContext } from "../commands/agent-approval-context";
+import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -1808,6 +1809,14 @@ export async function launchTuiAgentShell(opts: {
     let archive: NormalizedMessage[] = [];
     let nextArchiveIndex = 0;
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+    /**
+     * SLATE-5 open/close wiring (parity with `runAgentRepl` in
+     * `src/commands/shell.ts`) — a fresh, never-opened ref per live session
+     * dir, reassigned on `/new`/`/clear`. The TUI always has a live session
+     * (no sessions-off path here, unlike the REPL), so this is unconditional
+     * once `liveSession` is set below.
+     */
+    let slateSession: SlateSessionRef | undefined;
 
     const applyOpened = (
       opened: {
@@ -1950,6 +1959,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
     }
+    slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
 
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
@@ -2309,7 +2319,11 @@ export async function launchTuiAgentShell(opts: {
       if (chrome.isBusy()) {
         const command = findAgentCommand(line, "agent");
         if (command?.name === "/exit") {
-          r.destroy();
+          // SLATE-5 close trigger: shell exit (explicit command, while busy).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.destroy();
+          })();
           return;
         }
         if (command?.name === "/help") {
@@ -2380,15 +2394,26 @@ export async function launchTuiAgentShell(opts: {
       const command = findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
-          r.destroy();
+          // SLATE-5 close trigger: shell exit (explicit command).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.destroy();
+          })();
           return;
         }
         if (command.name === "/clear" || command.name === "/new") {
-          // Creates a NEW session id; previous transcript stays on disk for /resume.
-          startNewSession();
-          io.onSystem?.(
-            `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
-          );
+          // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
+          // dir for a fresh one — archive whatever slate it was building
+          // before switching away (parity with runAgentRepl in shell.ts).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            // Creates a NEW session id; previous transcript stays on disk for /resume.
+            startNewSession();
+            slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+            io.onSystem?.(
+              `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
+            );
+          })();
           return;
         }
         if (command.name === "/resume" || command.name === "/sessions") {
@@ -2770,7 +2795,10 @@ export async function launchTuiAgentShell(opts: {
       };
       const controller = new AbortController();
       mainTurnAbortController = controller;
-      void runAgentTurn(io, deps, history, line, { signal: controller.signal }).finally(() => {
+      void runAgentTurn(io, deps, history, line, {
+        signal: controller.signal,
+        ...(slateSession !== undefined ? { slateSession } : {}),
+      }).finally(() => {
         mainTurnAbortController = undefined;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();

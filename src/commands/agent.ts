@@ -17,6 +17,15 @@ import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-ri
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
+import { readSlate } from "../session/slate";
+import { courseFromSlate } from "../session/slate-course";
+import {
+  closeSlateSession,
+  ensureSlateOpened,
+  isClosePhrase,
+  isCourseDone,
+  type SlateSessionRef,
+} from "../session/slate-lifecycle";
 
 /**
  * Extra context handed to an approver alongside the raw tool input.
@@ -121,6 +130,17 @@ export interface AgentDeps {
 export interface RunAgentTurnOptions {
   /** Abort signal for a running turn (UI hard-stop support). */
   signal?: AbortSignal;
+  /**
+   * SLATE-2/SLATE-5 open/close wiring (Phase 2). Absent whenever the caller
+   * has no session dir to anchor a slate to (sessions disabled, or a caller
+   * — e.g. existing tests — that predates this wiring): the driver then
+   * skips ALL slate lifecycle work, unchanged from pre-Phase-2 behavior.
+   * `opened` is caller-owned mutable state that MUST persist across calls
+   * for the same running session/attempt (mirrors how `runAgentRepl` in
+   * `commands/shell.ts` already threads `history`/`live` across turns) — see
+   * `session/slate-lifecycle.ts`'s `SlateSessionRef` doc comment for why.
+   */
+  slateSession?: SlateSessionRef;
 }
 
 /**
@@ -252,6 +272,15 @@ function isActionRequest(text: string): boolean {
     "ls",
     "npm",
     "bun",
+    // SLATE-5: goal/task-shaped language that should also open a slate,
+    // not only the tool-invocation-shaped tokens above.
+    "implement",
+    "build",
+    "fix",
+    "create",
+    "task",
+    "goal",
+    "add",
   ]);
   const cyrillicActionTokens = new Set([
     "запусти",
@@ -276,6 +305,13 @@ function isActionRequest(text: string): boolean {
     "перезапусти",
     "подготовь",
     "сделай",
+    // SLATE-5: goal/task-shaped language mirroring the ASCII additions above.
+    "реализуй",
+    "создай",
+    "почини",
+    "исправь",
+    "задача",
+    "цель",
   ]);
   const tokens = tokensForActionDetection(text);
   return tokens.some((token) => asciiActionTokens.has(token) || cyrillicActionTokens.has(token));
@@ -546,8 +582,67 @@ export function reserveToolAttempt(
  * Run ONE user turn to completion (possibly several model round-trips if tools are
  * called). Appends the user message plus every assistant/tool message produced to
  * `history` in place.
+ *
+ * Thin wrapper around {@link runAgentTurnCore}: the core is left byte-for-byte
+ * unchanged (renamed only) so SLATE-5's close-on-flow-done check — which must
+ * run after the turn completes on EVERY exit path (text-only finish, abort,
+ * error, budget exhaustion) — does not require touching the core's many
+ * internal `return` statements. A `finally` here is the one place that
+ * naturally covers all of them.
  */
 export async function runAgentTurn(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  userLine: string,
+  options: RunAgentTurnOptions = {},
+): Promise<void> {
+  try {
+    await runAgentTurnCore(io, deps, history, userLine, options);
+  } finally {
+    // `closeSlateOnFlowDone` never throws — it swallows every failure
+    // itself (see its own doc comment) — but the `finally` block does not
+    // rely on that alone: it deliberately holds nothing here that could
+    // itself throw, so it can never supersede `runAgentTurnCore`'s real
+    // outcome via JS's finally-throw-replaces-original semantics.
+    await closeSlateOnFlowDone(io, deps, options);
+  }
+}
+
+/**
+ * SLATE-5 close trigger: flow-done. Re-derives Course live (never cached,
+ * per `slate-course.ts`) and archives the slate when it has reached `"done"`.
+ * Only reads `slate.json` at all when `options.slateSession.opened` is true —
+ * i.e. a slate was actually opened THIS attempt — so a session that never
+ * triggered an action-intent (no slate ever opened) costs this check nothing.
+ *
+ * F-003 fix: the read/close sequence is wrapped in its own try/catch,
+ * mirroring `slate-course.ts`'s `readCourse` fail-open pattern. `readSlate`
+ * only swallows `ENOENT` itself — a malformed `slate.json` (`JSON.parse`
+ * `SyntaxError`) or a permission failure (`EACCES`) would otherwise
+ * propagate out of this function and, via `runAgentTurn`'s `finally` block,
+ * REPLACE the turn's actual outcome/thrown error (JS finally-supersedes-
+ * original semantics) — silently masking a real `runAgentTurnCore` result
+ * behind an unrelated slate-bookkeeping failure. On any error here, degrade
+ * to "assume not done, skip closing this turn" instead.
+ */
+async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): Promise<void> {
+  const ref = options.slateSession;
+  if (ref === undefined || !ref.opened) {
+    return;
+  }
+  try {
+    const slate = await readSlate(ref.dir);
+    const course = await courseFromSlate(ref.cwd, slate);
+    if (isCourseDone(course)) {
+      await closeSlateSession(ref, () => deps.idSeq());
+    }
+  } catch (err) {
+    io.onSystem?.(`slate close check failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+
+async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
   history: NormalizedMessage[],
@@ -572,6 +667,28 @@ export async function runAgentTurn(
   const maxNonReadToolCalls = deps.maxNonReadToolCalls ?? DEFAULT_MAX_NON_READ_TOOL_CALLS;
   const parentRunId = deps.idSeq();
   const actionRequest = isActionRequest(userLine);
+  if (options.slateSession !== undefined) {
+    // Review finding: unlike the close trigger (`closeSlateOnFlowDone`,
+    // F-003-guarded), this open trigger had no try/catch — a corrupted
+    // `slate.json` (`JSON.parse` `SyntaxError` inside `ensureSlateOpened`'s
+    // `readSlate` check, or an `EACCES`) would throw uncaught here and abort
+    // the ENTIRE turn before the model is ever invoked, so the user's actual
+    // request is never processed. Degrade the same way the close path does:
+    // on any failure, skip slate lifecycle bookkeeping for this turn and let
+    // the real request proceed.
+    try {
+      if (isClosePhrase(userLine)) {
+        await closeSlateSession(options.slateSession, () => deps.idSeq());
+      } else if (actionRequest) {
+        await ensureSlateOpened(options.slateSession, () => deps.idSeq(), {
+          provider: deps.providerId,
+          model: deps.modelId,
+        });
+      }
+    } catch (err) {
+      io.onSystem?.(`slate open/close check failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
   const budget: ToolBudgetState = {
     charged: new Set(),
     readCharged: new Set(),

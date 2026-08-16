@@ -6,6 +6,7 @@ import {
   compactSession,
   createSession,
   findSession,
+  forkSession,
   latestSession,
   listSessions,
   loadArchive,
@@ -17,6 +18,7 @@ import {
   shortSessionId,
   titleFromPrompt,
 } from "./index";
+import { readSlate, writeSlate } from "./slate";
 
 function tempData(): string {
   return mkdtempSync(path.join(tmpdir(), "keryx-session-"));
@@ -151,6 +153,31 @@ test("resume missing id throws with per-project hint", () => {
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-miss-"));
   try {
     expect(() => openSession({ cwd: proj, dataDir, resumeId: "no-such-id" })).toThrow(/per-project/);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("AC2: forkSession never carries slate.json across — a forked session opens with a completely empty slate", async () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-fork-slate-"));
+  try {
+    const source = createSession({ cwd: proj, dataDir });
+    persistHistory(source, [{ role: "user", content: "start", provenance: "project" }]);
+    await writeSlate(source.dir, () => ({
+      anchors: { root: proj, touched: ["a.ts"], tree: "feature/x" },
+      course: { flowRef: "001" },
+      seeds: [{ id: "s1", text: "a live seed from the source session", ts: "2026-08-16T00:00:00.000Z" }],
+    }));
+    expect(await readSlate(source.dir)).toBeDefined();
+
+    const { handle } = forkSession({ cwd: proj, sourceIdOrPrefix: source.summary.id, dataDir });
+
+    expect(handle.dir).not.toBe(source.dir);
+    expect(await readSlate(handle.dir)).toBeUndefined();
+    // The source's own slate is untouched by the fork.
+    expect(await readSlate(source.dir)).toBeDefined();
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(proj, { recursive: true, force: true });

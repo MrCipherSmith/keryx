@@ -29,6 +29,7 @@ async function setup(role = "owner", writer: { owner: string; write: (input: { c
   const manifestPath = path.join(root, ".metaproject", "workspaces", "workspace-a", "workspace.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (role === "viewer") manifest.members = [{ subject: "user:owner", role: "owner" }, { subject: "user:reviewer", role: "viewer" }];
+  else if (role === "editor") manifest.members = [{ subject: "user:owner", role: "owner" }, { subject: "user:reviewer", role: "editor" }];
   await writeFile(manifestPath, JSON.stringify(manifest));
   const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async ({ sourceRef }) => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: sourceRef.includes("flow") ? "separate explicit wrap-up" : "explicit wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
   const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", recover: async () => writer.recover ? writer.recover() : undefined, persist: (intent: { correlationId: string }) => writer.write({ correlationId: intent.correlationId }) };
@@ -54,8 +55,8 @@ test("creates an immutable schema-valid proposed record with no raw payload", as
 
 test("accepted transition requires guarded target receipt and same-key retry returns it", async () => {
   const { root, service } = await setup(); await propose(service);
-  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
-  const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(first).toEqual(retry); expect(first.event.toStatus).toBe("accepted");
   const acceptance = (first.event as any).acceptance;
   expect(acceptance.targetWrite.binding).toMatchObject({ intentRef: acceptance.writeIntentRef, proposalId: "proposal-a", proposalRevision: "r1", workspaceId: "workspace-a", correlationId: "proposal-review-correlation-0001", idempotencyKey: "proposal-review-idempotency-0001", reviewerSubject: "user:reviewer", reviewerAuthority: "owner", policyRevision: "policy-r1" });
@@ -73,7 +74,7 @@ test("crash recovery obtains a durable owner receipt without a duplicate mutatio
     return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId };
   }, recover: async () => durableReceipt };
   const { root, service } = await setup("owner", writer as any); await propose(service);
-  const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001" };
+  const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001", interactive: true };
   await expect(service.review(request)).rejects.toThrow("simulated crash");
   const recovered = await service.review(request);
   expect(recovered.event.toStatus).toBe("accepted"); expect(mutations).toBe(1); expect(ownerCalls).toBe(1);
@@ -84,14 +85,14 @@ test("crash recovery obtains a durable owner receipt without a duplicate mutatio
 test("failed target write and denied reviewer never accept or mutate target", async () => {
   let writes = 0; const failed = { owner: "wiki" as const, write: async () => { writes++; return { ok: false as const, code: "target_write_failed" as const }; } };
   const { service } = await setup("owner", failed); await propose(service);
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("stale"); expect(writes).toBe(1);
   const denied = await setup("viewer"); await expect(propose(denied.service)).rejects.toMatchObject({ code: "access_denied" });
 });
 
 test("rejection is terminal append-only and does not call a target writer", async () => {
   let writes = 0; const { service } = await setup("owner", { owner: "wiki", write: async ({ correlationId }) => { writes++; return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId }; } }); await propose(service);
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("rejected"); expect(writes).toBe(0);
 });
 
@@ -102,8 +103,8 @@ test("a terminal transition in another proposal does not consume this proposal i
   const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0002");
   const wrapUp = await (service as any).options.wrapUpAuthority.issue({ actor, source: "flow", sourceRef: "./flows/wrap-up" });
   await service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0002", workspaceId: "workspace-a", id: "proposal-b", proposalRevision: "r1", kind: "risk", wrapUp });
-  await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0002", workspaceId: "workspace-a", proposalId: "proposal-b", decision: "dismissed", reason: "out of scope", idempotencyKey: "proposal-review-idempotency-0001" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001" });
+  await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0002", workspaceId: "workspace-a", proposalId: "proposal-b", decision: "dismissed", reason: "out of scope", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.proposalId).toBe("proposal-a");
   expect(result.event.sequence).toBe(1);
 });
@@ -131,7 +132,7 @@ test("requires a server-issued explicit session or Flow wrap-up, bound once to a
 test("stale evidence is denied at owner-use after approval and never invokes writer", async () => {
   let writes = 0; const { root, service } = await setup("owner", { owner: "wiki", write: async ({ correlationId }) => { writes++; return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId }; } }); await propose(service);
   (service as any).options.beforeTargetWrite = async () => { await writeFile(path.join(root, "evidence", "e.md"), "changed"); };
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("stale"); expect(writes).toBe(0);
 });
 
@@ -146,7 +147,7 @@ test("a skill owner receipt is accepted when targetRef matches the real ./projec
     write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./project-skills/sac/x.receipt.json", targetRef: "./project-skills/sac/x/SKILL.md", completedAt: time, correlationId }),
   });
   await propose(service, { kind: "decision" }); // any non-wiki-update/non-memory-entry kind routes to "skill" (ownerFor)
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -159,7 +160,7 @@ test("a skill owner receipt is REJECTED (lands as stale) when targetRef uses the
     write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./skill/x.receipt.json", targetRef: "./skill/x/SKILL.md", completedAt: time, correlationId }),
   });
   await propose(service, { kind: "decision" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("stale");
 });
 
@@ -178,7 +179,7 @@ test("review of a proposal that predates its workspace's archival completes norm
   const { service, workspaces } = await setup();
   await propose(service);
   await (workspaces as any).archive({ request: undefined, requestCorrelationId: "workspace-archive-after-propose-0001", workspaceId: "workspace-a" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -193,7 +194,7 @@ test("removeResource never causes a pending/accepted proposal's evidence resolut
   // evidence via manifest.resources[] membership).
   await propose(service);
   await (workspaces as any).removeResource({ request: undefined, requestCorrelationId: "workspace-removeresource-0001", workspaceId: "workspace-a", uri: "./src/a.ts" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -337,4 +338,93 @@ test("evidence swapped inside create()'s TOCTOU window (after authorization/lock
 test("the createLocalProposalLifecycleService comment no longer claims a self-accept protection that isn't real", async () => {
   const source = await readFile(new URL("./proposal-lifecycle.ts", import.meta.url), "utf8");
   expect(source).not.toContain("can never self-accept");
+});
+
+// --- SLATE-8: unattended checkpoint (AC4, AC5, AC6) ---
+// `review()`'s `interactive` gate mirrors `checkApproval` rule (h)
+// (src/harness/mutation/approval.ts:148-149, `interactive === false ->
+// invalid`) and is documented at the top of `review()` in
+// proposal-lifecycle.ts. These tests exercise it against the real
+// authorization/role machinery (not a mock), because AC4 requires "regardless
+// of role" to be genuinely proven, not merely asserted in a comment.
+
+test("accept is denied when interactive:false, for an owner reviewer (AC4) — mirrors src/lib/serve-turn.ts:605's honest `deps.interactive = false`, the same value every keryx serve session resolves for `runRemoteTurn`", async () => {
+  const { service } = await setup("owner"); await propose(service);
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false })).rejects.toMatchObject({ code: "non_interactive_accept_denied" });
+});
+
+test("accept is denied when interactive:false, for an editor reviewer too (AC4) — the denial does not depend on which otherwise-valid role the reviewer holds, and `review()` never consults `PolicyProfile` (src/harness/policy/profiles.ts) at all for this gate: profile answers a capability-ceiling question, interactive answers a human-presence question, and they are deliberately different axes never referenced together here", async () => {
+  const { service } = await setup("editor"); await propose(service);
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false })).rejects.toMatchObject({ code: "non_interactive_accept_denied" });
+});
+
+test("accept succeeds when interactive:true for an otherwise-valid actor — the human-at-the-terminal case `keryx workspace review`/MCP `sac.review` both pass", async () => {
+  const { service } = await setup("owner"); await propose(service);
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  expect(result.event.toStatus).toBe("accepted");
+});
+
+test("a \"rejected\" decision is completely unaffected by interactive:false (AC6 — only \"accepted\" is gated)", async () => {
+  const { service } = await setup(); await propose(service);
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001", interactive: false });
+  expect(result.event.toStatus).toBe("rejected");
+});
+
+test("a \"dismissed\" decision is completely unaffected by interactive:false (AC6)", async () => {
+  const { service } = await setup(); await propose(service);
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "dismissed", reason: "no longer needed", idempotencyKey: "proposal-review-idempotency-0001", interactive: false });
+  expect(result.event.toStatus).toBe("dismissed");
+});
+
+test("propose (create()) carries no interactive gate at all and is unaffected by a subsequent denied accept — the deferred-queue model (AC6)", async () => {
+  const { service } = await setup();
+  // create()'s input type has no `interactive` field whatsoever — nothing to
+  // bypass or satisfy, proving the SLATE-8 change is scoped to review()'s
+  // accept branch only, never to propose/create().
+  const proposal = await propose(service);
+  expect(proposal.status).toBe("proposed");
+  // The same unattended session's accept is still denied: propose is not a
+  // side door around the gate, and the proposal remains pending rather than
+  // being rejected outright.
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: proposal.id, decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false })).rejects.toMatchObject({ code: "non_interactive_accept_denied" });
+});
+
+test("the interactive value cannot be sourced from actor/clientClaims/proposal content — a spoofed interactive:true claim inside `request` has no effect on the boolean actually consulted (AC5)", async () => {
+  const { service } = await setup(); await propose(service);
+  // `request` normally flows only to `authorizationServer.actorContextFor()`
+  // to resolve the trusted actor — review() never reads an `interactive`
+  // field off it or off `clientClaims`. A malicious-looking payload that
+  // tries to smuggle `interactive`/`clientClaims.interactive` through here
+  // must be ignored: only the caller-supplied top-level `interactive`
+  // parameter — fixed at the harness/CLI/MCP boundary, never inside a
+  // request body a model/agent could shape — is honored.
+  const spoofedRequest = { interactive: true, clientClaims: { interactive: true, role: "owner" } };
+  await expect(service.review({ request: spoofedRequest, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false })).rejects.toMatchObject({ code: "non_interactive_accept_denied" });
+});
+
+test("the denial uses a distinct error code from other guard_denied reasons (F-008) — a caller pattern-matching on `.code` can never conflate \"no human present\" with archived-workspace or policy-guard denials", async () => {
+  const { service } = await setup(); await propose(service);
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false })).rejects.toMatchObject({ code: "non_interactive_accept_denied", message: expect.stringContaining("interactive: false") });
+});
+
+test("a replayed accept (same idempotency key) succeeds even when the retry's interactive value differs from the original — the idempotency replay lookup runs before the SLATE-8 gate, so it is never re-decided (F-006)", async () => {
+  const { service } = await setup("owner"); await propose(service);
+  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  expect(first.event.toStatus).toBe("accepted");
+  // Same idempotency key, but this replay call is dishonestly/differently
+  // tagged `interactive: false`. It must still return the already-committed
+  // "accepted" outcome rather than being freshly re-decided and denied.
+  const replay = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false });
+  expect(replay).toEqual(first);
+});
+
+test("a different idempotency key on an already-terminal proposal is never mistaken for a replay of a prior transition — the replay short-circuit only matches on the exact idempotencyKey, so a genuinely new request still runs the normal terminal-transition/gate logic (F-006 ordering)", async () => {
+  const { service } = await setup("owner"); await propose(service);
+  await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  // A second, fresh accept attempt under a different idempotency key is not a
+  // replay of the first (rejected) transition. `events.length > 0` denies it
+  // as a conflict before the interactive gate is even reached, proving the
+  // gate reordering did not create a bypass where a fresh non-interactive
+  // accept attempt could slip through as if it were a replay.
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0002", interactive: false })).rejects.toMatchObject({ code: "conflict" });
 });
