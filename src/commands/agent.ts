@@ -668,13 +668,25 @@ async function runAgentTurnCore(
   const parentRunId = deps.idSeq();
   const actionRequest = isActionRequest(userLine);
   if (options.slateSession !== undefined) {
-    if (isClosePhrase(userLine)) {
-      await closeSlateSession(options.slateSession, () => deps.idSeq());
-    } else if (actionRequest) {
-      await ensureSlateOpened(options.slateSession, () => deps.idSeq(), {
-        provider: deps.providerId,
-        model: deps.modelId,
-      });
+    // Review finding: unlike the close trigger (`closeSlateOnFlowDone`,
+    // F-003-guarded), this open trigger had no try/catch — a corrupted
+    // `slate.json` (`JSON.parse` `SyntaxError` inside `ensureSlateOpened`'s
+    // `readSlate` check, or an `EACCES`) would throw uncaught here and abort
+    // the ENTIRE turn before the model is ever invoked, so the user's actual
+    // request is never processed. Degrade the same way the close path does:
+    // on any failure, skip slate lifecycle bookkeeping for this turn and let
+    // the real request proceed.
+    try {
+      if (isClosePhrase(userLine)) {
+        await closeSlateSession(options.slateSession, () => deps.idSeq());
+      } else if (actionRequest) {
+        await ensureSlateOpened(options.slateSession, () => deps.idSeq(), {
+          provider: deps.providerId,
+          model: deps.modelId,
+        });
+      }
+    } catch (err) {
+      io.onSystem?.(`slate open/close check failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
   const budget: ToolBudgetState = {

@@ -473,6 +473,30 @@ test("a malformed-JSON flow resource yields work.state \"unbound\" from createLo
   expect(result.manifest.work).toEqual({ state: "unbound" });
 });
 
+// Review finding: `migrateFlow` (src/flow/store.ts) throws for any
+// schemaVersion other than 1 or 2 — including a missing field, since
+// `undefined !== 1 && undefined !== 2`. The `work` IIFE's catch documents
+// swallowing that throw into "unbound" exactly like malformed JSON, but that
+// specific path had zero test coverage until now.
+test("a flow resource with valid shape but an unsupported/missing schemaVersion yields work.state \"unbound\", never an uncaught rejection", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-local-flow-badversion-"));
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const strictGuard = { mode: "strict" as const, availability: "available" as const, decision: "pass" as const, policyRevision: "local-offline-v1" };
+  const workspaces = new WorkspaceService({ workspaceRoot: root, authorizationServer, strictGuard });
+  await workspaces.create({ request: undefined, requestCorrelationId: "fwk-local-flow-badversion-correlation-0001", id: "workspace-a", title: "Local flow read" });
+  await mkdir(path.join(root, "flows"), { recursive: true });
+  // Valid shape (id/status/updatedAt/tasks all present, passes the IIFE's own
+  // shape check) but schemaVersion is absent — migrateFlow throws on this,
+  // not a JSON.parse SyntaxError.
+  await writeFile(path.join(root, "flows", "badversion.json"), JSON.stringify({ id: "flow-1", status: "in-progress", updatedAt: stamp, tasks: [] }));
+  await workspaces.addResource({ request: undefined, requestCorrelationId: "fwk-local-flow-badversion-correlation-0001", workspaceId: "workspace-a", resource: { kind: "flow", uri: "./flows/badversion.json" } });
+
+  const service = createLocalFwkReadService(root);
+  const result = await service.overview({ workspaceId: "workspace-a", request: undefined, requestCorrelationId: "fwk-local-flow-badversion-correlation-0002", budget: { maxItems: 10, maxTokens: 1000 } });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.manifest.work).toEqual({ state: "unbound" });
+});
+
 test("a flow resource deleted after registration also yields work.state \"unbound\", never an uncaught rejection", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-local-flow-deleted-"));
   const authorizationServer = localWorkspaceAuthorizationServer();

@@ -263,14 +263,44 @@ const CLOSE_PHRASE_SUBORDINATING_FOLLOWERS: ReadonlySet<string> = new Set([
   "as",
 ]);
 
+/**
+ * Words that, when they IMMEDIATELY follow a matched close phrase, mark the
+ * phrase as introducing a direct object — an instruction TO the assistant
+ * ("wrap up THE leftover notes into one summary") — rather than a standalone
+ * declaration that the session itself is done (review finding: the
+ * subordinating-follower guard alone missed this class; "the"/"this"/etc.
+ * are not subordinating conjunctions, so a bare substring match still
+ * false-positive-closed on this shape).
+ */
+const CLOSE_PHRASE_OBJECT_FOLLOWERS: ReadonlySet<string> = new Set([
+  "the",
+  "this",
+  "that",
+  "these",
+  "those",
+  "it",
+  "your",
+  "my",
+  "our",
+  "his",
+  "her",
+  "their",
+]);
+
 export function isClosePhrase(text: string): boolean {
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
   return CLOSE_PHRASES.some((phrase) => {
     const idx = normalized.indexOf(phrase);
     if (idx === -1) return false;
     const after = normalized.slice(idx + phrase.length);
-    const nextWord = after.match(/[a-z']+/)?.[0];
-    if (nextWord && CLOSE_PHRASE_SUBORDINATING_FOLLOWERS.has(nextWord)) return false;
+    const words = after.match(/[a-z']+/g) ?? [];
+    const nextWord = words[0];
+    if (nextWord !== undefined && CLOSE_PHRASE_OBJECT_FOLLOWERS.has(nextWord)) return false;
+    // Scan the whole remainder, not just the immediate next word: a
+    // subordinate clause can start a few words later (review finding: "wrap
+    // up, but only after tests pass" has "but" immediately after, not
+    // "after" — the single-word check missed the real conditional).
+    if (words.some((word) => CLOSE_PHRASE_SUBORDINATING_FOLLOWERS.has(word))) return false;
     return true;
   });
 }

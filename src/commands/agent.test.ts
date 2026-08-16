@@ -1256,3 +1256,34 @@ test("F-003: a malformed slate.json during the flow-done close check never masks
   expect(raw).toBe("{ not valid json");
   expect(system.some((s) => s.includes("slate close check failed"))).toBe(true);
 });
+
+test("review finding: a malformed slate.json on the OPEN trigger never blocks the turn's real outcome (parity with F-003's close-path fix)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  // Simulate a stale/corrupted slate.json left behind by an earlier crashed
+  // attempt — before this fix, ensureSlateOpened's readSlate call threw
+  // uncaught here, aborting the ENTIRE turn before the model was ever
+  // invoked (unlike the close path, which was already F-003-guarded).
+  await writeFile(path.join(dir, "slate.json"), "{ not valid json", "utf8");
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("all good"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io, text, system } = collectingIo();
+
+  // "implement" is an action-intent token, so this exercises the open trigger.
+  await expect(runAgentTurn(io, deps, [], "implement the feature", { slateSession })).resolves.toBeUndefined();
+
+  // The turn itself completed normally and produced its real output — the
+  // user's request was processed despite the corrupted slate.json.
+  expect(text.join("")).toContain("all good");
+  const raw = await readFile(path.join(dir, "slate.json"), "utf8");
+  expect(raw).toBe("{ not valid json");
+  expect(system.some((s) => s.includes("slate open/close check failed"))).toBe(true);
+});

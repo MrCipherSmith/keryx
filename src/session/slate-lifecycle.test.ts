@@ -273,6 +273,17 @@ test("F-007: isClosePhrase still fires when the close phrase is not part of a co
   expect(isClosePhrase("task complete, thanks")).toBe(true);
 });
 
+test("review finding: isClosePhrase does not fire when a close phrase introduces a direct object (an instruction, not a declaration)", () => {
+  expect(isClosePhrase("can you wrap up the leftover code review notes into one summary")).toBe(false);
+  expect(isClosePhrase("wrap up this section before moving on")).toBe(false);
+  expect(isClosePhrase("wrap up your notes and send them over")).toBe(false);
+});
+
+test("review finding: isClosePhrase scans the whole remainder for a subordinating word, not just the immediate next word", () => {
+  expect(isClosePhrase("wrap up, but only after tests pass")).toBe(false);
+  expect(isClosePhrase("task complete, well, once you confirm it")).toBe(false);
+});
+
 test("mintTimestampAttemptId produces archiveSlate-safe tokens that never collide across immediate successive calls", () => {
   const a = mintTimestampAttemptId(new Date("2026-08-16T00:00:00.000Z"));
   const b = mintTimestampAttemptId(new Date("2026-08-16T00:00:00.000Z"));
