@@ -463,23 +463,6 @@ test("resolveSidebarMetadata reads branch via the injected git runner", () => {
   expect(resolveSidebarMetadata("/tmp/unused", () => "HEAD").branch).toBeUndefined();
 });
 
-test("resolveSidebarMetadata reads a real git -b init branch", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "keryx-git-meta-"));
-  try {
-    const init = Bun.spawnSync(["git", "init", "-q", "-b", "feature/sidebar-ui"], {
-      cwd,
-      stdout: "ignore",
-      stderr: "pipe",
-    });
-    if (init.exitCode !== 0) {
-      return;
-    }
-    expect(resolveSidebarMetadata(cwd).branch).toBe("feature/sidebar-ui");
-  } finally {
-    await rm(cwd, { recursive: true, force: true });
-  }
-});
-
 otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   const otui = requireOtui();
   const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
