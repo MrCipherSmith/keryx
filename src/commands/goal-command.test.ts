@@ -48,7 +48,7 @@
 // filesystem check (no `.metaproject/workspaces/` entries appear).
 
 import { expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -85,20 +85,53 @@ test("parseGoalArgs: text followed by --workspace <id>", () => {
   }
 });
 
-test("parseGoalArgs: --workspace <id> BEFORE the text still resolves both fields correctly", () => {
+// Review finding 5: `--workspace` used to be recognized via `tokens.indexOf`
+// at ANY position in the goal text — including leading and mid-sentence, as
+// the two tests below originally asserted. That is a genuine bug: there is
+// no content-based way to tell "a real --workspace flag" apart from "the
+// goal's own prose happens to contain the literal token --workspace"
+// (see parseGoalArgs's own doc comment for the concrete false-positive this
+// caused: "/goal document how --workspace flag works" silently lost the
+// word "flag" to `workspaceId`). The fix narrows recognition to ONLY the
+// trailing position (`... --workspace <id>` as the last two tokens),
+// matching ordinary CLI flag convention. That is a deliberate, documented
+// behavior change — not a pre-existing bug in these tests — so the two
+// tests below are UPDATED (not silently weakened) to assert the new, safer
+// contract: leading/mid-sentence `--workspace` is no longer treated as a
+// flag at all, and the entire input is preserved as goal text instead.
+
+test("parseGoalArgs: --workspace <id> BEFORE the text is no longer treated as a flag (review finding 5) — the whole string is goal text", () => {
   const parsed = parseGoalArgs("--workspace w1 do the thing");
   expect(isError(parsed)).toBe(false);
   if (!isError(parsed)) {
-    expect(parsed.text).toBe("do the thing");
-    expect(parsed.workspaceId).toBe("w1");
+    expect(parsed.text).toBe("--workspace w1 do the thing");
+    expect(parsed.workspaceId).toBeUndefined();
   }
 });
 
-test("parseGoalArgs: multi-word text around --workspace is preserved in order", () => {
+test("parseGoalArgs: --workspace embedded mid-sentence (not trailing) is no longer treated as a flag (review finding 5) — the whole string is goal text", () => {
   const parsed = parseGoalArgs("implement the login flow --workspace w-42 for the app");
   expect(isError(parsed)).toBe(false);
   if (!isError(parsed)) {
-    expect(parsed.text).toBe("implement the login flow for the app");
+    expect(parsed.text).toBe("implement the login flow --workspace w-42 for the app");
+    expect(parsed.workspaceId).toBeUndefined();
+  }
+});
+
+test("review finding 5: ordinary goal text that happens to contain the literal word '--workspace' mid-sentence is preserved verbatim, with no workspaceId extracted", () => {
+  const parsed = parseGoalArgs("document how --workspace flag works");
+  expect(isError(parsed)).toBe(false);
+  if (!isError(parsed)) {
+    expect(parsed.text).toBe("document how --workspace flag works");
+    expect(parsed.workspaceId).toBeUndefined();
+  }
+});
+
+test("review finding 5: a genuine trailing --workspace <id> still works correctly, including with multi-word goal text", () => {
+  const parsed = parseGoalArgs("implement the login flow --workspace w-42");
+  expect(isError(parsed)).toBe(false);
+  if (!isError(parsed)) {
+    expect(parsed.text).toBe("implement the login flow");
     expect(parsed.workspaceId).toBe("w-42");
   }
 });
@@ -373,4 +406,96 @@ test("a /goal with no slateSession (sessions disabled) still validates --workspa
   expect(system.some((line) => line.includes("bogus-not-a-real-workspace"))).toBe(true);
   expect(callCount()).toBe(0);
   expect(history.length).toBe(0);
+});
+
+// --- Review finding 2: /goal must trigger the SLATE-2a Anchors auto-inject ---
+//
+// `runGoalCommand` calls `ensureSlateOpened` itself (bypassing
+// `isActionRequest`'s heuristic by design), so `runAgentTurnCore`'s own
+// `!wasOpened && ref.opened` fresh-open detection never fires for a
+// `/goal`-started turn (the flag is already `true` by the time it checks).
+// This mirrors `agent.test.ts`'s own "ensureSlateOpened's fresh open injects
+// exactly ONE Anchors-block message" test (SLATE-2a), applied to `/goal`'s
+// own open trigger instead of the heuristic one.
+
+test("review finding 2 (AC4): runGoalCommand injects exactly one Anchors-block message reflecting the freshly-opened slate", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider, callCount } = textOnlyProvider("On it.");
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  await runGoalCommand({
+    raw: "implement the thing",
+    cwd,
+    io,
+    deps,
+    history,
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(slateSession.opened).toBe(true);
+  const anchors = (await readSlate(dir))?.anchors;
+  expect(anchors).toBeDefined();
+  const anchorsMsgs = history.filter(
+    (m) => m.role === "user" && m.provenance === "project" && m.content !== "implement the thing",
+  );
+  expect(anchorsMsgs.length).toBe(1);
+  expect(anchorsMsgs[0]?.content).toContain(anchors!.root);
+  expect(callCount()).toBe(1);
+});
+
+// --- Review finding 3: no try/catch around ensureSlateOpened/writeSlate ----
+//
+// A corrupted `slate.json` (JSON.parse SyntaxError) or an EACCES must never
+// crash/reject `runGoalCommand` — mirrors `agent.test.ts`'s own corrupted-
+// slate.json resilience test for `runAgentTurn`'s open/close triggers.
+// Chosen degrade-gracefully behavior (documented at the call site too): skip
+// slate lifecycle bookkeeping for this attempt entirely and let the goal's
+// actual turn still run, since a lost Anchors injection/workspace bind is
+// recoverable but crashing mid-`/goal` is not.
+
+test("review finding 3: runGoalCommand resolves (not rejects) when slate.json at the session dir is corrupted, and the turn still runs", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  await writeFile(path.join(dir, "slate.json"), "{ not valid json", "utf8");
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider, callCount } = textOnlyProvider("On it.");
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  await expect(
+    runGoalCommand({
+      raw: "implement the thing",
+      cwd,
+      io,
+      deps,
+      history,
+      slateSession,
+      mintAttemptId: () => "attempt-0",
+    }),
+  ).resolves.toBeUndefined();
+
+  expect(system.some((line) => line.includes("slate bookkeeping failed"))).toBe(true);
+  // The goal's actual turn still ran despite the slate bookkeeping failure.
+  expect(callCount()).toBe(1);
+  expect(history.some((m) => m.role === "user" && m.content === "implement the thing")).toBe(true);
 });
