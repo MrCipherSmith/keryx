@@ -1970,10 +1970,20 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   const fnStart = tuiSource.indexOf("export async function launchTuiAgentShell(opts: {");
   const fnBody = tuiSource.slice(fnStart); // last top-level function in the file
 
-  test("opts.makeAgentDeps's type accepts a getSessionDir second parameter", () => {
+  // Fix round (Finding 1, code review of PR #306): `opts.makeAgentDeps`'s
+  // second parameter widened from `getSessionDir: () => string | undefined`
+  // to `getSlateSession: () => SlateSessionRef | undefined` — a `.dir`-only
+  // getter meant `commands/shell.ts`'s `makeAgentDeps` closure had no way to
+  // hand `createSpawnSubagentTool` a real `SlateSessionRef` at all, so
+  // SLATE-6's child-slate fold silently never fired in a real TUI session.
+  // Every call site below now passes the live ref itself (`() =>
+  // slateSession`), not a pre-narrowed `.dir` string; `shell.ts`'s own
+  // `makeAgentDeps` derives `.dir` locally where `buildInteractiveAgentTools`
+  // still needs just the string (see that file).
+  test("opts.makeAgentDeps's type accepts a getSlateSession second parameter", () => {
     const optsTypeBlock = fnBody.slice(0, fnBody.indexOf("}): Promise<boolean> {"));
     expect(optsTypeBlock).toContain(
-      "makeAgentDeps: (sel: TuiSelection, getSessionDir: () => string | undefined) => Promise<AgentDeps>;",
+      "makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;",
     );
   });
 
@@ -1983,25 +1993,25 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     const declIndex = fnBody.indexOf("let slateSession: SlateSessionRef | undefined;");
     expect(declIndex).toBeGreaterThan(callIndex); // confirms the TDZ-shaped ordering this audit is about
     const call = fnBody.slice(callIndex, callIndex + 200);
-    expect(call).toContain("opts.makeAgentDeps(sel, () => slateSession?.dir)");
+    expect(call).toContain("opts.makeAgentDeps(sel, () => slateSession)");
   });
 
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
     const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 300);
-    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession?.dir)");
+    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
   });
 
   test("the read-only side-worker deps rebuild passes the same live getter", () => {
     const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
     expect(baseIndex).toBeGreaterThanOrEqual(0);
     const baseBlock = fnBody.slice(baseIndex, baseIndex + 200);
-    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, () => slateSession?.dir)");
+    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, () => slateSession)");
   });
 
   test("all three real call sites are updated — not fewer, not more", () => {
-    const occurrences = fnBody.split("() => slateSession?.dir").length - 1;
+    const occurrences = fnBody.split("() => slateSession)").length - 1;
     expect(occurrences).toBe(3);
   });
 });
@@ -2066,5 +2076,23 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
     expect(branchBlock).toContain("sessionCwd");
     expect(branchBlock).toContain("slateSession");
     expect(branchBlock).toContain("mintTimestampAttemptId");
+  });
+});
+
+// --- flow 163 AC8: the TUI's OpenTUI REPL never triggers the Track B
+// wrap-up composer this way either — the same invariant shell.test.ts's own
+// "flow 163 AC8" source-text audit proves for the readline REPL, mirrored
+// here for `launchTuiAgentShell` (the OpenTUI equivalent). The trigger call
+// site exists ONLY in the one-shot `keryx harness run` path (harness.test.ts's
+// own positive-half audit). Source-text audit, following the exact
+// precedent this file already sets above (SLATE-2a/SLATE-3a audits):
+// `launchTuiAgentShell` has no headless injection seam, so this is proven by
+// reading the real source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 163 AC8 — tui-shell.ts's OpenTUI REPL never triggers the wrap-up composer (source-text audit)", () => {
+  const tuiSourceAc8 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("tui-shell.ts never imports or calls the Track B wrap-up composer", () => {
+    expect(tuiSourceAc8).not.toContain("runWrapUp");
+    expect(tuiSourceAc8).not.toMatch(/machine-wrap-up/);
   });
 });

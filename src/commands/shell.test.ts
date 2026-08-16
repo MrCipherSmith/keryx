@@ -841,7 +841,17 @@ test("shellCommand's makeAgentDeps threads a supplied getSessionDir through to s
       source: "cache",
     }),
     launchAgent: async (opts) => {
-      const deps = await opts.makeAgentDeps({ provider: "fake", model: "fixture-model" }, () => sessionDir);
+      // Fix round (Finding 1, code review of PR #306): `opts.makeAgentDeps`'s
+      // second parameter widened from `getSessionDir: () => string |
+      // undefined` to `getSlateSession: () => SlateSessionRef | undefined` —
+      // `shell.ts`'s own `makeAgentDeps` now derives `getSessionDir` locally
+      // from this getter's `.dir` (see that file), so this test still
+      // exercises the same `slate_read`/`slate_write_seed` wiring via the
+      // full ref shape.
+      const deps = await opts.makeAgentDeps(
+        { provider: "fake", model: "fixture-model" },
+        () => ({ dir: sessionDir, cwd: process.cwd(), opened: true }),
+      );
       tools = deps.tools;
       return true;
     },
@@ -1160,5 +1170,24 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
     expect(replBody).toContain(
       "await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});",
     );
+  });
+});
+
+// --- flow 163 AC8: the REPL (keryx shell) never triggers the Track B
+// wrap-up composer this way — the trigger call site exists ONLY in the
+// one-shot `keryx harness run` path (see harness.test.ts's own "flow 163
+// AC8" source-text audit for the positive half of this proof). A long-lived
+// REPL process serves many turns; `closeSlateOnFlowDone` (already shipped)
+// is its own, unrelated slate-close mechanism — it must never additionally
+// fire a machine wrap-up. Source-text audit, following the exact precedent
+// this file already sets for its own SLATE-3a/SLATE-15 wiring proofs above
+// (`readFileSync` the real source, assert on literals — `runAgentRepl` has
+// no injection seam to drive this through end-to-end).
+describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (source-text audit)", () => {
+  const shellSourceAc8 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+
+  test("shell.ts never imports or calls the Track B wrap-up composer", () => {
+    expect(shellSourceAc8).not.toContain("runWrapUp");
+    expect(shellSourceAc8).not.toMatch(/machine-wrap-up/);
   });
 });
