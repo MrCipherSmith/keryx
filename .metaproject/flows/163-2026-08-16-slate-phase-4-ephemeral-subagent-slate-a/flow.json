@@ -3,17 +3,50 @@
   "id": "163",
   "slug": "slate-phase-4-ephemeral-subagent-slate-a",
   "title": "Slate Phase 4: Ephemeral subagent slate and wrap-up composer",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-16T18:53:47.460Z",
-  "updatedAt": "2026-08-16T20:12:18.985Z",
+  "updatedAt": "2026-08-16T21:11:59.578Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:107bed83d5969ec04aa4e26d88217e1c76e15bf1cd64f49047a2f2da3e4601ec",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T21:11:18.145Z",
+      "note": "spawn-subagent-child-slate.test.ts + machine-wrap-up.test.ts: source-text audits confirm neither file calls flow complete/workspace propose/workspace review directly"
+    },
+    "AC2": {
+      "at": "2026-08-16T21:11:18.354Z",
+      "note": "spawn-subagent-child-slate.test.ts 'AC2: a child's Seed lands only in parent.slate.childDispatches[dispatchId], never in the parent's own seeds/anchors/course'"
+    },
+    "AC3": {
+      "at": "2026-08-16T21:11:18.531Z",
+      "note": "spawn-subagent-child-slate.test.ts 'AC3: after the dispatch returns, the child's Seed is unreachable through every other path — parent slate_read-shaped state, a fresh disk read, and the OS tempdir'"
+    },
+    "AC4": {
+      "at": "2026-08-16T21:11:18.674Z",
+      "note": "machine-wrap-up.test.ts: races two REAL concurrent wrap-up triggers for the same flow transition, asserts at most one accepted evidence set (dedup via ProposalLifecycleService's conflict rejection, real-concurrency-tested per fix-round journal note)"
+    },
+    "AC5": {
+      "at": "2026-08-16T21:11:18.824Z",
+      "note": "machine-wrap-up.test.ts 'AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.md full-archive dump'"
+    },
+    "AC6": {
+      "at": "2026-08-16T21:11:18.964Z",
+      "note": "machine-wrap-up.test.ts 'AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifact (never calls propose)'"
+    },
+    "AC7": {
+      "at": "2026-08-16T21:11:19.085Z",
+      "note": "machine-wrap-up.test.ts 'AC6/AC7: ...groups untagged seeds as follow-up'"
+    },
+    "AC8": {
+      "at": "2026-08-16T21:11:19.241Z",
+      "note": "harness.test.ts: positive wrap-up-trigger test at one-shot process termination; shell.test.ts + tui-shell.test.ts: negative source-text audits proving the REPL on BOTH surfaces (readline + TUI) never triggers Track B"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/306"
   },
   "tasks": [
     {
@@ -129,6 +162,60 @@
       "at": "2026-08-16T20:12:18.985Z",
       "event": "task-done",
       "detail": "T5: Track B: machine wrap-up composer (resolveMachineWrapUp) + AC8 one-shot harness run trigger wiring"
+    },
+    {
+      "at": "2026-08-16T21:11:18.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: spawn-subagent-child-slate.test.ts + machine-wrap-up.test.ts: source-text audits confirm neither file calls flow complete/workspace propose/workspace review directly"
+    },
+    {
+      "at": "2026-08-16T21:11:18.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: spawn-subagent-child-slate.test.ts 'AC2: a child's Seed lands only in parent.slate.childDispatches[dispatchId], never in the parent's own seeds/anchors/course'"
+    },
+    {
+      "at": "2026-08-16T21:11:18.531Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: spawn-subagent-child-slate.test.ts 'AC3: after the dispatch returns, the child's Seed is unreachable through every other path — parent slate_read-shaped state, a fresh disk read, and the OS tempdir'"
+    },
+    {
+      "at": "2026-08-16T21:11:18.675Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: machine-wrap-up.test.ts: races two REAL concurrent wrap-up triggers for the same flow transition, asserts at most one accepted evidence set (dedup via ProposalLifecycleService's conflict rejection, real-concurrency-tested per fix-round journal note)"
+    },
+    {
+      "at": "2026-08-16T21:11:18.824Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: machine-wrap-up.test.ts 'AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.md full-archive dump'"
+    },
+    {
+      "at": "2026-08-16T21:11:18.964Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: machine-wrap-up.test.ts 'AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifact (never calls propose)'"
+    },
+    {
+      "at": "2026-08-16T21:11:19.085Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: machine-wrap-up.test.ts 'AC6/AC7: ...groups untagged seeds as follow-up'"
+    },
+    {
+      "at": "2026-08-16T21:11:19.241Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: harness.test.ts: positive wrap-up-trigger test at one-shot process termination; shell.test.ts + tui-shell.test.ts: negative source-text audits proving the REPL on BOTH surfaces (readline + TUI) never triggers Track B"
+    },
+    {
+      "at": "2026-08-16T21:11:57.051Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/306 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-16T21:11:57.181Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T21:11:59.578Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
