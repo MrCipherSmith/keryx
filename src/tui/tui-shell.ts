@@ -1409,17 +1409,20 @@ export async function launchTuiAgentShell(opts: {
       content: otui.t`${otui.dim("○ Ready")}`,
     });
     sidebar.add(sbWorkers);
-    const sbSubagents = new otui.BoxRenderable(r, {
+    const sbSubagents = new otui.ScrollBoxRenderable(r, {
       id: "sb-subagents",
-      flexDirection: "column",
-      flexShrink: 0,
+      flexGrow: 1,
+      flexShrink: 1,
+      minHeight: 3,
       marginTop: 1,
+      scrollY: true,
+      contentOptions: { flexDirection: "column" },
     });
     sidebar.add(sbSubagents);
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const paintFleet = (): void => {
-      const list = fleet.list().filter((w) => !w.id.startsWith("sub:"));
+      const list = fleet.list();
       const text = formatFleetSidebar(list, 12);
       const main = list.find((w) => w.id === MAIN_AGENT_ID);
       if (main?.status === "blocked") {
@@ -1430,8 +1433,11 @@ export async function launchTuiAgentShell(opts: {
         sbWorkers.content = otui.t`${otui.dim(text)}`;
       }
     };
-    const paintSubagents = (): void => {
-      paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
+    const paintSubagents = (hint?: { kind: string }): void => {
+      if (hint?.kind === "log") {
+        return;
+      }
+      paintSubagentSidebar(otui, r, sbSubagents.content, sessions.list(), {
         width: SIDEBAR_TEXT_WIDTH,
         onOpen: (id) => {
           openSubagentInspector(otui, chrome, { store: sessions, id, renderer: r });
@@ -1440,22 +1446,9 @@ export async function launchTuiAgentShell(opts: {
     };
     fleet.subscribe(paintFleet);
     sessions.subscribe(paintSubagents);
-    // MAE spawn_subagent → inspectable session list (never auto-dropped).
+    // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
-      if (ev.kind === "remove") {
-        return;
-      }
-      if (ev.kind === "log") {
-        return;
-      }
-      fleet.upsert({
-        id: ev.id,
-        label: ev.label,
-        status: ev.status,
-        ...(ev.detail !== undefined ? { detail: ev.detail } : {}),
-        ...(ev.model !== undefined ? { model: ev.model } : {}),
-      });
     });
 
     /** Update the pinned main-agent slot (Activity panel). */

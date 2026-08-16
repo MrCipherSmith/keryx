@@ -1,6 +1,9 @@
 // Flow 162 — subagent session store + list/work formatters (AC1, AC3, AC5).
 import { expect, test } from "bun:test";
+import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import {
+  MAX_SUBAGENT_EVENT_CHARS,
+  MAX_SUBAGENT_EVENTS,
   SubagentSessionStore,
   formatSubagentList,
   formatSubagentMeta,
@@ -33,7 +36,7 @@ test("AC1: formatSubagentList prints every child and never +N more", () => {
   const rows = Array.from({ length: 20 }, (_, i) =>
     session({ id: `sub:${i}`, label: `worker-${i}`, status: i === 0 ? "running" : "done" }),
   );
-  const text = formatSubagentList(rows, 26);
+  const text = formatSubagentList(rows, SIDEBAR_TEXT_WIDTH);
   expect(text).toContain("Subagents 20");
   expect(text).not.toMatch(/\+\d+ more/);
   for (let i = 0; i < 20; i += 1) {
@@ -44,12 +47,12 @@ test("AC1: formatSubagentList prints every child and never +N more", () => {
 test("formatSubagentRow is one sidebar line with glyph, label, and phase", () => {
   const line = formatSubagentRow(
     session({ id: "sub:1", label: "review-logic", status: "running", detail: "thinking" }),
-    26,
+    SIDEBAR_TEXT_WIDTH,
   );
   expect(line).toContain("◐");
   expect(line).toContain("review-logic");
   expect(line).toMatch(/think/i);
-  expect(line.length).toBeLessThanOrEqual(26);
+  expect(line.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
 });
 
 test("AC3: formatSubagentWork includes task and ordered tool/text/reasoning events", () => {
@@ -105,4 +108,37 @@ test("store appends log events and subscribe notifies", () => {
   expect(rec?.task).toBe("go");
   expect(rec?.events.map((e) => e.kind)).toEqual(["task", "tool", "text"]);
   expect(n).toBe(3);
+});
+
+test("terminal failed/done status is not overwritten by a later running upsert", () => {
+  const store = new SubagentSessionStore();
+  store.apply({ kind: "upsert", id: "sub:1", label: "one", status: "failed", detail: "timeout", task: "go" });
+  store.apply({ kind: "upsert", id: "sub:1", label: "one", status: "running", detail: "search_code", task: "go" });
+  expect(store.get("sub:1")?.status).toBe("failed");
+  expect(store.get("sub:1")?.detail).toBe("search_code");
+});
+
+test("formatSubagentWork shows empty state when only the synthetic task exists", () => {
+  const text = formatSubagentWork(
+    session({ id: "sub:1", label: "one", task: "Review auth", events: [{ at: 1, kind: "task", text: "Review auth" }] }),
+  );
+  expect(text).toContain("Review auth");
+  expect(text).toContain("(no events yet)");
+});
+
+test("store clips long log text and ring-buffers events while keeping the task", () => {
+  const store = new SubagentSessionStore();
+  store.apply({ kind: "upsert", id: "sub:1", label: "one", status: "running", task: "keep-me" });
+  store.apply({ kind: "log", id: "sub:1", entry: { kind: "text", text: "x".repeat(MAX_SUBAGENT_EVENT_CHARS + 50) } });
+  const first = store.get("sub:1")?.events.find((e) => e.kind === "text");
+  expect(first?.text.length).toBe(MAX_SUBAGENT_EVENT_CHARS + 1);
+  expect(first?.text.endsWith("…")).toBe(true);
+
+  for (let i = 0; i < MAX_SUBAGENT_EVENTS + 20; i += 1) {
+    store.apply({ kind: "log", id: "sub:1", entry: { kind: "tool", text: `t${i}` } });
+  }
+  const events = store.get("sub:1")?.events ?? [];
+  expect(events.length).toBeLessThanOrEqual(MAX_SUBAGENT_EVENTS);
+  expect(events[0]?.kind).toBe("task");
+  expect(events[0]?.text).toBe("keep-me");
 });

@@ -3,16 +3,21 @@
 // `openModal` from `./modal-host`. No private overlay.
 
 import { openModal } from "./modal-host";
+import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import {
-  formatSubagentList,
+  formatSubagentListHeader,
   formatSubagentMeta,
   formatSubagentRow,
   formatSubagentWork,
   type SubagentSession,
   type SubagentSessionStore,
+  type SubagentStoreHint,
 } from "./subagent-session";
 
-export const SUBAGENT_INSPECTOR_FOOTER = [{ key: "esc", label: "close" }] as const;
+export const SUBAGENT_INSPECTOR_FOOTER = [
+  { key: "←/→", label: "tabs" },
+  { key: "esc", label: "close" },
+] as const;
 
 export type ModalTab = { id: string; label: string };
 
@@ -79,7 +84,10 @@ export function presentSubagentInspector(
   let metaNode: TextNode | undefined;
   let unsubscribe: (() => void) | undefined;
 
-  const refresh = (): void => {
+  const refresh = (hint?: SubagentStoreHint): void => {
+    if (hint !== undefined && hint.id !== options.id) {
+      return;
+    }
     const current = options.store.get(options.id);
     if (current === undefined) {
       return;
@@ -170,11 +178,11 @@ export function paintSubagentSidebar(
   if (sessions.length === 0) {
     return;
   }
-  const width = options.width ?? 26;
+  const width = options.width ?? SIDEBAR_TEXT_WIDTH;
   box.add(
     new ctor(renderer, {
       id: "sb-subagents-h",
-      content: formatSubagentList(sessions, width).split("\n")[0] ?? `Subagents ${sessions.length}`,
+      content: formatSubagentListHeader(sessions.length),
     }),
   );
   for (const session of sessions) {

@@ -4,6 +4,7 @@
 // and the inspector modal need every child for the TUI session. `remove` is a
 // no-op so a finished spawn_subagent stays clickable.
 
+import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { humanFleetPhase, type FleetWorkerStatus } from "./worker-fleet";
 import type { SubagentFleetEvent, SubagentWorkKind } from "./subagent-bridge";
 
@@ -12,6 +13,13 @@ export type SubagentWorkEvent = {
   kind: SubagentWorkKind;
   text: string;
 };
+
+/** Keep the inspector usable without retaining a full child transcript. */
+export const MAX_SUBAGENT_EVENTS = 200;
+/** Clip one log line; tool results already preview at 400. */
+export const MAX_SUBAGENT_EVENT_CHARS = 2_000;
+
+export type SubagentStoreHint = { id: string; kind: "upsert" | "log" | "remove" };
 
 export type SubagentSession = {
   id: string;
@@ -70,7 +78,7 @@ export function formatElapsed(ms: number): string {
   return minRem === 0 ? `${hours}h` : `${hours}h ${minRem}m`;
 }
 
-export function formatSubagentRow(session: SubagentSession, width = 26): string {
+export function formatSubagentRow(session: SubagentSession, width = SIDEBAR_TEXT_WIDTH): string {
   const glyph = STATUS_GLYPH[session.status];
   const phase = humanFleetPhase(session.status, session.detail);
   const budget = Math.max(4, width - glyph.length - 1);
@@ -82,8 +90,12 @@ export function formatSubagentRow(session: SubagentSession, width = 26): string 
   return clip(`${glyph} ${label}${det}`, width);
 }
 
-export function formatSubagentList(sessions: readonly SubagentSession[], width = 26): string {
-  const lines = [`Subagents ${sessions.length}`];
+export function formatSubagentListHeader(count: number): string {
+  return `Subagents ${count}`;
+}
+
+export function formatSubagentList(sessions: readonly SubagentSession[], width = SIDEBAR_TEXT_WIDTH): string {
+  const lines = [formatSubagentListHeader(sessions.length)];
   if (sessions.length === 0) {
     lines.push(clip("(none)", width));
     return lines.join("\n");
@@ -103,20 +115,21 @@ export function formatSubagentWork(session: SubagentSession): string {
     lines.push("");
   }
   lines.push("Work");
-  if (session.events.length === 0) {
-    lines.push("  (no events yet)");
-    return lines.join("\n");
-  }
+  let workRows = 0;
   for (const event of session.events) {
     if (event.kind === "task") {
       continue;
     }
+    workRows += 1;
     if (event.kind === "text") {
       lines.push(event.text);
       continue;
     }
     const tag = WORK_LABEL[event.kind];
     lines.push(`[${tag}] ${event.text}`);
+  }
+  if (workRows === 0) {
+    lines.push("  (no events yet)");
   }
   return lines.join("\n");
 }
@@ -138,7 +151,7 @@ export function formatSubagentMeta(session: SubagentSession, now = Date.now()): 
 
 export class SubagentSessionStore {
   private readonly sessions = new Map<string, SubagentSession>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(hint: SubagentStoreHint) => void>();
   private readonly now: () => number;
 
   constructor(now: () => number = () => Date.now()) {
@@ -155,16 +168,24 @@ export class SubagentSessionStore {
         return;
       }
       this.appendLog(current, event.entry.kind, event.entry.text);
-      this.emit();
+      this.emit({ id: event.id, kind: "log" });
       return;
     }
 
     const prev = this.sessions.get(event.id);
+    const terminal = prev?.status === "done" || prev?.status === "failed";
+    const incomingActive = event.status === "running" || event.status === "queued";
+    const status = terminal && incomingActive && prev !== undefined ? prev.status : event.status;
     const startedAt = prev?.startedAt ?? this.now();
+    const taskIn = event.task ?? prev?.task;
+    const taskClipped =
+      taskIn !== undefined && taskIn.length > MAX_SUBAGENT_EVENT_CHARS
+        ? `${taskIn.slice(0, MAX_SUBAGENT_EVENT_CHARS)}…`
+        : taskIn;
     const next: SubagentSession = {
       id: event.id,
       label: event.label,
-      status: event.status,
+      status,
       startedAt,
       events: prev?.events ?? [],
       ...(event.detail !== undefined
@@ -177,13 +198,9 @@ export class SubagentSessionStore {
         : prev?.model !== undefined
           ? { model: prev.model }
           : {}),
-      ...(event.task !== undefined
-        ? { task: event.task }
-        : prev?.task !== undefined
-          ? { task: prev.task }
-          : {}),
+      ...(taskClipped !== undefined ? { task: taskClipped } : {}),
     };
-    if (event.status === "done" || event.status === "failed") {
+    if (status === "done" || status === "failed") {
       next.endedAt = prev?.endedAt ?? this.now();
     } else if (prev?.endedAt !== undefined) {
       next.endedAt = prev.endedAt;
@@ -193,7 +210,7 @@ export class SubagentSessionStore {
       next.events = [{ at: this.now(), kind: "task", text: task }, ...next.events];
     }
     this.sessions.set(event.id, next);
-    this.emit();
+    this.emit({ id: event.id, kind: "upsert" });
   }
 
   get(id: string): SubagentSession | undefined {
@@ -204,7 +221,7 @@ export class SubagentSessionStore {
     return [...this.sessions.values()];
   }
 
-  subscribe(listener: () => void): () => void {
+  subscribe(listener: (hint: SubagentStoreHint) => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -212,13 +229,21 @@ export class SubagentSessionStore {
   }
 
   private appendLog(session: SubagentSession, kind: SubagentWorkKind, text: string): void {
-    session.events.push({ at: this.now(), kind, text });
+    const clipped = text.length > MAX_SUBAGENT_EVENT_CHARS ? `${text.slice(0, MAX_SUBAGENT_EVENT_CHARS)}…` : text;
+    session.events.push({ at: this.now(), kind, text: clipped });
+    if (session.events.length <= MAX_SUBAGENT_EVENTS) {
+      return;
+    }
+    const task = session.events.find((item) => item.kind === "task");
+    const rest = session.events.filter((item) => item !== task);
+    const keep = rest.slice(-(MAX_SUBAGENT_EVENTS - (task !== undefined ? 1 : 0)));
+    session.events = task !== undefined ? [task, ...keep] : keep;
   }
 
-  private emit(): void {
+  private emit(hint: SubagentStoreHint): void {
     for (const listener of this.listeners) {
       try {
-        listener();
+        listener(hint);
       } catch {
         // never break callers
       }

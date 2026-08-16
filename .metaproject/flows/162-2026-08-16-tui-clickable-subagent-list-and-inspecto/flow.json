@@ -3,9 +3,9 @@
   "id": "162",
   "slug": "tui-clickable-subagent-list-and-inspecto",
   "title": "TUI: clickable subagent list and inspector modal",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-16T16:01:00.065Z",
-  "updatedAt": "2026-08-16T16:13:40.384Z",
+  "updatedAt": "2026-08-16T16:22:34.295Z",
   "source": {
     "type": "description",
     "ref": null
@@ -13,7 +13,7 @@
   "acChecksum": "sha256:024e83d51fb0ff07d680a2458708a930e96c8a64f7c8098e375311ea161f8c69",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/303"
   },
   "tasks": [
     {
@@ -135,6 +135,11 @@
       "at": "2026-08-16T16:13:40.384Z",
       "event": "task-done",
       "detail": "T5: Self-review against ACs and no-optional-imports"
+    },
+    {
+      "at": "2026-08-16T16:22:34.295Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/303"
     }
   ]
 }

@@ -33,6 +33,7 @@ test("AC2: presentSubagentInspector opens host modal with Work + Meta tabs", () 
   expect(input.title).toContain("review-logic");
   expect(input.tabs.map((t) => t.id)).toEqual(["work", "meta"]);
   expect(input.initialTab).toBe("work");
+  expect((input as { footer?: { key: string }[] }).footer?.map((item) => item.key)).toEqual(["←/→", "esc"]);
   expect(formatModalFooter(SUBAGENT_INSPECTOR_FOOTER).length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
 });
 

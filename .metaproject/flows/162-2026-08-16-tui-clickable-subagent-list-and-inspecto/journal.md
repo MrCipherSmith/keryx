@@ -13,3 +13,4 @@
 - 2026-08-16T16:13:39.968Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-16T16:13:40.195Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-16T16:13:40.384Z - task-done: T5: Self-review against ACs and no-optional-imports
+- 2026-08-16T16:22:34.295Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/303
