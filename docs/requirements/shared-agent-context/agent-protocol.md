@@ -1,10 +1,14 @@
 # Keryx Shared Agent Context — Agent Protocol
-Version: 1.2.0
+Version: 1.3.0
 
 ## Status
 
-Future protocol. It specifies agent behavior once SAC adapters exist; it does
-not claim that an agent currently receives these tools automatically.
+Current protocol for the shipped SAC adapters. An agent does **not** receive
+a workspace automatically: there is no session↔workspace linkage, so every
+read/propose call must pass an explicit `workspaceId` (discover ids with
+`keryx workspace list`). Tools exist on three surfaces: CLI
+(`keryx workspace …`), MCP (`sac.*`, local stdio only) and harness
+(`workspace_overview` / `workspace_read` on a local `keryx shell` turn).
 
 ## Preconditions
 
@@ -33,7 +37,9 @@ decision re-resolves the current role revision at the point of use.
 1. Request the smallest overview consistent with the current task and budget.
 2. Distinguish Facts, Work and Know-how in every work product summary.
 3. Follow evidence references before relying on a material Fact.
-4. Request detail only through the authorised future CLI/MCP surface.
+4. Request detail only through the authorised current surface:
+   `keryx workspace read`, MCP `sac.read`, or harness `workspace_read`.
+   Do not invent the never-shipped names `workspace.fwk` / `workspace.get`.
 5. Respect `denied`, `stale`, `expired`, `withdrawn` and budget exhaustion; do
    not substitute hidden cache/transcript content.
 6. Attribute material statements to reference IDs, not copied secret content.

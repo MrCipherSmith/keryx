@@ -81,7 +81,8 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `agents` | Manage the optional global Metaproject bootstrap for agent runtimes. |
 | `orient` | Emit or install bounded Metaproject + graph + wiki startup context. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
-| `mcp` | Expose read-only Metaproject services over the Model Context Protocol (opt-in, off by default). |
+| `mcp` | Expose Metaproject services over the Model Context Protocol (opt-in, off by default). SAC tools are stdio-only. |
+| `workspace` | Shared Agent Context: create/list/show workspaces, FWK overview/read, propose/review, collaboration overview, policy-readiness. Not listed by `keryx commands`. |
 
 ### Optional dependencies and graceful degradation
 
@@ -1133,3 +1134,48 @@ Unlike every other opt-in command, `mcp serve` **hard-fails** (prints an actiona
 message and exits `1`) when the optional `@modelcontextprotocol/sdk` dependency is
 not installed — this is the one sanctioned exception to graceful degradation. An
 unknown subcommand prints an error and exits `1`.
+
+SAC tools registered in `src/mcp/tools.ts` (`sac.overview`, `sac.read`,
+`sac.collaboration`, `sac.propose`, `sac.review`) refuse HTTP with
+`{ code: "sac_transport_denied" }` before workspace discovery. See
+[Shared Agent Context](./guides/shared-agent-context.md).
+
+---
+
+## workspace
+
+Shared Agent Context operator surface. Thin argv adapter over `src/sac/`
+(`src/commands/workspace.ts`). JSON on stdout; `--explain` human text on
+stderr. Actor is always the local OS user — there is no `--actor`. Full help:
+`keryx workspace --help`. **`keryx commands` omits this verb.**
+
+```
+keryx workspace create --title <title> [--component <workspace-relative-ref>]
+keryx workspace list
+keryx workspace show <workspace-id>
+keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]
+keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]
+keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]
+keryx workspace propose <workspace-id> --kind <decision|wiki-update|memory-entry|follow-up|contract-change|risk> --session <session-id> [--note <one-line>]
+keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]
+keryx workspace collaboration <workspace-id>
+keryx workspace policy-readiness
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `create` | `--title`, `--component` | Create `.metaproject/workspaces/<id>/workspace.json`. |
+| `list` | — | List workspaces visible to the local actor. |
+| `show` | `<workspace-id>` | Print the manifest. |
+| `add-resource` | `--kind`, `--uri`, `--revision` | Attach a workspace-relative typed ref. |
+| `overview` | `--max-items` (default 32), `--max-tokens` (default 4096), `--explain` | Bounded FWK overview + access receipt. Mandatory overflow → `context_overflow` and no receipt. |
+| `read` | `<item-id>`, `--max-items` (default 1), `--max-tokens` (default 4096), `--explain` | Progressive read of one overview item. |
+| `propose` | `--kind`, `--session`, `--note` | Immutable `proposed` record from a completed session wrap-up. |
+| `review` | `--decision`, `--reason`, `--idempotency-key` | Terminal review. `accepted` goes through real wiki/memory/skill owner writers. Same idempotency key replays. |
+| `collaboration` | `<workspace-id>` | Read-only collaboration overview. No public `record` writer. |
+| `policy-readiness` | — | Diagnose the opt-in policy-experiment chain. Exit `1` when `!integrityReady`. |
+
+Unknown options are rejected. Propose/review use
+`createHarnessProposalLifecycleService` (real owner writers). There is no
+session↔workspace auto-bind. Operator guide:
+[Shared Agent Context](./guides/shared-agent-context.md).

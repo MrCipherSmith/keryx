@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   buildAgentSystemInstruction,
   DEFAULT_MAX_TOOL_CALLS,
@@ -24,6 +26,8 @@ import type {
   NormalizedRequest,
   ProviderDescription,
 } from "../harness/provider/types";
+import { readSlate, writeSlate } from "../session/slate";
+import type { SlateSessionRef } from "../session/slate-lifecycle";
 
 test("resolveAgentMaxToolCalls: default is generous for multi-step prompts", () => {
   expect(DEFAULT_MAX_TOOL_CALLS).toBeGreaterThanOrEqual(48);
@@ -107,18 +111,21 @@ function fixedIdSeq(): () => string {
   return () => `id-${idCounter++}`;
 }
 
-function collectingIo(): { io: AgentIO; text: string[]; toolCalls: string[]; toolResults: string[] } {
+function collectingIo(): { io: AgentIO; text: string[]; toolCalls: string[]; toolResults: string[]; system: string[] } {
   const text: string[] = [];
   const toolCalls: string[] = [];
   const toolResults: string[] = [];
+  const system: string[] = [];
   return {
     text,
     toolCalls,
     toolResults,
+    system,
     io: {
       write: (s) => text.push(s),
       onToolCall: (name) => toolCalls.push(name),
       onToolResult: (name, r) => toolResults.push(`${name}:${r.isError ? "err" : "ok"}`),
+      onSystem: (s) => system.push(s),
     },
   };
 }
@@ -1019,4 +1026,264 @@ test("buildAgentSystemInstruction routes wiki enrich intents to keryx wiki enric
   expect(instr).toMatch(/active connected search provider|no implicit fallback/i);
   expect(instr).toMatch(/cannot discover an unknown URL/i);
   expect(instr).toMatch(/never retry web_search, guess URLs/i);
+});
+
+// --- SLATE-5 open/close wiring (Phase 2) ---
+
+async function tempSlateDir(): Promise<string> {
+  return mkdtemp(path.join(tmpdir(), "keryx-agent-slate-"));
+}
+
+async function tempProjectCwd(): Promise<string> {
+  return mkdtemp(path.join(tmpdir(), "keryx-agent-slate-cwd-"));
+}
+
+function textOnlyProvider(text: string): AgentDeps["provider"] {
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  return {
+    describe: () => description,
+    stream: (_request, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })(),
+  };
+}
+
+test("SLATE-5: an action-intent turn opens a fresh slate when a slateSession ref is supplied", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("Understood."),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession });
+
+  expect(slateSession.opened).toBe(true);
+  const slate = await readSlate(dir);
+  expect(slate).toBeDefined();
+  expect(slate?.anchors.touched).toEqual([]);
+  expect(slate?.course).toEqual({});
+  expect(slate?.seeds).toEqual([]);
+});
+
+test("SLATE-5: a turn with no slateSession option never touches the filesystem for a slate (unchanged pre-Phase-2 behavior)", async () => {
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  // No `options` at all — the pre-existing call shape every earlier test in
+  // this file already uses.
+  await expect(runAgentTurn(io, deps, [], "run the tests")).resolves.toBeUndefined();
+});
+
+test("SLATE-5: a second action-intent turn in the SAME running attempt does not re-open (no re-archive, accumulated Seeds survive)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession });
+  expect(slateSession.opened).toBe(true);
+
+  // Simulate a Seed the model wrote mid-attempt (Phase 3+ concern — hand-write
+  // here since `slate_write_seed` doesn't exist yet).
+  await writeSlate(dir, (prev) => ({
+    ...(prev ?? { anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }),
+    seeds: [{ id: "s1", text: "accumulated this attempt", ts: "2026-08-16T00:00:00.000Z" }],
+  }));
+
+  await runAgentTurn(io, deps, [], "check the status too", { slateSession });
+
+  const slate = await readSlate(dir);
+  expect(slate?.seeds.map((s) => s.id)).toEqual(["s1"]);
+});
+
+test("SLATE-5: an explicit close phrase archives the live slate mid-attempt", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession });
+  expect(slateSession.opened).toBe(true);
+
+  await runAgentTurn(io, deps, [], "ok, let's wrap up", { slateSession });
+
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+async function writeDoneFlow(cwd: string, dirName: string): Promise<void> {
+  const dir = path.join(cwd, ".metaproject", "flows", dirName);
+  await mkdir(dir, { recursive: true });
+  const flow = {
+    schemaVersion: 2,
+    id: dirName.slice(0, 3),
+    slug: dirName.slice(4),
+    title: "Test flow",
+    status: "done",
+    createdAt: "2026-08-16T00:00:00.000Z",
+    updatedAt: "2026-08-16T00:00:00.000Z",
+    source: { type: "description", ref: null },
+    acChecksum: null,
+    acConfirmed: {},
+    pr: { url: null },
+    tasks: [{ id: "T1", title: "First", kind: "context", status: "done" }],
+    history: [],
+  };
+  await writeFile(path.join(dir, "flow.json"), JSON.stringify(flow), "utf8");
+}
+
+test("SLATE-5: an already-open slate is closed after a turn when Course's live Flow projection reaches done", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await writeDoneFlow(cwd, "010-example-flow");
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: { flowRef: "010" }, seeds: [] }));
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  // Already open (as if a prior turn opened it) — a plain non-action, non-close message.
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "hello there", { slateSession });
+
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("SLATE-5: closeSlateOnFlowDone never reads slate.json when the ref was never opened this attempt (no fs cost when slate lifecycle is inert)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "hello there", { slateSession });
+
+  // Never opened (not an action-intent, not a close phrase) — still no slate file.
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("F-003: a malformed slate.json during the flow-done close check never masks the turn's real (successful) outcome", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  // Corrupt the live slate.json directly (bypassing writeSlate, which always
+  // produces valid JSON) to simulate the exact failure mode F-003 is about:
+  // `readSlate`'s `JSON.parse` throws a `SyntaxError` that only `isNotFound`
+  // (ENOENT) would have been swallowed by inside `readSlate` itself.
+  await writeFile(path.join(dir, "slate.json"), "{ not valid json", "utf8");
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("all good"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const { io, text, system } = collectingIo();
+
+  // Must not throw — a `finally`-block throw would otherwise replace this
+  // turn's genuine successful completion with an unrelated slate-read error.
+  await expect(runAgentTurn(io, deps, [], "hello there", { slateSession })).resolves.toBeUndefined();
+
+  // The turn itself completed normally and produced its real output.
+  expect(text.join("")).toContain("all good");
+  // The close check degraded to "assume not done, skip closing" rather than
+  // silently closing or crashing — `ref.opened` is untouched.
+  expect(slateSession.opened).toBe(true);
+  // The malformed file was left alone (not clobbered/removed) and the
+  // failure was surfaced (not silently eaten) via the system channel.
+  const raw = await readFile(path.join(dir, "slate.json"), "utf8");
+  expect(raw).toBe("{ not valid json");
+  expect(system.some((s) => s.includes("slate close check failed"))).toBe(true);
+});
+
+test("review finding: a malformed slate.json on the OPEN trigger never blocks the turn's real outcome (parity with F-003's close-path fix)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  // Simulate a stale/corrupted slate.json left behind by an earlier crashed
+  // attempt — before this fix, ensureSlateOpened's readSlate call threw
+  // uncaught here, aborting the ENTIRE turn before the model was ever
+  // invoked (unlike the close path, which was already F-003-guarded).
+  await writeFile(path.join(dir, "slate.json"), "{ not valid json", "utf8");
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("all good"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io, text, system } = collectingIo();
+
+  // "implement" is an action-intent token, so this exercises the open trigger.
+  await expect(runAgentTurn(io, deps, [], "implement the feature", { slateSession })).resolves.toBeUndefined();
+
+  // The turn itself completed normally and produced its real output — the
+  // user's request was processed despite the corrupted slate.json.
+  expect(text.join("")).toContain("all good");
+  const raw = await readFile(path.join(dir, "slate.json"), "utf8");
+  expect(raw).toBe("{ not valid json");
+  expect(system.some((s) => s.includes("slate open/close check failed"))).toBe(true);
 });

@@ -107,6 +107,8 @@
 // expected RED as `select.test.ts`'s missing-module import (a documented gap
 // for T6 to fill, not a test bug).
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import { FakeProvider, type FakeProviderTranscript, requestHashOf } from "../harness/provider/fake-provider";
 import type {
@@ -898,5 +900,77 @@ describe("expandedToolOutput (readline /expand, AC10)", () => {
     const out = expandedToolOutput("apply_patch", "@@ -1,2 +1,2 @@\n-gone\n+here") ?? "";
     expect(out).not.toContain(ESC);
     expect(out).toContain("@@ -1,2 +1,2 @@");
+  });
+});
+
+// --- SLATE-5 close-trigger wiring audit (Phase 2, review finding) ---
+//
+// `runAgentRepl` (the interactive agent-mode REPL loop, above `runShell` in
+// this file) is explicitly "NOT unit-tested" per its own doc comment,
+// predating this Flow: it drives real `process.stdout`, a real
+// TTY-conditioned spinner, and reads on-disk shell-permission config via
+// `loadShellPermissions()` with no injection seam — refactoring that is out
+// of this Flow's scope. The slate open/close/archive LOGIC this wiring calls
+// into is NOT new here and is already fully regression-tested directly:
+// `runAgentRepl` calls the SAME `runAgentTurn` that `agent.test.ts`'s
+// "SLATE-5: ..." tests already drive (shell.ts is a thin caller, not a
+// second implementation), and `slate-lifecycle.test.ts` covers
+// `closeSlateSession`/`ensureSlateOpened` directly. What IS new and
+// genuinely untested is shell.ts's OWN wiring — which exact points call
+// `closeSlateSession` and where a fresh `SlateSessionRef` is (re)created —
+// so this is a source-text audit proving every required call site exists,
+// following the precedent already established by `harness.test.ts`'s
+// "AC4 — src/cli.ts registers the harness command (source-text audit)" for
+// wiring this codebase already treats as impractical to drive through a
+// real, side-effecting REPL loop end-to-end.
+describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const bodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const replBody = shellSource.slice(bodyStart);
+  const closeCall = "await closeSlateSession(slateSession, mintTimestampAttemptId);";
+
+  test("imports the slate-lifecycle close primitives", () => {
+    expect(shellSource).toContain(
+      'import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";',
+    );
+  });
+
+  test("closes the live slate at exactly the three documented trigger points (EOF, /exit|/quit, /new|/clear) — not fewer, not more", () => {
+    const occurrences = replBody.split(closeCall).length - 1;
+    expect(occurrences).toBe(3);
+  });
+
+  test("EOF (end of input) is one of the close-trigger points", () => {
+    const eofBlock = replBody.slice(replBody.indexOf("if (line === undefined) {"), replBody.indexOf("return; // end of input") + 1);
+    expect(eofBlock).toContain(closeCall);
+  });
+
+  test("/exit and /quit is one of the close-trigger points", () => {
+    const exitBlock = replBody.slice(
+      replBody.indexOf('command === "/exit" || command === "/quit"'),
+      replBody.indexOf('command === "/exit" || command === "/quit"') + 300,
+    );
+    expect(exitBlock).toContain(closeCall);
+  });
+
+  test("/new (and /clear) closes the OLD slate before a fresh SlateSessionRef is created for the new session dir", () => {
+    const newBlockStart = replBody.indexOf('command === "/new" || command === "/clear"');
+    const newBlock = replBody.slice(newBlockStart, newBlockStart + 900);
+    const closeIndex = newBlock.indexOf(closeCall);
+    const reassignIndex = newBlock.indexOf("slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };");
+    expect(closeIndex).toBeGreaterThanOrEqual(0);
+    expect(reassignIndex).toBeGreaterThan(closeIndex);
+  });
+
+  test("the initial SlateSessionRef is constructed from the opened session (undefined when sessions are off)", () => {
+    expect(replBody).toContain(
+      "slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;",
+    );
+  });
+
+  test("the slate session ref is actually threaded into runAgentTurn for each turn", () => {
+    expect(replBody).toContain(
+      "await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});",
+    );
   });
 });

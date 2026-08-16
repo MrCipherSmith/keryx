@@ -118,7 +118,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
     trustLevel: "trusted",
     sourceKind: "keryx-shell",
   };
-  let childSeq = 0;
+  let childSeq = 0; // only for human labels when the model omits one
 
   return {
     definition: {
@@ -155,7 +155,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           : 6;
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
-      const workerId = `sub:${childSeq}`;
+      const workerId = `sub:${idSeq()}`;
       const label =
         labelRaw.length > 0
           ? labelRaw.length > 18
@@ -209,6 +209,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           label,
           status: "failed",
           detail: "denied",
+          task,
         });
         return {
           output: `spawn_subagent denied by MAE: ${spawned.reason}`,
@@ -227,6 +228,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         status: "running",
         detail: mode === "read_only" ? "read-only" : "general",
         model: `${runModel.provider}/${runModel.model}`,
+        task,
       });
 
       const cwd = deps.cwd;
@@ -262,15 +264,30 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
 
       let assistant = "";
       let childToolCalls = 0;
+      let closed = false;
+      const childAbort = new AbortController();
       const io: AgentIO = {
         write: (s) => {
           assistant += s;
         },
         onAssistantText: (text) => {
           assistant = text;
+          if (closed) {
+            return;
+          }
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "text", text } });
+        },
+        onReasoning: (text) => {
+          if (closed) {
+            return;
+          }
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
         },
         onToolCall: (name) => {
           childToolCalls += 1;
+          if (closed) {
+            return;
+          }
           emitSubagentFleet({
             kind: "upsert",
             id: workerId,
@@ -278,7 +295,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             status: "running",
             detail: name.length > 14 ? `${name.slice(0, 12)}…` : name,
             model: `${runModel.provider}/${runModel.model}`,
+            task,
           });
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
+        },
+        onToolResult: (name, result) => {
+          if (closed) {
+            return;
+          }
+          const preview = result.output.trim().slice(0, 400);
+          emitSubagentFleet({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "result", text: `${name}${result.isError ? " (error)" : ""} ${preview}` },
+          });
+        },
+        onSystem: (text) => {
+          if (closed) {
+            return;
+          }
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text } });
         },
         // SECURITY-CRITICAL INVARIANT — do not relax without an ADR.
         // `mode` is chosen by the MODEL and `read_only` is auto-approved with no
@@ -312,18 +348,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           `## Subagent task (${mode})\n` +
           `${task}\n\n` +
           `Return a concise summary of findings and any recommended next steps for the parent agent.`;
-        const turn = runAgentTurn(io, childDeps, history, userLine);
+        const turn = runAgentTurn(io, childDeps, history, userLine, { signal: childAbort.signal });
         if (deadlineMs > 0) {
           let timer: ReturnType<typeof setTimeout> | undefined;
           const expired = new Promise<"timeout">((resolve) => {
             timer = setTimeout(() => resolve("timeout"), deadlineMs);
           });
-          const outcome = await Promise.race([turn.then(() => "done" as const), expired]);
-          if (timer !== undefined) clearTimeout(timer);
+          let outcome: "done" | "timeout";
+          try {
+            outcome = await Promise.race([turn.then(() => "done" as const), expired]);
+          } finally {
+            if (timer !== undefined) clearTimeout(timer);
+          }
           if (outcome === "timeout") {
+            closed = true;
+            childAbort.abort();
+            void turn.catch(() => {
+              // abandoned turn; do not surface after the parent already timed out
+            });
             releaseBudget();
-            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout" });
-            setTimeout(() => emitSubagentFleet({ kind: "remove", id: workerId }), 15_000);
+            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             const partial = assistant.trim();
             return {
               output:
@@ -336,6 +380,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         } else {
           await turn;
         }
+        closed = true;
         releaseBudget();
         const raw =
           assistant.trim().length > 0
@@ -353,9 +398,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           status: "done",
           detail: "done",
           model: `${runModel.provider}/${runModel.model}`,
+          task,
         });
-        // Drop from fleet after a short delay so the panel stays readable.
-        setTimeout(() => emitSubagentFleet({ kind: "remove", id: workerId }), 15_000);
         return {
           output:
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
@@ -365,6 +409,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           isError: false,
         };
       } catch (cause) {
+        closed = true;
+        childAbort.abort();
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
         emitSubagentFleet({
@@ -373,6 +419,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           label,
           status: "failed",
           detail: "error",
+          task,
         });
         return { output: `subagent ${label} failed: ${msg}`, isError: true };
       }

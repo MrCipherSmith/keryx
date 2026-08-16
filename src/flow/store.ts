@@ -95,6 +95,32 @@ function assertUnambiguous(id: string, candidates: string[]): void {
   );
 }
 
+export type FlowWorkProjection = Readonly<{
+  flowRef: { uri: string; snapshot: string; revision: string };
+  completed: string[];
+  next: string[];
+  blocked: string[];
+}>;
+
+/**
+ * Pure completed/next/blocked task-status projection derived from an
+ * already-loaded, already-migrated `FlowState`. This is the single shared
+ * formula behind both live flow-work projections in the codebase:
+ * `src/sac/fwk-service.ts`'s `createLocalFwkReadService` (workspace-scoped,
+ * loads via `WorkspaceService`) and `src/session/slate-course.ts`'s
+ * `readCourse` (workspace-independent, loads via `readFlow`/`resolveFlowDir`
+ * below). Callers own fetching the flow and applying `migrateFlow` — this
+ * function never reads from disk and never mutates its input.
+ */
+export function deriveFlowWork(flow: FlowState, uri: string): FlowWorkProjection {
+  return {
+    flowRef: { uri, snapshot: flow.status, revision: flow.updatedAt },
+    completed: flow.tasks.filter((task) => task.status === "done").map((task) => task.id),
+    next: flow.tasks.filter((task) => task.status !== "done").map((task) => task.id),
+    blocked: flow.status === "blocked" ? [flow.id] : [],
+  };
+}
+
 export async function readFlow(cwd: string, dir: string): Promise<FlowState> {
   const file = path.join(flowsRoot(cwd), dir, "flow.json");
   if (!(await pathExists(file))) {
