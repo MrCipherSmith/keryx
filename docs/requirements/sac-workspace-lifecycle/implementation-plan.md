@@ -17,7 +17,7 @@ own PRD states they "must land together, not separately").
 
 This package has **no dependency on `slate`**. It may start immediately, in
 parallel with `docs/requirements/slate/implementation-plan.md` Phase 1, and
-must merge before [`slate`'s Phase 5](../slate/implementation-plan.md)
+must merge before [`slate`'s Phase 5](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/slate/implementation-plan.md)
 starts.
 
 ## Phase 1 — Archive, resource removal, rename

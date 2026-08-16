@@ -79,5 +79,7 @@ artifact-lifecycle.md`).
 - [SAC RP-06 Identity and Capabilities](../shared-agent-context-identity-capabilities/README.md)
   — владелец member management/multi-person identity, явно не дублируется
   здесь.
-- [Keryx Slate](../slate/README.md) — SLATE-10/SLATE-13 читают workspace
-  list/proposals; WSL-2 фиксирует границу взаимодействия явно.
+- [Keryx Slate](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/slate/README.md)
+  — SLATE-10/SLATE-13 читают workspace list/proposals; WSL-2 фиксирует
+  границу взаимодействия явно. (Absolute link: this package merges before
+  slate's docs land on `main`.)
