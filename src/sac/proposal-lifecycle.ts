@@ -65,6 +65,14 @@ export class ProposalLifecycleService {
     await this.validateProposal(proposal);
     await this.validateEvidence(proposal.evidence);
     return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId, action: "write", execute: async (manifest) => {
+      // KNOWN RISK: kept as an inline check rather than centralized in
+      // `withAuthorizedActor` — `review()` below uses the same `action:
+      // "write"`/"review" plumbing and must NOT be gated on archived status
+      // (frozen by spec: docs/requirements/sac-workspace-lifecycle/
+      // specification.md WSL-1; already covered by tests). The identical
+      // inline check lives in workspace-service.ts's `addResource`. Any new
+      // write operation that should reject on an archived workspace must add
+      // this check itself.
       if (manifest.status === "archived") throw new ProposalLifecycleError("guard_denied", "workspace is archived");
       const file = this.proposalPath(workspaceId, proposal.id);
       await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });

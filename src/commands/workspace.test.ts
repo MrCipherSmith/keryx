@@ -54,6 +54,29 @@ test("workspace archive marks the workspace archived and hides it from list unle
   expect(withArchived.stdout).toContain(manifest.id);
 });
 
+test("workspace list --include-archived=<value> parses the `=` spelling the same as every other option in this file, and refuses an unrecognized value instead of silently hiding archived workspaces", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-includearchived-cli-"));
+  const created = await invoke(cwd, ["create", "--title", "Include Archived Me"]);
+  expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
+  expect((await invoke(cwd, ["archive", manifest.id])).exitCode).toBe(0);
+
+  const bare = await invoke(cwd, ["list", "--include-archived"]);
+  expect(bare.exitCode).toBe(0); expect(bare.stdout).toContain(manifest.id);
+
+  const equalsTrue = await invoke(cwd, ["list", "--include-archived=true"]);
+  expect(equalsTrue.exitCode).toBe(0); expect(equalsTrue.stdout).toContain(manifest.id);
+
+  const equalsFalse = await invoke(cwd, ["list", "--include-archived=false"]);
+  expect(equalsFalse.exitCode).toBe(0); expect(equalsFalse.stdout).not.toContain(manifest.id);
+
+  const noFlag = await invoke(cwd, ["list"]);
+  expect(noFlag.exitCode).toBe(0); expect(noFlag.stdout).not.toContain(manifest.id);
+
+  const unrecognized = await invoke(cwd, ["list", "--include-archived=maybe"]);
+  expect(unrecognized.exitCode).toBe(1);
+  expect(unrecognized.stderr).toContain("--include-archived");
+});
+
 test("workspace remove-resource removes a resource by uri and rejects a uri that was never added", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-removeresource-cli-")); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "Remove Resource Me", "--component", "./src/a.ts"]);

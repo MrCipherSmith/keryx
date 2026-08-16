@@ -36,7 +36,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     }
     if (subcommand === "list") {
       rejectUnknownOptions(args.slice(1), new Set(["--include-archived"]));
-      const includeArchived = args.includes("--include-archived");
+      const includeArchived = booleanFlag(args, "--include-archived");
       console.log(JSON.stringify(await service().list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived }), null, 2)); return;
     }
     if (subcommand === "show") {
@@ -151,6 +151,32 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
     const name = argument.split("=", 1)[0]!;
     if (!allowed.has(name)) throw new Error(`Unknown option: ${name}`);
   }
+}
+
+/**
+ * A bare boolean flag (`--name`) or its explicit `--name=true`/`--name=false`
+ * spelling. Unlike `optionValue` (built for value-taking options such as
+ * `--title`), this never consumes a following bare word as the flag's value —
+ * `--include-archived` has no positional argument to swallow.
+ *
+ * `--name=<anything else>` is a refused, explicit error rather than a silent
+ * fallback to "flag absent": `args.includes("--include-archived")` previously
+ * matched only the bare spelling, so `--include-archived=true` (the natural
+ * spelling given every other option in this file uses `optionValue`'s `=`
+ * form) silently behaved as if the flag were never passed — archived
+ * workspaces stayed hidden with no error. See `optionValue`'s doc comment in
+ * `src/lib/args.ts` for the prior incident this is the same class of bug as.
+ */
+function booleanFlag(args: string[], name: string): boolean {
+  const bare = args.includes(name);
+  const prefixed = args.find((argument) => argument.startsWith(`${name}=`));
+  if (bare && prefixed) throw new Error(`${name} was given both bare and with a value — use one form`);
+  if (bare) return true;
+  if (!prefixed) return false;
+  const value = prefixed.slice(name.length + 1);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`Unknown value for ${name}: "${value}" — expected true or false`);
 }
 
 function printHelp(): void {

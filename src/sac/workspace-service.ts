@@ -7,6 +7,7 @@ import {
   authorizeSacUse,
   createSacAuthorizationServer,
   evaluateStrictSacGuard,
+  isWorkspaceOwner,
   resolveWorkspaceReference,
   validateSacContract,
   type SacAuthorizationServer,
@@ -132,7 +133,14 @@ export class WorkspaceService {
     const authorization = await this.requireAuthorization(input.actorContext, initial.id, input.action);
     return withFileLock(this.lockPath(input.workspaceId), async () => {
       const manifest = await this.readManifest(input.workspaceId);
-      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+      // Reuses `manifest`, just read under this exclusive lock, for the
+      // at-use role check below instead of re-reading. `withFileLock`
+      // (src/lib/fs.ts) is a cross-process mkdir-based exclusive lock, so no
+      // writer can race between this read and the check — a second read here
+      // would return byte-identical content, not fresher data. This is unlike
+      // `reauthorizeAtUse`/`resolveResourceForActor`, which deliberately
+      // re-read because they run with no lock held.
+      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, input.actorContext.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
       return input.execute(manifest);
     });
@@ -213,6 +221,15 @@ export class WorkspaceService {
       const manifest = await this.readManifest(input.workspaceId);
       const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, actor.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      // KNOWN RISK: this archived-status guard is deliberately NOT part of
+      // `withAuthorizedActor`/`requireAuthorization` — `review()` in
+      // proposal-lifecycle.ts must stay ungated on archived status (frozen by
+      // spec: docs/requirements/sac-workspace-lifecycle/specification.md
+      // WSL-1), and `rename`/`removeResource` also route through
+      // `withAuthorizedActor` without this check today. Centralizing risks
+      // silently gating one of those. The identical inline check lives in
+      // proposal-lifecycle.ts's `create()` — any new write operation that
+      // should reject on an archived workspace must add this check itself.
       if (manifest.status === "archived") throw new WorkspaceServiceError("guard_denied", "workspace is archived");
       if (manifest.resources.some((resource) => resource.uri === input.resource.uri)) throw new WorkspaceServiceError("conflict", "resource already exists");
       const next: WorkspaceManifest = { ...manifest, resources: [...manifest.resources, input.resource], updatedAt: this.timestamp() };
@@ -223,7 +240,23 @@ export class WorkspaceService {
     return result!;
   }
 
-  /** Owner-only: sets status to "archived". Archive changes discovery (list), never direct read (show). */
+  /**
+   * Owner-only: sets status to "archived". Archive changes discovery (list),
+   * never direct read (show).
+   *
+   * Deliberately idempotent: archiving an already-archived workspace succeeds
+   * again rather than raising `conflict`. This is the literal implementation
+   * `docs/requirements/sac-workspace-lifecycle/specification.md` (WSL-1)
+   * prescribes — `{...manifest, status: "archived", updatedAt: ...}` with no
+   * precondition on the prior status — and it matches archive's one-way
+   * `active -> archived` lifecycle (no delete, no un-archive): re-issuing the
+   * same terminal state is a no-op in effect, unlike `addResource`'s
+   * `conflict` on a duplicate URI, where a second call would silently discard
+   * the caller's `revision` field. `updatedAt` moving on a repeat call is an
+   * accepted, intentional side effect of that same "just set the field"
+   * design — the operation is idempotent in *outcome* (workspace ends up
+   * archived), not byte-identical on repeat.
+   */
   async archive(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<WorkspaceManifest> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     return this.withAuthorizedActor({
@@ -260,28 +293,25 @@ export class WorkspaceService {
   /** Owner-only mirror of addResource's write mechanics: not_found if the uri is absent, otherwise filters it out of resources[]. */
   async removeResource(input: { request: unknown; requestCorrelationId: string; workspaceId: string; uri: string }): Promise<WorkspaceManifest> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
-    await this.requireStrict("write");
-    const initial = await this.readManifest(input.workspaceId);
-    const authorization = await this.requireAuthorization(actor, initial.id, "write");
-    let result: WorkspaceManifest | undefined;
-    await withFileLock(this.lockPath(input.workspaceId), async () => {
-      const manifest = await this.readManifest(input.workspaceId);
-      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, actor.subject));
-      if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
-      this.requireOwner(manifest, actor);
-      const resource = manifest.resources.find((candidate) => candidate.uri === input.uri);
-      if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource not found");
-      const next: WorkspaceManifest = { ...manifest, resources: manifest.resources.filter((candidate) => candidate.uri !== input.uri), updatedAt: this.timestamp() };
-      await this.validateManifest(next);
-      await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
-      result = next;
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const resource = manifest.resources.find((candidate) => candidate.uri === input.uri);
+        if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource not found");
+        const next: WorkspaceManifest = { ...manifest, resources: manifest.resources.filter((candidate) => candidate.uri !== input.uri), updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
     });
-    return result!;
   }
 
-  /** Local owner-only gate — mirrors the inline check already established in collaboration-service.ts's record(). Not a change to authorizeSacUse. */
+  /** Local owner-only gate — shares `isWorkspaceOwner` with collaboration-service.ts's record(). Not a change to authorizeSacUse. */
   private requireOwner(manifest: WorkspaceManifest, actor: TrustedActorContext): void {
-    if (manifest.members.find((member) => member.subject === actor.subject)?.role !== "owner") {
+    if (!isWorkspaceOwner(manifest.members, actor.subject)) {
       throw new WorkspaceServiceError("access_denied", "owner authority is required");
     }
   }

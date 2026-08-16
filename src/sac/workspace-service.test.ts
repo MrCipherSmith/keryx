@@ -95,6 +95,21 @@ test("archive is owner-only (editor/viewer denied access_denied); sets status ar
   expect(archived.members).toEqual(manifest.members);
 });
 
+test("archive is intentionally idempotent: archiving an already-archived workspace succeeds again (not a conflict), keeps status archived, and only bumps updatedAt", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-archive-repeat-create-0001", id: "workspace-archive-repeat", title: "Archive Repeat" });
+  const first = await owner.archive({ request, requestCorrelationId: "registry-archive-repeat-0001", workspaceId: created.id });
+  expect(first.status).toBe("archived");
+  await Bun.sleep(5);
+  const second = await owner.archive({ request, requestCorrelationId: "registry-archive-repeat-0002", workspaceId: created.id });
+  expect(second.status).toBe("archived");
+  expect(second.id).toBe(first.id);
+  expect(second.title).toBe(first.title);
+  expect(second.resources).toEqual(first.resources);
+  expect(second.members).toEqual(first.members);
+  expect(second.updatedAt).not.toBe(first.updatedAt);
+});
+
 test("removeResource is owner-only (editor denied access_denied), not_found when uri is absent, and removes exactly the targeted resource while bumping updatedAt", async () => {
   const workspaceRoot = await root(); const owner = service(workspaceRoot);
   const created = await owner.create({ request, requestCorrelationId: "registry-remove-create-0001", id: "workspace-remove-alpha", title: "Remove Alpha", component: { kind: "component", uri: "./src/a.ts" } });
