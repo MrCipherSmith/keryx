@@ -79,7 +79,7 @@
     {
       "id": "T5",
       "title": "Fix1: --include-archived=value silently ignored in keryx workspace list",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -94,7 +94,7 @@
     {
       "id": "T6",
       "title": "Fix2: decide/document archive() re-archive idempotency",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -109,7 +109,7 @@
     {
       "id": "T7",
       "title": "Fix3: refactor removeResource to use withAuthorizedActor",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -124,7 +124,7 @@
     {
       "id": "T8",
       "title": "Fix4: extract shared owner-role gate (workspace-service + collaboration-service)",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -139,7 +139,7 @@
     {
       "id": "T9",
       "title": "Fix5: evaluate centralizing archived-write guard; document decision",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -154,7 +154,7 @@
     {
       "id": "T10",
       "title": "Fix6: evaluate archive/rename dedup into shared helper; document decision",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -169,7 +169,7 @@
     {
       "id": "T11",
       "title": "Fix7: reduce redundant manifest reads in withAuthorizedActor",
-      "kind": "fix",
+      "kind": "implement",
       "status": "done",
       "dependsOn": [],
       "attempts": {

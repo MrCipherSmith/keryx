@@ -212,9 +212,9 @@ keryx workspace policy-readiness
 This path does not change any public CLI or MCP schema and never enables the
 candidate implicitly. The operator process for **real** (non-synthetic) artifacts
 is in the
-[Phase 6b operator playbook](../../requirements/shared-agent-context/phase-6b-operator-playbook.md);
+[Phase 6b operator playbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6b-operator-playbook.md);
 runtime re-ingestion of raw receipts/outcomes is still planned — see
-[phase-6-real-opt-in-readiness.md](../../requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).
+[phase-6-real-opt-in-readiness.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).
 
 ## Not shipped (do not treat as current)
 
