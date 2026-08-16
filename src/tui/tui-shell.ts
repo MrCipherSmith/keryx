@@ -105,6 +105,8 @@ import {
   sideWorkerLabel,
 } from "./side-worker";
 import { setSubagentFleetListener } from "./subagent-bridge";
+import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
+import { SubagentSessionStore } from "./subagent-session";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
 import {
@@ -1407,7 +1409,18 @@ export async function launchTuiAgentShell(opts: {
       content: otui.t`${otui.dim("○ Ready")}`,
     });
     sidebar.add(sbWorkers);
+    // Hug-content box, not a flexGrow ScrollBox: a growing viewport inside
+    // flexShrink-0 sidebarTop covers the Model/Tools labels on a real pty
+    // (shell-pty-launch O-6). Empty list is zero height; rows add as children spawn.
+    const sbSubagents = new otui.BoxRenderable(r, {
+      id: "sb-subagents",
+      flexDirection: "column",
+      flexShrink: 0,
+      marginTop: 1,
+    });
+    sidebar.add(sbSubagents);
     const fleet = new WorkerFleet();
+    const sessions = new SubagentSessionStore();
     const paintFleet = (): void => {
       const list = fleet.list();
       const text = formatFleetSidebar(list, 12);
@@ -1420,20 +1433,22 @@ export async function launchTuiAgentShell(opts: {
         sbWorkers.content = otui.t`${otui.dim(text)}`;
       }
     };
-    fleet.subscribe(paintFleet);
-    // MAE spawn_subagent → Workers panel
-    setSubagentFleetListener((ev) => {
-      if (ev.kind === "remove") {
-        fleet.remove(ev.id);
+    const paintSubagents = (hint?: { kind: string }): void => {
+      if (hint?.kind === "log") {
         return;
       }
-      fleet.upsert({
-        id: ev.id,
-        label: ev.label,
-        status: ev.status,
-        ...(ev.detail !== undefined ? { detail: ev.detail } : {}),
-        ...(ev.model !== undefined ? { model: ev.model } : {}),
+      paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
+        width: SIDEBAR_TEXT_WIDTH,
+        onOpen: (id) => {
+          openSubagentInspector(otui, chrome, { store: sessions, id, renderer: r });
+        },
       });
+    };
+    fleet.subscribe(paintFleet);
+    sessions.subscribe(paintSubagents);
+    // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
+    setSubagentFleetListener((ev) => {
+      sessions.apply(ev);
     });
 
     /** Update the pinned main-agent slot (Activity panel). */

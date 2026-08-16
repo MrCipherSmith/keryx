@@ -1,8 +1,21 @@
-// Fleet event bridge: spawn_subagent tool → TUI Workers panel.
+// Fleet + work-log bridge: spawn_subagent tool → TUI Workers panel / inspector.
 // Tools are built before the TUI mounts; the shell registers a listener later.
 
+import type { FleetWorkerStatus } from "./worker-fleet";
+
+export type SubagentWorkKind = "task" | "text" | "reasoning" | "tool" | "result" | "system";
+
 export type SubagentFleetEvent =
-  | { kind: "upsert"; id: string; label: string; status: "queued" | "running" | "done" | "failed" | "blocked"; detail?: string; model?: string }
+  | {
+      kind: "upsert";
+      id: string;
+      label: string;
+      status: FleetWorkerStatus;
+      detail?: string;
+      model?: string;
+      task?: string;
+    }
+  | { kind: "log"; id: string; entry: { kind: SubagentWorkKind; text: string } }
   | { kind: "remove"; id: string };
 
 let listener: ((e: SubagentFleetEvent) => void) | undefined;
