@@ -27,7 +27,13 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
+import { openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
+import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+// RED: `../session/slate-terminal-state` does not exist yet (T11 creates it).
+import { renderTerminalStateBlock } from "../session/slate-terminal-state";
+import type { TerminalState } from "../session/slate-terminal-state";
 
 test("resolveAgentMaxToolCalls: default is generous for multi-step prompts", () => {
   expect(DEFAULT_MAX_TOOL_CALLS).toBeGreaterThanOrEqual(48);
@@ -1286,4 +1292,587 @@ test("review finding: a malformed slate.json on the OPEN trigger never blocks th
   const raw = await readFile(path.join(dir, "slate.json"), "utf8");
   expect(raw).toBe("{ not valid json");
   expect(system.some((s) => s.includes("slate open/close check failed"))).toBe(true);
+});
+
+// --- SLATE-2a: Anchors auto-inject (AC4) ---
+//
+// Contract under test (not yet implemented — T7 builds this): after each
+// tool call that actually executes, `runAgentTurnCore` extracts path-like
+// strings from the tool's parsed input (conventional field names: `path`,
+// `file`, `dir`, `target`) and, when `options.slateSession` is present AND
+// opened AND the SLATE-2a touched-tracking helper (`recordSlateTouch` in
+// `src/session/slate-lifecycle.ts`) reports a real change, pushes ONE
+// additional `{role:"user", content: renderAnchorsBlock(...), provenance:
+// "project"}` message into `history` immediately after that call's own
+// tool-result message — mirroring `buildRepeatedFailureHint`'s injection
+// pattern (`history.push(...); io.onHistoryChange?.("tool");`).
+//
+// Separately, `ensureSlateOpened`'s fresh-open path (worktree resolved
+// trigger) injects its own single Anchors-block reflecting the
+// freshly-computed root/tree, pushed BEFORE the model's first request of
+// the turn — distinct from the per-tool-call injection above.
+
+function probeTool(): InteractiveTool {
+  return {
+    definition: {
+      name: "probe",
+      description: "",
+      inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      risk: "read",
+    },
+    invoke: async () => ({ output: "probed", isError: false }),
+  };
+}
+
+test("SLATE-2a: a tool call with a path input injects one Anchors-block message right after its own tool-result message, when slateSession is open", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  // Pre-open the slate directly (mirrors what ensureSlateOpened's own
+  // openSlate call would do) so this test isolates SLATE-2a's per-tool-call
+  // injection from the separate open-triggered injection (tested below).
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "src/foo.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  // "hello" is neither an action-intent nor a close phrase, so no other
+  // slate-lifecycle trigger fires this turn — isolates the per-tool-call path.
+  await runAgentTurn(io, deps, history, "hello", { slateSession });
+
+  const toolMsgIndex = history.findIndex((m) => m.role === "tool" && m.content === "probed");
+  expect(toolMsgIndex).toBeGreaterThanOrEqual(0);
+  const anchorsMsg = history[toolMsgIndex + 1];
+  expect(anchorsMsg).toBeDefined();
+  expect(anchorsMsg?.role).toBe("user");
+  expect(anchorsMsg?.provenance).toBe("project");
+  expect(anchorsMsg?.content).toContain("src/foo.ts");
+  // Persisted, not just rendered in-memory.
+  const persisted = await readSlate(dir);
+  expect(persisted?.anchors.touched).toContain("src/foo.ts");
+});
+
+test("SLATE-2a: a second identical tool call (same path, no new info) does NOT inject a second Anchors-block message", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "src/foo.ts" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "src/foo.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "hello", { slateSession });
+
+  // Both calls ran (attempt 1 and attempt 2 of the same hash, one budget slot).
+  expect(history.filter((m) => m.role === "tool" && m.content === "probed").length).toBe(2);
+  // Only ONE Anchors-block injection — the second call changed nothing new.
+  const anchorsMsgs = history.filter((m) => m.role === "user" && m.content.includes("src/foo.ts"));
+  expect(anchorsMsgs.length).toBe(1);
+});
+
+test("SLATE-2a: with options.slateSession undefined, tool-call history is BYTE-FOR-BYTE unchanged — no Anchors-block ever appears", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "src/foo.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  // No `options` at all — pre-Phase-3 call shape, must stay byte-for-byte identical.
+  await runAgentTurn(io, deps, history, "hello");
+
+  expect(history.map((m) => m.role)).toEqual(["user", "tool", "assistant"]);
+  expect(history.some((m) => m.content.includes("src/foo.ts") && m.role === "user")).toBe(false);
+});
+
+test("SLATE-2a: ensureSlateOpened's fresh open injects exactly ONE Anchors-block message even when the model calls no tools", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("Understood."),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests", { slateSession });
+
+  expect(slateSession.opened).toBe(true);
+  const anchors = (await readSlate(dir))?.anchors;
+  expect(anchors).toBeDefined();
+  const anchorsMsgs = history.filter(
+    (m) => m.role === "user" && m.provenance === "project" && m.content !== "run the tests",
+  );
+  expect(anchorsMsgs.length).toBe(1);
+  expect(anchorsMsgs[0]?.content).toContain(anchors!.root);
+});
+
+test("SLATE-2a: ensureSlateOpened's fresh-open Anchors-block is pushed BEFORE the model's first request in the turn", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "text_delta", text: "Understood." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests", { slateSession });
+
+  expect(requests.length).toBe(1);
+  const firstRequestAnchorsMsg = requests[0]?.messages.find(
+    (m) => m.role === "user" && m.provenance === "project" && m.content !== "run the tests",
+  );
+  expect(firstRequestAnchorsMsg).toBeDefined();
+});
+
+// --- SLATE-11: unattended `TerminalState` (flow 161, T10 — AC3) -----------
+//
+// RED: `../session/slate-terminal-state` does not exist yet (T11 creates it,
+// see the import at the top of this file) — this whole describe block fails
+// at import time until then, mirroring the harness.test.ts precedent (see
+// its own doc comment: "the missing-module import is the expected RED
+// failure for the WHOLE file — this is NOT a per-test bug").
+//
+// PINNED API this block assumes (T11 implements exactly this surface — see
+// subagent-result):
+//   - `AgentDeps.unattended?: boolean` — new optional field, default
+//     undefined/false. Every EXISTING interactive call site (shell.ts,
+//     tui-shell.ts, every test above this describe block) is COMPLETELY
+//     unaffected — proven below by a byte-for-byte regression test.
+//   - `AgentDeps.now?: () => string` — new optional injected ISO-timestamp
+//     clock for `TerminalState.occurredAt`. Defaults to `() => new
+//     Date().toISOString()` when absent. This is a NEW seam, not a violation
+//     of this module's documented "uses ONLY deps.idSeq, never Date.now"
+//     determinism contract for provider/tool I/O: `now` is consulted ONLY on
+//     the new unattended terminal-state path, and only for the timestamp
+//     field — every existing call site omits it and is unaffected.
+//   - `AgentIO.onTerminalState?: (state: TerminalState) => void` — new
+//     optional, additive callback.
+//   - Budget exhaustion: when `deps.unattended === true`, in place of
+//     `finishWithBudgetSummary`'s free-text "Do NOT call tools." push AND its
+//     text-only wrap-up model round, build a `TerminalState` (`reason:
+//     "budget_exhausted"`), emit it via `io.onTerminalState?.(state)` AND a
+//     rendered `renderTerminalStateBlock(state)` text block via
+//     `io.onSystem`/`io.write`, and return WITHOUT any further
+//     `deps.provider.stream(...)` call and WITHOUT pushing anything
+//     additional into `history` — the turn's history reflects only what the
+//     tool-execution loop itself already wrote before the budget-exhausted
+//     branch was reached (this is what makes "no instruction persists into
+//     any later turn" hold structurally).
+//   - `courseSnapshot`/`anchorsSnapshot`: read from the current slate when
+//     `options.slateSession` is present AND `.opened === true` (via a plain
+//     `readSlate` call, mirroring `closeSlateOnFlowDone`'s own read pattern).
+//     IMPORTANT: `courseSnapshot` is the RAW `Slate["course"]` value straight
+//     off disk (`{flowRef?: string}`, per the spec's `TerminalState` type) —
+//     NOT `slate-course.ts`'s live `CourseProjection` (`courseFromSlate`'s
+//     richer `{state:"bound"|"unbound", ...}` union). Do not run it through
+//     `courseFromSlate` here. Otherwise a minimal/empty shape:
+//     `courseSnapshot: {}`, `anchorsSnapshot: { root: "", touched: [] }`.
+//   - ask_user interception: when `deps.unattended === true` and the model
+//     calls `ask_user`, the real `ask` callback baked into
+//     `createAskUserTool(ask)` is NEVER invoked — interception happens in
+//     `runAgentTurnCore`'s per-call loop BEFORE `executeCall`/`tool.invoke`
+//     runs. A `TerminalState` (`reason: "ask_user_unanswerable"`) is built
+//     and emitted via the SAME mechanism as budget exhaustion, and the
+//     ENTIRE turn stops immediately (not just that one call) — no further
+//     calls in the same batch are processed, no re-request happens, and
+//     nothing beyond what history already held before this call is added.
+//   - Interactive (non-unattended) behavior is BYTE-FOR-BYTE unchanged for
+//     both paths — proven by the two regression tests below.
+
+function collectingIoWithTerminalState(): {
+  io: AgentIO;
+  text: string[];
+  system: string[];
+  terminalStates: TerminalState[];
+} {
+  const { io, text, system } = collectingIo();
+  const terminalStates: TerminalState[] = [];
+  io.onTerminalState = (state) => terminalStates.push(state);
+  return { io, text, system, terminalStates };
+}
+
+function fixedNow(iso: string): () => string {
+  return () => iso;
+}
+
+test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budget_exhausted) and adds NO history beyond what the tool-execution loop itself already wrote", async () => {
+  const OCCURRED_AT = "2026-08-16T00:00:00.000Z";
+  const { provider, requests } = scriptedProvider([
+    // Round 1: two DISTINCT "probe" calls (different `path` → different hash).
+    // maxToolCalls: 1 means the first charges the sole slot; the second is
+    // refused for total-budget reasons, tripping `exhaustedBudget`.
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    unattended: true,
+    now: fixedNow(OCCURRED_AT),
+  };
+  const { io, system, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests");
+
+  // Exactly ONE provider.stream call — no second (wrap-up) round happened.
+  expect(requests.length).toBe(1);
+
+  // History: the initial user push + the two tool-loop entries the calls
+  // loop itself wrote (call1's real result, call2's budget-refusal message)
+  // — and NOTHING beyond that (no "[system] Tool loop stopped..." message,
+  // no wrap-up assistant text).
+  expect(history.length).toBe(3);
+  expect(history[0]?.role).toBe("user");
+  expect(history[1]?.role).toBe("tool");
+  expect(history[1]?.content).toBe("probed");
+  expect(history[2]?.role).toBe("tool");
+  expect(history.some((m) => m.content.includes("Do NOT call tools"))).toBe(false);
+  expect(history.some((m) => m.content.includes("Tool loop stopped"))).toBe(false);
+
+  // TerminalState emitted exactly once, with the expected shape.
+  expect(terminalStates.length).toBe(1);
+  const state = terminalStates[0]!;
+  expect(state.status).toBe("blocked");
+  expect(state.reason).toBe("budget_exhausted");
+  expect(state.occurredAt).toBe(OCCURRED_AT);
+  // No slateSession was supplied — minimal/empty snapshot shape.
+  expect(state.courseSnapshot).toEqual({});
+  expect(state.anchorsSnapshot).toEqual({ root: "", touched: [] });
+
+  // A rendered sentinel block reached the human/log-visible surface too.
+  expect(system.some((line) => line.includes("KERYX_TERMINAL_STATE"))).toBe(true);
+  expect(system.join("")).toContain(renderTerminalStateBlock(state));
+});
+
+test("SLATE-11: unattended budget exhaustion with an OPEN slateSession snapshots the REAL course/anchors, not the empty default", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const openedSlate = await readSlate(dir);
+  expect(openedSlate).toBeDefined();
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    unattended: true,
+    now: fixedNow("2026-08-16T00:00:00.000Z"),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests", { slateSession });
+
+  // T11 fix (documented deviation — see subagent-result): the ORIGINAL
+  // assertion here compared against `openedSlate`, read immediately after
+  // `openSlate` but BEFORE `runAgentTurn` ran. That is a genuine test bug,
+  // not a behavior this test is actually trying to pin: with `maxToolCalls:
+  // 1`, the FIRST "probe" call (path "a") genuinely executes, and the
+  // already-shipped SLATE-2a per-tool-call wiring in `runAgentTurnCore`
+  // (`recordSlateTouch`, unrelated to this flow) unconditionally updates the
+  // on-disk slate's `anchors.touched`/`anchors.runtime` for every executed
+  // call BEFORE the budget-exhausted branch is ever reached — regardless of
+  // `unattended`. So the on-disk slate legitimately DIFFERS from
+  // `openedSlate` by the time `emitTerminalState` reads it. Comparing
+  // against a pre-turn snapshot would only pass if the terminal-state
+  // snapshot were WRONG (stale/frozen), which contradicts this test's own
+  // title ("snapshots the REAL course/anchors, not the empty default") — the
+  // "real" value to compare against is the slate's state AT THE MOMENT the
+  // turn actually stopped, i.e. read fresh right here, not a pre-turn read.
+  const realSlateAtStop = await readSlate(dir);
+  expect(realSlateAtStop).toBeDefined();
+  expect(terminalStates.length).toBe(1);
+  expect(terminalStates[0]?.anchorsSnapshot).toEqual(realSlateAtStop!.anchors);
+  expect(terminalStates[0]?.courseSnapshot).toEqual(realSlateAtStop!.course);
+});
+
+test("SLATE-11 regression: unattended undefined/false — budget exhaustion behaves BYTE-FOR-BYTE as before (free-text push + wrap-up round, no TerminalState)", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+    // Round 2: the existing tools-less wrap-up round.
+    [
+      { kind: "text_delta", text: "Here is what happened." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    // `unattended` deliberately OMITTED — every existing call site's shape.
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "run the tests");
+
+  expect(requests.length).toBe(2); // main round + wrap-up round, unchanged.
+  expect(history.some((m) => m.content.includes("Do NOT call tools."))).toBe(true);
+  expect(history.some((m) => m.content === "Here is what happened.")).toBe(true);
+  expect(terminalStates.length).toBe(0);
+});
+
+test("SLATE-11: unattended ask_user interception — the real ask callback is NEVER invoked, a TerminalState (reason ask_user_unanswerable) is emitted, and history gains nothing beyond the user's own turn message", async () => {
+  const OCCURRED_AT = "2026-08-16T03:00:00.000Z";
+  let askCallCount = 0;
+  const ask: AskUserFn = async () => {
+    askCallCount += 1;
+    return "opt-a";
+  };
+  const askUserInput = JSON.stringify({
+    question: "Which approach?",
+    options: [
+      { id: "opt-a", label: "A" },
+      { id: "opt-b", label: "B" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "a1", toolName: "ask_user" },
+      { kind: "tool_call_end", toolCallId: "a1", input: askUserInput },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [createAskUserTool(ask)],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    unattended: true,
+    now: fixedNow(OCCURRED_AT),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "pick one");
+
+  expect(askCallCount).toBe(0);
+  expect(requests.length).toBe(1); // no re-request after interception.
+  expect(history.length).toBe(1); // only the user's own turn message.
+  expect(history[0]?.role).toBe("user");
+  expect(history[0]?.content).toBe("pick one");
+
+  expect(terminalStates.length).toBe(1);
+  expect(terminalStates[0]?.status).toBe("blocked");
+  expect(terminalStates[0]?.reason).toBe("ask_user_unanswerable");
+  expect(terminalStates[0]?.occurredAt).toBe(OCCURRED_AT);
+});
+
+test("F-003: unattended ask_user interception stops the WHOLE turn on the FIRST ask_user in a multi-call batch — calls before it execute normally, calls after it never run", async () => {
+  const OCCURRED_AT = "2026-08-16T04:00:00.000Z";
+  let askCallCount = 0;
+  const ask: AskUserFn = async () => {
+    askCallCount += 1;
+    return "opt-a";
+  };
+  const askUserInput = JSON.stringify({
+    question: "Which approach?",
+    options: [
+      { id: "opt-a", label: "A" },
+      { id: "opt-b", label: "B" },
+    ],
+  });
+  // A single batch of THREE calls: [read_something, ask_user, read_something_else].
+  // "probe" (already-available read-only fixture tool from probeTool() above)
+  // stands in for a real read tool at both ends of the batch.
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "a1", toolName: "ask_user" },
+      { kind: "tool_call_end", toolCallId: "a1", input: askUserInput },
+      { kind: "tool_call_start", toolCallId: "c3", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool(), createAskUserTool(ask)],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    unattended: true,
+    now: fixedNow(OCCURRED_AT),
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "do these three things");
+
+  // The real `ask` callback is never invoked, and no re-request happens.
+  expect(askCallCount).toBe(0);
+  expect(requests.length).toBe(1);
+
+  // Exactly one tool-result message (from the FIRST call, "probe" with path
+  // "a") landed in history, alongside the user's own turn message — nothing
+  // for `ask_user` itself (intercepted before any result is produced) and
+  // NOTHING for the third call (it never ran).
+  expect(history.length).toBe(2);
+  expect(history[0]?.role).toBe("user");
+  expect(history[0]?.content).toBe("do these three things");
+  expect(history[1]?.role).toBe("tool");
+  expect(history[1]?.content).toBe("probed");
+  expect(history.filter((m) => m.role === "tool").length).toBe(1);
+
+  // A structured TerminalState fired exactly once for the interception.
+  expect(terminalStates.length).toBe(1);
+  expect(terminalStates[0]?.status).toBe("blocked");
+  expect(terminalStates[0]?.reason).toBe("ask_user_unanswerable");
+  expect(terminalStates[0]?.occurredAt).toBe(OCCURRED_AT);
+});
+
+test("SLATE-11 regression: unattended undefined/false — ask_user behaves exactly as today (real callback invoked, no TerminalState)", async () => {
+  let askCallCount = 0;
+  const ask: AskUserFn = async () => {
+    askCallCount += 1;
+    return "opt-a";
+  };
+  const askUserInput = JSON.stringify({
+    question: "Which approach?",
+    options: [
+      { id: "opt-a", label: "A" },
+      { id: "opt-b", label: "B" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "a1", toolName: "ask_user" },
+      { kind: "tool_call_end", toolCallId: "a1", input: askUserInput },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "Chose A." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [createAskUserTool(ask)],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    // `unattended` deliberately OMITTED.
+  };
+  const { io, terminalStates } = collectingIoWithTerminalState();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "pick one");
+
+  expect(askCallCount).toBe(1);
+  expect(requests.length).toBe(2);
+  expect(history.some((m) => m.role === "tool" && m.content.includes("User selected"))).toBe(true);
+  expect(terminalStates.length).toBe(0);
 });

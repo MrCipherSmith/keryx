@@ -17,15 +17,17 @@ import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-ri
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
-import { readSlate } from "../session/slate";
+import { readSlate, renderAnchorsBlock, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
 import {
   closeSlateSession,
   ensureSlateOpened,
   isClosePhrase,
   isCourseDone,
+  recordSlateTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
+import { renderTerminalStateBlock, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
 /**
  * Extra context handed to an approver alongside the raw tool input.
@@ -95,6 +97,15 @@ export interface AgentIO {
   /** Non-token system/error text. */
   onSystem?: (text: string) => void;
   /**
+   * SLATE-11 (AC3): a `TerminalState` was emitted on the unattended path
+   * (`deps.unattended === true`) — budget exhaustion or an intercepted
+   * `ask_user` call. Additive, optional callback; absent for every existing
+   * `AgentIO` implementation, which is unaffected. A rendered text block is
+   * ALSO emitted via `onSystem`/`write` (see {@link renderTerminalStateBlock})
+   * for human/log visibility — this callback is the machine-readable path.
+   */
+  onTerminalState?: (state: TerminalState) => void;
+  /**
    * Approve a mutating (risk `shell`/`destructive`) tool call before it runs.
    * DEFAULT-DENY: when this is absent the driver denies the call and never
    * executes it. `input` is the raw JSON input string the model proposed.
@@ -125,6 +136,28 @@ export interface AgentDeps {
   maxReadToolCalls?: number;
   /** Max unique non-read signatures inside the total budget. Default 8. */
   maxNonReadToolCalls?: number;
+  /**
+   * SLATE-11 (AC3): operator-set signal that this run has no human present
+   * (mirrors `HarnessCommandDeps`'s `--unattended` flag, SLATE-8). Default
+   * undefined/false — every existing interactive call site (`keryx shell`,
+   * the TUI) is completely unaffected. When `true`:
+   *  - budget exhaustion emits a `TerminalState` (`reason: "budget_exhausted"`)
+   *    instead of `finishWithBudgetSummary`'s free-text wrap-up round, and
+   *    pushes NOTHING additional into `history`.
+   *  - an `ask_user` tool call is intercepted BEFORE the real callback runs;
+   *    the whole turn stops immediately with a `TerminalState`
+   *    (`reason: "ask_user_unanswerable"`).
+   */
+  unattended?: boolean;
+  /**
+   * Injected ISO-timestamp clock for `TerminalState.occurredAt`, consulted
+   * ONLY on the unattended terminal-state path. Defaults to
+   * `() => new Date().toISOString()`. This is a deliberate, narrowly-scoped
+   * exception to this module's "uses ONLY deps.idSeq" determinism contract
+   * for provider/tool I/O — every existing call site omits it and is
+   * unaffected.
+   */
+  now?: () => string;
 }
 
 export interface RunAgentTurnOptions {
@@ -141,6 +174,20 @@ export interface RunAgentTurnOptions {
    * `session/slate-lifecycle.ts`'s `SlateSessionRef` doc comment for why.
    */
   slateSession?: SlateSessionRef;
+  /**
+   * Review finding (Phase 3): `/goal` (`goal-command.ts`) already performs
+   * its own deterministic slate open + `workspaceId` bind BEFORE calling
+   * `runAgentTurn` with the same `parsed.text` as `userLine`. Without this
+   * flag, this function's own `isClosePhrase(userLine)` check re-examines
+   * that same text and — whenever the goal text happens to contain a close
+   * phrase substring ("...wrap up documentation...") — immediately archives
+   * the slate `/goal` just opened, silently discarding the workspace binding
+   * and Anchors visibility for the whole turn. Set only by `/goal`'s own
+   * call site; every other caller (the real REPL/TUI surfaces, where a
+   * close phrase in the user's own words is a genuine close intent) leaves
+   * this unset and keeps the existing heuristic.
+   */
+  skipCloseTrigger?: boolean;
 }
 
 /**
@@ -459,6 +506,44 @@ function parseToolInput(raw: string): Record<string, unknown> {
   }
 }
 
+/**
+ * SLATE-2a "touched" extraction (AC4): generic, no per-tool special-casing —
+ * pulls string values off conventional field names (`path`, `file`, `dir`,
+ * `target`) from a tool call's PARSED input. Covers `read_file`, `list_dir`,
+ * `graph_affected`, etc. without a maintained per-tool map (context.md's
+ * explicit design choice — a per-tool map would need updating every time a
+ * new read tool ships).
+ *
+ * `spawn_subagent` additionally contributes a `subagent:<label>` marker
+ * (never a bare path field) — the child's `label`/`task` identifies WHICH
+ * subagent ran, which is the situational-awareness fact worth surfacing in
+ * Anchors, not a filesystem path. Falls back to a truncated `task` when no
+ * `label` was given, matching `spawn-subagent-tool.ts`'s own `label` default
+ * derivation (`sub-${childSeq}` there is per-invocation counter state this
+ * function does not have access to, so a task-text fallback is used instead
+ * — still a stable, human-legible marker, just not byte-identical to what
+ * the tool itself displays).
+ */
+function extractTouchedFromToolInput(name: string, input: Record<string, unknown>): string[] {
+  const pathLikeFields = ["path", "file", "dir", "target"] as const;
+  const out: string[] = [];
+  for (const field of pathLikeFields) {
+    const value = input[field];
+    if (typeof value === "string" && value.trim().length > 0) {
+      out.push(value.trim());
+    }
+  }
+  if (name === "spawn_subagent") {
+    const label = typeof input.label === "string" ? input.label.trim() : "";
+    const task = typeof input.task === "string" ? input.task.trim() : "";
+    const marker = label.length > 0 ? label : task.length > 0 ? task.slice(0, 40) : "";
+    if (marker.length > 0) {
+      out.push(`subagent:${marker}`);
+    }
+  }
+  return out;
+}
+
 /** Canonical JSON with sorted keys so equivalent objects hash the same. */
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -579,6 +664,63 @@ export function reserveToolAttempt(
 }
 
 /**
+ * SLATE-11 snapshot resolution: read the CURRENT slate's raw `course`/
+ * `anchors` (not `slate-course.ts`'s live `CourseProjection`) when a slate is
+ * open for this turn, else a minimal/empty default. Never throws — a read
+ * failure (corrupted `slate.json`, permission error) degrades to the same
+ * empty default rather than letting a bookkeeping failure crash the stop
+ * path itself.
+ */
+async function resolveTerminalStateSnapshots(
+  options: RunAgentTurnOptions,
+): Promise<{ courseSnapshot: SlateCourse; anchorsSnapshot: SlateAnchors }> {
+  const ref = options.slateSession;
+  if (ref !== undefined && ref.opened) {
+    try {
+      const slate = await readSlate(ref.dir);
+      if (slate !== undefined) {
+        return { courseSnapshot: slate.course, anchorsSnapshot: slate.anchors };
+      }
+    } catch {
+      // Degrade to the empty default below.
+    }
+  }
+  return { courseSnapshot: {}, anchorsSnapshot: { root: "", touched: [] } };
+}
+
+/**
+ * SLATE-11 (AC3): build + emit a `TerminalState` via BOTH `io.onTerminalState`
+ * (machine-readable) and a rendered `renderTerminalStateBlock` text through
+ * `io.onSystem`/`io.write` (human/log visibility) — the single emission
+ * mechanism shared by the budget-exhausted and ask_user-interception stop
+ * paths. Never touches `history`: that is what makes "no instruction persists
+ * into any later turn" hold structurally, not by a value check.
+ */
+async function emitTerminalState(
+  io: AgentIO,
+  deps: AgentDeps,
+  options: RunAgentTurnOptions,
+  reason: TerminalStateReason,
+): Promise<void> {
+  const { courseSnapshot, anchorsSnapshot } = await resolveTerminalStateSnapshots(options);
+  const now = deps.now ?? (() => new Date().toISOString());
+  const state: TerminalState = {
+    status: "blocked",
+    reason,
+    courseSnapshot,
+    anchorsSnapshot,
+    occurredAt: now(),
+  };
+  io.onTerminalState?.(state);
+  const block = renderTerminalStateBlock(state);
+  if (io.onSystem !== undefined) {
+    io.onSystem(`\n${block}\n`);
+  } else {
+    io.write(`\n${block}\n`);
+  }
+}
+
+/**
  * Run ONE user turn to completion (possibly several model round-trips if tools are
  * called). Appends the user message plus every assistant/tool message produced to
  * `history` in place.
@@ -677,13 +819,37 @@ async function runAgentTurnCore(
     // on any failure, skip slate lifecycle bookkeeping for this turn and let
     // the real request proceed.
     try {
-      if (isClosePhrase(userLine)) {
+      if (options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
         await closeSlateSession(options.slateSession, () => deps.idSeq());
       } else if (actionRequest) {
+        // SLATE-2a "worktree resolved" trigger: `ensureSlateOpened` fires a
+        // fresh `computeAnchors()` (root/tree from live git state) only when
+        // it actually opens/reopens — a no-op "already opened, still live"
+        // call recomputes nothing and must not inject anything. There is no
+        // separate return value to detect this (`ensureSlateOpened` returns
+        // `void`, and changing its signature would ripple into every real
+        // call site in `shell.ts`/`tui-shell.ts` for a Phase-3-only need) —
+        // instead, snapshot `ref.opened` immediately before the call and
+        // compare after: a false→true transition IS "this call did the real
+        // open work" (mirrors `SlateSessionRef`'s own doc comment: `opened`
+        // only ever flips true inside `openSlate`'s own success path). This
+        // does not catch F-002's rarer "stale-flag re-open" case (where
+        // `ref.opened` was already `true` going in) — accepted gap, per the
+        // dispatch brief's "prefer the less invasive detection" guidance;
+        // that path still opens correctly, it just does not additionally
+        // surface an Anchors-block this turn.
+        const wasOpened = options.slateSession.opened;
         await ensureSlateOpened(options.slateSession, () => deps.idSeq(), {
           provider: deps.providerId,
           model: deps.modelId,
         });
+        if (!wasOpened && options.slateSession.opened) {
+          const freshSlate = await readSlate(options.slateSession.dir);
+          if (freshSlate !== undefined) {
+            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
+            io.onHistoryChange?.("tool");
+          }
+        }
       }
     } catch (err) {
       io.onSystem?.(`slate open/close check failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
@@ -866,6 +1032,17 @@ async function runAgentTurnCore(
         system("\n[stopped] Model turn interrupted by user.\n");
         return;
       }
+      if (deps.unattended === true && call.name === "ask_user") {
+        // SLATE-11 (AC3): no human is present to answer — deny BEFORE the real
+        // `ask` callback ever runs (it is never invoked) and stop the ENTIRE
+        // turn immediately (journal.md's accepted reading: a whole-turn stop
+        // on the FIRST ask_user call in a batch, not a per-call skip that lets
+        // sibling calls in the same batch continue). No re-request, no further
+        // calls processed, nothing pushed into history beyond what was already
+        // there before this call.
+        await emitTerminalState(io, deps, options, "ask_user_unanswerable");
+        return;
+      }
       if (untrustedContentSeen || (batchContainsUntrustedWeb && call.name !== "web_fetch" && call.name !== "web_search")) {
         const result: InteractiveToolResult = {
           output: "tool blocked: external web content cannot authorize further tool calls in this turn",
@@ -913,6 +1090,31 @@ async function runAgentTurnCore(
       if (result.untrusted === true && !result.isError) {
         untrustedContentSeen = true;
       }
+      if (options.slateSession !== undefined && options.slateSession.opened === true) {
+        // SLATE-2a per-tool-call Anchors auto-inject (AC4): "tool call
+        // completed" trigger. `spawn_subagent` is itself a tool call in this
+        // same loop, so it is covered here too — `extractTouchedFromToolInput`
+        // adds its own `subagent:<label>` marker for that one tool name.
+        // Wrapped in its own try/catch (mirrors `closeSlateOnFlowDone`'s
+        // defensive pattern above, and the open-trigger try/catch earlier in
+        // this function): a slate read/write failure here must never crash
+        // or abort the user's actual turn — degrade silently (the tool call
+        // itself already succeeded and its real result is already in
+        // `history`) rather than let a bookkeeping failure replace this
+        // turn's real outcome.
+        try {
+          const touchedPaths = extractTouchedFromToolInput(call.name, parseToolInput(call.input));
+          const touch = await recordSlateTouch(options.slateSession.dir, touchedPaths, {
+            runtime: { provider: deps.providerId, model: deps.modelId },
+          });
+          if (touch.changed) {
+            history.push({ role: "user", content: renderAnchorsBlock(touch.slate.anchors), provenance: "project" });
+            io.onHistoryChange?.("tool");
+          }
+        } catch (err) {
+          io.onSystem?.(`slate touch update failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+        }
+      }
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
       const riskUsage =
         risk === "read"
@@ -952,6 +1154,15 @@ async function runAgentTurnCore(
     // a new signature beyond a pool, or only re-issues exhausted hashes.
     const noProgress = !executedAny && calls.length > 0;
     if (exhaustedBudget !== undefined || noProgress) {
+      if (deps.unattended === true) {
+        // SLATE-11 (AC3): in place of `finishWithBudgetSummary`'s free-text
+        // "Do NOT call tools." push AND its text-only wrap-up model round,
+        // emit a structured stop record and return WITHOUT any further
+        // `deps.provider.stream(...)` call. `history` reflects only what the
+        // tool-execution loop itself already wrote before this branch.
+        await emitTerminalState(io, deps, options, "budget_exhausted");
+        return;
+      }
       await finishWithBudgetSummary(io, deps, history, parentRunId, {
         maxUnique: maxToolCalls,
         maxAttempts,

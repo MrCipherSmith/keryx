@@ -376,3 +376,46 @@ export function localWorkspaceAuthorizationServer(subject = `user:local-${proces
 }
 
 export function newWorkspaceId(): string { return `workspace-${randomUUID().replace(/-/g, "").slice(0, 16)}`; }
+
+/**
+ * SLATE-15 shared fail-closed `--workspace` validation (AC1): the SAME helper
+ * `/goal` (`commands/goal-command.ts`) and `keryx harness run --workspace`
+ * (`commands/harness.ts`) both reuse, so a bad/invisible workspace id is
+ * rejected identically in both places rather than two independently-drifting
+ * checks. Constructs its OWN `WorkspaceService` per call — the exact
+ * construction `commands/workspace.ts`'s `service()` factory already uses
+ * (`workspaceRoot: cwd`, `localWorkspaceAuthorizationServer()`, the same
+ * `strictGuard` literal) — and calls `.show()`, never `.create()`, so this
+ * helper can never itself cause AC2's "omitting --workspace never creates a
+ * workspace" guarantee to be violated by a caller that always calls it.
+ *
+ * NEVER throws: every failure (not_found, access_denied, guard_denied, or any
+ * other thrown error) is folded into `{ok: false, error}` so a fail-closed
+ * caller can check `.ok` without its own try/catch, and — critically for
+ * AC1's ordering — before doing anything else, including opening a slate.
+ */
+export async function resolveWorkspaceForActor(
+  cwd: string,
+  workspaceId: string,
+): Promise<{ ok: true; manifest: WorkspaceManifest } | { ok: false; error: WorkspaceServiceError }> {
+  const service = new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+  });
+  try {
+    const manifest = await service.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+    return { ok: true, manifest };
+  } catch (error) {
+    if (error instanceof WorkspaceServiceError) {
+      return { ok: false, error };
+    }
+    return {
+      ok: false,
+      error: new WorkspaceServiceError(
+        "not_found",
+        error instanceof Error ? error.message : "workspace could not be resolved",
+      ),
+    };
+  }
+}

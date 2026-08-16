@@ -73,6 +73,7 @@ import { checkApproval } from "../harness/mutation/approval";
 import type { ApprovalCheckInput } from "../harness/mutation/approval";
 import type { ParsedChildResult } from "../harness/child/contract";
 import type { Provenance } from "../harness/session/types";
+import { resolveWorkspaceForActor } from "../sac/workspace-service";
 
 const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
   "fake",
@@ -258,6 +259,10 @@ export interface ParsedArgs {
    * it ahead of that wiring landing.
    */
   unattended?: boolean;
+  /** `--goal <text>`: task goal text (SLATE-15). When set, becomes the effective prompt. */
+  goal?: string;
+  /** `--workspace <id>`: workspace identifier (SLATE-15). */
+  workspace?: string;
 }
 
 /** The usage text, printed on an unknown subcommand or invalid args. */
@@ -287,13 +292,31 @@ const denyingExecutor: ToolExecutorPort = {
   },
 };
 
-/** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] "<prompt>"`. */
+// Every flag this parser recognizes as taking NO value of its own vs. one
+// that DOES — used by `--goal`/`--workspace` below to detect "the next
+// token is actually another flag, not my value" instead of blindly
+// consuming it (review finding: `--goal --unattended "text"` used to parse
+// `goal` as the literal string `"--unattended"`, silently losing both the
+// real prompt and the unattended flag).
+const KNOWN_HARNESS_RUN_FLAGS: ReadonlySet<string> = new Set([
+  "--provider",
+  "--model",
+  "--base-url",
+  "--record",
+  "--unattended",
+  "--goal",
+  "--workspace",
+]);
+
+/** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] [--goal <text>] [--workspace <id>] "<prompt>"`. */
 export function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
   let record: string | undefined;
   let unattended: boolean | undefined;
+  let goal: string | undefined;
+  let workspace: string | undefined;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -309,15 +332,23 @@ export function parseArgs(args: string[]): ParsedArgs {
       record = args[++i];
     } else if (arg === "--unattended") {
       unattended = true;
+    } else if (arg === "--goal") {
+      const next = args[i + 1];
+      goal = next !== undefined && !KNOWN_HARNESS_RUN_FLAGS.has(next) ? args[++i] : undefined;
+    } else if (arg === "--workspace") {
+      const next = args[i + 1];
+      workspace = next !== undefined && !KNOWN_HARNESS_RUN_FLAGS.has(next) ? args[++i] : undefined;
     } else if (arg !== undefined) {
       positional.push(arg);
     }
   }
 
-  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
+  const parsed: ParsedArgs = { provider, model, prompt: goal !== undefined && goal.length > 0 ? goal : positional.join(" ") };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
   if (record !== undefined) parsed.record = record;
   if (unattended !== undefined) parsed.unattended = unattended;
+  if (goal !== undefined) parsed.goal = goal;
+  if (workspace !== undefined) parsed.workspace = workspace;
   return parsed;
 }
 
@@ -358,7 +389,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record, unattended } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, unattended, workspace } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
@@ -367,6 +398,51 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   if (!validProviders.has(provider) || prompt.length === 0) {
     console.log(USAGE);
     return;
+  }
+
+  // Review finding 4: a trailing `--workspace` with nothing after it (or a
+  // `--workspace` immediately followed by another recognized flag, since
+  // parseArgs no longer swallows a flag token as a value) parses to
+  // `workspace === undefined` in `ParsedArgs` — INDISTINGUISHABLE, once
+  // parsed, from "the flag was never given at all". The fail-closed
+  // validation guard below only ever checks the PARSED `workspace` field, so
+  // a malformed invocation (`keryx harness run --provider ... --workspace`)
+  // silently skipped validation and proceeded UNSCOPED, diverging from
+  // `/goal`'s own dangling-`--workspace` rejection (`goal-command.ts`'s
+  // `parseGoalArgs`, review finding 5). Rather than changing `parseArgs`'s
+  // always-succeeds return shape (which would ripple into every other call
+  // site of this mechanical parse-and-store parser), detect the malformed
+  // shape explicitly here by checking whether the raw `--workspace` token
+  // was present at all.
+  //
+  // Review finding (empty string): an EXPLICIT `--workspace ""` parses to
+  // `workspace === ""`, not `undefined` — it slipped past this guard AND
+  // past the `workspace.length > 0` check below (which exists to guard
+  // `.length` access, not to gate on non-emptiness), so it silently behaved
+  // as "no workspace" instead of being rejected the same way a dangling
+  // flag is. An empty string is never a valid workspace id, so it is folded
+  // into the same "requires a value" rejection here.
+  if (args.includes("--workspace") && (workspace === undefined || workspace.length === 0)) {
+    console.log(
+      '--workspace requires a value, e.g. keryx harness run --provider <p> --model <m> --workspace <id> "<prompt>". No run was started.',
+    );
+    return;
+  }
+
+  // SLATE-15 (AC1): `--workspace <id>` gets the SAME fail-closed validation
+  // `/goal` itself uses (`resolveWorkspaceForActor`,
+  // src/sac/workspace-service.ts) BEFORE constructing the provider/runOffline
+  // input at all — an invalid/actor-invisible id refuses the WHOLE command,
+  // never a structured blocked/failed run result (mirrors the usage guard
+  // above: print + return, no network, no runOffline).
+  if (workspace !== undefined && workspace.length > 0) {
+    const resolved = await resolveWorkspaceForActor(process.cwd(), workspace);
+    if (!resolved.ok) {
+      console.log(
+        `--workspace "${workspace}" was rejected (${resolved.error.code}): ${resolved.error.message}. No run was started.`,
+      );
+      return;
+    }
   }
 
   const env = deps?.env ?? process.env;

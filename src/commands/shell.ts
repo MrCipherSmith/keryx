@@ -85,6 +85,7 @@ import {
   type SessionHandle,
 } from "../session";
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
+import { runGoalCommand } from "./goal-command";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -130,6 +131,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/search-provider",
   "/search-connect",
   "/new",
+  "/goal",
   "/clear",
   "/compact",
   "/status",
@@ -800,6 +802,18 @@ async function runAgentRepl(
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
+  /**
+   * SLATE-3a (flow 161, AC5) side-channel: the caller's `slateSessionBox`
+   * (declared in `shellCommand`'s agent-mode branch, BEFORE the readline
+   * `buildInteractiveAgentTools({..., getSessionDir})` call that reads it).
+   * Every `slateSession = ...` reassignment below also syncs
+   * `slateSessionBox.current` immediately after, so that getter's closure —
+   * created once, outside this function, before any session is open — always
+   * observes this function's CURRENT `slateSession`, not a stale snapshot.
+   * Defaults to a throwaway box so ad hoc callers (tests) that do not care
+   * about Slate tool wiring need not pass one.
+   */
+  slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined },
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -1073,6 +1087,7 @@ async function runAgentRepl(
     }
   }
   slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
+  slateSessionBox.current = slateSession;
 
   const save = (): void => {
     if (live === undefined) {
@@ -1194,6 +1209,7 @@ async function runAgentRepl(
           archive = [];
           nextArchiveIndex = 0;
           slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };
+          slateSessionBox.current = slateSession;
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );
@@ -1284,6 +1300,17 @@ async function runAgentRepl(
           continue;
         }
         agentIo.onSystem?.(`Search provider '${providerId}' selected.\n`);
+      } else if (command === "/goal") {
+        // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
+        await runGoalCommand({
+          raw: rest,
+          cwd: sessionCwd,
+          io: agentIo,
+          deps,
+          history,
+          slateSession,
+          mintAttemptId: mintTimestampAttemptId,
+        });
       } else {
         // `/models` / `/provider` are chat-mode commands: say so instead of
         // calling them unknown. Anything else falls back to the old message.
@@ -1547,7 +1574,10 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     // Search credentials stay inside the controller/transport boundary. The
     // model only sees the read-only `web_search` tool and its redacted result.
     const searchProviderController = createDefaultSearchProviderController();
-    const makeAgentDeps = async (sel: { provider: string; model: string; baseUrl?: string }): Promise<AgentDeps> => {
+    const makeAgentDeps = async (
+      sel: { provider: string; model: string; baseUrl?: string },
+      getSessionDir: () => string | undefined,
+    ): Promise<AgentDeps> => {
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient = "";
       try {
@@ -1583,6 +1613,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           metaprojectPort,
           searchController: searchProviderController,
           spawnTool,
+          getSessionDir,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -1743,6 +1774,14 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
       const searchProviderController = createDefaultSearchProviderController();
+      // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
+      // CURRENT session dir at tool-invoke time, not whatever was true when
+      // `tools` was built (`runAgentRepl`'s own `slateSession` is only known
+      // once the REPL loop opens/resumes a session, well after this point).
+      // A shared mutable box is the side-channel `runAgentRepl` writes into on
+      // every `slateSession` reassignment (see its own body below); the
+      // getter here reads the box BY REFERENCE, never a snapshot.
+      const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
         getParentModel: () => ({
@@ -1763,6 +1802,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           metaprojectPort,
           searchController: searchProviderController,
           spawnTool,
+          getSessionDir: () => slateSessionBox.current?.dir,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
@@ -1783,7 +1823,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         cwd: process.cwd(),
         ...(flags.continueLast === true ? { continueLast: true } : {}),
         ...(resumeId !== undefined ? { resumeId } : {}),
-      });
+      }, slateSessionBox);
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

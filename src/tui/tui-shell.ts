@@ -41,7 +41,14 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import { buildApprovalContext } from "../commands/agent-approval-context";
-import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
+import {
+  closeSlateSession,
+  mintTimestampAttemptId,
+  recordSlateTouch,
+  type SlateSessionRef,
+} from "../session/slate-lifecycle";
+import { renderAnchorsBlock } from "../session/slate";
+import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -698,6 +705,70 @@ export async function pickShellApproval(
   return "deny";
 }
 
+/**
+ * SLATE-2a `/model`-switch Anchors auto-inject (AC4). The `/model` handler
+ * (`command.name === "/model"`, below) is a giant closure inline in
+ * `launchTuiAgentShell` with no headless test harness — every OTHER helper
+ * in this file is either a PURE function or renders through the scripted
+ * `runAgentTurn`/`createTuiAgentIo` harness, and neither shape fits "drive
+ * the real OpenTUI model picker". This is the extracted, independently
+ * testable seam instead: everything the `/model` handler needs to do to
+ * update Anchors, with the picker UI itself left in the closure.
+ *
+ * Reuses the SAME `recordSlateTouch` touched-tracking + change-detection
+ * helper (`src/session/slate-lifecycle.ts`) the per-tool-call injection path
+ * in `commands/agent.ts` uses — a `/model` switch is just another harness
+ * effect that can change `anchors.runtime`, so it goes through the identical
+ * "only inject when something actually changed" path rather than a bespoke
+ * one that could drift from it.
+ *
+ * A no-op (`false`, `params.history` untouched) when there is no open slate
+ * to update at all — `slateSession` absent or `slateSession.opened ===
+ * false` — mirroring `closeSlateSession`'s own `undefined`-safe contract:
+ * `/model` is usable before any slate has ever opened this attempt (no
+ * action-intent turn has run yet), and that must cost nothing. `changed ===
+ * false` (picking the SAME provider/model again) is also a no-op: `history`
+ * is shared, provider-bound state, and re-announcing information the model
+ * has already seen is exactly the history-bloat failure mode flow 161's
+ * plan.md Risks section calls out.
+ *
+ * `params.onHistoryChange` (review finding 6): this function used to push
+ * its Anchors-block message into `history` and stop there, unlike both other
+ * Anchors-injection sites in `agent.ts` (its per-tool-call and fresh-open
+ * triggers), which call `io.onHistoryChange?.("tool")` immediately after
+ * their own push. `onHistoryChange` drives `syncArchive()`/session-
+ * checkpoint persistence (this file's `launchTuiAgentShell`, where
+ * `io.onHistoryChange` is assigned) — without it, the `/model`-switch
+ * Anchors entry was not archived/persisted until some UNRELATED later event
+ * happened to fire `onHistoryChange`, so a session that ended/crashed before
+ * that lost the entry from the persisted archive. Optional (not `io`
+ * itself) so this function stays testable in isolation the way it already
+ * is above, with no IO dependency required when a caller does not need it;
+ * `"tool"` matches the `kind` used at the sibling harness-written-history-
+ * push call sites in `agent.ts`.
+ */
+export async function applyRuntimeSwitchToSlate(params: {
+  slateSession: SlateSessionRef | undefined;
+  runtime: { provider: string; model: string };
+  history: NormalizedMessage[];
+  onHistoryChange?: ((kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void) | undefined;
+}): Promise<boolean> {
+  if (params.slateSession === undefined || !params.slateSession.opened) {
+    return false;
+  }
+  const result = await recordSlateTouch(params.slateSession.dir, [], { runtime: params.runtime });
+  if (!result.changed) {
+    return false;
+  }
+  params.history.push({
+    role: "user",
+    content: renderAnchorsBlock(result.slate.anchors),
+    provenance: "project",
+  });
+  params.onHistoryChange?.("tool");
+  return true;
+}
+
 /** Compact token count for the header counter: 1234 → "1.2K", else the number. */
 export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
@@ -1265,7 +1336,7 @@ export function pickSessionInTui(
 export async function launchTuiAgentShell(opts: {
   detected: DetectedProvider[];
   initial?: TuiSelection;
-  makeAgentDeps: (sel: TuiSelection) => Promise<AgentDeps>;
+  makeAgentDeps: (sel: TuiSelection, getSessionDir: () => string | undefined) => Promise<AgentDeps>;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
@@ -1339,7 +1410,13 @@ export async function launchTuiAgentShell(opts: {
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
-    let deps = await opts.makeAgentDeps(sel);
+    // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
+    // reads is declared further down in this same function body. The getter
+    // only runs once a turn actually executes a tool call, well after that
+    // declaration has run, so referencing it here (textually earlier) is
+    // safe — TDZ is a call-time concern for a closure, not a
+    // closure-creation-time one.
+    let deps = await opts.makeAgentDeps(sel, () => slateSession?.dir);
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -2123,7 +2200,7 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
-      deps = await opts.makeAgentDeps(ns);
+      deps = await opts.makeAgentDeps(ns, () => slateSession?.dir);
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
@@ -2244,7 +2321,7 @@ export async function launchTuiAgentShell(opts: {
 
           let answer = "";
           try {
-            const base = await opts.makeAgentDeps(currentSel);
+            const base = await opts.makeAgentDeps(currentSel, () => slateSession?.dir);
             // Read-only: never allow shell/mutations from a side worker.
             const tools = base.tools.filter((t) => t.definition.risk === "read");
             const sideDeps: AgentDeps = {
@@ -2431,6 +2508,21 @@ export async function launchTuiAgentShell(opts: {
           })();
           return;
         }
+        if (command.name === "/goal") {
+          // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
+          void (async () => {
+            await runGoalCommand({
+              raw: line.slice(command.name.length).trim(),
+              cwd: sessionCwd,
+              io,
+              deps,
+              history,
+              slateSession,
+              mintAttemptId: mintTimestampAttemptId,
+            });
+          })();
+          return;
+        }
         if (command.name === "/resume" || command.name === "/sessions") {
           void resumeSessionInteractive();
           return;
@@ -2574,6 +2666,28 @@ export async function launchTuiAgentShell(opts: {
                   ? { provider: currentSel.provider, model: chosen }
                   : { provider: currentSel.provider, model: chosen, baseUrl: currentSel.baseUrl },
               );
+              // SLATE-2a `/model`-switch Anchors auto-inject (AC4). `switchTo`
+              // already reassigned `currentSel` above, so it carries the NEW
+              // provider/model here. Wrapped so a slate read/write failure
+              // degrades silently rather than aborting a model switch that
+              // already succeeded (mirrors the `closeSlateSession` close
+              // triggers elsewhere in this file, which are similarly
+              // best-effort bookkeeping around a real user-visible action).
+              try {
+                await applyRuntimeSwitchToSlate({
+                  slateSession,
+                  runtime: { provider: currentSel.provider, model: currentSel.model },
+                  history,
+                  // Review finding 6: without this, the pushed Anchors-block
+                  // message is not archived/persisted until some UNRELATED
+                  // later event happens to fire `onHistoryChange`.
+                  onHistoryChange: io.onHistoryChange,
+                });
+              } catch (err) {
+                io.onSystem?.(
+                  `slate anchors update failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`,
+                );
+              }
             } else {
               input.focus();
             }

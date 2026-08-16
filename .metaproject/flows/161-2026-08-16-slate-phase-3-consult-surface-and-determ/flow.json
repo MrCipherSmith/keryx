@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 2,
+  "id": "161",
+  "slug": "slate-phase-3-consult-surface-and-determ",
+  "title": "Slate Phase 3: Consult surface and deterministic entry",
+  "status": "in-progress",
+  "createdAt": "2026-08-16T14:38:57.193Z",
+  "updatedAt": "2026-08-16T17:12:36.002Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c5fc9de73f164cc6b97ad78d90e51544d8bad10cf6a11825892b680a8471c5a2",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Context collected directly (context.md)",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Failing tests: SLATE-2a Anchors auto-inject (AC4)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement SLATE-2a Anchors auto-inject",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Failing tests: SLATE-3a slate_read/slate_write_seed (AC5)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Implement SLATE-3a slate_read/slate_write_seed",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Failing tests: SLATE-11 TerminalState + SLATE-15 /goal (AC1/AC2/AC3)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Implement SLATE-11 TerminalState + SLATE-15 /goal",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "code-verifier + review-orchestrator; remediate; draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-16T14:38:57.193Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-16T14:42:04.134Z",
+      "event": "task-added",
+      "detail": "T5: Context collected directly (context.md)"
+    },
+    {
+      "at": "2026-08-16T14:42:04.243Z",
+      "event": "task-added",
+      "detail": "T6: Failing tests: SLATE-2a Anchors auto-inject (AC4)"
+    },
+    {
+      "at": "2026-08-16T14:42:04.328Z",
+      "event": "task-added",
+      "detail": "T7: Implement SLATE-2a Anchors auto-inject"
+    },
+    {
+      "at": "2026-08-16T14:42:04.404Z",
+      "event": "task-added",
+      "detail": "T8: Failing tests: SLATE-3a slate_read/slate_write_seed (AC5)"
+    },
+    {
+      "at": "2026-08-16T14:42:04.496Z",
+      "event": "task-added",
+      "detail": "T9: Implement SLATE-3a slate_read/slate_write_seed"
+    },
+    {
+      "at": "2026-08-16T14:42:04.591Z",
+      "event": "task-added",
+      "detail": "T10: Failing tests: SLATE-11 TerminalState + SLATE-15 /goal (AC1/AC2/AC3)"
+    },
+    {
+      "at": "2026-08-16T14:42:04.677Z",
+      "event": "task-added",
+      "detail": "T11: Implement SLATE-11 TerminalState + SLATE-15 /goal"
+    },
+    {
+      "at": "2026-08-16T14:42:04.749Z",
+      "event": "task-added",
+      "detail": "T12: code-verifier + review-orchestrator; remediate; draft PR"
+    },
+    {
+      "at": "2026-08-16T14:42:47.318Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-16T14:42:47.421Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-16T14:42:47.511Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-16T14:42:47.595Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-16T14:42:58.593Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-16T14:43:06.471Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-16T14:43:15.439Z",
+      "event": "task-done",
+      "detail": "T5: Context collected directly (context.md)"
+    },
+    {
+      "at": "2026-08-16T14:56:09.115Z",
+      "event": "task-done",
+      "detail": "T6: Failing tests: SLATE-2a Anchors auto-inject (AC4)"
+    },
+    {
+      "at": "2026-08-16T15:12:42.881Z",
+      "event": "task-done",
+      "detail": "T7: Implement SLATE-2a Anchors auto-inject"
+    },
+    {
+      "at": "2026-08-16T15:32:43.019Z",
+      "event": "task-done",
+      "detail": "T8: Failing tests: SLATE-3a slate_read/slate_write_seed (AC5)"
+    },
+    {
+      "at": "2026-08-16T15:47:18.512Z",
+      "event": "task-done",
+      "detail": "T9: Implement SLATE-3a slate_read/slate_write_seed"
+    },
+    {
+      "at": "2026-08-16T16:10:20.056Z",
+      "event": "task-done",
+      "detail": "T10: Failing tests: SLATE-11 TerminalState + SLATE-15 /goal (AC1/AC2/AC3)"
+    },
+    {
+      "at": "2026-08-16T16:32:13.564Z",
+      "event": "task-done",
+      "detail": "T11: Implement SLATE-11 TerminalState + SLATE-15 /goal"
+    },
+    {
+      "at": "2026-08-16T17:12:36.002Z",
+      "event": "task-done",
+      "detail": "T12: code-verifier + review-orchestrator; remediate; draft PR"
+    }
+  ]
+}

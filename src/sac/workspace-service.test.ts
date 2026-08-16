@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSacAuthorizationServer } from "./index";
-import { WorkspaceService } from "./workspace-service";
+import { WorkspaceService, localWorkspaceAuthorizationServer, resolveWorkspaceForActor } from "./workspace-service";
 import type { StrictSacGuard } from "./index";
 import { withFileLock } from "../lib/fs";
 
@@ -177,4 +177,90 @@ test("show on an archived workspace still succeeds for a role-visible actor — 
   const shown = await owner.show({ request, requestCorrelationId: "registry-archived-show-attempt-0001", workspaceId: created.id });
   expect(shown.status).toBe("archived");
   expect(shown.id).toBe(created.id);
+});
+
+// --- SLATE-15 `resolveWorkspaceForActor` (flow 161, T10 — AC1) ------------
+//
+// RED: `resolveWorkspaceForActor` does not exist yet (T11 adds it). Pins the
+// shared fail-closed `--workspace` validation helper `/goal` (shell.ts,
+// tui-shell.ts) and `keryx harness run --workspace` (harness.ts) both reuse —
+// see the tests-creator dispatch brief: "a shared helper — design it once,
+// use it in both places". Chosen home: `src/sac/workspace-service.ts`
+// (exported alongside `WorkspaceService`/`localWorkspaceAuthorizationServer`,
+// the exact construction `commands/workspace.ts`'s `service()` already uses).
+//
+// PINNED API:
+//   export async function resolveWorkspaceForActor(
+//     cwd: string,
+//     workspaceId: string,
+//   ): Promise<
+//     | { ok: true; manifest: WorkspaceManifest }
+//     | { ok: false; error: WorkspaceServiceError }
+//   >;
+// NEVER throws (fail-closed callers must not need a try/catch of their own —
+// `/goal`'s AC1 ordering requires checking `.ok` before doing anything else,
+// including opening a slate). Constructs its OWN `WorkspaceService` per call,
+// with `workspaceRoot: cwd`, `localWorkspaceAuthorizationServer()`, and the
+// same `strictGuard: { mode: "strict", availability: "available", decision:
+// "pass", policyRevision: "local-offline-v1" }` literal `commands/
+// workspace.ts`'s `service()` uses verbatim.
+test("resolveWorkspaceForActor: an existing, actor-owned workspace resolves ok:true with the real manifest", async () => {
+  const workspaceRoot = await root();
+  // Build the workspace with the SAME actor `resolveWorkspaceForActor` itself
+  // uses internally (`localWorkspaceAuthorizationServer()`) so the created
+  // workspace is genuinely visible to it — not a foreign-owner fixture.
+  const localOwner = new WorkspaceService({
+    workspaceRoot,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: strict,
+  });
+  const created = await localOwner.create({
+    request: undefined,
+    requestCorrelationId: "resolve-actor-ok-0001",
+    id: "workspace-resolve-ok",
+    title: "Resolve OK",
+  });
+
+  const result = await resolveWorkspaceForActor(workspaceRoot, created.id);
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.manifest.id).toBe(created.id);
+    expect(result.manifest.title).toBe("Resolve OK");
+  }
+});
+
+test("resolveWorkspaceForActor: a nonexistent workspace id resolves ok:false with code not_found — never throws", async () => {
+  const workspaceRoot = await root();
+  const result = await resolveWorkspaceForActor(workspaceRoot, "definitely-does-not-exist-workspace");
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error.code).toBe("not_found");
+  }
+});
+
+test("resolveWorkspaceForActor: a malformed workspace id (fails the id regex) resolves ok:false with code not_found — never throws", async () => {
+  const workspaceRoot = await root();
+  const result = await resolveWorkspaceForActor(workspaceRoot, "Not A Valid Id !!");
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error.code).toBe("not_found");
+  }
+});
+
+test("resolveWorkspaceForActor: a workspace that exists but has no visible role for this actor resolves ok:false with code access_denied — never throws", async () => {
+  const workspaceRoot = await root();
+  // Created by a DIFFERENT subject than the local actor `resolveWorkspaceForActor`
+  // resolves to internally — the local actor has no membership entry at all.
+  const foreignOwner = service(workspaceRoot, "user:someone-else");
+  const created = await foreignOwner.create({
+    request,
+    requestCorrelationId: "resolve-actor-denied-0001",
+    id: "workspace-resolve-denied",
+    title: "Resolve Denied",
+  });
+  const result = await resolveWorkspaceForActor(workspaceRoot, created.id);
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error.code).toBe("access_denied");
+  }
 });
