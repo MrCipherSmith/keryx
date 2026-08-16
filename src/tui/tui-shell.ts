@@ -74,14 +74,12 @@ import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
-  isShellCommandAllowed,
-  loadShellPermissionsWithAudit,
   shellPermissionsFingerprint,
   shellPermissionsPath,
   loadShellPermissions,
-  parseShellExecCommand,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
+import { evaluateShellApproval } from "../commands/shell-approval";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
   compactSession,
@@ -197,13 +195,16 @@ function runGhJson(repo: string, branch: string, cwd: string): string | undefine
   }
 }
 
-function resolveSidebarMetadata(cwd: string): SidebarRepoMetadata {
-  const branch = runGitText(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+export function resolveSidebarMetadata(
+  cwd: string,
+  git: (args: string[], cwd: string) => string | undefined = runGitText,
+): SidebarRepoMetadata {
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   if (branch === undefined || branch === "HEAD") {
     return {};
   }
 
-  const remote = runGitText(["config", "--get", "remote.origin.url"], cwd);
+  const remote = git(["config", "--get", "remote.origin.url"], cwd);
   const repo = parseGitHubRemote(remote ?? "");
   if (repo === undefined) {
     return { branch };
@@ -458,7 +459,13 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
  * Exported so the headless test mounts the SHIPPED panel — including the budget
  * it is shortened to — instead of a replica.
  */
-export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: string): void {
+export function mountCwdPanel(
+  otui: OpenTui,
+  r: Renderer,
+  sidebarTop: Box,
+  cwd: string,
+  metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
+): void {
   sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${otui.dim("Directory")}`, marginTop: 1 }));
   sidebarTop.add(
     new otui.TextRenderable(r, {
@@ -467,7 +474,6 @@ export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: 
     }),
   );
 
-  const metadata = resolveSidebarMetadata(cwd);
   if (metadata.branch !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${otui.dim("Branch")}`, marginTop: 1 }));
     sidebarTop.add(
@@ -1300,7 +1306,7 @@ export async function launchTuiAgentShell(opts: {
    * approval UI — the self-grant path — and the user is told before the next
    * auto-approve acts on it.
    */
-  const permissionsFingerprintAtStart = shellPermissionsFingerprint();
+  let permissionsFingerprintAtStart = shellPermissionsFingerprint();
   let permissionTamperShown = false;
   const searchProviderController = createDefaultSearchProviderController();
   // The chrome can only be mounted once a provider/model is chosen (the startup
@@ -1615,27 +1621,25 @@ export async function launchTuiAgentShell(opts: {
         return id === "allow";
       }
 
-      const cmd = parseShellExecCommand(inputJson);
-      const destructive = meta?.destructive === true;
-      // Auto-allow from session + disk (re-read disk so external edits apply).
-      // The audit surfaces stored patterns the current rules refuse — once per
-      // session, BEFORE the first auto-approve, so a grant that silently stopped
-      // applying is never mistaken for one that still does.
-      const audit = loadShellPermissionsWithAudit();
-      for (const p of audit.permissions.allow) {
-        sessionShellAllow.add(p);
-      }
-      if (!permissionMigrationShown && audit.rejected.length > 0) {
+      const ev = evaluateShellApproval({
+        inputJson,
+        ...(meta !== undefined ? { meta } : {}),
+        sessionAllow: sessionShellAllow,
+        fingerprintAtStart: permissionsFingerprintAtStart,
+      });
+      const cmd = ev.command;
+      const destructive = ev.destructive;
+      if (!permissionMigrationShown && ev.rejected.length > 0) {
         permissionMigrationShown = true;
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content: otui.t`${otui.yellow(
-              `⚠ ${audit.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
+              `⚠ ${ev.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
             )}`,
           }),
         );
-        for (const rej of audit.rejected) {
+        for (const rej of ev.rejected) {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
@@ -1652,7 +1656,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      if (!permissionTamperShown && shellPermissionsFingerprint() !== permissionsFingerprintAtStart) {
+      if (!permissionTamperShown && ev.tampered) {
         permissionTamperShown = true;
         transcript.add(
           new otui.TextRenderable(r, {
@@ -1663,7 +1667,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      if (!destructive && isShellCommandAllowed(cmd, [...sessionShellAllow])) {
+      if (ev.autoApprove) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -1713,6 +1717,7 @@ export async function launchTuiAgentShell(opts: {
         const stored = allowShellPattern(pattern);
         if (stored.length > 0) {
           sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
         }
         transcript.add(
           new otui.TextRenderable(r, {

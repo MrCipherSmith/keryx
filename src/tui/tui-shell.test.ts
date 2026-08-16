@@ -24,6 +24,7 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
   selectBoxHeight,
@@ -450,16 +451,19 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   setup.renderer.destroy();
 });
 
-otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "keryx-tui-git-"));
-  Bun.spawnSync(["git", "init", "-q"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "checkout", "-b", "feature/sidebar-ui"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "config", "user.name", "Keryx Test"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "config", "user.email", "test@example.com"], { cwd, stdout: "ignore", stderr: "ignore" });
-  await writeFile(join(cwd, "readme.md"), "hello", "utf8");
-  Bun.spawnSync(["git", "add", "readme.md"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "commit", "-m", "Init"], { cwd, stdout: "ignore", stderr: "ignore" });
+test("resolveSidebarMetadata reads branch via the injected git runner", () => {
+  const git = (args: string[], _cwd: string): string | undefined => {
+    if (args[0] === "rev-parse") {
+      return "feature/sidebar-ui";
+    }
+    return undefined;
+  };
+  expect(resolveSidebarMetadata("/tmp/unused", git).branch).toBe("feature/sidebar-ui");
+  expect(resolveSidebarMetadata("/tmp/unused", () => undefined).branch).toBeUndefined();
+  expect(resolveSidebarMetadata("/tmp/unused", () => "HEAD").branch).toBeUndefined();
+});
 
+otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   const otui = requireOtui();
   const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
   const chrome = await createShellChrome(otui.core, setup.renderer, {
@@ -470,7 +474,9 @@ otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
     commands: commandsForMode("agent"),
   });
   try {
-    mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, cwd);
+    mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, "/tmp/keryx-unused", {
+      branch: "feature/sidebar-ui",
+    });
     await setup.flush();
     const frame = setup.captureCharFrame();
 
@@ -481,7 +487,6 @@ otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   } finally {
     chrome.destroy();
     setup.renderer.destroy();
-    await rm(cwd, { recursive: true, force: true });
   }
 });
 
