@@ -313,6 +313,7 @@ otuiTest("/new resets the estimated context counter instead of letting it keep c
   h.mockInput.pressEnter();
   await settle(h);
   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
+  expect(h.captureCharFrame()).not.toContain("a question long enough to move the estimate");
   h.destroy();
 });
 

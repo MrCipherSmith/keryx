@@ -41,7 +41,7 @@ import { saveShellConfig } from "../lib/shell-config";
 import { latestSession } from "../session";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
-import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
+import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
 import type { VersionCheckResult } from "../lib/version-check";
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
@@ -403,6 +403,10 @@ export async function mountChatShell(
         seen.push({ content: line });
         paintContext();
       } else if (RESET_COMMANDS.has(line.split(/\s+/)[0] ?? "")) {
+        messages.reset();
+        clearTranscriptChildren(transcript);
+        chrome.scroll.scrollTop = 0;
+        chrome.scroll.stickyScroll = true;
         seen.length = 0;
         paintContext();
       }

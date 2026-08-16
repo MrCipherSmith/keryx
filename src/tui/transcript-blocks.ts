@@ -106,6 +106,8 @@ export interface BlockRegistry {
   bodyText(id: string): string;
   /** Total retained characters right now — never above `maxRetainedChars`. */
   retainedChars(): number;
+  /** Drop every block and the focus (a new session starts empty). */
+  clear(): void;
 }
 
 // Defaults sized for a long session: a few dozen blocks, a few hundred KB. Both
@@ -235,6 +237,10 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
       return block.truncated ? `${block.fullText}\n${TRUNCATED_BLOCK_NOTICE}` : block.fullText;
     },
     retainedChars,
+    clear: () => {
+      blocks.length = 0;
+      focusIndex = -1;
+    },
   };
 }
 
@@ -612,6 +618,8 @@ export interface AssistantMessageStream {
   finalize(text: string): void;
   /** True while a message container is open (content streamed, not finalized). */
   open(): boolean;
+  /** Drop an in-flight message so the next push starts a new container. */
+  reset(): void;
 }
 
 let messageSeq = 0;
@@ -701,6 +709,20 @@ export function createAssistantMessageStream(
       message = undefined;
     },
     open: () => message !== undefined,
+    reset: () => {
+      if (message === undefined) {
+        return;
+      }
+      for (const view of message.views.splice(0)) {
+        view.destroy();
+      }
+      try {
+        parent.remove(message.container);
+      } catch {
+        // already unmounted
+      }
+      message = undefined;
+    },
   };
 }
 
@@ -925,6 +947,8 @@ export interface BlockMount {
   add(input: BlockInput, options?: BlockViewOptions): string;
   /** The mounted view for a block id — the nav controller's `view` port. */
   view(id: string): BlockView | undefined;
+  /** Destroy every mounted view and empty the registry. */
+  clear(): void;
 }
 
 /**
@@ -949,7 +973,24 @@ export function createBlockMount(
       return id;
     },
     view: (id) => views.get(id),
+    clear: () => {
+      for (const view of views.values()) {
+        view.destroy();
+      }
+      views.clear();
+      registry.clear();
+    },
   };
+}
+
+/** Remove every child of a transcript box (user echoes, replies, system lines). */
+export function clearTranscriptChildren<T>(parent: {
+  getChildren: () => readonly T[];
+  remove: (child: T) => void;
+}): void {
+  for (const child of [...parent.getChildren()]) {
+    parent.remove(child);
+  }
 }
 
 // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 --------------------

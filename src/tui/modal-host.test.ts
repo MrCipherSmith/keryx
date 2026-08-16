@@ -12,11 +12,12 @@ import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import {
-  MODAL_PANEL_HEIGHT,
+  MODAL_PANEL_CHROME_X,
   MODAL_PANEL_INNER_WIDTH,
-  MODAL_PANEL_WIDTH,
+  MODAL_PANEL_MARGIN,
   formatModalFooter,
   openModal,
+  resolveModalInnerWidth,
 } from "./modal-host";
 
 async function loadOpenTui(): Promise<{
@@ -107,14 +108,16 @@ test("AC5: openModal is a no-op when OpenTUI is unavailable", () => {
   expect(calls).toEqual([]);
 });
 
-test("formatModalFooter is a single hint line that fits the panel", () => {
+test("formatModalFooter is a single hint line that fits the wrap budget", () => {
   const line = formatModalFooter([
     { key: "c", label: "copy id" },
     { key: "esc", label: "close" },
   ]);
   expect(line).toBe("c copy id · esc close");
-  expect(MODAL_PANEL_INNER_WIDTH).toBe(MODAL_PANEL_WIDTH - 4);
+  expect(MODAL_PANEL_MARGIN).toBeGreaterThan(0);
   expect(line.length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
+  expect(resolveModalInnerWidth(90)).toBe(90 - MODAL_PANEL_CHROME_X);
+  expect(resolveModalInnerWidth(10)).toBe(20);
 });
 
 test("AC7: modal-host has no static optional-core import and adds no /session-info", async () => {
@@ -125,7 +128,7 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
   expect(host).not.toMatch(/session-info/);
 });
 
-otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu stays closed on /", async () => {
+otuiTest("AC1: one tab paints a titled near-fullscreen opaque panel; slash menu stays closed on /", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
   h.chrome.transcript.add(
@@ -146,19 +149,22 @@ otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu sta
 
   const frame = h.captureCharFrame();
   expect(frame).toContain("Inspector");
-  expect(frame).toContain("Info");
+  expect(frame).toContain("[Info]");
   expect(frame).toContain("body:info");
+  expect(h.renderer.root.findDescendantById("modal-tab-info")).toBeDefined();
+  expect(h.renderer.root.findDescendantById("modal-body-scroll")).toBeDefined();
 
   const backdrop = h.renderer.root.findDescendantById("modal-backdrop");
   const panel = h.renderer.root.findDescendantById("modal-panel");
   expect(backdrop).toBeDefined();
   expect(panel).toBeDefined();
-  expect((panel as { width: number }).width).toBe(MODAL_PANEL_WIDTH);
-  expect((panel as { height: number }).height).toBe(MODAL_PANEL_HEIGHT);
+  const panelBox = panel as { width: number; height: number };
+  expect(panelBox.width).toBeGreaterThanOrEqual(h.renderer.width - MODAL_PANEL_MARGIN * 2 - 2);
+  expect(panelBox.height).toBeGreaterThanOrEqual(h.renderer.height - MODAL_PANEL_MARGIN * 2 - 2);
   expect(frame).toContain("[x] esc");
   expect(frame.toLowerCase()).toContain("esc close");
-  expect((backdrop as { opacity?: number }).opacity).toBeLessThan(1);
-  expect((backdrop as { opacity?: number }).opacity).toBeGreaterThan(0);
+  expect((backdrop as { opacity?: number }).opacity ?? 1).toBe(1);
+  expect(frame).not.toContain("transcript stays mounted");
 
   // Shell remains mounted: chrome header and transcript child are still in the tree.
   expect(h.chrome.header.parent).toBe(h.chrome.main);
@@ -223,7 +229,7 @@ otuiTest("AC2: initialTab mounts only that body; switching unmounts the previous
   h.destroy();
 });
 
-otuiTest("fixed panel size does not change when switching short and long tab bodies", async () => {
+otuiTest("panel size does not change when switching short and long tab bodies", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
   const handle = openModal(otui.core, h.chrome, {
@@ -244,8 +250,8 @@ otuiTest("fixed panel size does not change when switching short and long tab bod
   });
   await h.flush();
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
-  expect(panel.width).toBe(MODAL_PANEL_WIDTH);
-  expect(panel.height).toBe(MODAL_PANEL_HEIGHT);
+  expect(panel.width).toBeGreaterThanOrEqual(h.renderer.width - MODAL_PANEL_MARGIN * 2 - 2);
+  expect(panel.height).toBeGreaterThanOrEqual(h.renderer.height - MODAL_PANEL_MARGIN * 2 - 2);
   const first = { width: panel.width, height: panel.height };
   h.mockInput.pressArrow("right");
   await h.flush();
@@ -274,6 +280,58 @@ otuiTest("x closes the modal the same as Esc", async () => {
   });
   await h.flush();
   await h.mockInput.pressKeys(["x"]);
+  await h.flush();
+  expect(closed).toBe(1);
+  expect(h.chrome.overlayActive()).toBe(false);
+  h.destroy();
+});
+
+otuiTest("x does not close while the body scroll owns focus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  let closed = 0;
+  openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [{ id: "info", label: "Info" }],
+    renderTab: (tabId, body) => {
+      const parent = body as { add: (child: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: `body-${tabId}`, content: "line\n".repeat(40) }));
+    },
+    onClose: () => {
+      closed += 1;
+    },
+  });
+  await h.flush();
+  const scroll = h.renderer.root.findDescendantById("modal-body-scroll") as unknown as {
+    focus: () => void;
+    scrollHeight: number;
+    height: number;
+  };
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.height);
+  scroll.focus();
+  await h.flush();
+  await h.mockInput.pressKeys(["x"]);
+  await h.flush();
+  expect(closed).toBe(0);
+  expect(h.chrome.overlayActive()).toBe(true);
+  h.destroy();
+});
+
+otuiTest("clicking [x] closes the modal", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  let closed = 0;
+  openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [{ id: "info", label: "Info" }],
+    renderTab: () => {},
+    onClose: () => {
+      closed += 1;
+    },
+  });
+  await h.flush();
+  const close = h.renderer.root.findDescendantById("modal-close") as unknown as { x: number; y: number };
+  await h.mockMouse.click(close.x + 1, close.y);
   await h.flush();
   expect(closed).toBe(1);
   expect(h.chrome.overlayActive()).toBe(false);

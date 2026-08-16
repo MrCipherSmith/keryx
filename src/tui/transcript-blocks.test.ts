@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { segmentMarkdown } from "../lib/md-blocks";
 import {
+  clearTranscriptChildren,
   createBlockNavController,
   createBlockRegistry,
   createStreamSegmenter,
@@ -84,6 +85,22 @@ describe("createBlockRegistry: registration and collapse", () => {
     expect(() => registry.toggle("no-such-block")).not.toThrow();
     expect(registry.get(id)?.collapsed).toBe(true);
     expect(registry.list()).toHaveLength(1);
+  });
+
+  test("clear() drops every block and the focus so a new session starts empty", () => {
+    const registry = createBlockRegistry();
+    registry.register(block(1));
+    registry.register(block(2));
+    expect(registry.list()).toHaveLength(2);
+    expect(registry.focused()).toBeDefined();
+
+    registry.clear();
+    expect(registry.list()).toEqual([]);
+    expect(registry.focused()).toBeUndefined();
+    expect(registry.retainedChars()).toBe(0);
+
+    const next = registry.register(block(3));
+    expect(registry.list().map((b) => b.id)).toEqual([next]);
   });
 });
 
@@ -515,5 +532,22 @@ describe("createStreamSegmenter", () => {
       { kind: "code", lang: "ts", body: "x" },
       { kind: "text", text: "b" },
     ]);
+  });
+});
+
+describe("clearTranscriptChildren", () => {
+  test("removes every child of the parent box", () => {
+    const kids = ["a", "b", "c"];
+    const parent = {
+      getChildren: () => [...kids],
+      remove: (child: unknown) => {
+        const i = kids.indexOf(child as string);
+        if (i >= 0) {
+          kids.splice(i, 1);
+        }
+      },
+    };
+    clearTranscriptChildren(parent);
+    expect(kids).toEqual([]);
   });
 });

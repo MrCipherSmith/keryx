@@ -118,6 +118,7 @@ import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from
 import type { VersionCheckResult } from "../lib/version-check";
 import {
   appendUserEcho,
+  clearTranscriptChildren,
   createAssistantMessageStream,
   createBlockMount,
   createBlockNavController,
@@ -320,7 +321,12 @@ type StyledContent = string | ReturnType<OpenTui["t"]>;
  * `runAgentTurn` without a real TTY. Pass the reasoning/tool hooks through
  * {@link attachBlockIo} to upgrade those one-liners into retained blocks (AC1).
  */
-export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
+export type TuiAgentIo = AgentIO & {
+  /** Drop an in-flight assistant stream so the next turn starts a new container. */
+  resetStream(): void;
+};
+
+export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): TuiAgentIo {
   let seq = 0;
   const append = (content: StyledContent): void => {
     transcript.add(new otui.TextRenderable(renderer, { id: `n${seq++}`, content }));
@@ -373,6 +379,9 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       append(result.isError ? otui.t`${otui.red(line)}` : otui.t`${otui.dim(line)}`);
     },
     onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
+    resetStream: () => {
+      messages.reset();
+    },
   };
 }
 
@@ -540,7 +549,7 @@ export interface UsageChrome {
  * `runAgentTurn` through the real composition and see both outputs in one frame
  * rather than proving a replica.
  */
-export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
+export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { resetUsage(): void } {
   const base = io.onUsage?.bind(io);
   let totalIn = 0;
   let totalOut = 0;
@@ -555,7 +564,14 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
     chrome.setHeaderMeta(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`);
     chrome.setContextTotal(totalIn + totalOut);
   };
-  return io;
+  return Object.assign(io, {
+    resetUsage(): void {
+      totalIn = 0;
+      totalOut = 0;
+      chrome.setHeaderMeta("↑0 ↓0");
+      chrome.setContextTotal(0);
+    },
+  });
 }
 
 /**
@@ -1621,7 +1637,7 @@ export async function launchTuiAgentShell(opts: {
       }
       baseWrite(s);
     };
-    attachUsageIo(io, {
+    const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
         sbContext.content = otui.t`${otui.dim(`${total.toLocaleString()} tokens`)}`;
@@ -2122,7 +2138,23 @@ export async function launchTuiAgentShell(opts: {
       }
       flushSessionCheckpoint();
     };
+    const resetSessionSurface = (): void => {
+      nav.exit();
+      chrome.stopBusy();
+      io.resetStream();
+      blockMount.clear();
+      clearTranscriptChildren(transcript);
+      chrome.scroll.scrollTop = 0;
+      chrome.scroll.stickyScroll = true;
+      fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID);
+      setMainAgent("queued", "ready");
+      hasExactUsage = false;
+      lastUsage = undefined;
+      usage.resetUsage();
+    };
+
     const startNewSession = (note?: string): void => {
+      resetSessionSurface();
       liveSession = createSession({
         cwd: sessionCwd,
         provider: currentSel.provider,
