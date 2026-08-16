@@ -4,11 +4,12 @@ import { writeFile } from "node:fs/promises";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { formatFwkExplain } from "../sac/fwk-explain";
-import { createHarnessProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
+import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
 import { createLocalCollaborationService } from "../sac/collaboration-service";
 import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { findSession } from "../session/store";
+import { buildCatchUp, type CatchUpReport } from "../sac/catch-up";
 
 // Every kind a real writer now exists for: wiki-update -> wiki, memory-entry
 // -> memory, everything else -> skill (see ownerFor in proposal-lifecycle.ts).
@@ -142,6 +143,38 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       if (!report.integrityReady) process.exitCode = 1;
       return;
     }
+    if (subcommand === "catch-up") {
+      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json"]));
+      const workspaceId = optionValue(args, "--workspace");
+      const report = await buildCatchUp({ cwd: process.cwd(), ...(workspaceId ? { workspaceId } : {}) });
+      if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
+      else console.log(renderCatchUp(report));
+      return;
+    }
+    if (subcommand === "list-proposals") {
+      rejectUnknownOptions(args.slice(2), new Set());
+      const workspaceId = args[1];
+      const cwd = process.cwd();
+      const authorizationServer = localWorkspaceAuthorizationServer();
+      const actor = await authorizationServer.actorContextFor(undefined, randomUUID());
+      if (!actor) throw new Error("trusted ActorContext is required");
+      if (workspaceId) {
+        // Flow 165 review fix (F-001): unlike every other explicit-workspace-id
+        // subcommand in this file (`show`, `add-resource`, `archive`, …), this
+        // branch used to call `listProposedProposals(workspaceId)` directly
+        // with no actor/ACL check — a caller with zero role in a workspace
+        // could enumerate its pending proposals just by knowing/guessing the
+        // id. `showForActor` is the same authorization gate `show` itself
+        // uses (already throws `WorkspaceServiceError("access_denied", …)` on
+        // no role); calling it here first, purely for its authorization side
+        // effect, requires no new authorization plumbing.
+        await service().showForActor({ actorContext: actor, workspaceId });
+        console.log(JSON.stringify(await createLocalProposalLifecycleService(cwd).listProposedProposals(workspaceId), null, 2));
+        return;
+      }
+      console.log(JSON.stringify(await createLocalProposalLifecycleService(cwd).listVisibleProposedProposals(actor), null, 2));
+      return;
+    }
     throw new Error(`Unknown workspace command: ${subcommand}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1;
@@ -183,5 +216,36 @@ function booleanFlag(args: string[], name: string): boolean {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json]\nkeryx workspace list-proposals [<workspace-id>]");
+}
+
+/**
+ * SLATE-10's human-facing catch-up rendering (agent-protocol.md's "Catch-up
+ * protocol"): four hard-separated headed sections (AC2's text-rendering
+ * mirror of the already-separated `CatchUpReport` shape), each item as a
+ * structured question + options + recommendation — never a raw JSON/diff
+ * dump. `--json` (above) is the escape hatch for scripting.
+ */
+function renderCatchUp(report: CatchUpReport): string {
+  const sections: string[] = [];
+  sections.push(renderSection("Pending proposals", report.proposals, (item) =>
+    `- Accept, reject, or dismiss proposal ${item.proposalId} in workspace ${item.workspaceId}? ` +
+    `Recommendation: ${item.fresh ? "evidence is fresh — review now (`keryx workspace review " + item.workspaceId + " " + item.proposalId + " --decision <accepted|rejected|dismissed>`)" : "evidence has drifted since this proposal was created — treat as stale, re-run wrap-up before deciding"}.`));
+  sections.push(renderSection("Blocked sessions (stopped unattended)", report.blocked, (item) =>
+    `- Session ${item.sessionId} stopped unattended (${item.terminalState.reason}) at ${item.terminalState.occurredAt}. Resume it, or archive and move on? ` +
+    `Recommendation: \`keryx shell -r ${item.sessionId}\` to resume and unblock it.`));
+  sections.push(renderSection("Unbound candidates (wrap-up ran, no workspace bound)", report.unboundCandidates, (item) =>
+    `- Session ${item.sessionId} produced untriaged seeds with no workspace bound (${item.summary}). Bind to a workspace and propose, or discard? ` +
+    `Recommendation: pick a workspace, then \`keryx workspace propose <workspace-id> --kind <kind> --session ${item.sessionId}\` (evidence: ${item.evidencePath}).`));
+  sections.push(renderSection("Unknown (no resolution recorded)", report.unknown, (item) =>
+    `- Session ${item.sessionId} was last seen ${item.lastSeenAt} with no proposal, terminal state, or unbound-candidate artifact recorded. Investigate, or ignore? ` +
+    `Recommendation: \`keryx sessions list\` / \`keryx shell -r ${item.sessionId}\` to see what happened.`));
+  return sections.join("\n\n");
+}
+
+function renderSection<T>(title: string, items: readonly T[], describe: (item: T) => string): string {
+  const lines = [`== ${title} ==`];
+  if (items.length === 0) lines.push("(none)");
+  else for (const item of items) lines.push(describe(item));
+  return lines.join("\n");
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -8,6 +8,7 @@ import { createGuardedOwnerWriter } from "./guarded-owner-writer";
 import { createSacAuthorizationServer, validateSacLedger } from "./index";
 import { WorkspaceService } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
+import { pathExists } from "../lib/fs";
 
 const time = "2026-08-12T00:00:00.000Z";
 async function setup(role = "owner", writer: { owner: string; write: (input: { correlationId: string }) => Promise<any>; recover?: () => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
@@ -427,4 +428,129 @@ test("a different idempotency key on an already-terminal proposal is never mista
   // gate reordering did not create a bypass where a fresh non-interactive
   // accept attempt could slip through as if it were a replay.
   await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0002", interactive: false })).rejects.toMatchObject({ code: "conflict" });
+});
+
+// --- SLATE-10 (flow 165, T2): listProposedProposals / listVisibleProposedProposals / isEvidenceFresh ---
+//
+// RED: none of `listProposedProposals`, `listVisibleProposedProposals`,
+// `isEvidenceFresh` exist on `ProposalLifecycleService` yet (task-implementer's
+// Track A/Track B add them per plan.md) — every test below fails at runtime
+// ("is not a function") and at typecheck until then. Called directly (no
+// `as any`) since plan.md pins these as PUBLIC methods, unlike the file's
+// existing `(service as any).options...` casts for genuinely-private access.
+
+test("listProposedProposals returns only proposals still in 'proposed' status — a terminalized sibling proposal is filtered out via its activity.jsonl transition", async () => {
+  const { root, service } = await setup();
+  await propose(service); // proposal-a: stays pending
+
+  const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "list-correlation-0002");
+  const secondWrapUp = await (service as any).options.wrapUpAuthority.issue({ actor, source: "flow", sourceRef: "./flows/wrap-up" });
+  await service.create({ request: undefined, requestCorrelationId: "list-correlation-0002", workspaceId: "workspace-a", id: "proposal-b", proposalRevision: "r1", kind: "risk", wrapUp: secondWrapUp });
+  await service.review({ request: undefined, requestCorrelationId: "list-review-0002", workspaceId: "workspace-a", proposalId: "proposal-b", decision: "dismissed", reason: "not needed", idempotencyKey: "list-review-idem-0002", interactive: true });
+
+  const pending = await service.listProposedProposals("workspace-a");
+  expect(pending.map((p: any) => p.id)).toEqual(["proposal-a"]);
+
+  // Both proposal-a.json and proposal-b.json plus proposal-b's decision
+  // sidecar exist on disk — none of the sidecars leaked into the result.
+  const proposalsDir = path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals");
+  const files = await readdir(proposalsDir);
+  expect(files.length).toBeGreaterThan(2);
+  expect(pending).toHaveLength(1);
+});
+
+test("listProposedProposals never misidentifies a sidecar file (.decision.json/.approval.json/.write-result.json/.write-intent.json) as a proposal — filters by parsed recordType, not filename regex", async () => {
+  const { root, service } = await setup();
+  await propose(service);
+  await service.review({ request: undefined, requestCorrelationId: "sidecar-review-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "sidecar-review-idem-0001", interactive: true });
+  // Accepting proposal-a writes .approval.json/.write-intent.json/.write-result.json
+  // sidecars AND terminalizes it via activity.jsonl.
+  const proposalsDir = path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals");
+  const files = await readdir(proposalsDir);
+  expect(files.some((f) => f.includes(".approval.json") || f.includes(".write-result.json") || f.includes(".write-intent.json"))).toBe(true);
+
+  const pending = await service.listProposedProposals("workspace-a");
+  expect(pending).toEqual([]); // accepted (terminal), and no sidecar was ever counted as a proposal
+});
+
+test("listProposedProposals returns [] for a workspace with no proposals/ dir yet (ENOENT), not a throw", async () => {
+  const { service } = await setup();
+  await expect(service.listProposedProposals("workspace-a")).resolves.toEqual([]);
+});
+
+test("listProposedProposals skips a malformed proposals/ entry (partial/corrupt JSON) rather than throwing — a listing path, not a load path (unlike loadProposal, which legitimately throws on a single known id's bad JSON)", async () => {
+  const { root, service } = await setup();
+  await propose(service);
+  const proposalsDir = path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals");
+  await writeFile(path.join(proposalsDir, "corrupt.json"), "{not valid json");
+  const pending = await service.listProposedProposals("workspace-a");
+  expect(pending.map((p: any) => p.id)).toEqual(["proposal-a"]);
+});
+
+test("AC1 (flow 165): listVisibleProposedProposals surfaces a pending proposal from an ARCHIVED workspace identically to one from an active workspace — always includeArchived:true, never a caller toggle", async () => {
+  const { root, service, workspaces, server } = await setup();
+  await propose(service); // proposal-a in workspace-a (active)
+
+  await workspaces.create({ request: undefined, requestCorrelationId: "archived-ws-create-0001", id: "workspace-b", title: "Archived WS" });
+  const wrapUpAuthorityB = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async () => ({ workspaceId: "workspace-b", sourceRevision: "wrapup-r1", summary: "workspace-b summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
+  const serviceB = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: {}, wrapUpAuthority: wrapUpAuthorityB, now: () => new Date(time) });
+  const actorB = await server.actorContextFor(undefined, "archived-ws-actor-0001");
+  const wrapUpB = await wrapUpAuthorityB.issue({ actor: actorB!, source: "session", sourceRef: "./evidence/e.md" });
+  await serviceB.create({ request: undefined, requestCorrelationId: "archived-ws-create-0002", workspaceId: "workspace-b", id: "proposal-b", proposalRevision: "r1", kind: "follow-up", wrapUp: wrapUpB });
+  await workspaces.archive({ request: undefined, requestCorrelationId: "archived-ws-archive-0001", workspaceId: "workspace-b" });
+
+  const visible = await service.listVisibleProposedProposals(actorB!);
+  const workspaceIdsWithProposals = visible.map((entry: any) => entry.workspace.id).sort();
+  expect(workspaceIdsWithProposals).toEqual(["workspace-a", "workspace-b"]);
+  const archivedGroup = visible.find((entry: any) => entry.workspace.id === "workspace-b");
+  expect(archivedGroup?.workspace.status).toBe("archived");
+  expect(archivedGroup?.proposals.map((p: any) => p.id)).toEqual(["proposal-b"]);
+
+  // Not a caller-toggle: a plain `listForActor({includeArchived:false})` call
+  // must NOT surface workspace-b — listVisibleProposedProposals's inclusion
+  // of it is hardcoded internally, not threaded through from a caller flag.
+  const activeOnly = await workspaces.listForActor({ actorContext: actorB!, includeArchived: false });
+  expect(activeOnly.map((w) => w.id)).not.toContain("workspace-b");
+});
+
+test("listVisibleProposedProposals omits a visible workspace that currently has zero pending proposals — an empty per-workspace group is not itself an item", async () => {
+  const { service, workspaces, server } = await setup();
+  await workspaces.create({ request: undefined, requestCorrelationId: "empty-ws-create-0001", id: "workspace-empty", title: "Empty" });
+  const actor = await server.actorContextFor(undefined, "empty-ws-actor-0001");
+  const visible = await service.listVisibleProposedProposals(actor!);
+  expect(visible.map((entry: any) => entry.workspace.id)).not.toContain("workspace-empty");
+});
+
+// --- isEvidenceFresh (Track B item 6): read-only re-check, never throws, never writes ---
+
+test("isEvidenceFresh: unmutated evidence is fresh", async () => {
+  const { service } = await setup();
+  const proposal = await propose(service);
+  const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "fresh-check-0001");
+  await expect(service.isEvidenceFresh(proposal, actor)).resolves.toBe(true);
+});
+
+test("isEvidenceFresh: evidence mutated on disk after the proposal pinned its hash is stale — same fail-toward-stale posture as targetWriteOrStale's own catch block, but callable BEFORE any review/accept", async () => {
+  const { root, service } = await setup();
+  const proposal = await propose(service);
+  await writeFile(path.join(root, "evidence", "e.md"), "changed after the proposal pinned this revision");
+  const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "fresh-check-0002");
+  await expect(service.isEvidenceFresh(proposal, actor)).resolves.toBe(false);
+});
+
+test("isEvidenceFresh: a deleted/unreadable evidence file is stale, never a throw", async () => {
+  const { root, service } = await setup();
+  const proposal = await propose(service);
+  await rm(path.join(root, "evidence", "e.md"));
+  const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "fresh-check-0003");
+  await expect(service.isEvidenceFresh(proposal, actor)).resolves.toBe(false);
+});
+
+test("isEvidenceFresh never mutates lifecycle state — no activity.jsonl ledger is created, unlike an actual review/accept call", async () => {
+  const { root, service } = await setup();
+  const proposal = await propose(service);
+  const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "fresh-check-0004");
+  await service.isEvidenceFresh(proposal, actor);
+  const ledgerPath = path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl");
+  expect(await pathExists(ledgerPath)).toBe(false);
 });

@@ -264,3 +264,70 @@ test("resolveWorkspaceForActor: a workspace that exists but has no visible role 
     expect(result.error.code).toBe("access_denied");
   }
 });
+
+// --- listForActor (flow 165, T2 — Track A item 3) --------------------------
+//
+// RED: `listForActor` does not exist on `WorkspaceService` yet — every test
+// below fails at runtime ("is not a function") and at typecheck until
+// task-implementer adds it. PINNED API (plan.md):
+//   async listForActor(input: { actorContext: TrustedActorContext; includeArchived?: boolean }): Promise<WorkspaceManifest[]>
+// Same body as `list()` minus the `requireActor()` call — the actor is
+// already trusted/supplied, never re-derived from a `request`.
+
+test("listForActor mirrors list()'s own visibility for the SAME actor across includeArchived undefined/false/true — a future drift between the two loops would be caught here", async () => {
+  const workspaceRoot = await root();
+  const ownerServer = server("user:owner");
+  const owner = new WorkspaceService({ workspaceRoot, authorizationServer: ownerServer, strictGuard: strict });
+  const active = await owner.create({ request, requestCorrelationId: "listforactor-active-0001", id: "workspace-lfa-active", title: "Active" });
+  const toArchive = await owner.create({ request, requestCorrelationId: "listforactor-archive-0001", id: "workspace-lfa-archive", title: "ToArchive" });
+  await owner.archive({ request, requestCorrelationId: "listforactor-archive-0002", workspaceId: toArchive.id });
+  const ownerActor = await ownerServer.actorContextFor(request, "listforactor-actor-owner");
+
+  const defaultRequest = await owner.list({ request, requestCorrelationId: "listforactor-request-default" });
+  const defaultActor = await owner.listForActor({ actorContext: ownerActor! });
+  expect(defaultActor.map((w) => w.id)).toEqual(defaultRequest.map((w) => w.id));
+  expect(defaultActor.map((w) => w.id)).toEqual([active.id]);
+
+  const falseRequest = await owner.list({ request, requestCorrelationId: "listforactor-request-false", includeArchived: false });
+  const falseActor = await owner.listForActor({ actorContext: ownerActor!, includeArchived: false });
+  expect(falseActor.map((w) => w.id)).toEqual(falseRequest.map((w) => w.id));
+
+  const trueRequest = await owner.list({ request, requestCorrelationId: "listforactor-request-true", includeArchived: true });
+  const trueActor = await owner.listForActor({ actorContext: ownerActor!, includeArchived: true });
+  expect(trueActor.map((w) => w.id).sort()).toEqual(trueRequest.map((w) => w.id).sort());
+  expect(trueActor.map((w) => w.id).sort()).toEqual([active.id, toArchive.id].sort());
+});
+
+test("listForActor: a viewer-role actor sees exactly the same set list() would show it (same members see the same set), and a foreign actor with no role anywhere discovers nothing archived or not", async () => {
+  const workspaceRoot = await root();
+  const ownerServer = server("user:owner");
+  const owner = new WorkspaceService({ workspaceRoot, authorizationServer: ownerServer, strictGuard: strict });
+  const active = await owner.create({ request, requestCorrelationId: "listforactor-viewer-active-0001", id: "workspace-lfa-viewer-active", title: "Active" });
+  const toArchive = await owner.create({ request, requestCorrelationId: "listforactor-viewer-archive-0001", id: "workspace-lfa-viewer-archive", title: "ToArchive" });
+  await owner.archive({ request, requestCorrelationId: "listforactor-viewer-archive-0002", workspaceId: toArchive.id });
+  const file = path.join(workspaceRoot, ".metaproject", "workspaces", active.id, "workspace.json");
+  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> };
+  manifest.members.push({ subject: "user:viewer", role: "viewer" });
+  await writeFile(file, `${JSON.stringify(manifest)}\n`);
+
+  const viewerService = service(workspaceRoot, "user:viewer");
+  const viewerActor = await server("user:viewer").actorContextFor(request, "listforactor-viewer-actor-0001");
+  expect((await viewerService.list({ request, requestCorrelationId: "listforactor-viewer-list-0001" })).map((w) => w.id)).toEqual([active.id]);
+  // listForActor is called on the OWNER-scoped instance but handed the
+  // viewer's own actorContext — since it never re-derives an actor from its
+  // own authorizationServer, this must still resolve viewer-only visibility.
+  expect((await owner.listForActor({ actorContext: viewerActor! })).map((w) => w.id)).toEqual([active.id]);
+  expect((await owner.listForActor({ actorContext: viewerActor!, includeArchived: true })).map((w) => w.id)).toEqual([active.id]);
+
+  const foreignActor = await server("user:foreign").actorContextFor(request, "listforactor-foreign-actor-0001");
+  expect(await owner.listForActor({ actorContext: foreignActor! })).toEqual([]);
+  expect(await owner.listForActor({ actorContext: foreignActor!, includeArchived: true })).toEqual([]);
+});
+
+test("listForActor never re-derives an actor from a `request` — it trusts the already-issued actorContext directly, unlike list()", async () => {
+  const workspaceRoot = await root();
+  const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "listforactor-noreauth-0001", id: "workspace-lfa-noreauth", title: "NoReauth" });
+  const ownerActor = await server("user:owner").actorContextFor(request, "listforactor-noreauth-actor-0001");
+  expect((await owner.listForActor({ actorContext: ownerActor! })).map((w) => w.id)).toEqual([created.id]);
+});

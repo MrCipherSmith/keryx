@@ -84,6 +84,25 @@ export class WorkspaceService {
   async list(input: { request: unknown; requestCorrelationId: string; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     await this.requireStrict("read");
+    return this.enumerateVisible(actor, input.includeArchived);
+  }
+
+  /**
+   * `listForActor` mirror of `list()` for a caller that already holds a
+   * trusted, previously-issued `TrustedActorContext` and does not need (or
+   * want) `requireActor`'s own `request` re-authentication — same shape as
+   * `showForActor` vs. `show()`. Reuses `enumerateVisible`, the exact same
+   * enumerate-storageRoot + parse-manifest + `currentRole` visibility filter
+   * `list()` itself runs, so the two can never silently drift apart (plan.md
+   * Risks: "listForActor visibility drift from list()").
+   */
+  async listForActor(input: { actorContext: TrustedActorContext; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
+    await this.requireStrict("read");
+    return this.enumerateVisible(input.actorContext, input.includeArchived);
+  }
+
+  /** Shared enumerate+filter loop behind both `list()` and `listForActor()`. */
+  private async enumerateVisible(actor: TrustedActorContext, includeArchived?: boolean): Promise<WorkspaceManifest[]> {
     try { await mkdir(this.storageRoot, { recursive: true, mode: 0o700 }); } catch { return []; }
     const entries = await readdir(this.storageRoot, { withFileTypes: true });
     const visible: WorkspaceManifest[] = [];
@@ -92,7 +111,7 @@ export class WorkspaceService {
       try {
         const manifest = await this.readManifest(entry.name);
         const role = currentRole(manifest, actor.subject);
-        if (role && (input.includeArchived === true || manifest.status !== "archived")) visible.push(manifest);
+        if (role && (includeArchived === true || manifest.status !== "archived")) visible.push(manifest);
       } catch { /* corrupt or inaccessible workspaces are never disclosed by discovery */ }
     }
     return visible.sort((left, right) => left.id.localeCompare(right.id));
