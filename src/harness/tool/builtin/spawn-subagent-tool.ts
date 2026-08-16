@@ -227,6 +227,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         status: "running",
         detail: mode === "read_only" ? "read-only" : "general",
         model: `${runModel.provider}/${runModel.model}`,
+        task,
       });
 
       const cwd = deps.cwd;
@@ -268,6 +269,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         },
         onAssistantText: (text) => {
           assistant = text;
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "text", text } });
+        },
+        onReasoning: (text) => {
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
         },
         onToolCall: (name) => {
           childToolCalls += 1;
@@ -278,7 +283,20 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             status: "running",
             detail: name.length > 14 ? `${name.slice(0, 12)}…` : name,
             model: `${runModel.provider}/${runModel.model}`,
+            task,
           });
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
+        },
+        onToolResult: (name, result) => {
+          const preview = result.output.trim().slice(0, 400);
+          emitSubagentFleet({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "result", text: `${name}${result.isError ? " (error)" : ""} ${preview}` },
+          });
+        },
+        onSystem: (text) => {
+          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text } });
         },
         // SECURITY-CRITICAL INVARIANT — do not relax without an ADR.
         // `mode` is chosen by the MODEL and `read_only` is auto-approved with no
@@ -322,8 +340,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           if (timer !== undefined) clearTimeout(timer);
           if (outcome === "timeout") {
             releaseBudget();
-            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout" });
-            setTimeout(() => emitSubagentFleet({ kind: "remove", id: workerId }), 15_000);
+            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             const partial = assistant.trim();
             return {
               output:
@@ -353,9 +370,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           status: "done",
           detail: "done",
           model: `${runModel.provider}/${runModel.model}`,
+          task,
         });
-        // Drop from fleet after a short delay so the panel stays readable.
-        setTimeout(() => emitSubagentFleet({ kind: "remove", id: workerId }), 15_000);
         return {
           output:
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
@@ -373,6 +389,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           label,
           status: "failed",
           detail: "error",
+          task,
         });
         return { output: `subagent ${label} failed: ${msg}`, isError: true };
       }

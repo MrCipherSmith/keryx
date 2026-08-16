@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 2,
+  "id": "162",
+  "slug": "tui-clickable-subagent-list-and-inspecto",
+  "title": "TUI: clickable subagent list and inspector modal",
+  "status": "in-progress",
+  "createdAt": "2026-08-16T16:01:00.065Z",
+  "updatedAt": "2026-08-16T16:13:40.384Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:024e83d51fb0ff07d680a2458708a930e96c8a64f7c8098e375311ea161f8c69",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Self-review against ACs and no-optional-imports",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-16T16:01:00.065Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-16T16:05:29.565Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-16T16:05:29.656Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-16T16:06:16.494Z",
+      "event": "task-added",
+      "detail": "T5: Self-review against ACs and no-optional-imports"
+    },
+    {
+      "at": "2026-08-16T16:06:16.584Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-16T16:13:39.845Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-16T16:13:39.968Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-16T16:13:40.195Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-16T16:13:40.384Z",
+      "event": "task-done",
+      "detail": "T5: Self-review against ACs and no-optional-imports"
+    }
+  ]
+}
