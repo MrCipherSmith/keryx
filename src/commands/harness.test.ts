@@ -378,6 +378,43 @@ describe("SLATE-15 — keryx harness run --goal / --workspace flags (flow 161, T
     const result = lastJson(logs);
     expect(Array.isArray(result.events)).toBe(true);
   });
+
+  // --- Review finding 4: a value-less trailing --workspace must not silently
+  // proceed unscoped ---------------------------------------------------------
+  //
+  // `parseArgs` never fails (mechanical parse-and-store) — a trailing
+  // `--workspace` with nothing after it produces `workspace: undefined`,
+  // IDENTICAL to "the flag was never given at all". `harnessCommand` must
+  // tell the two apart by checking the raw `args` array, not just the parsed
+  // field, or it silently runs unscoped instead of refusing the malformed
+  // invocation.
+
+  test("parseArgs: a trailing --workspace with no value leaves workspace undefined — same as absent, so harnessCommand must check the raw args to tell them apart (review finding 4)", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "--workspace"]);
+    expect(parsed.workspace).toBeUndefined();
+  });
+
+  test("harnessCommand: a trailing --workspace with no value is rejected fail-closed, not silently treated as absent — fetch is NEVER invoked, no structured run result is printed (review finding 4)", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--goal", "do X", "--workspace"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("--workspace");
+    // Never a structured run result — the command refused before constructing
+    // any of that, same posture as the existing usage-guard tests.
+    expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+    expect(combined).not.toContain('"events"');
+  });
 });
 
 describe("AC4 — src/cli.ts registers the harness command (source-text audit)", () => {

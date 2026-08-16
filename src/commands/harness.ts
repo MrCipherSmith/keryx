@@ -382,6 +382,27 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
+  // Review finding 4: a trailing `--workspace` with nothing after it parses
+  // to `workspace === undefined` in `ParsedArgs` — INDISTINGUISHABLE, once
+  // parsed, from "the flag was never given at all". The fail-closed
+  // validation guard below only ever checks the PARSED `workspace` field, so
+  // a malformed invocation (`keryx harness run --provider ... --workspace`)
+  // silently skipped validation and proceeded UNSCOPED, diverging from
+  // `/goal`'s own dangling-`--workspace` rejection (`goal-command.ts`'s
+  // `parseGoalArgs`, review finding 5). Rather than changing `parseArgs`'s
+  // always-succeeds return shape (which would ripple into every other call
+  // site of this mechanical parse-and-store parser), detect the malformed
+  // shape explicitly here by checking whether the raw `--workspace` token
+  // was present at all — the only way `workspace` can be `undefined` despite
+  // that is the dangling-flag case, since `parseArgs` never validates or
+  // rejects the token following a genuinely-present `--workspace`.
+  if (args.includes("--workspace") && workspace === undefined) {
+    console.log(
+      '--workspace requires a value, e.g. keryx harness run --provider <p> --model <m> --workspace <id> "<prompt>". No run was started.',
+    );
+    return;
+  }
+
   // SLATE-15 (AC1): `--workspace <id>` gets the SAME fail-closed validation
   // `/goal` itself uses (`resolveWorkspaceForActor`,
   // src/sac/workspace-service.ts) BEFORE constructing the provider/runOffline
