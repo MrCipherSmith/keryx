@@ -292,6 +292,22 @@ const denyingExecutor: ToolExecutorPort = {
   },
 };
 
+// Every flag this parser recognizes as taking NO value of its own vs. one
+// that DOES — used by `--goal`/`--workspace` below to detect "the next
+// token is actually another flag, not my value" instead of blindly
+// consuming it (review finding: `--goal --unattended "text"` used to parse
+// `goal` as the literal string `"--unattended"`, silently losing both the
+// real prompt and the unattended flag).
+const KNOWN_HARNESS_RUN_FLAGS: ReadonlySet<string> = new Set([
+  "--provider",
+  "--model",
+  "--base-url",
+  "--record",
+  "--unattended",
+  "--goal",
+  "--workspace",
+]);
+
 /** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] [--goal <text>] [--workspace <id>] "<prompt>"`. */
 export function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
@@ -317,9 +333,11 @@ export function parseArgs(args: string[]): ParsedArgs {
     } else if (arg === "--unattended") {
       unattended = true;
     } else if (arg === "--goal") {
-      goal = args[++i];
+      const next = args[i + 1];
+      goal = next !== undefined && !KNOWN_HARNESS_RUN_FLAGS.has(next) ? args[++i] : undefined;
     } else if (arg === "--workspace") {
-      workspace = args[++i];
+      const next = args[i + 1];
+      workspace = next !== undefined && !KNOWN_HARNESS_RUN_FLAGS.has(next) ? args[++i] : undefined;
     } else if (arg !== undefined) {
       positional.push(arg);
     }
@@ -382,8 +400,10 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  // Review finding 4: a trailing `--workspace` with nothing after it parses
-  // to `workspace === undefined` in `ParsedArgs` — INDISTINGUISHABLE, once
+  // Review finding 4: a trailing `--workspace` with nothing after it (or a
+  // `--workspace` immediately followed by another recognized flag, since
+  // parseArgs no longer swallows a flag token as a value) parses to
+  // `workspace === undefined` in `ParsedArgs` — INDISTINGUISHABLE, once
   // parsed, from "the flag was never given at all". The fail-closed
   // validation guard below only ever checks the PARSED `workspace` field, so
   // a malformed invocation (`keryx harness run --provider ... --workspace`)
@@ -393,10 +413,16 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // always-succeeds return shape (which would ripple into every other call
   // site of this mechanical parse-and-store parser), detect the malformed
   // shape explicitly here by checking whether the raw `--workspace` token
-  // was present at all — the only way `workspace` can be `undefined` despite
-  // that is the dangling-flag case, since `parseArgs` never validates or
-  // rejects the token following a genuinely-present `--workspace`.
-  if (args.includes("--workspace") && workspace === undefined) {
+  // was present at all.
+  //
+  // Review finding (empty string): an EXPLICIT `--workspace ""` parses to
+  // `workspace === ""`, not `undefined` — it slipped past this guard AND
+  // past the `workspace.length > 0` check below (which exists to guard
+  // `.length` access, not to gate on non-emptiness), so it silently behaved
+  // as "no workspace" instead of being rejected the same way a dangling
+  // flag is. An empty string is never a valid workspace id, so it is folded
+  // into the same "requires a value" rejection here.
+  if (args.includes("--workspace") && (workspace === undefined || workspace.length === 0)) {
     console.log(
       '--workspace requires a value, e.g. keryx harness run --provider <p> --model <m> --workspace <id> "<prompt>". No run was started.',
     );

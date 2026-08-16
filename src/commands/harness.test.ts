@@ -328,6 +328,30 @@ describe("SLATE-15 — keryx harness run --goal / --workspace flags (flow 161, T
     expect(parsed.workspace).toBeUndefined();
   });
 
+  test("review finding: --goal immediately followed by another recognized flag does not swallow that flag as the goal text", () => {
+    const parsed = parseArgs([
+      "run",
+      "--provider",
+      "fake",
+      "--model",
+      "fixture-model",
+      "--goal",
+      "--unattended",
+      "implement X",
+    ]);
+    // Before the fix: goal === "--unattended", unattended === undefined,
+    // prompt === "--unattended" (the real prompt text lost entirely).
+    expect(parsed.goal).toBeUndefined();
+    expect(parsed.unattended).toBe(true);
+    expect(parsed.prompt).toBe("implement X");
+  });
+
+  test("review finding: --workspace immediately followed by another recognized flag is treated as dangling (no value), not as swallowing that flag", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "--workspace", "--goal", "do X"]);
+    expect(parsed.workspace).toBeUndefined();
+    expect(parsed.goal).toBe("do X");
+  });
+
   test("harnessCommand: an invalid/invisible --workspace id is rejected fail-closed BEFORE any run — fetch is NEVER invoked, no structured blocked/failed run result is printed", async () => {
     const { fetch: fetchMock, callCount } = makeThrowingFetch();
     const { logs, restore } = captureConsoleLog();
@@ -359,6 +383,24 @@ describe("SLATE-15 — keryx harness run --goal / --workspace flags (flow 161, T
     // constructing any of that, same posture as the existing usage-guard tests.
     expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
     expect(combined).not.toContain('"events"');
+  });
+
+  test("review finding: harnessCommand rejects an EXPLICIT empty --workspace \"\" the same way as a dangling --workspace, instead of silently proceeding unscoped", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--workspace", "", "--goal", "do X"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    // Never reached resolveWorkspaceForActor/runOffline — refused before any run.
+    expect(callCount()).toBe(0);
+    expect(logs.join("\n")).toContain("--workspace requires a value");
   });
 
   test("harnessCommand: a --goal with a VALID/absent --workspace still runs normally (no false-positive rejection)", async () => {

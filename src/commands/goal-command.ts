@@ -190,5 +190,10 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     }
   }
 
-  await runAgentTurn(io, deps, history, parsed.text, slateSession !== undefined ? { slateSession } : {});
+  // Review finding: `/goal` already opened the slate (and bound workspaceId)
+  // above, deterministically — `runAgentTurn`'s own heuristic close-phrase
+  // check must not re-examine the same `parsed.text` and immediately undo
+  // that open/bind whenever the goal text happens to contain a close-phrase
+  // substring (e.g. "wrap up documentation").
+  await runAgentTurn(io, deps, history, parsed.text, slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {});
 }

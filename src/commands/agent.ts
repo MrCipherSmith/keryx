@@ -174,6 +174,20 @@ export interface RunAgentTurnOptions {
    * `session/slate-lifecycle.ts`'s `SlateSessionRef` doc comment for why.
    */
   slateSession?: SlateSessionRef;
+  /**
+   * Review finding (Phase 3): `/goal` (`goal-command.ts`) already performs
+   * its own deterministic slate open + `workspaceId` bind BEFORE calling
+   * `runAgentTurn` with the same `parsed.text` as `userLine`. Without this
+   * flag, this function's own `isClosePhrase(userLine)` check re-examines
+   * that same text and — whenever the goal text happens to contain a close
+   * phrase substring ("...wrap up documentation...") — immediately archives
+   * the slate `/goal` just opened, silently discarding the workspace binding
+   * and Anchors visibility for the whole turn. Set only by `/goal`'s own
+   * call site; every other caller (the real REPL/TUI surfaces, where a
+   * close phrase in the user's own words is a genuine close intent) leaves
+   * this unset and keeps the existing heuristic.
+   */
+  skipCloseTrigger?: boolean;
 }
 
 /**
@@ -805,7 +819,7 @@ async function runAgentTurnCore(
     // on any failure, skip slate lifecycle bookkeeping for this turn and let
     // the real request proceed.
     try {
-      if (isClosePhrase(userLine)) {
+      if (options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
         await closeSlateSession(options.slateSession, () => deps.idSeq());
       } else if (actionRequest) {
         // SLATE-2a "worktree resolved" trigger: `ensureSlateOpened` fires a

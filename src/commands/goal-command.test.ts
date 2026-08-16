@@ -379,6 +379,58 @@ test("AC1 success path: /goal --workspace <real, visible id> opens the slate AND
   expect(history.some((m) => m.role === "user" && m.content === "implement the thing")).toBe(true);
 });
 
+test("review finding: /goal text that happens to contain a close-phrase substring does not undo the open+bind it just did", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+
+  const owner = new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: STRICT_GUARD,
+  });
+  const created = await owner.create({
+    request: undefined,
+    requestCorrelationId: "goal-command-close-phrase-fixture-0001",
+    id: "workspace-goal-close-fixture",
+    title: "Goal Close-Phrase Fixture",
+  });
+
+  const { provider, callCount } = textOnlyProvider("Documentation refreshed.");
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  // "wrap up" is a CLOSE_PHRASES entry (slate-lifecycle.ts) — before the
+  // fix, runAgentTurnCore's own isClosePhrase(userLine) check archived the
+  // slate /goal had just opened and bound, moments after runGoalCommand's
+  // own explicit open+bind above returned.
+  await runGoalCommand({
+    raw: `wrap up documentation --workspace ${created.id}`,
+    cwd,
+    io,
+    deps,
+    history,
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  // Not archived: the slate /goal opened is still the live one, still bound.
+  expect(slateSession.opened).toBe(true);
+  const slate = await readSlate(dir);
+  expect(slate).toBeDefined();
+  expect(slate?.workspaceId).toBe(created.id);
+  // The turn still ran.
+  expect(callCount()).toBe(1);
+});
+
 test("a /goal with no slateSession (sessions disabled) still validates --workspace fail-closed and never opens a slate", async () => {
   const cwd = await tempCwd();
   const { provider, callCount } = throwingProvider();
