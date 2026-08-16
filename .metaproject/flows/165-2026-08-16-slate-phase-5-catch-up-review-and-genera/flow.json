@@ -3,17 +3,38 @@
   "id": "165",
   "slug": "slate-phase-5-catch-up-review-and-genera",
   "title": "Slate Phase 5: Catch-up review and general-purpose listing",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-16T21:35:31.925Z",
-  "updatedAt": "2026-08-16T22:52:57.877Z",
+  "updatedAt": "2026-08-16T23:29:39.185Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:af9246ae4ae8fb4f5600734b93a698762d68079fe054375c3423494d27aa5270",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T23:29:03.208Z",
+      "note": "catch-up.test.ts 'AC1: a pending proposal in an ARCHIVED workspace surfaces in catch-up's proposals[] identically to one in an active workspace'"
+    },
+    "AC2": {
+      "at": "2026-08-16T23:29:03.299Z",
+      "note": "catch-up.test.ts 'AC2: buildCatchUp always returns four array fields...even when nothing is on disk' + 'one item per category lands in its own section, no sessionId shared across the three session-derived sections'"
+    },
+    "AC3": {
+      "at": "2026-08-16T23:29:03.389Z",
+      "note": "catch-up.test.ts 'AC3: a proposal's pinned evidence mutated on disk AFTER creation is reported fresh:false BEFORE any review/accept call ever happens'"
+    },
+    "AC4": {
+      "at": "2026-08-16T23:29:03.489Z",
+      "note": "buildCatchUp(input: {cwd: string; workspaceId?: string}) — single cwd param, no project-list/aggregation parameter exists in the type signature"
+    },
+    "AC5": {
+      "at": "2026-08-16T23:29:03.576Z",
+      "note": "catch-up.test.ts 'AC5: a session with a currently-held (fresh-mtime) lock never appears in ANY of the four categories, specifically never unknown' + stale-lock-dead-pid distinguishing test"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/308"
   },
   "tasks": [
     {
@@ -110,6 +131,45 @@
       "at": "2026-08-16T22:52:57.877Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-16T23:29:03.208Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: catch-up.test.ts 'AC1: a pending proposal in an ARCHIVED workspace surfaces in catch-up's proposals[] identically to one in an active workspace'"
+    },
+    {
+      "at": "2026-08-16T23:29:03.299Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: catch-up.test.ts 'AC2: buildCatchUp always returns four array fields...even when nothing is on disk' + 'one item per category lands in its own section, no sessionId shared across the three session-derived sections'"
+    },
+    {
+      "at": "2026-08-16T23:29:03.389Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: catch-up.test.ts 'AC3: a proposal's pinned evidence mutated on disk AFTER creation is reported fresh:false BEFORE any review/accept call ever happens'"
+    },
+    {
+      "at": "2026-08-16T23:29:03.489Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: buildCatchUp(input: {cwd: string; workspaceId?: string}) — single cwd param, no project-list/aggregation parameter exists in the type signature"
+    },
+    {
+      "at": "2026-08-16T23:29:03.576Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: catch-up.test.ts 'AC5: a session with a currently-held (fresh-mtime) lock never appears in ANY of the four categories, specifically never unknown' + stale-lock-dead-pid distinguishing test"
+    },
+    {
+      "at": "2026-08-16T23:29:36.686Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/308 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-16T23:29:36.787Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T23:29:39.185Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

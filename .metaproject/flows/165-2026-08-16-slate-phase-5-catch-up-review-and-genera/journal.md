@@ -52,3 +52,11 @@
   this flow started, 0 tasks done, no AC frozen, no CLI delete command
   exists; harmless to leave in place. Next: /code-review high effort
   against PR #308 as independent second review layer.
+- 2026-08-16T23:29:03.208Z - ac-confirmed: AC1: catch-up.test.ts 'AC1: a pending proposal in an ARCHIVED workspace surfaces in catch-up's proposals[] identically to one in an active workspace'
+- 2026-08-16T23:29:03.299Z - ac-confirmed: AC2: catch-up.test.ts 'AC2: buildCatchUp always returns four array fields...even when nothing is on disk' + 'one item per category lands in its own section, no sessionId shared across the three session-derived sections'
+- 2026-08-16T23:29:03.389Z - ac-confirmed: AC3: catch-up.test.ts 'AC3: a proposal's pinned evidence mutated on disk AFTER creation is reported fresh:false BEFORE any review/accept call ever happens'
+- 2026-08-16T23:29:03.489Z - ac-confirmed: AC4: buildCatchUp(input: {cwd: string; workspaceId?: string}) — single cwd param, no project-list/aggregation parameter exists in the type signature
+- 2026-08-16T23:29:03.576Z - ac-confirmed: AC5: catch-up.test.ts 'AC5: a session with a currently-held (fresh-mtime) lock never appears in ANY of the four categories, specifically never unknown' + stale-lock-dead-pid distinguishing test
+- 2026-08-16T23:29:36.686Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/308 (warning: PR is not a draft)
+- 2026-08-16T23:29:36.787Z - completing
+- 2026-08-16T23:29:39.185Z - done: all gates passed
