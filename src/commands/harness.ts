@@ -73,6 +73,7 @@ import { checkApproval } from "../harness/mutation/approval";
 import type { ApprovalCheckInput } from "../harness/mutation/approval";
 import type { ParsedChildResult } from "../harness/child/contract";
 import type { Provenance } from "../harness/session/types";
+import { resolveWorkspaceForActor } from "../sac/workspace-service";
 
 const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
   "fake",
@@ -258,6 +259,10 @@ export interface ParsedArgs {
    * it ahead of that wiring landing.
    */
   unattended?: boolean;
+  /** `--goal <text>`: task goal text (SLATE-15). When set, becomes the effective prompt. */
+  goal?: string;
+  /** `--workspace <id>`: workspace identifier (SLATE-15). */
+  workspace?: string;
 }
 
 /** The usage text, printed on an unknown subcommand or invalid args. */
@@ -287,13 +292,15 @@ const denyingExecutor: ToolExecutorPort = {
   },
 };
 
-/** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] "<prompt>"`. */
+/** Parse `run --provider <p> --model <m> [--base-url <url>] [--unattended] [--goal <text>] [--workspace <id>] "<prompt>"`. */
 export function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
   let record: string | undefined;
   let unattended: boolean | undefined;
+  let goal: string | undefined;
+  let workspace: string | undefined;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -309,15 +316,21 @@ export function parseArgs(args: string[]): ParsedArgs {
       record = args[++i];
     } else if (arg === "--unattended") {
       unattended = true;
+    } else if (arg === "--goal") {
+      goal = args[++i];
+    } else if (arg === "--workspace") {
+      workspace = args[++i];
     } else if (arg !== undefined) {
       positional.push(arg);
     }
   }
 
-  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
+  const parsed: ParsedArgs = { provider, model, prompt: goal !== undefined && goal.length > 0 ? goal : positional.join(" ") };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
   if (record !== undefined) parsed.record = record;
   if (unattended !== undefined) parsed.unattended = unattended;
+  if (goal !== undefined) parsed.goal = goal;
+  if (workspace !== undefined) parsed.workspace = workspace;
   return parsed;
 }
 
@@ -358,7 +371,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record, unattended } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, unattended, workspace } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
@@ -367,6 +380,22 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   if (!validProviders.has(provider) || prompt.length === 0) {
     console.log(USAGE);
     return;
+  }
+
+  // SLATE-15 (AC1): `--workspace <id>` gets the SAME fail-closed validation
+  // `/goal` itself uses (`resolveWorkspaceForActor`,
+  // src/sac/workspace-service.ts) BEFORE constructing the provider/runOffline
+  // input at all — an invalid/actor-invisible id refuses the WHOLE command,
+  // never a structured blocked/failed run result (mirrors the usage guard
+  // above: print + return, no network, no runOffline).
+  if (workspace !== undefined && workspace.length > 0) {
+    const resolved = await resolveWorkspaceForActor(process.cwd(), workspace);
+    if (!resolved.ok) {
+      console.log(
+        `--workspace "${workspace}" was rejected (${resolved.error.code}): ${resolved.error.message}. No run was started.`,
+      );
+      return;
+    }
   }
 
   const env = deps?.env ?? process.env;

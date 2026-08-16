@@ -112,6 +112,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   { name: "/new", description: "Start a new session (old kept on disk)", modes: BOTH },
+  {
+    name: "/goal",
+    description: "Deterministically start a goal — /goal <text> [--workspace <id>]",
+    // SLATE-15 (flow 161): deterministic slate-open entry, a TUI/readline
+    // agent-mode concept (mirrors /expand, /think, /copy) — chat mode has no
+    // slate/tools at all, so /goal has no chat-mode meaning.
+    modes: AGENT_ONLY,
+  },
   { name: "/resume", description: "Resume a prior session in this project", modes: AGENT_ONLY },
   { name: "/sessions", description: "Open the session list and switch to one", modes: AGENT_ONLY },
   {

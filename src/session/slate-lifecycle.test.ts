@@ -11,6 +11,7 @@ import {
   isCourseDone,
   mintTimestampAttemptId,
   openSlate,
+  recordSlateTouch,
   type SlateSessionRef,
 } from "./slate-lifecycle";
 import { readSlate, writeSlate, type Slate } from "./slate";
@@ -282,6 +283,95 @@ test("review finding: isClosePhrase does not fire when a close phrase introduces
 test("review finding: isClosePhrase scans the whole remainder for a subordinating word, not just the immediate next word", () => {
   expect(isClosePhrase("wrap up, but only after tests pass")).toBe(false);
   expect(isClosePhrase("task complete, well, once you confirm it")).toBe(false);
+});
+
+// --- SLATE-2a: recordSlateTouch (touched-tracking + change-detection, AC4) ---
+//
+// Contract under test (not yet implemented — T7 builds this):
+//   recordSlateTouch(
+//     dir: string,
+//     touched: readonly string[],
+//     extra?: { tree?: string; runtime?: { provider: string; model: string } },
+//   ): Promise<{ changed: boolean; slate: Slate }>
+// A locked read-modify-write against slate.json (via `writeSlate` — never a
+// second/ad hoc lock) that appends only genuinely-new entries to
+// anchors.touched (append-only, deduped against what's already there) and
+// reports whether anything actually changed (touched growth OR tree/runtime
+// diverging from what's stored), so callers only inject an Anchors-block
+// message when there is a real change.
+
+test("recordSlateTouch: a first call with new paths appends them to anchors.touched and reports changed", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+
+  const result = await recordSlateTouch(dir, ["src/a.ts", "src/b.ts"]);
+
+  expect(result.changed).toBe(true);
+  expect(result.slate.anchors.touched).toEqual(["src/a.ts", "src/b.ts"]);
+  const persisted = await readSlate(dir);
+  expect(persisted?.anchors.touched).toEqual(["src/a.ts", "src/b.ts"]);
+});
+
+test("recordSlateTouch: a second call with the SAME paths appends nothing and reports unchanged", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+  await recordSlateTouch(dir, ["src/a.ts", "src/b.ts"]);
+
+  const second = await recordSlateTouch(dir, ["src/a.ts", "src/b.ts"]);
+
+  expect(second.changed).toBe(false);
+  expect(second.slate.anchors.touched).toEqual(["src/a.ts", "src/b.ts"]);
+  const persisted = await readSlate(dir);
+  expect(persisted?.anchors.touched).toEqual(["src/a.ts", "src/b.ts"]);
+});
+
+test("recordSlateTouch: a call that also changes runtime reports changed even when touched did not grow", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: ["src/a.ts"] }, course: {}, seeds: [] }));
+
+  const result = await recordSlateTouch(dir, ["src/a.ts"], { runtime: { provider: "anthropic", model: "claude" } });
+
+  expect(result.changed).toBe(true);
+  expect(result.slate.anchors.touched).toEqual(["src/a.ts"]);
+  expect(result.slate.anchors.runtime).toEqual({ provider: "anthropic", model: "claude" });
+});
+
+test("recordSlateTouch: a repeat call with an unchanged runtime AND no new touched paths reports unchanged", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({
+    anchors: { root: cwd, touched: ["src/a.ts"], runtime: { provider: "anthropic", model: "claude" } },
+    course: {},
+    seeds: [],
+  }));
+
+  const result = await recordSlateTouch(dir, ["src/a.ts"], { runtime: { provider: "anthropic", model: "claude" } });
+
+  expect(result.changed).toBe(false);
+});
+
+test("recordSlateTouch: touched stays append-only across multiple calls — nothing is ever removed", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+
+  await recordSlateTouch(dir, ["src/a.ts"]);
+  await recordSlateTouch(dir, ["src/b.ts"]);
+  // "src/a.ts" is already present (must be deduped, not re-appended); "src/c.ts" is genuinely new.
+  const third = await recordSlateTouch(dir, ["src/a.ts", "src/c.ts"]);
+
+  expect(third.slate.anchors.touched).toEqual(["src/a.ts", "src/b.ts", "src/c.ts"]);
+  const persisted = await readSlate(dir);
+  expect(persisted?.anchors.touched).toEqual(["src/a.ts", "src/b.ts", "src/c.ts"]);
+});
+
+test("recordSlateTouch: throws when no slate is open in the session dir (caller bug, mirrors appendSeed's contract — never fabricates a slate)", async () => {
+  const dir = await tempSessionDir();
+  await expect(recordSlateTouch(dir, ["src/a.ts"])).rejects.toThrow();
+  expect(await readSlate(dir)).toBeUndefined();
 });
 
 test("mintTimestampAttemptId produces archiveSlate-safe tokens that never collide across immediate successive calls", () => {

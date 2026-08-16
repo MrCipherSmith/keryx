@@ -2,7 +2,17 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { appendSeed, archiveSlate, dedupeSeeds, readSlate, writeSlate, type Slate, type SlateSeed } from "./slate";
+import {
+  appendSeed,
+  archiveSlate,
+  dedupeSeeds,
+  readSlate,
+  renderAnchorsBlock,
+  writeSlate,
+  type Slate,
+  type SlateAnchors,
+  type SlateSeed,
+} from "./slate";
 
 const time = "2026-08-15T00:00:00.000Z";
 
@@ -167,4 +177,65 @@ test("dedupeSeeds does not mutate its input array", () => {
   const snapshot = JSON.parse(JSON.stringify(seeds));
   dedupeSeeds(seeds);
   expect(seeds).toEqual(snapshot);
+});
+
+// --- SLATE-2a: renderAnchorsBlock (Anchors auto-inject, AC4/AC5) ---
+//
+// Contract under test (not yet implemented — T7 builds this):
+//   renderAnchorsBlock(anchors: SlateAnchors, opts?: { maxTokens?: number }): string
+// Renders root/tree/runtime/touched (most-recent-touched-entry-first) as a
+// text block, bounded via `assembleContext` (src/ctx/assembly.ts) so the
+// render never exceeds the token budget — trimming drops the OLDEST touched
+// entries, not the newest. `root` is always a required candidate.
+
+test("renderAnchorsBlock renders root/tree/runtime/touched fully when everything fits the budget", () => {
+  const anchors: SlateAnchors = {
+    root: "/project/root",
+    tree: "feature/slate-phase3",
+    runtime: { provider: "anthropic", model: "claude-sonnet" },
+    touched: ["src/a.ts", "src/b.ts"],
+  };
+  const block = renderAnchorsBlock(anchors);
+  expect(block).toContain("/project/root");
+  expect(block).toContain("feature/slate-phase3");
+  expect(block).toContain("anthropic");
+  expect(block).toContain("claude-sonnet");
+  expect(block).toContain("src/a.ts");
+  expect(block).toContain("src/b.ts");
+});
+
+test("renderAnchorsBlock trims touched entries under a small maxTokens budget, keeping the MOST RECENTLY touched entries and dropping the oldest", () => {
+  const touched = Array.from(
+    { length: 30 },
+    (_, i) => `src/module-${String(i).padStart(2, "0")}-quite-a-long-descriptive-file-name.ts`,
+  );
+  const anchors: SlateAnchors = { root: "/project/root", touched };
+
+  const block = renderAnchorsBlock(anchors, { maxTokens: 60 });
+
+  // The most recently touched entry (end of the append-only array) survives.
+  expect(block).toContain(touched[touched.length - 1] as string);
+  // The oldest entry (start of the array) is dropped by the trim.
+  expect(block).not.toContain(touched[0] as string);
+});
+
+test("renderAnchorsBlock always includes root even under a very small maxTokens budget (root is a required candidate)", () => {
+  const touched = Array.from({ length: 20 }, (_, i) => `src/file-${i}-with-a-long-enough-name-to-cost-tokens.ts`);
+  const anchors: SlateAnchors = { root: "/project/root", touched };
+
+  const block = renderAnchorsBlock(anchors, { maxTokens: 20 });
+
+  expect(block).toContain("/project/root");
+});
+
+test("renderAnchorsBlock never contains the literal substrings 'course' or 'seeds' (case-insensitive) — defensive structural guard for AC5", () => {
+  const anchors: SlateAnchors = {
+    root: "/project/root",
+    tree: "main",
+    runtime: { provider: "openai", model: "gpt-4" },
+    touched: ["src/a.ts", "src/b.ts", "src/c.ts"],
+  };
+  const block = renderAnchorsBlock(anchors).toLowerCase();
+  expect(block).not.toContain("course");
+  expect(block).not.toContain("seeds");
 });

@@ -18,6 +18,8 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
+import { assembleContext, type ContextCandidate } from "../ctx/assembly";
+import { estimateTokens } from "../gdgraph/repomap";
 
 /**
  * Mirrors `ProposalKind` from `src/sac/proposal-lifecycle.ts`. Duplicated
@@ -213,4 +215,105 @@ export function dedupeSeeds(seeds: SlateSeed[]): SlateSeed[] {
     result.push(seed);
   }
   return result;
+}
+
+/**
+ * Default token budget for {@link renderAnchorsBlock} when the caller passes no
+ * `opts.maxTokens` — generous enough that a normal session's Anchors (root +
+ * tree + runtime + a modest `touched` list) always renders in full, while
+ * still bounding a pathologically long-running session's `touched` array
+ * (spec requirement: on-disk storage stays unbounded/append-only, but the
+ * RENDERED view injected into `history` must never grow without limit).
+ */
+const DEFAULT_RENDER_MAX_TOKENS = 2000;
+
+/**
+ * SLATE-2a (Anchors auto-inject, AC4/AC5): render `anchors.root`/`tree`/
+ * `runtime`/`touched` as a plain-text block suitable for a harness-written
+ * `{role:"user", provenance:"project"}` history message. Bounded via the
+ * existing `assembleContext` (`src/ctx/assembly.ts`) — the PURE bounding
+ * function, never `assembleAndRecordContext` (that wrapper also writes a
+ * `.metaproject/context-operations/traces/*.json` record per call; the spec
+ * cites `assembleContext` specifically, and this function runs once per
+ * qualifying tool call — a trace file per call would spam the workspace).
+ *
+ * `root` is always a REQUIRED `ContextCandidate` (`assembleContext` never
+ * drops a required candidate for a non-required one; when even `root`'s own
+ * token cost cannot fit `opts.maxTokens`, `assembleContext` returns a
+ * `context_overflow` shape instead of a normal assembly — that case is
+ * handled by forcing `root` into the render directly, since "root always
+ * survives" is this function's own contract, not something a caller should
+ * have to special-case).
+ *
+ * `touched` entries are fed to `assembleContext` MOST-RECENT-FIRST (the
+ * reverse of `anchors.touched`'s append-only storage order): `assembleContext`
+ * greedily accepts candidates in the order given and starts omitting once the
+ * budget is spent, so feeding recent-first means a tight budget drops the
+ * OLDEST entries, not the newest — the plan.md Risks section's explicit
+ * requirement ("keep the freshest situational awareness, not the earliest").
+ * Once selection is decided, surviving `touched` lines are rendered back in
+ * chronological (oldest-survivor-first) order for readability.
+ *
+ * Defensive structural guard for AC5 ("Course/Seeds content is reachable
+ * only through slate_read/slate_write_seed, never silently injected"): this
+ * function's concerns are strictly `anchors.*` — it must NEVER read
+ * `Slate.course`/`Slate.seeds`, and its rendered output must never contain
+ * the literal words "course"/"seeds" (case-insensitive), so a reviewer or a
+ * cheap grep-based test can confirm the two concerns stayed genuinely
+ * separate code paths, not just conventionally separate.
+ */
+export function renderAnchorsBlock(anchors: SlateAnchors, opts?: { maxTokens?: number }): string {
+  const maxTokens = opts?.maxTokens ?? DEFAULT_RENDER_MAX_TOKENS;
+
+  const rootLine = `root: ${anchors.root}`;
+  const treeLine = anchors.tree !== undefined ? `tree: ${anchors.tree}` : undefined;
+  const runtimeLine =
+    anchors.runtime !== undefined ? `runtime: ${anchors.runtime.provider}/${anchors.runtime.model}` : undefined;
+  // Most-recent-first: index 0 here is `anchors.touched`'s LAST (newest) entry.
+  const touchedRecentFirst = [...anchors.touched].reverse();
+
+  type Entry = { id: string; text: string; required: boolean };
+  const entries: Entry[] = [{ id: "root", text: rootLine, required: true }];
+  if (treeLine !== undefined) entries.push({ id: "tree", text: treeLine, required: false });
+  if (runtimeLine !== undefined) entries.push({ id: "runtime", text: runtimeLine, required: false });
+  touchedRecentFirst.forEach((text, i) => {
+    entries.push({ id: `touched:${i}`, text, required: false });
+  });
+
+  const candidates: ContextCandidate[] = entries.map((entry) => ({
+    id: entry.id,
+    required: entry.required,
+    tokens: estimateTokens(entry.text),
+  }));
+
+  const assembly = assembleContext({
+    candidates,
+    maxItems: candidates.length,
+    maxTokens,
+    traceRef: "slate-anchors",
+    configurationRevision: "slate-anchors-v1",
+    policyRef: "slate-anchors",
+    policyRevision: "v1",
+  });
+
+  // `assembleContext` returning a `context_overflow` shape (via `"code" in
+  // assembly`) means even `root` alone did not fit `maxTokens` — force it in
+  // anyway (required candidates always survive per this function's own
+  // contract) and drop every optional line rather than guess a partial fit.
+  const selectedIds = "code" in assembly ? new Set<string>(["root"]) : new Set(assembly.selected);
+
+  const lines: string[] = ["Anchors:", rootLine];
+  if (treeLine !== undefined && selectedIds.has("tree")) lines.push(treeLine);
+  if (runtimeLine !== undefined && selectedIds.has("runtime")) lines.push(runtimeLine);
+
+  const touchedLines = touchedRecentFirst
+    .map((text, i) => ({ id: `touched:${i}`, text }))
+    .filter((entry) => selectedIds.has(entry.id))
+    .reverse() // restore oldest-survivor-first order among the survivors
+    .map((entry) => `- ${entry.text}`);
+  if (touchedLines.length > 0) {
+    lines.push("touched:", ...touchedLines);
+  }
+
+  return lines.join("\n");
 }

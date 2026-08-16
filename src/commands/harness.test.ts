@@ -269,6 +269,117 @@ describe("SLATE-8 — keryx harness run --unattended flag parses correctly", () 
   });
 });
 
+describe("SLATE-15 — keryx harness run --goal / --workspace flags (flow 161, T10 — AC1)", () => {
+  // PINNED API (T11 implements exactly this surface — see subagent-result):
+  //   ParsedArgs gains `goal?: string; workspace?: string;`.
+  //   `--goal <text>` becomes the EFFECTIVE `prompt` when given (no positional
+  //   args needed) — mechanical parse-and-store, mirroring `--unattended`'s
+  //   own SLATE-8 precedent (parsed above at line ~223).
+  //   `--workspace <id>` reuses the SAME fail-closed validation `/goal`
+  //   itself uses (`resolveWorkspaceForActor`, `src/sac/workspace-service.ts`
+  //   — see `workspace-service.test.ts`'s SLATE-15 describe block and
+  //   `goal-command.test.ts`): `harnessCommand` calls it BEFORE constructing
+  //   the provider/`runOffline` input, and on `!ok` prints a clear rejection
+  //   and returns WITHOUT ever calling `runOffline` (proven below via
+  //   `callCount()`, mirroring this file's existing "usage guard" tests
+  //   above, which detect the analogous never-ran outcome the same way).
+  test("parseArgs: --goal <text> becomes the effective prompt, with no positional args needed", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "--goal", "do X"]);
+    expect(parsed.goal).toBe("do X");
+    expect(parsed.prompt).toBe("do X");
+  });
+
+  test("parseArgs: --goal is preferred over any positional prompt text when both are given", () => {
+    const parsed = parseArgs([
+      "run",
+      "--provider",
+      "fake",
+      "--model",
+      "fixture-model",
+      "--goal",
+      "do X",
+      "ignored positional text",
+    ]);
+    expect(parsed.prompt).toBe("do X");
+  });
+
+  test("parseArgs: goal is undefined when --goal is absent (existing positional-prompt behavior is unaffected)", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "hello there"]);
+    expect(parsed.goal).toBeUndefined();
+    expect(parsed.prompt).toBe("hello there");
+  });
+
+  test("parseArgs: --workspace <id> is captured", () => {
+    const parsed = parseArgs([
+      "run",
+      "--provider",
+      "fake",
+      "--model",
+      "fixture-model",
+      "--workspace",
+      "workspace-abc",
+      "hello",
+    ]);
+    expect(parsed.workspace).toBe("workspace-abc");
+  });
+
+  test("parseArgs: workspace is undefined when --workspace is absent", () => {
+    const parsed = parseArgs(["run", "--provider", "fake", "--model", "fixture-model", "hello"]);
+    expect(parsed.workspace).toBeUndefined();
+  });
+
+  test("harnessCommand: an invalid/invisible --workspace id is rejected fail-closed BEFORE any run — fetch is NEVER invoked, no structured blocked/failed run result is printed", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        [
+          "run",
+          "--provider",
+          "fake",
+          "--model",
+          "fixture-model",
+          "--workspace",
+          "definitely-not-a-real-workspace",
+          "--goal",
+          "do X",
+        ],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("definitely-not-a-real-workspace");
+    // Never a structured run result (blocked/failed status, or the
+    // events/text/completion/evidence shape) — the command refused before
+    // constructing any of that, same posture as the existing usage-guard tests.
+    expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+    expect(combined).not.toContain('"events"');
+  });
+
+  test("harnessCommand: a --goal with a VALID/absent --workspace still runs normally (no false-positive rejection)", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--goal", "do X"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0); // "fake" provider path never touches network fetch either way.
+    const result = lastJson(logs);
+    expect(Array.isArray(result.events)).toBe(true);
+  });
+});
+
 describe("AC4 — src/cli.ts registers the harness command (source-text audit)", () => {
   test("the root CLI dispatch mentions the harness command", () => {
     const cliSource = readFileSync(path.join(import.meta.dir, "..", "cli.ts"), "utf8");

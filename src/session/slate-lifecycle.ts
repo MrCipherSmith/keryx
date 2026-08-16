@@ -17,7 +17,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { archiveSlate, openSlateAtomic, readSlate, type Slate, type SlateAnchors } from "./slate";
+import { archiveSlate, openSlateAtomic, readSlate, writeSlate, type Slate, type SlateAnchors } from "./slate";
 import { resolveProjectRoot } from "./paths";
 import { courseFromSlate, type CourseProjection } from "./slate-course";
 
@@ -303,6 +303,69 @@ export function isClosePhrase(text: string): boolean {
     if (words.some((word) => CLOSE_PHRASE_SUBORDINATING_FOLLOWERS.has(word))) return false;
     return true;
   });
+}
+
+/**
+ * SLATE-2a touched-tracking + change-detection (AC4). A locked read-modify-
+ * write against `slate.json` via `writeSlate` — the same primitive
+ * `appendSeed` (`./slate.ts`) goes through, never a second/ad hoc lock, per
+ * that module's own doc comment. Appends only genuinely-new entries from
+ * `touched` to `anchors.touched` (append-only, deduped against what is
+ * already stored — the caller may safely pass the SAME extractor result
+ * turn after turn without growing the on-disk array with repeats), and
+ * updates `anchors.tree`/`anchors.runtime` from `extra` when given.
+ *
+ * Returns `changed: true` iff something actually differs from the stored
+ * value — `touched` grew, OR `tree` diverged, OR `runtime` diverged (by
+ * `provider`/`model`, not reference equality, so passing back the SAME
+ * runtime object shape every call is a safe no-op) — so a caller (the
+ * per-tool-call Anchors-block injection in `commands/agent.ts`, and the
+ * `/model`-switch injection in `tui/tui-shell.ts`) only pushes a rendered
+ * Anchors-block message into `history` when there is a real change to show,
+ * instead of spamming one on every single tool call regardless of content
+ * (plan.md's Risks section calls this out explicitly as the history-bloat
+ * failure mode to avoid).
+ *
+ * Requires an already-open slate: mirrors `appendSeed`'s own contract —
+ * calling this against a session dir with no live `slate.json` is a caller
+ * bug (the lifecycle layer must open a slate before anything can touch its
+ * Anchors), so it throws rather than silently fabricating a placeholder
+ * slate.
+ */
+export async function recordSlateTouch(
+  dir: string,
+  touched: readonly string[],
+  extra?: { tree?: string; runtime?: { provider: string; model: string } },
+): Promise<{ changed: boolean; slate: Slate }> {
+  let changed = false;
+  const slate = await writeSlate(dir, (prev) => {
+    if (!prev) throw new Error(`recordSlateTouch: no open slate in ${dir}`);
+    const existing = new Set(prev.anchors.touched);
+    const additions = touched.filter((entry) => !existing.has(entry));
+    const treeChanged = extra?.tree !== undefined && extra.tree !== prev.anchors.tree;
+    const runtimeChanged =
+      extra?.runtime !== undefined &&
+      (prev.anchors.runtime === undefined ||
+        prev.anchors.runtime.provider !== extra.runtime.provider ||
+        prev.anchors.runtime.model !== extra.runtime.model);
+    changed = additions.length > 0 || treeChanged || runtimeChanged;
+    if (!changed) {
+      // No-op write: persist `prev` unchanged rather than special-casing a
+      // "skip the write" path — `writeSlate` already guarantees this happens
+      // inside the same lock hold as the read, so there is no separate
+      // race window to worry about, and the caller-visible `slate` result
+      // still reflects the always-current on-disk value either way.
+      return prev;
+    }
+    const nextAnchors: SlateAnchors = {
+      ...prev.anchors,
+      touched: additions.length > 0 ? [...prev.anchors.touched, ...additions] : prev.anchors.touched,
+    };
+    if (extra?.tree !== undefined) nextAnchors.tree = extra.tree;
+    if (extra?.runtime !== undefined) nextAnchors.runtime = extra.runtime;
+    return { ...prev, anchors: nextAnchors };
+  });
+  return { changed, slate };
 }
 
 /**
