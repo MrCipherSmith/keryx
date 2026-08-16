@@ -3,15 +3,36 @@
   "id": "157",
   "slug": "slate-phase-1-skeleton-and-bundled-sac-h",
   "title": "Slate Phase 1: Skeleton and bundled SAC hardening",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-15T22:34:47.121Z",
-  "updatedAt": "2026-08-16T10:37:41.859Z",
+  "updatedAt": "2026-08-16T11:20:46.379Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:05d4c4ce03e94fd0414bcadb3b78d41dea768e1dfcf6134a7f5138afb41876e3",
-  "acConfirmed": {},
+  "acChecksum": "sha256:e8919ddc44bc0c2a81a396b52fd70183fb8ce85bee090478b7841a10c514082b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T11:20:35.715Z",
+      "note": "slate.test.ts: two overlapping writeSlate calls under withFileLock — both updates present in final file, no lost write"
+    },
+    "AC2": {
+      "at": "2026-08-16T11:20:35.813Z",
+      "note": "slate.test.ts: re-open archives prior slate.json to slate-archive/<attemptId>.json before any new write; live slate.json reflects only the new attempt"
+    },
+    "AC3": {
+      "at": "2026-08-16T11:20:35.907Z",
+      "note": "proposal-lifecycle.test.ts: security.gate computed from real detectSecrets/detectPii scan — needs-approval on secret/PII evidence, pass on clean evidence via real scan"
+    },
+    "AC4": {
+      "at": "2026-08-16T11:20:36.008Z",
+      "note": "proposal-lifecycle.test.ts regression test: source no longer contains \"can never self-accept\"; both CLI/MCP call sites use createHarnessProposalLifecycleService"
+    },
+    "AC5": {
+      "at": "2026-08-16T11:20:36.106Z",
+      "note": "fwk-service.test.ts: malformed-JSON and deleted-flow-resource both yield work.state unbound; role revoked strictly between the flow resource's two re-authorization checks denies the whole overview (full denied() receipt), not just work:unbound — corrected wording matches the shipped, more secure behavior (57/57 pass)"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/297"
   },
@@ -215,6 +236,45 @@
       "at": "2026-08-16T10:37:41.859Z",
       "event": "task-done",
       "detail": "T8: Add regression tests for all 4 findings and verify typecheck/tests/health"
+    },
+    {
+      "at": "2026-08-16T11:19:38.411Z",
+      "event": "ac-updated",
+      "detail": "AC5 wording predated the security fix distinguishing content-class flow-read failures (unbound) from access_denied (full denied() receipt, not collapsed into unbound) — corrected to match the shipped, more secure behavior"
+    },
+    {
+      "at": "2026-08-16T11:20:35.715Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: slate.test.ts: two overlapping writeSlate calls under withFileLock — both updates present in final file, no lost write"
+    },
+    {
+      "at": "2026-08-16T11:20:35.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: slate.test.ts: re-open archives prior slate.json to slate-archive/<attemptId>.json before any new write; live slate.json reflects only the new attempt"
+    },
+    {
+      "at": "2026-08-16T11:20:35.907Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: proposal-lifecycle.test.ts: security.gate computed from real detectSecrets/detectPii scan — needs-approval on secret/PII evidence, pass on clean evidence via real scan"
+    },
+    {
+      "at": "2026-08-16T11:20:36.008Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: proposal-lifecycle.test.ts regression test: source no longer contains \"can never self-accept\"; both CLI/MCP call sites use createHarnessProposalLifecycleService"
+    },
+    {
+      "at": "2026-08-16T11:20:36.106Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: fwk-service.test.ts: malformed-JSON and deleted-flow-resource both yield work.state unbound; role revoked strictly between the flow resource's two re-authorization checks denies the whole overview (full denied() receipt), not just work:unbound — corrected wording matches the shipped, more secure behavior (57/57 pass)"
+    },
+    {
+      "at": "2026-08-16T11:20:43.944Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-16T11:20:46.379Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
