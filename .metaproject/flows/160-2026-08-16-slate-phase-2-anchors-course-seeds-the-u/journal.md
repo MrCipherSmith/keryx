@@ -89,3 +89,12 @@ literal wording, not scope gaps.
 - 2026-08-16T13:02:28.611Z - task-added: T9: Fix round: remediate 5 major + 5 minor review findings (F-001..F-010)
 - 2026-08-16T13:22:26.813Z - task-done: T8: Fix review findings: shell.ts slate open/close test coverage, finally-block error masking, --unattended parse assertion
 - 2026-08-16T13:22:26.910Z - task-done: T9: Fix round: remediate 5 major + 5 minor review findings (F-001..F-010)
+- 2026-08-16T14:03:12.513Z - ac-confirmed: AC1: slate-lifecycle.test.ts/slate.test.ts: computeAnchors is called fresh every openSlate/openSlateAtomic call, never reads prior anchors; SlateSessionRef.opened resets to false on process restart
+- 2026-08-16T14:03:12.595Z - ac-confirmed: AC2: store.test.ts: 'AC2: forkSession never carries slate.json across — a forked session opens with a completely empty slate' (passing)
+- 2026-08-16T14:03:12.665Z - ac-confirmed: AC3: slate.test.ts (Phase 1, unchanged) + slate-lifecycle.test.ts: openSlateAtomic archives an unclosed prior slate before any fresh write, single lock hold (F-001 fix)
+- 2026-08-16T14:03:12.736Z - ac-confirmed: AC4: proposal-lifecycle.test.ts: review() throws non_interactive_accept_denied when decision===accepted && interactive===false, checked before role resolution/write, unconditional on role/PolicyProfile
+- 2026-08-16T14:03:12.812Z - ac-confirmed: AC5: proposal-lifecycle.ts: interactive is a required field consulted exactly as passed on input, never derived from actor/clientClaims/proposal content — both real call sites (workspace.ts, mcp/tools.ts) hardcode interactive: true at the trust boundary
+- 2026-08-16T14:03:12.885Z - ac-confirmed: AC6: proposal-lifecycle.test.ts: the interactive gate only fires for decision==="accepted"; propose()/create() and reject/dismiss decisions are unaffected and still succeed
+- 2026-08-16T14:04:40.411Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/301 (warning: PR is not a draft)
+- 2026-08-16T14:04:40.502Z - completing
+- 2026-08-16T14:04:42.868Z - done: all gates passed
