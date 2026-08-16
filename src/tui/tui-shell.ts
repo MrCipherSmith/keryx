@@ -1306,7 +1306,7 @@ export async function launchTuiAgentShell(opts: {
    * approval UI — the self-grant path — and the user is told before the next
    * auto-approve acts on it.
    */
-  const permissionsFingerprintAtStart = shellPermissionsFingerprint();
+  let permissionsFingerprintAtStart = shellPermissionsFingerprint();
   let permissionTamperShown = false;
   const searchProviderController = createDefaultSearchProviderController();
   // The chrome can only be mounted once a provider/model is chosen (the startup
@@ -1717,6 +1717,7 @@ export async function launchTuiAgentShell(opts: {
         const stored = allowShellPattern(pattern);
         if (stored.length > 0) {
           sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
         }
         transcript.add(
           new otui.TextRenderable(r, {

@@ -793,8 +793,30 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     },
   });
 
-  expect(toolNames).toContain("web_search");
-  expect(toolNames).toContain("web_fetch");
+  expect(toolNames.sort()).toEqual([
+    "ask_user",
+    "get_cwd",
+    "graph_affected",
+    "graph_path",
+    "graph_query",
+    "graph_symbol",
+    "health_status",
+    "list_dir",
+    "memory_search",
+    "read_file",
+    "read_wiki",
+    "repomap",
+    "search_code",
+    "shell_exec",
+    "spawn_subagent",
+    "test_related",
+    "web_fetch",
+    "web_search",
+    "wiki_ask",
+    "wiki_backlinks",
+    "workspace_overview",
+    "workspace_read",
+  ]);
 });
 
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----

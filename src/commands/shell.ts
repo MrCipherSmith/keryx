@@ -827,7 +827,7 @@ async function runAgentRepl(
   };
   const searchProviderController = createDefaultSearchProviderController();
   const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
-  const fingerprintAtStart = shellPermissionsFingerprint();
+  let fingerprintAtStart = shellPermissionsFingerprint();
   let permissionMigrationShown = false;
   let permissionTamperShown = false;
 
@@ -913,8 +913,22 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input, meta) => {
+    requestApproval: async (tool, input, meta) => {
       stopSpinner();
+      if (tool !== "shell_exec") {
+        const preview = input.length > 120 ? `${input.slice(0, 117)}…` : input;
+        out(`\n${GUTTER}${style.yellow(`Approve ${tool}?`)} ${style.dim(preview)}\n`);
+        out(`${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        if (!approved) {
+          return false;
+        }
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
       const evaled = evaluateShellApproval({
         inputJson: input,
         ...(meta !== undefined ? { meta } : {}),
@@ -961,6 +975,9 @@ async function runAgentRepl(
       const approved = always || /^y(es)?$/i.test(answer);
       if (always && approved) {
         const stored = rememberExactShellGrant(evaled.command, sessionShellAllow);
+        if (stored.length > 0) {
+          fingerprintAtStart = shellPermissionsFingerprint();
+        }
         out(
           stored.length > 0
             ? style.green(`approved · remembered “${stored}”\n`)

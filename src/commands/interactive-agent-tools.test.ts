@@ -26,10 +26,28 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     spawnTool: stubSpawn,
   });
   const names = interactiveAgentToolNames(tools);
-  expect(names).toContain("web_fetch");
-  expect(names).toContain("web_search");
-  expect(names).toContain("shell_exec");
-  expect(names).toContain("workspace_overview");
-  expect(names).toContain("spawn_subagent");
-  expect(names.filter((name) => name === "web_fetch")).toHaveLength(1);
+  expect(names).toEqual([
+    "ask_user",
+    "get_cwd",
+    "graph_affected",
+    "graph_path",
+    "graph_query",
+    "graph_symbol",
+    "health_status",
+    "list_dir",
+    "memory_search",
+    "read_file",
+    "read_wiki",
+    "repomap",
+    "search_code",
+    "shell_exec",
+    "spawn_subagent",
+    "test_related",
+    "web_fetch",
+    "web_search",
+    "wiki_ask",
+    "wiki_backlinks",
+    "workspace_overview",
+    "workspace_read",
+  ]);
 });
