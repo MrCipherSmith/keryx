@@ -41,10 +41,16 @@ Rules:
   `createLocalProposalLifecycleService`; the corrected comment states this
   accurately.
 - AC5: A flow-read failure inside `createLocalFwkReadService`'s `source`
-  composition (`src/sac/fwk-service.ts`) — deleted/malformed/
-  permission-denied flow resource — always yields `work` state `unbound`
-  in the resulting `FwkReadResult`, never an uncaught exception that
-  breaks the surrounding `overview`/`read` call; proven by a test that
-  makes the flow resource read or its `JSON.parse` fail and asserts the
-  call resolves normally with `work.state === "unbound"` instead of
-  rejecting.
+  composition (`src/sac/fwk-service.ts`) is classified by cause: a
+  deleted flow resource, a broken/unsafe reference, or malformed JSON
+  (content-class failures) always yield `work` state `unbound` in the
+  resulting `FwkReadResult`, never an uncaught exception. A genuine
+  `access_denied` (an authorization revocation caught between the
+  workspace manifest read and this resource's re-authorization at use)
+  is NOT collapsed into `unbound` — it propagates so
+  `FwkReadService.resolve()`'s existing catch maps it to a full
+  `denied()` receipt, matching how `access_denied` is already handled
+  for facts/knowHow reads elsewhere in the same composition. Proven by
+  one test per content-class failure asserting `work.state === "unbound"`
+  and one test for `access_denied` asserting the call rejects/denies
+  rather than silently downgrading to a partial `unbound` disclosure.

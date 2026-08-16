@@ -151,3 +151,11 @@
     change (`git status` scope: proposal-lifecycle.ts/.test.ts,
     fwk-service.ts/.test.ts, and this flow's own bookkeeping only).
   - Left uncommitted per instruction: calling agent reviews and commits.
+- 2026-08-16T11:19:38.411Z - ac-updated: AC5 wording predated the security fix distinguishing content-class flow-read failures (unbound) from access_denied (full denied() receipt, not collapsed into unbound) — corrected to match the shipped, more secure behavior
+- 2026-08-16T11:20:35.715Z - ac-confirmed: AC1: slate.test.ts: two overlapping writeSlate calls under withFileLock — both updates present in final file, no lost write
+- 2026-08-16T11:20:35.813Z - ac-confirmed: AC2: slate.test.ts: re-open archives prior slate.json to slate-archive/<attemptId>.json before any new write; live slate.json reflects only the new attempt
+- 2026-08-16T11:20:35.907Z - ac-confirmed: AC3: proposal-lifecycle.test.ts: security.gate computed from real detectSecrets/detectPii scan — needs-approval on secret/PII evidence, pass on clean evidence via real scan
+- 2026-08-16T11:20:36.008Z - ac-confirmed: AC4: proposal-lifecycle.test.ts regression test: source no longer contains "can never self-accept"; both CLI/MCP call sites use createHarnessProposalLifecycleService
+- 2026-08-16T11:20:36.106Z - ac-confirmed: AC5: fwk-service.test.ts: malformed-JSON and deleted-flow-resource both yield work.state unbound; role revoked strictly between the flow resource's two re-authorization checks denies the whole overview (full denied() receipt), not just work:unbound — corrected wording matches the shipped, more secure behavior (57/57 pass)
+- 2026-08-16T11:20:43.944Z - completing
+- 2026-08-16T11:20:46.379Z - done: all gates passed
