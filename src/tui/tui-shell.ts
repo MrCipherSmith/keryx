@@ -459,7 +459,13 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
  * Exported so the headless test mounts the SHIPPED panel — including the budget
  * it is shortened to — instead of a replica.
  */
-export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: string): void {
+export function mountCwdPanel(
+  otui: OpenTui,
+  r: Renderer,
+  sidebarTop: Box,
+  cwd: string,
+  metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
+): void {
   sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${otui.dim("Directory")}`, marginTop: 1 }));
   sidebarTop.add(
     new otui.TextRenderable(r, {
@@ -468,7 +474,6 @@ export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: 
     }),
   );
 
-  const metadata = resolveSidebarMetadata(cwd);
   if (metadata.branch !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${otui.dim("Branch")}`, marginTop: 1 }));
     sidebarTop.add(
