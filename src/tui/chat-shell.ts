@@ -42,6 +42,7 @@ import { latestSession } from "../session";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
+import { applyThemeId, getThemeId, loadPersistedThemeId } from "./theme";
 import type { VersionCheckResult } from "../lib/version-check";
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
@@ -328,6 +329,12 @@ export async function mountChatShell(
   opts: ChatShellOptions,
 ): Promise<ChatShellHandle> {
   const r = renderer;
+  applyThemeId(loadPersistedThemeId(), r.themeMode);
+  r.on("theme_mode", (mode: "dark" | "light") => {
+    if (getThemeId() === "auto") {
+      applyThemeId("auto", mode);
+    }
+  });
   let selection: TuiSelection = { ...opts.deps.initial };
   const label = (): string => `${selection.provider}/${selection.model}`;
 

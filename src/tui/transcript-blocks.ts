@@ -29,6 +29,7 @@ import {
   stripTrailingCr,
   type MdSegment,
 } from "../lib/md-blocks";
+import { getTheme } from "./theme";
 
 // --- registry (pure) -------------------------------------------------------
 
@@ -367,7 +368,7 @@ type Text = InstanceType<OpenTui["TextRenderable"]>;
 type Chunk = ReturnType<OpenTui["bold"]>;
 
 /** Frame color shared with the user-echo and side-worker boxes. */
-const FRAME_COLOR = "#3a4a4a";
+const frameColor = (): string => getTheme().border;
 
 /**
  * Columns a rounded, 1-column-padded frame costs on top of its content: two
@@ -577,7 +578,7 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
     maxWidth: frameWidth(segment.lang, segment.body),
     borderStyle: "rounded",
     border: true,
-    borderColor: FRAME_COLOR,
+    borderColor: frameColor(),
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -873,7 +874,7 @@ export function createBlockView(
       maxWidth: hugWidth(shown, FRAME_CHROME),
       borderStyle: "rounded",
       border: true,
-      borderColor: FRAME_COLOR,
+      borderColor: frameColor(),
       paddingLeft: 1,
       paddingRight: 1,
     });
@@ -945,7 +946,7 @@ export function appendUserEcho(
     id: options.id,
     borderStyle: "rounded",
     border: true,
-    borderColor: options.borderColor ?? FRAME_COLOR,
+    borderColor: options.borderColor ?? frameColor(),
     paddingLeft: 1,
     paddingRight: 1,
     marginTop: options.marginTop ?? 1,

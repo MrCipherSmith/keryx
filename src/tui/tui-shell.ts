@@ -70,6 +70,17 @@ import {
   findAgentCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
+import {
+  THEME_IDS,
+  applyThemeId,
+  formatThemeList,
+  getTheme,
+  getThemeId,
+  loadPersistedThemeId,
+  parseThemeId,
+  persistThemeId,
+  themeLabel,
+} from "./theme";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -870,7 +881,7 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#0a1414",
+    backgroundColor: getTheme().bg,
     flexDirection: "column",
     padding: 1,
   });
@@ -1384,6 +1395,7 @@ export async function launchTuiAgentShell(opts: {
   if (!process.stdout.isTTY) {
     return false;
   }
+  applyThemeId(loadPersistedThemeId());
   let otui: OpenTui;
   try {
     otui = await import("@opentui/core"); // optional dep; absent → fall back
@@ -1429,6 +1441,12 @@ export async function launchTuiAgentShell(opts: {
         resolveDone();
       },
     }));
+    applyThemeId(getThemeId(), r.themeMode);
+    r.on("theme_mode", (mode: "dark" | "light") => {
+      if (getThemeId() === "auto") {
+        applyThemeId("auto", mode);
+      }
+    });
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
@@ -2434,7 +2452,7 @@ export async function launchTuiAgentShell(opts: {
               id: `side-a${uid++}`,
               line: body,
               marker: "◇",
-              borderColor: "#5a3a6a",
+              borderColor: getTheme().side,
               marginTop: 0,
             });
             fleet.upsert({
@@ -2532,7 +2550,7 @@ export async function launchTuiAgentShell(opts: {
         appendUserEcho(otui, r, transcript, {
           id: `side-q${uid++}`,
           line: displayLine,
-          borderColor: "#5a3a6a",
+          borderColor: getTheme().side,
           marginTop: 0,
         });
         spawnSideWorker(line, displayLine);
@@ -2718,6 +2736,43 @@ export async function launchTuiAgentShell(opts: {
           if (target === undefined || !copyBlock(target.id)) {
             io.onSystem?.("Nothing to copy yet.\n");
           }
+          return;
+        }
+        if (command.name === "/theme") {
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          void (async () => {
+            let next = arg.length > 0 ? parseThemeId(arg) : undefined;
+            if (next === undefined && arg.length > 0) {
+              io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
+              return;
+            }
+            if (next === undefined) {
+              const picked = await chrome.withOverlay(() =>
+                showComposerChoice(otui, r, chrome.dock, {
+                  title: "Theme",
+                  subtitle: `current: ${themeLabel(getThemeId())}`,
+                  cancelId: "__keep__",
+                  options: THEME_IDS.map((id) => ({
+                    id,
+                    label: themeLabel(id),
+                    description: id === getThemeId() ? "active" : " ",
+                    recommended: id === getThemeId(),
+                  })),
+                }),
+              );
+              input.focus();
+              if (picked === undefined || picked === "__keep__") {
+                return;
+              }
+              next = parseThemeId(picked);
+            }
+            if (next === undefined) {
+              return;
+            }
+            applyThemeId(next, r.themeMode);
+            persistThemeId(next);
+            chrome.showToast(`Theme: ${themeLabel(next)}`);
+          })();
           return;
         }
         if (command.name === "/model") {

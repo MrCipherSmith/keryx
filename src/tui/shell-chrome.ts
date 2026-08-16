@@ -43,6 +43,7 @@
 // text, so the forbidden form must not appear in a comment either).
 import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
+import { getTheme, onThemeChange, type Theme } from "./theme";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -276,6 +277,8 @@ export interface ShellChrome {
 
   /** Transient `✓ msg` in the sidebar; replaces any pending toast. */
   showToast(message: string): void;
+  /** Recolor chrome surfaces from the active theme. */
+  applyTheme(theme?: Theme): void;
 
   /** Start the footer spinner + the in-transcript live status line. */
   startBusy(phase?: string): void;
@@ -324,6 +327,7 @@ export async function createShellRenderer(
     screenMode: "alternate-screen",
     clearOnShutdown: true,
     useMouse: true,
+    backgroundColor: getTheme().bg,
     ...(opts.onDestroy !== undefined ? { onDestroy: opts.onDestroy } : {}),
   });
 }
@@ -358,7 +362,7 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "column",
     border: ["left"],
-    borderColor: "#22333b",
+    borderColor: getTheme().highlight,
     paddingLeft: SIDEBAR_PADDING_LEFT,
     paddingRight: SIDEBAR_PADDING_RIGHT,
     paddingTop: 1,
@@ -477,10 +481,10 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "column",
     visible: false,
-    backgroundColor: "#0f1b1b",
+    backgroundColor: getTheme().panel,
     borderStyle: "rounded",
     border: true,
-    borderColor: "#3a4a4a",
+    borderColor: getTheme().border,
     paddingLeft: 1,
     paddingRight: 1,
     paddingTop: 0,
@@ -530,14 +534,14 @@ export async function createShellChrome(
     options: [...opts.commands],
     showScrollIndicator: true,
     wrapSelection: true,
-    backgroundColor: "#0f1b1b",
-    focusedBackgroundColor: "#0f1b1b",
-    selectedBackgroundColor: "#22333b",
-    textColor: "#c8d0d0",
-    focusedTextColor: "#c8d0d0",
-    selectedTextColor: "#ffd166",
-    descriptionColor: "#6b7a7a",
-    selectedDescriptionColor: "#8b9a9a",
+    backgroundColor: getTheme().panel,
+    focusedBackgroundColor: getTheme().panel,
+    selectedBackgroundColor: getTheme().highlight,
+    textColor: getTheme().text,
+    focusedTextColor: getTheme().text,
+    selectedTextColor: getTheme().focus,
+    descriptionColor: getTheme().muted,
+    selectedDescriptionColor: getTheme().muted,
   });
   main.add(menu);
 
@@ -553,6 +557,7 @@ export async function createShellChrome(
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
+    borderColor: getTheme().border,
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -833,6 +838,27 @@ export async function createShellChrome(
     }
   });
 
+  const applyTheme = (theme: Theme = getTheme()): void => {
+    try {
+      r.setBackgroundColor(theme.bg);
+    } catch {
+      // renderer may not expose the setter in tests
+    }
+    sidebar.borderColor = theme.highlight;
+    dock.backgroundColor = theme.panel;
+    dock.borderColor = theme.border;
+    composer.borderColor = theme.border;
+    menu.backgroundColor = theme.panel;
+    menu.focusedBackgroundColor = theme.panel;
+    menu.selectedBackgroundColor = theme.highlight;
+    menu.textColor = theme.text;
+    menu.focusedTextColor = theme.text;
+    menu.selectedTextColor = theme.focus;
+    menu.descriptionColor = theme.muted;
+    menu.selectedDescriptionColor = theme.muted;
+  };
+  const unsubTheme = onThemeChange((theme) => applyTheme(theme));
+
   return {
     renderer: r,
     root: rootRow,
@@ -867,6 +893,7 @@ export async function createShellChrome(
     withOverlay,
 
     showToast,
+    applyTheme,
 
     startBusy,
     stopBusy,
@@ -891,6 +918,7 @@ export async function createShellChrome(
 
     destroy: () => {
       alive = false;
+      unsubTheme();
       clearBusyTimer();
       clearToastTimer();
       unsubscribeMenuKeys();

@@ -14,6 +14,7 @@
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
 //   permissions.json        shell-command auto-approval allowlist
 //   sandbox.json            global sandbox defaults
+//   tui.json                TUI theme preference (flow: /theme)
 //   version-check.json      cached npm latest metadata + failure backoff
 //   turns/                  durable remote-turn records (flow 131 / R4c) — the
 //                           event log and terminal result each remote turn is

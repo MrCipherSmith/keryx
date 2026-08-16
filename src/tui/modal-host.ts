@@ -11,6 +11,7 @@
 // `typeof import(...)`. There is no top-level import of it (the static guard
 // in `src/capability/no-optional-imports` is a regex over file text).
 import type { ShellChrome } from "./shell-chrome";
+import { getTheme, onThemeChange } from "./theme";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -237,7 +238,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#0a1414",
+    backgroundColor: getTheme().bg,
     zIndex: 100,
     flexDirection: "column",
     padding: MODAL_PANEL_MARGIN,
@@ -252,8 +253,8 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
-    borderColor: "#3a4a4a",
-    backgroundColor: "#0f1b1b",
+    borderColor: getTheme().border,
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
     zIndex: 101,
@@ -401,6 +402,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   });
 
   hosts.set(r, state);
+  onThemeChange((theme) => {
+    state.backdrop.backgroundColor = theme.bg;
+    state.panel.backgroundColor = theme.panel;
+    state.panel.borderColor = theme.border;
+  });
   return state;
 }
 
