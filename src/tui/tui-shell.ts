@@ -1597,7 +1597,16 @@ export async function launchTuiAgentShell(opts: {
     // Reasoning, tool calls and tool results become addressable blocks that
     // RETAIN their full text (bounded — D-4) instead of discarding it, so they
     // can be expanded in place, navigated with the keyboard and copied.
-    const blocks = createBlockRegistry();
+    const blocks = createBlockRegistry({
+      onEvict: (dropped) => {
+        if (dropped.length === 1) {
+          const kind = dropped[0]?.kind ?? "block";
+          chrome.showToast(`Dropped oldest ${kind} output`);
+          return;
+        }
+        chrome.showToast(`Dropped ${dropped.length} oldest outputs`);
+      },
+    });
     const blockMount = createBlockMount(otui, r, transcript, blocks);
     // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
     // suspension) lives in `transcript-blocks.ts` so it is reachable from a
@@ -2357,7 +2366,9 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `side-h${uid++}`,
-              content: otui.t`${otui.magenta(`◇ ${sideWorkerLabelText}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
+              content: otui.t`${otui.magenta("──")} ${otui.bold(sideWorkerLabelText)} ${otui.magenta("──")} ${
+                otui.dim(`while main: ${busyPhase}`)
+              }`,
               marginTop: 1,
             }),
           );
@@ -2419,13 +2430,13 @@ export async function launchTuiAgentShell(opts: {
             };
             await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
             const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `side-a${uid++}`,
-                content: otui.t`${otui.magenta("◇")} ${body}`,
-                marginTop: 0,
-              }),
-            );
+            appendUserEcho(otui, r, transcript, {
+              id: `side-a${uid++}`,
+              line: body,
+              marker: "◇",
+              borderColor: "#5a3a6a",
+              marginTop: 0,
+            });
             fleet.upsert({
               id: SIDE_WORKER_ID,
               label: sideWorkerLabelText,

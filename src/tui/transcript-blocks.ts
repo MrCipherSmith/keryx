@@ -79,6 +79,8 @@ export interface BlockRegistryOptions {
    * cap is a real bound rather than a best effort.
    */
   maxRetainedChars?: number;
+  /** Fired once per `register` that evicted one or more older payloads. */
+  onEvict?: (dropped: readonly BlockState[]) => void;
 }
 
 export interface BlockRegistry {
@@ -146,18 +148,21 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
   // dropped the instant it arrived, which reads as a bug rather than as a
   // retention policy. It does not weaken the char bound — `register` already
   // clipped that payload to the cap, so "keep only the newest" always fits.
-  const enforceBounds = (): void => {
+  const enforceBounds = (): BlockState[] => {
+    const dropped: BlockState[] = [];
     for (;;) {
       if (retainedCount() <= maxBlocks && retainedChars() <= maxRetainedChars) {
-        return;
+        break;
       }
       const oldest = blocks.find((b) => b.retained);
       if (oldest === undefined || oldest === newestRetained()) {
-        return;
+        break;
       }
       oldest.retained = false;
       oldest.fullText = undefined;
+      dropped.push(snapshot(oldest));
     }
+    return dropped;
   };
 
   return {
@@ -183,7 +188,10 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
       if (focusIndex < 0) {
         focusIndex = 0;
       }
-      enforceBounds();
+      const dropped = enforceBounds();
+      if (dropped.length > 0) {
+        options.onEvict?.(dropped);
+      }
       return id;
     },
     get: (id) => {
@@ -763,6 +771,8 @@ export interface BlockView {
    */
   render(state: BlockState, opts?: { focused?: boolean; body?: string }): void;
   destroy(): void;
+  /** Content-relative box after the last layout pass (for scroll-into-view). */
+  extent(): { y: number; height: number };
 }
 
 /**
@@ -893,6 +903,10 @@ export function createBlockView(
         // best-effort teardown
       }
     },
+    extent: () => ({
+      y: typeof box.y === "number" ? box.y : 0,
+      height: typeof box.height === "number" ? box.height : 0,
+    }),
   };
 }
 
@@ -902,6 +916,8 @@ export interface UserEchoOptions {
   id: string;
   /** The submitted line, rendered after a `❯` marker. */
   line: string;
+  /** Leading marker inside the frame. Default `❯`. */
+  marker?: string;
   /** Frame color; defaults to the shared muted frame color. */
   borderColor?: string;
   /** Rows of separation from whatever precedes it (default 1). */
@@ -924,7 +940,7 @@ export function appendUserEcho(
   parent: Box,
   options: UserEchoOptions,
 ): Box {
-  const text = `❯ ${options.line}`;
+  const text = `${options.marker ?? "❯"} ${options.line}`;
   const box = new otui.BoxRenderable(renderer, {
     id: options.id,
     borderStyle: "rounded",
@@ -1008,6 +1024,32 @@ export function clearTranscriptChildren<T>(parent: {
 export interface NavScroll {
   scrollTop: number;
   stickyScroll: boolean;
+  /** Visible height of the transcript viewport. Missing → reveal is a no-op. */
+  height?: number;
+}
+
+/**
+ * Smallest `scrollTop` that keeps `[itemY, itemY+itemHeight)` inside the
+ * viewport. Pure so a headless test can pin the clamp without a renderer.
+ */
+export function revealScrollTop(
+  scrollTop: number,
+  viewportHeight: number,
+  itemY: number,
+  itemHeight: number,
+): number {
+  if (!(viewportHeight > 0) || !(itemHeight > 0) || !Number.isFinite(itemY)) {
+    return scrollTop;
+  }
+  if (itemY < scrollTop) {
+    return Math.max(0, itemY);
+  }
+  const bottom = itemY + itemHeight;
+  const viewBottom = scrollTop + viewportHeight;
+  if (bottom > viewBottom) {
+    return Math.max(0, bottom - viewportHeight);
+  }
+  return scrollTop;
 }
 
 /** The keypress event fields nav mode reads (OpenTUI's internal keypress shape). */
@@ -1114,6 +1156,19 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     }
   };
 
+  const reveal = (id: string): void => {
+    const viewport = scroll.height;
+    const mounted = view(id);
+    if (typeof viewport !== "number" || viewport <= 0 || mounted === undefined) {
+      return;
+    }
+    const { y, height } = mounted.extent();
+    const next = revealScrollTop(scroll.scrollTop, viewport, y, height);
+    if (next !== scroll.scrollTop) {
+      scroll.scrollTop = next;
+    }
+  };
+
   const newest = (kind?: string): BlockState | undefined => {
     const all = registry.list();
     for (let i = all.length - 1; i >= 0; i--) {
@@ -1193,6 +1248,7 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
     blurComposer();
     paintAll();
+    reveal(target.id);
     onChange();
   };
 
@@ -1227,6 +1283,7 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
       paint(previous.id);
     }
     paint(next.id);
+    reveal(next.id);
   };
 
   return {

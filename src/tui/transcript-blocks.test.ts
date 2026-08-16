@@ -5,6 +5,7 @@ import {
   createBlockNavController,
   createBlockRegistry,
   createStreamSegmenter,
+  revealScrollTop,
   EVICTED_BLOCK_TEXT,
   TRUNCATED_BLOCK_NOTICE,
   UNKNOWN_BLOCK_TEXT,
@@ -101,6 +102,21 @@ describe("createBlockRegistry: registration and collapse", () => {
 
     const next = registry.register(block(3));
     expect(registry.list().map((b) => b.id)).toEqual([next]);
+  });
+
+  test("onEvict reports every payload dropped by a register", () => {
+    const dropped: string[][] = [];
+    const registry = createBlockRegistry({
+      maxBlocks: 1,
+      onEvict: (blocks) => {
+        dropped.push(blocks.map((b) => b.id));
+      },
+    });
+    const first = registry.register(block(1));
+    expect(dropped).toEqual([]);
+    registry.register(block(2));
+    expect(dropped).toEqual([[first]]);
+    expect(registry.get(first)?.retained).toBe(false);
   });
 });
 
@@ -532,6 +548,24 @@ describe("createStreamSegmenter", () => {
       { kind: "code", lang: "ts", body: "x" },
       { kind: "text", text: "b" },
     ]);
+  });
+});
+
+describe("revealScrollTop", () => {
+  test("does not move when the item already fits", () => {
+    expect(revealScrollTop(10, 20, 12, 4)).toBe(10);
+  });
+
+  test("scrolls up when the item starts above the viewport", () => {
+    expect(revealScrollTop(20, 10, 5, 3)).toBe(5);
+  });
+
+  test("scrolls down when the item ends below the viewport", () => {
+    expect(revealScrollTop(0, 10, 8, 5)).toBe(3);
+  });
+
+  test("is a no-op when the viewport has no height", () => {
+    expect(revealScrollTop(4, 0, 0, 3)).toBe(4);
   });
 });
 
