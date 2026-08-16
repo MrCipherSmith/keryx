@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.3
+Version: 0.14.4
 
 ## Status
 
@@ -7,6 +7,13 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.4** — `sac-workspace-lifecycle` and `slate` (all 5 phases) shipped
+>   to `main` and released in v0.2.39: archive/removeResource/rename (PR
+>   #296), Slate skeleton + bundled SAC hardening (PR #297), open/close
+>   lifecycle + unattended `interactive` gate (PR #301), `/goal` + TerminalState
+>   + Anchors auto-inject (PR #304), ephemeral subagent slate + machine
+>   wrap-up composer (PR #306), catch-up review + `list-proposals` (PR #308).
+>   Both packages moved from spec-ready to implemented and verified.
 > - **0.14.3** — Added `sac-workspace-lifecycle` as a specification-ready,
 >   requirements-only package: closes a real gap found in the already-shipped
 >   `WorkspaceService` (SAC-1) — no archive, no resource removal, no rename.
@@ -149,8 +156,8 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 |---|---|---|
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
-| [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | design / spec-ready | Archive/resource-removal/rename for the already-shipped `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete are explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |
-| [Keryx Slate](slate/README.md) | design / spec-ready | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the implemented SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a three-category catch-up review flow. No runtime implementation claimed; explicitly non-duplicative of SAC RP-03/05/06/08. |
+| [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | implemented and verified (PR #296) | Archive/resource-removal/rename shipped for `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete remain explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |
+| [Keryx Slate](slate/README.md) | implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308) | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. |
 | [SAC RP-01 Runtime Truth](shared-agent-context-runtime-truth/README.md) | future / spec-ready | Make the deterministic retrieval plan independent and output-effective, with stable identities and honest freshness, detail, omissions, and cost. |
 | [SAC RP-02 Source-owned Projections](shared-agent-context-source-projections/README.md) | future / spec-ready | Replace raw/heuristic source interpretation with typed Flow, Evidence, Wiki, Memory, and Skills owner ports and canonical guarded writes. |
 | [SAC RP-03 Lifecycle Binding](shared-agent-context-lifecycle-binding/README.md) | future / spec-ready | Add explicit Session–workspace–Flow binding, discovery, derivation preview, and receipt-bound owner-accepted-to-accepted link-back. |
