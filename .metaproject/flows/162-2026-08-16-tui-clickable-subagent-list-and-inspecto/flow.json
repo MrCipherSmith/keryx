@@ -5,13 +5,38 @@
   "title": "TUI: clickable subagent list and inspector modal",
   "status": "implemented",
   "createdAt": "2026-08-16T16:01:00.065Z",
-  "updatedAt": "2026-08-16T16:22:34.295Z",
+  "updatedAt": "2026-08-16T16:48:31.967Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:024e83d51fb0ff07d680a2458708a930e96c8a64f7c8098e375311ea161f8c69",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-16T16:48:31.538Z",
+      "note": "formatSubagentList prints every child; tests pin 20 rows and no +N more. Sidebar paints one row per session."
+    },
+    "AC2": {
+      "at": "2026-08-16T16:48:31.615Z",
+      "note": "paintSubagentSidebar sets onMouseDown; tui-shell opens openSubagentInspector → openModal. Tests pin click and host tabs."
+    },
+    "AC3": {
+      "at": "2026-08-16T16:48:31.698Z",
+      "note": "Inspector Work/Meta show task, model, status, ordered tool/reasoning/text logs. Spawn emits task+text; formatter tests cover order."
+    },
+    "AC4": {
+      "at": "2026-08-16T16:48:31.773Z",
+      "note": "store.subscribe refresh updates workNode.content on log; test AC4 pins search_code after open."
+    },
+    "AC5": {
+      "at": "2026-08-16T16:48:31.861Z",
+      "note": "15s remove deleted; store remove is no-op; spawn test asserts no remove event."
+    },
+    "AC6": {
+      "at": "2026-08-16T16:48:31.967Z",
+      "note": "Headless tests for store/list/inspector/spawn; no-optional-imports passes on new modules."
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/303"
   },
@@ -140,6 +165,36 @@
       "at": "2026-08-16T16:22:34.295Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/303"
+    },
+    {
+      "at": "2026-08-16T16:48:31.538Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: formatSubagentList prints every child; tests pin 20 rows and no +N more. Sidebar paints one row per session."
+    },
+    {
+      "at": "2026-08-16T16:48:31.616Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: paintSubagentSidebar sets onMouseDown; tui-shell opens openSubagentInspector → openModal. Tests pin click and host tabs."
+    },
+    {
+      "at": "2026-08-16T16:48:31.698Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Inspector Work/Meta show task, model, status, ordered tool/reasoning/text logs. Spawn emits task+text; formatter tests cover order."
+    },
+    {
+      "at": "2026-08-16T16:48:31.773Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: store.subscribe refresh updates workNode.content on log; test AC4 pins search_code after open."
+    },
+    {
+      "at": "2026-08-16T16:48:31.861Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: 15s remove deleted; store remove is no-op; spawn test asserts no remove event."
+    },
+    {
+      "at": "2026-08-16T16:48:31.967Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Headless tests for store/list/inspector/spawn; no-optional-imports passes on new modules."
     }
   ]
 }
