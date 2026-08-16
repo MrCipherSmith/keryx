@@ -729,11 +729,27 @@ export async function pickShellApproval(
  * is shared, provider-bound state, and re-announcing information the model
  * has already seen is exactly the history-bloat failure mode flow 161's
  * plan.md Risks section calls out.
+ *
+ * `params.onHistoryChange` (review finding 6): this function used to push
+ * its Anchors-block message into `history` and stop there, unlike both other
+ * Anchors-injection sites in `agent.ts` (its per-tool-call and fresh-open
+ * triggers), which call `io.onHistoryChange?.("tool")` immediately after
+ * their own push. `onHistoryChange` drives `syncArchive()`/session-
+ * checkpoint persistence (this file's `launchTuiAgentShell`, where
+ * `io.onHistoryChange` is assigned) — without it, the `/model`-switch
+ * Anchors entry was not archived/persisted until some UNRELATED later event
+ * happened to fire `onHistoryChange`, so a session that ended/crashed before
+ * that lost the entry from the persisted archive. Optional (not `io`
+ * itself) so this function stays testable in isolation the way it already
+ * is above, with no IO dependency required when a caller does not need it;
+ * `"tool"` matches the `kind` used at the sibling harness-written-history-
+ * push call sites in `agent.ts`.
  */
 export async function applyRuntimeSwitchToSlate(params: {
   slateSession: SlateSessionRef | undefined;
   runtime: { provider: string; model: string };
   history: NormalizedMessage[];
+  onHistoryChange?: ((kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void) | undefined;
 }): Promise<boolean> {
   if (params.slateSession === undefined || !params.slateSession.opened) {
     return false;
@@ -747,6 +763,7 @@ export async function applyRuntimeSwitchToSlate(params: {
     content: renderAnchorsBlock(result.slate.anchors),
     provenance: "project",
   });
+  params.onHistoryChange?.("tool");
   return true;
 }
 
@@ -2646,6 +2663,10 @@ export async function launchTuiAgentShell(opts: {
                   slateSession,
                   runtime: { provider: currentSel.provider, model: currentSel.model },
                   history,
+                  // Review finding 6: without this, the pushed Anchors-block
+                  // message is not archived/persisted until some UNRELATED
+                  // later event happens to fire `onHistoryChange`.
+                  onHistoryChange: io.onHistoryChange,
                 });
               } catch (err) {
                 io.onSystem?.(

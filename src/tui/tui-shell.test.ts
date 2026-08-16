@@ -1844,6 +1844,56 @@ test("SLATE-2a: applyRuntimeSwitchToSlate pushes an Anchors-block message into h
   expect(slate?.anchors.runtime).toEqual({ provider: "openai", model: "gpt-5" });
 });
 
+test("review finding 6: applyRuntimeSwitchToSlate calls onHistoryChange(\"tool\") immediately after pushing an Anchors-block message", async () => {
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const history: NormalizedMessage[] = [];
+  const changes: string[] = [];
+
+  const changed = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+
+  expect(changed).toBe(true);
+  expect(changes).toEqual(["tool"]);
+});
+
+test("review finding 6: applyRuntimeSwitchToSlate does NOT call onHistoryChange when nothing changed (no-op switch, e.g. no slateSession or a same provider/model switch)", async () => {
+  const history: NormalizedMessage[] = [];
+  const changes: string[] = [];
+
+  const changedUndefined = await applyRuntimeSwitchToSlate({
+    slateSession: undefined,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+  expect(changedUndefined).toBe(false);
+  expect(changes).toEqual([]);
+
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({
+    anchors: { root: cwd, touched: [], runtime: { provider: "anthropic", model: "claude" } },
+    course: {},
+    seeds: [],
+  }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const changedSame = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "anthropic", model: "claude" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+  expect(changedSame).toBe(false);
+  expect(changes).toEqual([]);
+});
+
 test("SLATE-2a: applyRuntimeSwitchToSlate is a no-op (no history mutation) when slateSession is absent or not yet opened", async () => {
   const history: NormalizedMessage[] = [];
 
