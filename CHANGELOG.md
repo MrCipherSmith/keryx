@@ -5,6 +5,48 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.40] — 2026-08-17
+
+### Added
+
+- **Switchable TUI color themes (`/theme`).** `/theme` with no argument opens
+  a picker modal — a theme list on the left, a live preview (assistant
+  markdown, a code block, tool/side/chip/ok/error samples) on the right.
+  Arrow keys move the highlight and repaint the preview instantly; the
+  palette only applies on Enter or `[ Apply ]` — Esc/close leaves the
+  current theme untouched. `/theme <name>` still applies immediately on any
+  surface.
+
+### Changed
+
+- **Shared modal panel is opaque and near-fullscreen.** The `/status`,
+  `/flows`, and `/theme` host used to be a translucent 72×18 box that leaked
+  the transcript behind it and clipped long content; it now fills the
+  available terminal space with a scrollable body.
+- `/clear` and `/new` now fully reset the visible transcript (messages,
+  blocks, fleet rows, token counters), not just the underlying session.
+
+### Fixed
+
+- **Ctrl+O focused blocks scroll into view.** `↑`/`↓` navigation didn't
+  reveal the highlighted block if it was off-screen; it does now.
+- A toast now fires once when transcript retention drops an old payload,
+  instead of the loss only being discoverable via expand/copy.
+- Side-worker replies render in a framed box with a `── side-1 ──` label
+  instead of a bare, easy-to-miss magenta line.
+- A modal-open theme-change listener could accumulate across renderer
+  create/destroy cycles (relaunching the TUI shell within one process, or
+  running its own test suite) and kept writing onto already-destroyed
+  panels; it is now unregistered on teardown, alongside two related listener
+  leaks in the chat and agent TUI shells.
+- A keyboard-focus edge case let a stray digit `1`–`9` keypress jump modal
+  tabs while the scrollable body itself held focus, instead of being
+  absorbed by the scroll box — now consistent with the existing `x`-to-close
+  guard.
+- `/flows` content could overflow unwrapped on a narrow terminal while
+  `/status` wrapped correctly right next to it; both now wrap to the
+  panel's real width.
+
 ## [0.2.39] — 2026-08-17
 
 ### Added

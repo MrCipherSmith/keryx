@@ -161,6 +161,13 @@ holds and what forking copies.
   when given an argument.
 - `/sessions` opens an interactive session picker in the TUI and switches the
   live shell to the chosen session.
+- `/theme` (chat and agent) with no argument opens a picker modal: a theme
+  list on the left, a live preview (assistant markdown, a code block, tool/
+  side/chip/ok/error samples) on the right. Arrow keys move the highlight and
+  repaint the preview instantly; the palette itself only applies on Enter or
+  a click on `[ Apply ]` — Esc/close leaves the current theme untouched.
+  `/theme <name>` still applies immediately without opening the picker.
+  Readline / `--no-tui` supports only the immediate-apply form.
 - `/search-provider` configures and tests web search providers for `web_search`:
   run without args to list providers, pass `provider id` plus `key=<value>` (for
   keyed providers) to configure and validate one.
