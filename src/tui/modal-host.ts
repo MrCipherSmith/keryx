@@ -71,8 +71,29 @@ const PANEL_ID = "modal-panel";
 export const MODAL_PANEL_MARGIN = 1;
 /** Border (2) + horizontal padding (2). Subtract from the panel to wrap text. */
 export const MODAL_PANEL_CHROME_X = 4;
+/** Floor so a 24-row test TTY still fits; live shells grow toward the target. */
+export const MODAL_PANEL_MIN_WIDTH = 72;
+export const MODAL_PANEL_MIN_HEIGHT = 18;
+export const MODAL_PANEL_TARGET_WIDTH = 96;
+export const MODAL_PANEL_TARGET_HEIGHT = 28;
+/** Header + tab strip + footer + rounded border. */
+export const MODAL_CHROME_ROWS = 5;
+/** @deprecated Use resolveModalPanelSize; kept as the floor for footer-fit tests. */
+export const MODAL_PANEL_WIDTH = MODAL_PANEL_MIN_WIDTH;
+export const MODAL_PANEL_HEIGHT = MODAL_PANEL_MIN_HEIGHT;
 /** Fallback wrap budget before the panel has a measured width. */
-export const MODAL_PANEL_INNER_WIDTH = 68;
+export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_MIN_WIDTH - MODAL_PANEL_CHROME_X;
+
+export function resolveModalPanelSize(cols: number, rows: number): { width: number; height: number } {
+  return {
+    width: Math.min(MODAL_PANEL_TARGET_WIDTH, Math.max(MODAL_PANEL_MIN_WIDTH, cols - 4)),
+    height: Math.min(MODAL_PANEL_TARGET_HEIGHT, Math.max(MODAL_PANEL_MIN_HEIGHT, rows - 4)),
+  };
+}
+
+export function modalBodyRows(panelHeight: number): number {
+  return Math.max(1, panelHeight - MODAL_CHROME_ROWS);
+}
 const CLOSE_HINT = "[x] esc";
 
 export function resolveModalInnerWidth(availableWidth: number): number {
@@ -254,15 +275,22 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     backgroundColor: getTheme().bg,
     zIndex: 100,
     flexDirection: "column",
-    padding: MODAL_PANEL_MARGIN,
+    justifyContent: "center",
+    alignItems: "center",
     visible: false,
   });
+  // Fixed (not flex-filling) size: `openModal` imperatively sets width/height
+  // to `resolveModalPanelSize`'s result every time it opens, so the panel
+  // grows toward the 96x28 target and floors at 72x18 instead of stretching
+  // to fill the backdrop — `flexGrow`/`"100%"` here would fight that and win
+  // on the next layout pass (the panel would just fill available space,
+  // regardless of what was assigned).
   const panel = new otui.BoxRenderable(r, {
     id: PANEL_ID,
-    width: "100%",
-    flexGrow: 1,
-    flexShrink: 1,
-    minHeight: 1,
+    width: MODAL_PANEL_WIDTH,
+    height: MODAL_PANEL_HEIGHT,
+    flexShrink: 0,
+    flexGrow: 0,
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
@@ -467,6 +495,9 @@ export function openModal(
   }
 
   const state = ensureHost(otui, chrome);
+  const size = resolveModalPanelSize(chrome.renderer.width, chrome.renderer.height);
+  state.panel.width = size.width;
+  state.panel.height = size.height;
 
   if (state.open) {
     unmountActiveTab(state);

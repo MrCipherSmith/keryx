@@ -128,6 +128,19 @@ export async function loadInspectorWorkspaces(cwd: string): Promise<WorkspaceInf
   }
 }
 
+export function sortFlowsNewestFirst(items: readonly FlowInspectorItem[]): FlowInspectorItem[] {
+  return [...items].sort((left, right) => {
+    const byId = Number(right.id) - Number(left.id);
+    if (!Number.isNaN(byId) && byId !== 0) {
+      return byId;
+    }
+    if (left.updatedAt !== right.updatedAt) {
+      return left.updatedAt < right.updatedAt ? 1 : -1;
+    }
+    return right.id.localeCompare(left.id);
+  });
+}
+
 export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem[]> {
   try {
     const dirs = await listFlowDirs(cwd);
@@ -139,7 +152,7 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
         // skip unreadable packages; `keryx flow check` owns that report
       }
     }
-    return items;
+    return sortFlowsNewestFirst(items);
   } catch {
     return [];
   }

@@ -3,6 +3,7 @@ import {
   flowsInSession,
   formatSessionFlowLines,
   formatWorkspaceLines,
+  sortFlowsNewestFirst,
   workspacesInSession,
   type FlowInspectorItem,
   type WorkspaceInfo,
@@ -56,4 +57,10 @@ test("flowsInSession matches runLink session ids and explicit flow mentions only
 test("empty formatters say so", () => {
   expect(formatWorkspaceLines([])[0]).toMatch(/no workspaces/i);
   expect(formatSessionFlowLines([])[0]).toMatch(/no flows/i);
+});
+
+test("sortFlowsNewestFirst is last-id first", () => {
+  const older = { ...FLOW, id: "003", updatedAt: "2026-01-01T00:00:00.000Z" };
+  const newer = { ...FLOW, id: "154", updatedAt: "2026-08-01T00:00:00.000Z" };
+  expect(sortFlowsNewestFirst([older, newer]).map((item) => item.id)).toEqual(["154", "003"]);
 });
