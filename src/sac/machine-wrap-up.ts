@@ -94,10 +94,13 @@ export type MachineWrapUpResolution =
   | { ok: false; code: "no_credential" };
 
 /** A Seed together with which slate it actually came from — a child's Seed is
- * NEVER laundered as the parent's own (spec: "attributed, not merged"). */
-type AttributedSeed = { text: string; kind: SlateSeedKind; source: "parent" | { childDispatchId: string } };
+ * NEVER laundered as the parent's own (spec: "attributed, not merged"). Exported
+ * (SLATE-21): `session-wrap-up.ts` reuses this SAME attribution shape for the
+ * "session" wrap-up source, so a proposal's evidence taxonomy (diff/flow/seeds)
+ * looks identical regardless of which of the two wrap-up sources produced it. */
+export type AttributedSeed = { text: string; kind: SlateSeedKind; source: "parent" | { childDispatchId: string } };
 
-function describeSource(source: AttributedSeed["source"]): string {
+export function describeSource(source: AttributedSeed["source"]): string {
   return source === "parent" ? "parent" : `child:${source.childDispatchId}`;
 }
 
@@ -110,7 +113,7 @@ function describeSource(source: AttributedSeed["source"]): string {
  * about the LIVE slate structure; this is the read-side analog for wrap-up).
  * Untagged Seeds default to `"follow-up"` (AC7) — never an invented kind.
  */
-function dedupedAttributedSeeds(slate: Slate): AttributedSeed[] {
+export function dedupedAttributedSeeds(slate: Slate): AttributedSeed[] {
   const seen = new Set<string>();
   const result: AttributedSeed[] = [];
   const take = (seeds: SlateSeed[], source: AttributedSeed["source"]): void => {
@@ -147,8 +150,9 @@ function sha256(value: string): string {
 /** Best-effort working-tree diff; swallows "not a git repo"/`git` missing the
  * same way `slate-lifecycle.ts`'s `resolveTree` does — evidence with an empty
  * diff is still valid evidence (a real "nothing changed" observation), never
- * a reason to fail the whole wrap-up. */
-async function gitDiff(cwd: string): Promise<string> {
+ * a reason to fail the whole wrap-up. Exported (SLATE-21): `session-wrap-up.ts`
+ * reuses this exact best-effort git-diff primitive for its own evidence. */
+export async function gitDiff(cwd: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 });
     return stdout;
@@ -157,14 +161,14 @@ async function gitDiff(cwd: string): Promise<string> {
   }
 }
 
-function diffStatLine(diffText: string): string {
+export function diffStatLine(diffText: string): string {
   if (diffText.trim().length === 0) return "no working-tree changes";
   const added = (diffText.match(/^\+(?!\+\+)/gm) ?? []).length;
   const removed = (diffText.match(/^-(?!--)/gm) ?? []).length;
   return `working-tree diff: +${added}/-${removed} line(s)`;
 }
 
-function courseStatusLine(course: CourseProjection): string {
+export function courseStatusLine(course: CourseProjection): string {
   if (course.state !== "bound") return "flow: unbound";
   return `flow ${course.flowRef.uri} snapshot=${course.flowRef.snapshot} completed=${course.completed.length} next=${course.next.length} blocked=${course.blocked.length}`;
 }

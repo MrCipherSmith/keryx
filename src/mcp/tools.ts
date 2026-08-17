@@ -127,19 +127,24 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
-      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam.",
-      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" } }, ["workspaceId", "proposalId", "decision"]),
+      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam. Accepting requires confirmToken, minted by running `keryx workspace confirm-review <workspace-id> <proposal-id>` in a real, approval-gated shell — this tool cannot mint one itself.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" }, confirmToken: { type: "string", description: "Required when decision is \"accepted\" — mint via `keryx workspace confirm-review <workspace-id> <proposal-id>`." } }, ["workspaceId", "proposalId", "decision"]),
       mutating: true,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
-        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
+        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID(); const confirmToken = stringParam(params, "confirmToken");
         // Same composition as sac.propose: an accept must see the real owner
         // writer (memory/wiki/skill), or it lands in "stale" for no real reason.
         // `interactive: true` — matches current MCP trust posture (a human is
         // driving this tool call; SLATE-8's spec explicitly scopes the
         // stdio-transport trust gap as a separate, not-fixed-here concern, so
-        // this does not invent a stricter MCP-specific policy).
-        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}) });
+        // this does not invent a stricter MCP-specific policy). SLATE-20 adds
+        // a second, independent gate on top: `decision: "accepted"` also
+        // requires `confirmToken`, which only `keryx workspace confirm-review`
+        // (a real shell command, never exposed as a tool here) can mint — a
+        // caller with only MCP tool access, no shell_exec, cannot accept on
+        // its own even though `interactive: true` alone would have let it.
+        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}), ...(confirmToken ? { confirmToken } : {}) });
         return normalizeProposalLifecycleResult(result);
       },
     },

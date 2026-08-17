@@ -6,6 +6,7 @@ import path from "node:path";
 import { buildToolRegistry } from "./tools";
 import { createSession, persistHistory } from "../session/store";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService } from "../sac/workspace-service";
+import { mintConfirmToken } from "../sac/review-confirm-token";
 import type { ToolEntry } from "./types";
 
 let cwd: string;
@@ -76,9 +77,12 @@ describe("sac.propose / sac.review over MCP", () => {
     expect(proposed.status).toBe("proposed");
     expect(proposed.kind).toBe("memory-entry");
 
+    // SLATE-20: accept requires a confirm token minted by `keryx workspace
+    // confirm-review` — never mintable through the sac.review tool itself.
+    const { token } = await mintConfirmToken(cwd, workspaceId, proposed.id);
     const reviewed = (await tool("sac.review").invoke(
       cwd,
-      { workspaceId, proposalId: proposed.id, decision: "accepted" },
+      { workspaceId, proposalId: proposed.id, decision: "accepted", confirmToken: token },
       { transport: "stdio" },
     )) as { event: { toStatus: string; acceptance?: { targetWrite?: { targetRef: string } } } };
     expect(reviewed.event.toStatus).toBe("accepted");
