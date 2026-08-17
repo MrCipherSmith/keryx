@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 2,
+  "id": "166",
+  "slug": "slate-v2-slate-16-21-auto-workspace-bind",
+  "title": "Slate v2 (SLATE-16..21): auto workspace binding, cross-runtime tool parity, review confirm-token",
+  "status": "in-progress",
+  "createdAt": "2026-08-17T10:14:32.884Z",
+  "updatedAt": "2026-08-17T11:54:59.708Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c7e8d8b9c725bfb15faba5dd1e0dd9d7e54e38d1950241722bb14dbcd7f03f62",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "SLATE-20: review confirm-token",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "SLATE-21: finish SLATE-7 machine evidence",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "SLATE-19: cross-runtime agent-tool parity",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "SLATE-16: workspace resolve-or-create",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "SLATE-17: mid-session re-evaluation",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "SLATE-18: autonomous wrap-up dispatch",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-17T10:14:32.884Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-17T10:16:38.230Z",
+      "event": "task-added",
+      "detail": "T5: SLATE-20: review confirm-token"
+    },
+    {
+      "at": "2026-08-17T10:16:38.323Z",
+      "event": "task-added",
+      "detail": "T6: SLATE-21: finish SLATE-7 machine evidence"
+    },
+    {
+      "at": "2026-08-17T10:16:38.407Z",
+      "event": "task-added",
+      "detail": "T7: SLATE-19: cross-runtime agent-tool parity"
+    },
+    {
+      "at": "2026-08-17T10:16:38.486Z",
+      "event": "task-added",
+      "detail": "T8: SLATE-16: workspace resolve-or-create"
+    },
+    {
+      "at": "2026-08-17T10:16:38.581Z",
+      "event": "task-added",
+      "detail": "T9: SLATE-17: mid-session re-evaluation"
+    },
+    {
+      "at": "2026-08-17T10:16:38.670Z",
+      "event": "task-added",
+      "detail": "T10: SLATE-18: autonomous wrap-up dispatch"
+    },
+    {
+      "at": "2026-08-17T10:16:59.748Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-17T10:17:26.975Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-17T10:17:33.574Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-17T11:45:49.897Z",
+      "event": "task-done",
+      "detail": "T5: SLATE-20: review confirm-token"
+    },
+    {
+      "at": "2026-08-17T11:54:59.708Z",
+      "event": "task-done",
+      "detail": "T6: SLATE-21: finish SLATE-7 machine evidence"
+    }
+  ]
+}

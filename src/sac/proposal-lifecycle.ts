@@ -7,6 +7,7 @@ import { WorkspaceService, localWorkspaceAuthorizationServer, type WorkspaceMani
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 import { resolveSessionWrapUp } from "./session-wrap-up";
+import { consumeConfirmToken } from "./review-confirm-token";
 import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 import { createRealSkillOwnerWriter } from "./skill-owner-writer";
@@ -27,7 +28,7 @@ export type OwnerWriteAdapter = (input: OwnerWriteIntent & { owner: TargetOwner 
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
-  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
+  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "token_required" | "token_invalid" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
 }
 
 /**
@@ -119,7 +120,7 @@ export class ProposalLifecycleService {
     } });
   }
 
-  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string; interactive: boolean }): Promise<{ event: Transition }> {
+  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string; interactive: boolean; confirmToken?: string }): Promise<{ event: Transition }> {
     const actor = await this.actor(input.request, input.requestCorrelationId); const policyRevision = await this.strict();
     return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId: input.workspaceId, action: "review", execute: async (manifest) => {
       const proposal = await this.loadProposal(input.workspaceId, input.proposalId);
@@ -168,6 +169,37 @@ export class ProposalLifecycleService {
         // for, this gate.
         if (input.decision === "accepted" && input.interactive === false) {
           throw new ProposalLifecycleError("non_interactive_accept_denied", "accept is denied for a non-interactive session (interactive: false) — SLATE-8 unattended checkpoint; propose remains available, retry review from a session where interactive is honestly true");
+        }
+        // SLATE-20 self-accept trust gap: `interactive: true` above proves
+        // nothing beyond a caller-supplied flag — any agent with sac_review
+        // access can set it on itself. A genuinely NEW accept additionally
+        // requires a confirm token minted by `keryx workspace confirm-review`,
+        // a real shell command (risk: "shell", approval-gated, never an
+        // agent-native/MCP tool) — so a caller with only tool access cannot
+        // accept on its own, and a shell-capable caller still needs a human
+        // to approve that specific command. `consumeConfirmToken` is scoped
+        // to `input.idempotencyKey` (mirroring `writeApproval`/
+        // `ensureWriteIntent`'s own recovery short-circuit below): a
+        // crash-recovery retry of THIS SAME accept attempt (identical
+        // idempotencyKey, no terminal transition recorded yet — see the
+        // "crash recovery obtains a durable owner receipt" test) needs no
+        // second token, but a genuinely new accept attempt (fresh
+        // idempotencyKey) does. Placed after the replay short-circuit above
+        // (a replay of an already-terminal transition needs no token at all)
+        // and after the SLATE-8 gate (no point demanding a token for a call
+        // that is denied anyway), but before `authorityFor`/`writeApproval`/
+        // any write, so a missing/invalid/reused token blocks before
+        // anything is persisted.
+        if (input.decision === "accepted") {
+          const confirmed = await consumeConfirmToken(this.root, input.workspaceId, proposal.id, input.idempotencyKey, input.confirmToken);
+          if (!confirmed.ok) {
+            throw new ProposalLifecycleError(
+              confirmed.reason,
+              confirmed.reason === "token_required"
+                ? "accept requires a confirm token — run `keryx workspace confirm-review <workspace-id> <proposal-id>` from an interactive terminal first"
+                : "confirm token is missing, expired, already used, or does not match this proposal — mint a fresh one with `keryx workspace confirm-review <workspace-id> <proposal-id>`",
+            );
+          }
         }
         const reviewerAuthority = authorityFor(manifest, actor.subject);
         const approval = input.decision === "accepted" ? await this.writeApproval(proposal, actor, reviewerAuthority, input, policyRevision) : undefined;

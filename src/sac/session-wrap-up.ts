@@ -4,20 +4,35 @@
 // injects it"). This is that composition's session half.
 //
 // A wrap-up must point at real, verifiable evidence a reviewer can independently
-// check — never the agent's own summary of what it did. So this does not read the
-// session's title or message count and hand them back as "evidence"; it EXPORTS the
-// session's real archive (src/session/store.ts exportSessionMarkdown — every role,
-// every message, verbatim) into a file INSIDE the target workspace, hashes that
-// export, and returns a pointer to it. `resolveWorkspaceReference` (src/sac/index.ts)
-// then enforces the same workspace-containment check on this evidence as on any
-// other — the export exists precisely so a session (which lives outside the
-// workspace root, under the shared keryx data dir) has a workspace-relative
-// reference to point at.
+// check — never the agent's own summary of what it did.
+//
+// SLATE-21: the PRIMARY evidence (evidence[0], the item `readVerifiedProposalEvidence`
+// hands every owner writer — memory/wiki/skill) is now the SAME compact, structured
+// shape `machine-wrap-up.ts`'s `resolveMachineWrapUp` already produces for the
+// "flow"-triggered wrap-up source: a Course/flow status line, this session's Seeds,
+// and a working-tree diff stat, built from `gitDiff`/`courseStatusLine`/
+// `dedupedAttributedSeeds` (all exported from `./machine-wrap-up` for reuse) — never
+// the agent's own free-text account of what it did. The full raw diff and the
+// session's real archive export (src/session/store.ts's exportSessionMarkdown —
+// every role, every message, verbatim) are STILL produced and STILL hash-verified,
+// but now as secondary/reference evidence items (evidence[1]/evidence[2]), not the
+// sole or primary evidence a reviewer has to read to review this proposal — matching
+// the design intent this module's own SLATE-7 comment originally deferred ("Seeds +
+// diff + flow as the primary candidate, transcript as a linked attachment").
+// `resolveWorkspaceReference` (src/sac/index.ts) enforces the same workspace-
+// containment check on every evidence item here as on any other — every file below
+// is written inside the target workspace tree precisely so a session (which lives
+// outside the workspace root, under the shared keryx data dir) has workspace-relative
+// references to point at.
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sessionDir } from "../session/paths";
+import { readSlate } from "../session/slate";
 import { findSession, exportSessionMarkdown, TranscriptUnreadableError } from "../session/store";
-import type { TrustedWrapUpResolution } from "./trusted-wrap-up";
+import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./machine-wrap-up";
+import { readCourse } from "../session/slate-course";
+import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
 
 /** How long a resolved wrap-up may sit unconsumed before `verify()` expires it. */
 const WRAP_UP_TTL_MS = 60 * 60 * 1000;
@@ -87,24 +102,58 @@ export async function resolveSessionWrapUp(input: {
     throw new SessionWrapUpError("session_unreadable", `session "${summary.id}" could not be read: ${cause.message}`);
   }
   const relPath = sessionEvidenceRef(input.workspaceId, summary.id).slice(2); // drop leading "./"
-  await mkdir(path.join(input.cwd, path.dirname(relPath)), { recursive: true });
+  const evidenceDir = path.dirname(relPath);
+  await mkdir(path.join(input.cwd, evidenceDir), { recursive: true });
   await writeFile(path.join(input.cwd, relPath), markdown, "utf8");
 
+  // SLATE-21 primary evidence: same machine-collected shape as
+  // resolveMachineWrapUp's "flow" source — Course/flow status, this session's
+  // Seeds, and a diff stat, from real Slate/Anchors/git state, never a
+  // free-text account of what the agent believes it did. `readSlate` is
+  // lenient (undefined, not thrown) for a session that never opened one — an
+  // ordinary chat with no Slate engagement still gets a valid, if sparse,
+  // wrap-up rather than failing.
+  const slate = await readSlate(sessionDir(input.cwd, summary.id)).catch(() => undefined);
+  const diffText = await gitDiff(input.cwd);
+  const course = await readCourse(input.cwd, slate?.course.flowRef);
+  const seeds = slate ? dedupedAttributedSeeds(slate) : [];
+  const seedLines = seeds.length > 0
+    ? seeds.map((seed) => `- ${seed.text} [${seed.kind}] (source: ${describeSource(seed.source)})`)
+    : ["(no Seeds captured this session)"];
+  const wrapUpMarkdown = [
+    `# ${summary.title}`,
+    "",
+    "## Course",
+    courseStatusLine(course),
+    "",
+    "## Seeds",
+    ...seedLines,
+    "",
+    "## Working-tree diff",
+    diffStatLine(diffText),
+    "",
+  ].join("\n");
+  const wrapUpRelPath = path.join(evidenceDir, `${summary.id}.wrap-up.md`);
+  const diffRelPath = path.join(evidenceDir, `${summary.id}.diff.txt`);
+  await writeFile(path.join(input.cwd, wrapUpRelPath), wrapUpMarkdown, "utf8");
+  await writeFile(path.join(input.cwd, diffRelPath), diffText, "utf8");
+
   const observedAt = now().toISOString();
+  const evidence: WrapUpEvidence[] = [
+    { kind: "wrap-up", uri: `./${wrapUpRelPath}`, revision: createHash("sha256").update(wrapUpMarkdown).digest("hex"), observedAt },
+    { kind: "diff", uri: `./${diffRelPath}`, revision: createHash("sha256").update(diffText).digest("hex"), observedAt },
+    // Reference/attachment, deliberately last (never evidence[0], which
+    // readVerifiedProposalEvidence hands to every owner writer as THE
+    // content) — the full verbatim transcript, still hash-verified.
+    { kind: "session", uri: `./${relPath}`, revision: createHash("sha256").update(markdown).digest("hex"), observedAt },
+  ];
   return {
     workspaceId: input.workspaceId,
     sourceRevision: summary.updatedAt,
     summary: `Session "${summary.title}" (${summary.archiveMessageCount} messages${
       summary.model ? `, ${summary.provider ?? "?"}/${summary.model}` : ""
     })`,
-    evidence: [
-      {
-        kind: "session",
-        uri: `./${relPath}`,
-        revision: createHash("sha256").update(markdown).digest("hex"),
-        observedAt,
-      },
-    ],
+    evidence,
     expiresAt: new Date(now().getTime() + WRAP_UP_TTL_MS).toISOString(),
   };
 }

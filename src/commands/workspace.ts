@@ -8,6 +8,7 @@ import { createHarnessProposalLifecycleService, createLocalProposalLifecycleServ
 import { createLocalCollaborationService } from "../sac/collaboration-service";
 import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
+import { mintConfirmToken } from "../sac/review-confirm-token";
 import { findSession } from "../session/store";
 import { buildCatchUp, type CatchUpReport } from "../sac/catch-up";
 
@@ -118,17 +119,31 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       if (note) await writeFile(proposalNotePath(cwd, workspaceId, proposal.id), note, "utf8");
       console.log(JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2)); return;
     }
+    if (subcommand === "confirm-review") {
+      rejectUnknownOptions(args.slice(3), new Set());
+      const workspaceId = args[1]; const proposalId = args[2];
+      if (!workspaceId || !proposalId) throw new Error("Usage: keryx workspace confirm-review <workspace-id> <proposal-id>");
+      // SLATE-20: mints the short-lived, single-use token `review --decision
+      // accepted` requires. Deliberately its own separate shell command
+      // (never an agent-native/MCP tool, never folded into `review` itself)
+      // so accepting a proposal always takes two distinct approval-gated
+      // shell_exec invocations, not one — an agent that only has MCP/tool
+      // access, with no shell_exec at all, cannot mint this on its own.
+      const { token, expiresAt } = await mintConfirmToken(process.cwd(), workspaceId, proposalId);
+      console.log(JSON.stringify({ token, expiresAt }, null, 2)); return;
+    }
     if (subcommand === "review") {
-      rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key"]));
-      const workspaceId = args[1]; const proposalId = args[2]; const decision = optionValue(args, "--decision") as "accepted" | "rejected" | "dismissed" | undefined; const reason = optionValue(args, "--reason"); const idempotencyKey = optionValue(args, "--idempotency-key") ?? randomUUID();
-      if (!workspaceId || !proposalId || !decision) throw new Error("Usage: keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]");
+      rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key", "--confirm-token"]));
+      const workspaceId = args[1]; const proposalId = args[2]; const decision = optionValue(args, "--decision") as "accepted" | "rejected" | "dismissed" | undefined; const reason = optionValue(args, "--reason"); const idempotencyKey = optionValue(args, "--idempotency-key") ?? randomUUID(); const confirmToken = optionValue(args, "--confirm-token");
+      if (!workspaceId || !proposalId || !decision) throw new Error("Usage: keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]");
+      if (decision === "accepted" && !confirmToken) throw new Error("--decision accepted requires --confirm-token — run `keryx workspace confirm-review " + workspaceId + " " + proposalId + "` first");
       // Same composition as `propose`: an accept for any proposal kind must
       // see the real owner writer (memory/wiki/skill), or it lands in
       // "stale" for no real reason.
       // `interactive: true` — a human is directly invoking `keryx workspace
       // review` at the terminal (SLATE-8's unattended checkpoint; see
       // ProposalLifecycleService.review()'s gate).
-      const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}) });
+      const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}), ...(confirmToken ? { confirmToken } : {}) });
       console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
     }
     if (subcommand === "collaboration") {
@@ -216,7 +231,7 @@ function booleanFlag(args: string[], name: string): boolean {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json]\nkeryx workspace list-proposals [<workspace-id>]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id>\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json]\nkeryx workspace list-proposals [<workspace-id>]");
 }
 
 /**
