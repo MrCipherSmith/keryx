@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 2,
+  "id": "168",
+  "slug": "rp-13-sac-decision-dedup-hint-lifecycle-",
+  "title": "RP-13: SAC decision dedup hint + lifecycle cleanup flag",
+  "status": "in-progress",
+  "createdAt": "2026-08-17T18:56:53.529Z",
+  "updatedAt": "2026-08-17T19:17:06.124Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9234a43c16d7afcbd2613b2b8a649663057f294175f1b0c8f4e80ec6bf9d2c53",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "FR1+FR2: dedup/conflict hint + judge annotation at review time",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-17T18:56:53.529Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-17T18:58:20.576Z",
+      "event": "task-added",
+      "detail": "T5: FR1+FR2: dedup/conflict hint + judge annotation at review time"
+    },
+    {
+      "at": "2026-08-17T18:58:20.682Z",
+      "event": "task-added",
+      "detail": "T6: FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)"
+    },
+    {
+      "at": "2026-08-17T18:58:42.586Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-17T18:58:42.669Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-17T18:58:49.417Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-17T19:17:06.124Z",
+      "event": "task-done",
+      "detail": "T5: FR1+FR2: dedup/conflict hint + judge annotation at review time"
+    }
+  ]
+}
