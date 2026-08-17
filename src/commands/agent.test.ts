@@ -1326,6 +1326,123 @@ test("SLATE-5: an already-open slate is closed after a turn when Course's live F
   expect(await readSlate(dir)).toBeUndefined();
 });
 
+test("SLATE-18 (AC-27): flow-complete dispatches runWrapUp with the LIVE slate (Seeds still present) before the close archives it", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await writeDoneFlow(cwd, "010-example-flow");
+  await writeSlate(dir, () => ({
+    anchors: { root: cwd, touched: [] },
+    course: { flowRef: "010" },
+    seeds: [{ id: "s1", text: "a real finding", ts: "2026-08-16T00:00:00.000Z", kind: "decision" }],
+    workspaceId: "workspace-a",
+  }));
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const { io } = collectingIo();
+  const dispatched: Array<{ trigger: string; workspaceId?: string | undefined; seedCount: number }> = [];
+
+  await runAgentTurn(io, deps, [], "hello there", {
+    slateSession,
+    dispatchWrapUp: async (input) => {
+      dispatched.push({ trigger: input.trigger, workspaceId: input.slate.workspaceId, seedCount: input.slate.seeds.length });
+      return { groups: [] };
+    },
+  });
+
+  expect(dispatched).toEqual([{ trigger: "flow-complete", workspaceId: "workspace-a", seedCount: 1 }]);
+  // The close still happened — dispatch never blocks it.
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("SLATE-18 (AC-27): an explicit close phrase dispatches runWrapUp with trigger \"explicit\" before archiving", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+  const dispatched: string[] = [];
+  const dispatchWrapUp = async (input: { trigger: string }) => {
+    dispatched.push(input.trigger);
+    return { groups: [] };
+  };
+
+  // Open first (an action-intent turn), then explicitly close.
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession, dispatchWrapUp });
+  expect(slateSession.opened).toBe(true);
+  expect(dispatched).toEqual([]); // no dispatch on a plain open
+
+  await runAgentTurn(io, deps, [], "ok, let's wrap up", { slateSession, dispatchWrapUp });
+
+  expect(dispatched).toEqual(["explicit"]);
+  expect(slateSession.opened).toBe(false);
+});
+
+test("SLATE-18: a failing dispatchWrapUp never blocks the close (flow-complete)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await writeDoneFlow(cwd, "010-example-flow");
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: { flowRef: "010" }, seeds: [] }));
+
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "hello there", {
+    slateSession,
+    dispatchWrapUp: async () => {
+      throw new Error("simulated dispatch failure");
+    },
+  });
+
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("SLATE-18: no dispatch when there is no slateSession at all (unchanged pre-Phase-4 behavior)", async () => {
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  let dispatched = false;
+
+  await runAgentTurn(io, deps, [], "ok, let's wrap up", {
+    dispatchWrapUp: async () => {
+      dispatched = true;
+      return { groups: [] };
+    },
+  });
+
+  expect(dispatched).toBe(false);
+});
+
 test("SLATE-5: closeSlateOnFlowDone never reads slate.json when the ref was never opened this attempt (no fs cost when slate lifecycle is inert)", async () => {
   const dir = await tempSlateDir();
   const cwd = await tempProjectCwd();

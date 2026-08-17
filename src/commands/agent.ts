@@ -17,9 +17,10 @@ import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-ri
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
-import { readSlate, writeSlate, renderAnchorsBlock, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
 import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
+import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
   closeSlateSession,
   ensureSlateOpened,
@@ -208,6 +209,15 @@ export interface RunAgentTurnOptions {
    * plumbing through this file.
    */
   resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
+  /**
+   * SLATE-18 (flow 166, Phase 4) test seam: overrides the real `runWrapUp`
+   * (`../sac/machine-wrap-up`) dispatched at the flow-complete and explicit
+   * close triggers below. Every real call site leaves this unset and gets
+   * the real composer (real evidence collection, a real bounded model
+   * turn); tests inject a spy/stub here instead of wiring
+   * git/provider-factory plumbing through this file.
+   */
+  dispatchWrapUp?: (input: RunWrapUpInput) => Promise<WrapUpOutcome>;
 }
 
 /**
@@ -835,6 +845,32 @@ export async function runAgentTurn(
  * behind an unrelated slate-bookkeeping failure. On any error here, degrade
  * to "assume not done, skip closing this turn" instead.
  */
+/**
+ * SLATE-18: dispatch `runWrapUp` for one of SLATE-7's existing trigger
+ * conditions, in its OWN try/catch so a dispatch failure (no credential, a
+ * git/evidence-write error, an unexpected throw) can NEVER prevent the
+ * caller's subsequent close from happening — mirrors `commands/harness.ts`'s
+ * established "never let wrap-up bookkeeping crash this command or claw
+ * back the real result" rule for its own `process-termination` trigger.
+ * AC-27: this changes WHO calls `workspace_propose` at a trigger SLATE-7
+ * already fires at, never introduces a new trigger condition of its own.
+ */
+async function dispatchWrapUpBestEffort(
+  io: AgentIO,
+  options: RunAgentTurnOptions,
+  trigger: RunWrapUpInput["trigger"],
+  cwd: string,
+  dir: string,
+  slate: Slate,
+): Promise<void> {
+  try {
+    const dispatch = options.dispatchWrapUp ?? runWrapUp;
+    await dispatch({ trigger, cwd, dir, slate });
+  } catch (err) {
+    io.onSystem?.(`wrap-up dispatch failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+
 async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): Promise<void> {
   const ref = options.slateSession;
   if (ref === undefined || !ref.opened) {
@@ -844,6 +880,9 @@ async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAg
     const slate = await readSlate(ref.dir);
     const course = await courseFromSlate(ref.cwd, slate);
     if (isCourseDone(course)) {
+      if (slate !== undefined) {
+        await dispatchWrapUpBestEffort(io, options, "flow-complete", ref.cwd, ref.dir, slate);
+      }
       await closeSlateSession(ref, () => deps.idSeq());
     }
   } catch (err) {
@@ -887,6 +926,14 @@ async function runAgentTurnCore(
     // the real request proceed.
     try {
       if (options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
+        // SLATE-18 "explicit" trigger: a human declared the task done in
+        // plain language ("wrap up", "task complete", …) — dispatch BEFORE
+        // the close archives the slate, so there is still a live Slate to
+        // read Seeds/workspaceId from.
+        const liveSlate = await readSlate(options.slateSession.dir);
+        if (liveSlate !== undefined) {
+          await dispatchWrapUpBestEffort(io, options, "explicit", options.slateSession.cwd, options.slateSession.dir, liveSlate);
+        }
         await closeSlateSession(options.slateSession, () => deps.idSeq());
       } else if (actionRequest) {
         // SLATE-2a "worktree resolved" trigger: `ensureSlateOpened` fires a
