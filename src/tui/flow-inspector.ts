@@ -20,7 +20,7 @@ export type OpenModalInput = {
   tabs: readonly ModalTab[];
   initialTab?: string;
   footer?: readonly { key: string; label: string }[];
-  renderTab: (tabId: string, body: unknown) => void | (() => void);
+  renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
   onClose?: () => void;
 };
 
@@ -128,7 +128,36 @@ export type PresentFlowsOptions = {
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
-function paintLines(otui: unknown, renderer: unknown, body: unknown, lines: readonly string[]): { content: string } | undefined {
+// Review finding: session-info.ts's tabs wrap to ctx.width (added in this
+// same diff for the new flex-scaling modal panel); this file's tabs never
+// picked up the equivalent plumbing, so /flows content overflows unwrapped
+// on a narrow terminal while /status wraps correctly right next to it.
+function wrapLines(text: string, width: number | undefined): string {
+  if (width === undefined || width < 8) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .flatMap((line) => {
+      if (line.length <= width) {
+        return [line];
+      }
+      const chunks: string[] = [];
+      for (let i = 0; i < line.length; i += width) {
+        chunks.push(line.slice(i, i + width));
+      }
+      return chunks;
+    })
+    .join("\n");
+}
+
+function paintLines(
+  otui: unknown,
+  renderer: unknown,
+  body: unknown,
+  lines: readonly string[],
+  width?: number,
+): { content: string } | undefined {
   if (otui === undefined || otui === null || body === undefined || body === null) {
     return undefined;
   }
@@ -138,7 +167,7 @@ function paintLines(otui: unknown, renderer: unknown, body: unknown, lines: read
   if (parent.add === undefined || ctor === undefined) {
     return undefined;
   }
-  const node = new ctor(renderer, { id: "flows-body", content: lines.join("\n") });
+  const node = new ctor(renderer, { id: "flows-body", content: wrapLines(lines.join("\n"), width) });
   parent.add(node);
   return node;
 }
@@ -162,11 +191,21 @@ export function presentFlows(
     (typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
       : 13);
+  let tabWidth: number | undefined;
 
+  // List rows are one line per flow (fixed `id status done/total title`
+  // format) and its scroll/selection math is item-indexed (`scrollToReveal`
+  // reveals `selected`'s ROW), so it is windowed unwrapped — wrapping would
+  // desync the item↔row mapping the moment any title wraps to 2+ lines.
+  // Detail's body is prose (summary/tasks) with an already line-offset (not
+  // item-indexed) scroll, so wrapping composes there without that hazard —
+  // this is the fix for /flows content overflowing unwrapped on a narrow
+  // terminal while /status wraps correctly right next to it.
   const listLines = (): string[] => formatFlowListLines(items, selected);
   const detailLines = (): string[] => {
     const item = items[selected];
-    return item !== undefined ? formatFlowDetailLines(item) : ["No flow selected."];
+    const raw = item !== undefined ? formatFlowDetailLines(item) : ["No flow selected."];
+    return wrapLines(raw.join("\n"), tabWidth).split("\n");
   };
 
   const paintSelection = (): void => {
@@ -202,8 +241,9 @@ export function presentFlows(
     ],
     initialTab: "list",
     footer: FLOWS_FOOTER,
-    renderTab: (tabId, body) => {
+    renderTab: (tabId, body, ctx) => {
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
+      tabWidth = ctx?.width;
       if (tabId === "list") {
         listScroll = scrollToReveal(selected, listScroll, bodyRows);
         listNode = paintLines(otui, renderer, body, windowLines(listLines(), listScroll, bodyRows));

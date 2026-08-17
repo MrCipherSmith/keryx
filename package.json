@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.37",
+  "version": "0.2.40",
   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {

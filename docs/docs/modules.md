@@ -946,7 +946,65 @@ the `core/mcp/` structure + config and the `modules.mcp` manifest entry.
 facade + the security `guard` seam; the MCP SDK (`@modelcontextprotocol/sdk`) is an
 **optional** dependency loaded lazily only in `server.ts`. It is the outbound consumer
 of every other module's facade — the first cross-module integration that reaches in
-through the public service contracts rather than the shared file workspace.
+through the public service contracts rather than the shared file workspace. SAC
+tools (`sac.overview`, `sac.read`, `sac.collaboration`, `sac.propose`,
+`sac.review`) live in this same registry and **deny HTTP** with
+`sac_transport_denied` before workspace discovery.
+
+---
+
+## sac
+
+**Purpose.** Shared Agent Context is the local-first collaboration entry point:
+a file-backed workspace registry, a budgeted Facts / Work / Know-how read path,
+and a propose/review lifecycle that promotes a completed session into wiki,
+memory, or skills through guarded owner writers. It stores workspace-relative
+references, not copies. It is **not** one of the nine default `init` modules
+and has no `modules.sac` toggle — the CLI verb is always on `CLI_ROUTES`.
+
+**CLI surface.** `workspaceCommand` (`src/commands/workspace.ts`):
+
+| Subcommand | Behavior |
+|---|---|
+| `workspace create --title <t> [--component <ref>]` | create `workspace.json` |
+| `workspace list` / `show <id>` | list or print the manifest |
+| `workspace add-resource <id> --kind --uri [--revision]` | attach a typed `./…` ref |
+| `workspace overview` / `read` | FWK read path (`--max-items`, `--max-tokens`, `--explain`) |
+| `workspace propose` / `review` | session wrap-up → terminal review + owner write |
+| `workspace collaboration <id>` | read-only collaboration overview |
+| `workspace policy-readiness` | diagnose the opt-in policy-experiment chain |
+
+`keryx commands` **omits** this verb; use `keryx workspace --help`.
+
+**Key files.**
+- `src/sac/index.ts` — schemas, `validateSacContract`, trusted `ActorContext`, rank/guard.
+- `src/sac/workspace-service.ts` — `workspace.json`, authorize-at-use, POSIX `openat`/`O_NOFOLLOW` reads.
+- `src/sac/fwk-service.ts` — overview/read, access-receipt ledger, `resolvePolicySelection`.
+- `src/sac/proposal-lifecycle.ts` — create/review; harness vs fail-closed local factories.
+- `src/sac/wiki-owner-writer.ts`, `memory-owner-writer.ts`, `skill-owner-writer.ts`.
+- `src/sac/receipt-integrity.ts` — hash-chained access receipts.
+- `src/commands/workspace.ts` — CLI adapter.
+- `src/mcp/tools.ts` — `sac.*` tools (stdio only).
+- `src/harness/tool/builtin/workspace-context-tool.ts` — `workspace_overview` / `workspace_read`.
+
+**How it works.** Three thin adapters (CLI, MCP stdio, harness reads) call the
+same in-process factories and emit `JSON.parse(JSON.stringify(...))` results.
+Identity is the local OS user. Accept is possible only through
+`createHarnessProposalLifecycleService`. Know-how kinds are only
+`wiki | memory | skill`. Policy experiment default is `enabled: false` /
+`killSwitch: true`.
+
+**Data & artifacts.**
+- `.metaproject/workspaces/<id>/workspace.json` — primary record.
+- `.metaproject/workspaces/<id>/proposals/` + `activity.jsonl`.
+- `.metaproject/context-operations/access-receipts.jsonl` (+ checkpoint).
+- Accepted knowledge lands in `.metaproject/wiki/decisions/`,
+  `.metaproject/memory/`, `.metaproject/project-skills/sac/`.
+
+**Dependencies / integrations.** Flow (read-only Work), wiki/memory/gdskills
+(Know-how + owner writes), session store (`propose --session`), security
+guarded writes, MCP/harness adapters. POSIX required for source-content
+reads. Operator guide: [Shared Agent Context](./guides/shared-agent-context.md).
 
 ---
 
@@ -1148,6 +1206,9 @@ where tools actually run: the non-interactive harness paths register none.
 | `sessions export <id>` | Markdown transcript |
 | `sessions path` | the on-disk sessions directory |
 | `shell /sessions` | interactive session picker + live switch in TUI |
+| `shell /status` | session inspector (TUI modal; readline text dump). `/session-info` / `/info` are not aliases |
+| `shell /flows [id]` | browse project flows; optional one-package detail |
+| `shell /theme [name]` | no arg: TUI picker (live preview, applies on Enter/Apply); `[name]`: applies immediately on any surface |
 | `shell /interrupt` | hard-stop main turn in TUI |
 
 `session` is a singular alias for `sessions`.

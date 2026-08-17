@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -127,16 +127,70 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
-      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam.",
-      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" } }, ["workspaceId", "proposalId", "decision"]),
+      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam. Accepting requires confirmToken, minted by running `keryx workspace confirm-review <workspace-id> <proposal-id>` in a real, approval-gated shell — this tool cannot mint one itself.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" }, confirmToken: { type: "string", description: "Required when decision is \"accepted\" — mint via `keryx workspace confirm-review <workspace-id> <proposal-id>`." } }, ["workspaceId", "proposalId", "decision"]),
       mutating: true,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
-        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
+        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID(); const confirmToken = stringParam(params, "confirmToken");
         // Same composition as sac.propose: an accept must see the real owner
         // writer (memory/wiki/skill), or it lands in "stale" for no real reason.
-        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
+        // `interactive: true` — matches current MCP trust posture (a human is
+        // driving this tool call; SLATE-8's spec explicitly scopes the
+        // stdio-transport trust gap as a separate, not-fixed-here concern, so
+        // this does not invent a stricter MCP-specific policy). SLATE-20 adds
+        // a second, independent gate on top: `decision: "accepted"` also
+        // requires `confirmToken`, which only `keryx workspace confirm-review`
+        // (a real shell command, never exposed as a tool here) can mint — a
+        // caller with only MCP tool access, no shell_exec, cannot accept on
+        // its own even though `interactive: true` alone would have let it.
+        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}), ...(confirmToken ? { confirmToken } : {}) });
         return normalizeProposalLifecycleResult(result);
+      },
+    },
+    // SLATE-19b: MCP parallel of the keryx-shell workspace_list/workspace_create/
+    // workspace_show interactive tools (workspace-lifecycle-tool.ts) — before this,
+    // Claude Code/Codex/any other MCP client had sac.propose/sac.review but no way
+    // to discover or create a SAC workspace at all, unlike keryx-shell's own
+    // interactive agent. Same WorkspaceService the CLI (workspace.ts) and the
+    // keryx-shell tools already use — no shadow state, same records either surface
+    // produces. `sac.workspaceList`/`sac.workspaceShow` are plain reads;
+    // `sac.workspaceCreate` writes a new empty workspace container (no knowledge in
+    // it, reversible via `keryx workspace archive`) and is gated the same way
+    // `sac.propose`/`sac.review` already are — local-stdio only, since v1 SAC has no
+    // verified HTTP principal policy.
+    {
+      name: "sac.workspaceList", module: "sac", description: "List Shared Agent Context (SAC) workspaces visible to this actor — call this before sac.workspaceCreate to check whether an existing workspace already fits.",
+      inputSchema: OBJECT_SCHEMA({ includeArchived: { type: "boolean" } }, []),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const includeArchived = params.includeArchived === true;
+        const workspaces = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived });
+        return workspaces;
+      },
+    },
+    {
+      name: "sac.workspaceShow", module: "sac", description: "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via sac.workspaceList.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? "";
+        return await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+      },
+    },
+    {
+      name: "sac.workspaceCreate", module: "sac", description: "Create a new Shared Agent Context (SAC) workspace. Call sac.workspaceList FIRST and only create when no existing workspace already fits the current topic — a workspace is meant to persist and accumulate context across sessions.",
+      inputSchema: OBJECT_SCHEMA({ title: { type: "string" }, component: { type: "string" } }, ["title"]),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const title = stringParam(params, "title")?.trim() ?? "";
+        if (title.length === 0) throw new Error("sac.workspaceCreate requires a non-empty 'title'");
+        const component = stringParam(params, "component");
+        const workspace = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
+        return workspace;
       },
     },
     {

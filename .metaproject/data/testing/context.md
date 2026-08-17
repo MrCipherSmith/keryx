@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-13T11:45:26.026Z
+generatedAt: 2026-08-17T13:43:12.149Z
 
 ## Frameworks
 
@@ -46,6 +46,7 @@ generatedAt: 2026-08-13T11:45:26.026Z
 - src/commands/ctx.rg-argv.test.ts
 - src/commands/ctx.test.ts
 - src/commands/dashboard.test.ts
+- src/commands/goal-command.test.ts
 - src/commands/harness-exec-extension-wave.test.ts
 - src/commands/harness-exec-restricted.smoke.test.ts
 - src/commands/harness-exec.smoke.test.ts
@@ -56,6 +57,7 @@ generatedAt: 2026-08-13T11:45:26.026Z
 - src/commands/init.escape.test.ts
 - src/commands/init.no-git.test.ts
 - src/commands/init.test.ts
+- src/commands/interactive-agent-tools.test.ts
 - src/commands/mcp-install.test.ts
 - src/commands/memory-p0.test.ts
 - src/commands/memory-report.test.ts
@@ -74,6 +76,7 @@ generatedAt: 2026-08-13T11:45:26.026Z
 - src/commands/serve.process.test.ts
 - src/commands/serve.recovery.test.ts
 - src/commands/sessions.fork.test.ts
+- src/commands/shell-approval.test.ts
 - src/commands/shell-launch.test.ts
 - src/commands/shell-pty-launch.smoke.test.ts
 - src/commands/shell-slash-registry.test.ts
@@ -96,11 +99,8 @@ generatedAt: 2026-08-13T11:45:26.026Z
 - src/flow/context-p0.test.ts
 - src/flow/disposition.test.ts
 - src/flow/duplicate-ids.test.ts
-- src/flow/machine.test.ts
-- src/flow/migration.test.ts
-- src/flow/schema.test.ts
 
-- ... 265 more
+- ... 300 more
 
 ## CI
 
@@ -115,31 +115,31 @@ generatedAt: 2026-08-13T11:45:26.026Z
 - CLAUDE.md: For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.
 - CLAUDE.md: For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.
 - docs/README.md: [Implementation spec](report/release-readiness-2026-07-10/implementation-spec.md)
-- docs/decisions/keryx-harness/ADR-0001-d01-release0-boundary.md: 5. **Context manifest** — a bounded, hash-addressed project context scope (code graph, wiki, memory, rules, skills, testing, health, security references) with metadata, freshness indicators, and provenance.
-- docs/decisions/keryx-harness/ADR-0001-d01-release0-boundary.md: [specification.md](../../requirements/keryx-project-agent-harness/specification.md) — architecture, runtime lifecycle, storage model, manifest and config schemas, CLI, tool/policy boundary, durable orchestration.
-- docs/decisions/keryx-harness/ADR-0001-d01-release0-boundary.md: ✓ Traceability to implementation-plan.md, acceptance.feature, README, PRD, specification, brainstorm, and schemas
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: structured claims contain **no contradiction** with the frozen specification
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: This is the exact position of the frozen specification:
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: > — specification.md §Orchestration Model
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: > — specification.md §Canonical Ownership and Import Direction
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: orchestrator" (specification.md §Planned Module Map).
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: The frozen specification (§Canonical Ownership and Import Direction) names the
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: | `ContextProvider` | harness context service | graph, ctx, wiki, memory, testing, health adapters | adapter → port | Project brain stays owned by existing modules; harness consumes read-only. |
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: provider SDK, terminal UI, MCP SDK, or a specific subprocess implementation.
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: ports." (specification.md §Architectural Position)
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: section. S-06 is realized in the frozen package by specification.md
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: transitions") is the test gate for the single-coordinator invariant:
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: flow/harness completion parity and failure-disposition tests.
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: TM-01** specifies additive task/run-link fields (dependencies, attempts,
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: [specification.md](../../requirements/keryx-project-agent-harness/specification.md)
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: S-06** (single coordinator) → specification.md §Orchestration Model +
-- docs/decisions/keryx-harness/ADR-0002-d02-single-coordinator-ownership.md: > frozen spec.
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: resolution is deterministic, testable, and independent of the CLI/TUI) and D4
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: `specification.md` §Security Boundary confirms: "Three profiles exist:
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: S-04** (implementation-plan.md §W1 D-03 traceability id; `specification.md`
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: time (`specification.md` §Error and Recovery Contracts:
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: (`specification.md` §Security Boundary). Network enforcement is the broker, not
-- docs/decisions/keryx-harness/ADR-0003-d03-security-profiles-containment.md: (`specification.md` §Policy Decision; acceptance `@SC_R05_HARD_DENY`), and
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: failing_candidate_output_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: budget_33_of_32_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: stable_id_reorder_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: changed_unpinned_source_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: note_mutation_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: self_review_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: cross_proposal_idempotency_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: accepted_target_link_back_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: mixed_activity_ledger_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: sibling_worktree_contract_test
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: revoke_and_cross_workspace_tests_green
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ru/implementation-plan.md: Привязать текущие test claims к commit/date.
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ru/implementation-plan.md: Добавить executable docs smoke tests.
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ru/implementation-plan.md: Exit: output-changing e2e corpus, budget/property tests, replay-safe IDs.
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ru/implementation-plan.md: Exit: zero raw secret/PII persistence corpus; expiry/deletion/recovery tests.
+- docs/analysis/keryx-improvements-1/2026-08-14/plans/ru/implementation-plan.md: Exit: revoke/cross-workspace/replay/confused-deputy tests.
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | ID | Severity | Finding | Primary evidence | Falsifier/acceptance test |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-021 | P0 | Collaboration and proposal lifecycle share incompatible `activity.jsonl` | both services | handoff→proposal→review→collaboration mixed test |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-022 | P1 | Collaboration nested payload is not schema-closed | `collaboration-service.ts` | property tests reject nested extras/content |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-026 | P1 | Sibling worktrees cannot share checkout-rooted SAC state | containment/storage | explicit clone/worktree model test |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-027 | P1 | Every read performs a durable locked append; no surfaced retention | FWK ledger | 10k-read SLO, prune/repair tests |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-034 | P1 | Historical test totals are presented as current evidence | SAC docs | evidence pinned to commit/tag/date |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://github.com/a2aproject/A2A/blob/main/docs/specification.md
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: owner_contract_tests
 
 ## Recommendations
 

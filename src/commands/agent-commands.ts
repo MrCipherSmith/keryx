@@ -112,6 +112,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   { name: "/new", description: "Start a new session (old kept on disk)", modes: BOTH },
+  {
+    name: "/goal",
+    description: "Deterministically start a goal — /goal <text> [--workspace <id>]",
+    // SLATE-15 (flow 161): deterministic slate-open entry, a TUI/readline
+    // agent-mode concept (mirrors /expand, /think, /copy) — chat mode has no
+    // slate/tools at all, so /goal has no chat-mode meaning.
+    modes: AGENT_ONLY,
+  },
   { name: "/resume", description: "Resume a prior session in this project", modes: AGENT_ONLY },
   { name: "/sessions", description: "Open the session list and switch to one", modes: AGENT_ONLY },
   {
@@ -125,8 +133,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,
   },
+  { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
+  {
+    name: "/queue",
+    description: "Manage the main queue — /queue <remove|edit|force> [N] (N = qN position, default 1)",
+    modes: AGENT_ONLY,
+  },
   {
     name: "/exit",
     description: "Leave the shell (/quit works too)",

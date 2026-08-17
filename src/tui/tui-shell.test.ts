@@ -5,7 +5,8 @@
 // `AgentIO` (createTuiAgentIo), then the captured frame is asserted to contain the
 // streamed assistant text and a tool line. `@opentui/core` is optional + loaded
 // via dynamic import; the tests skip when it is absent.
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,6 +18,7 @@ import {
   SIDEBAR_TEXT_WIDTH,
 } from "./shell-chrome";
 import {
+  applyRuntimeSwitchToSlate,
   attachBlockIo,
   attachUsageIo,
   createTuiAgentIo,
@@ -24,8 +26,10 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  adaptiveSelectHeight,
   selectBoxHeight,
   filterConnectedDetectedProviders,
   shortenCwd,
@@ -47,8 +51,10 @@ import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
-import type { NormalizedEvent, ProviderDescription } from "../harness/provider/types";
+import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 import type { DetectedProvider } from "../commands/select";
+import { readSlate, writeSlate } from "../session/slate";
+import type { SlateSessionRef } from "../session/slate-lifecycle";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -301,6 +307,22 @@ test("selectBoxHeight: described items need 2 rows each so all stay visible (flo
   expect(selectBoxHeight(0, false)).toBe(1);
 });
 
+test("adaptiveSelectHeight: grows to available for a big list, min 1/4 of parent, never overflows", () => {
+  // Small list: fills to its content size, but at least 1/4 of the available height.
+  expect(adaptiveSelectHeight(1, 24)).toBe(Math.floor(24 / 4)); // min = 6
+  expect(adaptiveSelectHeight(3, 24, 1)).toBe(6); // min dominates (3 < 6)
+  // List taller than 1/4: grows with content.
+  expect(adaptiveSelectHeight(10, 24)).toBe(10);
+  // Huge list: capped at the full available height (scrolls within it).
+  expect(adaptiveSelectHeight(500, 24)).toBe(24);
+  // per=2 (described items) doubles content rows, still capped at available.
+  expect(adaptiveSelectHeight(100, 40, 2)).toBe(40);
+  expect(adaptiveSelectHeight(6, 40, 2)).toBe(12);
+  // Never overflows available even with degenerate inputs.
+  expect(adaptiveSelectHeight(1000, 10)).toBe(10);
+  expect(adaptiveSelectHeight(0, 10)).toBe(2); // min 1/4 of 10 = 2, never 0
+});
+
 test("filterConnectedDetectedProviders: keeps only providers with valid, successful credentials", async () => {
   const detected: DetectedProvider[] = [
     { name: "deepseek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },
@@ -450,16 +472,19 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   setup.renderer.destroy();
 });
 
-otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "keryx-tui-git-"));
-  Bun.spawnSync(["git", "init", "-q"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "checkout", "-b", "feature/sidebar-ui"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "config", "user.name", "Keryx Test"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "config", "user.email", "test@example.com"], { cwd, stdout: "ignore", stderr: "ignore" });
-  await writeFile(join(cwd, "readme.md"), "hello", "utf8");
-  Bun.spawnSync(["git", "add", "readme.md"], { cwd, stdout: "ignore", stderr: "ignore" });
-  Bun.spawnSync(["git", "commit", "-m", "Init"], { cwd, stdout: "ignore", stderr: "ignore" });
+test("resolveSidebarMetadata reads branch via the injected git runner", () => {
+  const git = (args: string[], _cwd: string): string | undefined => {
+    if (args[0] === "rev-parse") {
+      return "feature/sidebar-ui";
+    }
+    return undefined;
+  };
+  expect(resolveSidebarMetadata("/tmp/unused", git).branch).toBe("feature/sidebar-ui");
+  expect(resolveSidebarMetadata("/tmp/unused", () => undefined).branch).toBeUndefined();
+  expect(resolveSidebarMetadata("/tmp/unused", () => "HEAD").branch).toBeUndefined();
+});
 
+otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   const otui = requireOtui();
   const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
   const chrome = await createShellChrome(otui.core, setup.renderer, {
@@ -470,7 +495,9 @@ otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
     commands: commandsForMode("agent"),
   });
   try {
-    mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, cwd);
+    mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, "/tmp/keryx-unused", {
+      branch: "feature/sidebar-ui",
+    });
     await setup.flush();
     const frame = setup.captureCharFrame();
 
@@ -481,7 +508,6 @@ otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
   } finally {
     chrome.destroy();
     setup.renderer.destroy();
-    await rm(cwd, { recursive: true, force: true });
   }
 });
 
@@ -995,6 +1021,30 @@ otuiTest("AC3: Ctrl+O enters block-nav, ↑/↓ move focus, Enter expands, y cop
   expect(h.nav.active()).toBe(false);
   expect(h.textarea.focused).toBe(true);
   expect(h.captureCharFrame()).not.toContain("❯");
+  h.destroy();
+});
+
+otuiTest("block-nav ↑ scrolls an off-screen focused block into view", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 10 });
+  const first = h.add({ kind: "output", summary: "FIRST-BLOCK", fullText: "one" });
+  for (let i = 0; i < 12; i++) {
+    h.add({ kind: "output", summary: `later-${i}`, fullText: "x" });
+  }
+  await h.flush();
+  h.scroll.stickyScroll = false;
+  h.scroll.scrollTop = h.scroll.scrollHeight;
+  await h.flush();
+  expect(h.captureCharFrame()).not.toContain("FIRST-BLOCK");
+
+  h.nav.enter();
+  await h.flush();
+  for (let i = 0; i < 12; i++) {
+    h.mockInput.pressArrow("up");
+    await h.flush();
+  }
+  expect(h.registry.focused()?.id).toBe(first);
+  expect(lineWith(h.captureCharFrame(), "FIRST-BLOCK")).toContain("❯");
   h.destroy();
 });
 
@@ -1750,6 +1800,51 @@ otuiTest("a context loader that never settles neither delays nor blocks the appr
   h.renderer.destroy();
 });
 
+otuiTest("clicking the Deny row resolves the approval — options are mouse-clickable, not keyboard-only", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "bun test src/tui/tui-shell.ts";
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async () => "");
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  const rows = frame.split("\n");
+  const denyRow = rows.findIndex((line) => line.includes("Deny"));
+  expect(denyRow).toBeGreaterThanOrEqual(0);
+
+  const mouse = otui.testing.createMockMouse(h.renderer);
+  await mouse.click(5, denyRow);
+  await h.flush();
+
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
+otuiTest("a long multi-line command is no longer cut at 120 chars — it renders in full, up to the box", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { height: 24 });
+  // Well past the old 120-char cutoff; the tail line must still be visible.
+  const command = [
+    "python3 - <<'PY'",
+    "import io",
+    'p = "src/tui/tui-shell.ts"',
+    's = io.open(p, encoding="utf-8").read()',
+    "print('TAIL_MARKER_AFTER_120_CHARS', len(s))",
+  ].join("\n");
+  expect(command.length).toBeGreaterThan(120);
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async () => "");
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("TAIL_MARKER_AFTER_120_CHARS");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
 otuiTest("a streamed fence widens its frame as the payload grows (maxWidth is recomputed, flow 115)", async () => {
   const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 60, height: 12 });
@@ -1774,4 +1869,316 @@ otuiTest("a streamed fence widens its frame as the payload grows (maxWidth is re
   expect(frame.width).toBeGreaterThan(narrow);
   expect(captureCharFrame()).toContain("const bbbbbbbbbbbbbbbbbbbbbbbbbb = 2");
   renderer.destroy();
+});
+
+// --- SLATE-2a: /model-switch Anchors auto-inject (AC4) ---
+//
+// `launchTuiAgentShell`'s `/model` handler (`command.name === "/model"`,
+// ~tui-shell.ts:2549) is a giant closure with no headless test harness in
+// this file — every existing test here either drives an exported PURE
+// helper (isShellApproved, filterConnectedDetectedProviders, selectBoxHeight,
+// mountCwdPanel, …) or renders `runAgentTurn` output through
+// `createTuiAgentIo` inside a scripted-renderer harness; nothing drives the
+// full REPL's slash-command dispatch (`launchTuiAgentShell` itself is never
+// imported/invoked here). Per the dispatch brief, since the `/model` wiring
+// is not cleanly testable at that layer without the implementation already
+// existing, this pins down a NEW exported pure contract for T7 to build and
+// wire the `/model` handler through — matching this file's existing
+// extracted-pure-helper pattern:
+//
+//   applyRuntimeSwitchToSlate(params: {
+//     slateSession: SlateSessionRef | undefined;
+//     runtime: { provider: string; model: string };
+//     history: NormalizedMessage[];
+//   }): Promise<boolean>
+//
+// Reuses the SAME `recordSlateTouch` touched-tracking helper from
+// `src/session/slate-lifecycle.ts` (called with the NEW provider/model as
+// `runtime`) and, on a real change, pushes ONE `{role:"user",
+// provenance:"project", content: renderAnchorsBlock(...)}` message into the
+// TUI's `history` reflecting the new runtime — returns whether it injected.
+// A `/model` handler that calls this after `switchTo(...)` succeeds
+// satisfies AC4's "/model switch" trigger without this file needing to
+// drive the real OpenTUI dropdown/picker at all.
+
+async function tempSlateDirForTui(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "keryx-tui-slate-"));
+}
+
+async function tempCwdForTui(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "keryx-tui-slate-cwd-"));
+}
+
+test("SLATE-2a: applyRuntimeSwitchToSlate pushes an Anchors-block message into history reflecting the NEW provider/model after a /model switch", async () => {
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const history: NormalizedMessage[] = [];
+
+  const changed = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+  });
+
+  expect(changed).toBe(true);
+  const anchorsMsg = history.find((m) => m.role === "user" && m.content.includes("gpt-5"));
+  expect(anchorsMsg).toBeDefined();
+  expect(anchorsMsg?.provenance).toBe("project");
+  const slate = await readSlate(dir);
+  expect(slate?.anchors.runtime).toEqual({ provider: "openai", model: "gpt-5" });
+});
+
+test("review finding 6: applyRuntimeSwitchToSlate calls onHistoryChange(\"tool\") immediately after pushing an Anchors-block message", async () => {
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const history: NormalizedMessage[] = [];
+  const changes: string[] = [];
+
+  const changed = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+
+  expect(changed).toBe(true);
+  expect(changes).toEqual(["tool"]);
+});
+
+test("review finding 6: applyRuntimeSwitchToSlate does NOT call onHistoryChange when nothing changed (no-op switch, e.g. no slateSession or a same provider/model switch)", async () => {
+  const history: NormalizedMessage[] = [];
+  const changes: string[] = [];
+
+  const changedUndefined = await applyRuntimeSwitchToSlate({
+    slateSession: undefined,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+  expect(changedUndefined).toBe(false);
+  expect(changes).toEqual([]);
+
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({
+    anchors: { root: cwd, touched: [], runtime: { provider: "anthropic", model: "claude" } },
+    course: {},
+    seeds: [],
+  }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const changedSame = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "anthropic", model: "claude" },
+    history,
+    onHistoryChange: (kind) => changes.push(kind),
+  });
+  expect(changedSame).toBe(false);
+  expect(changes).toEqual([]);
+});
+
+test("SLATE-2a: applyRuntimeSwitchToSlate is a no-op (no history mutation) when slateSession is absent or not yet opened", async () => {
+  const history: NormalizedMessage[] = [];
+
+  const changedUndefined = await applyRuntimeSwitchToSlate({
+    slateSession: undefined,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+  });
+  expect(changedUndefined).toBe(false);
+  expect(history.length).toBe(0);
+
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  const notOpened: SlateSessionRef = { dir, cwd, opened: false };
+  const changedNotOpened = await applyRuntimeSwitchToSlate({
+    slateSession: notOpened,
+    runtime: { provider: "openai", model: "gpt-5" },
+    history,
+  });
+  expect(changedNotOpened).toBe(false);
+  expect(history.length).toBe(0);
+});
+
+test("SLATE-2a: applyRuntimeSwitchToSlate is idempotent — switching to the SAME provider/model twice injects only once", async () => {
+  const dir = await tempSlateDirForTui();
+  const cwd = await tempCwdForTui();
+  await writeSlate(dir, () => ({
+    anchors: { root: cwd, touched: [], runtime: { provider: "anthropic", model: "claude" } },
+    course: {},
+    seeds: [],
+  }));
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  const history: NormalizedMessage[] = [];
+
+  const first = await applyRuntimeSwitchToSlate({
+    slateSession,
+    runtime: { provider: "anthropic", model: "claude" },
+    history,
+  });
+
+  expect(first).toBe(false);
+  expect(history.length).toBe(0);
+});
+
+// --- SLATE-3a: tui-shell.ts getSessionDir threading (flow 161, AC5) ------
+//
+// `launchTuiAgentShell` builds `deps = await opts.makeAgentDeps(sel)` at its
+// FIRST call site (before session/`slateSession` setup runs later in the
+// same function — see the `slateSession` declaration further down) and
+// rebuilds `deps` at two more call sites (`/model`/`/connect` switch, and a
+// read-only side-worker deps rebuild). `slate_read`/`slate_write_seed` need
+// the CURRENT session dir at TOOL-INVOKE time, not whatever was true when
+// `deps.tools` was last built — a plain static dir threaded once cannot
+// track a session opened/reassigned later.
+//
+// Chosen shape (T8, for T9 to build exactly this): `opts.makeAgentDeps`'s
+// type gains a second parameter, `getSessionDir: () => string | undefined`,
+// and EVERY real call site passes `() => slateSession?.dir` — a closure
+// reading `launchTuiAgentShell`'s own `let slateSession` variable BY
+// REFERENCE. This is safe even at the FIRST call site (textually before
+// `let slateSession` is declared): the closure is only CREATED there, never
+// INVOKED until a turn actually runs a tool call, by which point
+// `slateSession`'s `let` has long since executed further down in the same
+// linear async function body — TDZ is a call-time concern, not a
+// closure-creation-time one.
+//
+// Like the SLATE-2a `/model` audit above, `launchTuiAgentShell` itself is
+// never imported/invoked in this file (no headless harness for the full
+// OpenTUI REPL) — this is a source-text audit, following the exact
+// precedent `shell.test.ts`'s SLATE-5 / SLATE-3a describe blocks set for
+// `runAgentRepl` (also never driven end-to-end here).
+describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)", () => {
+  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStart = tuiSource.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBody = tuiSource.slice(fnStart); // last top-level function in the file
+
+  // Fix round (Finding 1, code review of PR #306): `opts.makeAgentDeps`'s
+  // second parameter widened from `getSessionDir: () => string | undefined`
+  // to `getSlateSession: () => SlateSessionRef | undefined` — a `.dir`-only
+  // getter meant `commands/shell.ts`'s `makeAgentDeps` closure had no way to
+  // hand `createSpawnSubagentTool` a real `SlateSessionRef` at all, so
+  // SLATE-6's child-slate fold silently never fired in a real TUI session.
+  // Every call site below now passes the live ref itself (`() =>
+  // slateSession`), not a pre-narrowed `.dir` string; `shell.ts`'s own
+  // `makeAgentDeps` derives `.dir` locally where `buildInteractiveAgentTools`
+  // still needs just the string (see that file).
+  test("opts.makeAgentDeps's type accepts a getSlateSession second parameter", () => {
+    const optsTypeBlock = fnBody.slice(0, fnBody.indexOf("}): Promise<boolean> {"));
+    expect(optsTypeBlock).toContain(
+      "makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;",
+    );
+  });
+
+  test("the FIRST opts.makeAgentDeps call site (before slateSession is declared) passes a live getter, not a snapshot", () => {
+    const callIndex = fnBody.indexOf("let deps = await opts.makeAgentDeps(");
+    expect(callIndex).toBeGreaterThanOrEqual(0);
+    const declIndex = fnBody.indexOf("let slateSession: SlateSessionRef | undefined;");
+    expect(declIndex).toBeGreaterThan(callIndex); // confirms the TDZ-shaped ordering this audit is about
+    const call = fnBody.slice(callIndex, callIndex + 200);
+    expect(call).toContain("opts.makeAgentDeps(sel, () => slateSession)");
+  });
+
+  test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    expect(switchToIndex).toBeGreaterThanOrEqual(0);
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 300);
+    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
+  });
+
+  test("the read-only side-worker deps rebuild passes the same live getter", () => {
+    const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
+    expect(baseIndex).toBeGreaterThanOrEqual(0);
+    const baseBlock = fnBody.slice(baseIndex, baseIndex + 200);
+    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, () => slateSession)");
+  });
+
+  test("all three real call sites are updated — not fewer, not more", () => {
+    const occurrences = fnBody.split("() => slateSession)").length - 1;
+    expect(occurrences).toBe(3);
+  });
+});
+
+// --- SLATE-15: /goal wiring in tui-shell.ts's command switch (flow 161, T10
+// — AC1/AC2) ------------------------------------------------------------
+//
+// RED until T11 lands the wiring. `launchTuiAgentShell` itself is never
+// imported/invoked in this file (no headless harness for the full OpenTUI
+// REPL — see the SLATE-2a/SLATE-3a source-text audits above), so this is a
+// source-text audit, following the same precedent. The ACTUAL /goal
+// behavior (fail-closed `--workspace` validation, no-workspace-created
+// guarantee, ensureSlateOpened + runAgentTurn sequencing) is proven directly
+// against the shared `runGoalCommand` core in `../commands/goal-command.test.ts`;
+// this block only proves the TUI surface actually WIRES that core in — the
+// Phase-2 cross-surface-gap lesson this flow's dispatch briefs call out
+// explicitly ("verify both surfaces by grep, do not assume symmetry").
+//
+// PINNED SHAPE (T11 implements exactly this — see subagent-result): a new
+// `if (command.name === "/goal") { ... return; }` branch inside the command
+// switch (alongside `/model`, `/copy`, `/interrupt`, etc.), calling:
+//   void (async () => {
+//     await runGoalCommand({
+//       raw: line.slice(command.name.length).trim(),
+//       cwd: sessionCwd,
+//       io,
+//       deps,
+//       history,
+//       slateSession,
+//       mintAttemptId: mintTimestampAttemptId,
+//     });
+//   })();
+// `runGoalCommand` mutates `slateSession.opened`/`.dir` targets IN PLACE (the
+// same object `opts.makeAgentDeps`'s `getSessionDir` closure already reads BY
+// REFERENCE per the SLATE-3a audit above) — no additional getSessionDir
+// re-wiring is needed for this branch.
+//
+// `/goal` must ALSO be registered in `agent-commands.ts`'s
+// `AGENT_SLASH_COMMANDS` (AGENT_ONLY mode) for `findAgentCommand`/the `/`
+// composer dropdown to recognize it here at all — see
+// `agent-commands.test.ts`'s own SLATE-15 additions for that half.
+describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
+  const tuiSource2 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStart2 = tuiSource2.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBody2 = tuiSource2.slice(fnStart2);
+
+  test("runGoalCommand is imported from ../commands/goal-command", () => {
+    expect(tuiSource2).toMatch(/from ["'](\.\.\/commands\/)?goal-command["']/);
+    expect(tuiSource2).toContain("runGoalCommand");
+  });
+
+  test("the command switch has a /goal branch calling runGoalCommand", () => {
+    const branchIndex = fnBody2.indexOf('command.name === "/goal"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+    const branchBlock = fnBody2.slice(branchIndex, branchIndex + 400);
+    expect(branchBlock).toContain("runGoalCommand(");
+  });
+
+  test("the /goal branch passes cwd, io, deps, history, slateSession, and mintAttemptId", () => {
+    const branchIndex = fnBody2.indexOf('command.name === "/goal"');
+    const branchBlock = fnBody2.slice(branchIndex, branchIndex + 500);
+    expect(branchBlock).toContain("sessionCwd");
+    expect(branchBlock).toContain("slateSession");
+    expect(branchBlock).toContain("mintTimestampAttemptId");
+  });
+});
+
+// --- flow 163 AC8: the TUI's OpenTUI REPL never triggers the Track B
+// wrap-up composer this way either — the same invariant shell.test.ts's own
+// "flow 163 AC8" source-text audit proves for the readline REPL, mirrored
+// here for `launchTuiAgentShell` (the OpenTUI equivalent). The trigger call
+// site exists ONLY in the one-shot `keryx harness run` path (harness.test.ts's
+// own positive-half audit). Source-text audit, following the exact
+// precedent this file already sets above (SLATE-2a/SLATE-3a audits):
+// `launchTuiAgentShell` has no headless injection seam, so this is proven by
+// reading the real source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 163 AC8 — tui-shell.ts's OpenTUI REPL never triggers the wrap-up composer (source-text audit)", () => {
+  const tuiSourceAc8 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("tui-shell.ts never imports or calls the Track B wrap-up composer", () => {
+    expect(tuiSourceAc8).not.toContain("runWrapUp");
+    expect(tuiSourceAc8).not.toMatch(/machine-wrap-up/);
+  });
 });

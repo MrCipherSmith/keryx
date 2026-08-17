@@ -1,5 +1,5 @@
 # Keryx OpenTUI Modal and Tabs — Specification
-Version: 0.1.0
+Version: 0.1.1
 
 ## Identity and ownership
 
@@ -22,8 +22,8 @@ No `metaproject.json` flag. Availability = TUI is running.
 
 ## CLI or skill surface
 
-No new `keryx` CLI verb. No slash command in this package. Callers (e.g.
-`/session-info`) open the host from the existing slash registry.
+No new `keryx` CLI verb. No slash command in this package. Callers
+(`/status`, `/flows`) open the host from the existing slash registry.
 
 ## Proposed public API (normative names)
 
@@ -68,7 +68,8 @@ inside one `openModal` call.
 - Slash menu: inert while overlay active (already tested in
   `shell-chrome.test.ts`).
 - Block nav (`Ctrl+O`): already disabled when overlay is up.
-- First consumer: session-info (follow-up flow; not shipped here).
+- Callers: `/status` (`src/tui/session-info.ts`) and `/flows`
+  (`src/tui/flow-inspector.ts`).
 - Later consumer (out of scope here): remount `selectProviderModelInTui`
   steps as tab bodies (`Providers` / `Models`) instead of stacked
   full-screen `overlayBox` calls.
@@ -78,7 +79,8 @@ inside one `openModal` call.
 Observed from Grok Build user-guide (not from keryx source):
 
 - One **extensions modal**, four entry commands, each selecting a tab.
-- `/session-info` is an inspect modal with a **Session info** tab.
+- `/status` is an inspect modal with **Status** / **Context** (and
+  conditional Workspaces / Flow) tabs.
 - Steal-Esc: overlays dismiss before composer/clear/rewind.
 - `/settings` and `/config-agents` are the same overlay class.
 

@@ -35,6 +35,8 @@ project knowledge.
 ├── wiki/                       # knowledge-base pages (source of truth)
 ├── memory/                     # typed memory entries — Markdown, source of truth
 ├── flows/<NNN>-<date>-<slug>/  # flow (task) packages; flow.json is CLI-owned state
+├── workspaces/<id>/             # SAC primary records (workspace.json, proposals, activity.jsonl)
+├── context-operations/          # SAC access-receipt ledger + optional policy-experiment config
 ├── reviews/<date>-<target>/     # standalone managed review packages
 ├── modules/                    # per-module manifests + READMEs
 ├── hooks/                      # hooks readme + post-update.d/ (executables run by `update --hooks`)

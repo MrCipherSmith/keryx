@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createSpawnSubagentTool } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+import { setSubagentFleetListener, type SubagentFleetEvent } from "../../../tui/subagent-bridge";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -53,6 +54,61 @@ test("spawn_subagent runs a child turn and returns a summary", async () => {
   expect(result.output).toMatch(/MAE reservation/);
 });
 
+test("default per-child tool-call budget is 10 (was 6) when max_tool_calls is omitted", async () => {
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("ok"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+  expect(result.output).toMatch(/tools≤10\b/);
+});
+
+test("per-child tool-call cap is 24 (was 16) even when the model asks for more", async () => {
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("ok"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+  const result = await tool.invoke({ task: "investigate", mode: "read_only", max_tool_calls: 999 });
+  expect(result.output).toMatch(/tools≤24\b/);
+});
+
+test("onLedgerReady hands back a working resetBudget the tool keeps functioning after", async () => {
+  let resetBudget: (() => void) | undefined;
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("ok"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+    onLedgerReady: (controls) => {
+      resetBudget = controls.resetBudget;
+    },
+  });
+  expect(resetBudget).toBeDefined();
+  resetBudget?.();
+  const result = await tool.invoke({ task: "investigate after reset", mode: "read_only" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toMatch(/tools≤10\b/);
+});
+
 test("spawn_subagent inherits network LLM parent (deepseek) under tools-readonly policy", async () => {
   let seenProvider = "";
   const tool = createSpawnSubagentTool({
@@ -88,4 +144,39 @@ test("spawn_subagent rejects empty task", async () => {
   });
   const result = await tool.invoke({ task: "  " });
   expect(result.isError).toBe(true);
+});
+
+test("AC3/AC5: spawn_subagent emits task + text log and does not auto-remove", async () => {
+  const events: SubagentFleetEvent[] = [];
+  setSubagentFleetListener((event) => {
+    events.push(event);
+  });
+  try {
+    const tool = createSpawnSubagentTool({
+      cwd: process.cwd(),
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => stubProvider("Child found 2 issues in auth."),
+      getDetectedProviders: () => [{ name: "ollama" }],
+      idSeq: (() => {
+        let n = 0;
+        return () => `id-${n++}`;
+      })(),
+      clock: () => "2020-01-01T00:00:00.000Z",
+    });
+    const result = await tool.invoke({
+      task: "Review auth module briefly",
+      mode: "read_only",
+      label: "auth-check",
+    });
+    expect(result.isError).toBe(false);
+    expect(events.some((event) => event.kind === "remove")).toBe(false);
+    const upsert = events.find((event) => event.kind === "upsert" && event.status === "running");
+    expect(upsert?.kind === "upsert" ? upsert.task : undefined).toBe("Review auth module briefly");
+    const textLog = events.find((event) => event.kind === "log" && event.entry.kind === "text");
+    expect(textLog?.kind === "log" ? textLog.entry.text : "").toContain("Child found 2 issues");
+    const done = events.find((event) => event.kind === "upsert" && event.status === "done");
+    expect(done).toBeDefined();
+  } finally {
+    setSubagentFleetListener(undefined);
+  }
 });

@@ -41,6 +41,14 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import { buildApprovalContext } from "../commands/agent-approval-context";
+import {
+  closeSlateSession,
+  mintTimestampAttemptId,
+  recordSlateTouch,
+  type SlateSessionRef,
+} from "../session/slate-lifecycle";
+import { renderAnchorsBlock } from "../session/slate";
+import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -62,6 +70,17 @@ import {
   findAgentCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
+import {
+  applyThemeId,
+  formatThemeList,
+  getTheme,
+  getThemeId,
+  loadPersistedThemeId,
+  parseThemeId,
+  persistThemeId,
+  themeLabel,
+} from "./theme";
+import { openThemePicker } from "./theme-picker";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -74,14 +93,12 @@ import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
-  isShellCommandAllowed,
-  loadShellPermissionsWithAudit,
   shellPermissionsFingerprint,
   shellPermissionsPath,
   loadShellPermissions,
-  parseShellExecCommand,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
+import { evaluateShellApproval } from "../commands/shell-approval";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
   compactSession,
@@ -105,11 +122,23 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
+import type { QueuedMainQuestion } from "./main-queue";
+import {
+  formatMainQueueMarker,
+  parseQueueCommand,
+  removeMainQueueItem,
+  editMainQueueItem,
+  reinsertMainQueueItem,
+} from "./main-queue";
+
 import { setSubagentFleetListener } from "./subagent-bridge";
+import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
+import { SubagentSessionStore } from "./subagent-session";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
 import {
   appendUserEcho,
+  clearTranscriptChildren,
   createAssistantMessageStream,
   createBlockMount,
   createBlockNavController,
@@ -197,13 +226,16 @@ function runGhJson(repo: string, branch: string, cwd: string): string | undefine
   }
 }
 
-function resolveSidebarMetadata(cwd: string): SidebarRepoMetadata {
-  const branch = runGitText(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+export function resolveSidebarMetadata(
+  cwd: string,
+  git: (args: string[], cwd: string) => string | undefined = runGitText,
+): SidebarRepoMetadata {
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   if (branch === undefined || branch === "HEAD") {
     return {};
   }
 
-  const remote = runGitText(["config", "--get", "remote.origin.url"], cwd);
+  const remote = git(["config", "--get", "remote.origin.url"], cwd);
   const repo = parseGitHubRemote(remote ?? "");
   if (repo === undefined) {
     return { branch };
@@ -309,7 +341,12 @@ type StyledContent = string | ReturnType<OpenTui["t"]>;
  * `runAgentTurn` without a real TTY. Pass the reasoning/tool hooks through
  * {@link attachBlockIo} to upgrade those one-liners into retained blocks (AC1).
  */
-export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
+export type TuiAgentIo = AgentIO & {
+  /** Drop an in-flight assistant stream so the next turn starts a new container. */
+  resetStream(): void;
+};
+
+export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): TuiAgentIo {
   let seq = 0;
   const append = (content: StyledContent): void => {
     transcript.add(new otui.TextRenderable(renderer, { id: `n${seq++}`, content }));
@@ -362,6 +399,9 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       append(result.isError ? otui.t`${otui.red(line)}` : otui.t`${otui.dim(line)}`);
     },
     onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
+    resetStream: () => {
+      messages.reset();
+    },
   };
 }
 
@@ -458,7 +498,13 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
  * Exported so the headless test mounts the SHIPPED panel — including the budget
  * it is shortened to — instead of a replica.
  */
-export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: string): void {
+export function mountCwdPanel(
+  otui: OpenTui,
+  r: Renderer,
+  sidebarTop: Box,
+  cwd: string,
+  metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
+): void {
   sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${otui.dim("Directory")}`, marginTop: 1 }));
   sidebarTop.add(
     new otui.TextRenderable(r, {
@@ -467,7 +513,6 @@ export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: 
     }),
   );
 
-  const metadata = resolveSidebarMetadata(cwd);
   if (metadata.branch !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${otui.dim("Branch")}`, marginTop: 1 }));
     sidebarTop.add(
@@ -524,7 +569,7 @@ export interface UsageChrome {
  * `runAgentTurn` through the real composition and see both outputs in one frame
  * rather than proving a replica.
  */
-export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
+export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { resetUsage(): void } {
   const base = io.onUsage?.bind(io);
   let totalIn = 0;
   let totalOut = 0;
@@ -539,7 +584,14 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
     chrome.setHeaderMeta(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`);
     chrome.setContextTotal(totalIn + totalOut);
   };
-  return io;
+  return Object.assign(io, {
+    resetUsage(): void {
+      totalIn = 0;
+      totalOut = 0;
+      chrome.setHeaderMeta("↑0 ↓0");
+      chrome.setContextTotal(0);
+    },
+  });
 }
 
 /**
@@ -678,7 +730,9 @@ export async function pickShellApproval(
       : destructive
         ? "⚠ DESTRUCTIVE command — allow?"
         : "Allow shell command?",
-    subtitle: command.length > 120 ? `${command.slice(0, 117)}…` : command,
+    // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
+    // focusable box (its own defensive char cap), not a single collapsed line.
+    subtitle: command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -687,6 +741,70 @@ export async function pickShellApproval(
     return id;
   }
   return "deny";
+}
+
+/**
+ * SLATE-2a `/model`-switch Anchors auto-inject (AC4). The `/model` handler
+ * (`command.name === "/model"`, below) is a giant closure inline in
+ * `launchTuiAgentShell` with no headless test harness — every OTHER helper
+ * in this file is either a PURE function or renders through the scripted
+ * `runAgentTurn`/`createTuiAgentIo` harness, and neither shape fits "drive
+ * the real OpenTUI model picker". This is the extracted, independently
+ * testable seam instead: everything the `/model` handler needs to do to
+ * update Anchors, with the picker UI itself left in the closure.
+ *
+ * Reuses the SAME `recordSlateTouch` touched-tracking + change-detection
+ * helper (`src/session/slate-lifecycle.ts`) the per-tool-call injection path
+ * in `commands/agent.ts` uses — a `/model` switch is just another harness
+ * effect that can change `anchors.runtime`, so it goes through the identical
+ * "only inject when something actually changed" path rather than a bespoke
+ * one that could drift from it.
+ *
+ * A no-op (`false`, `params.history` untouched) when there is no open slate
+ * to update at all — `slateSession` absent or `slateSession.opened ===
+ * false` — mirroring `closeSlateSession`'s own `undefined`-safe contract:
+ * `/model` is usable before any slate has ever opened this attempt (no
+ * action-intent turn has run yet), and that must cost nothing. `changed ===
+ * false` (picking the SAME provider/model again) is also a no-op: `history`
+ * is shared, provider-bound state, and re-announcing information the model
+ * has already seen is exactly the history-bloat failure mode flow 161's
+ * plan.md Risks section calls out.
+ *
+ * `params.onHistoryChange` (review finding 6): this function used to push
+ * its Anchors-block message into `history` and stop there, unlike both other
+ * Anchors-injection sites in `agent.ts` (its per-tool-call and fresh-open
+ * triggers), which call `io.onHistoryChange?.("tool")` immediately after
+ * their own push. `onHistoryChange` drives `syncArchive()`/session-
+ * checkpoint persistence (this file's `launchTuiAgentShell`, where
+ * `io.onHistoryChange` is assigned) — without it, the `/model`-switch
+ * Anchors entry was not archived/persisted until some UNRELATED later event
+ * happened to fire `onHistoryChange`, so a session that ended/crashed before
+ * that lost the entry from the persisted archive. Optional (not `io`
+ * itself) so this function stays testable in isolation the way it already
+ * is above, with no IO dependency required when a caller does not need it;
+ * `"tool"` matches the `kind` used at the sibling harness-written-history-
+ * push call sites in `agent.ts`.
+ */
+export async function applyRuntimeSwitchToSlate(params: {
+  slateSession: SlateSessionRef | undefined;
+  runtime: { provider: string; model: string };
+  history: NormalizedMessage[];
+  onHistoryChange?: ((kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void) | undefined;
+}): Promise<boolean> {
+  if (params.slateSession === undefined || !params.slateSession.opened) {
+    return false;
+  }
+  const result = await recordSlateTouch(params.slateSession.dir, [], { runtime: params.runtime });
+  if (!result.changed) {
+    return false;
+  }
+  params.history.push({
+    role: "user",
+    content: renderAnchorsBlock(result.slate.anchors),
+    provenance: "project",
+  });
+  params.onHistoryChange?.("tool");
+  return true;
 }
 
 /** Compact token count for the header counter: 1234 → "1.2K", else the number. */
@@ -774,7 +892,7 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#0a1414",
+    backgroundColor: getTheme().bg,
     flexDirection: "column",
     padding: 1,
   });
@@ -1045,6 +1163,18 @@ export function selectProviderModelInTui(
 }
 
 /**
+ * Adaptive height (rows) for a `SelectRenderable`: when the item `count` is small
+ * the box is at least a quarter of the available `per`-rows budget; when the list is
+ * large it stretches up to the full available height (overflow then scrolls). This
+ * replaces the fixed model-picker height so a big OpenRouter list uses the whole
+ * overlay instead of a small window.
+ */
+export function adaptiveSelectHeight(count: number, available: number, per = 1): number {
+  const min = Math.max(1, Math.floor(available / 4));
+  return Math.min(available, Math.max(min, count * per));
+}
+
+/**
  * In-TUI model picker with TYPE-TO-FILTER (search by name, e.g. `free`). Absolute
  * overlay; the SelectRenderable is focused (↑/↓/Enter native) while printable keys
  * and Backspace edit a live filter over the (potentially large) model list. Resolves
@@ -1061,11 +1191,16 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
     const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to go back")}` });
     box.add(filterLine);
     const NO_MATCH = "(no match)";
+    // Adaptive height: the overlay is full-screen (overlayBox), so "parent height"
+    // = renderer height minus the title + filter + padding rows it consumes.
+    const rHeight = (r as { height?: number }).height;
+    const available = typeof rHeight === "number" && rHeight > 0 ? Math.max(4, rHeight - 4) : 16;
+    const height = adaptiveSelectHeight(all.length, available);
     const sel = new otui.SelectRenderable(r, {
       id: "mp-sel",
       width: 72,
       showDescription: false,
-      height: 14,
+      height,
       showScrollIndicator: true,
       wrapSelection: true,
       options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
@@ -1079,7 +1214,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
       const q = filter.trim().toLowerCase();
       const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
       sel.options = matches.length > 0 ? matches.map((m) => ({ name: m, description: "" })) : [{ name: NO_MATCH, description: "" }];
-      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
+      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length}/${all.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
     };
 
     const onKey = (key: { name: string; ctrl: boolean; meta: boolean; sequence: string; preventDefault: () => void; stopPropagation: () => void }): void => {
@@ -1256,7 +1391,21 @@ export function pickSessionInTui(
 export async function launchTuiAgentShell(opts: {
   detected: DetectedProvider[];
   initial?: TuiSelection;
-  makeAgentDeps: (sel: TuiSelection) => Promise<AgentDeps>;
+  /**
+   * Widened from a bare `getSessionDir: () => string | undefined` (fix
+   * round, code review of PR #306, Finding 1): `createSpawnSubagentTool`'s
+   * `SpawnSubagentToolDeps.getSlateSession` needs the FULL live
+   * `SlateSessionRef`, not just its `.dir` string, to fold a dispatched
+   * child's ephemeral slate into `parent.slate.childDispatches`. Exposing
+   * only `.dir` here (the old shape) meant `commands/shell.ts`'s
+   * `makeAgentDeps` closure had no way to hand a real `SlateSessionRef`
+   * through to `createSpawnSubagentTool` at all — SLATE-6's fold mechanism
+   * silently never fired for any real `keryx shell` TUI session. Both real
+   * call sites below (around lines 1419/2203) already hold the full
+   * `slateSession` local — this just widens the contract to pass it
+   * through instead of narrowing it to `.dir` first.
+   */
+  makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
@@ -1274,6 +1423,7 @@ export async function launchTuiAgentShell(opts: {
   if (!process.stdout.isTTY) {
     return false;
   }
+  applyThemeId(loadPersistedThemeId());
   let otui: OpenTui;
   try {
     otui = await import("@opentui/core"); // optional dep; absent → fall back
@@ -1300,7 +1450,7 @@ export async function launchTuiAgentShell(opts: {
    * approval UI — the self-grant path — and the user is told before the next
    * auto-approve acts on it.
    */
-  const permissionsFingerprintAtStart = shellPermissionsFingerprint();
+  let permissionsFingerprintAtStart = shellPermissionsFingerprint();
   let permissionTamperShown = false;
   const searchProviderController = createDefaultSearchProviderController();
   // The chrome can only be mounted once a provider/model is chosen (the startup
@@ -1319,10 +1469,21 @@ export async function launchTuiAgentShell(opts: {
         resolveDone();
       },
     }));
+    applyThemeId(getThemeId(), r.themeMode);
+    // Review finding: unregistered on destroy, unlike every other renderer-
+    // level subscription in this file — named so `.off()` at every exit path
+    // below can find the same reference `.on()` registered.
+    const onThemeMode = (mode: "dark" | "light"): void => {
+      if (getThemeId() === "auto") {
+        applyThemeId("auto", mode);
+      }
+    };
+    r.on("theme_mode", onThemeMode);
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
     if (sel === undefined) {
+      r.off("theme_mode", onThemeMode);
       r.destroy();
       return true; // could not select; treat as a clean exit (do not fall back)
     }
@@ -1330,7 +1491,18 @@ export async function launchTuiAgentShell(opts: {
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
-    let deps = await opts.makeAgentDeps(sel);
+    // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
+    // reads is declared further down in this same function body. The getter
+    // only runs once a turn actually executes a tool call, well after that
+    // declaration has run, so referencing it here (textually earlier) is
+    // safe — TDZ is a call-time concern for a closure, not a
+    // closure-creation-time one.
+    // Finding 1 fix: pass the FULL live `slateSession` ref through, not just
+    // `.dir` — `makeAgentDeps`'s widened contract (see `opts.makeAgentDeps`
+    // doc comment above) needs it to wire `createSpawnSubagentTool`'s new
+    // `getSlateSession` getter so a dispatched subagent's Seeds actually
+    // fold into this session's slate once it opens.
+    let deps = await opts.makeAgentDeps(sel, () => slateSession);
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -1400,7 +1572,18 @@ export async function launchTuiAgentShell(opts: {
       content: otui.t`${otui.dim("○ Ready")}`,
     });
     sidebar.add(sbWorkers);
+    // Hug-content box, not a flexGrow ScrollBox: a growing viewport inside
+    // flexShrink-0 sidebarTop covers the Model/Tools labels on a real pty
+    // (shell-pty-launch O-6). Empty list is zero height; rows add as children spawn.
+    const sbSubagents = new otui.BoxRenderable(r, {
+      id: "sb-subagents",
+      flexDirection: "column",
+      flexShrink: 0,
+      marginTop: 1,
+    });
+    sidebar.add(sbSubagents);
     const fleet = new WorkerFleet();
+    const sessions = new SubagentSessionStore();
     const paintFleet = (): void => {
       const list = fleet.list();
       const text = formatFleetSidebar(list, 12);
@@ -1413,20 +1596,22 @@ export async function launchTuiAgentShell(opts: {
         sbWorkers.content = otui.t`${otui.dim(text)}`;
       }
     };
-    fleet.subscribe(paintFleet);
-    // MAE spawn_subagent → Workers panel
-    setSubagentFleetListener((ev) => {
-      if (ev.kind === "remove") {
-        fleet.remove(ev.id);
+    const paintSubagents = (hint?: { kind: string }): void => {
+      if (hint?.kind === "log") {
         return;
       }
-      fleet.upsert({
-        id: ev.id,
-        label: ev.label,
-        status: ev.status,
-        ...(ev.detail !== undefined ? { detail: ev.detail } : {}),
-        ...(ev.model !== undefined ? { model: ev.model } : {}),
+      paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
+        width: SIDEBAR_TEXT_WIDTH,
+        onOpen: (id) => {
+          openSubagentInspector(otui, chrome, { store: sessions, id, renderer: r });
+        },
       });
+    };
+    fleet.subscribe(paintFleet);
+    sessions.subscribe(paintSubagents);
+    // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
+    setSubagentFleetListener((ev) => {
+      sessions.apply(ev);
     });
 
     /** Update the pinned main-agent slot (Activity panel). */
@@ -1463,7 +1648,16 @@ export async function launchTuiAgentShell(opts: {
     // Reasoning, tool calls and tool results become addressable blocks that
     // RETAIN their full text (bounded — D-4) instead of discarding it, so they
     // can be expanded in place, navigated with the keyboard and copied.
-    const blocks = createBlockRegistry();
+    const blocks = createBlockRegistry({
+      onEvict: (dropped) => {
+        if (dropped.length === 1) {
+          const kind = dropped[0]?.kind ?? "block";
+          chrome.showToast(`Dropped oldest ${kind} output`);
+          return;
+        }
+        chrome.showToast(`Dropped ${dropped.length} oldest outputs`);
+      },
+    });
     const blockMount = createBlockMount(otui, r, transcript, blocks);
     // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
     // suspension) lives in `transcript-blocks.ts` so it is reachable from a
@@ -1503,7 +1697,7 @@ export async function launchTuiAgentShell(opts: {
       }
       baseWrite(s);
     };
-    attachUsageIo(io, {
+    const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
         sbContext.content = otui.t`${otui.dim(`${total.toLocaleString()} tokens`)}`;
@@ -1615,27 +1809,25 @@ export async function launchTuiAgentShell(opts: {
         return id === "allow";
       }
 
-      const cmd = parseShellExecCommand(inputJson);
-      const destructive = meta?.destructive === true;
-      // Auto-allow from session + disk (re-read disk so external edits apply).
-      // The audit surfaces stored patterns the current rules refuse — once per
-      // session, BEFORE the first auto-approve, so a grant that silently stopped
-      // applying is never mistaken for one that still does.
-      const audit = loadShellPermissionsWithAudit();
-      for (const p of audit.permissions.allow) {
-        sessionShellAllow.add(p);
-      }
-      if (!permissionMigrationShown && audit.rejected.length > 0) {
+      const ev = evaluateShellApproval({
+        inputJson,
+        ...(meta !== undefined ? { meta } : {}),
+        sessionAllow: sessionShellAllow,
+        fingerprintAtStart: permissionsFingerprintAtStart,
+      });
+      const cmd = ev.command;
+      const destructive = ev.destructive;
+      if (!permissionMigrationShown && ev.rejected.length > 0) {
         permissionMigrationShown = true;
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content: otui.t`${otui.yellow(
-              `⚠ ${audit.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
+              `⚠ ${ev.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
             )}`,
           }),
         );
-        for (const rej of audit.rejected) {
+        for (const rej of ev.rejected) {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
@@ -1652,7 +1844,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      if (!permissionTamperShown && shellPermissionsFingerprint() !== permissionsFingerprintAtStart) {
+      if (!permissionTamperShown && ev.tampered) {
         permissionTamperShown = true;
         transcript.add(
           new otui.TextRenderable(r, {
@@ -1663,7 +1855,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      if (!destructive && isShellCommandAllowed(cmd, [...sessionShellAllow])) {
+      if (ev.autoApprove) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -1713,6 +1905,7 @@ export async function launchTuiAgentShell(opts: {
         const stored = allowShellPattern(pattern);
         if (stored.length > 0) {
           sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
         }
         transcript.add(
           new otui.TextRenderable(r, {
@@ -1803,6 +1996,14 @@ export async function launchTuiAgentShell(opts: {
     let archive: NormalizedMessage[] = [];
     let nextArchiveIndex = 0;
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+    /**
+     * SLATE-5 open/close wiring (parity with `runAgentRepl` in
+     * `src/commands/shell.ts`) — a fresh, never-opened ref per live session
+     * dir, reassigned on `/new`/`/clear`. The TUI always has a live session
+     * (no sessions-off path here, unlike the REPL), so this is unconditional
+     * once `liveSession` is set below.
+     */
+    let slateSession: SlateSessionRef | undefined;
 
     const applyOpened = (
       opened: {
@@ -1945,6 +2146,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
     }
+    slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
 
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
@@ -1996,7 +2198,23 @@ export async function launchTuiAgentShell(opts: {
       }
       flushSessionCheckpoint();
     };
+    const resetSessionSurface = (): void => {
+      nav.exit();
+      chrome.stopBusy();
+      io.resetStream();
+      blockMount.clear();
+      clearTranscriptChildren(transcript);
+      chrome.scroll.scrollTop = 0;
+      chrome.scroll.stickyScroll = true;
+      fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID);
+      setMainAgent("queued", "ready");
+      hasExactUsage = false;
+      lastUsage = undefined;
+      usage.resetUsage();
+    };
+
     const startNewSession = (note?: string): void => {
+      resetSessionSurface();
       liveSession = createSession({
         cwd: sessionCwd,
         provider: currentSel.provider,
@@ -2093,7 +2311,9 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
-      deps = await opts.makeAgentDeps(ns);
+      // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
+      // call above — pass the live `slateSession` ref, not just `.dir`.
+      deps = await opts.makeAgentDeps(ns, () => slateSession);
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
@@ -2110,6 +2330,18 @@ export async function launchTuiAgentShell(opts: {
       displayQuestion: string;
     };
     const sideQueue: QueuedSideQuestion[] = [];
+
+    // QueuedMainQuestion type imported from ./main-queue (pure helpers).
+    let mainQueue: QueuedMainQuestion[] = [];
+    let mainQueueSeq = 0;
+    // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
+    // this item at its original position instead of opening the recipient
+    // selector again (AC5 — edit must preserve position).
+    let pendingQueueEdit: { id: string; at: number } | undefined;
+    // Set by `forceMainQueue` when a turn is in flight: `abort()` only signals
+    // cancellation, it does not synchronously stop the turn, so the item is
+    // handed to the turn's `finally` to run next once it has settled (AC6).
+    let priorityMainQuestion: QueuedMainQuestion | undefined;
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -2127,6 +2359,72 @@ export async function launchTuiAgentShell(opts: {
         status: sideWorkerRunning ? "running" : "queued",
         detail: `queued ×${sideQueue.length}`,
       });
+    };
+
+    let mainQueueBlocks: Array<{ id: string; box: Box }> = [];
+    const paintMainQueue = (): void => {
+      // Remove stale blocks.
+      for (const entry of mainQueueBlocks) {
+        try {
+          transcript.remove(entry.box);
+        } catch {
+          // ignore
+        }
+      }
+      mainQueueBlocks = [];
+      for (let i = 0; i < mainQueue.length; i++) {
+        const item = mainQueue[i];
+        if (item === undefined) continue;
+        const box = appendUserEcho(otui, r, transcript, {
+          id: `mq-${item.id}`,
+          line: `${formatMainQueueMarker(i, mainQueue.length)} ${item.displayQuestion}`,
+          borderColor: getTheme().highlight,
+          marginTop: 0,
+        });
+        mainQueueBlocks.push({ id: item.id, box });
+      }
+      // Fleet/status counter.
+      if (mainQueue.length > 0) {
+        fleet.upsert({ id: "agent:queue", label: "mainQ", status: "queued", detail: `queued \u00d7${mainQueue.length}` });
+      } else {
+        fleet.remove("agent:queue");
+      }
+    };
+
+    const removeMainQueue = (index: number): void => {
+      if (index < 0 || index >= mainQueue.length) return;
+      mainQueue = removeMainQueueItem(mainQueue, index);
+      paintMainQueue();
+    };
+
+    const editMainQueue = (index: number): void => {
+      const edited = editMainQueueItem(mainQueue, index);
+      if (edited === undefined) return;
+      mainQueue = edited.rest;
+      pendingQueueEdit = { id: edited.removed.id, at: index };
+      input.value = edited.text;
+      input.focus();
+      paintMainQueue();
+    };
+
+    const forceMainQueue = (index: number): void => {
+      const item = mainQueue[index];
+      if (item === undefined) return;
+      mainQueue = removeMainQueueItem(mainQueue, index);
+      paintMainQueue();
+      if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
+        // `abort()` only signals cancellation — it does NOT synchronously stop
+        // the turn (`chrome.isBusy()` is still true right after this call), so
+        // running the item here would drop it. Stash it; the main turn's
+        // `finally` below runs it next, ahead of anything already queued.
+        priorityMainQuestion = item;
+        mainTurnAbortController.abort();
+        mainTurnAbortController = undefined;
+        io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
+        return;
+      }
+      // No turn in flight (e.g. forced right as the previous one settled).
+      runLine(item.question);
     };
 
     const clearSideWorkerSlot = (): void => {
@@ -2197,7 +2495,9 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `side-h${uid++}`,
-              content: otui.t`${otui.magenta(`◇ ${sideWorkerLabelText}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
+              content: otui.t`${otui.magenta("──")} ${otui.bold(sideWorkerLabelText)} ${otui.magenta("──")} ${
+                otui.dim(`while main: ${busyPhase}`)
+              }`,
               marginTop: 1,
             }),
           );
@@ -2214,7 +2514,10 @@ export async function launchTuiAgentShell(opts: {
 
           let answer = "";
           try {
-            const base = await opts.makeAgentDeps(currentSel);
+            // Finding 1 fix: same widened contract as the other two
+            // `opts.makeAgentDeps` call sites in this file — pass the live
+            // `slateSession` ref, not just `.dir`.
+            const base = await opts.makeAgentDeps(currentSel, () => slateSession);
             // Read-only: never allow shell/mutations from a side worker.
             const tools = base.tools.filter((t) => t.definition.risk === "read");
             const sideDeps: AgentDeps = {
@@ -2256,13 +2559,13 @@ export async function launchTuiAgentShell(opts: {
             };
             await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
             const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `side-a${uid++}`,
-                content: otui.t`${otui.magenta("◇")} ${body}`,
-                marginTop: 0,
-              }),
-            );
+            appendUserEcho(otui, r, transcript, {
+              id: `side-a${uid++}`,
+              line: body,
+              marker: "◇",
+              borderColor: getTheme().side,
+              marginTop: 0,
+            });
             fleet.upsert({
               id: SIDE_WORKER_ID,
               label: sideWorkerLabelText,
@@ -2297,6 +2600,10 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       const displayLine = summarizeSubmittedLine(line);
+      // Reuses `/status`'s and `/flows`'s own single-source-of-truth command
+      // matchers instead of a second, separately-maintained name list that
+      // could silently drift from them.
+      const isBusyReadonlyCommand = isSessionInfoCommand(line) || isFlowsCommand(line);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
@@ -2304,7 +2611,12 @@ export async function launchTuiAgentShell(opts: {
       if (chrome.isBusy()) {
         const command = findAgentCommand(line, "agent");
         if (command?.name === "/exit") {
-          r.destroy();
+          // SLATE-5 close trigger: shell exit (explicit command, while busy).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
+            r.destroy();
+          })();
           return;
         }
         if (command?.name === "/help") {
@@ -2317,8 +2629,8 @@ export async function launchTuiAgentShell(opts: {
           );
           io.onSystem?.(
             "Main agent is busy. Type a normal question to spawn a side worker " +
-              "(sees main status + recent context; read-only). /exit still works.\n",
-            );
+              "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
+          );
           return;
         }
         if (command?.name === "/interrupt") {
@@ -2330,11 +2642,35 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
-        if (command !== undefined && isSessionInfoCommand(command.name)) {
+        if (command?.name === "/queue") {
+          const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
+          if (parsed === undefined) {
+            io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
+            return;
+          }
+          const index = parsed.position - 1;
+          if (index < 0 || index >= mainQueue.length) {
+            io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
+            return;
+          }
+          if (parsed.action === "remove") {
+            removeMainQueue(index);
+            io.onSystem?.(`◇ removed q${parsed.position} from the main queue.\n`);
+            return;
+          }
+          if (parsed.action === "edit") {
+            editMainQueue(index);
+            io.onSystem?.(`◇ q${parsed.position} moved to the composer — edit and submit to re-queue at the same position.\n`);
+            return;
+          }
+          forceMainQueue(index);
+          return;
+        }
+        if (isBusyReadonlyCommand && isSessionInfoCommand(line)) {
           showSessionInfo();
           return;
         }
-        if (command !== undefined && isFlowsCommand(command.name)) {
+        if (isBusyReadonlyCommand && isFlowsCommand(line)) {
           showFlows();
           return;
         }
@@ -2351,13 +2687,48 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
-        appendUserEcho(otui, r, transcript, {
-          id: `side-q${uid++}`,
-          line: displayLine,
-          borderColor: "#5a3a6a",
-          marginTop: 0,
-        });
-        spawnSideWorker(line, displayLine);
+        // Recipient selector: post the message to the MAIN queue (default) or
+        // the read-only side-1 worker. Shown only while main is busy. `runLine`
+        // is sync, so the async choice is run in a detached IIFE (choice is
+        // synchronous UI; the callback below stays fire-and-forget).
+        // AC5: a pending `/queue edit` re-queues at its ORIGINAL position on
+        // the very next busy submit, skipping the recipient selector entirely
+        // (the item is already committed to the main queue by definition).
+        if (pendingQueueEdit !== undefined) {
+          const edit = pendingQueueEdit;
+          pendingQueueEdit = undefined;
+          mainQueue = reinsertMainQueueItem(mainQueue, edit.at, {
+            id: edit.id,
+            question: line,
+            displayQuestion: displayLine,
+          });
+          paintMainQueue();
+          return;
+        }
+        void (async () => {
+          const chosen = await showComposerChoice(otui, r, chrome.dock, {
+            title: "Main agent is busy",
+            subtitle: line,
+            options: [
+              { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+              { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+            ],
+            cancelId: "side",
+          });
+          if (chosen === "main") {
+            const id = `mq${mainQueueSeq++}`;
+            mainQueue.push({ id, question: line, displayQuestion: displayLine });
+            paintMainQueue();
+          } else {
+            appendUserEcho(otui, r, transcript, {
+              id: `side-q${uid++}`,
+              line: displayLine,
+              borderColor: getTheme().side,
+              marginTop: 0,
+            });
+            spawnSideWorker(line, displayLine);
+          }
+        })();
         return;
       }
 
@@ -2375,15 +2746,46 @@ export async function launchTuiAgentShell(opts: {
       const command = findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
-          r.destroy();
+          // SLATE-5 close trigger: shell exit (explicit command).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
+            r.destroy();
+          })();
           return;
         }
         if (command.name === "/clear" || command.name === "/new") {
-          // Creates a NEW session id; previous transcript stays on disk for /resume.
-          startNewSession();
-          io.onSystem?.(
-            `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
-          );
+          // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
+          // dir for a fresh one — archive whatever slate it was building
+          // before switching away (parity with runAgentRepl in shell.ts).
+          void (async () => {
+            await closeSlateSession(slateSession, mintTimestampAttemptId);
+            // Creates a NEW session id; previous transcript stays on disk for /resume.
+            startNewSession();
+            slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+            // The old session's subagents (sidebar list + inspector) belong to
+            // the transcript that just left — a fresh session starts with none.
+            sessions.clear();
+            deps.resetSubagentBudget?.();
+            io.onSystem?.(
+              `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
+            );
+          })();
+          return;
+        }
+        if (command.name === "/goal") {
+          // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
+          void (async () => {
+            await runGoalCommand({
+              raw: line.slice(command.name.length).trim(),
+              cwd: sessionCwd,
+              io,
+              deps,
+              history,
+              slateSession,
+              mintAttemptId: mintTimestampAttemptId,
+            });
+          })();
           return;
         }
         if (command.name === "/resume" || command.name === "/sessions") {
@@ -2516,6 +2918,32 @@ export async function launchTuiAgentShell(opts: {
           }
           return;
         }
+        if (command.name === "/theme") {
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          if (arg.length > 0) {
+            const next = parseThemeId(arg);
+            if (next === undefined) {
+              io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
+              return;
+            }
+            applyThemeId(next, r.themeMode);
+            persistThemeId(next);
+            chrome.showToast(`Theme: ${themeLabel(next)}`);
+            return;
+          }
+          openThemePicker(otui, chrome, {
+            current: getThemeId(),
+            mode: r.themeMode,
+            renderer: r,
+            ...inspectorKeys,
+            onApply: (id) => {
+              applyThemeId(id, r.themeMode);
+              persistThemeId(id);
+              chrome.showToast(`Theme: ${themeLabel(id)}`);
+            },
+          });
+          return;
+        }
         if (command.name === "/model") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
@@ -2529,6 +2957,28 @@ export async function launchTuiAgentShell(opts: {
                   ? { provider: currentSel.provider, model: chosen }
                   : { provider: currentSel.provider, model: chosen, baseUrl: currentSel.baseUrl },
               );
+              // SLATE-2a `/model`-switch Anchors auto-inject (AC4). `switchTo`
+              // already reassigned `currentSel` above, so it carries the NEW
+              // provider/model here. Wrapped so a slate read/write failure
+              // degrades silently rather than aborting a model switch that
+              // already succeeded (mirrors the `closeSlateSession` close
+              // triggers elsewhere in this file, which are similarly
+              // best-effort bookkeeping around a real user-visible action).
+              try {
+                await applyRuntimeSwitchToSlate({
+                  slateSession,
+                  runtime: { provider: currentSel.provider, model: currentSel.model },
+                  history,
+                  // Review finding 6: without this, the pushed Anchors-block
+                  // message is not archived/persisted until some UNRELATED
+                  // later event happens to fire `onHistoryChange`.
+                  onHistoryChange: io.onHistoryChange,
+                });
+              } catch (err) {
+                io.onSystem?.(
+                  `slate anchors update failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`,
+                );
+              }
             } else {
               input.focus();
             }
@@ -2537,6 +2987,12 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/interrupt") {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
+          return;
+        }
+        if (command.name === "/queue") {
+          // The queue only exists while main is busy (FIFO-drain empties it
+          // the instant a turn frees up), so outside a busy turn it is empty.
+          io.onSystem?.("◇ main queue is empty.\n");
           return;
         }
         if (command.name === "/connect" || command.name === "/provider") {
@@ -2752,6 +3208,11 @@ export async function launchTuiAgentShell(opts: {
 
       // Clear enrich/page workers only — keep concurrent side workers visible.
       fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID && !isSideWorkerId(w.id));
+      // A fresh turn starts with a clean subagent sidebar (and a fresh child
+      // tool-call/runtime budget) instead of piling this turn's spawns on top
+      // of whatever the previous turn(s) left behind.
+      sessions.clear();
+      deps.resetSubagentBudget?.();
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();
@@ -2765,7 +3226,10 @@ export async function launchTuiAgentShell(opts: {
       };
       const controller = new AbortController();
       mainTurnAbortController = controller;
-      void runAgentTurn(io, deps, history, line, { signal: controller.signal }).finally(() => {
+      void runAgentTurn(io, deps, history, line, {
+        signal: controller.signal,
+        ...(slateSession !== undefined ? { slateSession } : {}),
+      }).finally(() => {
         mainTurnAbortController = undefined;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
@@ -2785,6 +3249,19 @@ export async function launchTuiAgentShell(opts: {
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
         focusComposer(); // never steal focus from an active block-nav mode (R3)
+        // A forced item (AC6) wins over FIFO order — it is the reason the
+        // turn just settled. Otherwise FIFO-drain the head of the main queue
+        // (AC7), once the current one has fully settled (stopBusy/setMainAgent
+        // already ran).
+        if (priorityMainQuestion !== undefined) {
+          const next = priorityMainQuestion;
+          priorityMainQuestion = undefined;
+          runLine(next.question);
+        } else if (mainQueue.length > 0) {
+          const next = mainQueue.shift();
+          paintMainQueue();
+          if (next !== undefined) runLine(next.question);
+        }
       });
     };
 

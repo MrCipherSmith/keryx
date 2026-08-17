@@ -107,6 +107,10 @@
 // expected RED as `select.test.ts`'s missing-module import (a documented gap
 // for T6 to fill, not a test bug).
 
+import { readFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import { FakeProvider, type FakeProviderTranscript, requestHashOf } from "../harness/provider/fake-provider";
 import type {
@@ -787,13 +791,257 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
       source: "cache",
     }),
     launchAgent: async (opts) => {
-      const deps = await opts.makeAgentDeps({ provider: "fake", model: "fixture-model" });
+      // SLATE-3a: `makeAgentDeps` gains a second `getSessionDir` parameter
+      // (see the source-text audit below) — no live session in this
+      // scenario, so a getter that always resolves to `undefined` is the
+      // correct "no active session" input.
+      const deps = await opts.makeAgentDeps({ provider: "fake", model: "fixture-model" }, () => undefined);
       toolNames = deps.tools.map((tool) => tool.definition.name);
       return true;
     },
   });
 
-  expect(toolNames).toContain("web_search");
+  expect(toolNames.sort()).toEqual([
+    "ask_user",
+    "get_cwd",
+    "graph_affected",
+    "graph_path",
+    "graph_query",
+    "graph_symbol",
+    "health_status",
+    "list_dir",
+    "memory_search",
+    "read_file",
+    "read_wiki",
+    "repomap",
+    "search_code",
+    "shell_exec",
+    "slate_read",
+    "slate_write_seed",
+    "spawn_subagent",
+    "test_related",
+    "web_fetch",
+    "web_search",
+    "wiki_ask",
+    "wiki_backlinks",
+    "workspace_create",
+    "workspace_list",
+    "workspace_overview",
+    "workspace_propose",
+    "workspace_read",
+    "workspace_show",
+  ]);
+});
+
+test("shellCommand's makeAgentDeps threads a supplied getSessionDir through to slate_read/slate_write_seed", async () => {
+  let tools: { definition: { name: string }; invoke: (input: Record<string, unknown>) => Promise<{ isError: boolean }> }[] = [];
+  const sessionDir = await mkdtemp(path.join(os.tmpdir(), "keryx-shell-getsessiondir-"));
+  await shellCommand(["--agent", "--provider", "fake", "--model", "fixture-model"], {
+    isTty: true,
+    checkVersion: async () => ({
+      status: "up-to-date",
+      currentVersion: "test",
+      latestVersion: "test",
+      source: "cache",
+    }),
+    launchAgent: async (opts) => {
+      // Fix round (Finding 1, code review of PR #306): `opts.makeAgentDeps`'s
+      // second parameter widened from `getSessionDir: () => string |
+      // undefined` to `getSlateSession: () => SlateSessionRef | undefined` —
+      // `shell.ts`'s own `makeAgentDeps` now derives `getSessionDir` locally
+      // from this getter's `.dir` (see that file), so this test still
+      // exercises the same `slate_read`/`slate_write_seed` wiring via the
+      // full ref shape.
+      const deps = await opts.makeAgentDeps(
+        { provider: "fake", model: "fixture-model" },
+        () => ({ dir: sessionDir, cwd: process.cwd(), opened: true }),
+      );
+      tools = deps.tools;
+      return true;
+    },
+  });
+
+  const slateRead = tools.find((tool) => tool.definition.name === "slate_read");
+  expect(slateRead).toBeDefined();
+  // sessionDir has no open slate, but IS a real, resolved session dir — this
+  // must NOT be the "no active session" error path.
+  const result = await slateRead?.invoke({});
+  expect(result?.isError).toBe(false);
+});
+
+// --- SLATE-3a: shell.ts's getSessionDir threading (flow 161, AC5) --------
+//
+// `makeAgentDeps` (the TUI path's deps-builder, defined in shell.ts and
+// invoked via `opts.makeAgentDeps` from tui-shell.ts) gains a SECOND
+// parameter, `getSessionDir: () => string | undefined`, threaded straight
+// into `buildInteractiveAgentTools({ ..., getSessionDir })` — proven above by
+// invoking `opts.makeAgentDeps` end-to-end and checking `slate_read`/
+// `slate_write_seed` are in the tool set.
+//
+// The readline agent-mode path (`runAgentRepl`, `NOT unit-tested` per its own
+// doc comment — see the SLATE-5 audit above) is different: `tools:
+// buildInteractiveAgentTools({...})` is built in `shellCommand`'s "if
+// (agentMode)" branch BEFORE `runAgentRepl` is even called, but the
+// `SlateSessionRef` this turn's `slate_read`/`slate_write_seed` must resolve
+// is only known INSIDE `runAgentRepl` (`let slateSession`, reassigned as the
+// REPL runs — see the SLATE-5 audit above). A static dir captured at
+// tools-build time cannot work (no session exists yet), so a LAZY getter is
+// required, exactly like the TUI path — but the getter must read a value
+// `runAgentRepl` writes into AFTER the getter has already been created and
+// handed to `buildInteractiveAgentTools`.
+//
+// Chosen shape (T8, for T9 to build exactly this): a shared mutable box,
+//   const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
+// declared in `shellCommand`'s agent-mode branch BEFORE the readline
+// `buildInteractiveAgentTools({ ..., getSessionDir: () =>
+// slateSessionBox.current?.dir })` call, and threaded into `runAgentRepl(...)`
+// as a new argument. Inside `runAgentRepl`, every existing `slateSession =
+// ...` assignment additionally syncs the box (`slateSessionBox.current =
+// slateSession;`) immediately after — `runAgentRepl`'s own local `let
+// slateSession` variable and its 3-close-trigger wiring (audited above) stay
+// completely unchanged; the box is a pure side-channel, not a replacement.
+// `closeSlateSession` mutates `.opened` on the SAME object `slateSession`
+// already points to, so the box reflects that in-place mutation automatically
+// with no extra sync line needed — `.dir` (all `getSessionDir` ever reads)
+// never changes via close.
+//
+// This is a source-text audit, following the exact precedent set by the
+// SLATE-5 describe block above: `runAgentRepl` has no injection seam and is
+// not driven end-to-end here, so the wiring is proven by asserting the
+// required literals exist, in the required order, in the real source file —
+// not yet true until T9 lands this shape.
+describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  // A generous fixed window from the branch start: large enough to cover
+  // everything from `if (agentMode) {` through its `runAgentRepl(...)` call
+  // and a little past it, without accidentally reaching into an unrelated
+  // later part of the file (this file has no other "if (agentMode)" branch).
+  const agentModeBranch = shellSource.slice(agentModeBranchStart, agentModeBranchStart + 3600);
+  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
+
+  test("a shared slateSessionBox is declared before the readline buildInteractiveAgentTools call", () => {
+    const boxIndex = agentModeBranch.indexOf(
+      "const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };",
+    );
+    const toolsCallIndex = agentModeBranch.indexOf("tools: buildInteractiveAgentTools({");
+    expect(boxIndex).toBeGreaterThanOrEqual(0);
+    expect(toolsCallIndex).toBeGreaterThan(boxIndex);
+  });
+
+  test("the readline buildInteractiveAgentTools call passes a getSessionDir reading the box", () => {
+    const toolsCallIndex = agentModeBranch.indexOf("tools: buildInteractiveAgentTools({");
+    const toolsCallBlock = agentModeBranch.slice(toolsCallIndex, toolsCallIndex + 400);
+    expect(toolsCallBlock).toContain("getSessionDir: () => slateSessionBox.current?.dir");
+  });
+
+  test("the box is threaded into the runAgentRepl(...) call", () => {
+    const replCallIndex = shellSource.indexOf("await runAgentRepl(sharedLines,");
+    expect(replCallIndex).toBeGreaterThanOrEqual(0);
+    const replCallBlock = shellSource.slice(replCallIndex, replCallIndex + 400);
+    expect(replCallBlock).toContain("slateSessionBox");
+  });
+
+  test("every slateSession reassignment inside runAgentRepl syncs the box immediately after", () => {
+    const reassignments = ["slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;", "slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };"];
+    for (const assignment of reassignments) {
+      const idx = replBody.indexOf(assignment);
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const after = replBody.slice(idx + assignment.length, idx + assignment.length + 200);
+      expect(after).toContain("slateSessionBox.current = slateSession;");
+    }
+  });
+
+  // Review finding (code review of PR #313): the readline agent REPL built
+  // its own `createSpawnSubagentTool`/`agentDeps` without `onLedgerReady`/
+  // `resetSubagentBudget` at all, so the per-turn child-budget reset only
+  // ever applied to the TUI's `makeAgentDeps` — a `keryx shell --no-tui`
+  // session kept the old whole-session-lifetime ledger bug this same PR's
+  // own doc comment says it fixes.
+  test("the readline createSpawnSubagentTool call wires onLedgerReady into agentDeps.resetSubagentBudget", () => {
+    const readyIdx = agentModeBranch.indexOf("onLedgerReady:");
+    expect(readyIdx).toBeGreaterThanOrEqual(0);
+    const captureIdx = agentModeBranch.indexOf("resetSubagentBudget = controls.resetBudget;");
+    expect(captureIdx).toBeGreaterThan(readyIdx);
+    const depsIdx = agentModeBranch.indexOf(
+      "...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),",
+    );
+    expect(depsIdx).toBeGreaterThan(captureIdx);
+  });
+
+  test("the readline turn loop resets the subagent budget at the start of every turn", () => {
+    expect(replBody).toContain("deps.resetSubagentBudget?.();");
+  });
+});
+
+// --- SLATE-15: /goal wiring in shell.ts's readline agent-mode command switch
+// (flow 161, T10 — AC1/AC2) -------------------------------------------------
+//
+// RED until T11 lands the wiring: `runAgentRepl` has no injection seam (same
+// precedent as the SLATE-3a/SLATE-5 audits above), so this is a source-text
+// audit, not a driven-through-the-real-REPL test. The ACTUAL behavior (fail-
+// closed `--workspace` validation, no-workspace-created guarantee,
+// ensureSlateOpened + runAgentTurn sequencing) is proven directly against the
+// shared `runGoalCommand` core in `goal-command.test.ts`; this block only
+// proves shell.ts's readline surface actually WIRES that core in — the exact
+// Phase-2 cross-surface-gap lesson this flow's dispatch briefs call out
+// explicitly ("verify both surfaces by grep, do not assume symmetry").
+//
+// PINNED SHAPE (T11 implements exactly this — see subagent-result): a new
+// `else if (command === "/goal")` branch inside `runAgentRepl`'s existing
+// `if (line.startsWith("/"))` switch (alongside `/search-connect` etc.,
+// before the final unconditional `else`), calling:
+//   await runGoalCommand({
+//     raw: rest,                       // already-computed `parts.slice(1).join(" ").trim()`
+//     cwd: sessionCwd,
+//     io: agentIo,
+//     deps,
+//     history,
+//     slateSession,
+//     mintAttemptId: mintTimestampAttemptId,
+//   });
+// `runGoalCommand` mutates `slateSession.opened` IN PLACE (same object
+// `slateSessionBox.current` already points to via the SLATE-3a wiring above),
+// so no extra `slateSessionBox.current = slateSession;` sync is needed for
+// this branch specifically — it is not a REASSIGNMENT of the `slateSession`
+// variable itself, unlike `/new`'s branch.
+describe("SLATE-15 — /goal wiring in shell.ts's readline agent-mode command switch (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replBodyStart2 = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart2 = shellSource.indexOf("if (agentMode) {");
+  const replBody2 = shellSource.slice(replBodyStart2, agentModeBranchStart2);
+
+  test("runGoalCommand is imported from ./goal-command", () => {
+    expect(shellSource).toMatch(/from ["']\.\/goal-command["']/);
+    expect(shellSource).toContain("runGoalCommand");
+  });
+
+  test("the readline command switch has a /goal branch calling runGoalCommand", () => {
+    const branchIndex = replBody2.indexOf('command === "/goal"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+    const branchBlock = replBody2.slice(branchIndex, branchIndex + 400);
+    expect(branchBlock).toContain("runGoalCommand(");
+  });
+
+  test("the /goal branch passes rest, sessionCwd, agentIo, deps, history, slateSession, and mintTimestampAttemptId", () => {
+    const branchIndex = replBody2.indexOf('command === "/goal"');
+    const branchBlock = replBody2.slice(branchIndex, branchIndex + 500);
+    expect(branchBlock).toContain("rest");
+    expect(branchBlock).toContain("sessionCwd");
+    expect(branchBlock).toContain("agentIo");
+    expect(branchBlock).toContain("history");
+    expect(branchBlock).toContain("slateSession");
+    expect(branchBlock).toContain("mintTimestampAttemptId");
+  });
+
+  test("/goal appears in the readline agent REPL's own advertised command list (READLINE_AGENT_COMMANDS)", () => {
+    const start = shellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = shellSource.indexOf("];", start);
+    const block = shellSource.slice(start, end);
+    expect(block).toContain('"/goal"');
+  });
 });
 
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----
@@ -875,5 +1123,96 @@ describe("expandedToolOutput (readline /expand, AC10)", () => {
     const out = expandedToolOutput("apply_patch", "@@ -1,2 +1,2 @@\n-gone\n+here") ?? "";
     expect(out).not.toContain(ESC);
     expect(out).toContain("@@ -1,2 +1,2 @@");
+  });
+});
+
+// --- SLATE-5 close-trigger wiring audit (Phase 2, review finding) ---
+//
+// `runAgentRepl` (the interactive agent-mode REPL loop, above `runShell` in
+// this file) is explicitly "NOT unit-tested" per its own doc comment,
+// predating this Flow: it drives real `process.stdout`, a real
+// TTY-conditioned spinner, and reads on-disk shell-permission config via
+// `loadShellPermissions()` with no injection seam — refactoring that is out
+// of this Flow's scope. The slate open/close/archive LOGIC this wiring calls
+// into is NOT new here and is already fully regression-tested directly:
+// `runAgentRepl` calls the SAME `runAgentTurn` that `agent.test.ts`'s
+// "SLATE-5: ..." tests already drive (shell.ts is a thin caller, not a
+// second implementation), and `slate-lifecycle.test.ts` covers
+// `closeSlateSession`/`ensureSlateOpened` directly. What IS new and
+// genuinely untested is shell.ts's OWN wiring — which exact points call
+// `closeSlateSession` and where a fresh `SlateSessionRef` is (re)created —
+// so this is a source-text audit proving every required call site exists,
+// following the precedent already established by `harness.test.ts`'s
+// "AC4 — src/cli.ts registers the harness command (source-text audit)" for
+// wiring this codebase already treats as impractical to drive through a
+// real, side-effecting REPL loop end-to-end.
+describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const bodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const replBody = shellSource.slice(bodyStart);
+  const closeCall = "await closeSlateSession(slateSession, mintTimestampAttemptId);";
+
+  test("imports the slate-lifecycle close primitives", () => {
+    expect(shellSource).toContain(
+      'import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";',
+    );
+  });
+
+  test("closes the live slate at exactly the three documented trigger points (EOF, /exit|/quit, /new|/clear) — not fewer, not more", () => {
+    const occurrences = replBody.split(closeCall).length - 1;
+    expect(occurrences).toBe(3);
+  });
+
+  test("EOF (end of input) is one of the close-trigger points", () => {
+    const eofBlock = replBody.slice(replBody.indexOf("if (line === undefined) {"), replBody.indexOf("return; // end of input") + 1);
+    expect(eofBlock).toContain(closeCall);
+  });
+
+  test("/exit and /quit is one of the close-trigger points", () => {
+    const exitBlock = replBody.slice(
+      replBody.indexOf('command === "/exit" || command === "/quit"'),
+      replBody.indexOf('command === "/exit" || command === "/quit"') + 300,
+    );
+    expect(exitBlock).toContain(closeCall);
+  });
+
+  test("/new (and /clear) closes the OLD slate before a fresh SlateSessionRef is created for the new session dir", () => {
+    const newBlockStart = replBody.indexOf('command === "/new" || command === "/clear"');
+    const newBlock = replBody.slice(newBlockStart, newBlockStart + 900);
+    const closeIndex = newBlock.indexOf(closeCall);
+    const reassignIndex = newBlock.indexOf("slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };");
+    expect(closeIndex).toBeGreaterThanOrEqual(0);
+    expect(reassignIndex).toBeGreaterThan(closeIndex);
+  });
+
+  test("the initial SlateSessionRef is constructed from the opened session (undefined when sessions are off)", () => {
+    expect(replBody).toContain(
+      "slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;",
+    );
+  });
+
+  test("the slate session ref is actually threaded into runAgentTurn for each turn", () => {
+    expect(replBody).toContain(
+      "await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});",
+    );
+  });
+});
+
+// --- flow 163 AC8: the REPL (keryx shell) never triggers the Track B
+// wrap-up composer this way — the trigger call site exists ONLY in the
+// one-shot `keryx harness run` path (see harness.test.ts's own "flow 163
+// AC8" source-text audit for the positive half of this proof). A long-lived
+// REPL process serves many turns; `closeSlateOnFlowDone` (already shipped)
+// is its own, unrelated slate-close mechanism — it must never additionally
+// fire a machine wrap-up. Source-text audit, following the exact precedent
+// this file already sets for its own SLATE-3a/SLATE-15 wiring proofs above
+// (`readFileSync` the real source, assert on literals — `runAgentRepl` has
+// no injection seam to drive this through end-to-end).
+describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (source-text audit)", () => {
+  const shellSourceAc8 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+
+  test("shell.ts never imports or calls the Track B wrap-up composer", () => {
+    expect(shellSourceAc8).not.toContain("runWrapUp");
+    expect(shellSourceAc8).not.toMatch(/machine-wrap-up/);
   });
 });

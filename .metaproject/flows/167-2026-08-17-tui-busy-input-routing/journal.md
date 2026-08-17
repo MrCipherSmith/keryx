@@ -1,0 +1,37 @@
+# Flow Journal
+
+- 2026-08-17T10:30:42.555Z - flow created
+- 2026-08-17T10:31:15.947Z - task-added: T5: Analyze busy-submit routing in runLine and confirm insertion point
+- 2026-08-17T10:31:16.071Z - task-added: T6: Add recipient selector (main queue | side-1) on submit while busy
+- 2026-08-17T10:31:16.159Z - task-added: T7: Implement main queue state + transcript markers (qN (p))
+- 2026-08-17T10:31:16.248Z - task-added: T8: Implement remove / edit / force on main-queue items
+- 2026-08-17T10:31:16.331Z - task-added: T9: Implement FIFO drain of main queue after main turn completes
+- 2026-08-17T10:31:16.422Z - task-added: T10: Write unit tests for selector, queue, edit/remove/force, FIFO
+- 2026-08-17T10:39:20.229Z - frozen: 9 criteria; checksum recorded
+- 2026-08-17T10:39:20.317Z - started
+- 2026-08-17T10:40:02.831Z - task-done: T5: Analyze busy-submit routing in runLine and confirm insertion point
+- 2026-08-17T10:40:02.917Z - task-done: T1: Collect remaining context
+- 2026-08-17T11:49:08.929Z - task-done: T2: Implement per plan
+- 2026-08-17T11:49:09.013Z - task-done: T6: Add recipient selector (main queue | side-1) on submit while busy
+- 2026-08-17T11:49:09.093Z - task-done: T7: Implement main queue state + transcript markers (qN (p))
+- 2026-08-17T11:49:09.172Z - task-done: T8: Implement remove / edit / force on main-queue items
+- 2026-08-17T11:49:09.249Z - task-done: T9: Implement FIFO drain of main queue after main turn completes
+- 2026-08-17T11:49:09.328Z - task-done: T10: Write unit tests for selector, queue, edit/remove/force, FIFO
+- 2026-08-17T11:49:09.407Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-17T13:12:03.615Z - ac-confirmed: AC1: Unaffected by this session's fix; verified in code (tui-shell.ts busy branch: showComposerChoice with Main queue / Side-1 options) and via existing passing test suite (91/91, 231/231 src/tui).
+- 2026-08-17T13:12:03.695Z - ac-confirmed: AC2: paintMainQueue() renders formatMainQueueMarker(i, mainQueue.length) per item + fleet 'mainQ' counter; formatMainQueueMarker unit-tested (main-queue.test.ts).
+- 2026-08-17T13:12:03.786Z - ac-confirmed: AC3: F-001 fixed: added /queue <remove|edit|force> [N] slash command, registered AGENT_ONLY in agent-commands.ts, dispatched in the busy branch right after /interrupt. parseQueueCommand unit-tested (6 cases).
+- 2026-08-17T13:12:03.859Z - ac-confirmed: AC4: removeMainQueue(index) -> removeMainQueueItem + paintMainQueue(); markers are derived from live array position/length on every repaint, so renumbering is automatic, not stored per-item. removeMainQueueItem unit-tested.
+- 2026-08-17T13:12:03.939Z - ac-confirmed: AC5: F-004 fixed: editMainQueue now records pendingQueueEdit{id,at}; the NEXT busy plain-text submit consumes it via reinsertMainQueueItem(mainQueue, at, ...) instead of opening the selector, restoring original position. reinsertMainQueueItem unit-tested.
+- 2026-08-17T13:12:04.059Z - ac-confirmed: AC6: F-005 fixed: forceMainQueue no longer guards on chrome.isBusy() (abort() is not synchronous). It stashes the item in priorityMainQuestion and aborts; the main turn's finally() now checks priorityMainQuestion BEFORE the FIFO mainQueue drain, so the forced item runs next regardless of drain timing.
+- 2026-08-17T13:12:04.140Z - ac-confirmed: AC7: Unaffected by this session's fix; FIFO drain in the main-turn finally() unchanged except priorityMainQuestion is checked first (AC6 precedence).
+- 2026-08-17T13:12:04.235Z - ac-confirmed: AC9: Side-1 path (sideQueue/spawnSideWorker) untouched by this session's changes; diff shows no lines in that branch modified.
+- 2026-08-17T13:14:39.481Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-17T13:47:16.984Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)
+- 2026-08-17T19:04:14.318Z - completing
+- 2026-08-17T19:04:16.640Z - completion-failed: acceptance-criteria: unconfirmed: AC8
+- 2026-08-17T19:04:35.752Z - ac-confirmed: AC8: Bounded by this file's own architecture, not a shortcut: launchTuiAgentShell has no headless integration harness anywhere in tui-shell.ts (documented ~L748/~L1882 — every other command in this file is tested the same way). Deterministic/covered-by-unit-tests to the extent achievable: pure logic extracted and unit-tested (formatMainQueueMarker, removeMainQueueItem, editMainQueueItem, reinsertMainQueueItem, parseQueueCommand — main-queue.test.ts). Closure-level wiring (selector branch, FIFO/priority drain) verified by full read-through plus the 593-test regression suite (src/tui + agent/shell/sac) passing pre- and post-merge, and by the merged PR's green CI (11/11 checks).
+- 2026-08-17T19:04:50.884Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)
+- 2026-08-17T19:04:57.515Z - completing
+- 2026-08-17T19:04:57.538Z - done: all gates passed
+- 2026-08-17T19:16:00.000Z - record-corrected: merged.commit was recorded as c8ca3288e3a76b98d4421de5ea21d6a5ebfb0ac7 (PR #313's merge commit, pasted in error) instead of PR #317's actual merge commit. `keryx flow complete` refuses to re-run on a done flow, and flow.json has no CLI amend path for a terminal record, so this field was hand-corrected (manual edit, not the AC/checksum-protected content) to the verified value from `gh pr view 317 --json mergeCommit`, confirmed an ancestor of origin/main.

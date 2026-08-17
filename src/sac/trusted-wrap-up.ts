@@ -17,6 +17,13 @@ export type TrustedWrapUpProvenance = Readonly<{
   expiresAt: string;
 }>;
 
+// Module-scope (not per-`TrustedWrapUpAuthority`-instance) by design: every
+// authority instance shares these two sets, which is load-bearing for
+// `machine-wrap-up.ts`'s `proposeOneGroup` — it mints its OWN local
+// authority per group rather than reusing `createHarnessProposalLifecycleService`'s
+// internal one (to avoid a circular import), and that only verifies/consumes
+// correctly against the SERVICE's own composed authority because both
+// authorities check the same, shared, module-scope `issued`/`consumed` sets.
 const issued = new WeakSet<object>();
 const consumed = new WeakSet<object>();
 

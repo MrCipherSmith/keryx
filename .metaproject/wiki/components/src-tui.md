@@ -1,18 +1,18 @@
 # Module src/tui
 
-Version: 2.0.0
+Version: 2.1.0
 Type: component
 Status: accepted
 
 ## Summary
 
-`src/tui` groups 11 file(s). Depends on `src/lib`, `src/commands`, `src/harness/tool/builtin`. Exposes 17 public symbol(s).
+`src/tui` is the OpenTUI interactive shell: transcript, composer, sidebar, slash menu, and inspect modals (`/status`, `/flows`). The graph-owned Reference section below may lag the file count; verify against `src/tui/`.
 
 ## Overview
 
 `src/tui` implements the OpenTUI-based interactive shell renderer. It is the default shell on an interactive TTY (`--no-tui` opts out) and replaces the readline shell's IO layer (`createRichIo` in `src/commands/shell.ts`). The deterministic driver `runAgentTurn` is unchanged by this layer. The **pure render helpers in `src/lib` are not frozen**, though: flow 109 made `renderMarkdown` fence-aware and added `src/lib/md-blocks.ts`, so that both shells classify markdown, fences and diffs through one shared implementation — see decision **D-6** in `docs/requirements/keryx-opentui-shell/specification.md` §9.
 
-The module owns layout and composition (transcript scrollbox + split-footer composer + sidebar), block navigation (a modal Ctrl+O interface for toggling and copying), incremental markdown segmentation during streaming, and the UI overlays (choice docks, the approval gate, side-worker activity, wiki-enrich pickers). `@opentui/core` is an optional dependency loaded only via dynamic `import()` and guarded by the capability layer; the shell falls back to readline when it is absent or unusable.
+The module owns layout and composition (transcript scrollbox + split-footer composer + sidebar), block navigation (a modal Ctrl+O interface for toggling and copying), incremental markdown segmentation during streaming, inspect modals (`/status`, `/flows` via `modal-host.ts`), and the UI overlays (choice docks, the approval gate, side-worker activity, wiki-enrich pickers). `@opentui/core` is an optional dependency loaded only via dynamic `import()` and guarded by the capability layer; the shell falls back to readline when it is absent or unusable. Interactive tools and shell approval are shared with readline (`buildInteractiveAgentTools`, `evaluateShellApproval`) so `web_fetch` is not TUI-only.
 
 ## How it works
 
@@ -22,7 +22,7 @@ The **shell backbone** (`tui-shell.ts`, ~2300 lines) implements the `AgentIO` ho
 
 The **block model** (`transcript-blocks.ts`, ~1000 lines) is two independently testable halves. A pure registry (`createBlockRegistry`) stores bounded, addressable blocks (id, kind, summary, `fullText` clipped to the retention cap, collapse state, line count) with no OpenTUI involvement at all. A render layer (`createBlockView` / `createSegmentView`) paints the block: a **code or diff** segment gets a framed `BoxRenderable` with a language tag, while a **prose** segment is a bare unframed `TextRenderable`. Streaming is incremental — the trailing segment repaints per token and earlier segments freeze once their closing fence line arrives, so the buffer is never re-segmented from scratch.
 
-The **supporting surfaces** differ in kind and should not be lumped together. `worker-fleet.ts` and `side-worker.ts` are pure state and formatting (fleet registry and glyphs; side-worker prompt construction) and never touch OpenTUI. `ask-user-bridge.ts` and `subagent-bridge.ts` are module-level listener slots that let tools built before the TUI mounts reach it afterwards. `composer-choice.ts` is the only supporting file that renders, and correspondingly the only one that takes `otui` as a parameter. What all of them share — and what ADR-0005's lazy-capability contract actually requires — is that none imports `@opentui/core` at top level.
+The **supporting surfaces** differ in kind and should not be lumped together. `worker-fleet.ts` and `side-worker.ts` are pure state and formatting (fleet registry and glyphs; side-worker prompt construction) and never touch OpenTUI. `ask-user-bridge.ts` and `subagent-bridge.ts` are module-level listener slots that let tools built before the TUI mounts reach it afterwards. `composer-choice.ts` is the only supporting file that renders, and correspondingly the only one that takes `otui` as a parameter. Inspect UIs (`session-info.ts`, `flow-inspector.ts`, `inspector-sources.ts`, `context-usage.ts`) are presenters: they call `openModal` and do not import `@opentui/core` at top level. What all of them share — and what ADR-0005's lazy-capability contract actually requires — is that none imports `@opentui/core` at top level.
 
 ## Key concepts
 
@@ -32,6 +32,7 @@ The **supporting surfaces** differ in kind and should not be lumped together. `w
 - **Structural rendering** — prose via `markdownToChunks`; code and diffs via `payloadChunks`/`diffChunks`, which paint a language tag and per-line classes (add / del / hunk / meta / context) instead of spawning a tree-sitter worker. The *classification* is shared with the readline shell through the pure helpers `blockLabel` and `classifyDiffLine` in `src/lib/md-blocks.ts`, so the two shells cannot drift; the *emitters* differ by necessity — the TUI needs chunks, while `renderDiff` (`src/lib/ui.ts`) returns ANSI strings and is readline-only. The rationale is decision **D-2**, which lives in `docs/requirements/keryx-opentui-shell/specification.md` §9 (ADR-0005 ratifies the dependency itself and has no `D-n` decisions).
 - **Worker fleet** — a mutable registry (`WorkerFleet`) of the main agent plus subagent and side-worker entries (id, label, status, detail, model). Status glyphs: `queued` ○, `running` ◐, `done` ●, `failed` ✗, `blocked` ◼; `humanFleetPhase` renders `queued` as "ready". Pure formatting (`formatFleetSidebar`, `humanFleetPhase`) turns status plus detail into the sidebar Activity panel; the sidebar subscribes to the fleet and repaints on upsert/remove.
 - **Lazy capability** — `@opentui/core` is an optional dependency, loaded only via `await import()` inside `launchTuiAgentShell`, guarded by `src/capability/no-optional-imports`. The shell always takes `otui` as a parameter, never at top level. If the TTY check fails, the package is absent, or the renderer fails to initialize, `launchTuiAgentShell` returns `false` and the caller falls back to readline.
+- **Inspect modals** — `/status` is the only session-inspector token (`SESSION_INFO_COMMANDS`). Tabs are Status + Context always; Workspaces and Flow only when the session referenced those objects. `/flows` is a sibling list+Detail inspector. Both go through `openModal` (fixed 72×18 chrome, `[x] esc` header, one-line footer). `/session-info` and `/info` are not aliases.
 
 ## Main flows
 
@@ -48,6 +49,9 @@ A tool call registers a block with `kind: "tool"` and hint `ctrl+o`; the tool *r
 User types a question while the main agent is busy. `buildSideWorkerPrompt` builds the prompt from a snapshot of the main turn (phase, detail, elapsed seconds to one decimal) plus the last 10 messages, each truncated to 400 characters. The worker runs in-process through `runAgentTurn` with read-only tools (`risk === "read"`) and an approval callback hard-wired to `false`, so it cannot execute a shell command — but it does write into the visible transcript.
 
 Fleet updates here are **direct**: the side worker calls `fleet.upsert(...)` with id `side:<n>` and label `side-<n>`, and the sidebar repaints because it subscribes to the fleet. It does not go through the subagent bridge. That bridge is a separate path — `setSubagentFleetListener` is registered after the renderer is created, and `emitSubagentFleet` is called only by `src/harness/tool/builtin/spawn-subagent-tool.ts`, for real spawned subagents. `SubagentFleetEvent` carries `detail`, not `phase`. On completion the side worker is marked `status: "done", detail: "answered"` and then removed by a short `setTimeout`, so the finished slot stays visible for a moment.
+
+**Flow 5 — `/status` / `/flows` inspect modals**
+`/status` and `/flows` are slash builtins (both modes). They never call `provider.stream`. TUI dispatch calls `openModal` with a fixed 72×18 panel. `/status` paints Status + Context always; Workspaces / Flow tabs only if `inspector-sources` found a session-linked workspace or flow. `c` copies the session id. `/flows` lists packages; `↑/↓` selects, Enter/`→` opens Detail. Readline / `--no-tui` prints the same facts as text. `/session-info` and `/info` are not in `AGENT_SLASH_COMMANDS`.
 
 ---
 
@@ -115,6 +119,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 2.1.0 - Documented `/status` and `/flows` inspect modals, shared tool/approval parity with readline, and that `/session-info` / `/info` are gone. Left the graph-owned Reference file count untouched.
 - 2.0.0 - Prose rewritten after a claim-by-claim fact-check against the code. The 1.0.0 prose asserted 15 things the code does not do — three of the four Main flows described call paths that do not exist (a `/`-menu routed through `showComposerChoice`, per-token `segmentMarkdown` re-segmentation, side-worker fleet updates attributed to the `spawn_subagent` bridge with a fabricated event payload), plus `ShellIO` implementation, `markdownToChunks` placed in `src/lib`, `renderDiff` used by the TUI, D-2 attributed to ADR-0005, a non-existent `chunksFor`, and "pure render helpers remain unchanged" — which decision D-6 was written specifically to contradict. Mechanical claims (line counts, glyphs, key bindings and guards, retention constants, the never-remove-only-evict invariant, the `launchTuiAgentShell` return contract) were correct and are retained.
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow. Claimed verification against tui-shell.ts, transcript-blocks.ts, specification.md and ADR-0005; the 2.0.0 fact-check found that claim not credible.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-21T18:34:17.412Z. Prose sections are drafts for the gdwiki enrich workflow.

@@ -566,6 +566,22 @@ export function createSacAuthorizationServer(input: { authenticateRequest: (requ
   } });
 }
 
+/**
+ * Flow 165 fix (finding A): the ONLY runtime way to verify a caller-supplied
+ * `actorContext` is a genuine, server-issued `TrustedActorContext` rather than
+ * a structurally similar object literal — checks the same module-private
+ * `trustedActors` WeakSet `authorizeSacUse` above already consults, populated
+ * exclusively inside `createSacAuthorizationServer`'s `actorContextFor`. Every
+ * other actor-accepting entry point (`showForActor`, `withAuthorizedActor`,
+ * `reauthorizeAtUse`, `resolveResourceForActor`, and `authorizeSacUse` itself)
+ * already re-verifies trust this way before honoring an `actorContext`;
+ * `WorkspaceService.listForActor` did not, and is the caller this helper was
+ * added for.
+ */
+export function isTrustedActorContext(actorContext: unknown): actorContext is TrustedActorContext {
+  return isRecord(actorContext) && trustedActors.has(actorContext);
+}
+
 type CurrentRole = { role: SacRole; revision: string; workspaceId: string };
 type AuthorizationResult = { allowed: boolean; code: "allowed" | "untrusted_actor" | "workspace_access_denied" | "role_revoked" | "insufficient_role" | "authorization_changed"; authorizeAtUse: (resolve: () => Promise<CurrentRole>) => Promise<AuthorizationResult> };
 const roleRank: Record<Exclude<SacRole, "revoked">, number> = { viewer: 1, editor: 2, owner: 3 };
@@ -587,6 +603,19 @@ export async function authorizeSacUse(input: { actorContext: TrustedActorContext
   if (current.role === "revoked") return authorizationResult(false, "role_revoked", current, required, input.workspaceId);
   const allowed = (roleRank[current.role] ?? 0) >= required;
   return authorizationResult(allowed, allowed ? "allowed" : "insufficient_role", current, required, input.workspaceId);
+}
+
+export type SacMemberRole = { subject: string; role: string };
+/**
+ * Shared owner-only local gate. Not part of `authorizeSacUse`'s rank system —
+ * both call sites (`workspace-service.ts`'s `requireOwner`,
+ * `collaboration-service.ts`'s `record()`) use it as an additional in-process
+ * check inside an already-authorized `write` execution, matching
+ * `docs/requirements/sac-workspace-lifecycle/specification.md`'s "local gate
+ * inside `execute(manifest)`" description.
+ */
+export function isWorkspaceOwner(members: readonly SacMemberRole[], subject: string): boolean {
+  return members.find((member) => member.subject === subject)?.role === "owner";
 }
 
 export type StrictSacGuard = { mode: "strict"; availability: "available" | "unavailable" | "error" | "indeterminate"; decision?: "pass" | "fail" | "error"; policyRevision?: string } | { mode: "disabled" | "advisory"; decision?: string };

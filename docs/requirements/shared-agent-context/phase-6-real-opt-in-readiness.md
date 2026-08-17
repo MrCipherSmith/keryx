@@ -1,4 +1,5 @@
 # Shared Agent Context — Phase 6: Opt-in readiness (runtime guard + real-data readiness)
+Version: 1.0.0
 
 ## Status
 

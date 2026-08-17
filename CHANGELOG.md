@@ -5,6 +5,132 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.40] — 2026-08-17
+
+### Added
+
+- **Switchable TUI color themes (`/theme`).** `/theme` with no argument opens
+  a picker modal — a theme list on the left, a live preview (assistant
+  markdown, a code block, tool/side/chip/ok/error samples) on the right.
+  Arrow keys move the highlight and repaint the preview instantly; the
+  palette only applies on Enter or `[ Apply ]` — Esc/close leaves the
+  current theme untouched. `/theme <name>` still applies immediately on any
+  surface.
+
+### Changed
+
+- **Shared modal panel is opaque and near-fullscreen.** The `/status`,
+  `/flows`, and `/theme` host used to be a translucent 72×18 box that leaked
+  the transcript behind it and clipped long content; it now fills the
+  available terminal space with a scrollable body.
+- `/clear` and `/new` now fully reset the visible transcript (messages,
+  blocks, fleet rows, token counters), not just the underlying session.
+
+### Fixed
+
+- **Ctrl+O focused blocks scroll into view.** `↑`/`↓` navigation didn't
+  reveal the highlighted block if it was off-screen; it does now.
+- A toast now fires once when transcript retention drops an old payload,
+  instead of the loss only being discoverable via expand/copy.
+- Side-worker replies render in a framed box with a `── side-1 ──` label
+  instead of a bare, easy-to-miss magenta line.
+- A modal-open theme-change listener could accumulate across renderer
+  create/destroy cycles (relaunching the TUI shell within one process, or
+  running its own test suite) and kept writing onto already-destroyed
+  panels; it is now unregistered on teardown, alongside two related listener
+  leaks in the chat and agent TUI shells.
+- A keyboard-focus edge case let a stray digit `1`–`9` keypress jump modal
+  tabs while the scrollable body itself held focus, instead of being
+  absorbed by the scroll box — now consistent with the existing `x`-to-close
+  guard.
+- `/flows` content could overflow unwrapped on a narrow terminal while
+  `/status` wrapped correctly right next to it; both now wrap to the
+  panel's real width.
+
+## [0.2.39] — 2026-08-17
+
+### Added
+
+- **SAC workspace lifecycle completion.** `WorkspaceService` gains `archive`,
+  `removeResource`, and `rename`. Archiving a workspace hides it from
+  `workspace list` by default (`--include-archived` to see it) without
+  blocking read access, in-flight review, or discovery of its pending
+  proposals. `archive`/`removeResource`/`rename` all require `owner` role,
+  matching `archive`'s existing authorization level.
+- **Slate: a task-local harness layer over the shared workspace.** Every
+  `keryx shell`/TUI/`harness run` turn now tracks three ephemeral, per-attempt
+  shelves that live alongside — never inside — the shared SAC workspace:
+  - **Anchors** — execution context (root, tree/branch, runtime, touched
+    files) recomputed fresh from live state on every restart/resume/fork,
+    never restored from a prior attempt. Auto-injected into history on
+    harness effects (tool call done, worktree resolved, `/model` switch,
+    subagent spawn/return), visible on both the TUI and the readline shell.
+  - **Course** — a live, read-only projection of the attempt's bound Flow
+    (if any); never a second tracker, never mutated by slate itself.
+  - **Seeds** — append-only, model-writable hypotheses (`slate_read`/
+    `slate_write_seed` tools), promoted to the shared workspace's Know-how
+    only through the existing `workspace review` gate — never automatically.
+  - Opens on an action-intent turn or `/goal <text> [--workspace <id>]`
+    (also `keryx harness run --goal ... [--workspace <id>] [--unattended]`);
+    closes on flow-done, an explicit close phrase, `/new`, or shell exit,
+    always archiving an unclosed prior attempt first, never overwriting it
+    silently.
+- **Unattended-mode safety gate (SLATE-8).** `workspace review --decision
+  accepted` is denied outright for any session whose `interactive` context
+  field is `false` — every `keryx serve` session, unconditionally, regardless
+  of role or policy profile. `propose` is unaffected (deferred-queue model,
+  not a full block); a session can never flip its own `interactive` field at
+  runtime.
+- **Ephemeral subagent slate.** A dispatched subagent gets its own full,
+  disposable Anchors/Course/Seeds scoped to that one dispatch. On return, its
+  state lands only in the parent's `slate.childDispatches[dispatchId]` — a
+  separate, non-merged, provenance-tagged entry — never folded into the
+  parent's own Seeds, and unreachable by any other path once the dispatch
+  completes.
+- **Machine wrap-up composer.** Replaces raw-transcript evidence with machine
+  evidence (git diff, Flow snapshot, tagged Seeds) plus a model-generated
+  summary, falling back to a mechanical template on a slow-but-present
+  credential and failing closed (no proposal) with no credential at all.
+  Seeds are grouped by `kind` and proposed one group at a time; a proposal is
+  never created without a captured `workspaceId` — evidence is preserved as a
+  local `unbound-candidate` artifact instead.
+- **`keryx workspace catch-up` / `list-proposals`.** A pull-based,
+  `cwd`-scoped surface for reviewing what accumulated during unattended runs:
+  four always-separate sections (pending proposals, blocked runs,
+  unbound-candidate wrap-ups, and sessions of genuinely unknown fate), with
+  evidence freshness re-checked at display time rather than only at accept.
+  Archived workspaces surface identically to active ones — archival never
+  hides a pending proposal.
+
+## [0.2.38] — 2026-08-16
+
+### Added
+
+- **Managed flow PR completion lifecycle.** The flow orchestrator now offers a
+  complete PR path: create the PR, run review and fix iterations, merge into
+  the recorded base branch, and close the flow only after the merge.
+- **Bounded review recovery.** After six unsuccessful review/fix attempts, the
+  orchestrator must enrich context, diagnose the cycle, and choose a materially
+  different fix strategy or split the work into narrower tasks.
+- **Clickable TUI subagent inspector (flow 162, #303).** The sidebar lists
+  every spawned child for the session (running / done / failed) with no
+  `… +N more`. Clicking a row opens the shared modal host on Work + Meta:
+  task, live tool/reasoning/text log, model, status, and elapsed. Finished
+  children stay inspectable until the TUI session ends.
+
+### Changed
+
+- Flow completion is now explicitly PR-and-merge-gated; an unmerged PR or a
+  direct commit without a PR cannot transition a managed flow to `done`.
+
+### Fixed
+
+- **TUI/readline tool and approval parity.** One factory builds the
+  interactive tool set for both surfaces, so `web_fetch` is no longer
+  TUI-only. Approval policy (allowlist, tamper check, no auto-approve for
+  destructive or credential commands) lives in one module. Readline prints
+  those hints and can remember an exact `shell_exec` grant.
+
 ## [0.2.37] — 2026-08-16
 
 ### Added

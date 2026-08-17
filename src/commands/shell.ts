@@ -28,22 +28,17 @@ import type {
   ProviderPort,
 } from "../harness/provider/types";
 import { buildOrientation } from "../ctx/orient";
-import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
-import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
-import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
-import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
-import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
-import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
-import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builtin/workspace-context-tool";
+import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
+import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
 import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
@@ -54,6 +49,7 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { loadShellPermissions, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import {
   collapseToolOutput,
   colorEnabled,
@@ -89,6 +85,8 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
+import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
+import { runGoalCommand } from "./goal-command";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -118,6 +116,7 @@ const CONNECT_GUIDANCE = [
 const HELP_TEXT = [
   renderCommandHelp("chat"),
   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
+  "Context counter is an estimate (~4 chars/token); chat has no provider usage hook.",
   "",
 ].join("\n");
 
@@ -133,10 +132,12 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/search-provider",
   "/search-connect",
   "/new",
+  "/goal",
   "/clear",
   "/compact",
   "/status",
   "/flows",
+  "/theme",
   "/exit",
 ];
 
@@ -144,7 +145,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
 export function readlineAgentHelpText(): string {
   return (
     "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-    "graph_affected, memory_search, shell_exec (approval).\n" +
+    "graph_affected, memory_search, web_fetch, web_search, shell_exec (approval).\n" +
     renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
@@ -292,6 +293,22 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           continue;
         }
         system(formatFlowListText(items));
+        continue;
+      }
+      if (command === "/theme") {
+        const wanted = argument.trim();
+        if (wanted.length === 0) {
+          system(formatThemeList(getThemeId()));
+          continue;
+        }
+        const next = parseThemeId(wanted);
+        if (next === undefined) {
+          system(`Unknown theme '${wanted}'.\n${formatThemeList(getThemeId())}`);
+          continue;
+        }
+        applyThemeId(next);
+        persistThemeId(next);
+        system(`Theme: ${themeLabel(next)}\n`);
         continue;
       }
       if (command === "/clear" || command === "/new") {
@@ -803,6 +820,18 @@ async function runAgentRepl(
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
+  /**
+   * SLATE-3a (flow 161, AC5) side-channel: the caller's `slateSessionBox`
+   * (declared in `shellCommand`'s agent-mode branch, BEFORE the readline
+   * `buildInteractiveAgentTools({..., getSessionDir})` call that reads it).
+   * Every `slateSession = ...` reassignment below also syncs
+   * `slateSessionBox.current` immediately after, so that getter's closure —
+   * created once, outside this function, before any session is open — always
+   * observes this function's CURRENT `slateSession`, not a stale snapshot.
+   * Defaults to a throwaway box so ad hoc callers (tests) that do not care
+   * about Slate tool wiring need not pass one.
+   */
+  slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined },
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -830,6 +859,10 @@ async function runAgentRepl(
     }
   };
   const searchProviderController = createDefaultSearchProviderController();
+  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  let fingerprintAtStart = shellPermissionsFingerprint();
+  let permissionMigrationShown = false;
+  let permissionTamperShown = false;
 
   // A SINGLE line consumer shared by the main loop and the approval prompt, so an
   // approval read (mid-turn, while the main loop is suspended) never races it.
@@ -913,28 +946,85 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input) => {
+    requestApproval: async (tool, input, meta) => {
       stopSpinner();
-      let command = input;
-      try {
-        const parsed: unknown = JSON.parse(input);
-        if (parsed !== null && typeof parsed === "object" && typeof (parsed as { command?: unknown }).command === "string") {
-          command = (parsed as { command: string }).command;
+      if (tool !== "shell_exec") {
+        const preview = input.length > 120 ? `${input.slice(0, 117)}…` : input;
+        out(`\n${GUTTER}${style.yellow(`Approve ${tool}?`)} ${style.dim(preview)}\n`);
+        out(`${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        if (!approved) {
+          return false;
         }
-      } catch {
-        // show the raw input if it is not JSON
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
       }
-      // MP-6: advisory metaproject context (blast radius + related memory) before
-      // the prompt. Best-effort — never blocks or changes the default-deny gate.
-      const context = await buildApprovalContext(metaprojectPort, command);
+      const evaled = evaluateShellApproval({
+        inputJson: input,
+        ...(meta !== undefined ? { meta } : {}),
+        sessionAllow: sessionShellAllow,
+        fingerprintAtStart,
+      });
+      if (!permissionMigrationShown && evaled.rejected.length > 0) {
+        permissionMigrationShown = true;
+        out(
+          `${GUTTER}${style.yellow(
+            `⚠ ${evaled.rejected.length} saved shell permission(s) are no longer honoured`,
+          )}\n`,
+        );
+        for (const rej of evaled.rejected) {
+          out(`${GUTTER}${style.dim(`    “${rej.pattern}” — ${rej.reason}`)}\n`);
+        }
+      }
+      if (!permissionTamperShown && evaled.tampered) {
+        permissionTamperShown = true;
+        out(
+          `${GUTTER}${style.red(
+            "⚠ saved shell permissions changed outside this approval UI — review before trusting auto-approve",
+          )}\n`,
+        );
+      }
+      if (evaled.autoApprove) {
+        out(`${GUTTER}${style.dim(`✓ auto-approved shell: ${evaled.command}`)}\n`);
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
+      const context = await buildApprovalContext(metaprojectPort, evaled.command);
       if (context.length > 0) {
         out(`\n${indentBlock(style.dim(context), GUTTER)}`);
       }
-      out(`\n${GUTTER}${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
-      const answer = (await readLine()) ?? "";
-      const approved = /^y(es)?$/i.test(answer.trim());
-      out(approved ? style.green("approved\n") : style.red("denied\n"));
-      return approved;
+      for (const hint of formatShellApprovalHints(evaled)) {
+        out(`${GUTTER}${style.yellow(hint)}\n`);
+      }
+      const rememberable = !evaled.destructive && !evaled.credentials;
+      const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
+      out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
+      const answer = ((await readLine()) ?? "").trim();
+      const always = rememberable && /^a(lways)?$/i.test(answer);
+      const approved = always || /^y(es)?$/i.test(answer);
+      if (always && approved) {
+        const stored = rememberExactShellGrant(evaled.command, sessionShellAllow);
+        if (stored.length > 0) {
+          fingerprintAtStart = shellPermissionsFingerprint();
+        }
+        out(
+          stored.length > 0
+            ? style.green(`approved · remembered “${stored}”\n`)
+            : style.yellow("approved once · pattern cannot be remembered\n"),
+        );
+      } else {
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+      }
+      if (!approved) {
+        return false;
+      }
+      return meta?.fingerprint !== undefined
+        ? { approved: true, fingerprint: meta.fingerprint }
+        : true;
     },
     onToolCall: (name, input) => {
       stopSpinner();
@@ -967,6 +1057,13 @@ async function runAgentRepl(
   let archive: NormalizedMessage[] = [];
   let nextArchiveIndex = 0;
   let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * SLATE-5 open/close wiring: a fresh, never-opened ref per live session dir
+   * (reassigned on `/new`; see below). `undefined` whenever `live` is —
+   * sessions disabled, no dir to anchor a slate to, so `runAgentTurn` skips
+   * all slate lifecycle work (see `RunAgentTurnOptions.slateSession`).
+   */
+  let slateSession: SlateSessionRef | undefined;
   if (sessionsOn) {
     try {
       let resumeId = sessionOpts?.resumeId;
@@ -1007,6 +1104,8 @@ async function runAgentRepl(
       );
     }
   }
+  slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
+  slateSessionBox.current = slateSession;
 
   const save = (): void => {
     if (live === undefined) {
@@ -1058,6 +1157,8 @@ async function runAgentRepl(
   for (;;) {
     const line = await readLine();
     if (line === undefined) {
+      // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
+      await closeSlateSession(slateSession, mintTimestampAttemptId);
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -1066,6 +1167,8 @@ async function runAgentRepl(
       const command = parts[0] ?? "";
       const rest = parts.slice(1).join(" ").trim();
       if (command === "/exit" || command === "/quit") {
+        // SLATE-5 close trigger: shell exit (explicit command).
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
         return;
       }
       if (command === "/help") {
@@ -1109,6 +1212,11 @@ async function runAgentRepl(
           agentIo.onSystem?.("Nothing to expand — no tool output yet.\n");
         }
       } else if (command === "/new" || command === "/clear") {
+        // SLATE-5 close trigger: `/new` (and `/clear`, which is the same
+        // command under sessions-off — no session dir there, so nothing to
+        // close). Archive whatever slate the ABOUT-TO-BE-ABANDONED session
+        // was building before switching away from it.
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
         if (sessionsOn) {
           live = createSession({
             cwd: sessionCwd,
@@ -1118,6 +1226,8 @@ async function runAgentRepl(
           history = [];
           archive = [];
           nextArchiveIndex = 0;
+          slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };
+          slateSessionBox.current = slateSession;
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );
@@ -1208,6 +1318,17 @@ async function runAgentRepl(
           continue;
         }
         agentIo.onSystem?.(`Search provider '${providerId}' selected.\n`);
+      } else if (command === "/goal") {
+        // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
+        await runGoalCommand({
+          raw: rest,
+          cwd: sessionCwd,
+          io: agentIo,
+          deps,
+          history,
+          slateSession,
+          mintAttemptId: mintTimestampAttemptId,
+        });
       } else {
         // `/models` / `/provider` are chat-mode commands: say so instead of
         // calling them unknown. Anything else falls back to the old message.
@@ -1225,9 +1346,10 @@ async function runAgentRepl(
     }
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
+    deps.resetSubagentBudget?.();
     startSpinner();
     try {
-      await runAgentTurn(agentIo, deps, history, line);
+      await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});
     } finally {
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
@@ -1471,7 +1593,21 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     // Search credentials stay inside the controller/transport boundary. The
     // model only sees the read-only `web_search` tool and its redacted result.
     const searchProviderController = createDefaultSearchProviderController();
-    const makeAgentDeps = async (sel: { provider: string; model: string; baseUrl?: string }): Promise<AgentDeps> => {
+    const makeAgentDeps = async (
+      sel: { provider: string; model: string; baseUrl?: string },
+      getSlateSession: () => SlateSessionRef | undefined,
+    ): Promise<AgentDeps> => {
+      // Finding 1 fix (fix round, code review of PR #306): this parameter
+      // used to be `getSessionDir: () => string | undefined`, matching only
+      // what `buildInteractiveAgentTools` needs — but `createSpawnSubagentTool`
+      // below never received ANY slate ref at all, so SLATE-6's child-slate
+      // fold mechanism silently never fired for a real `keryx shell` TUI
+      // session (there was no `slateSession`/`getSlateSession` field passed
+      // to it whatsoever). Widened to match `tui-shell.ts`'s own widened
+      // `opts.makeAgentDeps` contract (see that file's doc comment); the
+      // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
+      // locally right below, not threaded in from the caller.
+      const getSessionDir = (): string | undefined => getSlateSession()?.dir;
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient = "";
       try {
@@ -1481,8 +1617,12 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       }
       const metaprojectPort = createMetaprojectAdapter(cwd);
       // MAE multi-agent: parent can spawn bounded subagents (ledger + fleet events).
+      let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd,
+        onLedgerReady: (controls) => {
+          resetSubagentBudget = controls.resetBudget;
+        },
         getParentModel: () => ({
           providerId: sel.provider,
           modelId: sel.model,
@@ -1497,22 +1637,25 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           }
           return [...names].map((name) => ({ name }));
         },
+        // Finding 1 fix: thread the LIVE getter through so a dispatched
+        // subagent's Seeds/Anchors actually fold into this TUI session's
+        // slate once it opens — `createSpawnSubagentTool` calls this at fold
+        // time, not once at construction, so it correctly observes a slate
+        // that opens AFTER this tool instance is built (see that file's own
+        // `SpawnSubagentToolDeps.getSlateSession` doc comment).
+        getSlateSession,
       });
       return {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools: [
-          ...builtinReadOnlyTools(cwd),
-          ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
-          webFetchTool(),
-          webSearchTool(searchProviderController),
-          shellExecTool(cwd),
-          workspaceOverviewTool(cwd),
-          workspaceReadTool(cwd),
-          createAskUserTool(invokeAskUserHost),
+        tools: buildInteractiveAgentTools({
+          cwd,
+          metaprojectPort,
+          searchController: searchProviderController,
           spawnTool,
-        ],
+          getSessionDir,
+        }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,
@@ -1521,6 +1664,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
+        ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
     };
     const redetect = (): Promise<DetectedProvider[]> =>
@@ -1672,6 +1816,19 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
       const searchProviderController = createDefaultSearchProviderController();
+      // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
+      // CURRENT session dir at tool-invoke time, not whatever was true when
+      // `tools` was built (`runAgentRepl`'s own `slateSession` is only known
+      // once the REPL loop opens/resumes a session, well after this point).
+      // A shared mutable box is the side-channel `runAgentRepl` writes into on
+      // every `slateSession` reassignment (see its own body below); the
+      // getter here reads the box BY REFERENCE, never a snapshot.
+      const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
+      // Same reset-per-turn wiring as the TUI's `makeAgentDeps` (this file,
+      // `createSpawnSubagentTool`'s `onLedgerReady`) — this readline REPL
+      // constructs its own, separate `spawn_subagent` tool instance, so it
+      // needs its own capture of the reset closure.
+      let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
         getParentModel: () => ({
@@ -1682,27 +1839,37 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
+        // Finding 1 fix (fix round, code review of PR #306): read
+        // `slateSessionBox.current` BY REFERENCE, at fold time — same
+        // "live box" idiom this exact call site already uses for
+        // `getSessionDir` below (`slateSessionBox` is only populated once
+        // `runAgentRepl` opens/resumes a session, well after this tool is
+        // constructed). Before this fix, this call passed no slate ref at
+        // all, so a dispatched subagent's Seeds/Anchors silently never
+        // folded anywhere in a real readline `keryx shell` agent session.
+        getSlateSession: () => slateSessionBox.current,
+        onLedgerReady: (controls) => {
+          resetSubagentBudget = controls.resetBudget;
+        },
       });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: [
-          ...builtinReadOnlyTools(agentCwd),
-          ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
-          webSearchTool(searchProviderController),
-          shellExecTool(agentCwd),
-          workspaceOverviewTool(agentCwd),
-          workspaceReadTool(agentCwd),
-          createAskUserTool(invokeAskUserHost),
+        tools: buildInteractiveAgentTools({
+          cwd: agentCwd,
+          metaprojectPort,
+          searchController: searchProviderController,
           spawnTool,
-        ],
+          getSessionDir: () => slateSessionBox.current?.dir,
+        }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
+        ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
       // created (flow 067), so it never runs here. This is the readline agent
@@ -1716,7 +1883,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         cwd: process.cwd(),
         ...(flags.continueLast === true ? { continueLast: true } : {}),
         ...(resumeId !== undefined ? { resumeId } : {}),
-      });
+      }, slateSessionBox);
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

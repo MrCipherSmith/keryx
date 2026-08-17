@@ -12,13 +12,18 @@ import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import {
+  MODAL_PANEL_CHROME_X,
   MODAL_PANEL_INNER_WIDTH,
+  MODAL_PANEL_MARGIN,
   MODAL_PANEL_MIN_HEIGHT,
   MODAL_PANEL_MIN_WIDTH,
+  destroyModalHost,
   formatModalFooter,
   openModal,
+  resolveModalInnerWidth,
   resolveModalPanelSize,
 } from "./modal-host";
+import { applyThemeId, getThemeId } from "./theme";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -108,14 +113,17 @@ test("AC5: openModal is a no-op when OpenTUI is unavailable", () => {
   expect(calls).toEqual([]);
 });
 
-test("formatModalFooter is a single hint line that fits the panel", () => {
+test("formatModalFooter is a single hint line that fits the wrap budget", () => {
   const line = formatModalFooter([
     { key: "c", label: "copy id" },
     { key: "esc", label: "close" },
   ]);
   expect(line).toBe("c copy id · esc close");
   expect(MODAL_PANEL_INNER_WIDTH).toBe(MODAL_PANEL_MIN_WIDTH - 4);
+  expect(MODAL_PANEL_MARGIN).toBeGreaterThan(0);
   expect(line.length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
+  expect(resolveModalInnerWidth(90)).toBe(90 - MODAL_PANEL_CHROME_X);
+  expect(resolveModalInnerWidth(10)).toBe(20);
 });
 
 test("resolveModalPanelSize grows toward the target and never shrinks below the floor", () => {
@@ -132,7 +140,7 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
   expect(host).not.toMatch(/session-info/);
 });
 
-otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu stays closed on /", async () => {
+otuiTest("AC1: one tab paints a titled near-fullscreen opaque panel; slash menu stays closed on /", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui);
   h.chrome.transcript.add(
@@ -153,8 +161,10 @@ otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu sta
 
   const frame = h.captureCharFrame();
   expect(frame).toContain("Inspector");
-  expect(frame).toContain("Info");
+  expect(frame).toContain("[Info]");
   expect(frame).toContain("body:info");
+  expect(h.renderer.root.findDescendantById("modal-tab-info")).toBeDefined();
+  expect(h.renderer.root.findDescendantById("modal-body-scroll")).toBeDefined();
 
   const backdrop = h.renderer.root.findDescendantById("modal-backdrop");
   const panel = h.renderer.root.findDescendantById("modal-panel");
@@ -165,8 +175,8 @@ otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu sta
   expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
   expect(frame.toLowerCase()).toContain("esc close");
-  expect((backdrop as { opacity?: number }).opacity).toBeLessThan(1);
-  expect((backdrop as { opacity?: number }).opacity).toBeGreaterThan(0);
+  expect((backdrop as { opacity?: number }).opacity ?? 1).toBe(1);
+  expect(frame).not.toContain("transcript stays mounted");
 
   // Shell remains mounted: chrome header and transcript child are still in the tree.
   expect(h.chrome.header.parent).toBe(h.chrome.main);
@@ -231,7 +241,7 @@ otuiTest("AC2: initialTab mounts only that body; switching unmounts the previous
   h.destroy();
 });
 
-otuiTest("fixed panel size does not change when switching short and long tab bodies", async () => {
+otuiTest("panel size does not change when switching short and long tab bodies", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui);
   const handle = openModal(otui.core, h.chrome, {
@@ -283,6 +293,122 @@ otuiTest("x closes the modal the same as Esc", async () => {
   });
   await h.flush();
   await h.mockInput.pressKeys(["x"]);
+  await h.flush();
+  expect(closed).toBe(1);
+  expect(h.chrome.overlayActive()).toBe(false);
+  h.destroy();
+});
+
+otuiTest("x does not close while the body scroll owns focus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  let closed = 0;
+  openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [{ id: "info", label: "Info" }],
+    renderTab: (tabId, body) => {
+      const parent = body as { add: (child: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: `body-${tabId}`, content: "line\n".repeat(40) }));
+    },
+    onClose: () => {
+      closed += 1;
+    },
+  });
+  await h.flush();
+  const scroll = h.renderer.root.findDescendantById("modal-body-scroll") as unknown as {
+    focus: () => void;
+    scrollHeight: number;
+    height: number;
+  };
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.height);
+  scroll.focus();
+  await h.flush();
+  await h.mockInput.pressKeys(["x"]);
+  await h.flush();
+  expect(closed).toBe(0);
+  expect(h.chrome.overlayActive()).toBe(true);
+  h.destroy();
+});
+
+otuiTest("review finding: a digit 1-9 keypress does not jump tabs while the body scroll owns focus (same guard x-close uses)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [
+      { id: "one", label: "One" },
+      { id: "two", label: "Two" },
+    ],
+    renderTab: (tabId, body) => {
+      const parent = body as { add: (child: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: `body-${tabId}`, content: "line\n".repeat(40) }));
+    },
+  });
+  await h.flush();
+  const scroll = h.renderer.root.findDescendantById("modal-body-scroll") as unknown as {
+    focus: () => void;
+    scrollHeight: number;
+    height: number;
+  };
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.height);
+  scroll.focus();
+  await h.flush();
+  // Before the fix: this checked containsNode(state.body, focused) instead of
+  // reusing the same containsNode(state.scroll, focused) the x-close guard
+  // above uses — focus on `scroll` itself (not a descendant of `body`) fell
+  // through and jumped to tab "two" instead of being absorbed.
+  await h.mockInput.pressKeys(["2"]);
+  await h.flush();
+  expect(handle?.activeTab()).toBe("one");
+  h.destroy();
+});
+
+otuiTest("review finding: destroyModalHost unregisters the theme listener — a theme change after destroy no longer touches the host's boxes", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const previousThemeId = getThemeId();
+  try {
+    applyThemeId("groknight");
+    openModal(otui.core, h.chrome, {
+      title: "Inspector",
+      tabs: [{ id: "info", label: "Info" }],
+      renderTab: (_tabId, body) => {
+        const parent = body as { add: (child: unknown) => void };
+        parent.add(new otui.core.TextRenderable(h.renderer, { id: "body-info", content: "x" }));
+      },
+    });
+    await h.flush();
+    const backdrop = h.renderer.root.findDescendantById("modal-backdrop") as unknown as { backgroundColor: unknown };
+    const beforeDestroy = backdrop.backgroundColor;
+
+    destroyModalHost(h.renderer);
+    applyThemeId("grokday"); // a real theme change, distinct bg from groknight
+    await h.flush();
+
+    // Before the fix: onThemeChange's returned unsubscribe was discarded, so
+    // this write still landed on the now-torn-down host's backdrop.
+    expect(backdrop.backgroundColor).toBe(beforeDestroy);
+  } finally {
+    applyThemeId(previousThemeId);
+    h.destroy();
+  }
+});
+
+otuiTest("clicking [x] closes the modal", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  let closed = 0;
+  openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [{ id: "info", label: "Info" }],
+    renderTab: () => {},
+    onClose: () => {
+      closed += 1;
+    },
+  });
+  await h.flush();
+  const close = h.renderer.root.findDescendantById("modal-close") as unknown as { x: number; y: number };
+  await h.mockMouse.click(close.x + 1, close.y);
   await h.flush();
   expect(closed).toBe(1);
   expect(h.chrome.overlayActive()).toBe(false);

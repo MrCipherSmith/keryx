@@ -483,7 +483,9 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "wiki",
     description:
-      "Read a project wiki page (architecture, domain, decisions) under .metaproject/wiki/. Input: { path: string } relative to the wiki root.",
+      "Read a project wiki page (architecture, domain, decisions) under .metaproject/wiki/. Input: { path: string } " +
+      "relative to the wiki root — you must already know the EXACT page path. If you don't, use wiki_ask with a " +
+      "plain-language question instead: it finds and cites the right page(s) for you.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string" } },
@@ -571,7 +573,11 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Look up where a symbol is defined plus its callers/callees over the code-graph symbol layer (`keryx gdgraph symbol`). Input: { name: string }.",
+      "Look up where a symbol is defined plus its callers/callees over the code-graph symbol layer (`keryx gdgraph " +
+      "symbol`). Input: { name: string }. This is the FIRST tool to try for 'where is X defined' — it returns the " +
+      "exact file + line, no guessing a range in read_file needed. Empty definitions means the symbol layer has no " +
+      "entry for that name here (tree-sitter grammar missing for this language, or the graph is stale) — fall back " +
+      "to search_code with the same name as a text pattern rather than retrying this with a reworded name.",
     inputSchema: {
       type: "object",
       properties: { name: { type: "string" } },

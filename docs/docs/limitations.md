@@ -19,6 +19,10 @@ each gap actually costs you, and what to use instead.
 | No tools in the non-interactive harness | `keryx harness run` and `keryx serve` are single text turns | `keryx shell` is where tools actually run |
 | Replay validates a log, it does not re-execute | A fixture check cannot tell you whether a run would behave the same today | Record and compare fixtures for integrity |
 | Session branches never merge | A fork diverges permanently | Re-fork from a shared ancestor |
+| No session↔workspace auto-bind | Every SAC call needs an explicit `workspaceId` | `keryx workspace list`, then pass the id |
+| SAC MCP is stdio-only | HTTP MCP returns `sac_transport_denied` | Use `keryx mcp serve` (stdio) or the CLI |
+| SAC source reads need POSIX `openat` | Fail-closed on platforms without `O_NOFOLLOW` | Use macOS or Linux |
+| Policy experiment is synthetic / off | No production learned policy | Keep the deterministic baseline |
 
 ## Optional AI features are not bundled
 

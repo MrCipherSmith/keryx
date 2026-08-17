@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.0
+Version: 0.14.5
 
 ## Status
 
@@ -7,6 +7,47 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.5** — Added `shared-agent-context-decision-integrity` (RP-13) as a
+>   specification-ready, requirements-only package: closes a real gap found
+>   while designing Slate v2 — `workspace review --decision accepted`
+>   bypasses the already-working `findDuplicates`/`findConflicts`
+>   (`src/memory/dedup.ts`), and nothing ties SAC content back to a deleted
+>   code component (`wikiPruneOrphans` only covers `wiki/components/*`).
+>   Explicitly does NOT add auto-merge/auto-archive/a new similarity engine;
+>   automatic decision versioning is a named, deferred future track with
+>   its constraints pre-fixed, not built here. Also bumped `slate` to
+>   2.0.0 (SLATE-16..21, still design/not implemented) — see that
+>   package's own changelog.
+> - **0.14.4** — `sac-workspace-lifecycle` and `slate` (all 5 phases) shipped
+>   to `main` and released in v0.2.39: archive/removeResource/rename (PR
+>   #296), Slate skeleton + bundled SAC hardening (PR #297), open/close
+>   lifecycle + unattended `interactive` gate (PR #301), `/goal` + TerminalState
+>   + Anchors auto-inject (PR #304), ephemeral subagent slate + machine
+>   wrap-up composer (PR #306), catch-up review + `list-proposals` (PR #308).
+>   Both packages moved from spec-ready to implemented and verified.
+> - **0.14.3** — Added `sac-workspace-lifecycle` as a specification-ready,
+>   requirements-only package: closes a real gap found in the already-shipped
+>   `WorkspaceService` (SAC-1) — no archive, no resource removal, no rename.
+>   Explicitly does NOT add member management or delete; both are documented
+>   non-goals (member management would create ACL entries no actor can
+>   verify under today's OS-uid-only identity — owned by future RP-06; delete
+>   conflicts with SAC's own AC-9 append-only audit guarantee). Cross-patches
+>   `slate`'s SLATE-10/SLATE-13 so archived workspaces never silently drop
+>   out of pending-review discovery.
+> - **0.14.2** — Added `slate` as a specification-ready, requirements-only
+>   package: a task-local harness layer (Anchors/Course/Seeds) sitting in
+>   front of the implemented `shared-agent-context` workspace, covering
+>   subagent slate handoff, unattended-mode gating, and a catch-up review
+>   flow. No runtime implementation is claimed. Explicitly scoped against
+>   SAC RP-03/05/06/08 (session-workspace binding, secure evidence, identity/
+>   capabilities, worktree collaboration) — slate reuses smaller already-
+>   shipped harness primitives as interim measures rather than duplicating
+>   any of those four packages' future architecture.
+> - **0.14.1** — Reconciled `shared-agent-context` package prose with the
+>   shipped `src/sac/` runtime (CLI `keryx workspace`, MCP `sac.*`, harness
+>   `workspace_*`, guarded owner-writers, access-receipt integrity). Earlier
+>   package text still said CLI/MCP were planned and that the runtime exposed
+>   none of those tools. Satellite RP-01…RP-12 stay future / spec-ready.
 > - **0.14.0** — Truth-synced the implemented Shared Agent Context core and
 >   added twelve future improvement packages plus the SAC Improvements Program.
 >   The new packages define dependency-ordered requirements, validation,
@@ -126,6 +167,8 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 |---|---|---|
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
+| [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | implemented and verified (PR #296) | Archive/resource-removal/rename shipped for `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete remain explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |
+| [Keryx Slate](slate/README.md) | v1 (SLATE-1..15) implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308); v2 (SLATE-16..21) specification-ready, not implemented | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. v2 adds automatic workspace resolve-or-create, autonomous `propose` dispatch, and a review confirm-token closing `sac.review`'s known self-accept gap — narrows RP-03's remaining scope; see the package's own v2.0.0 changelog. |
 | [SAC RP-01 Runtime Truth](shared-agent-context-runtime-truth/README.md) | future / spec-ready | Make the deterministic retrieval plan independent and output-effective, with stable identities and honest freshness, detail, omissions, and cost. |
 | [SAC RP-02 Source-owned Projections](shared-agent-context-source-projections/README.md) | future / spec-ready | Replace raw/heuristic source interpretation with typed Flow, Evidence, Wiki, Memory, and Skills owner ports and canonical guarded writes. |
 | [SAC RP-03 Lifecycle Binding](shared-agent-context-lifecycle-binding/README.md) | future / spec-ready | Add explicit Session–workspace–Flow binding, discovery, derivation preview, and receipt-bound owner-accepted-to-accepted link-back. |
@@ -138,7 +181,8 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [SAC RP-10 Receipts and Provenance](shared-agent-context-receipts-provenance/README.md) | future / spec-ready | Add metadata-only capsules, replay/drift reasons, durability classes, retention/repair/quota controls, and measured read SLOs. |
 | [SAC RP-11 Evaluation and Orchestration](shared-agent-context-evaluation-orchestration/README.md) | future / spec-ready | Evaluate deterministic/candidate shadow baselines, causal ablations, topology, outcome/security/overhead, and retain/remove/defer decisions. |
 | [SAC RP-12 Documentation Truth](shared-agent-context-documentation-truth/README.md) | future / spec-ready | Enforce source-pinned current-behavior claims, taxonomy, graph/wiki coverage, then registry-derived operation docs/examples after RP-09. |
-| [SAC Improvements Program](shared-agent-context-improvements-program/README.md) | future / spec-ready | Coordinate all twelve packages with dependency waves, integration checkpoints, copy-ready phase prompts, dashboard statistics, evidence, stop, and rollback gates. |
+| [SAC RP-13 Decision Deduplication and Lifecycle Cleanup](shared-agent-context-decision-integrity/README.md) | future / spec-ready | Wire the existing `findDuplicates`/`findConflicts` (`src/memory/dedup.ts`) into `workspace review` as a reviewer-visible hint, plus an optional informational model annotation; extend the graph-diff signal that already drives `wikiPruneOrphans` to a report-only lifecycle flag for workspaces/memory entries/wiki decisions whose component left the graph. Surfaced by Slate v2's autonomous workspace/propose flow; not built by Slate v2 itself. |
+| [SAC Improvements Program](shared-agent-context-improvements-program/README.md) | future / spec-ready | Coordinate all twelve packages with dependency waves, integration checkpoints, copy-ready phase prompts, dashboard statistics, evidence, stop, and rollback gates. RP-13 is not yet included in this coordination. |
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |
@@ -154,4 +198,6 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx Sandbox Credential Auto-Mask](keryx-sandbox-credential-auto-mask/README.md) | implemented (P0–P0.b; PR #175–179) | Auto-derive HTTPS credential masks when restricted OS sandbox is on; fail-closed TLS (ADR-0007). **P0** resolver. **Verify** dual-axis. **P1** global `sandbox.json`. **P2** project `.keryx/sandbox-policy.json` + init skeleton. **P0.b** flipped the built-in unset-`maskMode` default from `manual` to **`auto`** and added a flag-gated live dual-axis smoke test (flow 108). Order: env → project → global → built-in (`auto`). Secrets: user-global `auth.json` only. |
 | [Keryx Sandbox Harness Hardening](keryx-sandbox-harness-hardening/README.md) | implemented (H1+H2+H3-light) | Operator/security edge after live deep probe: harness **mask-without-TLS fail-closed**, structured spawn diagnostics (exit-71 class), portable **deep-probe** script + REPORT schema, agent rules for **network.decisions** over curl exitCode. Does not re-architect OS sandbox. H0 docs were already on main. Related already-landed UX: tool budget 48 (PR #180), multiline shell allow (PR #181). |
 | [Keryx Project Agent Harness](keryx-project-agent-harness/README.md) | implemented (Release 0 + most of Release 1/2) | The execution loop that lets a model operate on a project through controlled tools while keeping the project brain local, durable, auditable, and reproducible. `src/harness/` is a substantial runtime (~175 files across 30 subdirectories): append-only session, allow/ask/deny policy engine, tool registry, provider port (fake + Anthropic + Ollama adapters), resume/recovery, branch/compaction, guarded mutation + approval, child-agent isolation (see Multi-Agent Engine), bounded parallel scheduling, extensions, OS sandbox integration, replay, completion, budget, and monitor. CLI: `keryx harness run|exec|extension|wave`. Release 2+ still open: harness TUI, network broker-mediated tools, full-strength executable extensions, provider-side session storage, external compatibility adapters. |
-| [Keryx OpenTUI Shell](keryx-opentui-shell/README.md) | implemented (default shell; flows 059–066) | Full-screen OpenTUI (`@opentui/core`) interactive shell replacing the line-based `node:readline` renderer: live `/` command composer, persistent composer region, component-based rendering, with the deterministic agent driver and pure render helpers unchanged. The TUI is **the default shell when `stdout.isTTY`**; `--tui`/`--no-tui` flags and a graceful readline fallback remain. ADR-0005 Accepted. Additive features shipped beyond the original Phase 0–5 spec: side-workers, multi-agent spawn wiring, dual-store session persistence. |
+| [Keryx OpenTUI Shell](keryx-opentui-shell/README.md) | implemented (default shell; flows 059–066) | Full-screen OpenTUI (`@opentui/core`) interactive shell replacing the line-based `node:readline` renderer: live `/` command composer, persistent composer region, component-based rendering, with the deterministic agent driver and pure render helpers unchanged. The TUI is **the default shell when `stdout.isTTY`**; `--tui`/`--no-tui` flags and a graceful readline fallback remain. ADR-0005 Accepted. Additive features shipped beyond the original Phase 0–5 spec: side-workers, multi-agent spawn wiring, dual-store session persistence. Shared interactive tools + approval across TUI and readline (`web_fetch` is not TUI-only). |
+| [Keryx OpenTUI Modal and Tabs](keryx-opentui-modal-tabs/README.md) | implemented (flow 154) | Reusable `openModal` host in `src/tui/modal-host.ts`: dimmed backdrop, titled panel, tab strip, Esc dismiss, `shell-chrome` overlay registration. No slash command of its own. |
+| [Keryx OpenTUI Session Info](keryx-opentui-session-info/README.md) | implemented (flows 155; 0.2.36–0.2.37) | `/status` inspector on the shared host (Status + Context; Workspaces / Flow only when the session referenced them). `/session-info` and `/info` are not aliases. Sibling `/flows` lists project flows on the same host. |

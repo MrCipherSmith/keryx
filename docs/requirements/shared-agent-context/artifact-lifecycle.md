@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Artifact Lifecycle
-Version: 1.4.0
+Version: 1.5.0
 
 ## Source of truth and derived artifacts
 
@@ -7,7 +7,7 @@ Version: 1.4.0
 |---|---|---|---|
 | Workspace manifest | SAC local manifest | active → archived | Retain until authorised archive/deletion policy. |
 | Facts/Work/Know-how receipt | Derived from source modules | fresh → stale/expired/denied → regenerated | May be deleted/rebuilt; never primary knowledge. |
-| Access receipt | Derived pointer to Context Operations assembly/trace | recorded → retention expiry | Retain minimal metadata per project policy; no raw content. |
+| Access receipt | Hash-chained ledger at `.metaproject/context-operations/access-receipts.jsonl` (`src/sac/receipt-integrity.ts`); derived pointer to Context Operations assembly/trace | recorded → retention expiry | Retain minimal metadata per project policy; no raw content. Integrity owner is SAC receipt-integrity (recordHash + previousRecordHash + checkpoint). |
 | Proposal | Immutable SAC candidate record + append-only events | proposed → pending-write → accepted/rejected/dismissed/stale | Retain audit metadata; content subject to security/data policy. |
 | Review decision | Append-only decision event | terminal except correction link | Retain with proposal, target-write and prior-event reference. |
 | Accepted knowledge | Owning wiki/memory/skill system | owner-defined | SAC stores only reference. |

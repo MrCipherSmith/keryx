@@ -29,6 +29,7 @@ import {
   stripTrailingCr,
   type MdSegment,
 } from "../lib/md-blocks";
+import { getTheme } from "./theme";
 
 // --- registry (pure) -------------------------------------------------------
 
@@ -79,6 +80,8 @@ export interface BlockRegistryOptions {
    * cap is a real bound rather than a best effort.
    */
   maxRetainedChars?: number;
+  /** Fired once per `register` that evicted one or more older payloads. */
+  onEvict?: (dropped: readonly BlockState[]) => void;
 }
 
 export interface BlockRegistry {
@@ -106,6 +109,8 @@ export interface BlockRegistry {
   bodyText(id: string): string;
   /** Total retained characters right now — never above `maxRetainedChars`. */
   retainedChars(): number;
+  /** Drop every block and the focus (a new session starts empty). */
+  clear(): void;
 }
 
 // Defaults sized for a long session: a few dozen blocks, a few hundred KB. Both
@@ -144,18 +149,21 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
   // dropped the instant it arrived, which reads as a bug rather than as a
   // retention policy. It does not weaken the char bound — `register` already
   // clipped that payload to the cap, so "keep only the newest" always fits.
-  const enforceBounds = (): void => {
+  const enforceBounds = (): BlockState[] => {
+    const dropped: BlockState[] = [];
     for (;;) {
       if (retainedCount() <= maxBlocks && retainedChars() <= maxRetainedChars) {
-        return;
+        break;
       }
       const oldest = blocks.find((b) => b.retained);
       if (oldest === undefined || oldest === newestRetained()) {
-        return;
+        break;
       }
       oldest.retained = false;
       oldest.fullText = undefined;
+      dropped.push(snapshot(oldest));
     }
+    return dropped;
   };
 
   return {
@@ -181,7 +189,10 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
       if (focusIndex < 0) {
         focusIndex = 0;
       }
-      enforceBounds();
+      const dropped = enforceBounds();
+      if (dropped.length > 0) {
+        options.onEvict?.(dropped);
+      }
       return id;
     },
     get: (id) => {
@@ -235,6 +246,10 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
       return block.truncated ? `${block.fullText}\n${TRUNCATED_BLOCK_NOTICE}` : block.fullText;
     },
     retainedChars,
+    clear: () => {
+      blocks.length = 0;
+      focusIndex = -1;
+    },
   };
 }
 
@@ -353,7 +368,7 @@ type Text = InstanceType<OpenTui["TextRenderable"]>;
 type Chunk = ReturnType<OpenTui["bold"]>;
 
 /** Frame color shared with the user-echo and side-worker boxes. */
-const FRAME_COLOR = "#3a4a4a";
+const frameColor = (): string => getTheme().border;
 
 /**
  * Columns a rounded, 1-column-padded frame costs on top of its content: two
@@ -563,7 +578,7 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
     maxWidth: frameWidth(segment.lang, segment.body),
     borderStyle: "rounded",
     border: true,
-    borderColor: FRAME_COLOR,
+    borderColor: frameColor(),
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -612,6 +627,8 @@ export interface AssistantMessageStream {
   finalize(text: string): void;
   /** True while a message container is open (content streamed, not finalized). */
   open(): boolean;
+  /** Drop an in-flight message so the next push starts a new container. */
+  reset(): void;
 }
 
 let messageSeq = 0;
@@ -701,6 +718,20 @@ export function createAssistantMessageStream(
       message = undefined;
     },
     open: () => message !== undefined,
+    reset: () => {
+      if (message === undefined) {
+        return;
+      }
+      for (const view of message.views.splice(0)) {
+        view.destroy();
+      }
+      try {
+        parent.remove(message.container);
+      } catch {
+        // already unmounted
+      }
+      message = undefined;
+    },
   };
 }
 
@@ -741,6 +772,8 @@ export interface BlockView {
    */
   render(state: BlockState, opts?: { focused?: boolean; body?: string }): void;
   destroy(): void;
+  /** Content-relative box after the last layout pass (for scroll-into-view). */
+  extent(): { y: number; height: number };
 }
 
 /**
@@ -782,11 +815,22 @@ export function createBlockView(
     });
     const line = state.summary.length > 0 ? `${label}  ${state.summary}` : label;
     if (focused) {
+      header.fg = undefined;
       header.content = otui.t`${otui.yellow(`❯ ${line}`)}`;
       return;
     }
-    header.content =
-      tone === "red" ? otui.t`${otui.red(line)}` : tone === "cyan" ? otui.t`${otui.cyan(line)}` : otui.t`${otui.dim(line)}`;
+    // Theme-driven, not `otui.red`/`otui.cyan`: those are OpenTUI's fixed
+    // ANSI-bright helpers, so a tool/error block header used to stay the same
+    // harsh red/cyan on every palette regardless of the active theme's own
+    // (deliberately softer) `error`/`tool` tones — plain content + `fg` is the
+    // same pattern `theme-picker.ts`'s preview already uses for theme colors.
+    if (tone === "red" || tone === "cyan") {
+      header.content = line;
+      header.fg = tone === "red" ? getTheme().error : getTheme().tool;
+      return;
+    }
+    header.fg = undefined;
+    header.content = otui.t`${otui.dim(line)}`;
   };
 
   const dropBody = (): void => {
@@ -841,7 +885,7 @@ export function createBlockView(
       maxWidth: hugWidth(shown, FRAME_CHROME),
       borderStyle: "rounded",
       border: true,
-      borderColor: FRAME_COLOR,
+      borderColor: frameColor(),
       paddingLeft: 1,
       paddingRight: 1,
     });
@@ -871,6 +915,10 @@ export function createBlockView(
         // best-effort teardown
       }
     },
+    extent: () => ({
+      y: typeof box.y === "number" ? box.y : 0,
+      height: typeof box.height === "number" ? box.height : 0,
+    }),
   };
 }
 
@@ -880,6 +928,8 @@ export interface UserEchoOptions {
   id: string;
   /** The submitted line, rendered after a `❯` marker. */
   line: string;
+  /** Leading marker inside the frame. Default `❯`. */
+  marker?: string;
   /** Frame color; defaults to the shared muted frame color. */
   borderColor?: string;
   /** Rows of separation from whatever precedes it (default 1). */
@@ -902,12 +952,12 @@ export function appendUserEcho(
   parent: Box,
   options: UserEchoOptions,
 ): Box {
-  const text = `❯ ${options.line}`;
+  const text = `${options.marker ?? "❯"} ${options.line}`;
   const box = new otui.BoxRenderable(renderer, {
     id: options.id,
     borderStyle: "rounded",
     border: true,
-    borderColor: options.borderColor ?? FRAME_COLOR,
+    borderColor: options.borderColor ?? frameColor(),
     paddingLeft: 1,
     paddingRight: 1,
     marginTop: options.marginTop ?? 1,
@@ -925,6 +975,8 @@ export interface BlockMount {
   add(input: BlockInput, options?: BlockViewOptions): string;
   /** The mounted view for a block id — the nav controller's `view` port. */
   view(id: string): BlockView | undefined;
+  /** Destroy every mounted view and empty the registry. */
+  clear(): void;
 }
 
 /**
@@ -949,7 +1001,42 @@ export function createBlockMount(
       return id;
     },
     view: (id) => views.get(id),
+    clear: () => {
+      for (const view of views.values()) {
+        view.destroy();
+      }
+      views.clear();
+      registry.clear();
+    },
   };
+}
+
+/**
+ * Remove every child of a transcript box (user echoes, replies, system lines).
+ *
+ * Review finding: this only detached children — unlike `blockMount.clear()`
+ * above, which `.destroy()`s each view instead. A long session that
+ * repeatedly hits `/new` (which calls this on the whole transcript)
+ * accumulated non-destroyed renderables every time. Mirrors
+ * `blockMount.clear()` exactly: when a child supports `.destroy()`, that
+ * alone detaches it (OpenTUI renderables already remove themselves from
+ * their parent on destroy) — calling `parent.remove()` afterward would just
+ * log a harmless "not a child, skipping remove" warning. Only fall back to
+ * an explicit `remove()` for a child with no `.destroy()`, so this stays
+ * usable with plain test doubles that only support removal.
+ */
+export function clearTranscriptChildren<T>(parent: {
+  getChildren: () => readonly T[];
+  remove: (child: T) => void;
+}): void {
+  for (const child of [...parent.getChildren()]) {
+    const destroyable = child as { destroy?: () => void } | null | undefined;
+    if (typeof destroyable?.destroy === "function") {
+      destroyable.destroy();
+    } else {
+      parent.remove(child);
+    }
+  }
 }
 
 // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 --------------------
@@ -967,6 +1054,32 @@ export function createBlockMount(
 export interface NavScroll {
   scrollTop: number;
   stickyScroll: boolean;
+  /** Visible height of the transcript viewport. Missing → reveal is a no-op. */
+  height?: number;
+}
+
+/**
+ * Smallest `scrollTop` that keeps `[itemY, itemY+itemHeight)` inside the
+ * viewport. Pure so a headless test can pin the clamp without a renderer.
+ */
+export function revealScrollTop(
+  scrollTop: number,
+  viewportHeight: number,
+  itemY: number,
+  itemHeight: number,
+): number {
+  if (!(viewportHeight > 0) || !(itemHeight > 0) || !Number.isFinite(itemY)) {
+    return scrollTop;
+  }
+  if (itemY < scrollTop) {
+    return Math.max(0, itemY);
+  }
+  const bottom = itemY + itemHeight;
+  const viewBottom = scrollTop + viewportHeight;
+  if (bottom > viewBottom) {
+    return Math.max(0, bottom - viewportHeight);
+  }
+  return scrollTop;
 }
 
 /** The keypress event fields nav mode reads (OpenTUI's internal keypress shape). */
@@ -1073,6 +1186,19 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     }
   };
 
+  const reveal = (id: string): void => {
+    const viewport = scroll.height;
+    const mounted = view(id);
+    if (typeof viewport !== "number" || viewport <= 0 || mounted === undefined) {
+      return;
+    }
+    const { y, height } = mounted.extent();
+    const next = revealScrollTop(scroll.scrollTop, viewport, y, height);
+    if (next !== scroll.scrollTop) {
+      scroll.scrollTop = next;
+    }
+  };
+
   const newest = (kind?: string): BlockState | undefined => {
     const all = registry.list();
     for (let i = all.length - 1; i >= 0; i--) {
@@ -1152,6 +1278,7 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
     blurComposer();
     paintAll();
+    reveal(target.id);
     onChange();
   };
 
@@ -1186,6 +1313,7 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
       paint(previous.id);
     }
     paint(next.id);
+    reveal(next.id);
   };
 
   return {

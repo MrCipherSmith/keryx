@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { segmentMarkdown } from "../lib/md-blocks";
 import {
+  clearTranscriptChildren,
   createBlockNavController,
   createBlockRegistry,
   createStreamSegmenter,
+  revealScrollTop,
   EVICTED_BLOCK_TEXT,
   TRUNCATED_BLOCK_NOTICE,
   UNKNOWN_BLOCK_TEXT,
@@ -84,6 +86,37 @@ describe("createBlockRegistry: registration and collapse", () => {
     expect(() => registry.toggle("no-such-block")).not.toThrow();
     expect(registry.get(id)?.collapsed).toBe(true);
     expect(registry.list()).toHaveLength(1);
+  });
+
+  test("clear() drops every block and the focus so a new session starts empty", () => {
+    const registry = createBlockRegistry();
+    registry.register(block(1));
+    registry.register(block(2));
+    expect(registry.list()).toHaveLength(2);
+    expect(registry.focused()).toBeDefined();
+
+    registry.clear();
+    expect(registry.list()).toEqual([]);
+    expect(registry.focused()).toBeUndefined();
+    expect(registry.retainedChars()).toBe(0);
+
+    const next = registry.register(block(3));
+    expect(registry.list().map((b) => b.id)).toEqual([next]);
+  });
+
+  test("onEvict reports every payload dropped by a register", () => {
+    const dropped: string[][] = [];
+    const registry = createBlockRegistry({
+      maxBlocks: 1,
+      onEvict: (blocks) => {
+        dropped.push(blocks.map((b) => b.id));
+      },
+    });
+    const first = registry.register(block(1));
+    expect(dropped).toEqual([]);
+    registry.register(block(2));
+    expect(dropped).toEqual([[first]]);
+    expect(registry.get(first)?.retained).toBe(false);
   });
 });
 
@@ -515,5 +548,40 @@ describe("createStreamSegmenter", () => {
       { kind: "code", lang: "ts", body: "x" },
       { kind: "text", text: "b" },
     ]);
+  });
+});
+
+describe("revealScrollTop", () => {
+  test("does not move when the item already fits", () => {
+    expect(revealScrollTop(10, 20, 12, 4)).toBe(10);
+  });
+
+  test("scrolls up when the item starts above the viewport", () => {
+    expect(revealScrollTop(20, 10, 5, 3)).toBe(5);
+  });
+
+  test("scrolls down when the item ends below the viewport", () => {
+    expect(revealScrollTop(0, 10, 8, 5)).toBe(3);
+  });
+
+  test("is a no-op when the viewport has no height", () => {
+    expect(revealScrollTop(4, 0, 0, 3)).toBe(4);
+  });
+});
+
+describe("clearTranscriptChildren", () => {
+  test("removes every child of the parent box", () => {
+    const kids = ["a", "b", "c"];
+    const parent = {
+      getChildren: () => [...kids],
+      remove: (child: unknown) => {
+        const i = kids.indexOf(child as string);
+        if (i >= 0) {
+          kids.splice(i, 1);
+        }
+      },
+    };
+    clearTranscriptChildren(parent);
+    expect(kids).toEqual([]);
   });
 });

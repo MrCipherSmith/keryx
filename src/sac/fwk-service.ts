@@ -11,6 +11,8 @@ import {
   validateSacContract,
 } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
+import { deriveFlowWork, migrateFlow } from "../flow/store";
+import type { FlowState } from "../flow/types";
 import { withFileLock } from "../lib/fs";
 import {
   resolvePolicyExperiment,
@@ -568,12 +570,23 @@ export class FwkReadService {
 }
 
 /** Local-only composition for the CLI and stdio MCP adapters. */
-export function createLocalFwkReadService(cwd: string): FwkReadService {
+export function createLocalFwkReadService(
+  cwd: string,
+  /**
+   * Test seam: `beforeResourceOpen` is threaded straight into the internal
+   * `WorkspaceService` (see its own doc comment — "runs after
+   * authorization/containment but before the safe FD open"). Lets tests
+   * reproduce an ACL change landing in the real re-authorize-at-use window
+   * without needing a second real client/process.
+   */
+  opts?: { beforeResourceOpen?: () => Promise<void> | void },
+): FwkReadService {
   const authorizationServer = localWorkspaceAuthorizationServer();
   const workspaces = new WorkspaceService({
     workspaceRoot: cwd,
     authorizationServer,
     strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+    ...(opts?.beforeResourceOpen ? { beforeResourceOpen: opts.beforeResourceOpen } : {}),
   });
   const canonical = Object.freeze({ workspaceRoot: cwd, configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" });
   return new FwkReadService({
@@ -594,10 +607,46 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
         return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
       }));
       const work = flow ? await (async () => {
-        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
-        const snapshot = JSON.parse(raw) as { id?: string; status?: string; updatedAt?: string; tasks?: Array<{ id: string; status: string }> };
-        if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
-        return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
+        // A deleted flow resource entry, an unsafe/broken reference, or
+        // malformed JSON must not break the whole Facts+Work+Know-how
+        // assembly for overview/read: any CONTENT-class failure here yields
+        // `undefined`, which `FwkReadService.resolve()` already maps to
+        // `work.state === "unbound"` rather than throwing.
+        try {
+          const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
+          const snapshot = JSON.parse(raw) as FlowState;
+          if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
+          // Same read-time normalization `src/flow/store.ts`'s `readFlow` applies
+          // (v1 -> v2 in-memory only) before handing off to the shared
+          // completed/next/blocked formula (`deriveFlowWork`) — the same one
+          // `src/session/slate-course.ts`'s `readCourse` uses. An unsupported/
+          // missing schemaVersion throws here and is swallowed by the catch
+          // below exactly like malformed JSON already is.
+          return deriveFlowWork(migrateFlow(snapshot), flow.uri);
+        } catch (error) {
+          // Only a content-unreadable/malformed failure collapses to
+          // "unbound" here: a deleted flow resource entry (`not_found`), a
+          // broken/unsafe reference or safe-read failure (`invalid_reference`
+          // — including a platform-unavailable safe-read bridge), or
+          // genuinely malformed JSON (`SyntaxError`; the shape check above
+          // already returns `undefined` directly without throwing). A
+          // `WorkspaceServiceError` whose code is `access_denied` is an
+          // AUTHORIZATION denial, not a content problem — most commonly the
+          // actor's role being revoked between the workspace manifest read
+          // and this specific resource's re-authorization at use
+          // (`WorkspaceService.readResourceForActor`'s own TOCTOU-closing
+          // re-check; see workspace-service.ts). Swallowing it here would
+          // silently downgrade a full authorization denial into a partial
+          // disclosure: facts/knowHow already resolved successfully moments
+          // earlier would still be returned, with only `work` hidden. It
+          // must propagate out of this composition so
+          // `FwkReadService.resolve()`'s existing catch (~line 493) maps it
+          // to a full `denied()` receipt instead — exactly like it already
+          // does when `access_denied` surfaces from the facts/knowHow reads
+          // above, which were never wrapped in a local catch at all.
+          if (error instanceof WorkspaceServiceError && error.code === "access_denied") throw error;
+          return undefined;
+        }
       })() : undefined;
       return {
         facts: facts.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),

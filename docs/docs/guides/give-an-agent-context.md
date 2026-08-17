@@ -101,5 +101,7 @@ into the number.
 - [Architecture](../architecture.md) — what the workspace contract actually is,
   and who may write what.
 - [Module reference](../modules.md) — one section per module.
+- [Shared Agent Context](shared-agent-context.md) — bind a task to a workspace,
+  read a bounded FWK overview, propose reviewed knowledge back.
 - [Run keryx in CI](run-in-ci.md) — keep these artifacts current without anyone
   remembering to.

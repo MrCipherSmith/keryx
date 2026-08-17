@@ -63,11 +63,11 @@ export type OpenModalInput = {
   tabs: readonly ModalTab[];
   initialTab?: string;
   footer?: readonly { key: string; label: string }[];
-  renderTab: (tabId: string, body: unknown) => void | (() => void);
+  renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
   onClose?: () => void;
 };
 
-/** One-line hints; keep `formatModalFooter(...)` within the 72-col panel. */
+/** One-line hints; keep `formatModalFooter(...)` within the wrap budget. */
 export const SESSION_INFO_FOOTER = [
   { key: "c", label: "copy id" },
   { key: "←/→", label: "tabs" },
@@ -246,7 +246,26 @@ export type PresentSessionInfoOptions = {
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
-function paintContent(otui: unknown, renderer: unknown, body: unknown, content: string): void {
+function wrapBlock(text: string, width: number): string {
+  if (width < 8) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .flatMap((line) => {
+      if (line.length <= width) {
+        return [line];
+      }
+      const chunks: string[] = [];
+      for (let i = 0; i < line.length; i += width) {
+        chunks.push(line.slice(i, i + width));
+      }
+      return chunks;
+    })
+    .join("\n");
+}
+
+function paintContent(otui: unknown, renderer: unknown, body: unknown, content: string, width?: number): void {
   if (otui === undefined || otui === null || body === undefined || body === null) {
     return;
   }
@@ -256,12 +275,25 @@ function paintContent(otui: unknown, renderer: unknown, body: unknown, content: 
   if (parent.add === undefined || ctor === undefined) {
     return;
   }
-  parent.add(new ctor(renderer, { id: "session-info-body", content }));
+  const next = width !== undefined ? wrapBlock(content, width) : content;
+  parent.add(new ctor(renderer, { id: "session-info-body", content: next }));
 }
 
-function paintRows(otui: unknown, renderer: unknown, body: unknown, rows: readonly SessionInfoRow[]): void {
+function paintRows(
+  otui: unknown,
+  renderer: unknown,
+  body: unknown,
+  rows: readonly SessionInfoRow[],
+  wrapWidth?: number,
+): void {
   const width = rows.reduce((max, row) => Math.max(max, row.label.length), 0);
-  paintContent(otui, renderer, body, rows.map((row) => `${row.label.padEnd(width)}  ${row.value}`).join("\n"));
+  paintContent(
+    otui,
+    renderer,
+    body,
+    rows.map((row) => `${row.label.padEnd(width)}  ${row.value}`).join("\n"),
+    wrapWidth,
+  );
 }
 
 export function presentSessionInfo(
@@ -288,22 +320,23 @@ export function presentSessionInfo(
     tabs: statusModalTabs(snapshot),
     initialTab: "status",
     footer: SESSION_INFO_FOOTER,
-    renderTab: (tabId, body) => {
+    renderTab: (tabId, body, ctx) => {
       const renderer =
         options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
+      const width = ctx?.width;
       if (tabId === "context") {
-        paintContent(otui, renderer, body, formatContextUsageText(snapshot.context).trimEnd());
+        paintContent(otui, renderer, body, formatContextUsageText(snapshot.context).trimEnd(), width);
         return;
       }
       if (tabId === "workspaces") {
-        paintContent(otui, renderer, body, snapshot.workspaceLines.join("\n"));
+        paintContent(otui, renderer, body, snapshot.workspaceLines.join("\n"), width);
         return;
       }
       if (tabId === "flow") {
-        paintContent(otui, renderer, body, snapshot.flowLines.join("\n"));
+        paintContent(otui, renderer, body, snapshot.flowLines.join("\n"), width);
         return;
       }
-      paintRows(otui, renderer, body, snapshot.sessionRows);
+      paintRows(otui, renderer, body, snapshot.sessionRows, width);
     },
     onClose: () => {
       unsubscribeKey?.();

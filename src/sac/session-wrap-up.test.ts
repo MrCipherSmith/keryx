@@ -59,15 +59,27 @@ describe("resolveSessionWrapUp", () => {
 
     expect(resolution.workspaceId).toBe("workspace-a");
     expect(resolution.summary).toContain("Explain WorktreePort");
-    expect(resolution.evidence).toHaveLength(1);
 
-    const evidence = resolution.evidence[0]!;
-    expect(evidence.kind).toBe("session");
-    expect(evidence.uri.startsWith("./.metaproject/workspaces/workspace-a/session-evidence/")).toBe(true);
+    // SLATE-21: primary evidence (evidence[0], what readVerifiedProposalEvidence
+    // hands every owner writer) is the compact wrap-up doc, never the raw
+    // transcript — the full transcript is still exported and hash-verified,
+    // but only as the LAST, reference/attachment evidence item.
+    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff", "session"]);
 
-    const exportedContent = await readFile(path.join(cwd, evidence.uri.slice(2)), "utf8");
+    const wrapUp = resolution.evidence[0]!;
+    expect(wrapUp.uri.startsWith("./.metaproject/workspaces/workspace-a/session-evidence/")).toBe(true);
+    const wrapUpContent = await readFile(path.join(cwd, wrapUp.uri.slice(2)), "utf8");
+    expect(wrapUpContent).toContain("# Explain WorktreePort");
+    expect(wrapUpContent).toContain("## Course");
+    expect(wrapUpContent).toContain("## Seeds");
+    expect(wrapUpContent).toContain("## Working-tree diff");
+    expect(createHash("sha256").update(wrapUpContent).digest("hex")).toBe(wrapUp.revision);
+
+    const sessionEvidence = resolution.evidence[2]!;
+    expect(sessionEvidence.uri.startsWith("./.metaproject/workspaces/workspace-a/session-evidence/")).toBe(true);
+    const exportedContent = await readFile(path.join(cwd, sessionEvidence.uri.slice(2)), "utf8");
     expect(exportedContent).toContain("WorktreePort");
-    expect(createHash("sha256").update(exportedContent).digest("hex")).toBe(evidence.revision);
+    expect(createHash("sha256").update(exportedContent).digest("hex")).toBe(sessionEvidence.revision);
 
     // Real expiry, not a fabricated far-future date.
     expect(new Date(resolution.expiresAt).getTime()).toBeGreaterThan(Date.now());
@@ -79,5 +91,14 @@ describe("resolveSessionWrapUp", () => {
     const first = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: ref });
     const second = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: ref });
     expect(first.evidence[0]!.revision).toBe(second.evidence[0]!.revision);
+    expect(first.evidence[2]!.revision).toBe(second.evidence[2]!.revision);
+  });
+
+  test("a session with no Slate engagement still wraps up — sparse Course/Seeds, never a thrown error", async () => {
+    const handle = realSession("Plain chat, no slate opened");
+    const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
+    const wrapUpContent = await readFile(path.join(cwd, resolution.evidence[0]!.uri.slice(2)), "utf8");
+    expect(wrapUpContent).toContain("flow: unbound");
+    expect(wrapUpContent).toContain("(no Seeds captured this session)");
   });
 });

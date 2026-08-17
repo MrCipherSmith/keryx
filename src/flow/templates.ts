@@ -48,7 +48,7 @@ only via \`keryx flow task done <id> <taskId>\`.
 | T1 | context | Collect remaining context |
 | T2 | implement | Implement per plan |
 | T3 | test | Add/adjust tests and make them pass |
-| T4 | review | Self-review and prepare draft PR |
+| T4 | review | Review, fix findings, and prepare PR |
 `;
 }
 
@@ -99,7 +99,8 @@ Version: 0.1.0
 ## Purpose
 
 Agent-first flow lifecycle: initialization with frozen acceptance criteria,
-strict status state machine, draft-PR completion gates, and tracker reporting.
+strict status state machine, reviewed-and-merged PR completion gates, and
+tracker reporting.
 
 ## Commands
 
@@ -139,7 +140,7 @@ know CLI commands - recognize the intent and route it yourself.
 | "Заведи стори / инициализируй задачу / start a story" | init | ask for a problem description or issue link if missing, then init |
 | "Какие фло активны? / статус по фло / where are we on 003" | status | \`keryx flow list\` / \`flow status <id>\` |
 | "Отметь задачу T2 / добавь задачу в фло" | manage | [manage.md](manage.md): \`flow task done/add\` |
-| "Имплементация готова, PR создан" | accept implementation | [manage.md](manage.md): verify draft PR, \`flow implemented --pr <url>\` |
+| "Создай PR и доведи до merge" | create and merge | [manage.md](manage.md): review/fix, merge into base, then \`flow implemented --pr <url>\` |
 | "Заверши фло / закрой стори / finish the flow" | complete | [complete.md](complete.md): confirm ACs, \`flow complete\` |
 | "Фло застрял / поставь на паузу" | block | \`flow block <id> --reason\` / \`flow unblock\` |
 
@@ -152,7 +153,7 @@ the work.
 - Starting new work: [init.md](init.md) - flow-init.
 - Orchestrating/implementing an active flow: [manage.md](manage.md) -
   flow-manager (embeds into the orchestrator).
-- Finishing a flow whose draft PR exists: [complete.md](complete.md) -
+- Finishing a flow whose reviewed PR has merged: [complete.md](complete.md) -
   flow-complete.
 
 ## Hard policy (all roles)
@@ -162,7 +163,7 @@ the work.
   \`keryx flow ac update <id> --reason\`. Implementors NEVER touch them.
 - Status changes only through the CLI; invalid transitions are rejected.
 - Only flow-manager declares implementation complete (\`flow implemented\`),
-  and only when a draft PR exists.
+  and only after a reviewed PR has merged into the recorded base branch.
 `;
 }
 
@@ -230,26 +231,29 @@ data and status.
    \`flow unblock <id>\`.
 4. Acceptance criteria change ONLY when requirements truly changed:
    \`keryx flow ac update <id> --reason "<why>"\` (logged; audit trail).
-5. Completion decision is yours alone: when the implementor has finished and a
-   **draft PR exists in the author's name**, run
-   \`keryx flow implemented <id> --pr <url>\`.
-   Never accept work without a draft PR; never let the implementor self-accept.
+5. Completion decision is yours alone: after the user selects the PR path,
+   create the PR, run the bounded review/fix loop, and merge it only after the
+   review is clean and required checks are green. The merge target must be the
+   base branch captured when the flow branch was created. Only after verifying
+   that merge may you run \`keryx flow implemented <id> --pr <url>\`.
+   Never accept work without a PR and confirmed merge; never let the
+   implementor self-accept.
 6. Hand off to flow-complete (complete.md).
 
-Completion is strictly PR-gated - there is **no bypass**. Work that shipped
-straight to the default branch (direct commits, no PR) **cannot** be completed
-through the flow: \`flow implemented\` requires a PR URL and \`flow complete\`
-gates on its checks. So if you start a managed flow, the work must go through a
-draft PR. A flow whose implementation already merged without a PR stays open by
-design; record it as a legacy exception in journal.md rather than forcing a
-status change.
+Completion is strictly PR-and-merge-gated - there is **no bypass**. Work that
+shipped straight to the default branch (direct commits, no PR) **cannot** be
+completed through the flow. A PR that exists but has not been merged also
+cannot be completed. A flow whose implementation already merged without a PR
+stays open by design; record it as a legacy exception in journal.md rather than
+forcing a status change.
 `;
 }
 
 export function renderFlowCompleteSkill(): string {
   return `# flow-complete Skill
 
-Finish a flow whose status is \`implemented\`.
+Finish a flow whose PR has passed review, been merged into the base branch, and
+whose status is \`implemented\`.
 
 ## Workflow
 
@@ -257,10 +261,11 @@ Finish a flow whose status is \`implemented\`.
    deviations journaled; all tasks done.
 2. Confirm every acceptance criterion after actually checking it:
    \`keryx flow ac confirm <id> ACn --note "<evidence>"\`.
-3. Run \`keryx flow complete <id>\`. Gates: AC confirmed + checksum intact;
-   draft PR exists with green checks; code-health gate passes.
+3. Verify that the PR was merged into the base branch recorded for the flow,
+   then run \`keryx flow complete <id>\`. Gates: AC confirmed + checksum intact;
+   merged PR exists with green checks; code-health gate passes.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
-   - small fixes: run a fix agent, then re-run from step 2;
+   - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
 5. Gates pass -> flow is done:

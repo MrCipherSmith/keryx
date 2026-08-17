@@ -1,12 +1,14 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readWorkspaceFileNoFollow } from "./secure-resource-read";
 import {
   authorizeSacUse,
   createSacAuthorizationServer,
   evaluateStrictSacGuard,
+  isTrustedActorContext,
+  isWorkspaceOwner,
   resolveWorkspaceReference,
   validateSacContract,
   type SacAuthorizationServer,
@@ -80,9 +82,34 @@ export class WorkspaceService {
     return manifest;
   }
 
-  async list(input: { request: unknown; requestCorrelationId: string }): Promise<WorkspaceManifest[]> {
+  async list(input: { request: unknown; requestCorrelationId: string; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     await this.requireStrict("read");
+    return this.enumerateVisible(actor, input.includeArchived);
+  }
+
+  /**
+   * `listForActor` mirror of `list()` for a caller that already holds a
+   * trusted, previously-issued `TrustedActorContext` and does not need (or
+   * want) `requireActor`'s own `request` re-authentication — same shape as
+   * `showForActor` vs. `show()`. Reuses `enumerateVisible`, the exact same
+   * enumerate-storageRoot + parse-manifest + `currentRole` visibility filter
+   * `list()` itself runs, so the two can never silently drift apart (plan.md
+   * Risks: "listForActor visibility drift from list()").
+   */
+  async listForActor(input: { actorContext: TrustedActorContext; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
+    await this.requireStrict("read");
+    // Flow 165 fix (finding A): unlike every other actor-accepting method on
+    // this class, `listForActor` receives an already-issued `TrustedActorContext`
+    // with no separate `requireAuthorization`/`authorizeSacUse` call downstream
+    // to catch an untrusted, merely object-shaped caller — verify trust here,
+    // before it is ever used for visibility filtering.
+    if (!isTrustedActorContext(input.actorContext)) throw new WorkspaceServiceError("access_denied", "untrusted actor");
+    return this.enumerateVisible(input.actorContext, input.includeArchived);
+  }
+
+  /** Shared enumerate+filter loop behind both `list()` and `listForActor()`. */
+  private async enumerateVisible(actor: TrustedActorContext, includeArchived?: boolean): Promise<WorkspaceManifest[]> {
     try { await mkdir(this.storageRoot, { recursive: true, mode: 0o700 }); } catch { return []; }
     const entries = await readdir(this.storageRoot, { withFileTypes: true });
     const visible: WorkspaceManifest[] = [];
@@ -91,7 +118,7 @@ export class WorkspaceService {
       try {
         const manifest = await this.readManifest(entry.name);
         const role = currentRole(manifest, actor.subject);
-        if (role) visible.push(manifest);
+        if (role && (includeArchived === true || manifest.status !== "archived")) visible.push(manifest);
       } catch { /* corrupt or inaccessible workspaces are never disclosed by discovery */ }
     }
     return visible.sort((left, right) => left.id.localeCompare(right.id));
@@ -132,7 +159,14 @@ export class WorkspaceService {
     const authorization = await this.requireAuthorization(input.actorContext, initial.id, input.action);
     return withFileLock(this.lockPath(input.workspaceId), async () => {
       const manifest = await this.readManifest(input.workspaceId);
-      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+      // Reuses `manifest`, just read under this exclusive lock, for the
+      // at-use role check below instead of re-reading. `withFileLock`
+      // (src/lib/fs.ts) is a cross-process mkdir-based exclusive lock, so no
+      // writer can race between this read and the check — a second read here
+      // would return byte-identical content, not fresher data. This is unlike
+      // `reauthorizeAtUse`/`resolveResourceForActor`, which deliberately
+      // re-read because they run with no lock held.
+      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, input.actorContext.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
       return input.execute(manifest);
     });
@@ -213,6 +247,16 @@ export class WorkspaceService {
       const manifest = await this.readManifest(input.workspaceId);
       const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, actor.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      // KNOWN RISK: this archived-status guard is deliberately NOT part of
+      // `withAuthorizedActor`/`requireAuthorization` — `review()` in
+      // proposal-lifecycle.ts must stay ungated on archived status (frozen by
+      // spec: docs/requirements/sac-workspace-lifecycle/specification.md
+      // WSL-1), and `rename`/`removeResource` also route through
+      // `withAuthorizedActor` without this check today. Centralizing risks
+      // silently gating one of those. The identical inline check lives in
+      // proposal-lifecycle.ts's `create()` — any new write operation that
+      // should reject on an archived workspace must add this check itself.
+      if (manifest.status === "archived") throw new WorkspaceServiceError("guard_denied", "workspace is archived");
       if (manifest.resources.some((resource) => resource.uri === input.resource.uri)) throw new WorkspaceServiceError("conflict", "resource already exists");
       const next: WorkspaceManifest = { ...manifest, resources: [...manifest.resources, input.resource], updatedAt: this.timestamp() };
       await this.validateManifest(next);
@@ -220,6 +264,82 @@ export class WorkspaceService {
       result = next;
     });
     return result!;
+  }
+
+  /**
+   * Owner-only: sets status to "archived". Archive changes discovery (list),
+   * never direct read (show).
+   *
+   * Deliberately idempotent: archiving an already-archived workspace succeeds
+   * again rather than raising `conflict`. This is the literal implementation
+   * `docs/requirements/sac-workspace-lifecycle/specification.md` (WSL-1)
+   * prescribes — `{...manifest, status: "archived", updatedAt: ...}` with no
+   * precondition on the prior status — and it matches archive's one-way
+   * `active -> archived` lifecycle (no delete, no un-archive): re-issuing the
+   * same terminal state is a no-op in effect, unlike `addResource`'s
+   * `conflict` on a duplicate URI, where a second call would silently discard
+   * the caller's `revision` field. `updatedAt` moving on a repeat call is an
+   * accepted, intentional side effect of that same "just set the field"
+   * design — the operation is idempotent in *outcome* (workspace ends up
+   * archived), not byte-identical on repeat.
+   */
+  async archive(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const next: WorkspaceManifest = { ...manifest, status: "archived", updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
+    });
+  }
+
+  /** Owner-only: sets title. No other field is touched besides updatedAt. */
+  async rename(input: { request: unknown; requestCorrelationId: string; workspaceId: string; title: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const next: WorkspaceManifest = { ...manifest, title: input.title, updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
+    });
+  }
+
+  /** Owner-only mirror of addResource's write mechanics: not_found if the uri is absent, otherwise filters it out of resources[]. */
+  async removeResource(input: { request: unknown; requestCorrelationId: string; workspaceId: string; uri: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const resource = manifest.resources.find((candidate) => candidate.uri === input.uri);
+        if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource not found");
+        const next: WorkspaceManifest = { ...manifest, resources: manifest.resources.filter((candidate) => candidate.uri !== input.uri), updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
+    });
+  }
+
+  /** Local owner-only gate — shares `isWorkspaceOwner` with collaboration-service.ts's record(). Not a change to authorizeSacUse. */
+  private requireOwner(manifest: WorkspaceManifest, actor: TrustedActorContext): void {
+    if (!isWorkspaceOwner(manifest.members, actor.subject)) {
+      throw new WorkspaceServiceError("access_denied", "owner authority is required");
+    }
   }
 
   private async requireActor(request: unknown, correlationId: string): Promise<TrustedActorContext> {
@@ -275,8 +395,6 @@ function currentRole(manifest: WorkspaceManifest, subject: string): { role: "own
 function currentRoleOrRevoked(manifest: WorkspaceManifest, subject: string) {
   return currentRole(manifest, subject) ?? { role: "revoked" as const, revision: `${manifest.updatedAt}:absent`, workspaceId: manifest.id };
 }
-function isNotFound(error: unknown): boolean { return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"; }
-
 export function localWorkspaceAuthorizationServer(subject = `user:local-${process.getuid?.() ?? process.pid}`): SacAuthorizationServer {
   // This function is intentionally the local CLI composition boundary. It
   // reads no caller-supplied subject/role and exports no client minting path.
@@ -284,3 +402,46 @@ export function localWorkspaceAuthorizationServer(subject = `user:local-${proces
 }
 
 export function newWorkspaceId(): string { return `workspace-${randomUUID().replace(/-/g, "").slice(0, 16)}`; }
+
+/**
+ * SLATE-15 shared fail-closed `--workspace` validation (AC1): the SAME helper
+ * `/goal` (`commands/goal-command.ts`) and `keryx harness run --workspace`
+ * (`commands/harness.ts`) both reuse, so a bad/invisible workspace id is
+ * rejected identically in both places rather than two independently-drifting
+ * checks. Constructs its OWN `WorkspaceService` per call — the exact
+ * construction `commands/workspace.ts`'s `service()` factory already uses
+ * (`workspaceRoot: cwd`, `localWorkspaceAuthorizationServer()`, the same
+ * `strictGuard` literal) — and calls `.show()`, never `.create()`, so this
+ * helper can never itself cause AC2's "omitting --workspace never creates a
+ * workspace" guarantee to be violated by a caller that always calls it.
+ *
+ * NEVER throws: every failure (not_found, access_denied, guard_denied, or any
+ * other thrown error) is folded into `{ok: false, error}` so a fail-closed
+ * caller can check `.ok` without its own try/catch, and — critically for
+ * AC1's ordering — before doing anything else, including opening a slate.
+ */
+export async function resolveWorkspaceForActor(
+  cwd: string,
+  workspaceId: string,
+): Promise<{ ok: true; manifest: WorkspaceManifest } | { ok: false; error: WorkspaceServiceError }> {
+  const service = new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+  });
+  try {
+    const manifest = await service.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+    return { ok: true, manifest };
+  } catch (error) {
+    if (error instanceof WorkspaceServiceError) {
+      return { ok: false, error };
+    }
+    return {
+      ok: false,
+      error: new WorkspaceServiceError(
+        "not_found",
+        error instanceof Error ? error.message : "workspace could not be resolved",
+      ),
+    };
+  }
+}

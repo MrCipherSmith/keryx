@@ -11,6 +11,13 @@ import {
   renderCommandHelp,
 } from "./agent-commands";
 
+// SLATE-15 (flow 161, T10 — AC1/AC2): `/goal` is added to the registry
+// AGENT_ONLY (mirrors `/expand`/`/think`/`/copy` — deterministic entry is a
+// TUI/readline agent-mode concept, not a chat-mode one), positioned right
+// after `/new` (session-lifecycle grouping: `/new`, `/goal`, `/resume`,
+// `/sessions`). RED until T11 adds this entry — the exact-order lists below
+// (and `filterCommands("/", "agent")`, further down this file) are the
+// pinned target shape, not yet true of the real registry.
 test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
   expect(AGENT_SLASH_COMMANDS.map((c) => c.name)).toEqual([
     "/help",
@@ -24,15 +31,50 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/expand",
     "/copy",
     "/new",
+    "/goal",
     "/resume",
     "/sessions",
     "/status",
     "/flows",
     "/compact",
+    "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
+});
+
+test("SLATE-15: /goal is agent-only (deterministic entry has no chat-mode meaning)", () => {
+  const goal = AGENT_SLASH_COMMANDS.find((c) => c.name === "/goal");
+  expect(goal).toBeDefined();
+  expect(goal?.modes).toEqual(["agent"]);
+  expect(goal && goal.description.length).toBeGreaterThan(0);
+});
+
+test("SLATE-15: findAgentCommand resolves /goal (with args) in agent mode, never in chat mode", () => {
+  expect(findAgentCommand("/goal do the thing --workspace w1", "agent")?.name).toBe("/goal");
+  expect(findAgentCommand("/goal", "chat")).toBeUndefined();
+});
+
+test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal", () => {
+  expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal"]);
+});
+
+test("flow 167: /queue is agent-only (main-queue remove/edit/force has no chat-mode meaning)", () => {
+  const queue = AGENT_SLASH_COMMANDS.find((c) => c.name === "/queue");
+  expect(queue).toBeDefined();
+  expect(queue?.modes).toEqual(["agent"]);
+  expect(queue && queue.description.length).toBeGreaterThan(0);
+});
+
+test("flow 167: findAgentCommand resolves /queue (with args) in agent mode, never in chat mode", () => {
+  expect(findAgentCommand("/queue remove 2", "agent")?.name).toBe("/queue");
+  expect(findAgentCommand("/queue", "chat")).toBeUndefined();
+});
+
+test("flow 167: filterCommands('/q', 'agent') resolves to /queue", () => {
+  expect(filterCommands("/q", "agent").map((c) => c.name)).toEqual(["/queue"]);
 });
 
 test("every command declares at least one mode, and every mode resolves a description", () => {
@@ -57,13 +99,16 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/expand",
     "/copy",
     "/new",
+    "/goal",
     "/resume",
     "/sessions",
     "/status",
     "/flows",
     "/compact",
+    "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
 });
@@ -80,6 +125,7 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
     "/status",
     "/flows",
     "/compact",
+    "/theme",
     "/clear",
     "/exit",
   ]);
@@ -152,13 +198,16 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/expand",
     "/copy",
     "/new",
+    "/goal",
     "/resume",
     "/sessions",
     "/status",
     "/flows",
     "/compact",
+    "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
@@ -171,6 +220,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/status",
     "/flows",
     "/compact",
+    "/theme",
     "/clear",
     "/exit",
   ]);

@@ -30,6 +30,7 @@ import {
   sessionDir as sessionDirPath,
 } from "./paths";
 import { compactMessages, type CompactOptions } from "./compact";
+import { readSlate, type Slate } from "./slate";
 
 export const SESSION_SCHEMA_VERSION = 1 as const;
 
@@ -49,6 +50,10 @@ export interface SessionSummary {
   provider?: string;
   model?: string;
   parentSessionId?: string;
+  /** Flow 165 (Slate Phase 5) catch-up field: how this session was driven. */
+  runMode?: "interactive" | "unattended";
+  /** Flow 165 (Slate Phase 5) catch-up field: this session's Course lifecycle state. */
+  courseStatus?: "unbound" | "active" | "blocked" | "done";
 }
 
 export interface SessionHandle {
@@ -214,6 +219,8 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       ...(typeof o.provider === "string" ? { provider: o.provider } : {}),
       ...(typeof o.model === "string" ? { model: o.model } : {}),
       ...(typeof o.parentSessionId === "string" ? { parentSessionId: o.parentSessionId } : {}),
+      ...(o.runMode === "interactive" || o.runMode === "unattended" ? { runMode: o.runMode } : {}),
+      ...(o.courseStatus === "unbound" || o.courseStatus === "active" || o.courseStatus === "blocked" || o.courseStatus === "done" ? { courseStatus: o.courseStatus } : {}),
     };
   } catch {
     return undefined;
@@ -412,6 +419,26 @@ export function findSession(cwd: string, idOrPrefix: string, dataDir?: string): 
   return undefined;
 }
 
+/**
+ * SLATE-21: this session's `slate.json`, lenient (`undefined`, never thrown)
+ * on any read failure — no `slate.json` yet (an ordinary chat that never
+ * opened a Slate), a mid-write race, or a corrupted file. Lives here rather
+ * than a raw `sessionDirPath(...)` + `readSlate(...)` call at each caller so
+ * every direct use of `sessionDir`-family resolvers alongside a raw file
+ * write stays confined to this already-exempted file (see
+ * `config-dir.writers.test.ts`'s EXEMPTIONS) — `session-wrap-up.ts` needs
+ * this session's Slate AND writes evidence files of its own, and a resolver
+ * name plus a raw write in the SAME file is exactly what that guard exists
+ * to catch, regardless of which resolved path each write actually targets.
+ */
+export async function readSessionSlate(cwd: string, sessionId: string, dataDir?: string): Promise<Slate | undefined> {
+  try {
+    return await readSlate(sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Load the active model context (what the agent should resume with). */
 export function loadContext(cwd: string, sessionId: string, dataDir?: string): NormalizedMessage[] {
   const dir = sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir);
@@ -584,6 +611,19 @@ export class UnknownSessionError extends Error {
  * `context` and `archive` come across, because a fork that resumed with the
  * model window but lost the pre-compact history would silently be a different
  * conversation from the one it claims to branch.
+ *
+ * `slate.json` is deliberately NEVER part of this copy (SLATE-1/SLATE-2, AC-1
+ * / AC-2, `docs/requirements/slate/specification.md`'s "Future storage
+ * structure": "`keryx sessions fork` ... creates no `slate.json` for the new
+ * session — the fork opens with a fresh, empty slate, exactly as a
+ * brand-new session would... No code path may special-case fork to carry
+ * `slate.json` across."). This mirrors the same principle already applied to
+ * `messageCount` etc. below: only raw transcript (`context`/`archive`) and
+ * explicit identity fields (`title`/`provider`/`model`) are copied, never
+ * derived/computed session state — and Anchors/Course/Seeds are exactly
+ * that. `createSession` below never writes a `slate.json` on its own, so
+ * simply not touching `slate.ts` here is sufficient; see
+ * `src/session/store.test.ts` for the regression assertion.
  */
 export function forkSession(opts: {
   cwd: string;

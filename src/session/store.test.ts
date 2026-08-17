@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   compactSession,
   createSession,
   findSession,
+  forkSession,
   latestSession,
   listSessions,
   loadArchive,
@@ -17,6 +18,7 @@ import {
   shortSessionId,
   titleFromPrompt,
 } from "./index";
+import { readSlate, writeSlate } from "./slate";
 
 function tempData(): string {
   return mkdtempSync(path.join(tmpdir(), "keryx-session-"));
@@ -157,11 +159,105 @@ test("resume missing id throws with per-project hint", () => {
   }
 });
 
+test("AC2: forkSession never carries slate.json across — a forked session opens with a completely empty slate", async () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-fork-slate-"));
+  try {
+    const source = createSession({ cwd: proj, dataDir });
+    persistHistory(source, [{ role: "user", content: "start", provenance: "project" }]);
+    await writeSlate(source.dir, () => ({
+      anchors: { root: proj, touched: ["a.ts"], tree: "feature/x" },
+      course: { flowRef: "001" },
+      seeds: [{ id: "s1", text: "a live seed from the source session", ts: "2026-08-16T00:00:00.000Z" }],
+    }));
+    expect(await readSlate(source.dir)).toBeDefined();
+
+    const { handle } = forkSession({ cwd: proj, sourceIdOrPrefix: source.summary.id, dataDir });
+
+    expect(handle.dir).not.toBe(source.dir);
+    expect(await readSlate(handle.dir)).toBeUndefined();
+    // The source's own slate is untouched by the fork.
+    expect(await readSlate(source.dir)).toBeDefined();
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
 test("loadContext returns empty for unknown session", () => {
   const dataDir = tempData();
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-empty-"));
   try {
     expect(loadContext(proj, "00000000-0000-4000-8000-000000000099", dataDir)).toEqual([]);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+// --- SessionSummary runMode/courseStatus (flow 165, T2 — plan.md Track A item 5) ---
+//
+// RED: `readSummaryFile` does not yet read/return `runMode`/`courseStatus` —
+// today it silently drops both fields even when present on disk, so the
+// assertions below fail against the CURRENT implementation. PINNED shape:
+//   runMode?: "interactive" | "unattended";
+//   courseStatus?: "unbound" | "active" | "blocked" | "done";
+// Validated against the literal union (not just `typeof === "string"`), so a
+// corrupt/foreign value degrades to "field absent" rather than passing
+// through unchecked — mirroring every other optional field's existing
+// `typeof o.field === "string" ? {field: o.field} : {}` pattern, but with a
+// literal-membership check in place of the bare `typeof` check.
+
+test("SessionSummary: valid runMode/courseStatus values written directly to summary.json round-trip through findSession/listSessions", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-summary-fields-"));
+  try {
+    const created = createSession({ cwd: proj, dataDir, title: "valid fields" });
+    const summaryPath = path.join(created.dir, "summary.json");
+    const raw = JSON.parse(readFileSync(summaryPath, "utf8")) as Record<string, unknown>;
+    writeFileSync(summaryPath, JSON.stringify({ ...raw, runMode: "unattended", courseStatus: "blocked" }));
+
+    const found = findSession(proj, created.summary.id, dataDir);
+    expect(found?.runMode).toBe("unattended");
+    expect(found?.courseStatus).toBe("blocked");
+    expect(listSessions(proj, dataDir)[0]?.runMode).toBe("unattended");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("SessionSummary: a corrupt/foreign runMode or courseStatus value degrades to absent, not a throw and not a pass-through — every OTHER field on the same summary still reads correctly", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-summary-bad-fields-"));
+  try {
+    const created = createSession({ cwd: proj, dataDir, title: "bogus fields" });
+    const summaryPath = path.join(created.dir, "summary.json");
+    const raw = JSON.parse(readFileSync(summaryPath, "utf8")) as Record<string, unknown>;
+    writeFileSync(summaryPath, JSON.stringify({ ...raw, runMode: "not-a-real-run-mode", courseStatus: 42 }));
+
+    const found = findSession(proj, created.summary.id, dataDir);
+    expect(found).toBeDefined();
+    expect(found?.runMode).toBeUndefined();
+    expect(found?.courseStatus).toBeUndefined();
+    expect(found?.title).toBe("bogus fields");
+    expect(found?.id).toBe(created.summary.id);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("SessionSummary: omitting runMode/courseStatus entirely still parses cleanly — both fields fully optional, every existing consumer unaffected", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-summary-omit-fields-"));
+  try {
+    const created = createSession({ cwd: proj, dataDir, title: "no new fields at all" });
+    const found = findSession(proj, created.summary.id, dataDir);
+    expect(found).toBeDefined();
+    expect(found?.runMode).toBeUndefined();
+    expect(found?.courseStatus).toBeUndefined();
+    expect(listSessions(proj, dataDir)).toHaveLength(1);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(proj, { recursive: true, force: true });

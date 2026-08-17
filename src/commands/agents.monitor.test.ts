@@ -78,7 +78,12 @@ describe("keryx agents monitor", () => {
       expect(process.exitCode).toBe(1);
     } finally {
       console.error = origErr;
-      process.exitCode = prevExit;
+      // `process.exitCode = undefined` does NOT clear a previously-set exit
+      // code in Bun (unlike Node) — it leaves 1 in place, which then becomes
+      // the whole test run's real process exit code even though every
+      // assertion passed. `?? 0` is what actually restores "no error" when
+      // nothing had set an exit code before this test ran.
+      process.exitCode = prevExit ?? 0;
     }
   });
 });
