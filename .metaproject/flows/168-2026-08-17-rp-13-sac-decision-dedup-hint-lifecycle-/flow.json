@@ -3,17 +3,39 @@
   "id": "168",
   "slug": "rp-13-sac-decision-dedup-hint-lifecycle-",
   "title": "RP-13: SAC decision dedup hint + lifecycle cleanup flag",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-17T18:56:53.529Z",
-  "updatedAt": "2026-08-17T19:49:37.588Z",
+  "updatedAt": "2026-08-17T20:01:10.752Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9234a43c16d7afcbd2613b2b8a649663057f294175f1b0c8f4e80ec6bf9d2c53",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-17T20:00:38.534Z"
+    },
+    "AC2": {
+      "at": "2026-08-17T20:00:38.627Z"
+    },
+    "AC3": {
+      "at": "2026-08-17T20:00:38.717Z"
+    },
+    "AC4": {
+      "at": "2026-08-17T20:00:38.808Z"
+    },
+    "AC5": {
+      "at": "2026-08-17T20:00:38.919Z"
+    },
+    "AC6": {
+      "at": "2026-08-17T20:00:39.035Z"
+    },
+    "AC7": {
+      "at": "2026-08-17T20:00:39.145Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/323"
   },
   "tasks": [
     {
@@ -35,7 +57,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +65,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,13 +80,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -71,7 +95,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -142,6 +167,70 @@
       "at": "2026-08-17T19:49:37.588Z",
       "event": "task-done",
       "detail": "T6: FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)"
+    },
+    {
+      "at": "2026-08-17T20:00:38.534Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-17T20:00:38.627Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-17T20:00:38.717Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-17T20:00:38.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-17T20:00:38.919Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-17T20:00:39.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-17T20:00:39.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-17T20:00:45.352Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-17T20:00:45.433Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-17T20:00:45.511Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-17T20:01:01.915Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/323 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-17T20:01:07.842Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-17T20:01:10.752Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
