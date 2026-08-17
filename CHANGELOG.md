@@ -5,6 +5,79 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.41] — 2026-08-18
+
+### Added
+
+- **Slate v2 — autonomous SAC workspace binding (SLATE-16..21).** An agent now
+  resolves-or-creates its own SAC workspace by judgment on an action-intent
+  turn — the same tool-calling judgment `ask_user`/`spawn_subagent` already
+  use, no new similarity/embedding engine — and re-evaluates that binding
+  mid-session if the topic shifts. On task completion it dispatches a wrap-up
+  proposal autonomously (machine-composed evidence: git diff, Flow snapshot,
+  tagged Seeds). Review/accept stays strictly human: a `decision: "accepted"`
+  review now requires a `confirmToken`, minted only by `keryx workspace
+  confirm-review <workspace-id> <proposal-id>` run in a real, approval-gated
+  shell — no tool call, MCP or `keryx-shell`, can mint one itself. Workspace
+  `list`/`create`/`show` are now available with identical shape from both
+  `keryx-shell` tools and MCP (`workspace_list`, `workspace_create`,
+  `workspace_show`) — previously CLI/`keryx-shell`-only.
+- **Decision dedup/conflict hint at review time.** Accepting a wiki-update or
+  memory-entry proposal now computes a `DedupHint` (duplicates/conflicts
+  against already-accepted entries, reusing `src/memory/dedup.ts`'s existing
+  scoring unchanged) and, when the hint is non-empty, an optional bounded
+  model-judge annotation — informational only, never consulted by any
+  accept/reject/merge code path. Computed *after* the decision, never gating
+  it; a computation failure (timeout, read error) degrades to an absent hint,
+  never a blocked or crashed review. `sac.review` (MCP) and `keryx workspace
+  review` (CLI) return the identical shape.
+- **Lifecycle flag for orphaned SAC content.** `keryx workspace catch-up`
+  gains a fifth, additive section (`--include-lifecycle-flags`, shown by
+  default) surfacing every workspace, memory entry, and wiki decision page
+  whose recorded module no longer resolves in the code graph — reusing the
+  exact graph-diff signal that already drives `wikiPruneOrphans`. Report-only:
+  it never archives a workspace, edits a memory entry, or removes a wiki page
+  on its own; a workspace can appear here and in the pending-proposals section
+  at the same time without either suppressing the other.
+- **TUI: queue input while the agent is busy.** Submitting a normal message
+  while the main agent is busy now opens a selector — **Main queue**
+  (default) or **Side-1** (the existing read-only worker, outside main
+  history). A queued main message appears in the transcript as `qN (p)` and
+  drains FIFO right after the current turn completes. Each queued item can be
+  `remove`d (dropped without running), `edit`ed (returned to the composer,
+  pulled from the queue until re-submitted), or `force`d (aborts the current
+  turn and runs immediately as a new priority turn).
+- **Shell-command approvals are mouse-clickable.** The Allow/Deny-style option
+  list (shell approval, the wiki-enrich plan picker, `ask_user`) is a
+  scrollable, clickable list instead of keyboard-only.
+
+### Changed
+
+- **`/flows` sorts newest-first; Detail scrolls; the modal grows toward
+  96×28.** The flow list now orders by highest id, then `updatedAt`. On the
+  Detail tab, `↑`/`↓` scroll the body instead of changing the selection —
+  `[`/`]` (or `p`/`n`) switch between flows instead; the List tab still uses
+  `↑`/`↓` to move the selection. The shared modal panel (`/status`, `/flows`,
+  `/theme`) now grows toward a 96×28 target from the live terminal size
+  (floor 72×18) instead of a fixed 72×18 box.
+- `/status` and `/flows` are now allowed while the main agent is busy
+  (previously blocked like any other input).
+- A subagent's tool-call budget was a whole-session-lifetime pool that only
+  reset on `/model` switch; it now resets per parent turn, with a larger
+  default pool and higher per-child limits.
+- Tool/error block headers used a fixed bright red/cyan instead of the active
+  theme's palette; they are now theme-driven, matching `/theme`.
+
+### Fixed
+
+- The TUI subagent sidebar never cleared finished entries — not on
+  `/clear`/`/new`, not at the start of a fresh turn — so subagents from
+  earlier turns piled up indefinitely; it now clears at both points.
+- A shell-command approval's command preview was hard-truncated at 120
+  characters regardless of available box space; it now shows in full (8,000
+  character cap) in a scrollable box, with `ctrl+o` toggling focus into it for
+  arrow/PageUp/PageDown scrolling.
+
 ## [0.2.40] — 2026-08-17
 
 ### Added
