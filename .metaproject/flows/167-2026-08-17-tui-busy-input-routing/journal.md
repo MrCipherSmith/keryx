@@ -1,0 +1,29 @@
+# Flow Journal
+
+- 2026-08-17T10:30:42.555Z - flow created
+- 2026-08-17T10:31:15.947Z - task-added: T5: Analyze busy-submit routing in runLine and confirm insertion point
+- 2026-08-17T10:31:16.071Z - task-added: T6: Add recipient selector (main queue | side-1) on submit while busy
+- 2026-08-17T10:31:16.159Z - task-added: T7: Implement main queue state + transcript markers (qN (p))
+- 2026-08-17T10:31:16.248Z - task-added: T8: Implement remove / edit / force on main-queue items
+- 2026-08-17T10:31:16.331Z - task-added: T9: Implement FIFO drain of main queue after main turn completes
+- 2026-08-17T10:31:16.422Z - task-added: T10: Write unit tests for selector, queue, edit/remove/force, FIFO
+- 2026-08-17T10:39:20.229Z - frozen: 9 criteria; checksum recorded
+- 2026-08-17T10:39:20.317Z - started
+- 2026-08-17T10:40:02.831Z - task-done: T5: Analyze busy-submit routing in runLine and confirm insertion point
+- 2026-08-17T10:40:02.917Z - task-done: T1: Collect remaining context
+- 2026-08-17T11:49:08.929Z - task-done: T2: Implement per plan
+- 2026-08-17T11:49:09.013Z - task-done: T6: Add recipient selector (main queue | side-1) on submit while busy
+- 2026-08-17T11:49:09.093Z - task-done: T7: Implement main queue state + transcript markers (qN (p))
+- 2026-08-17T11:49:09.172Z - task-done: T8: Implement remove / edit / force on main-queue items
+- 2026-08-17T11:49:09.249Z - task-done: T9: Implement FIFO drain of main queue after main turn completes
+- 2026-08-17T11:49:09.328Z - task-done: T10: Write unit tests for selector, queue, edit/remove/force, FIFO
+- 2026-08-17T11:49:09.407Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-17T13:12:03.615Z - ac-confirmed: AC1: Unaffected by this session's fix; verified in code (tui-shell.ts busy branch: showComposerChoice with Main queue / Side-1 options) and via existing passing test suite (91/91, 231/231 src/tui).
+- 2026-08-17T13:12:03.695Z - ac-confirmed: AC2: paintMainQueue() renders formatMainQueueMarker(i, mainQueue.length) per item + fleet 'mainQ' counter; formatMainQueueMarker unit-tested (main-queue.test.ts).
+- 2026-08-17T13:12:03.786Z - ac-confirmed: AC3: F-001 fixed: added /queue <remove|edit|force> [N] slash command, registered AGENT_ONLY in agent-commands.ts, dispatched in the busy branch right after /interrupt. parseQueueCommand unit-tested (6 cases).
+- 2026-08-17T13:12:03.859Z - ac-confirmed: AC4: removeMainQueue(index) -> removeMainQueueItem + paintMainQueue(); markers are derived from live array position/length on every repaint, so renumbering is automatic, not stored per-item. removeMainQueueItem unit-tested.
+- 2026-08-17T13:12:03.939Z - ac-confirmed: AC5: F-004 fixed: editMainQueue now records pendingQueueEdit{id,at}; the NEXT busy plain-text submit consumes it via reinsertMainQueueItem(mainQueue, at, ...) instead of opening the selector, restoring original position. reinsertMainQueueItem unit-tested.
+- 2026-08-17T13:12:04.059Z - ac-confirmed: AC6: F-005 fixed: forceMainQueue no longer guards on chrome.isBusy() (abort() is not synchronous). It stashes the item in priorityMainQuestion and aborts; the main turn's finally() now checks priorityMainQuestion BEFORE the FIFO mainQueue drain, so the forced item runs next regardless of drain timing.
+- 2026-08-17T13:12:04.140Z - ac-confirmed: AC7: Unaffected by this session's fix; FIFO drain in the main-turn finally() unchanged except priorityMainQuestion is checked first (AC6 precedence).
+- 2026-08-17T13:12:04.235Z - ac-confirmed: AC9: Side-1 path (sideQueue/spawnSideWorker) untouched by this session's changes; diff shows no lines in that branch modified.
+- 2026-08-17T13:14:39.481Z - task-done: T4: Self-review and prepare draft PR

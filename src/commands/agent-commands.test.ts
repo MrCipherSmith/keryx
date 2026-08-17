@@ -40,6 +40,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
 });
@@ -58,6 +59,22 @@ test("SLATE-15: findAgentCommand resolves /goal (with args) in agent mode, never
 
 test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal", () => {
   expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal"]);
+});
+
+test("flow 167: /queue is agent-only (main-queue remove/edit/force has no chat-mode meaning)", () => {
+  const queue = AGENT_SLASH_COMMANDS.find((c) => c.name === "/queue");
+  expect(queue).toBeDefined();
+  expect(queue?.modes).toEqual(["agent"]);
+  expect(queue && queue.description.length).toBeGreaterThan(0);
+});
+
+test("flow 167: findAgentCommand resolves /queue (with args) in agent mode, never in chat mode", () => {
+  expect(findAgentCommand("/queue remove 2", "agent")?.name).toBe("/queue");
+  expect(findAgentCommand("/queue", "chat")).toBeUndefined();
+});
+
+test("flow 167: filterCommands('/q', 'agent') resolves to /queue", () => {
+  expect(filterCommands("/q", "agent").map((c) => c.name)).toEqual(["/queue"]);
 });
 
 test("every command declares at least one mode, and every mode resolves a description", () => {
@@ -91,6 +108,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
 });
@@ -189,6 +207,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/theme",
     "/clear",
     "/interrupt",
+    "/queue",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([

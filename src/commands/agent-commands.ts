@@ -137,6 +137,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {
+    name: "/queue",
+    description: "Manage the main queue — /queue <remove|edit|force> [N] (N = qN position, default 1)",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/exit",
     description: "Leave the shell (/quit works too)",
     modes: BOTH,

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-17-review-flow-src-tui-tui-shell-ts",
+  "mode": "review-flow",
+  "status": "draft",
+  "target": {
+    "kind": "path",
+    "ref": "src/tui/tui-shell.ts"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/scope.md",
+    "coverage": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/coverage.md",
+    "report": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/report.md",
+    "findings": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/findings.json",
+    "learning": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/learning.md",
+    "decisions": ".metaproject/reviews/2026-08-17-review-flow-src-tui-tui-shell-ts/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-17T12:11:51.138Z",
+  "updatedAt": "2026-08-17T12:11:51.138Z"
+}
