@@ -32,6 +32,31 @@ test("store keeps every child, including done and failed; remove is a no-op", ()
   expect(store.get("sub:2")?.status).toBe("done");
 });
 
+test("clear() drops every tracked child in one call and notifies listeners once", () => {
+  const store = new SubagentSessionStore();
+  store.apply({ kind: "upsert", id: "sub:1", label: "a", status: "done", detail: "done" });
+  store.apply({ kind: "upsert", id: "sub:2", label: "b", status: "running" });
+  const hints: string[] = [];
+  store.subscribe((hint) => hints.push(hint.kind));
+
+  store.clear();
+
+  expect(store.list()).toEqual([]);
+  expect(hints).toEqual(["remove"]);
+});
+
+test("clear() on an already-empty store is a no-op (no listener notification)", () => {
+  const store = new SubagentSessionStore();
+  let notified = false;
+  store.subscribe(() => {
+    notified = true;
+  });
+
+  store.clear();
+
+  expect(notified).toBe(false);
+});
+
 test("AC1: formatSubagentList prints every child and never +N more", () => {
   const rows = Array.from({ length: 20 }, (_, i) =>
     session({ id: `sub:${i}`, label: `worker-${i}`, status: i === 0 ? "running" : "done" }),

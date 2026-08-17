@@ -158,6 +158,15 @@ export interface AgentDeps {
    * unaffected.
    */
   now?: () => string;
+  /**
+   * When the caller's `spawn_subagent` tool exposed a reset hook (see
+   * `createSpawnSubagentTool`'s `onLedgerReady`), calling this at the start of
+   * a new turn gives that turn's subagents a fresh child tool-call/runtime
+   * pool instead of fighting over whatever earlier turns already spent.
+   * Optional and a no-op when absent — every call site that predates this
+   * (tests, any non-TUI/non-shell driver) is unaffected.
+   */
+  resetSubagentBudget?: () => void;
 }
 
 export interface RunAgentTurnOptions {
@@ -439,7 +448,9 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
   const base =
     "You are the keryx interactive agent (project harness). You have read-only tools to " +
     "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
-    "graph_affected, memory_search, read_wiki, wiki_ask, graph_symbol (keryx metaproject), web_fetch for an exact known public HTTPS URL, and web_search when an active connected search provider is configured. " +
+    "graph_affected, graph_symbol, graph_path, graph_query, memory_search, read_wiki, wiki_ask, wiki_backlinks, " +
+    "test_related, health_status, repomap, workspace_overview, workspace_read, slate_read, slate_write_seed " +
+    "(keryx metaproject), web_fetch for an exact known public HTTPS URL, and web_search when an active connected search provider is configured. " +
     "You may also propose shell_exec to run a command, which requires the user's explicit " +
     "approval before it executes.\n\n" +
     "Tool-calling rules (critical):\n" +
@@ -449,8 +460,24 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "- ALWAYS pass every required field in the tool JSON (e.g. search_code needs " +
     "`pattern`, read_wiki needs `path`, wiki_ask needs `question`). Never call a tool " +
     "with an empty object.\n" +
+    "- To find where a function/class/symbol is defined (or who calls it): call " +
+    "**graph_symbol** with `{ name }` FIRST — it returns the exact file + line in one call. " +
+    "read_file is capped at its first bytes only (see its own description) and cannot page " +
+    "forward, so re-reading a large file to hunt for a symbol wastes calls without ever " +
+    "reaching content past the cap; use graph_symbol (or search_code for a text pattern) " +
+    "to get the location, THEN read_file only if you need surrounding context near it.\n" +
     "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
     "to run a known keryx workflow.\n" +
+    "- This session has its own Slate (working-set scratch, not project knowledge): " +
+    "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
+    "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
+    "`{ text, kind? }` records a draft hypothesis/decision/follow-up worth a later human review " +
+    "— use it for a real finding worth not losing (e.g. a root cause, a risk, a suggested " +
+    "change), not for routine progress notes. A Seed is never accepted knowledge by itself.\n" +
+    "- If the user references a shared team workspace (SAC) or accepted project context beyond " +
+    "this codebase: **workspace_overview** with `{ workspaceId }` (find the id via `keryx " +
+    "workspace list` through shell_exec first), then **workspace_read** with `{ workspaceId, " +
+    "itemId }` for one specific item it lists.\n" +
     "- When you need a decision, interview step, or clarification: use **ask_user** with " +
     "2–6 options `{ id, label, description, recommended? }` (mark one recommended). " +
     "Do not dump long prose questions without options.\n" +

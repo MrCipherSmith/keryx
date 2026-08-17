@@ -722,7 +722,9 @@ export async function pickShellApproval(
       : destructive
         ? "⚠ DESTRUCTIVE command — allow?"
         : "Allow shell command?",
-    subtitle: command.length > 120 ? `${command.slice(0, 117)}…` : command,
+    // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
+    // focusable box (its own defensive char cap), not a single collapsed line.
+    subtitle: command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -1153,6 +1155,18 @@ export function selectProviderModelInTui(
 }
 
 /**
+ * Adaptive height (rows) for a `SelectRenderable`: when the item `count` is small
+ * the box is at least a quarter of the available `per`-rows budget; when the list is
+ * large it stretches up to the full available height (overflow then scrolls). This
+ * replaces the fixed model-picker height so a big OpenRouter list uses the whole
+ * overlay instead of a small window.
+ */
+export function adaptiveSelectHeight(count: number, available: number, per = 1): number {
+  const min = Math.max(1, Math.floor(available / 4));
+  return Math.min(available, Math.max(min, count * per));
+}
+
+/**
  * In-TUI model picker with TYPE-TO-FILTER (search by name, e.g. `free`). Absolute
  * overlay; the SelectRenderable is focused (↑/↓/Enter native) while printable keys
  * and Backspace edit a live filter over the (potentially large) model list. Resolves
@@ -1169,11 +1183,16 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
     const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to go back")}` });
     box.add(filterLine);
     const NO_MATCH = "(no match)";
+    // Adaptive height: the overlay is full-screen (overlayBox), so "parent height"
+    // = renderer height minus the title + filter + padding rows it consumes.
+    const rHeight = (r as { height?: number }).height;
+    const available = typeof rHeight === "number" && rHeight > 0 ? Math.max(4, rHeight - 4) : 16;
+    const height = adaptiveSelectHeight(all.length, available);
     const sel = new otui.SelectRenderable(r, {
       id: "mp-sel",
       width: 72,
       showDescription: false,
-      height: 14,
+      height,
       showScrollIndicator: true,
       wrapSelection: true,
       options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
@@ -1187,7 +1206,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
       const q = filter.trim().toLowerCase();
       const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
       sel.options = matches.length > 0 ? matches.map((m) => ({ name: m, description: "" })) : [{ name: NO_MATCH, description: "" }];
-      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
+      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length}/${all.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
     };
 
     const onKey = (key: { name: string; ctrl: boolean; meta: boolean; sequence: string; preventDefault: () => void; stopPropagation: () => void }): void => {
@@ -2597,6 +2616,10 @@ export async function launchTuiAgentShell(opts: {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
             startNewSession();
             slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+            // The old session's subagents (sidebar list + inspector) belong to
+            // the transcript that just left — a fresh session starts with none.
+            sessions.clear();
+            deps.resetSubagentBudget?.();
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
@@ -3032,6 +3055,11 @@ export async function launchTuiAgentShell(opts: {
 
       // Clear enrich/page workers only — keep concurrent side workers visible.
       fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID && !isSideWorkerId(w.id));
+      // A fresh turn starts with a clean subagent sidebar (and a fresh child
+      // tool-call/runtime budget) instead of piling this turn's spawns on top
+      // of whatever the previous turn(s) left behind.
+      sessions.clear();
+      deps.resetSubagentBudget?.();
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();

@@ -29,6 +29,7 @@ import {
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  adaptiveSelectHeight,
   selectBoxHeight,
   filterConnectedDetectedProviders,
   shortenCwd,
@@ -304,6 +305,22 @@ test("selectBoxHeight: described items need 2 rows each so all stay visible (flo
   // Never returns 0 rows for an empty list.
   expect(selectBoxHeight(0, true)).toBe(2);
   expect(selectBoxHeight(0, false)).toBe(1);
+});
+
+test("adaptiveSelectHeight: grows to available for a big list, min 1/4 of parent, never overflows", () => {
+  // Small list: fills to its content size, but at least 1/4 of the available height.
+  expect(adaptiveSelectHeight(1, 24)).toBe(Math.floor(24 / 4)); // min = 6
+  expect(adaptiveSelectHeight(3, 24, 1)).toBe(6); // min dominates (3 < 6)
+  // List taller than 1/4: grows with content.
+  expect(adaptiveSelectHeight(10, 24)).toBe(10);
+  // Huge list: capped at the full available height (scrolls within it).
+  expect(adaptiveSelectHeight(500, 24)).toBe(24);
+  // per=2 (described items) doubles content rows, still capped at available.
+  expect(adaptiveSelectHeight(100, 40, 2)).toBe(40);
+  expect(adaptiveSelectHeight(6, 40, 2)).toBe(12);
+  // Never overflows available even with degenerate inputs.
+  expect(adaptiveSelectHeight(1000, 10)).toBe(10);
+  expect(adaptiveSelectHeight(0, 10)).toBe(2); // min 1/4 of 10 = 2, never 0
 });
 
 test("filterConnectedDetectedProviders: keeps only providers with valid, successful credentials", async () => {
@@ -1780,6 +1797,51 @@ otuiTest("a context loader that never settles neither delays nor blocks the appr
 
   await pressEscapeAndSettle(h);
   expect(await choice).toBe("deny"); // resolves without the context ever arriving
+  h.renderer.destroy();
+});
+
+otuiTest("clicking the Deny row resolves the approval — options are mouse-clickable, not keyboard-only", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "bun test src/tui/tui-shell.ts";
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async () => "");
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  const rows = frame.split("\n");
+  const denyRow = rows.findIndex((line) => line.includes("Deny"));
+  expect(denyRow).toBeGreaterThanOrEqual(0);
+
+  const mouse = otui.testing.createMockMouse(h.renderer);
+  await mouse.click(5, denyRow);
+  await h.flush();
+
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
+otuiTest("a long multi-line command is no longer cut at 120 chars — it renders in full, up to the box", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { height: 24 });
+  // Well past the old 120-char cutoff; the tail line must still be visible.
+  const command = [
+    "python3 - <<'PY'",
+    "import io",
+    'p = "src/tui/tui-shell.ts"',
+    's = io.open(p, encoding="utf-8").read()',
+    "print('TAIL_MARKER_AFTER_120_CHARS', len(s))",
+  ].join("\n");
+  expect(command.length).toBeGreaterThan(120);
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async () => "");
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("TAIL_MARKER_AFTER_120_CHARS");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
   h.renderer.destroy();
 });
 

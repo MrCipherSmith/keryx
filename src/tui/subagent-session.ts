@@ -1,8 +1,15 @@
 // Session-scoped inspectable subagent log (flow 162).
 //
-// Unlike WorkerFleet, this store NEVER drops a spawned child: the sidebar list
-// and the inspector modal need every child for the TUI session. `remove` is a
-// no-op so a finished spawn_subagent stays clickable.
+// Unlike WorkerFleet, individual entries are never dropped one at a time: the
+// sidebar list and the inspector modal need every child from the CURRENT
+// scope (the running turn, or the session since the last `/clear`/`/new`) to
+// stay clickable, so a single finished spawn_subagent never silently
+// disappears mid-turn. `apply({kind: "remove"})` stays a no-op for that
+// reason. The whole store IS reset in bulk via `clear()` — at each new parent
+// turn (so subagents from an EARLIER turn stop cluttering the list once a
+// fresh one starts, spawning or not) and on `/clear`/`/new` (a full session
+// reset). Without either, entries accumulated for the rest of the shell
+// process's life: nothing ever called `clear()` or emitted `remove`.
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { humanFleetPhase, type FleetWorkerStatus } from "./worker-fleet";
@@ -219,6 +226,19 @@ export class SubagentSessionStore {
 
   list(): SubagentSession[] {
     return [...this.sessions.values()];
+  }
+
+  /**
+   * Drop every tracked subagent at once (new turn / `/clear` / `/new`). A
+   * no-op — no listener notification — when already empty, so a turn that
+   * never spawns a subagent does not repaint the sidebar for nothing.
+   */
+  clear(): void {
+    if (this.sessions.size === 0) {
+      return;
+    }
+    this.sessions.clear();
+    this.emit({ id: "*", kind: "remove" });
   }
 
   subscribe(listener: (hint: SubagentStoreHint) => void): () => void {

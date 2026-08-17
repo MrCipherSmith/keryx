@@ -815,11 +815,22 @@ export function createBlockView(
     });
     const line = state.summary.length > 0 ? `${label}  ${state.summary}` : label;
     if (focused) {
+      header.fg = undefined;
       header.content = otui.t`${otui.yellow(`❯ ${line}`)}`;
       return;
     }
-    header.content =
-      tone === "red" ? otui.t`${otui.red(line)}` : tone === "cyan" ? otui.t`${otui.cyan(line)}` : otui.t`${otui.dim(line)}`;
+    // Theme-driven, not `otui.red`/`otui.cyan`: those are OpenTUI's fixed
+    // ANSI-bright helpers, so a tool/error block header used to stay the same
+    // harsh red/cyan on every palette regardless of the active theme's own
+    // (deliberately softer) `error`/`tool` tones — plain content + `fg` is the
+    // same pattern `theme-picker.ts`'s preview already uses for theme colors.
+    if (tone === "red" || tone === "cyan") {
+      header.content = line;
+      header.fg = tone === "red" ? getTheme().error : getTheme().tool;
+      return;
+    }
+    header.fg = undefined;
+    header.content = otui.t`${otui.dim(line)}`;
   };
 
   const dropBody = (): void => {
