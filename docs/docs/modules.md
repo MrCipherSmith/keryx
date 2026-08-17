@@ -1208,6 +1208,7 @@ where tools actually run: the non-interactive harness paths register none.
 | `shell /sessions` | interactive session picker + live switch in TUI |
 | `shell /status` | session inspector (TUI modal; readline text dump). `/session-info` / `/info` are not aliases |
 | `shell /flows [id]` | browse project flows; optional one-package detail |
+| `shell /theme [name]` | no arg: TUI picker (live preview, applies on Enter/Apply); `[name]`: applies immediately on any surface |
 | `shell /interrupt` | hard-stop main turn in TUI |
 
 `session` is a singular alias for `sessions`.

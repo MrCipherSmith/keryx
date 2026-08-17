@@ -17,8 +17,10 @@ import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-ri
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
-import { readSlate, renderAnchorsBlock, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
+import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
+import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
   closeSlateSession,
   ensureSlateOpened,
@@ -197,6 +199,25 @@ export interface RunAgentTurnOptions {
    * this unset and keeps the existing heuristic.
    */
   skipCloseTrigger?: boolean;
+  /**
+   * SLATE-16 (flow 166, Phase 3) test seam: overrides the real
+   * `resolveOrCreateWorkspace` (`../sac/workspace-resolve`) called at the
+   * default action-intent open trigger below. Every real call site leaves
+   * this unset and gets the real resolver (real `workspace_list`/
+   * `workspace_create` tool calls, a real bounded model turn); tests inject
+   * a canned decision here instead of wiring model-turn/provider-factory
+   * plumbing through this file.
+   */
+  resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
+  /**
+   * SLATE-18 (flow 166, Phase 4) test seam: overrides the real `runWrapUp`
+   * (`../sac/machine-wrap-up`) dispatched at the flow-complete and explicit
+   * close triggers below. Every real call site leaves this unset and gets
+   * the real composer (real evidence collection, a real bounded model
+   * turn); tests inject a spy/stub here instead of wiring
+   * git/provider-factory plumbing through this file.
+   */
+  dispatchWrapUp?: (input: RunWrapUpInput) => Promise<WrapUpOutcome>;
 }
 
 /**
@@ -449,8 +470,12 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "You are the keryx interactive agent (project harness). You have read-only tools to " +
     "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
     "graph_affected, graph_symbol, graph_path, graph_query, memory_search, read_wiki, wiki_ask, wiki_backlinks, " +
-    "test_related, health_status, repomap, workspace_overview, workspace_read, slate_read, slate_write_seed " +
+    "test_related, health_status, repomap, workspace_overview, workspace_read, workspace_list, workspace_show, " +
+    "slate_read, slate_write_seed " +
     "(keryx metaproject), web_fetch for an exact known public HTTPS URL, and web_search when an active connected search provider is configured. " +
+    "You also have workspace_create and workspace_propose, which write without asking for approval (see the " +
+    "Shared Agent Context bullet below) — a proposal is never accepted knowledge by itself; accepting one " +
+    "always requires a human at a real terminal. " +
     "You may also propose shell_exec to run a command, which requires the user's explicit " +
     "approval before it executes.\n\n" +
     "Tool-calling rules (critical):\n" +
@@ -474,10 +499,20 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "`{ text, kind? }` records a draft hypothesis/decision/follow-up worth a later human review " +
     "— use it for a real finding worth not losing (e.g. a root cause, a risk, a suggested " +
     "change), not for routine progress notes. A Seed is never accepted knowledge by itself.\n" +
-    "- If the user references a shared team workspace (SAC) or accepted project context beyond " +
-    "this codebase: **workspace_overview** with `{ workspaceId }` (find the id via `keryx " +
-    "workspace list` through shell_exec first), then **workspace_read** with `{ workspaceId, " +
-    "itemId }` for one specific item it lists.\n" +
+    "- Shared Agent Context (SAC) workspaces hold accepted, evidence-backed project context " +
+    "beyond this codebase. **workspace_list** with `{ includeArchived? }` shows every workspace " +
+    "visible to you — call it first when the user references a shared team workspace or accepted " +
+    "project context, or before creating a new workspace, to judge whether an existing one " +
+    "already fits the current topic. **workspace_show** with `{ workspaceId }` shows one " +
+    "workspace's manifest. **workspace_overview** with `{ workspaceId }`, then **workspace_read** " +
+    "with `{ workspaceId, itemId }` for one specific item, reads its accepted Facts/Work/Know-how. " +
+    "**workspace_create** with `{ title, component? }` creates a new workspace — only when " +
+    "workspace_list found no fitting one; a workspace is meant to persist across sessions, so " +
+    "prefer an existing one over creating another for the same topic. **workspace_propose** with " +
+    "`{ workspaceId, kind, sessionId?, note? }` (sessionId defaults to this session) proposes a decision/wiki-update/memory-entry/" +
+    "follow-up/contract-change/risk from this session for later human review — it never accepts " +
+    "anything by itself; accepting always requires a human running `keryx workspace review` at a " +
+    "real terminal, never this tool.\n" +
     "- When you need a decision, interview step, or clarification: use **ask_user** with " +
     "2–6 options `{ id, label, description, recommended? }` (mark one recommended). " +
     "Do not dump long prose questions without options.\n" +
@@ -810,6 +845,32 @@ export async function runAgentTurn(
  * behind an unrelated slate-bookkeeping failure. On any error here, degrade
  * to "assume not done, skip closing this turn" instead.
  */
+/**
+ * SLATE-18: dispatch `runWrapUp` for one of SLATE-7's existing trigger
+ * conditions, in its OWN try/catch so a dispatch failure (no credential, a
+ * git/evidence-write error, an unexpected throw) can NEVER prevent the
+ * caller's subsequent close from happening — mirrors `commands/harness.ts`'s
+ * established "never let wrap-up bookkeeping crash this command or claw
+ * back the real result" rule for its own `process-termination` trigger.
+ * AC-27: this changes WHO calls `workspace_propose` at a trigger SLATE-7
+ * already fires at, never introduces a new trigger condition of its own.
+ */
+async function dispatchWrapUpBestEffort(
+  io: AgentIO,
+  options: RunAgentTurnOptions,
+  trigger: RunWrapUpInput["trigger"],
+  cwd: string,
+  dir: string,
+  slate: Slate,
+): Promise<void> {
+  try {
+    const dispatch = options.dispatchWrapUp ?? runWrapUp;
+    await dispatch({ trigger, cwd, dir, slate });
+  } catch (err) {
+    io.onSystem?.(`wrap-up dispatch failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+
 async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): Promise<void> {
   const ref = options.slateSession;
   if (ref === undefined || !ref.opened) {
@@ -819,6 +880,9 @@ async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAg
     const slate = await readSlate(ref.dir);
     const course = await courseFromSlate(ref.cwd, slate);
     if (isCourseDone(course)) {
+      if (slate !== undefined) {
+        await dispatchWrapUpBestEffort(io, options, "flow-complete", ref.cwd, ref.dir, slate);
+      }
       await closeSlateSession(ref, () => deps.idSeq());
     }
   } catch (err) {
@@ -862,6 +926,14 @@ async function runAgentTurnCore(
     // the real request proceed.
     try {
       if (options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
+        // SLATE-18 "explicit" trigger: a human declared the task done in
+        // plain language ("wrap up", "task complete", …) — dispatch BEFORE
+        // the close archives the slate, so there is still a live Slate to
+        // read Seeds/workspaceId from.
+        const liveSlate = await readSlate(options.slateSession.dir);
+        if (liveSlate !== undefined) {
+          await dispatchWrapUpBestEffort(io, options, "explicit", options.slateSession.cwd, options.slateSession.dir, liveSlate);
+        }
         await closeSlateSession(options.slateSession, () => deps.idSeq());
       } else if (actionRequest) {
         // SLATE-2a "worktree resolved" trigger: `ensureSlateOpened` fires a
@@ -890,6 +962,31 @@ async function runAgentTurnCore(
           if (freshSlate !== undefined) {
             history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
             io.onHistoryChange?.("tool");
+            // SLATE-16 (AC-25): resolve-or-create fires exactly here — a
+            // slate that just opened with no workspaceId bound yet (the
+            // default action-intent open; `/goal`'s own explicit open runs
+            // the identical call in goal-command.ts). A slate that already
+            // has workspaceId set (v1 explicit `/goal --workspace`, or an
+            // earlier SLATE-16 run this session) is never re-resolved merely
+            // because a new turn started. Failure (no credential, timeout,
+            // ambiguous judgment) never blocks this turn — the resolver
+            // itself fails closed, and an unresolved workspaceId simply
+            // retries at the next action-intent open.
+            if (freshSlate.workspaceId === undefined) {
+              const resolver = options.resolveWorkspace ?? resolveOrCreateWorkspace;
+              const resolved = await resolver({
+                cwd: options.slateSession.cwd,
+                topicHint: userLine,
+                provider: deps.providerId,
+                model: deps.modelId,
+              });
+              if (resolved.ok) {
+                await writeSlate(options.slateSession.dir, (prev) => {
+                  if (!prev) throw new Error(`SLATE-16 bind: no open slate in ${options.slateSession!.dir}`);
+                  return { ...prev, workspaceId: resolved.workspaceId };
+                });
+              }
+            }
           }
         }
       }

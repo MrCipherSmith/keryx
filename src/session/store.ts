@@ -30,6 +30,7 @@ import {
   sessionDir as sessionDirPath,
 } from "./paths";
 import { compactMessages, type CompactOptions } from "./compact";
+import { readSlate, type Slate } from "./slate";
 
 export const SESSION_SCHEMA_VERSION = 1 as const;
 
@@ -416,6 +417,26 @@ export function findSession(cwd: string, idOrPrefix: string, dataDir?: string): 
     return matches[0];
   }
   return undefined;
+}
+
+/**
+ * SLATE-21: this session's `slate.json`, lenient (`undefined`, never thrown)
+ * on any read failure — no `slate.json` yet (an ordinary chat that never
+ * opened a Slate), a mid-write race, or a corrupted file. Lives here rather
+ * than a raw `sessionDirPath(...)` + `readSlate(...)` call at each caller so
+ * every direct use of `sessionDir`-family resolvers alongside a raw file
+ * write stays confined to this already-exempted file (see
+ * `config-dir.writers.test.ts`'s EXEMPTIONS) — `session-wrap-up.ts` needs
+ * this session's Slate AND writes evidence files of its own, and a resolver
+ * name plus a raw write in the SAME file is exactly what that guard exists
+ * to catch, regardless of which resolved path each write actually targets.
+ */
+export async function readSessionSlate(cwd: string, sessionId: string, dataDir?: string): Promise<Slate | undefined> {
+  try {
+    return await readSlate(sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Load the active model context (what the agent should resume with). */

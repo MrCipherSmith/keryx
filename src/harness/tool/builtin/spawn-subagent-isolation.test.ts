@@ -91,6 +91,28 @@ test("a subagent cannot spawn a further subagent (no delegate tool at any depth)
   expect(result.output).not.toMatch(/grandchild/);
 });
 
+// --- SLATE-19/AC-32: no child ever gets the SAC workspace lifecycle tools ---
+// (flow 166, Phase 2/4). `workspace_create`/`workspace_propose` are risk:
+// "read" — no approval prompt stands between a model calling them and a real
+// write, unlike shell_exec. If a child ever inherited them, it could create
+// workspaces or propose knowledge on the parent's behalf with no isolation
+// boundary at all. Every real call site builds the child's tools from
+// `builtinReadOnlyTools`/`builtinMetaprojectTools` only (spawn-subagent-tool.ts) —
+// never `buildInteractiveAgentTools`, which is the ONLY place the four
+// workspace-lifecycle tools are registered.
+
+test("neither a read_only nor a general subagent can create or propose to a SAC workspace", async () => {
+  for (const mode of ["read_only", "general"] as const) {
+    const tool = spawnTool([toolCallRound("workspace_create", '{"title":"child-created"}')]);
+    const result = await tool.invoke({ task: "try to create a workspace", mode });
+    expect(result.output).not.toMatch(/child-created/);
+
+    const proposeTool = spawnTool([toolCallRound("workspace_propose", '{"workspaceId":"w","kind":"decision"}')]);
+    const proposeResult = await proposeTool.invoke({ task: "try to propose", mode });
+    expect(proposeResult.output).not.toMatch(/"status":"proposed"/);
+  }
+});
+
 test("the reported mode is the requested mode — the transcript cannot understate privilege", async () => {
   const ro = await spawnTool([]).invoke({ task: "t", mode: "read_only" });
   expect(ro.output).toMatch(/read_only/);

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { ProposalLifecycleError, ProposalLifecycleService } from "./proposal-lifecycle";
+import { mintConfirmToken } from "./review-confirm-token";
 import { createGuardedOwnerWriter } from "./guarded-owner-writer";
 import { createSacAuthorizationServer, validateSacLedger } from "./index";
 import { WorkspaceService } from "./workspace-service";
@@ -48,6 +49,13 @@ async function propose(service: ProposalLifecycleService, overrides: Record<stri
   return service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-a", proposalRevision: "r1", kind: "wiki-update", wrapUp: await wrapUp(service), ...overrides } as any);
 }
 
+// SLATE-20: every `decision: "accepted"` review() call below now needs a
+// confirm token. `(service as any).root` reaches the service's private root
+// without threading `root` through every test's destructure.
+async function acceptToken(service: ProposalLifecycleService, workspaceId = "workspace-a", proposalId = "proposal-a"): Promise<string> {
+  return (await mintConfirmToken((service as any).root, workspaceId, proposalId)).token;
+}
+
 test("creates an immutable schema-valid proposed record with no raw payload", async () => {
   const { root, service } = await setup(); const proposal = await propose(service);
   expect(proposal.status).toBe("proposed"); expect(JSON.stringify(proposal)).not.toContain("prompt");
@@ -56,8 +64,8 @@ test("creates an immutable schema-valid proposed record with no raw payload", as
 
 test("accepted transition requires guarded target receipt and same-key retry returns it", async () => {
   const { root, service } = await setup(); await propose(service);
-  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
-  const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
+  const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(first).toEqual(retry); expect(first.event.toStatus).toBe("accepted");
   const acceptance = (first.event as any).acceptance;
   expect(acceptance.targetWrite.binding).toMatchObject({ intentRef: acceptance.writeIntentRef, proposalId: "proposal-a", proposalRevision: "r1", workspaceId: "workspace-a", correlationId: "proposal-review-correlation-0001", idempotencyKey: "proposal-review-idempotency-0001", reviewerSubject: "user:reviewer", reviewerAuthority: "owner", policyRevision: "policy-r1" });
@@ -75,7 +83,7 @@ test("crash recovery obtains a durable owner receipt without a duplicate mutatio
     return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId };
   }, recover: async () => durableReceipt };
   const { root, service } = await setup("owner", writer as any); await propose(service);
-  const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001", interactive: true };
+  const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) };
   await expect(service.review(request)).rejects.toThrow("simulated crash");
   const recovered = await service.review(request);
   expect(recovered.event.toStatus).toBe("accepted"); expect(mutations).toBe(1); expect(ownerCalls).toBe(1);
@@ -86,7 +94,7 @@ test("crash recovery obtains a durable owner receipt without a duplicate mutatio
 test("failed target write and denied reviewer never accept or mutate target", async () => {
   let writes = 0; const failed = { owner: "wiki" as const, write: async () => { writes++; return { ok: false as const, code: "target_write_failed" as const }; } };
   const { service } = await setup("owner", failed); await propose(service);
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("stale"); expect(writes).toBe(1);
   const denied = await setup("viewer"); await expect(propose(denied.service)).rejects.toMatchObject({ code: "access_denied" });
 });
@@ -133,7 +141,7 @@ test("requires a server-issued explicit session or Flow wrap-up, bound once to a
 test("stale evidence is denied at owner-use after approval and never invokes writer", async () => {
   let writes = 0; const { root, service } = await setup("owner", { owner: "wiki", write: async ({ correlationId }) => { writes++; return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId }; } }); await propose(service);
   (service as any).options.beforeTargetWrite = async () => { await writeFile(path.join(root, "evidence", "e.md"), "changed"); };
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("stale"); expect(writes).toBe(0);
 });
 
@@ -148,7 +156,7 @@ test("a skill owner receipt is accepted when targetRef matches the real ./projec
     write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./project-skills/sac/x.receipt.json", targetRef: "./project-skills/sac/x/SKILL.md", completedAt: time, correlationId }),
   });
   await propose(service, { kind: "decision" }); // any non-wiki-update/non-memory-entry kind routes to "skill" (ownerFor)
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -161,7 +169,7 @@ test("a skill owner receipt is REJECTED (lands as stale) when targetRef uses the
     write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./skill/x.receipt.json", targetRef: "./skill/x/SKILL.md", completedAt: time, correlationId }),
   });
   await propose(service, { kind: "decision" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("stale");
 });
 
@@ -180,7 +188,7 @@ test("review of a proposal that predates its workspace's archival completes norm
   const { service, workspaces } = await setup();
   await propose(service);
   await (workspaces as any).archive({ request: undefined, requestCorrelationId: "workspace-archive-after-propose-0001", workspaceId: "workspace-a" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -195,7 +203,7 @@ test("removeResource never causes a pending/accepted proposal's evidence resolut
   // evidence via manifest.resources[] membership).
   await propose(service);
   await (workspaces as any).removeResource({ request: undefined, requestCorrelationId: "workspace-removeresource-0001", workspaceId: "workspace-a", uri: "./src/a.ts" });
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -361,7 +369,7 @@ test("accept is denied when interactive:false, for an editor reviewer too (AC4) 
 
 test("accept succeeds when interactive:true for an otherwise-valid actor — the human-at-the-terminal case `keryx workspace review`/MCP `sac.review` both pass", async () => {
   const { service } = await setup("owner"); await propose(service);
-  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(result.event.toStatus).toBe("accepted");
 });
 
@@ -410,7 +418,7 @@ test("the denial uses a distinct error code from other guard_denied reasons (F-0
 
 test("a replayed accept (same idempotency key) succeeds even when the retry's interactive value differs from the original — the idempotency replay lookup runs before the SLATE-8 gate, so it is never re-decided (F-006)", async () => {
   const { service } = await setup("owner"); await propose(service);
-  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true });
+  const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   expect(first.event.toStatus).toBe("accepted");
   // Same idempotency key, but this replay call is dishonestly/differently
   // tagged `interactive: false`. It must still return the already-committed
@@ -462,7 +470,7 @@ test("listProposedProposals returns only proposals still in 'proposed' status �
 test("listProposedProposals never misidentifies a sidecar file (.decision.json/.approval.json/.write-result.json/.write-intent.json) as a proposal — filters by parsed recordType, not filename regex", async () => {
   const { root, service } = await setup();
   await propose(service);
-  await service.review({ request: undefined, requestCorrelationId: "sidecar-review-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "sidecar-review-idem-0001", interactive: true });
+  await service.review({ request: undefined, requestCorrelationId: "sidecar-review-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "sidecar-review-idem-0001", interactive: true, confirmToken: await acceptToken(service) });
   // Accepting proposal-a writes .approval.json/.write-intent.json/.write-result.json
   // sidecars AND terminalizes it via activity.jsonl.
   const proposalsDir = path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals");
