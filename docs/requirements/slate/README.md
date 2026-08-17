@@ -1,5 +1,5 @@
 # Keryx Slate — Task-Local Harness Layer
-Version: 1.0.0
+Version: 2.0.0
 
 ## Назначение
 
@@ -13,15 +13,21 @@ Slate — временный, непубличный, task-local слой хар
 
 ## Статус
 
-**Design.** Кода нет. Пакет формализует решения, принятые за 4 раунда review
-(2 brainstorm-раунда Pragmatist/Innovator/Critic, 1 security/autonomy
-стресс-тест, 1 SLATE-10 aggregation deep-dive), каждое утверждение сверено с
-реальным кодом (`src/sac/`, `src/session/`, `src/harness/`) с привязкой
-file:line. В отличие от более раннего состояния пакета `shared-agent-context`
-(который до версии 1.5.0 ошибочно годами описывал уже реализованный SAC как
-«future/planned»), этот пакет явно не совершает ту же ошибку в обратную
-сторону: slate **не реализован**, и этот README прямо это утверждает, а не
-маскирует под «future contract» без даты.
+**Implemented (v1, SLATE-1…15).** `src/session/slate.ts`,
+`src/harness/tool/builtin/slate-tool.ts`, `src/commands/goal-command.ts` и
+интеграция в `commands/agent.ts`/`commands/shell.ts`/`tui/tui-shell.ts`/
+`spawn-subagent-tool.ts` реализованы и работают в проде — Anchors/Course/
+Seeds пишутся и читаются в реальных сессиях, `/goal` открывает слейт и
+опционально биндит `workspaceId`. Этот README раньше (v1.0.0) утверждал
+«Design. Кода нет.» — это было верно на момент написания пакета, но устарело
+после реализации; оставлять неверным было бы хуже, чем поправить задним
+числом, поэтому статус обновлён вместе с этой ревизией, а не отдельным PR.
+
+**v2 (SLATE-16…) — Design.** Этот раунд (auto-resolve/create workspace,
+автономный wrap-up dispatch, review confirm-token) — новые требования поверх
+уже работающего v1, ещё не реализованные. Каждое утверждение по-прежнему
+сверено с реальным кодом (`src/sac/`, `src/session/`, `src/harness/`,
+`src/mcp/tools.ts`, `src/commands/workspace.ts`) с привязкой file:line.
 
 ## Модель Anchors · Course · Seeds
 
@@ -87,10 +93,15 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
 - Slate в git/`.metaproject/` как wiki — это temp-артефакт.
 - Шаринг открытого slate между клиентами (Claude, keryx TUI, Grok) — только
   workspace шарится.
-- **Session↔workspace↔Flow автоматический binding** — владеет
-  [SAC RP-03 Lifecycle Binding](../shared-agent-context-lifecycle-binding/README.md);
-  slate v1 продолжает требовать явный `workspaceId`, как сегодняшние
-  `workspace_overview`/`workspace_read`, и не строит конкурирующий механизм.
+- ~~**Session↔workspace↔Flow автоматический binding** — владеет RP-03;
+  slate v1 продолжает требовать явный `workspaceId`~~ — **отменено в v2**
+  (SLATE-16…19, см. PRD). Slate теперь сам резолвит/создаёт workspace через
+  суждение модели (`workspace_list` + собственная оценка темы), без нового
+  ACL/binding-record сервиса, которого требовал RP-03. RP-03 продолжает
+  владеть тем, что v2 НЕ трогает: явный `keryx shell --workspace <id>`,
+  `--session current` resolution, Flow/worktree derivation preview,
+  accepted-target link-back — см. обновлённый
+  [RP-03 README](../shared-agent-context-lifecycle-binding/README.md).
 - **Полная модель evidence-security (sealed/scanned/schema-closed)** — владеет
   [SAC RP-05 Secure Minimal Evidence](../shared-agent-context-secure-evidence/README.md);
   slate v1 использует уже существующие `detectSecrets`/`detectPii`
@@ -127,3 +138,14 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
 - `src/session/`, `src/harness/child/`, `src/harness/policy/`,
   `src/harness/mutation/`, `src/flow/` — существующие интеграционные
   границы.
+
+## Changelog
+
+- 2.0.0 — Статус обновлён на Implemented для SLATE-1…15. Добавлены
+  SLATE-16…20 (v2, Design): auto-resolve/create workspace через суждение
+  модели, автономный wrap-up dispatch, review confirm-token, cross-runtime
+  паритет agent tools. Отменяет SLATE-1/SLATE-15's «никакого auto-create
+  workspace» — явное, задокументированное решение пользователя разворачивает
+  более раннее «согласовано, раздел 8 исходного обсуждения». RP-03
+  Non-goal сужен, не убран целиком.
+- 1.0.0 — Исходный пакет (SLATE-1…15), design-only.

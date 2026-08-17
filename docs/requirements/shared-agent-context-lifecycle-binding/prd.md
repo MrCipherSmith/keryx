@@ -1,10 +1,19 @@
 # Shared Agent Context — Lifecycle Binding PRD
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
 Future / planned. The current runtime requires an explicit workspace ID for
 each SAC read and has no current-workspace/session-binding surface.
+
+**Note (0.2.0):** FR6's "creation/selection requires explicit confirmation"
+and FR7's "offer an explicit wrap-up/proposal path" describe a stance this
+package no longer owns for the flow/topic-resolution case — [Keryx Slate v2](../slate/README.md)
+(SLATE-16…19) implements automatic resolve-or-create and autonomous propose
+dispatch via model judgment instead, by an explicit, documented product
+decision. FR3–FR5 and FR8 (explicit `--workspace`/`--session current`
+selection, discovery, link-back) are unaffected and remain this package's
+scope.
 
 ## Problem
 

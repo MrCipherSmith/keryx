@@ -1,10 +1,22 @@
 # Shared Agent Context — Session, Workspace and Flow Lifecycle Binding
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
 Future / planned requirements package. No behaviour in this package is a claim
 about the current runtime.
+
+**Scope narrowed (0.2.0):** automatic Session↔workspace↔Flow *binding* —
+resolving or creating a workspace for the current task via model judgment,
+and dispatching a proposal without a separate human command — is now owned
+by [Keryx Slate v2](../slate/README.md) (SLATE-16…19), implemented with the
+harness's existing tool-calling/model-judgment pattern rather than the
+formal `LifecycleBinding` record, ACL, and subject-hash model this package
+originally specified for that scope. This package's remaining, still-future
+scope is unchanged: explicit `keryx shell --workspace <id>` selection,
+`--session current` resolution, Flow/worktree derivation preview, and
+accepted-target link-back (FR3–FR8 minus the parts SLATE-16 now covers) —
+see `prd.md`/`specification.md` for the precise line.
 
 ## Purpose
 

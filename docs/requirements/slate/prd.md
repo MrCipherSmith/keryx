@@ -1,5 +1,5 @@
 # Keryx Slate — PRD
-Version: 1.0.0
+Version: 2.0.0
 
 ## Problem
 
@@ -25,6 +25,36 @@ Security/autonomy review (раунд 3) показал: self-accept в SAC те�
 различая человека и агента от его имени) и становится **структурным
 дефолтом**, а не краевым случаем, при полностью автономной работе без
 дополнительных мер.
+
+**v2 addendum (после реализации v1).** SLATE-1…15 реализованы и работают, но
+проверка против реального кода (текущая сессия) нашла два разрыва,
+пережившие реализацию, а не устранённые ей:
+
+1. **Биндинг остался 100% ручным даже там, где v1 планировал его облегчить.**
+   `workspaceId` пишется в `slate.json` ровно одним путём — `/goal --workspace
+   <id>` (`src/commands/goal-command.ts:181-186`), явно набранным человеком.
+   Дефолтный action-intent триггер (обычное «почини X» без `/goal`) никогда
+   не биндит вообще. `keryx workspace propose`/`sac.propose` тоже не читают
+   `slate.workspaceId` — id вводится заново как позиционный аргумент
+   (`src/commands/workspace.ts:96`, `src/mcp/tools.ts:104`), никак не связан
+   с тем, что было привязано через `/goal`.
+2. **SLATE-7's wrap-up composer, как задумано (machine evidence вместо raw
+   transcript), не реализован.** `resolveSessionWrapUp`
+   (`src/sac/session-wrap-up.ts:1-110`) по-прежнему буквально экспортирует
+   **весь** транскрипт сессии verbatim (`exportSessionMarkdown`) как
+   единственное evidence — собственный комментарий файла: «it EXPORTS the
+   session's real archive... every role, every message, verbatim». Ни одного
+   обращения к `seeds`/`course`/`readSlate` во всём файле. То есть основная
+   заявленная цель slate (не raw-transcript evidence) технически не
+   достигнута реализацией v1 — SLATE-7 в specification.md описывал
+   `resolveMachineWrapUp` как новый резолвер, но реально построенный код
+   продолжает вызывать старый `resolveSessionWrapUp`.
+
+Отдельно: пользователь пересмотрел раздел 8 исходного обсуждения («никакого
+auto-create workspace на open slate», зафиксированный в v1 как SLATE-1/
+SLATE-15's явный non-goal) — новое явное решение (текущая сессия): биндинг
+должен быть автоматическим, управляемым суждением агента, а не требовать
+`/goal --workspace` каждый раз.
 
 ## Goal
 
@@ -208,7 +238,88 @@ Security/autonomy review (раунд 3) показал: self-accept в SAC те�
   практический пробел, отмеченный в SLATE-8: «инструкции unattended-задачи
   должны называть workspace id»).
 
-## Success criteria
+### v2 (Design) — Автоматический binding и cross-runtime паритет
+
+- **SLATE-16 — Workspace resolve-or-create.** **Отменяет** SLATE-1/SLATE-15's
+  «никакого auto-create workspace» (явное, задокументированное решение
+  пользователя, см. Problem v2 addendum). Процедура запускается в двух
+  точках: (1) при создании flow; (2) при открытии slate без flow (дефолтный
+  action-intent триггер или `/goal` без `--workspace`). Агент вызывает
+  `workspace_list` (SLATE-19), сам оценивает совпадение по теме
+  (title/component существующих workspace против текста задачи) — без нового
+  similarity/embedding-сервиса, тем же способом, каким уже принимает решения
+  `ask_user`/`spawn_subagent` (модельное суждение через существующий
+  tool-calling цикл, не новая инфраструктура). Совпадение найдено → биндит
+  существующий id. Не найдено → `workspace_create` (SLATE-19) → биндит новый.
+  Связь однонаправленная (flow → workspace): `WorkspaceService` не
+  индексирует обратно от workspace к flow, и это не меняется этим
+  требованием. Привязка пишется как `flow.workspaceId` (новое поле flow
+  record, если есть flow) или прямо `slate.workspaceId` (если flow нет —
+  ровно то же поле, что SLATE-1 уже определяет).
+- **SLATE-17 — Мид-сессийная ре-оценка.** Точка «новый несвязанный вопрос =
+  новый slate» (существующая close-trigger эвристика, SLATE-5/`isActionRequest`)
+  без `/clear` теперь дополнительно перепроверяет workspace-биндинг через ту
+  же процедуру SLATE-16, не только slate-boundary. После `/clear`/`/new` —
+  тот же алгоритм, что для новой сессии (без изменений в текущем SLATE-5
+  close-поведении).
+- **SLATE-18 — Автономный wrap-up dispatch.** SLATE-7's существующие триггеры
+  (flow complete, явная команда человека, one-shot-invocation termination)
+  остаются без изменений; добавляется: сам wrap-up composer, дойдя до
+  propose-worthy момента при наличии `workspaceId`, вызывает
+  `workspace_propose` (SLATE-19) сам, без ожидания отдельной человеческой
+  команды. Не меняет SLATE-9 («никакой новой review-authority») — propose
+  создаёт draft, не accepted knowledge; человеческий чекпойнт остаётся на
+  review (SLATE-20).
+- **SLATE-19 — Cross-runtime agent-tool паритет.** Найденная асимметрия:
+  MCP-клиенты (`src/mcp/tools.ts`) имеют `sac.propose`/`sac.review`/
+  `sac.overview`/`sac.read`/`sac.collaboration`, но не `list`/`create`;
+  keryx-shell interactive agent (`src/commands/interactive-agent-tools.ts`)
+  имеет только `workspace_overview`/`workspace_read` — ни `propose`, ни
+  `create`, ни `list`; агент вынужден идти через `shell_exec` (approval-
+  трение) для действий, которые MCP-клиент делает вообще без approval
+  (`sac.propose`/`sac.review` гейтятся только `interactive: true`, не
+  реальной проверкой — см. SLATE-20). Добавляются 4 keryx-shell interactive
+  tools, зеркалящие существующий MCP-набор тем же risk-tier'ом, что
+  `slate_write_seed` (`risk: "read"` — создаёт draft/discovery, self-accept
+  структурно невозможен): `workspace_create` (`{title, component?}`),
+  `workspace_list` (`{includeArchived?}`), `workspace_show` (`{workspaceId}`),
+  `workspace_propose` (`{workspaceId, kind, sessionId?, note?}` —
+  `sessionId` по умолчанию текущая сессия, не требует набирать id заново).
+  `workspace_review` **не добавляется** ни в keryx-shell, ни расширяется в
+  MCP — остаётся вне agent-tool поверхности на любом раннтайме, на любом
+  из трёх (CLI/MCP/keryx-shell).
+- **SLATE-20 — Review confirm-token.** Закрывает существующий,
+  задокументированный self-accept gap: `sac.review`/`keryx workspace review
+  --decision accepted` сегодня гейтятся только `interactive: true` (хардкод,
+  не проверка) — MCP-клиент технически может accept свой же proposal без
+  реального человеческого действия (`src/mcp/tools.ts:138-142`'s собственный
+  комментарий: «matches current MCP trust posture... does not invent a
+  stricter MCP-specific policy» — известный, ранее сознательно отложенный
+  gap, не новая находка). Новая команда `keryx workspace confirm-review
+  <workspace-id> <proposal-id>` печатает короткоживущий (2 минуты),
+  одноразовый токен — требует реальный терминал, или `shell_exec` (уже
+  гейтится существующим approval — тот же барьер, что и любая другая
+  мутирующая команда). `decision: "accepted"` (и только `"accepted"` —
+  `"rejected"`/`"dismissed"` не требуют токена, они ничего не promote)
+  требует этот токен как дополнительный параметр; без валидного,
+  непросроченного, неиспользованного токена review завершается
+  `token_required`/`token_invalid`, никогда не проходит по умолчанию.
+  Особенно важно теперь, когда SLATE-16/18 делают create+bind+propose
+  полностью автономными — review остаётся единственной точкой, где
+  обязателен человек.
+- **SLATE-21 — Довести SLATE-7 до задуманного (machine evidence, не
+  транскрипт).** Не новое требование v2 по духу — SLATE-7 (v1) уже
+  специфицировал `resolveMachineWrapUp` под `WrapUpSource === "flow"`, но
+  реально построенный код (`src/sac/session-wrap-up.ts`) продолжает вызывать
+  старый `resolveSessionWrapUp`, который экспортирует **весь** транскрипт
+  сессии verbatim как единственное evidence (см. Problem v2 addendum) —
+  разрыв между спекой и реализацией, найденный этой сессией, не новое
+  решение. Исправление: evidence кандидата собирается из `anchors.touched`
+  (файлы) + git diff по ним + `course.flowRef`/статус flow + `seeds[]` как
+  основной текст evidence; полный экспорт транскрипта (`exportSessionMarkdown`)
+  сохраняется как ссылка-приложение (не embedded, не убран целиком —
+  пользовательское решение этой сессии), доступная ревьюеру по клику, а не
+  единственный источник.
 
 - Anchors.root/tree актуальны на момент первого tool call сессии — баг
   «читал не тот checkout» не повторяется.
@@ -218,11 +329,25 @@ Security/autonomy review (раунд 3) показал: self-accept в SAC те�
   interactive-профиля, выставленного человеком заранее.
 - Каждый unattended-запуск (успешный, blocked, crashed) диагностируем через
   SLATE-10 catch-up — ни один класс исхода не исчезает молча.
+- **v2:** Ни один SLATE-16 resolve-or-create вызов не биндит workspace без
+  предварительного `workspace_list` — никогда «угадано» без вызова
+  инструмента.
+- **v2:** Ни один `decision: "accepted"` review не проходит без валидного
+  confirm-token, ни через CLI, ни через MCP.
+- **v2:** Одинаковый набор операций (`create`/`list`/`show`/`overview`/`read`/
+  `propose`) доступен через CLI, MCP, keryx-shell interactive tools —
+  review-accept остаётся единственным исключением на всех трёх.
+- **v2:** Сабагент никогда не резолвит/не создаёт workspace и не вызывает
+  `workspace_propose` сам — только родитель (без изменений от SLATE-9/AC-3).
 
 ## Risks
 
 - **Self-accept pre-existing gap** — SLATE-8 смягчает через переиспользуемый
-  профильный gate, не устраняет полностью до приземления RP-06.
+  профильный gate (interactive-барьер на `accept`); **SLATE-20 (v2) закрывает
+  его полнее** через confirm-token, не устраняет полностью до приземления
+  RP-06 (OS-UID-only identity остаётся; токен поднимает планку с «ничего» до
+  «требует реального terminal-присутствия или explicit shell approval», не
+  заменяет полноценную identity-модель).
 - **Evidence security** — SLATE-12 — временная мера, не полная защита до
   RP-05 (сегодня `detectSecrets`/`detectPii` не покрывают весь класс утечек,
   который RP-05 специфицирует: monotonic sensitivity, retention, deletion).
@@ -232,11 +357,32 @@ Security/autonomy review (раунд 3) показал: self-accept в SAC те�
 - **Overlap с RP-03/05/06/08** — если эти пакеты продвинутся в реализацию
   раньше slate, часть interim-мер (SLATE-8's профильный gate, SLATE-12's
   прямой вызов detectSecrets/detectPii) должна быть заменена на их
-  финальные механизмы, а не оставлена как параллельная архитектура.
+  финальные механизмы, а не оставлена как параллельная архитектура. **v2**
+  сужает RP-03's Non-goal (см. README.md), а не убирает его целиком —
+  `keryx shell --workspace <id>`, `--session current`, Flow/worktree
+  derivation preview, accepted-target link-back остаются RP-03's скоупом.
+- **v2 — Дубликаты workspace от плохого суждения модели.** SLATE-16's
+  «совпадение по теме» — модельное суждение, не гарантированно точное;
+  плохое суждение может расплодить несколько workspace под одну тему.
+  Смягчается: (1) `workspace_list` обязателен ДО `create` — модель не может
+  создать не проверив существующие; (2) дубликаты не теряют данные — их
+  можно archive/rename постфактум через уже существующий
+  `sac-workspace-lifecycle`.
+- **v2 — Confirm-token не полная защита.** Не защищает от скомпрометированного
+  терминала или заранее одобренного (`allow always`) `shell_exec`-паттерна на
+  саму команду `confirm-review` — только поднимает планку, не заменяет
+  полноценную identity-модель (RP-06).
 
 ## Recommendation
 
-Реализовать SLATE-1…12 как v1. Явно не строить конкурирующую архитектуру
-там, где RP-03/05/06/08 уже владеют скоупом — использовать наименьшие уже
-существующие в харнесе примитивы как interim-меры (профиль харнеса,
-detectSecrets/detectPii), с явной пометкой «заменить при приземлении RP-*».
+**v1 (реализовано):** SLATE-1…15 реализованы. Явно не строить конкурирующую
+архитектуру там, где RP-03/05/06/08 уже владеют скоупом — использовать
+наименьшие уже существующие в харнесе примитивы как interim-меры (профиль
+харнеса, detectSecrets/detectPii), с явной пометкой «заменить при
+приземлении RP-*».
+
+**v2 (Design):** Реализовать SLATE-20 (review confirm-token) первым и
+независимо — чистый security-фикс, не зависящий от остального v2. SLATE-16/
+17/18/19 — единый связанный блок (auto-bind без propose-dispatch
+бесполезен; cross-runtime tools нужны SLATE-16/18, чтобы агент мог их
+вызвать без `shell_exec`) — реализовать вместе, не по отдельности.
