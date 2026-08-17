@@ -1207,15 +1207,17 @@ where tools actually run: the non-interactive harness paths register none.
 | `sessions path` | the on-disk sessions directory |
 | `shell /sessions` | interactive session picker + live switch in TUI |
 | `shell /status` | session inspector (TUI modal; readline text dump). `/session-info` / `/info` are not aliases |
-| `shell /flows [id]` | browse project flows; optional one-package detail |
+| `shell /flows [id]` | browse project flows, newest first; List selects with `↑/↓`, Detail scrolls with `↑/↓` and switches flows with `[`/`]`; optional one-package detail |
 | `shell /theme [name]` | no arg: TUI picker (live preview, applies on Enter/Apply); `[name]`: applies immediately on any surface |
 | `shell /interrupt` | hard-stop main turn in TUI |
 
 `session` is a singular alias for `sessions`.
 
-In the TUI, plain questions submitted while the main turn is active are queued as
-read-only side work on a single worker (`side-1`). Those side prompts are processed
-sequentially, and the queue is surfaced in the sidebar and transcript.
+In the TUI, submitting a normal message while the main turn is busy opens a
+selector: the **main queue** (default — drains FIFO after the current turn,
+each item `remove`/`edit`/`force`-able) or **side-1**, a read-only worker
+outside main history, processed sequentially and surfaced in the sidebar and
+transcript. `/status` and `/flows` are always allowed while busy.
 
 **Key files.**
 - `src/session/store.ts` — create, list, find, load, persist, compact, fork; atomic multi-file writes.

@@ -155,10 +155,13 @@ holds and what forking copies.
   flow (`runLink.sessionId` or an explicit `flow 154` / `/flows 154`
   mention). `c` copies the session id. Readline / `--no-tui` prints the
   same rows. `/session-info` and `/info` are **not** aliases.
-- `/flows` lists project flows. In the TUI `↑/↓` selects a row; Enter or
-  `→` opens Detail (status, dir, tasks, PR). `/flows 154` (id, padded id,
-  or slug) opens one package. Readline prints the list, or one package
-  when given an argument.
+- `/flows` lists project flows, newest first (highest id, then `updatedAt`).
+  In the TUI, the List tab uses `↑/↓` to move the selection; Enter or `→`
+  opens Detail. On Detail, `↑/↓` scroll the body instead — `[`/`]` (or
+  `p`/`n`) switch to the adjacent flow. `/flows 154` (id, padded id, or slug)
+  opens one package directly. Readline prints the list, or one package when
+  given an argument. `/status` and `/flows` remain usable even while the main
+  turn is busy.
 - `/sessions` opens an interactive session picker in the TUI and switches the
   live shell to the chosen session.
 - `/theme` (chat and agent) with no argument opens a picker modal: a theme
@@ -178,9 +181,14 @@ holds and what forking copies.
 - Session history is durable during a turn: user input and tool results save
   immediately; streamed assistant text checkpoints every 300 ms and is flushed
   by `/interrupt`.
-- If the main turn is busy, additional normal questions are queued as read-only
-  "side workers" (single slot by default, labeled as `side-1`) and processed
-  after each answer. While queued, the transcript notes `◦ side-1 queued`.
+- If the main turn is busy, submitting a normal message opens a selector:
+  **Main queue** (default) or **Side-1** (a read-only worker, outside main
+  history, single slot by default; the transcript notes `◦ side-1 queued`
+  while it processes). A message sent to the main queue appears as `qN (p)`
+  and drains FIFO right after the current turn completes. Each queued item
+  can be `remove`d (dropped without running), `edit`ed (returned to the
+  composer, pulled from the queue until re-submitted), or `force`d (aborts
+  the current turn and runs immediately as a new priority turn).
 
 When side-worker context is still processing, queued questions do not block the
 session state and still see recent context about the busy main turn.
@@ -1164,7 +1172,9 @@ keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relat
 keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]
 keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]
 keryx workspace propose <workspace-id> --kind <decision|wiki-update|memory-entry|follow-up|contract-change|risk> --session <session-id> [--note <one-line>]
-keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]
+keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]
+keryx workspace confirm-review <workspace-id> <proposal-id>
+keryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]
 keryx workspace collaboration <workspace-id>
 keryx workspace policy-readiness
 ```
@@ -1178,11 +1188,17 @@ keryx workspace policy-readiness
 | `overview` | `--max-items` (default 32), `--max-tokens` (default 4096), `--explain` | Bounded FWK overview + access receipt. Mandatory overflow → `context_overflow` and no receipt. |
 | `read` | `<item-id>`, `--max-items` (default 1), `--max-tokens` (default 4096), `--explain` | Progressive read of one overview item. |
 | `propose` | `--kind`, `--session`, `--note` | Immutable `proposed` record from a completed session wrap-up. |
-| `review` | `--decision`, `--reason`, `--idempotency-key` | Terminal review. `accepted` goes through real wiki/memory/skill owner writers. Same idempotency key replays. |
+| `review` | `--decision`, `--reason`, `--idempotency-key`, `--confirm-token` | Terminal review. `accepted` goes through real wiki/memory/skill owner writers and requires `--confirm-token`, minted only by `confirm-review`. Same idempotency key replays. A `wiki-update`/`memory-entry` accept also returns a dedup/conflict hint (duplicates/conflicts against already-accepted entries) and, when non-empty, an optional model-judge annotation — both informational only. |
+| `confirm-review` | `<workspace-id>`, `<proposal-id>` | Mint the `--confirm-token` a `review --decision accepted` call needs. Run this yourself in a real, approval-gated shell — no tool call (MCP or `keryx-shell`) can mint one. |
+| `catch-up` | `--workspace`, `--json`, `--include-lifecycle-flags` (default on) | Pull-based `cwd`-scoped digest: pending proposals, blocked runs, unbound-candidate wrap-ups, sessions of unknown fate, and a lifecycle-flags section for any workspace/memory-entry/wiki-decision whose recorded module no longer resolves in the code graph. Report-only — never writes. |
 | `collaboration` | `<workspace-id>` | Read-only collaboration overview. No public `record` writer. |
 | `policy-readiness` | — | Diagnose the opt-in policy-experiment chain. Exit `1` when `!integrityReady`. |
 
 Unknown options are rejected. Propose/review use
 `createHarnessProposalLifecycleService` (real owner writers). There is no
-session↔workspace auto-bind. Operator guide:
+session↔workspace auto-bind — except in `keryx shell`/TUI/`harness run`,
+where an action-intent turn resolves-or-creates one automatically by agent
+judgment (`/goal <text> [--workspace <id>]`, or `harness run --goal ...
+[--workspace <id>]`); a completed attempt dispatches its own wrap-up proposal
+without a manual `propose` call. Operator guide:
 [Shared Agent Context](./guides/shared-agent-context.md).

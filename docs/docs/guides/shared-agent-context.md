@@ -97,7 +97,16 @@ keryx workspace review <workspace-id> <proposal-id> --decision accepted \
 Review decisions: `accepted` | `rejected` | `dismissed`. Accept is possible only
 through the harness composition (`createHarnessProposalLifecycleService`): it
 wires real owner writers. The local factory is fail-closed and cannot
-self-accept.
+self-accept. `--decision accepted` additionally requires `--confirm-token`,
+minted only by `keryx workspace confirm-review <workspace-id> <proposal-id>`
+run yourself in a real, approval-gated shell — no tool call, MCP or
+`keryx-shell`, can mint one on its own. Accepting a `wiki-update` or
+`memory-entry` proposal also returns a `DedupHint` (duplicates/conflicts
+against already-accepted entries, computed *after* the decision, never
+gating it) and, when the hint is non-empty, an optional model-judge
+annotation — both informational only; nothing reads `.verdict` to decide
+accept/reject. `sac.review` (MCP) and `keryx workspace review` (CLI) return
+the identical shape.
 
 | Kind | Owner | Lands under |
 |---|---|---|
@@ -119,6 +128,22 @@ keryx workspace collaboration <workspace-id>
 and proposal lifecycle both append `activity.jsonl` with incompatible event
 shapes — a mixed file can make collaboration overview fail.
 
+## Catch up on what accumulated during unattended runs
+
+```bash
+keryx workspace catch-up [--workspace <workspace-id>] [--json]
+```
+
+A pull-based, `cwd`-scoped digest: pending proposals, blocked runs,
+unbound-candidate wrap-ups, and sessions of genuinely unknown fate — always
+four separate sections, never merged. It also includes a fifth,
+`--include-lifecycle-flags` section (shown by default) — every workspace,
+memory entry, and wiki decision page whose recorded module no longer
+resolves in the code graph, reusing the graph-diff signal that already
+drives orphaned-wiki-page pruning. Report-only: it never archives a
+workspace, edits a memory entry, or removes a wiki page on its own; a
+workspace can carry both a pending proposal and a lifecycle flag at once.
+
 ## Agent surfaces (MCP and shell)
 
 MCP tools (`src/mcp/tools.ts`), **local stdio / in-process only**. HTTP returns
@@ -132,14 +157,17 @@ MCP tools (`src/mcp/tools.ts`), **local stdio / in-process only**. HTTP returns
 | `sac.propose` | yes |
 | `sac.review` | yes |
 
-Harness tools on a local `keryx shell` agent turn (`risk: "read"`). They are
-**not** on `keryx serve` / chat-only mode. There is no `workspace_list` tool —
-discover ids with `keryx workspace list` via `shell_exec`:
+Harness tools on a local `keryx shell` agent turn. They are **not** on
+`keryx serve` / chat-only mode. Only the parent turn has them — a dispatched
+subagent never gets workspace resolve/create/propose access.
 
-| Tool | Same service as |
-|---|---|
-| `workspace_overview` | `keryx workspace overview` |
-| `workspace_read` | `keryx workspace read` |
+| Tool | Risk | Same service as |
+|---|---|---|
+| `workspace_overview` | read | `keryx workspace overview` |
+| `workspace_read` | read | `keryx workspace read` |
+| `workspace_list` | read | `keryx workspace list` |
+| `workspace_show` | read | `keryx workspace show` |
+| `workspace_create` | mutating | `keryx workspace create` |
 
 CLI and MCP reads share `normalizeFwkResult`. Never-shipped names
 (`workspace.fwk`, `workspace.get`, `workspace.proposal create --from-flow`)
@@ -216,9 +244,21 @@ is in the
 runtime re-ingestion of raw receipts/outcomes is still planned — see
 [phase-6-real-opt-in-readiness.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).
 
+## Autonomous binding on an action-intent turn (Slate v2)
+
+An action-intent turn in `keryx shell`/TUI/`harness run` — or an explicit
+`/goal <text> [--workspace <id>]` (`harness run --goal ... [--workspace
+<id>]` non-interactively) — now resolves-or-creates its workspace binding
+automatically, by the same tool-calling judgment `ask_user`/`spawn_subagent`
+already use (no new similarity/embedding engine), and re-evaluates that
+binding mid-session if the topic shifts. On completion it dispatches its own
+wrap-up proposal without a manual `propose` call. This is still `source:
+"session"` under the hood, not a new propose source — see the Flow-wrap-up
+note above. Review/accept is unaffected: still strictly human, still gated
+by `confirm-review`.
+
 ## Not shipped (do not treat as current)
 
-- Automatic session↔workspace linkage (`--workspace` on `keryx shell`).
 - Propose from a Flow wrap-up snapshot.
 - SAC over MCP HTTP or `keryx serve`.
 - Public collaboration writer / member / archive APIs.
