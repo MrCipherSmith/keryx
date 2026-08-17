@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.4
+Version: 0.14.5
 
 ## Status
 
@@ -7,6 +7,17 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.5** — Added `shared-agent-context-decision-integrity` (RP-13) as a
+>   specification-ready, requirements-only package: closes a real gap found
+>   while designing Slate v2 — `workspace review --decision accepted`
+>   bypasses the already-working `findDuplicates`/`findConflicts`
+>   (`src/memory/dedup.ts`), and nothing ties SAC content back to a deleted
+>   code component (`wikiPruneOrphans` only covers `wiki/components/*`).
+>   Explicitly does NOT add auto-merge/auto-archive/a new similarity engine;
+>   automatic decision versioning is a named, deferred future track with
+>   its constraints pre-fixed, not built here. Also bumped `slate` to
+>   2.0.0 (SLATE-16..21, still design/not implemented) — see that
+>   package's own changelog.
 > - **0.14.4** — `sac-workspace-lifecycle` and `slate` (all 5 phases) shipped
 >   to `main` and released in v0.2.39: archive/removeResource/rename (PR
 >   #296), Slate skeleton + bundled SAC hardening (PR #297), open/close
@@ -157,7 +168,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
 | [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | implemented and verified (PR #296) | Archive/resource-removal/rename shipped for `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete remain explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |
-| [Keryx Slate](slate/README.md) | implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308) | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. |
+| [Keryx Slate](slate/README.md) | v1 (SLATE-1..15) implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308); v2 (SLATE-16..21) specification-ready, not implemented | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. v2 adds automatic workspace resolve-or-create, autonomous `propose` dispatch, and a review confirm-token closing `sac.review`'s known self-accept gap — narrows RP-03's remaining scope; see the package's own v2.0.0 changelog. |
 | [SAC RP-01 Runtime Truth](shared-agent-context-runtime-truth/README.md) | future / spec-ready | Make the deterministic retrieval plan independent and output-effective, with stable identities and honest freshness, detail, omissions, and cost. |
 | [SAC RP-02 Source-owned Projections](shared-agent-context-source-projections/README.md) | future / spec-ready | Replace raw/heuristic source interpretation with typed Flow, Evidence, Wiki, Memory, and Skills owner ports and canonical guarded writes. |
 | [SAC RP-03 Lifecycle Binding](shared-agent-context-lifecycle-binding/README.md) | future / spec-ready | Add explicit Session–workspace–Flow binding, discovery, derivation preview, and receipt-bound owner-accepted-to-accepted link-back. |
@@ -170,7 +181,8 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [SAC RP-10 Receipts and Provenance](shared-agent-context-receipts-provenance/README.md) | future / spec-ready | Add metadata-only capsules, replay/drift reasons, durability classes, retention/repair/quota controls, and measured read SLOs. |
 | [SAC RP-11 Evaluation and Orchestration](shared-agent-context-evaluation-orchestration/README.md) | future / spec-ready | Evaluate deterministic/candidate shadow baselines, causal ablations, topology, outcome/security/overhead, and retain/remove/defer decisions. |
 | [SAC RP-12 Documentation Truth](shared-agent-context-documentation-truth/README.md) | future / spec-ready | Enforce source-pinned current-behavior claims, taxonomy, graph/wiki coverage, then registry-derived operation docs/examples after RP-09. |
-| [SAC Improvements Program](shared-agent-context-improvements-program/README.md) | future / spec-ready | Coordinate all twelve packages with dependency waves, integration checkpoints, copy-ready phase prompts, dashboard statistics, evidence, stop, and rollback gates. |
+| [SAC RP-13 Decision Deduplication and Lifecycle Cleanup](shared-agent-context-decision-integrity/README.md) | future / spec-ready | Wire the existing `findDuplicates`/`findConflicts` (`src/memory/dedup.ts`) into `workspace review` as a reviewer-visible hint, plus an optional informational model annotation; extend the graph-diff signal that already drives `wikiPruneOrphans` to a report-only lifecycle flag for workspaces/memory entries/wiki decisions whose component left the graph. Surfaced by Slate v2's autonomous workspace/propose flow; not built by Slate v2 itself. |
+| [SAC Improvements Program](shared-agent-context-improvements-program/README.md) | future / spec-ready | Coordinate all twelve packages with dependency waves, integration checkpoints, copy-ready phase prompts, dashboard statistics, evidence, stop, and rollback gates. RP-13 is not yet included in this coordination. |
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |
