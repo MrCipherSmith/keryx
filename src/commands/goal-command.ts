@@ -16,6 +16,7 @@ import type { NormalizedMessage } from "../harness/provider/types";
 import { ensureSlateOpened, type SlateSessionRef } from "../session/slate-lifecycle";
 import { readSlate, renderAnchorsBlock, writeSlate, type Slate } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
+import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
 
 /** `/goal <text> [--workspace <id>]`, successfully parsed. */
 export interface ParsedGoalArgs {
@@ -95,6 +96,12 @@ export interface RunGoalCommandParams {
   history: NormalizedMessage[];
   slateSession: SlateSessionRef | undefined;
   mintAttemptId: () => string;
+  /**
+   * SLATE-16 test seam, mirrors `agent.ts`'s `RunAgentTurnOptions.resolveWorkspace`
+   * exactly — every real call site leaves this unset and gets the real
+   * `resolveOrCreateWorkspace` (real tool calls, a real bounded model turn).
+   */
+  resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
 }
 
 /** Emit `text` via `io.onSystem` when present, else `io.write` (mirrors `agent.ts`'s own `system` helper). */
@@ -110,12 +117,16 @@ function systemLine(io: AgentIO, text: string): void {
  * Run `/goal`'s full sequence: parse → (if `--workspace` was given) validate
  * it FIRST via `resolveWorkspaceForActor` — fail-closed, no slate opened, no
  * turn run on rejection (AC1) → open the slate (bypassing `isActionRequest`'s
- * heuristic; `/goal` IS the deterministic alternative) → (only if a validated
- * `--workspace` was given) bind `slate.workspaceId` (never auto-created,
- * never guessed — AC2) → run the turn with the parsed text.
+ * heuristic; `/goal` IS the deterministic alternative) → bind
+ * `slate.workspaceId`: an explicit, validated `--workspace` always wins
+ * (AC2, v1 behavior, unchanged); when `--workspace` was omitted, SLATE-16's
+ * resolve-or-create now runs instead (supersedes v1's "leave unset") and
+ * only when this slate has no workspaceId bound yet — a `/goal` reusing an
+ * already-bound slate mid-session is never re-resolved (AC-25) → run the
+ * turn with the parsed text.
  */
 export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
-  const { raw, cwd, io, deps, history, slateSession, mintAttemptId } = params;
+  const { raw, cwd, io, deps, history, slateSession, mintAttemptId, resolveWorkspace } = params;
   const parsed = parseGoalArgs(raw);
   if ("error" in parsed) {
     systemLine(io, `/goal: ${parsed.error}\n`);
@@ -184,6 +195,23 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           const base: Slate = prev ?? { anchors: { root: "", touched: [] }, course: {}, seeds: [] };
           return { ...base, workspaceId };
         });
+      } else {
+        // SLATE-16 supersedes SLATE-15's old "omitted --workspace = leave
+        // unset" behavior: `/goal` without `--workspace` now triggers
+        // resolve-or-create instead. Only when this slate does not already
+        // have a workspaceId bound (AC-25) — a `/goal` reusing an
+        // already-bound slate mid-session is never re-resolved.
+        const current = await readSlate(slateSession.dir);
+        if (current !== undefined && current.workspaceId === undefined) {
+          const resolver = resolveWorkspace ?? resolveOrCreateWorkspace;
+          const resolved = await resolver({ cwd, topicHint: parsed.text, provider: deps.providerId, model: deps.modelId });
+          if (resolved.ok) {
+            await writeSlate(slateSession.dir, (prev) => {
+              if (!prev) throw new Error(`SLATE-16 bind: no open slate in ${slateSession.dir}`);
+              return { ...prev, workspaceId: resolved.workspaceId };
+            });
+          }
+        }
       }
     } catch (err) {
       systemLine(io, `/goal: slate bookkeeping failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);

@@ -17,8 +17,9 @@ import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-ri
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
-import { readSlate, renderAnchorsBlock, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { readSlate, writeSlate, renderAnchorsBlock, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
+import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
 import {
   closeSlateSession,
   ensureSlateOpened,
@@ -197,6 +198,16 @@ export interface RunAgentTurnOptions {
    * this unset and keeps the existing heuristic.
    */
   skipCloseTrigger?: boolean;
+  /**
+   * SLATE-16 (flow 166, Phase 3) test seam: overrides the real
+   * `resolveOrCreateWorkspace` (`../sac/workspace-resolve`) called at the
+   * default action-intent open trigger below. Every real call site leaves
+   * this unset and gets the real resolver (real `workspace_list`/
+   * `workspace_create` tool calls, a real bounded model turn); tests inject
+   * a canned decision here instead of wiring model-turn/provider-factory
+   * plumbing through this file.
+   */
+  resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
 }
 
 /**
@@ -904,6 +915,31 @@ async function runAgentTurnCore(
           if (freshSlate !== undefined) {
             history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
             io.onHistoryChange?.("tool");
+            // SLATE-16 (AC-25): resolve-or-create fires exactly here — a
+            // slate that just opened with no workspaceId bound yet (the
+            // default action-intent open; `/goal`'s own explicit open runs
+            // the identical call in goal-command.ts). A slate that already
+            // has workspaceId set (v1 explicit `/goal --workspace`, or an
+            // earlier SLATE-16 run this session) is never re-resolved merely
+            // because a new turn started. Failure (no credential, timeout,
+            // ambiguous judgment) never blocks this turn — the resolver
+            // itself fails closed, and an unresolved workspaceId simply
+            // retries at the next action-intent open.
+            if (freshSlate.workspaceId === undefined) {
+              const resolver = options.resolveWorkspace ?? resolveOrCreateWorkspace;
+              const resolved = await resolver({
+                cwd: options.slateSession.cwd,
+                topicHint: userLine,
+                provider: deps.providerId,
+                model: deps.modelId,
+              });
+              if (resolved.ok) {
+                await writeSlate(options.slateSession.dir, (prev) => {
+                  if (!prev) throw new Error(`SLATE-16 bind: no open slate in ${options.slateSession!.dir}`);
+                  return { ...prev, workspaceId: resolved.workspaceId };
+                });
+              }
+            }
           }
         }
       }
