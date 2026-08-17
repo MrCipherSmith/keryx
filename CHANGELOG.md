@@ -5,6 +5,61 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.39] — 2026-08-17
+
+### Added
+
+- **SAC workspace lifecycle completion.** `WorkspaceService` gains `archive`,
+  `removeResource`, and `rename`. Archiving a workspace hides it from
+  `workspace list` by default (`--include-archived` to see it) without
+  blocking read access, in-flight review, or discovery of its pending
+  proposals. `archive`/`removeResource`/`rename` all require `owner` role,
+  matching `archive`'s existing authorization level.
+- **Slate: a task-local harness layer over the shared workspace.** Every
+  `keryx shell`/TUI/`harness run` turn now tracks three ephemeral, per-attempt
+  shelves that live alongside — never inside — the shared SAC workspace:
+  - **Anchors** — execution context (root, tree/branch, runtime, touched
+    files) recomputed fresh from live state on every restart/resume/fork,
+    never restored from a prior attempt. Auto-injected into history on
+    harness effects (tool call done, worktree resolved, `/model` switch,
+    subagent spawn/return), visible on both the TUI and the readline shell.
+  - **Course** — a live, read-only projection of the attempt's bound Flow
+    (if any); never a second tracker, never mutated by slate itself.
+  - **Seeds** — append-only, model-writable hypotheses (`slate_read`/
+    `slate_write_seed` tools), promoted to the shared workspace's Know-how
+    only through the existing `workspace review` gate — never automatically.
+  - Opens on an action-intent turn or `/goal <text> [--workspace <id>]`
+    (also `keryx harness run --goal ... [--workspace <id>] [--unattended]`);
+    closes on flow-done, an explicit close phrase, `/new`, or shell exit,
+    always archiving an unclosed prior attempt first, never overwriting it
+    silently.
+- **Unattended-mode safety gate (SLATE-8).** `workspace review --decision
+  accepted` is denied outright for any session whose `interactive` context
+  field is `false` — every `keryx serve` session, unconditionally, regardless
+  of role or policy profile. `propose` is unaffected (deferred-queue model,
+  not a full block); a session can never flip its own `interactive` field at
+  runtime.
+- **Ephemeral subagent slate.** A dispatched subagent gets its own full,
+  disposable Anchors/Course/Seeds scoped to that one dispatch. On return, its
+  state lands only in the parent's `slate.childDispatches[dispatchId]` — a
+  separate, non-merged, provenance-tagged entry — never folded into the
+  parent's own Seeds, and unreachable by any other path once the dispatch
+  completes.
+- **Machine wrap-up composer.** Replaces raw-transcript evidence with machine
+  evidence (git diff, Flow snapshot, tagged Seeds) plus a model-generated
+  summary, falling back to a mechanical template on a slow-but-present
+  credential and failing closed (no proposal) with no credential at all.
+  Seeds are grouped by `kind` and proposed one group at a time; a proposal is
+  never created without a captured `workspaceId` — evidence is preserved as a
+  local `unbound-candidate` artifact instead.
+- **`keryx workspace catch-up` / `list-proposals`.** A pull-based,
+  `cwd`-scoped surface for reviewing what accumulated during unattended runs:
+  four always-separate sections (pending proposals, blocked runs,
+  unbound-candidate wrap-ups, and sessions of genuinely unknown fate), with
+  evidence freshness re-checked at display time rather than only at accept.
+  Archived workspaces surface identically to active ones — archival never
+  hides a pending proposal.
+
 ## [0.2.38] — 2026-08-16
 
 ### Added
