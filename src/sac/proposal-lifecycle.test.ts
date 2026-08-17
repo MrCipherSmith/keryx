@@ -66,7 +66,13 @@ test("accepted transition requires guarded target receipt and same-key retry ret
   const { root, service } = await setup(); await propose(service);
   const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
   const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) });
-  expect(first).toEqual(retry); expect(first.event.toStatus).toBe("accepted");
+  // RP-13: the FIRST call is a fresh accept, so it also carries a computed
+  // dedupHint; `retry` (same idempotencyKey) hits the replay short-circuit
+  // and does not recompute one — the two results legitimately differ by
+  // that one field, so only the durable `.event` is compared.
+  expect(first.event).toEqual(retry.event); expect(first.event.toStatus).toBe("accepted");
+  expect(first.dedupHint).toEqual({ duplicates: [], conflicts: [] });
+  expect(retry.dedupHint).toBeUndefined();
   const acceptance = (first.event as any).acceptance;
   expect(acceptance.targetWrite.binding).toMatchObject({ intentRef: acceptance.writeIntentRef, proposalId: "proposal-a", proposalRevision: "r1", workspaceId: "workspace-a", correlationId: "proposal-review-correlation-0001", idempotencyKey: "proposal-review-idempotency-0001", reviewerSubject: "user:reviewer", reviewerAuthority: "owner", policyRevision: "policy-r1" });
   const ledgerRecords = (await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
@@ -424,7 +430,9 @@ test("a replayed accept (same idempotency key) succeeds even when the retry's in
   // tagged `interactive: false`. It must still return the already-committed
   // "accepted" outcome rather than being freshly re-decided and denied.
   const replay = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: false });
-  expect(replay).toEqual(first);
+  // RP-13: `replay` hits the idempotency short-circuit and never recomputes
+  // a dedupHint — only the durable `.event` is guaranteed identical.
+  expect(replay.event).toEqual(first.event);
 });
 
 test("a different idempotency key on an already-terminal proposal is never mistaken for a replay of a prior transition — the replay short-circuit only matches on the exact idempotencyKey, so a genuinely new request still runs the normal terminal-transition/gate logic (F-006 ordering)", async () => {

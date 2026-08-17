@@ -8,6 +8,7 @@ import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type Trusted
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 import { resolveSessionWrapUp } from "./session-wrap-up";
 import { consumeConfirmToken } from "./review-confirm-token";
+import { computeDedupHint, type DecisionAnnotation, type DedupHint } from "./decision-dedup";
 import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 import { createRealSkillOwnerWriter } from "./skill-owner-writer";
@@ -120,7 +121,7 @@ export class ProposalLifecycleService {
     } });
   }
 
-  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string; interactive: boolean; confirmToken?: string }): Promise<{ event: Transition }> {
+  async review(input: { request: unknown; requestCorrelationId: string; workspaceId: string; proposalId: string; decision: "accepted" | "rejected" | "dismissed"; idempotencyKey: string; reason?: string; interactive: boolean; confirmToken?: string }): Promise<{ event: Transition; dedupHint?: DedupHint; annotation?: DecisionAnnotation }> {
     const actor = await this.actor(input.request, input.requestCorrelationId); const policyRevision = await this.strict();
     return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId: input.workspaceId, action: "review", execute: async (manifest) => {
       const proposal = await this.loadProposal(input.workspaceId, input.proposalId);
@@ -216,6 +217,17 @@ export class ProposalLifecycleService {
         const event = await this.transition({ proposal, actor, input, records: await this.records(ledger).then((all) => all.filter((record) => record.proposalId === proposal.id)), outcome, ...(targetWrite ? { targetWrite } : {}), ...(intent ? { writeIntentRef: intent.intentRef } : {}), ...(targetAttempt?.freshnessVerifiedAt ? { freshnessVerifiedAt: targetAttempt.freshnessVerifiedAt } : {}), reviewerAuthority });
         await this.validateTransition(event);
         await appendFile(ledger, `${JSON.stringify(event)}\n`, { mode: 0o600 });
+        // RP-13 FR1+FR2: computed AFTER the accept has already committed
+        // above — informational only, attached to this function's RETURN
+        // VALUE, never to the schema-validated `event`/ledger record itself
+        // (that schema is `additionalProperties: false`). A computation
+        // failure inside `computeDedupHint` already degrades to `undefined`
+        // internally (AC2) — nothing here can turn a successful accept into
+        // a failed review call.
+        if (outcome === "accepted" && (proposal.kind === "wiki-update" || proposal.kind === "memory-entry")) {
+          const dedup = await computeDedupHint({ cwd: this.root, workspaceId: input.workspaceId, proposalId: proposal.id, kind: proposal.kind });
+          if (dedup) return { event, dedupHint: dedup.hint, ...(dedup.annotation ? { annotation: dedup.annotation } : {}) };
+        }
         return { event };
       });
     } });
