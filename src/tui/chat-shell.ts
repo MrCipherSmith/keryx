@@ -42,7 +42,8 @@ import { latestSession } from "../session";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
-import { applyThemeId, getThemeId, loadPersistedThemeId } from "./theme";
+import { applyThemeId, getThemeId, loadPersistedThemeId, parseThemeId, persistThemeId, themeLabel, formatThemeList } from "./theme";
+import { isThemeCommand, openThemePicker } from "./theme-picker";
 import type { VersionCheckResult } from "../lib/version-check";
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
@@ -83,7 +84,7 @@ export type ChatSubmitResult =
   /** A slash command typed mid-turn: refused rather than raced against it. */
   | "deferred"
   /**
-   * A read-only local command (`/status` or `/flows`). Never queued as a
+   * A local TUI command (`/status`, `/flows`, `/theme`). Never queued as a
    * user turn and never deferred — the caller opens the inspector itself.
    */
   | "local"
@@ -268,7 +269,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         close();
         return "exit";
       }
-      if (isSessionInfoCommand(value) || isFlowsCommand(value)) {
+      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value)) {
         return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
@@ -489,6 +490,32 @@ export async function mountChatShell(
     if (result === "local") {
       const cwd = opts.deps.session?.cwd;
       const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+      if (isThemeCommand(line)) {
+        const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+        if (arg.length > 0) {
+          const next = parseThemeId(arg);
+          if (next === undefined) {
+            append(otui.t`${otui.dim(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`)}`);
+            return;
+          }
+          applyThemeId(next, r.themeMode);
+          persistThemeId(next);
+          chrome.showToast(`Theme: ${themeLabel(next)}`);
+          return;
+        }
+        openThemePicker(otui, chrome, {
+          current: getThemeId(),
+          mode: r.themeMode,
+          renderer: r,
+          ...keys,
+          onApply: (id) => {
+            applyThemeId(id, r.themeMode);
+            persistThemeId(id);
+            chrome.showToast(`Theme: ${themeLabel(id)}`);
+          },
+        });
+        return;
+      }
       void (async () => {
         const [workspaces, flows] = cwd === undefined
           ? [[], []]

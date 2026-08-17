@@ -133,7 +133,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,
   },
-  { name: "/theme", description: "Switch the TUI color theme — /theme [name]", modes: BOTH },
+  { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {

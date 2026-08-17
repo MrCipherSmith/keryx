@@ -71,7 +71,6 @@ import {
   renderCommandHelp,
 } from "../commands/agent-commands";
 import {
-  THEME_IDS,
   applyThemeId,
   formatThemeList,
   getTheme,
@@ -81,6 +80,7 @@ import {
   persistThemeId,
   themeLabel,
 } from "./theme";
+import { openThemePicker } from "./theme-picker";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -2740,39 +2740,28 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/theme") {
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
-          void (async () => {
-            let next = arg.length > 0 ? parseThemeId(arg) : undefined;
-            if (next === undefined && arg.length > 0) {
+          if (arg.length > 0) {
+            const next = parseThemeId(arg);
+            if (next === undefined) {
               io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
-              return;
-            }
-            if (next === undefined) {
-              const picked = await chrome.withOverlay(() =>
-                showComposerChoice(otui, r, chrome.dock, {
-                  title: "Theme",
-                  subtitle: `current: ${themeLabel(getThemeId())}`,
-                  cancelId: "__keep__",
-                  options: THEME_IDS.map((id) => ({
-                    id,
-                    label: themeLabel(id),
-                    description: id === getThemeId() ? "active" : " ",
-                    recommended: id === getThemeId(),
-                  })),
-                }),
-              );
-              input.focus();
-              if (picked === undefined || picked === "__keep__") {
-                return;
-              }
-              next = parseThemeId(picked);
-            }
-            if (next === undefined) {
               return;
             }
             applyThemeId(next, r.themeMode);
             persistThemeId(next);
             chrome.showToast(`Theme: ${themeLabel(next)}`);
-          })();
+            return;
+          }
+          openThemePicker(otui, chrome, {
+            current: getThemeId(),
+            mode: r.themeMode,
+            renderer: r,
+            ...inspectorKeys,
+            onApply: (id) => {
+              applyThemeId(id, r.themeMode);
+              persistThemeId(id);
+              chrome.showToast(`Theme: ${themeLabel(id)}`);
+            },
+          });
           return;
         }
         if (command.name === "/model") {
