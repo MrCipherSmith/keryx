@@ -49,8 +49,12 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "web_search",
     "wiki_ask",
     "wiki_backlinks",
+    "workspace_create",
+    "workspace_list",
     "workspace_overview",
+    "workspace_propose",
     "workspace_read",
+    "workspace_show",
   ]);
 });
 
