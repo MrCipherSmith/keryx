@@ -23,6 +23,14 @@ export { proposalNotePath } from "./proposal-evidence";
 export { findSession } from "../session/store";
 export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";
 export {
+  WorkspaceService,
+  WorkspaceServiceError,
+  localWorkspaceAuthorizationServer,
+  newWorkspaceId,
+  type WorkspaceManifest,
+  type WorkspaceResource,
+} from "./workspace-service";
+export {
   buildPolicyCorpus,
   defaultPolicyExperimentConfig,
   evaluatePolicyExperiment,
