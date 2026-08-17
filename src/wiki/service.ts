@@ -338,6 +338,37 @@ export async function wikiPruneOrphans(cwd: string): Promise<WikiPruneResult> {
   return { pruned, orphanedAccepted };
 }
 
+/**
+ * RP-13 FR3+FR4 (flow 168, Phase 2): the SAME "valid modules" set
+ * `wikiPruneOrphans` already derives from the current graph (`nodes.jsonl`,
+ * grouped via `moduleNameFromProjectPath` exactly as `collectGraphWikiCandidates`
+ * does for its own `moduleFiles` map) — extracted as its own, smaller,
+ * additive read so a second consumer (the SAC lifecycle flag, `src/sac/
+ * lifecycle-flag.ts`) never re-derives module grouping with a second,
+ * possibly-drifting implementation, and never needs the edges/deps
+ * computation `collectGraphWikiCandidates` also does for the wiki-collect
+ * enrichment feature, which this consumer has no use for.
+ *
+ * `undefined` (not an empty `Set`) when the graph has not been built yet —
+ * an empty set would make every scoped piece of content look orphaned,
+ * which is the opposite of this package's report-only, conservative
+ * posture. The caller must treat "graph unavailable" as "nothing to flag
+ * yet," not as "everything is invalid."
+ */
+export async function validModuleNames(cwd: string): Promise<Set<string> | undefined> {
+  const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
+  if (!(await pathExists(nodesPath))) {
+    return undefined;
+  }
+  const modules = new Set<string>();
+  for (const node of parseJsonl(await readFile(nodesPath, "utf8"))) {
+    if (node.kind === "asset") continue;
+    const nodePath = String(node.path ?? node.id ?? "unknown");
+    modules.add(moduleNameFromProjectPath(nodePath));
+  }
+  return modules;
+}
+
 export function createGdWikiService(): GdWikiService {
   return {
     status: (input) => wikiStatus(input.cwd),
@@ -1178,7 +1209,7 @@ function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
 // (`src/pipelines`, `src/pipelines/store`, `src/pipelines/features/pipeline-variables`
 // all become distinct modules) rather than only the top ~12. A file directly in
 // a root dir keeps that root as its module.
-function moduleNameFromProjectPath(filePath: string): string {
+export function moduleNameFromProjectPath(filePath: string): string {
   const parts = filePath.split("/").filter(Boolean);
   if (parts.length <= 1) {
     return "root";

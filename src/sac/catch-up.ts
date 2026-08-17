@@ -45,6 +45,7 @@ import type { TerminalState } from "../session/slate-terminal-state";
 import { listSessions, type SessionSummary } from "../session/store";
 import { createLocalProposalLifecycleService, type ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
+import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
 
 // `Proposal` is not exported from `proposal-lifecycle.ts` (it is that
 // module's own private record shape) — derived structurally from the public
@@ -64,6 +65,14 @@ export type CatchUpReport = {
   blocked: CatchUpBlockedItem[];
   unboundCandidates: CatchUpUnboundCandidateItem[];
   unknown: CatchUpUnknownItem[];
+  // RP-13 FR3+FR4 (flow 168, Phase 2): a SEPARATE, additive category — a
+  // workspace can appear here AND in `proposals[]` at the same time (a
+  // pending proposal and a lifecycle flag are independent facts about the
+  // same workspace); this never suppresses or replaces the other
+  // categories. Always populated, never gated inside the report builder
+  // itself — the CLI layer decides whether to DISPLAY the section
+  // (`--include-lifecycle-flags`, default shown).
+  lifecycleFlags: LifecycleFlag[];
 };
 
 /**
@@ -78,11 +87,17 @@ export type CatchUpReport = {
  * `proposals[]`, never an error (never leaking whether the id exists).
  */
 export async function buildCatchUp(input: { cwd: string; workspaceId?: string }): Promise<CatchUpReport> {
-  const [proposals, sessionCategories] = await Promise.all([
+  const [proposals, sessionCategories, lifecycleFlagsAll] = await Promise.all([
     collectProposals(input.cwd, input.workspaceId),
     collectSessionCategories(input.cwd),
+    computeLifecycleFlags(input.cwd),
   ]);
-  return { proposals, ...sessionCategories };
+  // Same `input.workspaceId` scoping `collectProposals` already applies —
+  // never expanding beyond what the caller asked to see.
+  const lifecycleFlags = input.workspaceId === undefined
+    ? lifecycleFlagsAll
+    : lifecycleFlagsAll.filter((flag) => flag.kind !== "workspace" || flag.ref === input.workspaceId);
+  return { proposals, ...sessionCategories, lifecycleFlags };
 }
 
 async function collectProposals(cwd: string, workspaceId: string | undefined): Promise<CatchUpProposalItem[]> {
