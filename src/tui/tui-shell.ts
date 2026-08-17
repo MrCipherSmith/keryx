@@ -146,6 +146,7 @@ interface SidebarRepoMetadata {
 }
 
 const SESSION_PREVIEW_MESSAGE_COUNT = 200;
+const BUSY_READONLY_COMMANDS = ["/status", "/flows"] as const;
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
 function parseGitHubRemote(remote: string): string | undefined {
@@ -2494,6 +2495,8 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       const displayLine = summarizeSubmittedLine(line);
+      const commandToken = line.trim().split(/\s+/)[0] ?? "";
+      const isBusyReadonlyCommand = BUSY_READONLY_COMMANDS.includes(commandToken as (typeof BUSY_READONLY_COMMANDS)[number]);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
@@ -2519,8 +2522,8 @@ export async function launchTuiAgentShell(opts: {
           );
           io.onSystem?.(
             "Main agent is busy. Type a normal question to spawn a side worker " +
-              "(sees main status + recent context; read-only). /exit still works.\n",
-            );
+              "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
+          );
           return;
         }
         if (command?.name === "/interrupt") {
@@ -2532,11 +2535,11 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
-        if (command !== undefined && isSessionInfoCommand(command.name)) {
+        if (isBusyReadonlyCommand && isSessionInfoCommand(commandToken)) {
           showSessionInfo();
           return;
         }
-        if (command !== undefined && isFlowsCommand(command.name)) {
+        if (isBusyReadonlyCommand && isFlowsCommand(commandToken)) {
           showFlows();
           return;
         }
