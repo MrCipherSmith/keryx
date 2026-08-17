@@ -5,12 +5,12 @@
   "title": "Slate v2 (SLATE-16..21): auto workspace binding, cross-runtime tool parity, review confirm-token",
   "status": "in-progress",
   "createdAt": "2026-08-17T10:14:32.884Z",
-  "updatedAt": "2026-08-17T11:54:59.708Z",
+  "updatedAt": "2026-08-17T13:20:16.480Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:c7e8d8b9c725bfb15faba5dd1e0dd9d7e54e38d1950241722bb14dbcd7f03f62",
+  "acChecksum": "sha256:0da4816419718537a0e0245fe6330d14505c06eafb7fb03ef567f4e81f963c05",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -107,7 +107,7 @@
       "id": "T7",
       "title": "SLATE-19: cross-runtime agent-tool parity",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -115,7 +115,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -218,6 +219,16 @@
       "at": "2026-08-17T11:54:59.708Z",
       "event": "task-done",
       "detail": "T6: SLATE-21: finish SLATE-7 machine evidence"
+    },
+    {
+      "at": "2026-08-17T12:45:24.850Z",
+      "event": "task-done",
+      "detail": "T7: SLATE-19: cross-runtime agent-tool parity"
+    },
+    {
+      "at": "2026-08-17T13:20:16.480Z",
+      "event": "ac-updated",
+      "detail": "AC4 scoped down: flow-creation trigger deferred (no flowRef write path exists yet; user confirmed agent-session-only scope)"
     }
   ]
 }

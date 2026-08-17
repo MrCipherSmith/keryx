@@ -21,9 +21,16 @@ the full text, do not restate it here.
   equivalent; no `workspace_review` agent tool exists anywhere (= spec's
   AC-28, AC-29).
 - AC4: SLATE-16's resolve-or-create never binds a workspace id without a
-  preceding `workspace_list` call, and fires only at flow-creation and at
+  preceding `workspace_list` call, and fires only at
   slate-open-without-bound-workspace — never on every turn (= spec's AC-24,
-  AC-25).
+  AC-25, SCOPE-NARROWED for T8: the spec's other named trigger point, "flow
+  creation", is NOT wired this phase — `slate.course.flowRef` has no write
+  path anywhere in this codebase, so "resolve at flow creation" has no real
+  flow↔slate linkage to hang off yet; confirmed with the user that SLATE-16
+  should only fire from an agent session, never from a bare `keryx flow
+  init`, which ruled out hooking `FlowService.init()` directly. Building the
+  flow↔slate linkage this would need is out of scope for this phase — an
+  explicit, documented follow-up, not a silent gap).
 - AC5: SLATE-17's mid-session re-evaluation fires only at the existing
   SLATE-5 close-trigger point, introducing no new topic-shift detector
   (= spec's AC-26).

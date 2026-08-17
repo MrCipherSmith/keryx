@@ -27,7 +27,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
-import { openSlate } from "../session/slate-lifecycle";
+import { closeSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
@@ -1091,6 +1091,126 @@ test("SLATE-5: an action-intent turn opens a fresh slate when a slateSession ref
   expect(slate?.anchors.touched).toEqual([]);
   expect(slate?.course).toEqual({});
   expect(slate?.seeds).toEqual([]);
+});
+
+test("SLATE-16: the freshly-opened slate's workspaceId is bound from the injected resolver, AC-24-shaped input (cwd + topicHint reach the resolver)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("Understood."),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const calls: Array<{ cwd: string; topicHint: string; provider?: string; model?: string }> = [];
+
+  await runAgentTurn(io, deps, [], "run the tests", {
+    slateSession,
+    resolveWorkspace: async (input) => {
+      calls.push(input);
+      return { ok: true, workspaceId: "workspace-resolved", action: "created" };
+    },
+  });
+
+  expect(calls).toEqual([{ cwd, topicHint: "run the tests", provider: "scripted", model: "m" }]);
+  const slate = await readSlate(dir);
+  expect(slate?.workspaceId).toBe("workspace-resolved");
+});
+
+test("SLATE-16 (AC-25): a slate that already has workspaceId bound is never re-resolved merely because a new turn started", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+  let resolveCalls = 0;
+  const resolveWorkspace = async () => {
+    resolveCalls += 1;
+    return { ok: true as const, workspaceId: "workspace-resolved", action: "created" as const };
+  };
+
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession, resolveWorkspace });
+  expect(resolveCalls).toBe(1);
+
+  // A second action-intent turn in the same attempt: `ensureSlateOpened` is a
+  // no-op re-open (already opened), but AC-25 must ALSO hold even for a
+  // freshly-opened-with-workspaceId-already-set slate.
+  await runAgentTurn(io, deps, [], "check the status too", { slateSession, resolveWorkspace });
+  expect(resolveCalls).toBe(1);
+});
+
+test("SLATE-16: a failing/ambiguous resolver never blocks the turn — the real request still completes and workspaceId stays unbound", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("the real answer"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, text } = collectingIo();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+
+  await runAgentTurn(io, deps, [], "run the tests", {
+    slateSession,
+    resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
+  });
+
+  expect(text.join("")).toContain("the real answer");
+  const slate = await readSlate(dir);
+  expect(slate?.workspaceId).toBeUndefined();
+});
+
+test("SLATE-17: closing via /new's closeSlateSession (SLATE-5's existing close-trigger point) makes the NEXT action-intent open re-run SLATE-16 — no new topic-shift detector needed (AC-26)", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = {
+    provider: textOnlyProvider("ok"),
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+  const resolved: string[] = [];
+  const resolveWorkspace = async () => {
+    const workspaceId = `workspace-${resolved.length + 1}`;
+    resolved.push(workspaceId);
+    return { ok: true as const, workspaceId, action: "created" as const };
+  };
+
+  await runAgentTurn(io, deps, [], "investigate the flaky test", { slateSession, resolveWorkspace });
+  expect(resolved).toEqual(["workspace-1"]);
+  expect((await readSlate(dir))?.workspaceId).toBe("workspace-1");
+
+  // /new's real call site (shell.ts/tui-shell.ts): closeSlateSession, never a
+  // new topic-shift detector of its own — exactly what AC-26 requires.
+  await closeSlateSession(slateSession, () => "attempt-2");
+  expect(slateSession.opened).toBe(false);
+  expect(await readSlate(dir)).toBeUndefined();
+
+  // An unrelated new question, with no /clear, on the freshly-reopened
+  // (workspaceId-less by construction) slate: SLATE-16 fires again on its
+  // OWN existing trigger condition (freshSlate.workspaceId === undefined) —
+  // no SLATE-17-specific code ran any of this.
+  await runAgentTurn(io, deps, [], "run a totally unrelated new investigation", { slateSession, resolveWorkspace });
+  expect(resolved).toEqual(["workspace-1", "workspace-2"]);
+  expect((await readSlate(dir))?.workspaceId).toBe("workspace-2");
 });
 
 test("SLATE-5: a turn with no slateSession option never touches the filesystem for a slate (unchanged pre-Phase-2 behavior)", async () => {

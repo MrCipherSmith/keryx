@@ -12,3 +12,5 @@
 - 2026-08-17T10:17:33.574Z - started
 - 2026-08-17T11:45:49.897Z - task-done: T5: SLATE-20: review confirm-token
 - 2026-08-17T11:54:59.708Z - task-done: T6: SLATE-21: finish SLATE-7 machine evidence
+- 2026-08-17T12:45:24.850Z - task-done: T7: SLATE-19: cross-runtime agent-tool parity
+- 2026-08-17T13:20:16.480Z - ac-updated: AC4 scoped down: flow-creation trigger deferred (no flowRef write path exists yet; user confirmed agent-session-only scope)
