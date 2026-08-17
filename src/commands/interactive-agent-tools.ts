@@ -10,6 +10,7 @@ import { slateReadTool, slateWriteSeedTool } from "../harness/tool/builtin/slate
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
 import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builtin/workspace-context-tool";
+import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
 import type { SearchProviderController } from "../harness/search";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
@@ -51,6 +52,10 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     shellExecTool(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
+    workspaceCreateTool(input.cwd),
+    workspaceListTool(input.cwd),
+    workspaceShowTool(input.cwd),
+    workspaceProposeTool(input.cwd, getSessionDir),
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
