@@ -17,3 +17,19 @@
 - 2026-08-17T13:35:15.257Z - task-done: T8: SLATE-16: workspace resolve-or-create
 - 2026-08-17T13:35:15.339Z - task-done: T9: SLATE-17: mid-session re-evaluation
 - 2026-08-17T13:46:56.103Z - task-done: T10: SLATE-18: autonomous wrap-up dispatch
+- 2026-08-17T14:16:46.798Z - task-done: T2: Implement per plan
+- 2026-08-17T14:16:46.894Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-17T14:16:46.982Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-17T14:16:56.472Z - ac-confirmed: AC1: SLATE-20: confirm-token gate landed and tested in PR #314 (merged)
+- 2026-08-17T14:17:06.005Z - ac-confirmed: AC2: SLATE-21: primary evidence is now wrap-up/diff, session transcript demoted to evidence[2] reference; landed in PR #314
+- 2026-08-17T14:17:15.097Z - ac-confirmed: AC3: SLATE-19: workspace_create/list/show/propose landed as risk:read interactive tools in PR #315, no workspace_review agent tool exists
+- 2026-08-17T14:17:29.125Z - ac-confirmed: AC4: SLATE-16: workspace_list-first evidence + slate-open-without-bound-workspace trigger landed in PR #316. Flow-creation trigger explicitly deferred (documented in this AC's own text) — no flowRef write path exists in this codebase yet; follow-up work, not silently skipped
+- 2026-08-17T14:17:37.076Z - ac-confirmed: AC5: SLATE-17: needed zero new production code, proved by an integration test in agent.test.ts that /new's closeSlateSession -> next open re-fires SLATE-16 naturally; PR #316
+- 2026-08-17T14:17:45.358Z - ac-confirmed: AC6: SLATE-18: wired flow-complete and explicit triggers into agent.ts's existing SLATE-5/SLATE-7 close points, never a new trigger; process-termination was already wired pre-existing in harness.ts; PR #318
+- 2026-08-17T14:20:08.978Z - ac-confirmed: AC7: Verified by code inspection (spawn-subagent-tool.ts builds child tools from builtinReadOnlyTools/builtinMetaprojectTools only, never buildInteractiveAgentTools) + new regression test in PR #319
+- 2026-08-17T14:22:37.868Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/318 (warning: PR is not a draft)
+- 2026-08-17T14:22:45.201Z - completing
+- 2026-08-17T14:22:50.910Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-08-17T14:23:26.566Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/318 (warning: PR is not a draft)
+- 2026-08-17T14:23:26.663Z - completing
+- 2026-08-17T14:23:38.169Z - done: all gates passed
