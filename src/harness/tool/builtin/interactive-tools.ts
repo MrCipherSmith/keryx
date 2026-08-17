@@ -115,7 +115,12 @@ export function builtinReadOnlyTools(root: string): InteractiveTool[] {
   const readFileTool: InteractiveTool = {
     definition: {
       name: "read_file",
-      description: "Read a UTF-8 text file inside the project. Input: { path: string } relative to the project root.",
+      description:
+        "Read a UTF-8 text file inside the project. Input: { path: string } relative to the project root. " +
+        `CAPPED at ${MAX_READ_BYTES} bytes from the START of the file — a bigger file is silently truncated ` +
+        "there and re-reading the same path returns the exact same truncated head every time (no offset/range " +
+        "input exists). To locate a specific function/class/symbol in a large file, call graph_symbol first " +
+        "(exact definition + line) — or search_code for a pattern — instead of guessing a line range.",
       inputSchema: {
         type: "object",
         properties: { path: { type: "string" } },

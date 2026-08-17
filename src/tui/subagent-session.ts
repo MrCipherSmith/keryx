@@ -1,8 +1,15 @@
 // Session-scoped inspectable subagent log (flow 162).
 //
-// Unlike WorkerFleet, this store NEVER drops a spawned child: the sidebar list
-// and the inspector modal need every child for the TUI session. `remove` is a
-// no-op so a finished spawn_subagent stays clickable.
+// Unlike WorkerFleet, individual entries are never dropped one at a time: the
+// sidebar list and the inspector modal need every child from the CURRENT
+// scope (the running turn, or the session since the last `/clear`/`/new`) to
+// stay clickable, so a single finished spawn_subagent never silently
+// disappears mid-turn. `apply({kind: "remove"})` stays a no-op for that
+// reason. The whole store IS reset in bulk via `clear()` — at each new parent
+// turn (so subagents from an EARLIER turn stop cluttering the list once a
+// fresh one starts, spawning or not) and on `/clear`/`/new` (a full session
+// reset). Without either, entries accumulated for the rest of the shell
+// process's life: nothing ever called `clear()` or emitted `remove`.
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { humanFleetPhase, type FleetWorkerStatus } from "./worker-fleet";
@@ -153,6 +160,22 @@ export class SubagentSessionStore {
   private readonly sessions = new Map<string, SubagentSession>();
   private readonly listeners = new Set<(hint: SubagentStoreHint) => void>();
   private readonly now: () => number;
+  /**
+   * Ids present at the moment `clear()` ran, blacklisted forever after.
+   *
+   * A `spawn_subagent` dispatch that hits its deadline is abandoned, not
+   * cancelled (`spawn-subagent-tool.ts`: "the orphaned promise may still
+   * settle later; its result is ignored") — everything it does DURING that
+   * abandoned run is suppressed by its own `closed` flag, but the final
+   * status `upsert` at the end of its async function is unconditional. If
+   * that settles after `clear()` already reset the sidebar for the next
+   * turn, `apply()`'s normal upsert path would otherwise treat the id as
+   * "new" (the map was just emptied) and resurrect a phantom entry from a
+   * turn the user has already moved past. Once an id is retired it can never
+   * come back — a genuinely new dispatch always gets a fresh id, so this
+   * never blocks real work.
+   */
+  private readonly retiredIds = new Set<string>();
 
   constructor(now: () => number = () => Date.now()) {
     this.now = now;
@@ -160,6 +183,9 @@ export class SubagentSessionStore {
 
   apply(event: SubagentFleetEvent): void {
     if (event.kind === "remove") {
+      return;
+    }
+    if (this.retiredIds.has(event.id)) {
       return;
     }
     if (event.kind === "log") {
@@ -219,6 +245,22 @@ export class SubagentSessionStore {
 
   list(): SubagentSession[] {
     return [...this.sessions.values()];
+  }
+
+  /**
+   * Drop every tracked subagent at once (new turn / `/clear` / `/new`). A
+   * no-op — no listener notification — when already empty, so a turn that
+   * never spawns a subagent does not repaint the sidebar for nothing.
+   */
+  clear(): void {
+    if (this.sessions.size === 0) {
+      return;
+    }
+    for (const id of this.sessions.keys()) {
+      this.retiredIds.add(id);
+    }
+    this.sessions.clear();
+    this.emit({ id: "*", kind: "remove" });
   }
 
   subscribe(listener: (hint: SubagentStoreHint) => void): () => void {

@@ -1,5 +1,5 @@
 # Keryx Slate — Specification
-Version: 1.0.0
+Version: 2.0.0
 
 ## Identity and ownership
 
@@ -9,7 +9,7 @@ Version: 1.0.0
 | Reviewed shared context | `src/sac` (workspace) | Consulted read-only at slate open; sole write target at wrap-up |
 | Work status and acceptance criteria | Flow | Slate never writes; Course only re-projects |
 | Knowledge acceptance | Existing SAC `propose`/`review` + guarded owner-writers | Unchanged; slate supplies only the wrap-up candidate's raw material |
-| Session↔workspace↔Flow automatic binding | [SAC RP-03](../shared-agent-context-lifecycle-binding/README.md) (future) | Slate v1 requires explicit `workspaceId`, same as today's `workspace_overview`/`workspace_read` |
+| Session↔workspace↔Flow automatic binding | Slate v2 (SLATE-16…19) — see below | Slate v2 resolves/creates via model judgment (`workspace_list` + own assessment), no new ACL/binding-record service; RP-03 retains what v2 does not touch: `keryx shell --workspace <id>` explicit selection, `--session current` resolution, Flow/worktree derivation preview, accepted-target link-back — see [RP-03](../shared-agent-context-lifecycle-binding/README.md) |
 | Evidence sealing/scanning/minimisation | [SAC RP-05](../shared-agent-context-secure-evidence/README.md) (future) | Slate v1 calls existing `detectSecrets`/`detectPii` as an interim gate |
 | Execution identity / continuous authorization | [SAC RP-06](../shared-agent-context-identity-capabilities/README.md) (future) | Slate v1 reuses the existing `unattended-untrusted` harness profile as an interim gate |
 | TTL reservations / "in review by" signal | [SAC RP-08](../shared-agent-context-collaboration-worktrees/README.md) (future) | Slate v1 catch-up (SLATE-10) does not build its own reservation mechanism |
@@ -62,7 +62,13 @@ AC-1 already states for Anchors. No code path may special-case fork to carry
 | SLATE-12 | Interim evidence scan | Call `detectSecrets`/`detectPii` (`src/security/detect/*`) on evidence before persistence in `proposal-lifecycle.ts`/`session-wrap-up.ts`; replace the hardcoded `security.gate: "pass"` (`proposal-lifecycle.ts:59`) with a real scan result. **Bundled SAC fix, not slate-exclusive** — this is a defect in today's `keryx workspace propose --session` regardless of slate |
 | SLATE-13 | General-purpose proposal listing | Expose SLATE-10's `listProposedProposals`/`listVisibleProposedProposals` helpers as a standalone `keryx workspace list-proposals [<workspace-id>]` command, independent of catch-up. **Cross-package requirement** (see `docs/requirements/sac-workspace-lifecycle/` WSL-2): `listVisibleProposedProposals` must enumerate workspaces via a variant of `list()` that never applies an archived-status filter — pending-proposal discovery is a safety property, not a declutter default; archival must never silently remove a pending proposal from this or SLATE-10's discovery path |
 | SLATE-14 | Correct misleading self-accept comment | Fix or remove the "Local CLI/stdin MCP composition ... can never self-accept" comment in `createLocalProposalLifecycleService` (`src/sac/proposal-lifecycle.ts`) — it describes a composition the real CLI/MCP handlers (`src/commands/workspace.ts`, `src/mcp/tools.ts`) never actually use, so it misrepresents a real protection that isn't there |
-| SLATE-15 | Explicit `/goal` trigger | New `/goal <text> [--workspace <id>]` shell command (deterministic alternative to `isActionRequest`): opens slate immediately, validates `--workspace <id>` visibility via existing `WorkspaceService` role-check and sets `slate.workspaceId` if given, never auto-creates a workspace when omitted. Mirrored as `keryx harness run --goal "<text>" --workspace <id> [--unattended]` CLI flags for scheduled/unattended invocations, composing with SLATE-8's needed `--unattended` flag |
+| SLATE-15 | Explicit `/goal` trigger | New `/goal <text> [--workspace <id>]` shell command (deterministic alternative to `isActionRequest`): opens slate immediately, validates `--workspace <id>` visibility via existing `WorkspaceService` role-check and sets `slate.workspaceId` if given. **Superseded by SLATE-16 for the omitted-`--workspace` case** (see below) — `/goal` without `--workspace` no longer leaves `workspaceId` unset; it triggers SLATE-16's resolve-or-create instead. Mirrored as `keryx harness run --goal "<text>" --workspace <id> [--unattended]` CLI flags for scheduled/unattended invocations, composing with SLATE-8's needed `--unattended` flag |
+| SLATE-16 | Workspace resolve-or-create (v2) | New procedure, called from (a) flow creation, (b) slate-open without an explicit `--workspace` (default action-intent trigger or bare `/goal`). Calls `workspace_list` (SLATE-19), lets the model judge topic match against existing titles/components (no new similarity/embedding service — same tool-calling judgment pattern as `ask_user`/`spawn_subagent`). Match → binds existing id. No match → `workspace_create` (SLATE-19) → binds new id. Writes `flow.workspaceId` (new optional field on the flow record) when a flow exists, else `slate.workspaceId` directly (same field SLATE-1 already defines) |
+| SLATE-17 | Mid-session re-evaluation (v2) | The existing "unrelated new question = new slate" close-trigger heuristic (SLATE-5) additionally re-runs SLATE-16 when it fires without `/clear`/`/new` — not a new detection mechanism, an extra effect on an existing one |
+| SLATE-18 | Autonomous wrap-up dispatch (v2) | SLATE-7's existing triggers unchanged; the wrap-up composer itself calls `workspace_propose` (SLATE-19) at a propose-worthy moment when `workspaceId` is bound, instead of waiting for a separate human command |
+| SLATE-19 | Cross-runtime agent-tool parity (v2) | Four new keryx-shell interactive tools in `src/commands/interactive-agent-tools.ts`, mirroring the existing MCP `sac.*` set, `risk: "read"` (same tier as `slate_write_seed` — draft/discovery, self-accept structurally impossible): `workspace_create` `{title, component?}`, `workspace_list` `{includeArchived?}`, `workspace_show` `{workspaceId}`, `workspace_propose` `{workspaceId, kind, sessionId?, note?}` (`sessionId` defaults to the current session). `workspace_review` is added to none of CLI/MCP/keryx-shell as an agent tool |
+| SLATE-20 | Review confirm-token (v2) | New `keryx workspace confirm-review <workspace-id> <proposal-id>` prints a short-lived (2 min), single-use token — requires a real terminal or an approval-gated `shell_exec`. `decision: "accepted"` on both the CLI `workspace review` handler (`src/commands/workspace.ts`) and the MCP `sac.review` handler (`src/mcp/tools.ts`) requires this token as an additional parameter; `"rejected"`/`"dismissed"` do not (they promote nothing) |
+| SLATE-21 | Finish SLATE-7's machine evidence (gap, not new design) | `resolveSessionWrapUp` (`src/sac/session-wrap-up.ts`) is replaced/wrapped so the evidence candidate is built from `anchors.touched` + git diff on those paths + `course.flowRef`/flow status + `seeds[]` as the primary text; `exportSessionMarkdown`'s full transcript is retained as a linked reference attachment, not the sole or embedded evidence |
 
 ## Anchors / Course / Seeds semantics
 
@@ -114,19 +120,33 @@ nicety.** SLATE-7's wrap-up composer calls `workspace propose
 <workspace-id>` — nothing in `Course.flowRef` resolves to a workspace id
 today (no reverse lookup from flow to the workspace(s) that reference it as
 a resource exists in `WorkspaceService`, and such a lookup would be
-ambiguous — a flow can be referenced by zero or several workspaces). Set
+ambiguous — a flow can be referenced by zero or several workspaces, and
+SLATE-16 does not change that: the new `flow.workspaceId` field is a
+forward reference the flow itself carries, not a reverse index).
+
+**v1 behavior (still valid as a path, no longer the only one):** set
 `slate.workspaceId` the first time any `workspace_overview`/`workspace_read`/
 `slate_read` consult succeeds with an explicit id during the slate's life,
-**or explicitly via `/goal --workspace <id>` (SLATE-15) at slate-open time**.
-No other trigger exists — absent one of these two paths, nothing initiates a
-consult on its own, and an ordinary task that never names a workspace in
-conversation leaves `workspaceId` unset for the entire session (the id
-itself is still human-supplied — slate v1 does not solve automatic binding,
-see RP-03 in Non-goals — slate only *captures and persists* what was already
-explicitly supplied, instead of losing it by the time wrap-up runs). If
-`workspaceId` is still unset when wrap-up fires (most likely in unattended
-mode without a `/goal --workspace`/`--workspace` flag), `propose` cannot be
-attempted — the machine-collected
+or explicitly via `/goal --workspace <id>` (SLATE-15) at slate-open time.
+
+**v2 (SLATE-16, supersedes the "human-supplied only" framing below):** when
+neither of the above already bound an id, slate-open (default action-intent
+trigger, or `/goal` without `--workspace`) and flow-creation both trigger
+SLATE-16's resolve-or-create instead of leaving `workspaceId` unset — the id
+is no longer required to be human-supplied; the agent may resolve an
+existing match (via `workspace_list` + its own judgment) or create a new
+workspace via `workspace_create` (SLATE-19) and bind that. The v1 text this
+replaces read: *"the id itself is still human-supplied — slate v1 does not
+solve automatic binding, see RP-03 in Non-goals — slate only captures and
+persists what was already explicitly supplied"* — that constraint is
+explicitly lifted in v2, by a documented user decision (see PRD's Problem v2
+addendum), not by an implementation drift; RP-03's Non-goal reference is
+correspondingly narrowed in README.md to the subset SLATE-16 does not cover.
+
+If `workspaceId` is still unset when wrap-up fires — now only reachable if
+SLATE-16's resolve-or-create itself failed (e.g. `workspace_create` denied,
+no credential for the model judgment call) — `propose` cannot be attempted:
+the machine-collected
 evidence and summary are still preserved as a local-only artifact (written
 under the session's `slate-archive/`, never inside a `.metaproject/workspaces/`
 that doesn't apply here) rather than silently discarded, and surface at the
@@ -225,6 +245,28 @@ keryx workspace catch-up [--workspace <id>]
 (new; SLATE-10 — pull-based, no push/webhook infrastructure exists natively
 in keryx, none is added here.)
 
+**v2 (SLATE-20):**
+```text
+keryx workspace confirm-review <workspace-id> <proposal-id>
+```
+Prints a short-lived (2 min), single-use token to stdout — nothing else.
+Takes no `--decision`; it does not itself review anything, only mints the
+token `workspace review --decision accepted` (and `sac.review` with
+`decision: "accepted"`) then requires as an additional parameter.
+
+**v2 (SLATE-19) — new keryx-shell interactive agent tools**, mirrored in
+`src/commands/interactive-agent-tools.ts`'s `buildInteractiveAgentTools`,
+`risk: "read"`:
+```text
+workspace_create  { title: string, component?: string }
+workspace_list    { includeArchived?: boolean }
+workspace_show    { workspaceId: string }
+workspace_propose { workspaceId: string, kind: ProposalKind, sessionId?: string, note?: string }
+```
+`workspace_propose`'s `sessionId` defaults to the calling session's own id
+when omitted — SLATE-18 needs the composer to propose without re-supplying
+an id it already knows. No `workspace_review` tool is added anywhere.
+
 ## Permission model and security invariants
 
 Slate introduces no new `ActorContext`, no new role, no new write authority.
@@ -271,6 +313,29 @@ SLATE-12 wires the already-existing `detectSecrets`/`detectPii` into the
 evidence path before persistence — an interim measure pending [SAC RP-05](../shared-agent-context-secure-evidence/README.md),
 which owns the full sealed/scanned/schema-closed evidence model.
 
+**v2 (SLATE-20) closes the specific self-accept gap described above, for the
+`decision: "accepted"` path only.** `keryx workspace confirm-review
+<workspace-id> <proposal-id>` mints a token (2 min TTL, single-use, bound to
+that exact `workspaceId`+`proposalId` pair) that both the CLI `workspace
+review` handler and the MCP `sac.review` handler must additionally validate
+before honoring `decision: "accepted"`; `"rejected"`/`"dismissed"` are
+unaffected (they accept/promote nothing, so the self-accept concern does not
+apply to them). Minting the token itself requires either a real terminal
+(the command reads/writes nothing that a headless MCP stdio process can
+reach on its own) or a `shell_exec` call that already goes through the
+existing approval gate — so a caller with *only* MCP tool access (no shell)
+cannot mint one at all, and a caller that also has `shell_exec` still needs
+a human to approve that specific call, same as any other mutating command.
+This is a real, verifiable barrier, not a renamed `interactive: true` flag:
+unlike `interactive`, which is set once per session and trusted for the
+whole session, the token is minted per-proposal, expires quickly, and is
+consumed on first use — replaying an old approval, or a session that was
+`interactive: true` at session-start but has since gone unattended, no
+longer suffices. [SAC RP-06](../shared-agent-context-identity-capabilities/README.md)
+remains the eventual proper replacement for OS-UID-only identity; SLATE-20
+is a smaller, concrete interim measure that does not block on RP-06 landing
+and does not claim to solve execution identity in general.
+
 ## Integrations and dependencies
 
 - `src/session/*`: sessionDir, atomic write patterns — slate's storage
@@ -303,8 +368,19 @@ which owns the full sealed/scanned/schema-closed evidence model.
   structured terminal-state pattern reused for SLATE-11.
 - `src/commands/agent.ts` `isActionRequest`: SLATE-5's open/close classifier,
   extended not replaced.
+- `src/commands/workspace.ts`, `src/mcp/tools.ts`, `src/sac/workspace-service.ts`:
+  **v2** — `propose`/`review`/`create`/`list`/`show` handlers SLATE-16/18/19/20
+  extend directly; `localWorkspaceAuthorizationServer`'s OS-UID-only subject
+  resolution is where SLATE-20's token check is added, not a new module.
+- `src/flow/*`: **v2** — SLATE-16 adds an optional `workspaceId` field to the
+  flow record; native Flow commands remain the sole work-state channel
+  otherwise, unchanged.
 - **Explicitly not integrated with (see Non-goals in README.md):**
-  [SAC RP-03](../shared-agent-context-lifecycle-binding/README.md),
+  [SAC RP-03](../shared-agent-context-lifecycle-binding/README.md) — **v1
+  scope only** (session↔workspace↔Flow binding is now SLATE-16…19, not
+  RP-03; RP-03 retains `keryx shell --workspace <id>` explicit selection,
+  `--session current` resolution, Flow/worktree derivation preview, and
+  accepted-target link-back, none of which v2 touches),
   [RP-05](../shared-agent-context-secure-evidence/README.md),
   [RP-06](../shared-agent-context-identity-capabilities/README.md),
   [RP-08](../shared-agent-context-collaboration-worktrees/README.md) — slate
@@ -375,11 +451,14 @@ which owns the full sealed/scanned/schema-closed evidence model.
   no cross-project aggregation exists in v1, and this is a stated scope
   boundary (see Functional surface, SLATE-10), not an oversight.
 - **AC-15:** A wrap-up composer invocation never attempts `workspace
-  propose` without a `workspaceId` captured earlier in the slate's life; when
-  none was captured, the composer still writes its machine-collected
-  evidence and summary to a local artifact (never discarded, never silently
-  attempted against a guessed/default workspace id) and that artifact is
-  visible at the next `workspace catch-up` as `unbound-candidate`.
+  propose` without a `workspaceId` captured earlier in the slate's life —
+  via v1's explicit-consult/`/goal --workspace` paths, **or v2's SLATE-16
+  resolve-or-create** (an id it captured is captured, regardless of which
+  path bound it); when none was captured (SLATE-16 itself failed or was
+  never reached), the composer still writes its machine-collected evidence
+  and summary to a local artifact (never discarded, never silently attempted
+  against a guessed/default workspace id) and that artifact is visible at
+  the next `workspace catch-up` as `unbound-candidate`.
 - **AC-16:** `keryx workspace list-proposals [<workspace-id>]` returns every
   non-terminal proposal visible to the calling actor's role, without
   requiring the caller to already know a proposal id — usable standalone,
@@ -391,8 +470,13 @@ which owns the full sealed/scanned/schema-closed evidence model.
   tools.ts` actually invoke.
 - **AC-18:** `/goal --workspace <id>` rejects an invalid or actor-invisible
   workspace id explicitly (fail closed, no silent unbound fallback) rather
-  than opening a slate that only discovers the problem at wrap-up; `/goal`
-  without `--workspace` never creates a workspace on the agent's behalf.
+  than opening a slate that only discovers the problem at wrap-up.
+  **Superseded (v2):** this AC's original second clause read *"`/goal`
+  without `--workspace` never creates a workspace on the agent's behalf"* —
+  that is no longer true by design: `/goal` without `--workspace` now
+  triggers SLATE-16's resolve-or-create, which may create one. The first
+  clause (explicit `--workspace <id>` still fails closed on an invalid id)
+  is unchanged and still holds.
 - **AC-19:** A one-shot `keryx harness run`/`--goal` invocation with no Flow
   ever bound and no explicit human "done" command still reaches wrap-up on
   natural process termination; this trigger is never available to a `keryx
@@ -418,3 +502,61 @@ which owns the full sealed/scanned/schema-closed evidence model.
   `text` fields are identical after trimming whitespace; near-duplicate
   detection is explicitly deferred, not silently attempted with an
   unspecified threshold.
+
+### v2 acceptance criteria (SLATE-16…20)
+
+- **AC-24:** SLATE-16's resolve-or-create never binds a workspace id without
+  a preceding `workspace_list` tool call in the same decision — no code path
+  may bind an id the model asserted without evidence of having listed
+  existing workspaces first.
+- **AC-25:** SLATE-16 fires at exactly two points — flow creation, and
+  slate-open without an already-bound `workspaceId` (default action-intent
+  trigger or bare `/goal`) — and nowhere else; a slate that already has
+  `workspaceId` set (v1 explicit-consult, `/goal --workspace`, or an earlier
+  SLATE-16 run this session) is not re-resolved merely because a new turn
+  started.
+- **AC-26:** SLATE-17's mid-session re-evaluation only fires at the same
+  point SLATE-5's existing close-trigger heuristic already fires (unrelated
+  new question, no `/clear`); it introduces no new topic-shift detector of
+  its own.
+- **AC-27:** SLATE-18's autonomous `workspace_propose` call never fires
+  without SLATE-7's existing trigger conditions (flow complete / explicit
+  human command / one-shot process termination) also having fired — SLATE-18
+  changes *who* calls `propose` at those triggers, not *when* wrap-up is
+  triggered.
+- **AC-28:** `workspace_create`, `workspace_list`, `workspace_show`,
+  `workspace_propose` are reachable from keryx-shell's interactive agent
+  without `shell_exec` and without any human approval prompt (`risk: "read"`
+  auto-allows, matching `slate_write_seed`'s existing tier) — and produce
+  outcomes visible to `keryx workspace list`/`keryx workspace show`
+  afterward identical to the CLI-driven equivalent (same records, same
+  `WorkspaceService` writes, no shadow state).
+- **AC-29:** No agent tool named `workspace_review` (or equivalent) exists in
+  keryx-shell's interactive tool set or in the MCP `sac.*` set; `decision:
+  "accepted"` is reachable only through the CLI `workspace review` command
+  and the MCP `sac.review` tool, both gated by AC-30.
+- **AC-30:** `keryx workspace review --decision accepted` and MCP
+  `sac.review` with `decision: "accepted"` both fail with a typed
+  `token_required`/`token_invalid` result — never silently proceed — when no
+  valid, unexpired, unused confirm-token for that exact `(workspaceId,
+  proposalId)` pair is supplied. A token is single-use: replaying the same
+  token against the same or a different proposal after one successful accept
+  fails the same way. `decision: "rejected"`/`"dismissed"` require no token.
+- **AC-31:** `keryx workspace confirm-review <workspace-id> <proposal-id>`
+  itself is `risk: "shell"` when reached via `shell_exec` (subject to the
+  existing approval gate, never auto-allowed) and is not exposed as any
+  agent-native tool (MCP or keryx-shell) — the only path to mint a token is
+  a real terminal invocation or an approved `shell_exec`.
+- **AC-32:** No subagent (dispatched via `spawn_subagent`) resolves, creates,
+  reads, or proposes into a workspace, whether directly or through
+  `workspace_list`/`workspace_create`/`workspace_show`/`workspace_propose` —
+  those four tools are present only in the parent's own tool set, never
+  threaded into a child's ephemeral tool list (`spawn-subagent-tool.ts`'s
+  `read_only`/`general` mode tool construction). Unchanged from AC-3/AC-9's
+  existing "subagent never proposes/completes on its own" invariant, restated
+  for the four new tools specifically.
+- **AC-33:** Every proposal produced by the wrap-up path has zero
+  `session-evidence/*.md` full-archive content embedded in its primary
+  evidence text — evidence is git-diff/flow-snapshot/seed-derived, matching
+  AC-5's original intent — with the full transcript export still reachable
+  as a separate linked reference, not deleted and not the primary candidate.

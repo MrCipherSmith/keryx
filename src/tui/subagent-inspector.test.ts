@@ -118,6 +118,33 @@ test("AC2: paintSubagentSidebar rows fire onOpen on mouse down", () => {
   expect(opened).toEqual(["sub:1"]);
 });
 
+test("review finding: a bulk clear() while the inspector is open repaints the gone-state, not frozen stale content", () => {
+  const store = new SubagentSessionStore();
+  store.apply({ kind: "upsert", id: "sub:1", label: "one", status: "running", task: "go" });
+  let workBody: { content: string } | undefined;
+  const openModal: OpenModalFn = (_otui, _chrome, input) => {
+    input.renderTab("work", {
+      add: (child: { content: string }) => {
+        workBody = child;
+      },
+    });
+    return { close: () => {}, setTab: () => {}, activeTab: () => "work" };
+  };
+  presentSubagentInspector(
+    openModal,
+    { TextRenderable: class { content = ""; constructor(_r: unknown, opts: { content: string }) { this.content = opts.content; } } },
+    { renderer: {} },
+    { store, id: "sub:1" },
+  );
+  expect(workBody?.content).toContain("go");
+
+  // /clear or a new turn wipes the whole sidebar (wildcard id "*") while
+  // this inspector is still open on a subagent that no longer exists.
+  store.clear();
+
+  expect(workBody?.content).toBe("Subagent is gone.");
+});
+
 test("AC2/AC6: tui-shell wires inspector through openModal, no private overlay", () => {
   const hostImport = /from\s*["']\.\/subagent-inspector["']/;
   const tui = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");

@@ -50,6 +50,72 @@ export type SubagentMode = "read_only" | "general";
 const MAX_CHILD_SUMMARY_CHARS = 16_000;
 
 /**
+ * Total unique tool-call pool shared by every child spawned from ONE parent
+ * turn (the ledger is reset at each new turn — see `resetLedger` below). Was a
+ * SHELL-SESSION-lifetime pool (never reset except on a model switch) sized at
+ * 48 — a real session running several rounds of `spawn_subagent` (e.g. "verify
+ * these 4 findings, one subagent each") drained it permanently: a child that
+ * burned its whole reservation on failed lookups (no graph index, a wrong
+ * file path, …) returned little to `release()`, so subagents dispatched later
+ * in the SAME turn — let alone a later turn — started with whatever scraps
+ * were left. Now scoped per turn, it can afford to be generous.
+ */
+export const DEFAULT_SUBAGENT_LEDGER_TOOL_CALLS = 96;
+
+/** Env override for {@link DEFAULT_SUBAGENT_LEDGER_TOOL_CALLS} (positive integer). */
+export const ENV_SUBAGENT_LEDGER_MAX_TOOL_CALLS = "KERYX_SUBAGENT_LEDGER_MAX_TOOL_CALLS";
+
+/** Hard ceiling when env requests an extreme value (runaway guard). */
+export const MAX_SUBAGENT_LEDGER_TOOL_CALLS = 512;
+
+/**
+ * Parse an integer env var; `undefined` when unset, blank, or non-finite.
+ * Shared by every `resolveSubagent*` env-override resolver below — each
+ * still owns its own validity floor/clamp/fallback, since those genuinely
+ * differ (e.g. the timeout resolver treats `0` as a valid "disabled").
+ */
+function parseIntEnvVar(env: Record<string, string | undefined>, key: string): number | undefined {
+  const raw = env[key];
+  if (raw === undefined || raw.trim().length === 0) {
+    return undefined;
+  }
+  const n = Number.parseInt(raw.trim(), 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Resolve the per-turn child-ledger tool-call pool; unset/invalid env → default. */
+export function resolveSubagentLedgerMaxToolCalls(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_LEDGER_MAX_TOOL_CALLS);
+  if (n === undefined || n < 1) {
+    return DEFAULT_SUBAGENT_LEDGER_TOOL_CALLS;
+  }
+  return Math.min(n, MAX_SUBAGENT_LEDGER_TOOL_CALLS);
+}
+
+/**
+ * Total wall-clock pool (ms) shared across every child spawned from one
+ * parent turn. Was 15 minutes for the whole shell session; at 5 min/child
+ * (the per-spawn reservation below) that admitted only 3 concurrent-ish
+ * children before the runtime dimension denied further spawns regardless of
+ * remaining tool-call budget. Reset per turn like the pool above.
+ */
+export const DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS = 30 * 60_000;
+
+/**
+ * Per-child unique tool-call budget when the model's `spawn_subagent` call
+ * omits `max_tool_calls`. Was 6 — tight enough that a child which tries one
+ * graph lookup, gets nothing back, and retries a slightly different query
+ * (2 distinct signatures × up to 3 attempts each) can exhaust it before doing
+ * any real work.
+ */
+export const DEFAULT_SUBAGENT_MAX_TOOL_CALLS = 10;
+
+/** Per-child hard cap even when the model explicitly asks for more. */
+export const MAX_SUBAGENT_MAX_TOOL_CALLS = 24;
+
+/**
  * Env override for the child wall-clock deadline, in ms. The effective deadline
  * is the SMALLER of this and the granted reservation, so an operator can tighten
  * it but never widen it past what MAE reserved. `0` disables it.
@@ -61,12 +127,8 @@ export function resolveSubagentTimeoutMs(
   reservationMs: number,
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const raw = env[ENV_SUBAGENT_TIMEOUT_MS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return reservationMs;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 0) {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_TIMEOUT_MS);
+  if (n === undefined || n < 0) {
     return reservationMs;
   }
   if (n === 0) {
@@ -127,6 +189,22 @@ export interface SpawnSubagentToolDeps {
    * map to fold into.
    */
   getSlateSession?: () => SlateSessionRef | undefined;
+  /**
+   * Called once, synchronously, during `createSpawnSubagentTool()` with a
+   * `resetBudget` callback the caller can invoke at the start of every new
+   * PARENT turn. Without this the child-tool-call/runtime ledger below was a
+   * single pool for the whole `keryx shell` PROCESS (only ever rebuilt on a
+   * `/model` switch) — a long session draining it in early turns left later
+   * turns' `spawn_subagent` calls fighting over whatever `release()` happened
+   * to refund. `resetBudget()` swaps in a fresh ledger with the same limits;
+   * children already in flight keep their already-granted reservation (the
+   * old ledger object they hold a reference to is simply discarded, never
+   * mutated), so a reset mid-turn cannot retroactively shrink or lose an
+   * outstanding grant. Optional: an omitted hook (tests, or a call site that
+   * predates this) leaves the pre-existing whole-session-lifetime behavior
+   * unchanged.
+   */
+  onLedgerReady?: (controls: { resetBudget: () => void }) => void;
 }
 
 function sha256(text: string): string {
@@ -146,17 +224,29 @@ const childReadOnlyPolicy = shellChildReadOnlyProfile;
 
 /**
  * Create the `spawn_subagent` tool bound to a live shell host.
- * One ledger is shared across all spawns for this tool instance (one shell run).
+ *
+ * The child ledger (tool-call + runtime pool shared by every spawn) is
+ * PER-TURN, not per-tool-instance: `deps.onLedgerReady` (when supplied) hands
+ * the caller a `resetBudget()` closure to call at each new parent turn, so a
+ * turn that spawns several subagents is never constrained by what earlier
+ * turns already spent. A caller that never invokes it keeps a single pool for
+ * the tool instance's whole lifetime, same as before.
  */
 export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): InteractiveTool {
   const idSeq = deps.idSeq ?? (() => randomUUID());
   const clock = deps.clock ?? (() => new Date().toISOString());
   const parentRunId = deps.parentRunId ?? idSeq();
   const parentSessionId = deps.parentSessionId ?? idSeq();
-  const ledger = new RemainingBudgetLedger(
-    { maxRuntimeMs: 15 * 60_000, maxToolCalls: 48 },
-    { maxChildren: DEFAULT_MAX_CHILDREN },
-  );
+  const ledgerLimits = {
+    maxRuntimeMs: DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+    maxToolCalls: resolveSubagentLedgerMaxToolCalls(),
+  };
+  let ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: DEFAULT_MAX_CHILDREN });
+  deps.onLedgerReady?.({
+    resetBudget: () => {
+      ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: DEFAULT_MAX_CHILDREN });
+    },
+  });
   const parentProvenance: Provenance = {
     provenanceId: idSeq(),
     trustLevel: "trusted",
@@ -195,8 +285,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
       const mode: SubagentMode = input.mode === "general" ? "general" : "read_only";
       const maxToolCalls =
         typeof input.max_tool_calls === "number" && input.max_tool_calls > 0
-          ? Math.min(16, Math.floor(input.max_tool_calls))
-          : 6;
+          ? Math.min(MAX_SUBAGENT_MAX_TOOL_CALLS, Math.floor(input.max_tool_calls))
+          : DEFAULT_SUBAGENT_MAX_TOOL_CALLS;
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
       const workerId = `sub:${idSeq()}`;
@@ -419,6 +509,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
+          `You have a budget of ${spawned.reservation.maxToolCalls ?? maxToolCalls} unique tool calls ` +
+          "for this whole task — an identical call repeated is NOT a new attempt, so do not retry " +
+          "the same query hoping for a different answer. If a graph/symbol/wiki lookup returns " +
+          "empty or 'not found', that tool has no index for this — do not re-run it with a slightly " +
+          "reworded query; switch tool (e.g. a direct file read or a plain text/code search) or " +
+          "report the gap instead of spending the budget probing the same dead end. " +
           "End with a short factual summary the parent can use.",
         idSeq: () => idSeq(),
         maxToolCalls: spawned.reservation.maxToolCalls ?? maxToolCalls,
@@ -707,7 +803,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         const userLine =
           `## Subagent task (${mode})\n` +
           `${task}\n\n` +
-          `Return a concise summary of findings and any recommended next steps for the parent agent.`;
+          `Project root: ${deps.cwd}\n` +
+          `Tool budget: ${spawned.reservation.maxToolCalls ?? maxToolCalls} unique calls — plan which tools ` +
+          "to try before spending them; prefer a direct, targeted lookup (exact file path, exact symbol) " +
+          "over a broad/guessed one, and fall back to a different tool rather than repeating a failed call.\n\n" +
+          "Return a concise summary of findings and any recommended next steps for the parent agent.";
         const turn = runAgentTurn(io, childDeps, history, userLine, { signal: childAbort.signal });
         if (deadlineMs > 0) {
           let timer: ReturnType<typeof setTimeout> | undefined;

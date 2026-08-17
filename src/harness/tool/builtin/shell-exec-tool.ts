@@ -369,7 +369,11 @@ export function shellExecTool(root: string, run: CommandRunner = makeCommandRunn
     definition: {
       name: "shell_exec",
       description:
-        "Run a shell command in the project root (e.g. `git status`, `bun test`). Requires the user's approval before it runs. Input: { command: string }.",
+        "Run a shell command in the project root (e.g. `git status`, `bun test`). Requires the user's approval " +
+        "before it runs. Input: { command: string }. Combined stdout+stderr is CAPPED at 20,000 bytes from the " +
+        "start of output — do not use sed/grep/cat/awk here to locate code (they can silently truncate before " +
+        "reaching what you need, and repeating the command returns the same truncated head); use search_code or " +
+        "graph_symbol instead, which are built for that and stay within the cap.",
       inputSchema: {
         type: "object",
         properties: { command: { type: "string" } },
