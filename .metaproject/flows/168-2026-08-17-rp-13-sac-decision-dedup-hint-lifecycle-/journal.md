@@ -8,3 +8,16 @@
 - 2026-08-17T18:58:49.417Z - task-done: T1: Collect remaining context
 - 2026-08-17T19:17:06.124Z - task-done: T5: FR1+FR2: dedup/conflict hint + judge annotation at review time
 - 2026-08-17T19:49:37.588Z - task-done: T6: FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)
+- 2026-08-17T20:00:38.534Z - ac-confirmed: AC1
+- 2026-08-17T20:00:38.627Z - ac-confirmed: AC2
+- 2026-08-17T20:00:38.717Z - ac-confirmed: AC3
+- 2026-08-17T20:00:38.808Z - ac-confirmed: AC4
+- 2026-08-17T20:00:38.919Z - ac-confirmed: AC5
+- 2026-08-17T20:00:39.035Z - ac-confirmed: AC6
+- 2026-08-17T20:00:39.145Z - ac-confirmed: AC7
+- 2026-08-17T20:00:45.352Z - task-done: T2: Implement per plan
+- 2026-08-17T20:00:45.433Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-17T20:00:45.511Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-17T20:01:01.915Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/323 (warning: PR is not a draft)
+- 2026-08-17T20:01:07.842Z - completing
+- 2026-08-17T20:01:10.752Z - done: all gates passed
