@@ -5,7 +5,7 @@
   "title": "Slate v2 (SLATE-16..21): auto workspace binding, cross-runtime tool parity, review confirm-token",
   "status": "in-progress",
   "createdAt": "2026-08-17T10:14:32.884Z",
-  "updatedAt": "2026-08-17T13:20:16.480Z",
+  "updatedAt": "2026-08-17T13:46:56.103Z",
   "source": {
     "type": "description",
     "ref": null
@@ -122,7 +122,7 @@
       "id": "T8",
       "title": "SLATE-16: workspace resolve-or-create",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -130,13 +130,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "SLATE-17: mid-session re-evaluation",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -144,13 +145,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "SLATE-18: autonomous wrap-up dispatch",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -158,7 +160,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -229,6 +232,21 @@
       "at": "2026-08-17T13:20:16.480Z",
       "event": "ac-updated",
       "detail": "AC4 scoped down: flow-creation trigger deferred (no flowRef write path exists yet; user confirmed agent-session-only scope)"
+    },
+    {
+      "at": "2026-08-17T13:35:15.257Z",
+      "event": "task-done",
+      "detail": "T8: SLATE-16: workspace resolve-or-create"
+    },
+    {
+      "at": "2026-08-17T13:35:15.339Z",
+      "event": "task-done",
+      "detail": "T9: SLATE-17: mid-session re-evaluation"
+    },
+    {
+      "at": "2026-08-17T13:46:56.103Z",
+      "event": "task-done",
+      "detail": "T10: SLATE-18: autonomous wrap-up dispatch"
     }
   ]
 }

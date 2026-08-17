@@ -14,3 +14,6 @@
 - 2026-08-17T11:54:59.708Z - task-done: T6: SLATE-21: finish SLATE-7 machine evidence
 - 2026-08-17T12:45:24.850Z - task-done: T7: SLATE-19: cross-runtime agent-tool parity
 - 2026-08-17T13:20:16.480Z - ac-updated: AC4 scoped down: flow-creation trigger deferred (no flowRef write path exists yet; user confirmed agent-session-only scope)
+- 2026-08-17T13:35:15.257Z - task-done: T8: SLATE-16: workspace resolve-or-create
+- 2026-08-17T13:35:15.339Z - task-done: T9: SLATE-17: mid-session re-evaluation
+- 2026-08-17T13:46:56.103Z - task-done: T10: SLATE-18: autonomous wrap-up dispatch
