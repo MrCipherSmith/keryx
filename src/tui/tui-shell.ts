@@ -122,6 +122,15 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
+import type { QueuedMainQuestion } from "./main-queue";
+import {
+  formatMainQueueMarker,
+  parseQueueCommand,
+  removeMainQueueItem,
+  editMainQueueItem,
+  reinsertMainQueueItem,
+} from "./main-queue";
+
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
 import { SubagentSessionStore } from "./subagent-session";
@@ -2321,6 +2330,18 @@ export async function launchTuiAgentShell(opts: {
       displayQuestion: string;
     };
     const sideQueue: QueuedSideQuestion[] = [];
+
+    // QueuedMainQuestion type imported from ./main-queue (pure helpers).
+    let mainQueue: QueuedMainQuestion[] = [];
+    let mainQueueSeq = 0;
+    // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
+    // this item at its original position instead of opening the recipient
+    // selector again (AC5 — edit must preserve position).
+    let pendingQueueEdit: { id: string; at: number } | undefined;
+    // Set by `forceMainQueue` when a turn is in flight: `abort()` only signals
+    // cancellation, it does not synchronously stop the turn, so the item is
+    // handed to the turn's `finally` to run next once it has settled (AC6).
+    let priorityMainQuestion: QueuedMainQuestion | undefined;
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -2338,6 +2359,72 @@ export async function launchTuiAgentShell(opts: {
         status: sideWorkerRunning ? "running" : "queued",
         detail: `queued ×${sideQueue.length}`,
       });
+    };
+
+    let mainQueueBlocks: Array<{ id: string; box: Box }> = [];
+    const paintMainQueue = (): void => {
+      // Remove stale blocks.
+      for (const entry of mainQueueBlocks) {
+        try {
+          transcript.remove(entry.box);
+        } catch {
+          // ignore
+        }
+      }
+      mainQueueBlocks = [];
+      for (let i = 0; i < mainQueue.length; i++) {
+        const item = mainQueue[i];
+        if (item === undefined) continue;
+        const box = appendUserEcho(otui, r, transcript, {
+          id: `mq-${item.id}`,
+          line: `${formatMainQueueMarker(i, mainQueue.length)} ${item.displayQuestion}`,
+          borderColor: getTheme().highlight,
+          marginTop: 0,
+        });
+        mainQueueBlocks.push({ id: item.id, box });
+      }
+      // Fleet/status counter.
+      if (mainQueue.length > 0) {
+        fleet.upsert({ id: "agent:queue", label: "mainQ", status: "queued", detail: `queued \u00d7${mainQueue.length}` });
+      } else {
+        fleet.remove("agent:queue");
+      }
+    };
+
+    const removeMainQueue = (index: number): void => {
+      if (index < 0 || index >= mainQueue.length) return;
+      mainQueue = removeMainQueueItem(mainQueue, index);
+      paintMainQueue();
+    };
+
+    const editMainQueue = (index: number): void => {
+      const edited = editMainQueueItem(mainQueue, index);
+      if (edited === undefined) return;
+      mainQueue = edited.rest;
+      pendingQueueEdit = { id: edited.removed.id, at: index };
+      input.value = edited.text;
+      input.focus();
+      paintMainQueue();
+    };
+
+    const forceMainQueue = (index: number): void => {
+      const item = mainQueue[index];
+      if (item === undefined) return;
+      mainQueue = removeMainQueueItem(mainQueue, index);
+      paintMainQueue();
+      if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
+        // `abort()` only signals cancellation — it does NOT synchronously stop
+        // the turn (`chrome.isBusy()` is still true right after this call), so
+        // running the item here would drop it. Stash it; the main turn's
+        // `finally` below runs it next, ahead of anything already queued.
+        priorityMainQuestion = item;
+        mainTurnAbortController.abort();
+        mainTurnAbortController = undefined;
+        io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
+        return;
+      }
+      // No turn in flight (e.g. forced right as the previous one settled).
+      runLine(item.question);
     };
 
     const clearSideWorkerSlot = (): void => {
@@ -2555,6 +2642,30 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
+        if (command?.name === "/queue") {
+          const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
+          if (parsed === undefined) {
+            io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
+            return;
+          }
+          const index = parsed.position - 1;
+          if (index < 0 || index >= mainQueue.length) {
+            io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
+            return;
+          }
+          if (parsed.action === "remove") {
+            removeMainQueue(index);
+            io.onSystem?.(`◇ removed q${parsed.position} from the main queue.\n`);
+            return;
+          }
+          if (parsed.action === "edit") {
+            editMainQueue(index);
+            io.onSystem?.(`◇ q${parsed.position} moved to the composer — edit and submit to re-queue at the same position.\n`);
+            return;
+          }
+          forceMainQueue(index);
+          return;
+        }
         if (isBusyReadonlyCommand && isSessionInfoCommand(line)) {
           showSessionInfo();
           return;
@@ -2576,13 +2687,48 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
-        appendUserEcho(otui, r, transcript, {
-          id: `side-q${uid++}`,
-          line: displayLine,
-          borderColor: getTheme().side,
-          marginTop: 0,
-        });
-        spawnSideWorker(line, displayLine);
+        // Recipient selector: post the message to the MAIN queue (default) or
+        // the read-only side-1 worker. Shown only while main is busy. `runLine`
+        // is sync, so the async choice is run in a detached IIFE (choice is
+        // synchronous UI; the callback below stays fire-and-forget).
+        // AC5: a pending `/queue edit` re-queues at its ORIGINAL position on
+        // the very next busy submit, skipping the recipient selector entirely
+        // (the item is already committed to the main queue by definition).
+        if (pendingQueueEdit !== undefined) {
+          const edit = pendingQueueEdit;
+          pendingQueueEdit = undefined;
+          mainQueue = reinsertMainQueueItem(mainQueue, edit.at, {
+            id: edit.id,
+            question: line,
+            displayQuestion: displayLine,
+          });
+          paintMainQueue();
+          return;
+        }
+        void (async () => {
+          const chosen = await showComposerChoice(otui, r, chrome.dock, {
+            title: "Main agent is busy",
+            subtitle: line,
+            options: [
+              { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+              { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+            ],
+            cancelId: "side",
+          });
+          if (chosen === "main") {
+            const id = `mq${mainQueueSeq++}`;
+            mainQueue.push({ id, question: line, displayQuestion: displayLine });
+            paintMainQueue();
+          } else {
+            appendUserEcho(otui, r, transcript, {
+              id: `side-q${uid++}`,
+              line: displayLine,
+              borderColor: getTheme().side,
+              marginTop: 0,
+            });
+            spawnSideWorker(line, displayLine);
+          }
+        })();
         return;
       }
 
@@ -2843,6 +2989,12 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
+        if (command.name === "/queue") {
+          // The queue only exists while main is busy (FIFO-drain empties it
+          // the instant a turn frees up), so outside a busy turn it is empty.
+          io.onSystem?.("◇ main queue is empty.\n");
+          return;
+        }
         if (command.name === "/connect" || command.name === "/provider") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
@@ -3097,6 +3249,19 @@ export async function launchTuiAgentShell(opts: {
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
         focusComposer(); // never steal focus from an active block-nav mode (R3)
+        // A forced item (AC6) wins over FIFO order — it is the reason the
+        // turn just settled. Otherwise FIFO-drain the head of the main queue
+        // (AC7), once the current one has fully settled (stopBusy/setMainAgent
+        // already ran).
+        if (priorityMainQuestion !== undefined) {
+          const next = priorityMainQuestion;
+          priorityMainQuestion = undefined;
+          runLine(next.question);
+        } else if (mainQueue.length > 0) {
+          const next = mainQueue.shift();
+          paintMainQueue();
+          if (next !== undefined) runLine(next.question);
+        }
       });
     };
 
