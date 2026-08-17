@@ -313,6 +313,7 @@ otuiTest("/new resets the estimated context counter instead of letting it keep c
   h.mockInput.pressEnter();
   await settle(h);
   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
+  expect(h.captureCharFrame()).not.toContain("a question long enough to move the estimate");
   h.destroy();
 });
 
@@ -396,6 +397,7 @@ test("AC11: composer submissions become ShellIO.lines in order, including while 
   // Session inspector is read-only: it must not cancel, defer, or queue.
   expect(bridge.submit("/status")).toBe("local");
   expect(bridge.submit("/flows")).toBe("local");
+  expect(bridge.submit("/theme")).toBe("local");
   expect(bridge.submit("/session-info")).toBe("deferred");
   expect(bridge.pending()).toBe(2);
 

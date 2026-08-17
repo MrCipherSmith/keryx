@@ -38,6 +38,7 @@ import type { SearchProviderDescriptor, SearchProviderId } from "../harness/sear
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
+import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
 import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
@@ -136,6 +137,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/compact",
   "/status",
   "/flows",
+  "/theme",
   "/exit",
 ];
 
@@ -291,6 +293,22 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           continue;
         }
         system(formatFlowListText(items));
+        continue;
+      }
+      if (command === "/theme") {
+        const wanted = argument.trim();
+        if (wanted.length === 0) {
+          system(formatThemeList(getThemeId()));
+          continue;
+        }
+        const next = parseThemeId(wanted);
+        if (next === undefined) {
+          system(`Unknown theme '${wanted}'.\n${formatThemeList(getThemeId())}`);
+          continue;
+        }
+        applyThemeId(next);
+        persistThemeId(next);
+        system(`Theme: ${themeLabel(next)}\n`);
         continue;
       }
       if (command === "/clear" || command === "/new") {

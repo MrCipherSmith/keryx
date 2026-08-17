@@ -31,6 +31,8 @@ export interface ComposerChoiceRequest {
   cancelId: string;
 }
 
+import { getTheme } from "./theme";
+
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
@@ -105,14 +107,14 @@ export function showComposerChoice(
       showSelectionIndicator: true,
       wrapSelection: true,
       selectedIndex,
-      backgroundColor: "#0f1b1b",
-      focusedBackgroundColor: "#0f1b1b",
-      selectedBackgroundColor: "#22333b",
-      textColor: "#c8d0d0",
-      focusedTextColor: "#c8d0d0",
-      selectedTextColor: "#ffd166",
-      descriptionColor: "#6b7a7a",
-      selectedDescriptionColor: "#8b9a9a",
+      backgroundColor: getTheme().panel,
+      focusedBackgroundColor: getTheme().panel,
+      selectedBackgroundColor: getTheme().highlight,
+      textColor: getTheme().text,
+      focusedTextColor: getTheme().text,
+      selectedTextColor: getTheme().focus,
+      descriptionColor: getTheme().muted,
+      selectedDescriptionColor: getTheme().muted,
       options: options.map((o) => ({
         name: o.displayLabel,
         description: o.description.length > 0 ? o.description : " ",

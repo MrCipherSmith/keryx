@@ -41,7 +41,9 @@ import { saveShellConfig } from "../lib/shell-config";
 import { latestSession } from "../session";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
-import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
+import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
+import { applyThemeId, getThemeId, loadPersistedThemeId, parseThemeId, persistThemeId, themeLabel, formatThemeList } from "./theme";
+import { isThemeCommand, openThemePicker } from "./theme-picker";
 import type { VersionCheckResult } from "../lib/version-check";
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
@@ -82,7 +84,7 @@ export type ChatSubmitResult =
   /** A slash command typed mid-turn: refused rather than raced against it. */
   | "deferred"
   /**
-   * A read-only local command (`/status` or `/flows`). Never queued as a
+   * A local TUI command (`/status`, `/flows`, `/theme`). Never queued as a
    * user turn and never deferred — the caller opens the inspector itself.
    */
   | "local"
@@ -267,7 +269,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         close();
         return "exit";
       }
-      if (isSessionInfoCommand(value) || isFlowsCommand(value)) {
+      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value)) {
         return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
@@ -328,6 +330,16 @@ export async function mountChatShell(
   opts: ChatShellOptions,
 ): Promise<ChatShellHandle> {
   const r = renderer;
+  applyThemeId(loadPersistedThemeId(), r.themeMode);
+  // Review finding: unregistered on destroy, unlike every other renderer-level
+  // subscription in this file — named so `.off()` below can find the same
+  // reference `.on()` registered.
+  const onThemeMode = (mode: "dark" | "light"): void => {
+    if (getThemeId() === "auto") {
+      applyThemeId("auto", mode);
+    }
+  };
+  r.on("theme_mode", onThemeMode);
   let selection: TuiSelection = { ...opts.deps.initial };
   const label = (): string => `${selection.provider}/${selection.model}`;
 
@@ -403,6 +415,10 @@ export async function mountChatShell(
         seen.push({ content: line });
         paintContext();
       } else if (RESET_COMMANDS.has(line.split(/\s+/)[0] ?? "")) {
+        messages.reset();
+        clearTranscriptChildren(transcript);
+        chrome.scroll.scrollTop = 0;
+        chrome.scroll.stickyScroll = true;
         seen.length = 0;
         paintContext();
       }
@@ -478,6 +494,32 @@ export async function mountChatShell(
     if (result === "local") {
       const cwd = opts.deps.session?.cwd;
       const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+      if (isThemeCommand(line)) {
+        const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+        if (arg.length > 0) {
+          const next = parseThemeId(arg);
+          if (next === undefined) {
+            append(otui.t`${otui.dim(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`)}`);
+            return;
+          }
+          applyThemeId(next, r.themeMode);
+          persistThemeId(next);
+          chrome.showToast(`Theme: ${themeLabel(next)}`);
+          return;
+        }
+        openThemePicker(otui, chrome, {
+          current: getThemeId(),
+          mode: r.themeMode,
+          renderer: r,
+          ...keys,
+          onApply: (id) => {
+            applyThemeId(id, r.themeMode);
+            persistThemeId(id);
+            chrome.showToast(`Theme: ${themeLabel(id)}`);
+          },
+        });
+        return;
+      }
       void (async () => {
         const [workspaces, flows] = cwd === undefined
           ? [[], []]
@@ -525,6 +567,7 @@ export async function mountChatShell(
     done,
     destroy: () => {
       bridge.close();
+      r.off("theme_mode", onThemeMode);
       chrome.destroy();
     },
   };

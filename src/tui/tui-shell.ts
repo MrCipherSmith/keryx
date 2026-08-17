@@ -70,6 +70,17 @@ import {
   findAgentCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
+import {
+  applyThemeId,
+  formatThemeList,
+  getTheme,
+  getThemeId,
+  loadPersistedThemeId,
+  parseThemeId,
+  persistThemeId,
+  themeLabel,
+} from "./theme";
+import { openThemePicker } from "./theme-picker";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -118,6 +129,7 @@ import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from
 import type { VersionCheckResult } from "../lib/version-check";
 import {
   appendUserEcho,
+  clearTranscriptChildren,
   createAssistantMessageStream,
   createBlockMount,
   createBlockNavController,
@@ -320,7 +332,12 @@ type StyledContent = string | ReturnType<OpenTui["t"]>;
  * `runAgentTurn` without a real TTY. Pass the reasoning/tool hooks through
  * {@link attachBlockIo} to upgrade those one-liners into retained blocks (AC1).
  */
-export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
+export type TuiAgentIo = AgentIO & {
+  /** Drop an in-flight assistant stream so the next turn starts a new container. */
+  resetStream(): void;
+};
+
+export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): TuiAgentIo {
   let seq = 0;
   const append = (content: StyledContent): void => {
     transcript.add(new otui.TextRenderable(renderer, { id: `n${seq++}`, content }));
@@ -373,6 +390,9 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       append(result.isError ? otui.t`${otui.red(line)}` : otui.t`${otui.dim(line)}`);
     },
     onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
+    resetStream: () => {
+      messages.reset();
+    },
   };
 }
 
@@ -540,7 +560,7 @@ export interface UsageChrome {
  * `runAgentTurn` through the real composition and see both outputs in one frame
  * rather than proving a replica.
  */
-export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
+export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { resetUsage(): void } {
   const base = io.onUsage?.bind(io);
   let totalIn = 0;
   let totalOut = 0;
@@ -555,7 +575,14 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO {
     chrome.setHeaderMeta(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`);
     chrome.setContextTotal(totalIn + totalOut);
   };
-  return io;
+  return Object.assign(io, {
+    resetUsage(): void {
+      totalIn = 0;
+      totalOut = 0;
+      chrome.setHeaderMeta("↑0 ↓0");
+      chrome.setContextTotal(0);
+    },
+  });
 }
 
 /**
@@ -854,7 +881,7 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#0a1414",
+    backgroundColor: getTheme().bg,
     flexDirection: "column",
     padding: 1,
   });
@@ -1368,6 +1395,7 @@ export async function launchTuiAgentShell(opts: {
   if (!process.stdout.isTTY) {
     return false;
   }
+  applyThemeId(loadPersistedThemeId());
   let otui: OpenTui;
   try {
     otui = await import("@opentui/core"); // optional dep; absent → fall back
@@ -1413,10 +1441,21 @@ export async function launchTuiAgentShell(opts: {
         resolveDone();
       },
     }));
+    applyThemeId(getThemeId(), r.themeMode);
+    // Review finding: unregistered on destroy, unlike every other renderer-
+    // level subscription in this file — named so `.off()` at every exit path
+    // below can find the same reference `.on()` registered.
+    const onThemeMode = (mode: "dark" | "light"): void => {
+      if (getThemeId() === "auto") {
+        applyThemeId("auto", mode);
+      }
+    };
+    r.on("theme_mode", onThemeMode);
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
     if (sel === undefined) {
+      r.off("theme_mode", onThemeMode);
       r.destroy();
       return true; // could not select; treat as a clean exit (do not fall back)
     }
@@ -1581,7 +1620,16 @@ export async function launchTuiAgentShell(opts: {
     // Reasoning, tool calls and tool results become addressable blocks that
     // RETAIN their full text (bounded — D-4) instead of discarding it, so they
     // can be expanded in place, navigated with the keyboard and copied.
-    const blocks = createBlockRegistry();
+    const blocks = createBlockRegistry({
+      onEvict: (dropped) => {
+        if (dropped.length === 1) {
+          const kind = dropped[0]?.kind ?? "block";
+          chrome.showToast(`Dropped oldest ${kind} output`);
+          return;
+        }
+        chrome.showToast(`Dropped ${dropped.length} oldest outputs`);
+      },
+    });
     const blockMount = createBlockMount(otui, r, transcript, blocks);
     // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
     // suspension) lives in `transcript-blocks.ts` so it is reachable from a
@@ -1621,7 +1669,7 @@ export async function launchTuiAgentShell(opts: {
       }
       baseWrite(s);
     };
-    attachUsageIo(io, {
+    const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
         sbContext.content = otui.t`${otui.dim(`${total.toLocaleString()} tokens`)}`;
@@ -2122,7 +2170,23 @@ export async function launchTuiAgentShell(opts: {
       }
       flushSessionCheckpoint();
     };
+    const resetSessionSurface = (): void => {
+      nav.exit();
+      chrome.stopBusy();
+      io.resetStream();
+      blockMount.clear();
+      clearTranscriptChildren(transcript);
+      chrome.scroll.scrollTop = 0;
+      chrome.scroll.stickyScroll = true;
+      fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID);
+      setMainAgent("queued", "ready");
+      hasExactUsage = false;
+      lastUsage = undefined;
+      usage.resetUsage();
+    };
+
     const startNewSession = (note?: string): void => {
+      resetSessionSurface();
       liveSession = createSession({
         cwd: sessionCwd,
         provider: currentSel.provider,
@@ -2325,7 +2389,9 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `side-h${uid++}`,
-              content: otui.t`${otui.magenta(`◇ ${sideWorkerLabelText}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
+              content: otui.t`${otui.magenta("──")} ${otui.bold(sideWorkerLabelText)} ${otui.magenta("──")} ${
+                otui.dim(`while main: ${busyPhase}`)
+              }`,
               marginTop: 1,
             }),
           );
@@ -2387,13 +2453,13 @@ export async function launchTuiAgentShell(opts: {
             };
             await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
             const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `side-a${uid++}`,
-                content: otui.t`${otui.magenta("◇")} ${body}`,
-                marginTop: 0,
-              }),
-            );
+            appendUserEcho(otui, r, transcript, {
+              id: `side-a${uid++}`,
+              line: body,
+              marker: "◇",
+              borderColor: getTheme().side,
+              marginTop: 0,
+            });
             fleet.upsert({
               id: SIDE_WORKER_ID,
               label: sideWorkerLabelText,
@@ -2438,6 +2504,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command, while busy).
           void (async () => {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
           return;
@@ -2489,7 +2556,7 @@ export async function launchTuiAgentShell(opts: {
         appendUserEcho(otui, r, transcript, {
           id: `side-q${uid++}`,
           line: displayLine,
-          borderColor: "#5a3a6a",
+          borderColor: getTheme().side,
           marginTop: 0,
         });
         spawnSideWorker(line, displayLine);
@@ -2513,6 +2580,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
           return;
@@ -2675,6 +2743,32 @@ export async function launchTuiAgentShell(opts: {
           if (target === undefined || !copyBlock(target.id)) {
             io.onSystem?.("Nothing to copy yet.\n");
           }
+          return;
+        }
+        if (command.name === "/theme") {
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          if (arg.length > 0) {
+            const next = parseThemeId(arg);
+            if (next === undefined) {
+              io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
+              return;
+            }
+            applyThemeId(next, r.themeMode);
+            persistThemeId(next);
+            chrome.showToast(`Theme: ${themeLabel(next)}`);
+            return;
+          }
+          openThemePicker(otui, chrome, {
+            current: getThemeId(),
+            mode: r.themeMode,
+            renderer: r,
+            ...inspectorKeys,
+            onApply: (id) => {
+              applyThemeId(id, r.themeMode);
+              persistThemeId(id);
+              chrome.showToast(`Theme: ${themeLabel(id)}`);
+            },
+          });
           return;
         }
         if (command.name === "/model") {

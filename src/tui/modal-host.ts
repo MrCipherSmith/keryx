@@ -1,22 +1,33 @@
 // Reusable modal panel + tab strip for the OpenTUI shell (flow 154).
 //
 // Presentation only: callers own tab bodies via `renderTab`. The host registers
-// as a chrome overlay source, paints a dimmed backdrop (not a 100% overlayBox),
-// and replaces an already-open modal on the same renderer instead of stacking.
+// as a chrome overlay source, paints an opaque full-window backdrop with a
+// small inset bordered panel, and replaces an already-open modal on the same
+// renderer instead of stacking. The panel must not sit under a parent
+// `opacity < 1` — OpenTUI multiplies child alpha, which lets the transcript
+// bleed through the modal.
 //
 // The optional renderer package is referenced ONLY structurally, through
 // `typeof import(...)`. There is no top-level import of it (the static guard
 // in `src/capability/no-optional-imports` is a regex over file text).
 import type { ShellChrome } from "./shell-chrome";
+import { getTheme, onThemeChange } from "./theme";
+import { clearTranscriptChildren } from "./transcript-blocks";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
 type Text = InstanceType<OpenTui["TextRenderable"]>;
+type ScrollBox = InstanceType<OpenTui["ScrollBoxRenderable"]>;
 
 export type ModalTab = { id: string; label: string };
 
 export type ModalFooterAction = { key: string; label: string };
+
+export type ModalTabContext = {
+  /** Columns available inside the panel after border + padding. */
+  width: number;
+};
 
 export type OpenModalInput = {
   title: string;
@@ -24,7 +35,7 @@ export type OpenModalInput = {
   initialTab?: string;
   /** Footer key-hints. Default: tab switch + Esc close. */
   footer?: readonly ModalFooterAction[];
-  renderTab: (tabId: string, body: unknown) => void | (() => void);
+  renderTab: (tabId: string, body: unknown, ctx: ModalTabContext) => void | (() => void);
   onClose?: () => void;
 };
 
@@ -56,13 +67,17 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
-const BACKDROP_OPACITY = 0.45;
-/** Fixed panel so tab bodies of different lengths do not resize the chrome. */
-export const MODAL_PANEL_WIDTH = 72;
-export const MODAL_PANEL_HEIGHT = 18;
-/** Inner columns after rounded border + horizontal padding. */
-export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_WIDTH - 4;
+/** Inset between the opaque backdrop edge and the bordered panel. */
+export const MODAL_PANEL_MARGIN = 1;
+/** Border (2) + horizontal padding (2). Subtract from the panel to wrap text. */
+export const MODAL_PANEL_CHROME_X = 4;
+/** Fallback wrap budget before the panel has a measured width. */
+export const MODAL_PANEL_INNER_WIDTH = 68;
 const CLOSE_HINT = "[x] esc";
+
+export function resolveModalInnerWidth(availableWidth: number): number {
+  return Math.max(20, availableWidth - MODAL_PANEL_CHROME_X);
+}
 const DEFAULT_FOOTER: readonly ModalFooterAction[] = [
   { key: "←/→", label: "tabs" },
   { key: "esc", label: "close" },
@@ -81,6 +96,7 @@ type HostState = {
   titleText: Text;
   closeText: Text;
   tabStrip: Box;
+  scroll: ScrollBox;
   body: Box;
   footer: Box;
   footerText: Text;
@@ -94,15 +110,26 @@ type HostState = {
   releaseOverlay: (() => void) | undefined;
   unsubKeys: (() => void) | undefined;
   savedScrollTop: number | undefined;
+  unsubTheme: () => void;
 };
 
 const hosts = new WeakMap<Renderer, HostState>();
 
-function clearChildren(box: Box): void {
-  for (const child of [...box.getChildren()]) {
-    box.remove(child);
-  }
+/**
+ * Review finding: `ensureHost` registers an `onThemeChange` listener once per
+ * renderer, but `hosts` being a `WeakMap` only lets the STATE object itself
+ * be collected — `theme.ts`'s own `listeners` Set is a process-lifetime,
+ * non-weak Set, so the listener closure (holding `state.backdrop`/
+ * `state.panel`) keeps the whole renderer's modal boxes alive forever once
+ * registered. Any caller that creates more than one renderer per process
+ * (every OpenTUI test suite; a relaunched TUI shell within one process) must
+ * call this when tearing its renderer down, or every later `applyThemeId()`
+ * keeps writing onto boxes belonging to renderers nobody can reach anymore.
+ */
+export function destroyModalHost(renderer: Renderer): void {
+  hosts.get(renderer)?.unsubTheme();
 }
+
 
 function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
   if (root === node) {
@@ -127,21 +154,41 @@ function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undef
   return first.id;
 }
 
+function innerWidthOf(state: HostState): number {
+  const panelWidth = state.panel.width;
+  if (typeof panelWidth === "number" && panelWidth > MODAL_PANEL_CHROME_X) {
+    return panelWidth - MODAL_PANEL_CHROME_X;
+  }
+  return resolveModalInnerWidth(state.chrome.renderer.width - MODAL_PANEL_MARGIN * 2);
+}
+
 function paintTabs(state: HostState): void {
-  clearChildren(state.tabStrip);
-  const labels = state.tabs
-    .map((tab) => (tab.id === state.active ? `[${tab.label}]` : ` ${tab.label} `))
-    .join(" ");
-  state.tabStrip.add(
-    new state.otui.TextRenderable(state.chrome.renderer, {
-      id: "modal-tabs",
-      content: state.otui.t`${state.otui.dim(labels)}`,
-    }),
-  );
+  clearTranscriptChildren(state.tabStrip);
+  for (const [index, tab] of state.tabs.entries()) {
+    const active = tab.id === state.active;
+    const label = active ? `[${tab.label}]` : ` ${tab.label} `;
+    const prefix = index === 0 ? "" : " ";
+    state.tabStrip.add(
+      new state.otui.TextRenderable(state.chrome.renderer, {
+        id: `modal-tab-${tab.id}`,
+        content: active
+          ? state.otui.t`${prefix}${state.otui.bold(label)}`
+          : state.otui.t`${prefix}${state.otui.dim(label)}`,
+        onMouseDown: () => {
+          if (!state.open || state.input === undefined || tab.id === state.active) {
+            return;
+          }
+          mountTab(state, state.input, tab.id);
+        },
+      }),
+    );
+  }
 }
 
 function paintHeader(state: HostState, title: string): void {
-  state.titleText.content = state.otui.t`${state.otui.bold(title)}`;
+  const maxTitle = Math.max(8, innerWidthOf(state) - CLOSE_HINT.length - 1);
+  const shown = title.length > maxTitle ? `${title.slice(0, Math.max(1, maxTitle - 1))}…` : title;
+  state.titleText.content = state.otui.t`${state.otui.bold(shown)}`;
   state.closeText.content = state.otui.t`${state.otui.dim(CLOSE_HINT)}`;
 }
 
@@ -156,14 +203,15 @@ function unmountActiveTab(state: HostState): void {
   if (cleanup !== undefined) {
     cleanup();
   }
-  clearChildren(state.body);
+  clearTranscriptChildren(state.body);
+  state.scroll.scrollTop = 0;
 }
 
 function mountTab(state: HostState, input: OpenModalInput, tabId: string): void {
   unmountActiveTab(state);
   state.active = tabId;
   paintTabs(state);
-  const cleanup = input.renderTab(tabId, state.body);
+  const cleanup = input.renderTab(tabId, state.body, { width: innerWidthOf(state) });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
 }
 
@@ -202,25 +250,23 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#000000",
-    opacity: BACKDROP_OPACITY,
+    backgroundColor: getTheme().bg,
     zIndex: 100,
     flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
+    padding: MODAL_PANEL_MARGIN,
     visible: false,
   });
   const panel = new otui.BoxRenderable(r, {
     id: PANEL_ID,
-    width: MODAL_PANEL_WIDTH,
-    height: MODAL_PANEL_HEIGHT,
-    flexShrink: 0,
-    flexGrow: 0,
+    width: "100%",
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 1,
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
-    borderColor: "#3a4a4a",
-    backgroundColor: "#0f1b1b",
+    borderColor: getTheme().border,
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
     zIndex: 101,
@@ -242,6 +288,12 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     id: "modal-close",
     content: "",
     flexShrink: 0,
+    onMouseDown: () => {
+      const current = hosts.get(r);
+      if (current !== undefined && current.open) {
+        closeHost(current, { restoreFocus: true, runOnClose: true });
+      }
+    },
   });
   header.add(titleText);
   header.add(closeText);
@@ -253,13 +305,16 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     flexDirection: "row",
     focusable: true,
   });
-  const body = new otui.BoxRenderable(r, {
-    id: "modal-body",
+  const scroll = new otui.ScrollBoxRenderable(r, {
+    id: "modal-body-scroll",
     width: "100%",
     flexGrow: 1,
-    minHeight: 1,
-    flexDirection: "column",
+    minHeight: 0,
+    scrollY: true,
+    contentOptions: { flexDirection: "column" },
   });
+  const body = scroll.content;
+  body.id = "modal-body";
   const footer = new otui.BoxRenderable(r, {
     id: "modal-footer",
     width: "100%",
@@ -274,7 +329,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   footer.add(footerText);
   panel.add(header);
   panel.add(tabStrip);
-  panel.add(body);
+  panel.add(scroll);
   panel.add(footer);
   backdrop.add(panel);
   r.root.add(backdrop);
@@ -288,6 +343,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     titleText,
     closeText,
     tabStrip,
+    scroll,
     body,
     footer,
     footerText,
@@ -301,6 +357,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     releaseOverlay: undefined,
     unsubKeys: undefined,
     savedScrollTop: undefined,
+    unsubTheme: () => {},
   };
 
   state.releaseOverlay = chrome.addOverlaySource(() => state.open);
@@ -308,14 +365,21 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     if (!state.open || state.input === undefined) {
       return;
     }
-    if (key.name === "escape" || key.name === "x" || key.sequence === "x") {
+    const focused = r.currentFocusedRenderable;
+    const inBody = focused !== null && containsNode(state.scroll, focused);
+    if (key.name === "escape") {
+      closeHost(state, { restoreFocus: true, runOnClose: true });
+      key.preventDefault();
+      key.stopPropagation();
+      return;
+    }
+    if ((key.name === "x" || key.sequence === "x") && !inBody) {
       closeHost(state, { restoreFocus: true, runOnClose: true });
       key.preventDefault();
       key.stopPropagation();
       return;
     }
     const idx = state.tabs.findIndex((tab) => tab.id === state.active);
-    const focused = r.currentFocusedRenderable;
     const onStrip = focused !== null && containsNode(state.tabStrip, focused);
     if (key.name === "left" || (onStrip && key.name === "tab" && key.shift === true)) {
       const prev = idx > 0 ? state.tabs[idx - 1] : undefined;
@@ -336,7 +400,13 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
       return;
     }
     // MT-5: 1…9 jump only when the tab body is not capturing digits.
-    if (focused !== null && containsNode(state.body, focused)) {
+    // Review finding: this used to re-check `state.body` instead of reusing
+    // `inBody` (computed above from `state.scroll`, the same container the
+    // x-close guard uses) — when focus lands on `state.scroll` itself rather
+    // than a descendant of `state.body`, the two checks disagreed: x-close
+    // correctly treated it as "in body" but this one didn't, so a stray
+    // digit keypress jumped tabs instead of being absorbed by the scroll box.
+    if (inBody) {
       return;
     }
     const digit = key.sequence.length === 1 ? key.sequence : key.name;
@@ -351,6 +421,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   });
 
   hosts.set(r, state);
+  state.unsubTheme = onThemeChange((theme) => {
+    state.backdrop.backgroundColor = theme.bg;
+    state.panel.backgroundColor = theme.panel;
+    state.panel.borderColor = theme.border;
+  });
   return state;
 }
 

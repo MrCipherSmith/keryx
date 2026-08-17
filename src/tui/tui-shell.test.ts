@@ -1007,6 +1007,30 @@ otuiTest("AC3: Ctrl+O enters block-nav, ↑/↓ move focus, Enter expands, y cop
   h.destroy();
 });
 
+otuiTest("block-nav ↑ scrolls an off-screen focused block into view", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 10 });
+  const first = h.add({ kind: "output", summary: "FIRST-BLOCK", fullText: "one" });
+  for (let i = 0; i < 12; i++) {
+    h.add({ kind: "output", summary: `later-${i}`, fullText: "x" });
+  }
+  await h.flush();
+  h.scroll.stickyScroll = false;
+  h.scroll.scrollTop = h.scroll.scrollHeight;
+  await h.flush();
+  expect(h.captureCharFrame()).not.toContain("FIRST-BLOCK");
+
+  h.nav.enter();
+  await h.flush();
+  for (let i = 0; i < 12; i++) {
+    h.mockInput.pressArrow("up");
+    await h.flush();
+  }
+  expect(h.registry.focused()?.id).toBe(first);
+  expect(lineWith(h.captureCharFrame(), "FIRST-BLOCK")).toContain("❯");
+  h.destroy();
+});
+
 // --- repaint cost (the flow-109 review finding deferred out of its fix pass) --
 //
 // The finding: `render()` rebuilt the body on EVERY paint and `moveFocus` painted
