@@ -3,9 +3,9 @@
   "id": "167",
   "slug": "tui-busy-input-routing",
   "title": "TUI busy-input routing: main queue + side-1 selector",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-17T10:30:42.555Z",
-  "updatedAt": "2026-08-17T13:14:39.481Z",
+  "updatedAt": "2026-08-17T13:47:16.984Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/317"
   },
   "tasks": [
     {
@@ -333,6 +333,11 @@
       "at": "2026-08-17T13:14:39.481Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-17T13:47:16.984Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)"
     }
   ]
 }

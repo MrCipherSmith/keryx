@@ -27,3 +27,4 @@
 - 2026-08-17T13:12:04.140Z - ac-confirmed: AC7: Unaffected by this session's fix; FIFO drain in the main-turn finally() unchanged except priorityMainQuestion is checked first (AC6 precedence).
 - 2026-08-17T13:12:04.235Z - ac-confirmed: AC9: Side-1 path (sideQueue/spawnSideWorker) untouched by this session's changes; diff shows no lines in that branch modified.
 - 2026-08-17T13:14:39.481Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-17T13:47:16.984Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)
