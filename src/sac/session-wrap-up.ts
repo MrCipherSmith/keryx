@@ -27,9 +27,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { sessionDir } from "../session/paths";
-import { readSlate } from "../session/slate";
-import { findSession, exportSessionMarkdown, TranscriptUnreadableError } from "../session/store";
+import { findSession, exportSessionMarkdown, readSessionSlate, TranscriptUnreadableError } from "../session/store";
 import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./machine-wrap-up";
 import { readCourse } from "../session/slate-course";
 import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
@@ -113,7 +111,7 @@ export async function resolveSessionWrapUp(input: {
   // lenient (undefined, not thrown) for a session that never opened one — an
   // ordinary chat with no Slate engagement still gets a valid, if sparse,
   // wrap-up rather than failing.
-  const slate = await readSlate(sessionDir(input.cwd, summary.id)).catch(() => undefined);
+  const slate = await readSessionSlate(input.cwd, summary.id);
   const diffText = await gitDiff(input.cwd);
   const course = await readCourse(input.cwd, slate?.course.flowRef);
   const seeds = slate ? dedupedAttributedSeeds(slate) : [];
