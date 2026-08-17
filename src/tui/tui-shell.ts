@@ -1442,15 +1442,20 @@ export async function launchTuiAgentShell(opts: {
       },
     }));
     applyThemeId(getThemeId(), r.themeMode);
-    r.on("theme_mode", (mode: "dark" | "light") => {
+    // Review finding: unregistered on destroy, unlike every other renderer-
+    // level subscription in this file — named so `.off()` at every exit path
+    // below can find the same reference `.on()` registered.
+    const onThemeMode = (mode: "dark" | "light"): void => {
       if (getThemeId() === "auto") {
         applyThemeId("auto", mode);
       }
-    });
+    };
+    r.on("theme_mode", onThemeMode);
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
     if (sel === undefined) {
+      r.off("theme_mode", onThemeMode);
       r.destroy();
       return true; // could not select; treat as a clean exit (do not fall back)
     }
@@ -2499,6 +2504,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command, while busy).
           void (async () => {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
           return;
@@ -2574,6 +2580,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
+            r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
           return;

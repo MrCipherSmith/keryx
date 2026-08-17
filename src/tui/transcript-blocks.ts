@@ -1000,13 +1000,31 @@ export function createBlockMount(
   };
 }
 
-/** Remove every child of a transcript box (user echoes, replies, system lines). */
+/**
+ * Remove every child of a transcript box (user echoes, replies, system lines).
+ *
+ * Review finding: this only detached children — unlike `blockMount.clear()`
+ * above, which `.destroy()`s each view instead. A long session that
+ * repeatedly hits `/new` (which calls this on the whole transcript)
+ * accumulated non-destroyed renderables every time. Mirrors
+ * `blockMount.clear()` exactly: when a child supports `.destroy()`, that
+ * alone detaches it (OpenTUI renderables already remove themselves from
+ * their parent on destroy) — calling `parent.remove()` afterward would just
+ * log a harmless "not a child, skipping remove" warning. Only fall back to
+ * an explicit `remove()` for a child with no `.destroy()`, so this stays
+ * usable with plain test doubles that only support removal.
+ */
 export function clearTranscriptChildren<T>(parent: {
   getChildren: () => readonly T[];
   remove: (child: T) => void;
 }): void {
   for (const child of [...parent.getChildren()]) {
-    parent.remove(child);
+    const destroyable = child as { destroy?: () => void } | null | undefined;
+    if (typeof destroyable?.destroy === "function") {
+      destroyable.destroy();
+    } else {
+      parent.remove(child);
+    }
   }
 }
 

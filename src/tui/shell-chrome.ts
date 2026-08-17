@@ -44,6 +44,7 @@
 import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
 import { getTheme, onThemeChange, type Theme } from "./theme";
+import { destroyModalHost } from "./modal-host";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -919,6 +920,7 @@ export async function createShellChrome(
     destroy: () => {
       alive = false;
       unsubTheme();
+      destroyModalHost(r);
       clearBusyTimer();
       clearToastTimer();
       unsubscribeMenuKeys();

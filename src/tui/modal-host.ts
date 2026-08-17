@@ -12,6 +12,7 @@
 // in `src/capability/no-optional-imports` is a regex over file text).
 import type { ShellChrome } from "./shell-chrome";
 import { getTheme, onThemeChange } from "./theme";
+import { clearTranscriptChildren } from "./transcript-blocks";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -109,15 +110,26 @@ type HostState = {
   releaseOverlay: (() => void) | undefined;
   unsubKeys: (() => void) | undefined;
   savedScrollTop: number | undefined;
+  unsubTheme: () => void;
 };
 
 const hosts = new WeakMap<Renderer, HostState>();
 
-function clearChildren(box: Box): void {
-  for (const child of [...box.getChildren()]) {
-    box.remove(child);
-  }
+/**
+ * Review finding: `ensureHost` registers an `onThemeChange` listener once per
+ * renderer, but `hosts` being a `WeakMap` only lets the STATE object itself
+ * be collected — `theme.ts`'s own `listeners` Set is a process-lifetime,
+ * non-weak Set, so the listener closure (holding `state.backdrop`/
+ * `state.panel`) keeps the whole renderer's modal boxes alive forever once
+ * registered. Any caller that creates more than one renderer per process
+ * (every OpenTUI test suite; a relaunched TUI shell within one process) must
+ * call this when tearing its renderer down, or every later `applyThemeId()`
+ * keeps writing onto boxes belonging to renderers nobody can reach anymore.
+ */
+export function destroyModalHost(renderer: Renderer): void {
+  hosts.get(renderer)?.unsubTheme();
 }
+
 
 function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
   if (root === node) {
@@ -151,7 +163,7 @@ function innerWidthOf(state: HostState): number {
 }
 
 function paintTabs(state: HostState): void {
-  clearChildren(state.tabStrip);
+  clearTranscriptChildren(state.tabStrip);
   for (const [index, tab] of state.tabs.entries()) {
     const active = tab.id === state.active;
     const label = active ? `[${tab.label}]` : ` ${tab.label} `;
@@ -191,7 +203,7 @@ function unmountActiveTab(state: HostState): void {
   if (cleanup !== undefined) {
     cleanup();
   }
-  clearChildren(state.body);
+  clearTranscriptChildren(state.body);
   state.scroll.scrollTop = 0;
 }
 
@@ -345,6 +357,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     releaseOverlay: undefined,
     unsubKeys: undefined,
     savedScrollTop: undefined,
+    unsubTheme: () => {},
   };
 
   state.releaseOverlay = chrome.addOverlaySource(() => state.open);
@@ -387,7 +400,13 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
       return;
     }
     // MT-5: 1…9 jump only when the tab body is not capturing digits.
-    if (focused !== null && containsNode(state.body, focused)) {
+    // Review finding: this used to re-check `state.body` instead of reusing
+    // `inBody` (computed above from `state.scroll`, the same container the
+    // x-close guard uses) — when focus lands on `state.scroll` itself rather
+    // than a descendant of `state.body`, the two checks disagreed: x-close
+    // correctly treated it as "in body" but this one didn't, so a stray
+    // digit keypress jumped tabs instead of being absorbed by the scroll box.
+    if (inBody) {
       return;
     }
     const digit = key.sequence.length === 1 ? key.sequence : key.name;
@@ -402,7 +421,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   });
 
   hosts.set(r, state);
-  onThemeChange((theme) => {
+  state.unsubTheme = onThemeChange((theme) => {
     state.backdrop.backgroundColor = theme.bg;
     state.panel.backgroundColor = theme.panel;
     state.panel.borderColor = theme.border;

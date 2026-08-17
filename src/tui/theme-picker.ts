@@ -1,8 +1,8 @@
 // Theme picker modal: 1/4 list + 3/4 live preview. The live palette does not
 // change until the operator submits — Esc / close leaves the current theme.
 // OpenTUI is a parameter (ADR-0005); this file never statically imports it.
-import { openModal } from "./modal-host";
-import { markdownToChunks } from "./transcript-blocks";
+import { openModal, type ModalHandle, type OpenModalInput } from "./modal-host";
+import { clearTranscriptChildren, markdownToChunks } from "./transcript-blocks";
 import {
   THEME_IDS,
   getTheme,
@@ -38,23 +38,11 @@ export const THEME_PREVIEW_CODE = [
   "}",
 ].join("\n");
 
-export type ModalTab = { id: string; label: string };
-
-export type OpenModalInput = {
-  title: string;
-  tabs: readonly ModalTab[];
-  initialTab?: string;
-  footer?: readonly { key: string; label: string }[];
-  renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
-  onClose?: () => void;
-};
-
-export type ModalHandle = {
-  close(): void;
-  setTab(id: string): void;
-  activeTab(): string;
-};
-
+// Review finding: this file used to redefine its own ModalTab/OpenModalInput/
+// ModalHandle/OpenModalFn shapes instead of importing the real ones from
+// modal-host.ts, and they had already drifted (this file's renderTab made
+// `ctx` optional; the real one never is). Import the canonical types instead
+// so a future change to modal-host's real shape is caught here too.
 export type OpenModalFn = (
   otui: unknown,
   chrome: unknown,
@@ -96,12 +84,6 @@ function asOtui(otui: unknown): OtuiLike | undefined {
     return undefined;
   }
   return cand as OtuiLike;
-}
-
-function clearChildren(box: BoxLike): void {
-  for (const child of [...box.getChildren()]) {
-    box.remove(child);
-  }
 }
 
 export function formatThemePickerRows(
@@ -169,7 +151,7 @@ function paintList(
   onSelect: (id: ThemeId) => void,
   onApply: () => void,
 ): void {
-  clearChildren(list);
+  clearTranscriptChildren(list);
   const chrome = getTheme();
   addText(otui, renderer, list, {
     id: "theme-list-title",
@@ -195,7 +177,7 @@ function paintList(
 }
 
 function paintPreview(otui: OtuiLike, renderer: unknown, preview: BoxLike, theme: Theme, id: ThemeId): void {
-  clearChildren(preview);
+  clearTranscriptChildren(preview);
   preview.backgroundColor = theme.bg;
   preview.borderColor = theme.border;
 

@@ -15,10 +15,12 @@ import {
   MODAL_PANEL_CHROME_X,
   MODAL_PANEL_INNER_WIDTH,
   MODAL_PANEL_MARGIN,
+  destroyModalHost,
   formatModalFooter,
   openModal,
   resolveModalInnerWidth,
 } from "./modal-host";
+import { applyThemeId, getThemeId } from "./theme";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -315,6 +317,70 @@ otuiTest("x does not close while the body scroll owns focus", async () => {
   expect(closed).toBe(0);
   expect(h.chrome.overlayActive()).toBe(true);
   h.destroy();
+});
+
+otuiTest("review finding: a digit 1-9 keypress does not jump tabs while the body scroll owns focus (same guard x-close uses)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Inspector",
+    tabs: [
+      { id: "one", label: "One" },
+      { id: "two", label: "Two" },
+    ],
+    renderTab: (tabId, body) => {
+      const parent = body as { add: (child: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: `body-${tabId}`, content: "line\n".repeat(40) }));
+    },
+  });
+  await h.flush();
+  const scroll = h.renderer.root.findDescendantById("modal-body-scroll") as unknown as {
+    focus: () => void;
+    scrollHeight: number;
+    height: number;
+  };
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.height);
+  scroll.focus();
+  await h.flush();
+  // Before the fix: this checked containsNode(state.body, focused) instead of
+  // reusing the same containsNode(state.scroll, focused) the x-close guard
+  // above uses — focus on `scroll` itself (not a descendant of `body`) fell
+  // through and jumped to tab "two" instead of being absorbed.
+  await h.mockInput.pressKeys(["2"]);
+  await h.flush();
+  expect(handle?.activeTab()).toBe("one");
+  h.destroy();
+});
+
+otuiTest("review finding: destroyModalHost unregisters the theme listener — a theme change after destroy no longer touches the host's boxes", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const previousThemeId = getThemeId();
+  try {
+    applyThemeId("groknight");
+    openModal(otui.core, h.chrome, {
+      title: "Inspector",
+      tabs: [{ id: "info", label: "Info" }],
+      renderTab: (_tabId, body) => {
+        const parent = body as { add: (child: unknown) => void };
+        parent.add(new otui.core.TextRenderable(h.renderer, { id: "body-info", content: "x" }));
+      },
+    });
+    await h.flush();
+    const backdrop = h.renderer.root.findDescendantById("modal-backdrop") as unknown as { backgroundColor: unknown };
+    const beforeDestroy = backdrop.backgroundColor;
+
+    destroyModalHost(h.renderer);
+    applyThemeId("grokday"); // a real theme change, distinct bg from groknight
+    await h.flush();
+
+    // Before the fix: onThemeChange's returned unsubscribe was discarded, so
+    // this write still landed on the now-torn-down host's backdrop.
+    expect(backdrop.backgroundColor).toBe(beforeDestroy);
+  } finally {
+    applyThemeId(previousThemeId);
+    h.destroy();
+  }
 });
 
 otuiTest("clicking [x] closes the modal", async () => {

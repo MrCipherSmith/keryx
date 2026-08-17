@@ -331,11 +331,15 @@ export async function mountChatShell(
 ): Promise<ChatShellHandle> {
   const r = renderer;
   applyThemeId(loadPersistedThemeId(), r.themeMode);
-  r.on("theme_mode", (mode: "dark" | "light") => {
+  // Review finding: unregistered on destroy, unlike every other renderer-level
+  // subscription in this file — named so `.off()` below can find the same
+  // reference `.on()` registered.
+  const onThemeMode = (mode: "dark" | "light"): void => {
     if (getThemeId() === "auto") {
       applyThemeId("auto", mode);
     }
-  });
+  };
+  r.on("theme_mode", onThemeMode);
   let selection: TuiSelection = { ...opts.deps.initial };
   const label = (): string => `${selection.provider}/${selection.model}`;
 
@@ -563,6 +567,7 @@ export async function mountChatShell(
     done,
     destroy: () => {
       bridge.close();
+      r.off("theme_mode", onThemeMode);
       chrome.destroy();
     },
   };

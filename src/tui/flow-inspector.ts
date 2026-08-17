@@ -18,7 +18,7 @@ export type OpenModalInput = {
   tabs: readonly ModalTab[];
   initialTab?: string;
   footer?: readonly { key: string; label: string }[];
-  renderTab: (tabId: string, body: unknown) => void | (() => void);
+  renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
   onClose?: () => void;
 };
 
@@ -101,7 +101,36 @@ export type PresentFlowsOptions = {
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
-function paintLines(otui: unknown, renderer: unknown, body: unknown, lines: readonly string[]): { content: string } | undefined {
+// Review finding: session-info.ts's tabs wrap to ctx.width (added in this
+// same diff for the new flex-scaling modal panel); this file's tabs never
+// picked up the equivalent plumbing, so /flows content overflows unwrapped
+// on a narrow terminal while /status wraps correctly right next to it.
+function wrapLines(text: string, width: number | undefined): string {
+  if (width === undefined || width < 8) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .flatMap((line) => {
+      if (line.length <= width) {
+        return [line];
+      }
+      const chunks: string[] = [];
+      for (let i = 0; i < line.length; i += width) {
+        chunks.push(line.slice(i, i + width));
+      }
+      return chunks;
+    })
+    .join("\n");
+}
+
+function paintLines(
+  otui: unknown,
+  renderer: unknown,
+  body: unknown,
+  lines: readonly string[],
+  width?: number,
+): { content: string } | undefined {
   if (otui === undefined || otui === null || body === undefined || body === null) {
     return undefined;
   }
@@ -111,7 +140,7 @@ function paintLines(otui: unknown, renderer: unknown, body: unknown, lines: read
   if (parent.add === undefined || ctor === undefined) {
     return undefined;
   }
-  const node = new ctor(renderer, { id: "flows-body", content: lines.join("\n") });
+  const node = new ctor(renderer, { id: "flows-body", content: wrapLines(lines.join("\n"), width) });
   parent.add(node);
   return node;
 }
@@ -127,14 +156,18 @@ export function presentFlows(
   let listNode: { content: string } | undefined;
   let detailNode: { content: string } | undefined;
   let unsubscribeKey: (() => void) | undefined;
+  let tabWidth: number | undefined;
 
   const paintSelection = (): void => {
     if (listNode !== undefined) {
-      listNode.content = formatFlowListLines(items, selected).join("\n");
+      listNode.content = wrapLines(formatFlowListLines(items, selected).join("\n"), tabWidth);
     }
     if (detailNode !== undefined) {
       const item = items[selected];
-      detailNode.content = item !== undefined ? formatFlowDetailLines(item).join("\n") : "No flow selected.";
+      detailNode.content = wrapLines(
+        item !== undefined ? formatFlowDetailLines(item).join("\n") : "No flow selected.",
+        tabWidth,
+      );
     }
   };
 
@@ -146,10 +179,11 @@ export function presentFlows(
     ],
     initialTab: "list",
     footer: FLOWS_FOOTER,
-    renderTab: (tabId, body) => {
+    renderTab: (tabId, body, ctx) => {
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
+      tabWidth = ctx?.width;
       if (tabId === "list") {
-        listNode = paintLines(otui, renderer, body, formatFlowListLines(items, selected));
+        listNode = paintLines(otui, renderer, body, formatFlowListLines(items, selected), tabWidth);
         return;
       }
       const item = items[selected];
@@ -158,6 +192,7 @@ export function presentFlows(
         renderer,
         body,
         item !== undefined ? formatFlowDetailLines(item) : ["No flow selected."],
+        tabWidth,
       );
     },
     onClose: () => {
