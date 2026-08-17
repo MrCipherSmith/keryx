@@ -131,7 +131,8 @@ export function destroyModalHost(renderer: Renderer): void {
 }
 
 
-function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
+/** Shared with `composer-choice.ts` — one renderable-tree containment walk, not two copies. */
+export function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
   if (root === node) {
     return true;
   }

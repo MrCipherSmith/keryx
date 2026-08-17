@@ -913,7 +913,7 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
   // everything from `if (agentMode) {` through its `runAgentRepl(...)` call
   // and a little past it, without accidentally reaching into an unrelated
   // later part of the file (this file has no other "if (agentMode)" branch).
-  const agentModeBranch = shellSource.slice(agentModeBranchStart, agentModeBranchStart + 3000);
+  const agentModeBranch = shellSource.slice(agentModeBranchStart, agentModeBranchStart + 3600);
   const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
   const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
 
@@ -947,6 +947,27 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
       const after = replBody.slice(idx + assignment.length, idx + assignment.length + 200);
       expect(after).toContain("slateSessionBox.current = slateSession;");
     }
+  });
+
+  // Review finding (code review of PR #313): the readline agent REPL built
+  // its own `createSpawnSubagentTool`/`agentDeps` without `onLedgerReady`/
+  // `resetSubagentBudget` at all, so the per-turn child-budget reset only
+  // ever applied to the TUI's `makeAgentDeps` — a `keryx shell --no-tui`
+  // session kept the old whole-session-lifetime ledger bug this same PR's
+  // own doc comment says it fixes.
+  test("the readline createSpawnSubagentTool call wires onLedgerReady into agentDeps.resetSubagentBudget", () => {
+    const readyIdx = agentModeBranch.indexOf("onLedgerReady:");
+    expect(readyIdx).toBeGreaterThanOrEqual(0);
+    const captureIdx = agentModeBranch.indexOf("resetSubagentBudget = controls.resetBudget;");
+    expect(captureIdx).toBeGreaterThan(readyIdx);
+    const depsIdx = agentModeBranch.indexOf(
+      "...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),",
+    );
+    expect(depsIdx).toBeGreaterThan(captureIdx);
+  });
+
+  test("the readline turn loop resets the subagent budget at the start of every turn", () => {
+    expect(replBody).toContain("deps.resetSubagentBudget?.();");
   });
 });
 

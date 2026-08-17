@@ -1824,6 +1824,11 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       // every `slateSession` reassignment (see its own body below); the
       // getter here reads the box BY REFERENCE, never a snapshot.
       const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
+      // Same reset-per-turn wiring as the TUI's `makeAgentDeps` (this file,
+      // `createSpawnSubagentTool`'s `onLedgerReady`) — this readline REPL
+      // constructs its own, separate `spawn_subagent` tool instance, so it
+      // needs its own capture of the reset closure.
+      let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
         getParentModel: () => ({
@@ -1843,6 +1848,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         // all, so a dispatched subagent's Seeds/Anchors silently never
         // folded anywhere in a real readline `keryx shell` agent session.
         getSlateSession: () => slateSessionBox.current,
+        onLedgerReady: (controls) => {
+          resetSubagentBudget = controls.resetBudget;
+        },
       });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
@@ -1861,6 +1869,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
+        ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
       // created (flow 067), so it never runs here. This is the readline agent

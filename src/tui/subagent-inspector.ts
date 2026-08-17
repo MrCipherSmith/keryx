@@ -116,12 +116,26 @@ export function presentSubagentInspector(
   let metaNode: TextNode | undefined;
   let unsubscribe: (() => void) | undefined;
 
+  const GONE_TEXT = "Subagent is gone.";
+
   const refresh = (hint?: SubagentStoreHint): void => {
-    if (hint !== undefined && hint.id !== options.id) {
+    // A bulk `clear()` (wildcard id "*") must still refresh THIS inspector —
+    // it is exactly the case where the tracked subagent may have just been
+    // dropped out from under an already-open modal.
+    if (hint !== undefined && hint.id !== "*" && hint.id !== options.id) {
       return;
     }
     const current = options.store.get(options.id);
     if (current === undefined) {
+      // Same fallback text `renderTab` paints on initial open when the
+      // session is already gone — update the mounted nodes in place instead
+      // of leaving them frozen on stale content from before it vanished.
+      if (workNode !== undefined) {
+        workNode.content = GONE_TEXT;
+      }
+      if (metaNode !== undefined) {
+        metaNode.content = GONE_TEXT;
+      }
       return;
     }
     if (workNode !== undefined) {

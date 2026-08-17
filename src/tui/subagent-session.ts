@@ -160,6 +160,22 @@ export class SubagentSessionStore {
   private readonly sessions = new Map<string, SubagentSession>();
   private readonly listeners = new Set<(hint: SubagentStoreHint) => void>();
   private readonly now: () => number;
+  /**
+   * Ids present at the moment `clear()` ran, blacklisted forever after.
+   *
+   * A `spawn_subagent` dispatch that hits its deadline is abandoned, not
+   * cancelled (`spawn-subagent-tool.ts`: "the orphaned promise may still
+   * settle later; its result is ignored") — everything it does DURING that
+   * abandoned run is suppressed by its own `closed` flag, but the final
+   * status `upsert` at the end of its async function is unconditional. If
+   * that settles after `clear()` already reset the sidebar for the next
+   * turn, `apply()`'s normal upsert path would otherwise treat the id as
+   * "new" (the map was just emptied) and resurrect a phantom entry from a
+   * turn the user has already moved past. Once an id is retired it can never
+   * come back — a genuinely new dispatch always gets a fresh id, so this
+   * never blocks real work.
+   */
+  private readonly retiredIds = new Set<string>();
 
   constructor(now: () => number = () => Date.now()) {
     this.now = now;
@@ -167,6 +183,9 @@ export class SubagentSessionStore {
 
   apply(event: SubagentFleetEvent): void {
     if (event.kind === "remove") {
+      return;
+    }
+    if (this.retiredIds.has(event.id)) {
       return;
     }
     if (event.kind === "log") {
@@ -236,6 +255,9 @@ export class SubagentSessionStore {
   clear(): void {
     if (this.sessions.size === 0) {
       return;
+    }
+    for (const id of this.sessions.keys()) {
+      this.retiredIds.add(id);
     }
     this.sessions.clear();
     this.emit({ id: "*", kind: "remove" });

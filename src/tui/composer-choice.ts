@@ -32,6 +32,7 @@ export interface ComposerChoiceRequest {
 }
 
 import { getTheme } from "./theme";
+import { containsNode } from "./modal-host";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -58,6 +59,23 @@ const MAX_SUBTITLE_CHARS = 8_000;
 /** Visible rows for the scrollable command/code preview before it scrolls. */
 const MAX_SUBTITLE_ROWS = 10;
 
+/**
+ * A single-line subtitle at or under this length renders as a plain,
+ * non-interactive line — same as before the scrollable-preview rewrite.
+ * Only a genuinely multi-line or long subtitle (a real command/code preview,
+ * not a short hint like "Esc = new session") gets the ctrl+o-focusable
+ * scroll box; otherwise every dialog with any subtitle at all — including
+ * ones that never needed it — stole ctrl+o and confused arrow-key nav for no
+ * reason.
+ */
+const SUBTITLE_INLINE_MAX_CHARS = 76;
+
+/** Rows per option (label + description) — mirrors the old `SelectRenderable` layout. */
+const OPTION_ROWS = 2;
+
+/** Visible rows for the options list before it scrolls — matches the old `SelectRenderable` cap. */
+const MAX_OPTIONS_ROWS = 16;
+
 function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => void {
   (r as unknown as { _internalKeyInput: { onInternal: (e: string, h: (k: KeypressEvent) => void) => void } })._internalKeyInput.onInternal(
     "keypress",
@@ -68,18 +86,6 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
       "keypress",
       handler,
     );
-}
-
-function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
-  if (root === node) {
-    return true;
-  }
-  for (const child of root.getChildren()) {
-    if (containsNode(child as { getChildren: () => unknown[] }, node)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -113,7 +119,8 @@ export function showComposerChoice(
         ? `${rawSubtitle.slice(0, MAX_SUBTITLE_CHARS)}\n…(truncated: ${rawSubtitle.length - MAX_SUBTITLE_CHARS} more characters)`
         : rawSubtitle;
     const subtitleLines = subtitleText?.split("\n") ?? [];
-    const hasScrollableSubtitle = subtitleLines.length > 0;
+    const hasScrollableSubtitle =
+      subtitleLines.length > 1 || (subtitleLines[0]?.length ?? 0) > SUBTITLE_INLINE_MAX_CHARS;
     const subtitleRows = Math.min(Math.max(subtitleLines.length, 1), MAX_SUBTITLE_ROWS);
 
     const title = new otui.TextRenderable(r, {
@@ -123,6 +130,7 @@ export function showComposerChoice(
     dock.add(title);
 
     let subtitleScroll: ScrollBox | undefined;
+    let subtitleLine: Text | undefined;
     if (hasScrollableSubtitle) {
       subtitleScroll = new otui.ScrollBoxRenderable(r, {
         id: `ch-sub-scroll-${Date.now()}`,
@@ -140,16 +148,28 @@ export function showComposerChoice(
         );
       }
       dock.add(subtitleScroll);
+    } else if (subtitleLines.length > 0) {
+      // Trivial one-liner: a plain, non-interactive line — no scroll box, no
+      // ctrl+o hint, exactly the pre-rewrite behavior for short subtitles.
+      subtitleLine = new otui.TextRenderable(r, {
+        id: `ch-sub-${Date.now()}`,
+        content: otui.t`${otui.yellow(subtitleLines[0] ?? "")}`,
+      });
+      dock.add(subtitleLine);
     }
 
-    const optionsBox = new otui.BoxRenderable(r, {
-      id: `ch-opts-${Date.now()}`,
+    const optionsRows = options.length * OPTION_ROWS;
+    const optionsScroll = new otui.ScrollBoxRenderable(r, {
+      id: `ch-opts-scroll-${Date.now()}`,
       width: "100%",
-      flexDirection: "column",
+      height: Math.min(Math.max(optionsRows, OPTION_ROWS), MAX_OPTIONS_ROWS),
+      scrollY: true,
+      contentOptions: { flexDirection: "column" },
     });
-    dock.add(optionsBox);
+    dock.add(optionsScroll);
+    const optionsBox = optionsScroll.content;
 
-    const rows: { box: Box; label: Text; desc: Text }[] = [];
+    const rows: { id: string; box: Box; label: Text; desc: Text }[] = [];
     const paintOptions = (): void => {
       for (const [i, o] of options.entries()) {
         const row = rows[i];
@@ -161,6 +181,12 @@ export function showComposerChoice(
         row.label.fg = active ? theme.focus : theme.text;
         row.label.content = active ? otui.t`${otui.bold(o.displayLabel)}` : o.displayLabel;
         row.desc.content = otui.t`${otui.dim(o.description.length > 0 ? o.description : " ")}`;
+        if (active) {
+          // Keyboard nav (↑/↓) must keep the highlighted row on-screen once
+          // the list is taller than `MAX_OPTIONS_ROWS` — a mouse click never
+          // needs this since the row is already visible to be clicked.
+          optionsScroll.scrollChildIntoView(row.id);
+        }
       }
     };
 
@@ -170,8 +196,9 @@ export function showComposerChoice(
     };
 
     for (const [i, o] of options.entries()) {
+      const rowId = `ch-opt-${i}-${Date.now()}`;
       const box = new otui.BoxRenderable(r, {
-        id: `ch-opt-${i}-${Date.now()}`,
+        id: rowId,
         width: "100%",
         flexDirection: "column",
         onMouseDown: () => {
@@ -186,7 +213,7 @@ export function showComposerChoice(
       box.add(label);
       box.add(desc);
       optionsBox.add(box);
-      rows.push({ box, label, desc });
+      rows.push({ id: rowId, box, label, desc });
     }
     paintOptions();
 
@@ -206,7 +233,7 @@ export function showComposerChoice(
         });
         contextLines.push(renderable);
         try {
-          dock.insertBefore(renderable, optionsBox);
+          dock.insertBefore(renderable, optionsScroll);
         } catch {
           dock.add(renderable); // best-effort: still visible, just below the options
         }
@@ -226,10 +253,13 @@ export function showComposerChoice(
         if (subtitleScroll !== undefined) {
           dock.remove(subtitleScroll);
         }
+        if (subtitleLine !== undefined) {
+          dock.remove(subtitleLine);
+        }
         for (const line of contextLines) {
           dock.remove(line);
         }
-        dock.remove(optionsBox);
+        dock.remove(optionsScroll);
       } catch {
         // best-effort
       }
@@ -247,7 +277,7 @@ export function showComposerChoice(
         const focused = r.currentFocusedRenderable;
         const inScroll = focused !== null && containsNode(subtitleScroll, focused);
         if (inScroll) {
-          optionsBox.focus();
+          optionsScroll.focus();
         } else {
           subtitleScroll.focus();
         }
@@ -286,6 +316,6 @@ export function showComposerChoice(
       }
     };
     const unsub = onKeypress(r, onKey);
-    optionsBox.focus();
+    optionsScroll.focus();
   });
 }

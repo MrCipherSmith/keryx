@@ -68,16 +68,27 @@ export const ENV_SUBAGENT_LEDGER_MAX_TOOL_CALLS = "KERYX_SUBAGENT_LEDGER_MAX_TOO
 /** Hard ceiling when env requests an extreme value (runaway guard). */
 export const MAX_SUBAGENT_LEDGER_TOOL_CALLS = 512;
 
+/**
+ * Parse an integer env var; `undefined` when unset, blank, or non-finite.
+ * Shared by every `resolveSubagent*` env-override resolver below — each
+ * still owns its own validity floor/clamp/fallback, since those genuinely
+ * differ (e.g. the timeout resolver treats `0` as a valid "disabled").
+ */
+function parseIntEnvVar(env: Record<string, string | undefined>, key: string): number | undefined {
+  const raw = env[key];
+  if (raw === undefined || raw.trim().length === 0) {
+    return undefined;
+  }
+  const n = Number.parseInt(raw.trim(), 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /** Resolve the per-turn child-ledger tool-call pool; unset/invalid env → default. */
 export function resolveSubagentLedgerMaxToolCalls(
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const raw = env[ENV_SUBAGENT_LEDGER_MAX_TOOL_CALLS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_SUBAGENT_LEDGER_TOOL_CALLS;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 1) {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_LEDGER_MAX_TOOL_CALLS);
+  if (n === undefined || n < 1) {
     return DEFAULT_SUBAGENT_LEDGER_TOOL_CALLS;
   }
   return Math.min(n, MAX_SUBAGENT_LEDGER_TOOL_CALLS);
@@ -116,12 +127,8 @@ export function resolveSubagentTimeoutMs(
   reservationMs: number,
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const raw = env[ENV_SUBAGENT_TIMEOUT_MS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return reservationMs;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 0) {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_TIMEOUT_MS);
+  if (n === undefined || n < 0) {
     return reservationMs;
   }
   if (n === 0) {
