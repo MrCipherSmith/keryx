@@ -28,3 +28,10 @@
 - 2026-08-17T13:12:04.235Z - ac-confirmed: AC9: Side-1 path (sideQueue/spawnSideWorker) untouched by this session's changes; diff shows no lines in that branch modified.
 - 2026-08-17T13:14:39.481Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-17T13:47:16.984Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)
+- 2026-08-17T19:04:14.318Z - completing
+- 2026-08-17T19:04:16.640Z - completion-failed: acceptance-criteria: unconfirmed: AC8
+- 2026-08-17T19:04:35.752Z - ac-confirmed: AC8: Bounded by this file's own architecture, not a shortcut: launchTuiAgentShell has no headless integration harness anywhere in tui-shell.ts (documented ~L748/~L1882 — every other command in this file is tested the same way). Deterministic/covered-by-unit-tests to the extent achievable: pure logic extracted and unit-tested (formatMainQueueMarker, removeMainQueueItem, editMainQueueItem, reinsertMainQueueItem, parseQueueCommand — main-queue.test.ts). Closure-level wiring (selector branch, FIFO/priority drain) verified by full read-through plus the 593-test regression suite (src/tui + agent/shell/sac) passing pre- and post-merge, and by the merged PR's green CI (11/11 checks).
+- 2026-08-17T19:04:50.884Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/317 (warning: PR is not a draft)
+- 2026-08-17T19:04:57.515Z - completing
+- 2026-08-17T19:04:57.538Z - done: all gates passed
+- 2026-08-17T19:16:00.000Z - record-corrected: merged.commit was recorded as c8ca3288e3a76b98d4421de5ea21d6a5ebfb0ac7 (PR #313's merge commit, pasted in error) instead of PR #317's actual merge commit. `keryx flow complete` refuses to re-run on a done flow, and flow.json has no CLI amend path for a terminal record, so this field was hand-corrected (manual edit, not the AC/checksum-protected content) to the verified value from `gh pr view 317 --json mergeCommit`, confirmed an ancestor of origin/main.
