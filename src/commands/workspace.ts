@@ -159,11 +159,12 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "catch-up") {
-      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json"]));
+      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json", "--include-lifecycle-flags"]));
       const workspaceId = optionValue(args, "--workspace");
+      const includeLifecycleFlags = booleanFlagDefaultTrue(args, "--include-lifecycle-flags");
       const report = await buildCatchUp({ cwd: process.cwd(), ...(workspaceId ? { workspaceId } : {}) });
       if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
-      else console.log(renderCatchUp(report));
+      else console.log(renderCatchUp(report, includeLifecycleFlags));
       return;
     }
     if (subcommand === "list-proposals") {
@@ -230,18 +231,47 @@ function booleanFlag(args: string[], name: string): boolean {
   throw new Error(`Unknown value for ${name}: "${value}" — expected true or false`);
 }
 
+/**
+ * Same parsing/validation as {@link booleanFlag}, but the ABSENT case
+ * defaults to `true` instead of `false` — for `--include-lifecycle-flags`,
+ * whose spec explicitly says "defaults to shown, not opt-in, since the
+ * whole point is discoverability." An operator opts OUT with
+ * `--include-lifecycle-flags=false`, never opts in.
+ */
+function booleanFlagDefaultTrue(args: string[], name: string): boolean {
+  const bare = args.includes(name);
+  const prefixed = args.find((argument) => argument.startsWith(`${name}=`));
+  if (bare && prefixed) throw new Error(`${name} was given both bare and with a value — use one form`);
+  if (bare) return true;
+  if (!prefixed) return true;
+  const value = prefixed.slice(name.length + 1);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`Unknown value for ${name}: "${value}" — expected true or false`);
+}
+
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id>\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json]\nkeryx workspace list-proposals [<workspace-id>]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id>\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]");
 }
 
 /**
  * SLATE-10's human-facing catch-up rendering (agent-protocol.md's "Catch-up
- * protocol"): four hard-separated headed sections (AC2's text-rendering
- * mirror of the already-separated `CatchUpReport` shape), each item as a
- * structured question + options + recommendation — never a raw JSON/diff
- * dump. `--json` (above) is the escape hatch for scripting.
+ * protocol"): hard-separated headed sections (AC2's text-rendering mirror of
+ * the already-separated `CatchUpReport` shape), each item as a structured
+ * question + options + recommendation — never a raw JSON/diff dump. `--json`
+ * (above) is the escape hatch for scripting.
+ *
+ * RP-13 FR3+FR4 (flow 168, Phase 2): a fifth section, `lifecycleFlags`, is
+ * ALWAYS present in `report` (never gated inside `buildCatchUp` itself —
+ * see that function's own doc comment) but only DISPLAYED here when
+ * `includeLifecycleFlags` is true (default) — `--include-lifecycle-flags`
+ * defaults to shown, per the spec's own "the whole point is
+ * discoverability," so an operator opts OUT (`=false`), never in. A
+ * workspace can legitimately appear in BOTH "Pending proposals" and this
+ * section at once — the two are independent facts, and this rendering
+ * never suppresses one because of the other.
  */
-function renderCatchUp(report: CatchUpReport): string {
+function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): string {
   const sections: string[] = [];
   sections.push(renderSection("Pending proposals", report.proposals, (item) =>
     `- Accept, reject, or dismiss proposal ${item.proposalId} in workspace ${item.workspaceId}? ` +
@@ -255,6 +285,11 @@ function renderCatchUp(report: CatchUpReport): string {
   sections.push(renderSection("Unknown (no resolution recorded)", report.unknown, (item) =>
     `- Session ${item.sessionId} was last seen ${item.lastSeenAt} with no proposal, terminal state, or unbound-candidate artifact recorded. Investigate, or ignore? ` +
     `Recommendation: \`keryx sessions list\` / \`keryx shell -r ${item.sessionId}\` to see what happened.`));
+  if (includeLifecycleFlags) {
+    sections.push(renderSection("Lifecycle flags (component no longer in the graph)", report.lifecycleFlags, (item) =>
+      `- ${item.kind} \`${item.ref}\` scopes to \`${item.missingComponent}\`, which is no longer in the code graph (flagged ${item.flaggedAt}). Still relevant, or safe to clean up? ` +
+      `Recommendation: this is report-only — nothing was archived/edited/removed automatically; ${item.kind === "workspace" ? "\`keryx workspace archive " + item.ref + "\`" : item.kind === "memory-entry" ? "\`keryx memory supersede\` or edit the entry directly" : "edit or remove the wiki page directly"} if you decide it's actually stale.`));
+  }
   return sections.join("\n\n");
 }
 

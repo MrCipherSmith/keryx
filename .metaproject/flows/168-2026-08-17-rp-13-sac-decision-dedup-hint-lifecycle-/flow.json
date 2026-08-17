@@ -5,7 +5,7 @@
   "title": "RP-13: SAC decision dedup hint + lifecycle cleanup flag",
   "status": "in-progress",
   "createdAt": "2026-08-17T18:56:53.529Z",
-  "updatedAt": "2026-08-17T19:17:06.124Z",
+  "updatedAt": "2026-08-17T19:49:37.588Z",
   "source": {
     "type": "description",
     "ref": null
@@ -92,7 +92,7 @@
       "id": "T6",
       "title": "FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -100,7 +100,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -136,6 +137,11 @@
       "at": "2026-08-17T19:17:06.124Z",
       "event": "task-done",
       "detail": "T5: FR1+FR2: dedup/conflict hint + judge annotation at review time"
+    },
+    {
+      "at": "2026-08-17T19:49:37.588Z",
+      "event": "task-done",
+      "detail": "T6: FR3+FR4: report-only lifecycle flag (workspaces/memory/wiki-decisions)"
     }
   ]
 }

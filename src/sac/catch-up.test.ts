@@ -68,6 +68,25 @@ async function archiveWorkspace(cwd: string, id: string): Promise<void> {
   await workspaces.archive({ request: undefined, requestCorrelationId: randomUUID(), workspaceId: id });
 }
 
+/** Creates a workspace bound to a real, on-disk `component` resource (never
+ * created by `ensureWorkspace`/`proposeInWorkspace`, which bind no
+ * component at all) — used by the RP-13/WSL-2 cross-category test below. */
+async function ensureWorkspaceWithComponent(cwd: string, id: string, componentPath: string, title = id): Promise<void> {
+  const abs = path.join(cwd, componentPath);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(abs, "export {};\n");
+  const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: LOCAL_STRICT });
+  await workspaces.create({ request: undefined, requestCorrelationId: randomUUID(), id, title, component: { kind: "component", uri: `./${componentPath}` } });
+}
+
+async function writeGraphNodesExcluding(cwd: string, filePaths: string[]): Promise<void> {
+  const dir = path.join(cwd, ".metaproject", "data", "gdgraph", "storage");
+  await mkdir(dir, { recursive: true });
+  const nodes = filePaths.map((p) => ({ path: p, kind: "file" }));
+  await writeFile(path.join(dir, "nodes.jsonl"), `${nodes.map((n) => JSON.stringify(n)).join("\n")}\n`, "utf8");
+  await writeFile(path.join(dir, "edges.jsonl"), "", "utf8");
+}
+
 /** Creates a real pending proposal via the real ProposalLifecycleService — the same local composition `commands/workspace.ts`'s `propose` subcommand uses (`localWorkspaceAuthorizationServer()`), so the actor buildCatchUp resolves internally always has real access to it. */
 async function proposeInWorkspace(cwd: string, workspaceId: string, proposalId: string): Promise<{ evidencePath: string }> {
   await ensureWorkspace(cwd, workspaceId);
@@ -333,6 +352,28 @@ test("AC1: a pending proposal in an ARCHIVED workspace surfaces in catch-up's pr
   // not a degraded/partial record because its workspace happens to be archived.
   expect(Object.keys(archivedItem ?? {}).sort()).toEqual(Object.keys(activeItem ?? {}).sort());
   expect(archivedItem?.fresh).toBe(activeItem?.fresh);
+});
+
+// --- RP-13/WSL-2: lifecycleFlags[] is additive, never a substitute for or --
+// --- suppressor of proposals[] --------------------------------------------
+
+test("RP-13/WSL-2: a workspace with BOTH a pending proposal AND a lifecycle flag appears correctly in both categories, not just one", async () => {
+  const cwd = await tempCwd("keryx-catchup-wsl2-");
+  await ensureWorkspaceWithComponent(cwd, "workspace-wsl2", "src/wsl2/component.ts");
+  await proposeInWorkspace(cwd, "workspace-wsl2", "proposal-wsl2");
+  // The graph knows about a DIFFERENT module only — "src/wsl2" (the
+  // workspace's bound component) never appears, so it is flagged.
+  await writeGraphNodesExcluding(cwd, ["src/other/still-here.ts"]);
+
+  const report = await buildCatchUp({ cwd });
+
+  const proposalItem = report.proposals.find((item) => item.proposalId === "proposal-wsl2");
+  expect(proposalItem).toBeDefined();
+  expect(proposalItem?.workspaceId).toBe("workspace-wsl2");
+
+  const flagItem = report.lifecycleFlags.find((flag) => flag.kind === "workspace" && flag.ref === "workspace-wsl2");
+  expect(flagItem).toBeDefined();
+  expect(flagItem?.missingComponent).toBe("src/wsl2/component.ts");
 });
 
 // --- AC4: cwd-scoped only, no cross-project leakage ------------------------

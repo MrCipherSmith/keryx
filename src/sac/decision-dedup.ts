@@ -93,7 +93,7 @@ async function resolveWorkspaceModule(cwd: string, workspaceId: string): Promise
  * Never throws: an unreadable directory returns `[]`, a malformed
  * individual page is skipped, never failing the whole scan.
  */
-async function collectWikiDecisionEntries(cwd: string): Promise<MemoryEntry[]> {
+export async function collectWikiDecisionEntries(cwd: string): Promise<MemoryEntry[]> {
   const dir = path.join(cwd, ".metaproject", "wiki", "decisions");
   let files: string[];
   try {
