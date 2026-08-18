@@ -140,7 +140,7 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
   expect(host).not.toMatch(/session-info/);
 });
 
-otuiTest("AC1: one tab paints a titled near-fullscreen opaque panel; slash menu stays closed on /", async () => {
+otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent backdrop; slash menu stays closed on /", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui);
   h.chrome.transcript.add(
@@ -175,8 +175,18 @@ otuiTest("AC1: one tab paints a titled near-fullscreen opaque panel; slash menu 
   expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
   expect(frame.toLowerCase()).toContain("esc close");
+  // `opacity` itself is untouched (still 1) — the backdrop's translucency
+  // below comes from its fill color's own alpha channel, never this prop
+  // (which composes onto every descendant, including `panel`; see
+  // `backdropFillColor`'s docstring in modal-host.ts).
   expect((backdrop as { opacity?: number }).opacity ?? 1).toBe(1);
-  expect(frame).not.toContain("transcript stays mounted");
+  // The backdrop is translucent by design (BACKDROP_ALPHA): the transcript
+  // now peeks through around the panel instead of being fully hidden.
+  expect(frame).toContain("transcript stays mounted");
+  // The panel itself stays fully opaque regardless: its own content is
+  // unmixed with whatever is behind it.
+  const panelLines = frame.split("\n").filter((line) => line.includes("Inspector") || line.includes("body:info"));
+  expect(panelLines.some((line) => line.includes("transcript stays mounted"))).toBe(false);
 
   // Shell remains mounted: chrome header and transcript child are still in the tree.
   expect(h.chrome.header.parent).toBe(h.chrome.main);
