@@ -144,3 +144,14 @@
   session) — none of that is staged/committed into this PR; only the flow-169 file set
   (src/wiki/* new+modified, docs/docs/cli-reference.md, and the
   docs/requirements/keryx-wiki-enrich-rlm/ + flow package itself) is committed here.
+- 2026-08-18T08:42:07.395Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/326 (warning: PR is not a draft)
+- 2026-08-18T08:42:17.231Z - ac-confirmed: AC1: enrich-rlm.test.ts: rlm.enabled:false and absent-config runs produce identical WikiEnrichPageResult[] and identical on-disk content (NFR-4 parity test)
+- 2026-08-18T08:42:17.316Z - ac-confirmed: AC2: enrich-rlm.test.ts: skip-classified page makes zero LLM calls, output equals collect.ts template unchanged
+- 2026-08-18T08:42:17.401Z - ac-confirmed: AC3: deep-enrich.test.ts: buildDeepEnrichTools tool array asserted to contain exactly the 6 named read-only ops, no spawn/shell capability (FR-6)
+- 2026-08-18T08:42:17.485Z - ac-confirmed: AC4: enrich-rlm.test.ts: unchanged page skipped on re-run; T10 fix ensures per-page hash always recomputed/compared (not gated by repo-wide staleness), verified by a changed-content-not-skipped test
+- 2026-08-18T08:42:17.573Z - ac-confirmed: AC5: deep-enrich.test.ts: budget/timeout exhaustion returns fallback variant, never throws; T10 added try/catch isolation around all RLM per-unit workers so one page's failure cannot crash the whole wikiEnrich run
+- 2026-08-18T08:42:17.655Z - ac-confirmed: AC6: enrich-rlm.test.ts: batch overflow splits into multiple groups via repomap.ts's token-budget pattern rather than truncating
+- 2026-08-18T08:42:17.738Z - ac-confirmed: AC7: AC text corrected via ac update (T6 grounding correction): DeepEnrichToolCall[] provenance log verified present on every DeepEnrichResult variant, surfaced via WikiEnrichPageResult's deepToolCalls field
+- 2026-08-18T08:42:17.821Z - ac-confirmed: AC8: typecheck clean; full bun test suite 4086 pass/0 fail on the feature branch before merge, 87/87 src/wiki/ tests re-verified green on main post-merge
+- 2026-08-18T08:42:21.141Z - completing
+- 2026-08-18T08:42:23.168Z - done: all gates passed
