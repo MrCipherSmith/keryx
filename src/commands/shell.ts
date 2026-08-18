@@ -1833,6 +1833,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
         },
+        ...(flags.permissionModeFlag !== undefined ? { initialPermissionMode: flags.permissionModeFlag } : {}),
         versionCheck,
       })
     ) {
