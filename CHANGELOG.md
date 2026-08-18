@@ -26,6 +26,18 @@ All notable changes to `keryx` are documented here. The format follows
   immediately. Clicking the sidebar is an intentional no-op — it has no
   focusable content today, so literally focusing it would blur the composer
   into a keyboard dead-zone.
+- **TUI: workspace sidebar row + `/workspace` inspector modal.** The sidebar
+  now shows the current session's bound SAC workspace (title · status · slate
+  count), refreshed after session open/resume, after `/new`, and after every
+  main turn settles; empty (`—`) until one is bound. Clicking it opens a new
+  `/workspace` inspector with 3 tabs — Workspace (overview), Slates (every
+  session bound to this workspace, newest-first, same interaction model as
+  `/flows`), Slate (detail: touched files, seeds).
+- **TUI: translucent modal backdrop.** The full-screen backdrop behind
+  `/flows` and every other modal was 100% opaque; now translucent via the
+  fill color's own alpha channel (never the `opacity` prop, which would have
+  faded the panel's own content along with it). The panel itself stays fully
+  opaque.
 
 ## [0.2.42] — 2026-08-18
 
