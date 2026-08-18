@@ -242,6 +242,25 @@ export async function initCommand(args: string[]): Promise<void> {
       ? `Updating the .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`
       : `Setting up a .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`,
   );
+
+  // Interactive shortcut: one question ahead of the per-module ones below,
+  // answering the question every one of THEM already asks by default ("y" ==
+  // "accept the Recommended default"). Mutating `options.yes` — rather than a
+  // separate local flag — means every `!options.yes`/`options.yes` branch
+  // below (already exactly kept in sync with each individual confirm's own
+  // Recommended default) needs no duplicate logic, and an explicit
+  // `--no-<module>` flag still wins exactly as it does under `--yes` on the
+  // command line: those checks run BEFORE `options.yes` in every branch.
+  if (!options.yes) {
+    const yesToAll = await confirm(
+      "Install everything with recommended defaults?",
+      true,
+    );
+    if (yesToAll) {
+      options.yes = true;
+    }
+  }
+
   if (!options.yes) {
     note("Press Enter to accept the Recommended default for each question.");
     heading("Modules");

@@ -23,6 +23,12 @@ All notable changes to `keryx` are documented here. The format follows
   policy-profile engine untouched — "headless never silently allows" is
   unaffected. See the
   [permission modes guide](docs/docs/guides/permission-modes.md).
+- **`keryx init`: one-question install shortcut.** Interactive `init` now
+  opens with *"Install everything with recommended defaults?"* (default Y).
+  Answering yes enables all 9 modules with their recommended settings and
+  skips every per-module question that follows — equivalent to `--yes`.
+  Answering no falls through to the existing per-module questions, unchanged.
+  An explicit `--no-<module>` flag still wins either way.
 
 ## [0.2.41] — 2026-08-18
 
