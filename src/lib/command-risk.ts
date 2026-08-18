@@ -279,3 +279,30 @@ export function touchesAgentCredentials(command: string): boolean {
   const text = command.toLowerCase();
   return CREDENTIAL_MARKERS.some((marker) => text.includes(marker));
 }
+
+/**
+ * SAC's own proof that a human is present, not the agent (`review-confirm-
+ * token.ts`): a proposal's `decision: "accepted"` requires a `confirmToken`
+ * minted by running `keryx workspace confirm-review` as a real, approval-
+ * gated shell command — deliberately never exposed as an agent-native tool
+ * or MCP tool, specifically so that step cannot happen without a human
+ * answering an approval prompt. That guarantee lives entirely in the prompt
+ * actually firing; a permission mode that skips it for "just another
+ * non-destructive shell command" defeats the whole mechanism as completely
+ * as leaking a credential would.
+ *
+ * Matched broadly on the command family (`confirm-review` and `workspace
+ * review`, which also covers the harmless reject/dismiss decisions) rather
+ * than parsing out `--decision accepted` specifically — same "a false
+ * positive costs one confirmation; a false negative costs the guarantee
+ * itself" posture as {@link touchesAgentCredentials}, and parsing a shell
+ * string for one specific flag value is exactly the kind of classification
+ * ADR-0009 says this layer must not be trusted to do perfectly.
+ */
+const SAC_REVIEW_MARKERS: readonly string[] = ["confirm-review", "workspace review"];
+
+/** True when `command` mentions SAC's proposal-review/confirm-token family. Pure. */
+export function touchesSacConfirmReview(command: string): boolean {
+  const text = command.toLowerCase();
+  return SAC_REVIEW_MARKERS.some((marker) => text.includes(marker));
+}

@@ -13,7 +13,7 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../lib/command-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -1518,7 +1518,8 @@ async function executeCall(
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
-    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials });
+    const sacReviewConfirmation = touchesSacConfirmReview(command);
+    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation });
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
@@ -1540,7 +1541,7 @@ async function executeCall(
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
-    const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false });
+    const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false, sacReviewConfirmation: false });
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {

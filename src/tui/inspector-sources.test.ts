@@ -6,10 +6,13 @@ import { randomUUID } from "node:crypto";
 import { createSession } from "../session/store";
 import { writeSlate } from "../session/slate";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
+import type { CatchUpBlockedItem, CatchUpProposalItem, CatchUpReport } from "../sac/catch-up";
 import {
+  catchUpItems,
   flowsInSession,
   formatSessionFlowLines,
   formatWorkspaceLines,
+  loadInspectorCatchUp,
   loadInspectorSlates,
   loadInspectorWorkspace,
   sortFlowsNewestFirst,
@@ -134,6 +137,51 @@ test("loadInspectorWorkspace / loadInspectorSlates: real fixtures, real cross-se
     expect(slates[0]?.touchedFiles).toEqual(["src/a.ts"]);
 
     expect(await loadInspectorSlates(cwd, "no-such-workspace")).toEqual([]);
+  } finally {
+    if (originalDataDir !== undefined) process.env.KERYX_DATA_DIR = originalDataDir;
+    else delete process.env.KERYX_DATA_DIR;
+    await rm(dataDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+const PROPOSAL: CatchUpProposalItem = { type: "proposal", workspaceId: "ws-1", proposalId: "p-1", fresh: true };
+const BLOCKED: CatchUpBlockedItem = {
+  type: "blocked",
+  sessionId: "sess-1",
+  terminalState: {
+    status: "blocked",
+    reason: "other",
+    courseSnapshot: {},
+    anchorsSnapshot: { root: "/tmp", touched: [] },
+    occurredAt: "2026-08-16T00:00:00.000Z",
+  },
+};
+
+test("catchUpItems concatenates proposals, blocked, unbound-candidates, unknown in that order — never lifecycleFlags", () => {
+  const report: CatchUpReport = {
+    proposals: [PROPOSAL],
+    blocked: [BLOCKED],
+    unboundCandidates: [{ type: "unbound-candidate", sessionId: "sess-2", evidencePath: "/tmp/e.json", summary: "1 seed" }],
+    unknown: [{ type: "unknown", sessionId: "sess-3", lastSeenAt: "2026-08-16T00:00:00.000Z" }],
+    lifecycleFlags: [
+      { kind: "workspace", ref: "ws-2", missingComponent: "src/gone.ts", flaggedAt: "2026-08-16T00:00:00.000Z" },
+    ],
+  };
+  const items = catchUpItems(report);
+  expect(items.map((item) => item.type)).toEqual(["proposal", "blocked", "unbound-candidate", "unknown"]);
+  expect(items).toHaveLength(4);
+});
+
+test("loadInspectorCatchUp: an ordinary project with no proposals/sessions returns an empty report, never throws", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "keryx-catchup-data-"));
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-catchup-cwd-"));
+  const originalDataDir = process.env.KERYX_DATA_DIR;
+  process.env.KERYX_DATA_DIR = dataDir;
+  try {
+    const report = await loadInspectorCatchUp(cwd);
+    expect(catchUpItems(report)).toEqual([]);
+    expect(report.lifecycleFlags).toEqual([]);
   } finally {
     if (originalDataDir !== undefined) process.env.KERYX_DATA_DIR = originalDataDir;
     else delete process.env.KERYX_DATA_DIR;

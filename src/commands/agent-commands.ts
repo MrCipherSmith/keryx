@@ -137,6 +137,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    name: "/review",
+    description: "Show project-wide items needing review (proposals, blocked sessions)",
+    // TUI-only, same reasoning as /workspace: the sidebar badge, mouse
+    // click, and list+detail modal (with its [a]/[y] accept) all need the
+    // OpenTUI surface.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,

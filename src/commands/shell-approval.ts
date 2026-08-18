@@ -2,6 +2,7 @@
 // Surfaces still own the prompt chrome; this module decides auto-approve vs ask.
 
 import type { ApprovalMeta } from "./agent";
+import { touchesSacConfirmReview } from "../lib/command-risk";
 import {
   allowShellPattern,
   isShellCommandAllowed,
@@ -16,6 +17,14 @@ export type ShellApprovalEval = {
   command: string;
   destructive: boolean;
   credentials: boolean;
+  /**
+   * SAC's proposal-review/confirm-token family (`touchesSacConfirmReview`).
+   * Computed from `command` directly, not from `meta` — this module has the
+   * parsed command already, and `ApprovalMeta` has no field for this (adding
+   * one would widen a shape shared with every other approver for one
+   * command-family-specific signal this is the only reader of).
+   */
+  sacReviewConfirmation: boolean;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -42,17 +51,22 @@ export function evaluateShellApproval(input: {
   const command = parseShellExecCommand(input.inputJson);
   const destructive = input.meta?.destructive === true;
   const credentials = input.meta?.credentials === true;
+  const sacReviewConfirmation = touchesSacConfirmReview(command);
   const audit = io.loadAudit();
   for (const pattern of audit.permissions.allow) {
     input.sessionAllow.add(pattern);
   }
   const tampered = io.fingerprint() !== input.fingerprintAtStart;
   const autoApprove =
-    !destructive && !credentials && isShellCommandAllowed(command, [...input.sessionAllow]);
+    !destructive &&
+    !credentials &&
+    !sacReviewConfirmation &&
+    isShellCommandAllowed(command, [...input.sessionAllow]);
   return {
     command,
     destructive,
     credentials,
+    sacReviewConfirmation,
     autoApprove,
     rejected: audit.rejected,
     tampered,
@@ -78,6 +92,9 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   }
   if (evaled.credentials) {
     lines.push("touches agent credentials — will not be remembered");
+  }
+  if (evaled.sacReviewConfirmation) {
+    lines.push("SAC proposal review/confirm-token — will not be remembered");
   }
   return lines;
 }

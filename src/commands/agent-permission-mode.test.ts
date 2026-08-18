@@ -145,6 +145,36 @@ test("auto mode still asks for a credentials-touching command (hard floor)", asy
   expect(ran()).toBe(false);
 });
 
+test("auto mode still asks for a command touching SAC confirm-review (hard floor)", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return false;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(
+        callScript("shell_exec", '{"command":"keryx workspace confirm-review --workspace ws-1"}'),
+      ),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(1);
+  expect(ran()).toBe(false);
+});
+
 test("trust mode auto-approves a benign shell command without prompting", async () => {
   const { tool, ran } = fakeTool("shell_exec", "shell");
   let approvalCalls = 0;

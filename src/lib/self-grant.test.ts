@@ -15,7 +15,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
-import { touchesAgentCredentials } from "./command-risk";
+import { touchesAgentCredentials, touchesSacConfirmReview } from "./command-risk";
 import {
   isShellCommandAllowed,
   shellPermissionsFingerprint,
@@ -64,6 +64,40 @@ test("a command touching the permission files can never be remembered", () => {
   const v = validateShellPattern("cat ~/.local/share/keryx/auth.json");
   expect(v.ok).toBe(false);
   expect(v.ok === false && v.reason).toMatch(/credential|permission/i);
+});
+
+// --- SAC confirm-review: a second, independent hard floor -------------------
+//
+// Accepting a proposal proves a human is present only because
+// `keryx workspace confirm-review` fires a real approval prompt. A permission
+// mode or a remembered pattern that skipped that prompt would defeat the
+// guarantee the same way self-granted credentials would.
+
+test("touchesSacConfirmReview recognises SAC's confirm-review / review command family", () => {
+  for (const cmd of [
+    "keryx workspace confirm-review --workspace ws-1",
+    "keryx workspace review --decision accepted --confirm-token abc",
+    "keryx workspace review --list",
+  ]) {
+    expect(`${cmd} => ${touchesSacConfirmReview(cmd)}`).toBe(`${cmd} => true`);
+  }
+});
+
+test("touchesSacConfirmReview leaves ordinary commands alone", () => {
+  for (const cmd of ["ls", "git status", "keryx wiki index", "keryx workspace list", "bun test"]) {
+    expect(`${cmd} => ${touchesSacConfirmReview(cmd)}`).toBe(`${cmd} => false`);
+  }
+});
+
+test("a command touching SAC confirm-review is never auto-approved, even under a granted pattern", () => {
+  expect(isShellCommandAllowed("keryx workspace confirm-review --workspace ws-1", ["keryx *"])).toBe(false);
+  expect(isShellCommandAllowed("keryx workspace list", ["keryx *"])).toBe(true);
+});
+
+test("a command touching SAC confirm-review can never be remembered", () => {
+  const v = validateShellPattern("keryx workspace confirm-review --workspace ws-1");
+  expect(v.ok).toBe(false);
+  expect(v.ok === false && v.reason).toMatch(/confirm-token|review/i);
 });
 
 // --- defence in depth: sandbox masking --------------------------------------

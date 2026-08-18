@@ -46,6 +46,15 @@ export interface ApprovalGateInput {
    * (`touchesAgentCredentials`) — mirrors `ApprovalMeta.credentials`.
    */
   credentials: boolean;
+  /**
+   * The action touches SAC's proposal-review/confirm-token family
+   * (`touchesSacConfirmReview`, `src/lib/command-risk.ts`) — accepting a
+   * proposal requires a human to answer a real approval prompt for
+   * `keryx workspace confirm-review`; that guarantee lives entirely in the
+   * prompt firing, so this is a second, independent hard floor alongside
+   * `credentials`, not a variant of it.
+   */
+  sacReviewConfirmation: boolean;
 }
 
 export type ApprovalGateDecision = "auto" | "ask";
@@ -54,11 +63,13 @@ export type ApprovalGateDecision = "auto" | "ask";
  * Decide whether an action proceeds without prompting, or still needs
  * `AgentIO.requestApproval`.
  *
- * `credentials` is a hard floor that no mode lifts — `ApprovalMeta`'s own
- * docstring already commits to this for the existing shell "remember" path
- * ("never auto-approved and never remembered, whatever the user picks"); an
- * action that can hand the agent authority it did not have gets the same
- * floor here, including under `auto`. Every other axis follows the mode:
+ * `credentials` and `sacReviewConfirmation` are hard floors that no mode
+ * lifts — `ApprovalMeta`'s own docstring already commits to this for the
+ * existing shell "remember" path ("never auto-approved and never
+ * remembered, whatever the user picks"); an action that can hand the agent
+ * authority it did not have, or that exists specifically to prove a human
+ * is present, gets the same floor here, including under `auto`. Every other
+ * axis follows the mode:
  *
  *   - `ask`   — unchanged today's behavior; only `read` skips the prompt.
  *   - `trust` — auto-approve unless the action is `destructive` (static risk
@@ -70,13 +81,13 @@ export type ApprovalGateDecision = "auto" | "ask";
  *     any action is skipped under it.
  */
 export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateDecision {
-  const { mode, risk, destructive, credentials } = input;
+  const { mode, risk, destructive, credentials, sacReviewConfirmation } = input;
 
   if (risk === "read") {
     return "auto";
   }
 
-  if (credentials) {
+  if (credentials || sacReviewConfirmation) {
     return "ask";
   }
 

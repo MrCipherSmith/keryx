@@ -9,6 +9,7 @@ import {
   WorkspaceService,
   type WorkspaceManifest,
 } from "../sac/workspace-service";
+import { buildCatchUp, type CatchUpItem, type CatchUpReport } from "../sac/catch-up";
 import { readSlate } from "../session/slate";
 import { listSessions, sessionDir } from "../session";
 
@@ -244,6 +245,32 @@ export function formatWorkspaceLines(workspaces: readonly WorkspaceInfo[]): stri
   }
   const width = workspaces.reduce((max, workspace) => Math.max(max, workspace.id.length), 0);
   return workspaces.map((workspace) => `${workspace.id.padEnd(width)}  ${workspace.status}  ${workspace.title}`);
+}
+
+/**
+ * Whole-project catch-up (SLATE-10) for the sidebar "Review" badge and
+ * `/review` modal — never workspace-scoped, matching the "whole project, all
+ * catch-up categories" scope decided for this surface. Failures stay an
+ * empty report, same "failures stay empty rows" contract as every other
+ * loader in this file.
+ */
+export async function loadInspectorCatchUp(cwd: string): Promise<CatchUpReport> {
+  try {
+    return await buildCatchUp({ cwd });
+  } catch {
+    return { proposals: [], blocked: [], unboundCandidates: [], unknown: [], lifecycleFlags: [] };
+  }
+}
+
+/**
+ * Items a human can act on from `/review`, in `renderCatchUp`'s own section
+ * order (`src/commands/workspace.ts`) — proposals, then blocked sessions,
+ * then unbound candidates, then unknown. `lifecycleFlags` is deliberately
+ * excluded: it is a separate, report-only category (see `CatchUpReport`'s own
+ * doc comment in `src/sac/catch-up.ts`) with no "review" action of its own.
+ */
+export function catchUpItems(report: CatchUpReport): CatchUpItem[] {
+  return [...report.proposals, ...report.blocked, ...report.unboundCandidates, ...report.unknown];
 }
 
 export function formatSessionFlowLines(flows: readonly FlowInspectorItem[]): string[] {
