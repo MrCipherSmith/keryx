@@ -5,6 +5,8 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.42] — 2026-08-18
+
 ### Added
 
 - **Session permission modes: `ask` / `trust` / `auto`.** `keryx shell` gains
@@ -29,6 +31,19 @@ All notable changes to `keryx` are documented here. The format follows
   skips every per-module question that follows — equivalent to `--yes`.
   Answering no falls through to the existing per-module questions, unchanged.
   An explicit `--no-<module>` flag still wins either way.
+- **Optional RLM-style recursive enrichment for `wiki enrich`.** A
+  classification gate (skip/light/deep) can run ahead of each page's model
+  call — light-tier batches sibling pages of the same module; deep-tier
+  spawns a bounded, unattended child turn with a filtered read-only tool
+  subset (never `shell_exec`/`spawn_subagent`, so it cannot recurse).
+  Per-page staleness is now also tracked independently via content-hash
+  resume state. Off by default — `.metaproject/wiki.config.json`'s
+  `rlm.enabled: false`, matching an absent config file, and the disabled
+  path is byte-for-byte identical to the pre-existing worker. Kept off in
+  this project's own dogfood config for now: live comparison (local Ollama
+  8B and DeepSeek) showed high variance on the weak local model and no clear
+  quality win on a capable one, pending real classification-threshold tuning
+  data.
 
 ## [0.2.41] — 2026-08-18
 
