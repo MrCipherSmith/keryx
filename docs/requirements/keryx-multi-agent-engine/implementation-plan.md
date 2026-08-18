@@ -1,15 +1,18 @@
 # Multi-Agent Engine — Implementation Plan
-Version: 0.2.0
+Version: 0.4.0
 
-> **Status note:** **all phases A → B → C shipped** as flows 088–101, including
-> the originally-deferred cost-dimension hook in the budget ledger (flow 101).
-> The plan below is retained as the original phased record; see `README.md` for
-> the per-phase runtime evidence and the two minor items still open (live
-> `keryx agents` snapshot; dedicated `orchestrator-state` fold).
+> **Status note:** **all phases A → B → C → D shipped** as flows 088–101
+> (phases A–C) and flow 171 (phase D), including the originally-deferred
+> cost-dimension hook in the budget ledger (flow 101). The plan below is
+> retained as the original phased record; see `README.md` for the per-phase
+> runtime evidence and the two minor items still open (live `keryx agents`
+> snapshot; dedicated `orchestrator-state` fold).
 
 Phased plan. **Phases 1–3 are the recommended first slice (Option B + caps);
-Phases 4–6 are the roadmap (Option C).** No runtime is implemented yet; this is a
-plan, not a status claim.
+Phases 4–6 are the roadmap (Option C).** (Historical note: at the time this plan
+was first written, no runtime existed yet for Phases 1-6 — that is no longer
+true, see the status note above; Phase D below is in that same
+not-yet-implemented state as of 0.3.0.)
 
 ## Phase 1 — `resolveChildModel` (core, S)
 
@@ -80,6 +83,52 @@ plan, not a status claim.
   `ExitWorktree` + `ContainedCommand.cwd` seam); explicit post-wave merge.
 - Bounded `peer_message` (artifact-refs only, policy-gated) as an event
   projection; per-child message quota in the budget lattice to prevent loops.
+
+## Phase D — Concurrent waves + structured status (implemented, flow 171)
+
+Added 2026-08-18, shipped as flow 171 (tasks T5–T7). Additive to A–C; no rework
+of shipped contracts.
+
+- **D1a — Wave executor:** `src/harness/parallel/scheduler.ts` — add
+  `executeWaves(tasks, waves, deps)` next to `planWaves` (spec §D1). Pure
+  wave-order enforcement, concurrent-within-wave via `Promise.all`; failures
+  are values, never thrown across the boundary (a rejected child settlement
+  must not abort its siblings — use `Promise.allSettled` internally if `run`
+  itself can reject, even though the D2 contract makes rejection unlikely for
+  the intended caller).
+- **D1b — Turn-loop integration:** `src/commands/agent.ts` — in the tool-call
+  batch handler (~line 1192-1238), detect 2+ `spawn_subagent` calls in the same
+  batch, build `ChildTask[]` (no `dependsOn`; `taskId` = the tool-call id),
+  call `planWaves` with a new `maxConcurrency` config field, run
+  `executeWaves`, splice results back into the batch's per-call results in the
+  model's original call order (order of RESULTS returned to the model must
+  match order of CALLS made — concurrency changes execution order, not
+  reporting order). Every other tool type's handling is untouched.
+- **D1c — Concurrency cap:** `AgentDeps.maxSubagentConcurrency` (new, optional,
+  default 3 — see spec §D1 for why not a fixed number and why no config-file
+  wiring yet). Threaded the same way `maxTreeDepth`/`maxChildrenPerRun` already
+  are (hardcoded constant, not config-loaded).
+- **D2a — Thread the internal finish reason out:** `src/commands/agent.ts` —
+  `runAgentTurn`'s return value gains an internal (not model-facing)
+  `finishReason?: "budget" | "no-progress"` field, set exactly where
+  `finishWithBudgetSummary` (~line 1349) and the existing no-progress detector
+  (~line 1318) already fire — no new detection, just surfacing what's already
+  computed.
+- **D2b — Consume it in the tool:** `src/harness/tool/builtin/spawn-subagent-tool.ts`
+  — the success-path branch (~line 844-872) checks the child turn's
+  `finishReason` before building its return value; maps `"budget"` →
+  `status:"BudgetExhausted"`, `"no-progress"` → `status:"NoProgress"`,
+  otherwise `status:"Completed"`. The existing timeout (~812-840) and thrown-error
+  (~873-888) branches gain `status:"Timeout"`/`status:"Error"` respectively (a
+  label added to an already-correct branch, not new logic); the MAE-denial
+  branch (`spawned.ok === false`) gains `status:"Denied"`.
+- **Tests:** `scheduler.test.ts` extension for `executeWaves` (AC9, AC10 via
+  fake/injected clocks — no real `setTimeout` sleep in the test suite);
+  `spawn-subagent-tool.test.ts` extension for AC11 (one test per status value,
+  including the two that are net-new: `BudgetExhausted`, `NoProgress`);
+  `agent.test.ts` extension for AC12 (regression: no `status` field read ⇒
+  identical observable behavior to pre-Phase-D).
+- **Acceptance:** AC9, AC10, AC11, AC12.
 
 ## Cross-cutting constraints
 

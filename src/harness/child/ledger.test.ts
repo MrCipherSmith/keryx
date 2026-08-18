@@ -132,3 +132,94 @@ describe("RemainingBudgetLedger — cost dimension (flow 101)", () => {
     expect(ledger.costRemaining).toBe(5);
   });
 });
+
+// --- flow 171 (Phase D / PRD R8, AC10): concurrency-safety investigation ---
+//
+// Phase D's `executeWaves` (`../parallel/scheduler.ts`) introduces the
+// harness's FIRST real concurrent execution path — wave siblings dispatched
+// via `Promise.allSettled`. This ledger, and everything it composes
+// (`inheritBudget` in `./isolation`, `spawnSubagent` in `./orchestrate`), was
+// written and exercised only under sequential spawning.
+//
+// Direct code reading (not assumption) of the full grant path found NO
+// `await` anywhere between a budget check and its corresponding decrement:
+//   - `RemainingBudgetLedger.admit()` (./ledger.ts) is a single synchronous
+//     function body: `maxChildren` check -> `inheritBudget()` subset check ->
+//     cost-ceiling check -> mutate `this.remainingBudget`/`this.admittedChildren`
+//     — no `await` anywhere in that sequence.
+//   - `inheritBudget()` (./isolation.ts) is itself fully synchronous (pure
+//     comparisons, no I/O, no Promise).
+//   - `spawnSubagent()` (./orchestrate.ts), the facade Phase D's concurrent
+//     `run()` callers would actually invoke, calls `spawnChild()` then
+//     `ctx.ledger.admit()` with no `await` between them either — the whole
+//     function is synchronous.
+//
+// Because JavaScript's event loop runs a synchronous function body to
+// completion before any other microtask/macrotask gets a turn, concurrent
+// CALLERS (e.g. many wave-sibling tasks each invoking `ledger.admit(...)`
+// after their own independent async work) cannot interleave BETWEEN one
+// call's check and its own decrement — there is no `await` inside `admit()`
+// to yield at. The ledger is therefore ALREADY safe for concurrent use, by
+// virtue of being synchronous — not because it was designed with concurrency
+// in mind. No production code change was needed; this section only adds a
+// regression test proving the property empirically under a genuinely
+// concurrent-looking calling pattern, so a future change that accidentally
+// introduces an `await` inside `admit()` (or anything it calls) would be
+// caught here.
+describe("RemainingBudgetLedger — concurrency-safety under concurrent-looking callers (flow 171, Phase D / AC10, PRD R8)", () => {
+  test("many callers racing to admit() after an unpredictable number of event-loop yields never cause the ledger to over-grant", async () => {
+    const initial: ParentRemainingBudget = { maxRuntimeMs: 100_000, maxToolCalls: 50 };
+    const ledger = new RemainingBudgetLedger(initial);
+
+    // 30 callers each request 4_000ms/2 tool-calls. Aggregate demand
+    // (120_000ms / 60 tool-calls) deliberately EXCEEDS the budget
+    // (100_000ms / 50 tool-calls), so some callers MUST be denied — the
+    // property under test is that whichever ones ARE granted never sum past
+    // the original budget, even when every caller "arrives" at its own
+    // `admit()` call through a different, unpredictable number of
+    // microtask/macrotask hops first (simulating wave siblings that each do
+    // different amounts of async work before reaching their own budget
+    // grant).
+    const callers = Array.from({ length: 30 }, (_, i) => async () => {
+      for (let hop = 0; hop < i % 5; hop++) {
+        await Promise.resolve();
+      }
+      if (i % 3 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return ledger.admit(res(`c${i}`, 4_000, 2));
+    });
+
+    const results = await Promise.all(callers.map((run) => run()));
+
+    let sumRuntime = 0;
+    let sumTools = 0;
+    let admittedCount = 0;
+    for (const r of results) {
+      if (r.ok) {
+        admittedCount += 1;
+        sumRuntime += r.reservation.maxRuntimeMs;
+        sumTools += r.reservation.maxToolCalls ?? 0;
+      }
+    }
+
+    // The core invariant: cumulative granted budget never exceeds what the
+    // parent started with, even under concurrent-looking arrival order.
+    expect(sumRuntime).toBeLessThanOrEqual(initial.maxRuntimeMs);
+    expect(sumTools).toBeLessThanOrEqual(initial.maxToolCalls ?? Number.POSITIVE_INFINITY);
+
+    // Non-vacuous: some callers were admitted (proves this isn't an
+    // all-denied no-op) and some were denied (proves the aggregate cap
+    // actually bound something real under this concurrent access pattern).
+    expect(admittedCount).toBeGreaterThan(0);
+    expect(admittedCount).toBeLessThan(30);
+
+    // The ledger's own bookkeeping matches the sum of what it actually
+    // granted — no drift from a missed/duplicated decrement.
+    expect(ledger.remaining).toEqual({
+      maxRuntimeMs: initial.maxRuntimeMs - sumRuntime,
+      maxToolCalls: (initial.maxToolCalls ?? 0) - sumTools,
+    });
+    expect(ledger.childCount).toBe(admittedCount);
+  });
+});

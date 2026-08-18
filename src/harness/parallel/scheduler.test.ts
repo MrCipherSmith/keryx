@@ -55,8 +55,8 @@ import type { BudgetReservation } from "../child/isolation";
 
 // PINNED API (see dispatch) — PA-01 impl (T6) exports these; imports fail
 // until then (expected RED: "Cannot find module './scheduler'").
-import { planWaves } from "./scheduler";
-import type { ChildTask, PlanWavesConfig, PlanWavesResult, Wave } from "./scheduler";
+import { executeWaves, planWaves, WaveExecutionError } from "./scheduler";
+import type { ChildTask, PlanWavesConfig, PlanWavesResult, Wave, WaveExecutorDeps } from "./scheduler";
 
 // ---------------------------------------------------------------------------
 // Deterministic fixtures.
@@ -423,5 +423,266 @@ describe("planWaves — optional modelRequest is threaded, not interpreted", () 
     const tasks: ChildTask[] = [{ ...task("A", [], 1_000), modelRequest: { kind: "inherit" } }];
     const result = planWaves(tasks, config);
     expect(result.ok).toBe(true);
+  });
+});
+
+// ============================================================================
+// 7. executeWaves (flow 171, Phase D / D1a) — actually RUNNING a planWaves plan.
+// ============================================================================
+//
+// Every test below is fully deterministic: no `Date.now`, no real
+// `setTimeout` sleep. Concurrency and "wall-clock" timing are proven via
+// manually-controlled deferred promises and a tiny injected fake clock
+// (`FakeClock` below), never real elapsed time.
+
+/** Flushes the microtask queue `n` times — enough hops for a chain of
+ * `Promise.allSettled`/`await` continuations inside `executeWaves` to run,
+ * without ever waiting on a real timer. */
+async function flushMicrotasks(n = 10): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    await Promise.resolve();
+  }
+}
+
+/**
+ * A minimal deterministic fake clock for proving "wall-clock time bounded by
+ * max(delay), not sum(delay)" WITHOUT any real timer. `wait(delayTicks)`
+ * resolves only once `advance()` has been called `delayTicks` times after the
+ * call to `wait` — the test drives `advance()` itself, so elapsed "time" is
+ * just an integer the test fully controls.
+ */
+class FakeClock {
+  private tick = 0;
+  private pending: Array<{ at: number; resolve: () => void }> = [];
+
+  wait(delayTicks: number): Promise<void> {
+    const at = this.tick + delayTicks;
+    return new Promise<void>((resolve) => {
+      this.pending.push({ at, resolve });
+    });
+  }
+
+  /** Advance the fake clock by one tick, resolving anything now due. */
+  advance(): void {
+    this.tick += 1;
+    const due = this.pending.filter((p) => p.at <= this.tick);
+    this.pending = this.pending.filter((p) => p.at > this.tick);
+    for (const p of due) p.resolve();
+  }
+
+  get now(): number {
+    return this.tick;
+  }
+}
+
+describe("D1a — executeWaves: wave-order enforcement (later wave never starts before the earlier one settles)", () => {
+  test("wave 1's task only starts after BOTH wave-0 siblings have been resolved (deferred promises, no real sleep)", async () => {
+    const tasks: ChildTask[] = [
+      task("a1", [], 1_000),
+      task("a2", [], 1_000),
+      task("b1", ["a1", "a2"], 1_000),
+    ];
+    const config: PlanWavesConfig = { maxConcurrency: 2, parentRemaining: { maxRuntimeMs: 100_000 } };
+    const planned = planWaves(tasks, config);
+    expectOk(planned);
+    expect(planned.waves).toHaveLength(2);
+    expect(planned.waves[0]?.taskIds).toEqual(["a1", "a2"]);
+    expect(planned.waves[1]?.taskIds).toEqual(["b1"]);
+
+    const events: string[] = [];
+    const resolvers: Record<string, () => void> = {};
+    const deps: WaveExecutorDeps<ChildTask, string> = {
+      run: (t) =>
+        new Promise<string>((resolve) => {
+          events.push(`start:${t.taskId}`);
+          resolvers[t.taskId] = () => resolve(t.taskId);
+        }),
+    };
+
+    const execPromise = executeWaves(tasks, planned.waves, deps);
+
+    // Both wave-0 siblings are dispatched SYNCHRONOUSLY (the `.map()` call
+    // inside `executeWaves` invokes `deps.run` for every task in the wave
+    // before the function's own first `await`) — proving genuine concurrent
+    // dispatch, not a serial "await one, then start the next" loop. Wave 1's
+    // task must NOT have started: it depends on wave 0, which has not
+    // resolved yet.
+    expect(events).toEqual(["start:a1", "start:a2"]);
+
+    resolvers["a1"]?.();
+    resolvers["a2"]?.();
+    await flushMicrotasks();
+
+    expect(events).toContain("start:b1");
+    expect(events.indexOf("start:b1")).toBeGreaterThan(events.indexOf("start:a2"));
+
+    resolvers["b1"]?.();
+    const result = await execPromise;
+
+    expect(result.get("a1")).toBe("a1");
+    expect(result.get("a2")).toBe("a2");
+    expect(result.get("b1")).toBe("b1");
+  });
+});
+
+describe("AC9 — executeWaves: within-wave concurrency (fake-clock wall-time bounded by max(delay), not sum(delay))", () => {
+  test("3 independent tasks with distinct injected delays (3, 7, 1 ticks) each complete at their OWN delay, and the whole wave needs only max(delay)=7 ticks, not sum(delay)=11", async () => {
+    const clock = new FakeClock();
+    const delays: Record<string, number> = { d1: 3, d2: 7, d3: 1 };
+    const completedAt: Record<string, number> = {};
+
+    const tasks: ChildTask[] = Object.keys(delays).map((id) => task(id, [], 1_000));
+    const config: PlanWavesConfig = { maxConcurrency: 3, parentRemaining: { maxRuntimeMs: 100_000 } };
+    const planned = planWaves(tasks, config);
+    expectOk(planned);
+    expect(planned.waves).toHaveLength(1); // fully independent tasks -> one wave
+
+    const deps: WaveExecutorDeps<ChildTask, number> = {
+      run: async (t) => {
+        const delay = delays[t.taskId];
+        if (delay === undefined) throw new Error(`no fixture delay for ${t.taskId}`);
+        await clock.wait(delay);
+        completedAt[t.taskId] = clock.now;
+        return delay;
+      },
+    };
+
+    const execPromise = executeWaves(tasks, planned.waves, deps);
+
+    // Drive the fake clock forward tick by tick, exactly max(delays)=7 ticks.
+    // If the executor ran tasks SEQUENTIALLY instead of concurrently, d1
+    // would not resolve until tick 3, d2 not until tick 3+7=10, d3 not until
+    // tick 10+1=11 (sum(delay)=11) — 7 ticks would leave the wave still
+    // unsettled. Instead every task resolves at exactly its OWN delay value,
+    // proving they were all dispatched together at tick 0.
+    for (let i = 0; i < 7; i++) {
+      await Promise.resolve();
+      clock.advance();
+      await Promise.resolve();
+    }
+    await flushMicrotasks();
+
+    const result = await execPromise;
+
+    expect(result.get("d1")).toBe(3);
+    expect(result.get("d2")).toBe(7);
+    expect(result.get("d3")).toBe(1);
+
+    expect(completedAt["d1"]).toBe(3);
+    expect(completedAt["d2"]).toBe(7);
+    expect(completedAt["d3"]).toBe(1);
+
+    // The whole wave finished within max(delays) = 7 ticks, well under
+    // sum(delays) = 11 — the property AC1/AC9 requires.
+    expect(clock.now).toBe(7);
+  });
+});
+
+describe("D1a — executeWaves: sibling isolation on a rejecting run()", () => {
+  test("one sibling's run() throwing does not abort or corrupt the other siblings dispatched in the SAME wave", async () => {
+    const tasks: ChildTask[] = [task("ok-1", [], 1_000), task("boom", [], 1_000), task("ok-2", [], 1_000)];
+    const config: PlanWavesConfig = { maxConcurrency: 3, parentRemaining: { maxRuntimeMs: 100_000 } };
+    const planned = planWaves(tasks, config);
+    expectOk(planned);
+    expect(planned.waves).toHaveLength(1);
+
+    const completed: string[] = [];
+    const deps: WaveExecutorDeps<ChildTask, string> = {
+      run: async (t) => {
+        if (t.taskId === "boom") {
+          throw new Error("boom failed");
+        }
+        // Yield once so `boom`'s rejection has every opportunity to reach
+        // the executor FIRST. A `Promise.all`-based (rather than
+        // `Promise.allSettled`-based) implementation would short-circuit the
+        // whole wave the instant ANY promise rejects — this yield would then
+        // catch that bug by giving the reject a head start over completion.
+        await Promise.resolve();
+        completed.push(t.taskId);
+        return t.taskId;
+      },
+    };
+
+    let caught: unknown;
+    try {
+      await executeWaves(tasks, planned.waves, deps);
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(WaveExecutionError);
+    const err = caught as WaveExecutionError<string>;
+    expect(err.waveIndex).toBe(0);
+    expect(err.failedTaskIds).toEqual(["boom"]);
+    expect(err.causes).toHaveLength(1);
+    expect((err.causes[0] as Error).message).toBe("boom failed");
+
+    // The critical assertion: both non-rejecting siblings ran to completion
+    // even though `boom` rejected in the same wave.
+    expect(completed).toContain("ok-1");
+    expect(completed).toContain("ok-2");
+
+    // T9 (code-verifier fix): the SAME-wave siblings that fulfilled must be
+    // recoverable from the thrown error's `partialResults` — a caller (e.g.
+    // `runConcurrentSpawnBatch` in agent.ts) must be able to return their
+    // REAL results instead of overwriting them with a generic wave-error
+    // fallback just because `boom` rejected alongside them.
+    expect(err.partialResults.size).toBe(2);
+    expect(err.partialResults.get("ok-1")).toBe("ok-1");
+    expect(err.partialResults.get("ok-2")).toBe("ok-2");
+    expect(err.partialResults.has("boom")).toBe(false);
+  });
+
+  test("a rejection in an EARLIER wave stops a later wave from ever starting (fail-closed on partial success)", async () => {
+    const tasks: ChildTask[] = [task("a1", [], 1_000), task("b1", ["a1"], 1_000)];
+    const config: PlanWavesConfig = { maxConcurrency: 2, parentRemaining: { maxRuntimeMs: 100_000 } };
+    const planned = planWaves(tasks, config);
+    expectOk(planned);
+    expect(planned.waves).toHaveLength(2);
+
+    let b1Started = false;
+    const deps: WaveExecutorDeps<ChildTask, string> = {
+      run: async (t) => {
+        if (t.taskId === "a1") throw new Error("a1 failed");
+        b1Started = true;
+        return t.taskId;
+      },
+    };
+
+    let caught: unknown;
+    try {
+      await executeWaves(tasks, planned.waves, deps);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(WaveExecutionError);
+    expect(b1Started).toBe(false);
+    // T9: `a1` is the ONLY task in wave 0, and it rejected, so wave 0 has no
+    // fulfilled siblings and wave 1 (`b1`) never even started — the thrown
+    // error's `partialResults` must be empty, not just missing an
+    // assertion. A caller must be able to tell "nothing settled" apart from
+    // "everything settled" purely from this map.
+    const err = caught as WaveExecutionError<string>;
+    expect(err.partialResults.size).toBe(0);
+  });
+});
+
+describe("D1a — executeWaves: defensive checks on a malformed Wave (should be unreachable via planWaves output)", () => {
+  test("a wave taskId with no matching entry in `tasks` fails that wave via WaveExecutionError, not a silent skip", async () => {
+    const tasks: ChildTask[] = [task("known", [], 1_000)];
+    const waves: Wave[] = [{ taskIds: ["known", "unknown"], reservations: [budget("res-known", 1_000), budget("res-unknown", 1_000)] }];
+
+    const deps: WaveExecutorDeps<ChildTask, string> = {
+      run: async (t) => t.taskId,
+    };
+
+    let caught: unknown;
+    try {
+      await executeWaves(tasks, waves, deps);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(WaveExecutionError);
+    expect((caught as WaveExecutionError).failedTaskIds).toEqual(["unknown"]);
   });
 });

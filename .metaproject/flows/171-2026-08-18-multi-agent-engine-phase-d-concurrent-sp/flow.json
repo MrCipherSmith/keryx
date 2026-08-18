@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 2,
+  "id": "171",
+  "slug": "multi-agent-engine-phase-d-concurrent-sp",
+  "title": "Multi-Agent Engine Phase D: concurrent spawn_subagent waves + structured completion status",
+  "status": "in-progress",
+  "createdAt": "2026-08-18T16:28:02.331Z",
+  "updatedAt": "2026-08-18T18:13:17.411Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5a30d53001a9b7c5d62bc76fab2ad403de9cf50b07494e6be69d94e55ca6f491",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "D1: wave executor (scheduler.ts) + ledger concurrency-safety verification (PRD R8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "D1: turn-loop concurrent spawn_subagent integration (agent.ts) + maxConcurrency config field",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "D2: thread finishReason out of runAgentTurn + consume in spawn-subagent-tool.ts for SubagentCompletionStatus",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Flip requirements package status notes to implemented with runtime evidence, once D1+D2 land",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Fix code-verifier finding: WaveExecutionError discards earlier-wave successes in multi-wave batches",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-18T16:28:02.331Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-18T16:29:26.428Z",
+      "event": "task-added",
+      "detail": "T5: D1: wave executor (scheduler.ts) + ledger concurrency-safety verification (PRD R8)"
+    },
+    {
+      "at": "2026-08-18T16:29:26.653Z",
+      "event": "task-added",
+      "detail": "T6: D1: turn-loop concurrent spawn_subagent integration (agent.ts) + maxConcurrency config field"
+    },
+    {
+      "at": "2026-08-18T16:29:26.864Z",
+      "event": "task-added",
+      "detail": "T7: D2: thread finishReason out of runAgentTurn + consume in spawn-subagent-tool.ts for SubagentCompletionStatus"
+    },
+    {
+      "at": "2026-08-18T16:29:27.080Z",
+      "event": "task-added",
+      "detail": "T8: Flip requirements package status notes to implemented with runtime evidence, once D1+D2 land"
+    },
+    {
+      "at": "2026-08-18T16:30:58.031Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-18T16:30:58.221Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-18T16:30:58.471Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-18T16:52:02.896Z",
+      "event": "task-done",
+      "detail": "T5: D1: wave executor (scheduler.ts) + ledger concurrency-safety verification (PRD R8)"
+    },
+    {
+      "at": "2026-08-18T17:18:53.201Z",
+      "event": "task-done",
+      "detail": "T6: D1: turn-loop concurrent spawn_subagent integration (agent.ts) + maxConcurrency config field"
+    },
+    {
+      "at": "2026-08-18T17:44:21.154Z",
+      "event": "task-done",
+      "detail": "T7: D2: thread finishReason out of runAgentTurn + consume in spawn-subagent-tool.ts for SubagentCompletionStatus"
+    },
+    {
+      "at": "2026-08-18T17:44:49.735Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-18T17:53:51.586Z",
+      "event": "task-done",
+      "detail": "T8: Flip requirements package status notes to implemented with runtime evidence, once D1+D2 land"
+    },
+    {
+      "at": "2026-08-18T18:01:30.438Z",
+      "event": "task-added",
+      "detail": "T9: Fix code-verifier finding: WaveExecutionError discards earlier-wave successes in multi-wave batches"
+    },
+    {
+      "at": "2026-08-18T18:13:17.411Z",
+      "event": "task-done",
+      "detail": "T9: Fix code-verifier finding: WaveExecutionError discards earlier-wave successes in multi-wave batches"
+    }
+  ]
+}
