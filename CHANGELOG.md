@@ -5,6 +5,25 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Session permission modes: `ask` / `trust` / `auto`.** `keryx shell` gains
+  a session-level layer over the existing approval gate — `--permission-mode
+  <ask|trust|auto>` / `--ask`/`--trust`/`--auto`, and a `/mode` command
+  (show/switch/`save`/`clear`) in both the OpenTUI shell and the `--no-tui`
+  readline REPL. `trust` auto-approves everything except a destructive
+  command (tool-declared or classifier-detected); `auto` auto-approves
+  everything except a credentials-touching command, which no mode ever
+  bypasses, and requires an explicit one-time confirmation to enter. A
+  per-project default persists to `permission-mode.json` next to
+  `auth.json`/`projects.json` in the shared keryx config directory, opt-in
+  via `/mode <mode> save`. Every silent auto-approval still prints a
+  non-dimmed transcript line. Deliberately out of scope: `harness run`/
+  `harness exec`/`keryx serve` and the MCP server keep the existing
+  policy-profile engine untouched — "headless never silently allows" is
+  unaffected. See the
+  [permission modes guide](docs/docs/guides/permission-modes.md).
+
 ## [0.2.41] — 2026-08-18
 
 ### Added

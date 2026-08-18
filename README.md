@@ -225,6 +225,13 @@ What is in it today:
   seven risk classes — read, write, shell, network, credential, delegate,
   destructive — with path and command rules underneath. Shell and destructive
   actions are default-deny and need an explicit approval before they run.
+- **Session permission modes.** `keryx shell --trust`/`--auto`, or `/mode`
+  inside a running session, decide whether that approval is asked for at all
+  — `ask` (default), `trust` (safe calls run, a destructive one still asks),
+  `auto` (nothing asks except a credentials-touching command, which no mode
+  ever auto-approves). A session-level layer only: `harness run`/`exec`,
+  `keryx serve`, and MCP keep the unconditional policy engine above,
+  untouched. See the [permission modes guide](docs/docs/guides/permission-modes.md).
 - **Kernel-enforced containment underneath.** The OS sandbox sits *below* the
   policy engine — Seatbelt on macOS, bubblewrap on Linux — with network off/on,
   and on macOS a loopback domain allowlist, credential masking behind a per-run
@@ -483,6 +490,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
+- **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 
 Run `keryx <command> --help` for the live flag surface of any command.

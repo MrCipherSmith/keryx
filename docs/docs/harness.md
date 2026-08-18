@@ -82,6 +82,22 @@ Four properties are worth knowing before you rely on it:
 4. **Structural safety runs before policy.** `guardAction` refuses malformed or
    unsafe shapes ahead of any allow/ask/deny question.
 
+## Interactive session: ask / trust / auto
+
+The properties above are unconditional — they hold for `keryx harness run`,
+`keryx harness exec`, and `keryx serve` no matter what. `keryx shell` sits on
+top of that same approval gate and adds a **session-level convenience layer**
+with three modes: `ask` (default, unchanged), `trust` (safe calls run without
+asking; a destructive one still asks), and `auto` (nothing asks except a
+credentials-touching command, which no mode ever auto-approves). Set it with
+`keryx shell --trust`/`--auto`, or the `/mode` command once inside a session.
+Full reference, including exactly where the per-project default is stored:
+[Choose an approval mode](guides/permission-modes.md).
+
+This layer never reaches `harness run`/`harness exec`/`keryx serve` or the
+MCP server — property 3 above (**headless never silently allows**) is
+untouched by it.
+
 ## Containment underneath
 
 The OS sandbox sits *below* the policy engine — Seatbelt on macOS, bubblewrap on
