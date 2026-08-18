@@ -295,3 +295,83 @@ test("the mode getter is read fresh per turn — a live toggle between turns tak
   expect(approvalCalls).toBe(1); // trust mode: no additional prompt for a benign command
   expect(ran()).toBe(true);
 });
+
+test("onAutoApproved fires with the escalation flags when a mode skips the prompt", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const seen: { tool: string; destructive: boolean; credentials: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => true,
+    permissionMode: () => "trust",
+    onAutoApproved: (t, _input, meta) => {
+      seen.push({ tool: t, ...meta });
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ tool: "shell_exec", destructive: false, credentials: false }]);
+});
+
+test("onAutoApproved does NOT fire when the mode still asks", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  let autoApprovedCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => true,
+    permissionMode: () => "ask",
+    onAutoApproved: () => {
+      autoApprovedCalls += 1;
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(autoApprovedCalls).toBe(0);
+});
+
+test("onAutoApproved never fires for a plain read tool — that was already silent", async () => {
+  const { tool } = fakeTool("get_cwd", "read");
+  let autoApprovedCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onAutoApproved: () => {
+      autoApprovedCalls += 1;
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("get_cwd", '{"command":"n/a"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(autoApprovedCalls).toBe(0);
+});

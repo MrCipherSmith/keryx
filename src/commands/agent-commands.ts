@@ -134,6 +134,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: BOTH,
   },
   { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
+  {
+    name: "/mode",
+    description: "Show or switch the permission mode — /mode [ask|trust|auto]",
+    // Chat mode has no tools, so there is nothing for a permission mode to gate.
+    modes: AGENT_ONLY,
+  },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {

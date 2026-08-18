@@ -117,6 +117,17 @@ export interface AgentIO {
    */
   requestApproval?: (tool: string, input: string, meta?: ApprovalMeta) => Promise<ApprovalResponse>;
   /**
+   * A `trust`/`auto` permission-mode decision just skipped `requestApproval`
+   * entirely for this call — it is about to run with no prompt. Optional and
+   * side-effect-free from the driver's point of view (the call runs regardless
+   * of whether this is wired), but omitting it in a real UI recreates exactly
+   * the failure mode `spawn_subagent`'s read_only auto-approval line already
+   * guards against elsewhere: "an auto-approval the user cannot notice is an
+   * auto-approval they cannot object to." Never called for risk `read` — that
+   * was already silent before permission modes existed, and stays that way.
+   */
+  onAutoApproved?: (tool: string, input: string, meta: { destructive: boolean; credentials: boolean }) => void;
+  /**
    * The session's current permission mode (see `permission-mode.ts`).
    * Read fresh on every gated call, never cached — this is how a live `/mode`
    * toggle takes effect on the very next tool call. Absent (or `undefined`)
@@ -1224,7 +1235,7 @@ async function runAgentTurnCore(
       }
 
       executedAny = true;
-      const result = await executeCall(call, toolByName, io.requestApproval, io.permissionMode);
+      const result = await executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved);
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -1470,6 +1481,7 @@ async function executeCall(
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
   permissionMode: AgentIO["permissionMode"],
+  onAutoApproved: AgentIO["onAutoApproved"],
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -1507,7 +1519,9 @@ async function executeCall(
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
     const decision = resolveApprovalDecision({ mode, risk, destructive, credentials });
-    if (decision !== "auto") {
+    if (decision === "auto") {
+      onAutoApproved?.(call.name, call.input, { destructive, credentials });
+    } else {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined
@@ -1527,7 +1541,9 @@ async function executeCall(
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
     const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false });
-    if (decision !== "auto") {
+    if (decision === "auto") {
+      onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
+    } else {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined

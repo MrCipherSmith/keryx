@@ -778,6 +778,25 @@ describe("parseShellCliFlags — default TUI agent shell", () => {
     expect(parseShellCliFlags(["-r"]).resumePick).toBe(true);
     expect(parseShellCliFlags(["-r"]).resumeId).toBeUndefined();
   });
+
+  test("--permission-mode <ask|trust|auto> and the shorthand flags", () => {
+    expect(parseShellCliFlags(["--permission-mode", "trust"]).permissionModeFlag).toBe("trust");
+    expect(parseShellCliFlags(["--ask"]).permissionModeFlag).toBe("ask");
+    expect(parseShellCliFlags(["--trust"]).permissionModeFlag).toBe("trust");
+    expect(parseShellCliFlags(["--auto"]).permissionModeFlag).toBe("auto");
+  });
+
+  test("--permission-mode with an unknown value is ignored, not thrown", () => {
+    expect(parseShellCliFlags(["--permission-mode", "yolo"]).permissionModeFlag).toBeUndefined();
+  });
+
+  test("no permission flag leaves permissionModeFlag unset", () => {
+    expect(parseShellCliFlags([]).permissionModeFlag).toBeUndefined();
+  });
+
+  test("a later --ask/--trust/--auto wins over an earlier one", () => {
+    expect(parseShellCliFlags(["--trust", "--auto"]).permissionModeFlag).toBe("auto");
+  });
 });
 
 test("shellCommand wires web_search into the agent TUI tool set", async () => {
