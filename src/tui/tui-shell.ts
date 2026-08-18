@@ -56,6 +56,8 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import {
+  catchUpItems,
+  loadInspectorCatchUp,
   loadInspectorFlows,
   loadInspectorSlates,
   loadInspectorWorkspace,
@@ -64,6 +66,9 @@ import {
   type WorkspaceInfo,
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
+import { isReviewCommand, openReview } from "./review-inspector";
+import { acceptProposalViaShell } from "./review-accept";
+import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
 import {
   buildSessionInfoSnapshot,
@@ -1642,6 +1647,29 @@ export async function launchTuiAgentShell(opts: {
           ? otui.t`${otui.dim("—")}`
           : otui.t`${otui.dim(`${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`;
     };
+    // SLATE-10 catch-up (RP-13-ish sidebar surface): project-wide, not
+    // scoped to this session's own workspace — a human coming back after
+    // several sessions needs to see EVERY pending proposal/blocked
+    // session/unbound candidate, not just this one's. Yellow (matches the
+    // Status row's own "blocked = yellow" convention) once nonzero, so the
+    // badge reads as a notification rather than a passive count.
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-review-k", content: otui.t`${otui.dim("Review")}`, marginTop: 1 }));
+    const sbReviewV = new otui.TextRenderable(r, {
+      id: "sb-review-v",
+      content: otui.t`${otui.dim("—")}`,
+      onMouseDown: () => {
+        showReview();
+      },
+    });
+    sidebar.add(sbReviewV);
+    const refreshReviewSidebar = async (): Promise<void> => {
+      const cwd = opts.session?.cwd ?? process.cwd();
+      const count = catchUpItems(await loadInspectorCatchUp(cwd)).length;
+      sbReviewV.content =
+        count === 0
+          ? otui.t`${otui.dim("— nothing to review")}`
+          : otui.t`${otui.yellow(`${count} item${count === 1 ? "" : "s"} need review`)}`;
+    };
     sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
     const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
     sidebar.add(sbContext);
@@ -2261,6 +2289,7 @@ export async function launchTuiAgentShell(opts: {
     }
     slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
+    void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
@@ -2435,6 +2464,21 @@ export async function launchTuiAgentShell(opts: {
         openWorkspace(otui, chrome, {
           workspace,
           slates,
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
+    };
+    const showReview = (): void => {
+      void (async () => {
+        const cwd = inspectorCwd();
+        const items = catchUpItems(await loadInspectorCatchUp(cwd));
+        openReview(otui, chrome, {
+          items,
+          acceptProposal: (item) => acceptProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
+          onAccepted: () => {
+            void refreshReviewSidebar();
+          },
           renderer: r,
           ...inspectorKeys,
         });
@@ -3128,6 +3172,10 @@ export async function launchTuiAgentShell(opts: {
             startNewSession();
             slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
             void refreshWorkspaceSidebar(); // new session: no bound workspace yet
+            // The just-closed session's wrap-up may have just added a new
+            // proposal/unbound-candidate — project-wide, so worth a refresh
+            // even though this new session has no workspace of its own yet.
+            void refreshReviewSidebar();
             // The old session's subagents (sidebar list + inspector) belong to
             // the transcript that just left — a fresh session starts with none.
             sessions.clear();
@@ -3275,6 +3323,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isWorkspaceCommand(command.name)) {
           showWorkspace();
+          return;
+        }
+        if (isReviewCommand(command.name)) {
+          showReview();
           return;
         }
         if (command.name === "/copy") {
@@ -3682,6 +3734,10 @@ export async function launchTuiAgentShell(opts: {
         // FIRST action — the sidebar can only reflect that once the turn
         // that decided it has actually settled.
         void refreshWorkspaceSidebar();
+        // A settled turn may have proposed something, or wrap-up may have
+        // just run — the "keryx itself periodically figures out what needs
+        // review" behavior this badge exists for.
+        void refreshReviewSidebar();
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
         try {
           flushSessionCheckpoint();
