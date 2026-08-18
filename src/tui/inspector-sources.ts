@@ -1,4 +1,5 @@
-// Read-only project sources for /status and /flows. Failures stay empty rows.
+// Read-only project sources for /status, /flows, and /workspace. Failures
+// stay empty rows.
 
 import { randomUUID } from "node:crypto";
 import { listFlowDirs, readFlow } from "../flow/store";
@@ -8,6 +9,8 @@ import {
   WorkspaceService,
   type WorkspaceManifest,
 } from "../sac/workspace-service";
+import { readSlate } from "../session/slate";
+import { listSessions, sessionDir } from "../session";
 
 export type WorkspaceInfo = {
   id: string;
@@ -109,22 +112,43 @@ export function flowItemFromState(flow: FlowState, dir: string): FlowInspectorIt
   };
 }
 
+function localSacGuard() {
+  return {
+    mode: "strict" as const,
+    availability: "available" as const,
+    decision: "pass" as const,
+    policyRevision: "local-offline-v1",
+  };
+}
+
 export async function loadInspectorWorkspaces(cwd: string): Promise<WorkspaceInfo[]> {
   try {
     const service = new WorkspaceService({
       workspaceRoot: cwd,
       authorizationServer: localWorkspaceAuthorizationServer(),
-      strictGuard: {
-        mode: "strict",
-        availability: "available",
-        decision: "pass",
-        policyRevision: "local-offline-v1",
-      },
+      strictGuard: localSacGuard(),
     });
     const listed = await service.list({ request: undefined, requestCorrelationId: randomUUID() });
     return listed.map(workspaceFromManifest);
   } catch {
     return [];
+  }
+}
+
+/** Single-workspace fetch for the sidebar/`/workspace` modal. `undefined` on
+ * any failure (not found, guard denial, corrupt manifest) — same "failures
+ * stay empty" contract as every other loader in this file. */
+export async function loadInspectorWorkspace(cwd: string, workspaceId: string): Promise<WorkspaceInfo | undefined> {
+  try {
+    const service = new WorkspaceService({
+      workspaceRoot: cwd,
+      authorizationServer: localWorkspaceAuthorizationServer(),
+      strictGuard: localSacGuard(),
+    });
+    const manifest = await service.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+    return workspaceFromManifest(manifest);
+  } catch {
+    return undefined;
   }
 }
 
@@ -153,6 +177,62 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
       }
     }
     return sortFlowsNewestFirst(items);
+  } catch {
+    return [];
+  }
+}
+
+export type SlateInspectorItem = {
+  sessionId: string;
+  sessionTitle: string;
+  updatedAt: string;
+  /** SessionSummary's own Slate-Phase-5 catch-up field; "unbound" when the
+   * session predates that field or was never classified. */
+  courseStatus: string;
+  flowRef?: string;
+  seedCount: number;
+  touchedFiles: readonly string[];
+  seeds: readonly { id: string; text: string; ts: string; kind?: string }[];
+};
+
+export function sortSlatesNewestFirst(items: readonly SlateInspectorItem[]): SlateInspectorItem[] {
+  return [...items].sort((left, right) => (left.updatedAt < right.updatedAt ? 1 : left.updatedAt > right.updatedAt ? -1 : 0));
+}
+
+/**
+ * Every session in this project whose `slate.json` is bound to `workspaceId`
+ * — the sole link is `Slate.workspaceId` (set at resolve-or-create time,
+ * SLATE-16); a workspace's own `resources[]` never gets a `kind: "session"`
+ * entry for this. One extra `readSlate` per project session; `listSessions`
+ * is already project-scoped so this never crosses project boundaries.
+ */
+export async function loadInspectorSlates(cwd: string, workspaceId: string): Promise<SlateInspectorItem[]> {
+  try {
+    const sessions = listSessions(cwd);
+    const items: SlateInspectorItem[] = [];
+    for (const session of sessions) {
+      const dir = sessionDir(session.projectPath, session.id);
+      let slate: Awaited<ReturnType<typeof readSlate>>;
+      try {
+        slate = await readSlate(dir);
+      } catch {
+        continue; // unreadable/corrupt slate.json — skip, never abort the whole list
+      }
+      if (slate === undefined || slate.workspaceId !== workspaceId) {
+        continue;
+      }
+      items.push({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        updatedAt: session.updatedAt,
+        courseStatus: session.courseStatus ?? "unbound",
+        ...(slate.course.flowRef !== undefined ? { flowRef: slate.course.flowRef } : {}),
+        seedCount: slate.seeds.length,
+        touchedFiles: slate.anchors.touched,
+        seeds: slate.seeds,
+      });
+    }
+    return sortSlatesNewestFirst(items);
   } catch {
     return [];
   }
