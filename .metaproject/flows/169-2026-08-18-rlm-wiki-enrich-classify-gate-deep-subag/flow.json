@@ -3,17 +3,50 @@
   "id": "169",
   "slug": "rlm-wiki-enrich-classify-gate-deep-subag",
   "title": "RLM wiki-enrich: classify gate + deep subagent path + batching + per-page staleness",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-18T07:03:21.450Z",
-  "updatedAt": "2026-08-18T08:33:35.438Z",
+  "updatedAt": "2026-08-18T08:42:23.168Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:bb8c21d900090d723ee37ad90148f39c170002464b7a1dc52e89a65a71b326eb",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-18T08:42:17.231Z",
+      "note": "enrich-rlm.test.ts: rlm.enabled:false and absent-config runs produce identical WikiEnrichPageResult[] and identical on-disk content (NFR-4 parity test)"
+    },
+    "AC2": {
+      "at": "2026-08-18T08:42:17.316Z",
+      "note": "enrich-rlm.test.ts: skip-classified page makes zero LLM calls, output equals collect.ts template unchanged"
+    },
+    "AC3": {
+      "at": "2026-08-18T08:42:17.401Z",
+      "note": "deep-enrich.test.ts: buildDeepEnrichTools tool array asserted to contain exactly the 6 named read-only ops, no spawn/shell capability (FR-6)"
+    },
+    "AC4": {
+      "at": "2026-08-18T08:42:17.485Z",
+      "note": "enrich-rlm.test.ts: unchanged page skipped on re-run; T10 fix ensures per-page hash always recomputed/compared (not gated by repo-wide staleness), verified by a changed-content-not-skipped test"
+    },
+    "AC5": {
+      "at": "2026-08-18T08:42:17.573Z",
+      "note": "deep-enrich.test.ts: budget/timeout exhaustion returns fallback variant, never throws; T10 added try/catch isolation around all RLM per-unit workers so one page's failure cannot crash the whole wikiEnrich run"
+    },
+    "AC6": {
+      "at": "2026-08-18T08:42:17.655Z",
+      "note": "enrich-rlm.test.ts: batch overflow splits into multiple groups via repomap.ts's token-budget pattern rather than truncating"
+    },
+    "AC7": {
+      "at": "2026-08-18T08:42:17.738Z",
+      "note": "AC text corrected via ac update (T6 grounding correction): DeepEnrichToolCall[] provenance log verified present on every DeepEnrichResult variant, surfaced via WikiEnrichPageResult's deepToolCalls field"
+    },
+    "AC8": {
+      "at": "2026-08-18T08:42:17.821Z",
+      "note": "typecheck clean; full bun test suite 4086 pass/0 fail on the feature branch before merge, 87/87 src/wiki/ tests re-verified green on main post-merge"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/326"
   },
   "tasks": [
     {
@@ -259,6 +292,60 @@
       "at": "2026-08-18T08:33:35.438Z",
       "event": "task-done",
       "detail": "T10: Fix review findings: FR-7 false-unchanged staleness gate, unhandled exceptions crash whole RLM run, non-positive maxRuntimeMs disables timeout"
+    },
+    {
+      "at": "2026-08-18T08:42:07.395Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/326 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-18T08:42:17.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: enrich-rlm.test.ts: rlm.enabled:false and absent-config runs produce identical WikiEnrichPageResult[] and identical on-disk content (NFR-4 parity test)"
+    },
+    {
+      "at": "2026-08-18T08:42:17.316Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: enrich-rlm.test.ts: skip-classified page makes zero LLM calls, output equals collect.ts template unchanged"
+    },
+    {
+      "at": "2026-08-18T08:42:17.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: deep-enrich.test.ts: buildDeepEnrichTools tool array asserted to contain exactly the 6 named read-only ops, no spawn/shell capability (FR-6)"
+    },
+    {
+      "at": "2026-08-18T08:42:17.485Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: enrich-rlm.test.ts: unchanged page skipped on re-run; T10 fix ensures per-page hash always recomputed/compared (not gated by repo-wide staleness), verified by a changed-content-not-skipped test"
+    },
+    {
+      "at": "2026-08-18T08:42:17.573Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: deep-enrich.test.ts: budget/timeout exhaustion returns fallback variant, never throws; T10 added try/catch isolation around all RLM per-unit workers so one page's failure cannot crash the whole wikiEnrich run"
+    },
+    {
+      "at": "2026-08-18T08:42:17.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: enrich-rlm.test.ts: batch overflow splits into multiple groups via repomap.ts's token-budget pattern rather than truncating"
+    },
+    {
+      "at": "2026-08-18T08:42:17.738Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: AC text corrected via ac update (T6 grounding correction): DeepEnrichToolCall[] provenance log verified present on every DeepEnrichResult variant, surfaced via WikiEnrichPageResult's deepToolCalls field"
+    },
+    {
+      "at": "2026-08-18T08:42:17.821Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: typecheck clean; full bun test suite 4086 pass/0 fail on the feature branch before merge, 87/87 src/wiki/ tests re-verified green on main post-merge"
+    },
+    {
+      "at": "2026-08-18T08:42:21.141Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-18T08:42:23.168Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
