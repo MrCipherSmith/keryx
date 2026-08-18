@@ -216,7 +216,7 @@ export interface ShellChrome {
   readonly renderer: Renderer;
   /** Root row: `main` + `sidebar`. */
   readonly root: Box;
-  /** Left column: header, transcript, dock, menu, composer, footer. */
+  /** Left column: header, transcript, queue dock, dock, menu, composer, footer. */
   readonly main: Box;
   /** Right status column: `sidebarTop`, a spacer, then the pinned toast. */
   readonly sidebar: Box;
@@ -233,6 +233,13 @@ export interface ShellChrome {
   readonly transcript: Box;
   /** Choice dock above the composer (`showComposerChoice` mounts into it). */
   readonly dock: Box;
+  /**
+   * Persistent queue dock above `dock`, listing queued main-turn messages
+   * (`paintMainQueue` in `tui-shell.ts` mounts into it). Unlike `dock` it is
+   * multi-item and stays mounted for as long as the queue is non-empty
+   * (`.visible` toggles with `mainQueue.length > 0`).
+   */
+  readonly queueDock: Box;
   readonly menu: Select;
   readonly composer: Box;
   readonly textarea: Textarea;
@@ -474,6 +481,30 @@ export async function createShellChrome(
   main.add(scroll);
   const transcript = scroll.content;
 
+  // --- queue dock -----------------------------------------------------------
+  // Persistent (not ephemeral like `dock` below): lists queued main-turn
+  // messages so they stop being painted into `transcript` (flow 170). Mirrors
+  // `dock`'s own styling below so the two docks read as one visual family, but
+  // starts hidden — `paintMainQueue()` in tui-shell.ts flips `.visible` once
+  // `mainQueue.length > 0`. Inserted between `scroll` and `dock` in add-order:
+  // the passive queue reminder sits one step further from the composer than
+  // the active choice dock.
+  const queueDock = new otui.BoxRenderable(r, {
+    id: "queue-dock",
+    flexShrink: 0,
+    flexDirection: "column",
+    visible: false,
+    backgroundColor: getTheme().panel,
+    borderStyle: "rounded",
+    border: true,
+    borderColor: getTheme().border,
+    paddingLeft: 1,
+    paddingRight: 1,
+    paddingTop: 0,
+    paddingBottom: 0,
+  });
+  main.add(queueDock);
+
   // --- bottom stack: dock, menu, composer ---------------------------------
   // Layout order = the visual bottom stack: dock and menu open *upward* into the
   // transcript, so they are added before the composer.
@@ -638,6 +669,51 @@ export async function createShellChrome(
     focus(): void {
       textarea.focus();
     },
+  };
+
+  // --- region click-to-focus (flow 170 T6, PRD FR-11/FR-13/FR-15) ---------
+  // Clicking a region routes keyboard focus to whatever it logically belongs
+  // to. Both handlers defer entirely to an active overlay (FR-15) via the
+  // SAME `overlayActive()` the `/`-menu key router above already relies on —
+  // confirmed by reading its body (a few lines up) rather than assumed: it
+  // already folds in anything registered through `addOverlaySource` (e.g.
+  // flow 170 T5's queue-nav mode), so this one check is sufficient on its
+  // own, no separate queue-nav-aware guard needed.
+  scroll.onMouseDown = (event) => {
+    if (overlayActive()) return;
+    input.focus(); // FR-13: transcript/output-area (or empty space below it,
+    // since `scroll` is the flexGrow:1 filler) click -> composer.
+    // `ScrollBoxRenderable` is itself focusable (for keyboard scrolling), and
+    // the renderer's OWN mouse dispatch (`dispatchMouseEvent`, bundled
+    // `@opentui/core`) walks from the click target up through `.parent`
+    // AFTER firing this handler, auto-focusing the first focusable ancestor
+    // it finds — which would be `scroll` itself, immediately blurring the
+    // composer this handler just focused. `preventDefault()` is exactly the
+    // renderer's own escape hatch for that walk (confirmed against the
+    // bundled implementation, not assumed) — without it, every transcript
+    // click would visibly focus the composer for one frame and then silently
+    // lose it again.
+    event.preventDefault();
+  };
+  // FR-11: `sidebar` is display-only today — model/context/tools/status text
+  // plus per-row subagent entries that already own their own `onMouseDown`
+  // (`subagent-inspector.ts`'s `paintSubagentSidebar`). It has no focusable
+  // child of its own, and `Renderable.focus()` (the OpenTUI base class every
+  // Box inherits) is a real, stateful operation: making `sidebar` focusable
+  // and calling `.focus()` on it would blur whatever currently holds
+  // keyboard focus (`ctx.focusRenderable` blurs the previously focused
+  // renderable — confirmed against the bundled `@opentui/core`
+  // implementation, not assumed) and then swallow every subsequent keystroke
+  // into nothing, since a plain `BoxRenderable` has no `handleKeyPress` to
+  // route them anywhere — a keyboard dead-zone strictly worse than today's
+  // no-op. So this handler intentionally does NOT call `.focus()` on
+  // anything: it exists — and keeps the `overlayActive()` guard — so the
+  // click-to-focus routing point FR-11 asks for is uniformly present across
+  // all three regions, ready to wire to a real focus target the day the
+  // sidebar gains one (a keyboard-navigable subagent list, say), without
+  // faking keyboard ownership over content that cannot use it today.
+  sidebar.onMouseDown = () => {
+    if (overlayActive()) return;
   };
 
   // --- footer + busy spinner ----------------------------------------------
@@ -848,6 +924,8 @@ export async function createShellChrome(
     sidebar.borderColor = theme.highlight;
     dock.backgroundColor = theme.panel;
     dock.borderColor = theme.border;
+    queueDock.backgroundColor = theme.panel;
+    queueDock.borderColor = theme.border;
     composer.borderColor = theme.border;
     menu.backgroundColor = theme.panel;
     menu.focusedBackgroundColor = theme.panel;
@@ -870,6 +948,7 @@ export async function createShellChrome(
     scroll,
     transcript,
     dock,
+    queueDock,
     menu,
     composer,
     textarea,

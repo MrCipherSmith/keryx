@@ -138,6 +138,8 @@ import {
   editMainQueueItem,
   reinsertMainQueueItem,
 } from "./main-queue";
+import type { QueueNavAction } from "./queue-nav";
+import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
@@ -1546,6 +1548,22 @@ export async function launchTuiAgentShell(opts: {
       ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
     });
     mountedChrome = chrome;
+    // Flow 170 T6, PRD FR-14: the composer has keyboard focus the moment the
+    // shell finishes launching, no click required. `createShellChrome`
+    // already calls `textarea.focus()` once internally during construction
+    // (see its "/`-menu wiring" section) and this call is therefore a no-op
+    // in the common case — `Renderable.focus()` returns immediately when
+    // already focused (confirmed against the bundled `@opentui/core`
+    // implementation). It stays as an explicit, separately-documented
+    // guarantee at THIS call site anyway: AC13 must hold regardless of an
+    // internal implementation detail of `shell-chrome.ts` that a future
+    // refactor could silently change, and every other overlay/picker that
+    // can compete for focus at startup (the resume-picker below, ~550 lines
+    // further down, gated on `opts.session?.pickOnStart`) runs well AFTER
+    // this point and restores focus itself once it resolves — so there is
+    // nothing between here and there for this call to clobber or be
+    // clobbered by.
+    chrome.input.focus();
     const transcript = chrome.transcript;
     const input = chrome.input;
 
@@ -2411,28 +2429,176 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
-    let mainQueueBlocks: Array<{ id: string; box: Box }> = [];
+    // Keyboard queue-nav mode (flow 170 T5, PRD FR-8): reaches Force/Edit/
+    // Delete without a mouse. Entry: Ctrl+Q -- a grep of this file's other
+    // `key.ctrl &&`-guarded bindings at implementation time found none bound
+    // to "q" (only Ctrl+O for block-nav), so the TRD's proposed key needed no
+    // substitution. While active, up/down move `selectedQueueIndex`,
+    // left/right move `selectedQueueAction`, Enter fires it (then exits,
+    // mirroring `composer-choice.ts`'s `finish(id)`-on-select), Esc exits
+    // without acting (mirrors `composer-choice.ts`'s
+    // `finish(request.cancelId)` on escape).
+    let queueNavActive = false;
+    let selectedQueueIndex = 0;
+    let selectedQueueAction: QueueNavAction = "force";
+    // Registered once, for the session: the existing cross-file arbitration
+    // primitive (`ShellChrome.addOverlaySource`, doc'd as exactly "overlays
+    // the caller owns... but the chrome cannot know about them") already
+    // folds `queueNavActive` into `chrome.overlayActive()` -- the same
+    // boolean block-nav's own `isBlocked()` and the `/`-menu router both
+    // already consult -- so entering queue-nav suppresses both with zero
+    // edits to shell-chrome.ts's `overlayActive()` body.
+    chrome.addOverlaySource(() => queueNavActive);
+
+    let mainQueueBlocks: Array<{
+      id: string;
+      box: Box;
+      setRowActive: (active: boolean) => void;
+      buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
+    }> = [];
+    /**
+     * Small styled label mimicking a clickable button \u2014 mirrors
+     * `composer-choice.ts`'s "small styled label" pattern (bold/colored
+     * `TextRenderable`, no border) rather than a bordered box: a bordered
+     * child box next to a plain-text label in the same row would need its own
+     * explicit height to avoid the row's cross-axis stretch fighting its
+     * border rows (see `.metaproject/memory/lessons/
+     * tui-alignself-height-collapse.md` \u2014 this file avoids `alignSelf`
+     * entirely for exactly that class of bug).
+     */
+    const mainQueueButton = (
+      label: string,
+      id: string,
+      color: string,
+      onMouseDown: () => void,
+    ): { box: Box; setActive: (active: boolean) => void } => {
+      const box = new otui.BoxRenderable(r, {
+        id,
+        flexShrink: 0,
+        marginLeft: 1,
+        paddingLeft: 1,
+        paddingRight: 1,
+        onMouseDown: (event: { stopPropagation: () => void }) => {
+          // Part A (flow 170 T5 investigation): @opentui/core's
+          // Renderable.processMouseEvent fires this handler THEN, unless
+          // told otherwise, walks up .parent and fires every ancestor's
+          // onMouseDown too (confirmed against the bundled implementation,
+          // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
+          // processMouseEvent/onMouseDown setter pair) -- mouse events
+          // bubble by default. queueDock (T6) will get its own onMouseDown
+          // to enter queue-nav on a background click; without stopping it
+          // here, every button click would ALSO re-enter queue-nav as an
+          // unwanted bubbled side effect (AC9/AC10 both depend on the button
+          // click NOT merely focusing the dock). Stop it at the deepest,
+          // most specific handler -- the button itself.
+          event.stopPropagation();
+          onMouseDown();
+        },
+      });
+      // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
+      // helpers) -- plain content + `.fg` is the same pattern
+      // `transcript-blocks.ts`'s block header already uses for theme colors.
+      const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
+      text.fg = color;
+      box.add(text);
+      const setActive = (active: boolean): void => {
+        box.backgroundColor = active ? getTheme().highlight : undefined;
+        text.content = active ? otui.t`${otui.bold(`[${label}]`)}` : `[${label}]`;
+        text.fg = color;
+      };
+      return { box, setActive };
+    };
+    /** Repaint the queue-nav highlight only -- no rebuild, mirrors
+     * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
+    const applyQueueNavHighlight = (): void => {
+      for (let i = 0; i < mainQueueBlocks.length; i++) {
+        const entry = mainQueueBlocks[i];
+        if (entry === undefined) continue;
+        const rowActive = queueNavActive && i === selectedQueueIndex;
+        entry.setRowActive(rowActive);
+        entry.buttons.force.setActive(rowActive && selectedQueueAction === "force");
+        entry.buttons.edit.setActive(rowActive && selectedQueueAction === "edit");
+        entry.buttons.delete.setActive(rowActive && selectedQueueAction === "delete");
+      }
+    };
+    const exitQueueNav = (): void => {
+      if (!queueNavActive) return;
+      queueNavActive = false;
+      applyQueueNavHighlight();
+    };
+    const enterQueueNav = (): void => {
+      if (mainQueue.length === 0) return;
+      queueNavActive = true;
+      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
+      applyQueueNavHighlight();
+    };
+    // Flow 170 T6, PRD FR-12/AC10: a click on queueDock's own background/item
+    // text (not a button) enters queue-nav — `enterQueueNav` is local to this
+    // closure, so this assignment (rather than new `ShellChromeOptions`
+    // plumbing) is the simplest wiring, per T5's own recommendation. No
+    // anti-bubbling guard is needed here (unlike a naive read of TRD §1.6
+    // might suggest): T5's dispatch-order investigation found mouse events
+    // bubble child-to-parent by default, and fixed it at the SOURCE — each
+    // Force/Edit/Delete button already calls `event.stopPropagation()`
+    // before firing its own action, so a click that reaches this handler at
+    // all already means it did NOT land on a button. It still defers to
+    // `overlayActive()` (FR-15) the same as the sidebar/scroll handlers: an
+    // active approval/choice-dock prompt (AC8's coexistence case) must keep
+    // owning the keyboard even while queueDock is visible alongside it.
+    chrome.queueDock.onMouseDown = () => {
+      if (chrome.overlayActive()) return;
+      enterQueueNav();
+    };
     const paintMainQueue = (): void => {
-      // Remove stale blocks.
+      // Remove stale blocks (same "remove stale, rebuild all" strategy as before).
       for (const entry of mainQueueBlocks) {
         try {
-          transcript.remove(entry.box);
+          chrome.queueDock.remove(entry.box);
         } catch {
           // ignore
         }
       }
       mainQueueBlocks = [];
+      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
+      if (mainQueue.length === 0) {
+        // Queue-nav only makes sense while there is something to act on.
+        exitQueueNav();
+      }
+      const theme = getTheme();
       for (let i = 0; i < mainQueue.length; i++) {
         const item = mainQueue[i];
         if (item === undefined) continue;
-        const box = appendUserEcho(otui, r, transcript, {
+        const index = i;
+        const row = new otui.BoxRenderable(r, {
           id: `mq-${item.id}`,
-          line: `${formatMainQueueMarker(i, mainQueue.length)} ${item.displayQuestion}`,
-          borderColor: getTheme().highlight,
-          marginTop: 0,
+          width: "100%",
+          flexDirection: "row",
         });
-        mainQueueBlocks.push({ id: item.id, box });
+        const label = new otui.TextRenderable(r, {
+          id: `mq-${item.id}-t`,
+          flexGrow: 1,
+          minWidth: 0,
+          content: otui.t`${otui.dim(`${formatMainQueueMarker(index, mainQueue.length)} ${item.displayQuestion}`)}`,
+        });
+        row.add(label);
+        const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));
+        const edit = mainQueueButton("Edit", `mq-edit-${item.id}`, theme.text, () => editMainQueue(index));
+        const del = mainQueueButton("Delete", `mq-del-${item.id}`, theme.error, () => removeMainQueue(index));
+        row.add(force.box);
+        row.add(edit.box);
+        row.add(del.box);
+        chrome.queueDock.add(row);
+        mainQueueBlocks.push({
+          id: item.id,
+          box: row,
+          setRowActive: (active) => {
+            row.backgroundColor = active ? theme.highlight : undefined;
+          },
+          buttons: { force, edit, delete: del },
+        });
       }
+      chrome.queueDock.visible = mainQueue.length > 0;
+      applyQueueNavHighlight();
       // Fleet/status counter.
       if (mainQueue.length > 0) {
         fleet.upsert({ id: "agent:queue", label: "mainQ", status: "queued", detail: `queued \u00d7${mainQueue.length}` });
@@ -2475,6 +2641,83 @@ export async function launchTuiAgentShell(opts: {
       }
       // No turn in flight (e.g. forced right as the previous one settled).
       runLine(item.question);
+    };
+
+    /**
+     * Queue-nav keyboard router (flow 170 T5, PRD FR-8) -- mirrors the shape
+     * of `nav.handleKey` (`createBlockNavController`, transcript-blocks.ts)
+     * and is subscribed the same way, right beside it, further down. Entry
+     * (Ctrl+Q) only arms while nothing else already owns the keyboard:
+     * `chrome.overlayActive()` covers the choice-dock/`withOverlay`/other
+     * registered sources, `chrome.menuActive()` covers the `/`-menu, and
+     * `nav.active()` covers block-nav mode -- the same checks block-nav's
+     * own `isBlocked()` performs for itself, written out here the other way
+     * (querying `nav.active()` from inside `nav`'s own closure isn't
+     * possible in reverse).
+     */
+    const handleQueueNavKey = (key: KeypressEvent): void => {
+      if (!queueNavActive) {
+        if (
+          key.ctrl &&
+          key.name === "q" &&
+          mainQueue.length > 0 &&
+          !chrome.overlayActive() &&
+          !chrome.menuActive() &&
+          !nav.active()
+        ) {
+          enterQueueNav();
+          key.preventDefault();
+          key.stopPropagation();
+        }
+        return;
+      }
+      if (key.name === "escape") {
+        exitQueueNav();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "up") {
+        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, mainQueue.length, "up");
+        applyQueueNavHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "down") {
+        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, mainQueue.length, "down");
+        applyQueueNavHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "left") {
+        selectedQueueAction = stepQueueNavAction(selectedQueueAction, "left");
+        applyQueueNavHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "right") {
+        selectedQueueAction = stepQueueNavAction(selectedQueueAction, "right");
+        applyQueueNavHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+        const index = selectedQueueIndex;
+        const action = selectedQueueAction;
+        // Fires the SAME functions the mouse buttons call (T2) -- no
+        // duplicated logic. Exits queue-nav afterward, mirroring
+        // composer-choice.ts's finish(id)-on-select.
+        exitQueueNav();
+        if (action === "force") forceMainQueue(index);
+        else if (action === "edit") editMainQueue(index);
+        else removeMainQueue(index);
+        key.preventDefault();
+        key.stopPropagation();
+      }
     };
 
     const clearSideWorkerSlot = (): void => {
@@ -3398,6 +3641,14 @@ export async function launchTuiAgentShell(opts: {
     // directly (risk R2); the chrome's `/`-menu router is the other consumer.
     onKeypress(r, (key) => {
       nav.handleKey(key);
+    });
+
+    // --- queue-nav mode (Ctrl+Q ... Esc) -- flow 170 T5 ---------------------
+    // Same subscription mechanism as block-nav directly above; the mode's own
+    // arbitration is via `chrome.addOverlaySource` (registered next to
+    // `queueNavActive`'s declaration), not a new key-routing primitive.
+    onKeypress(r, (key) => {
+      handleQueueNavKey(key);
     });
 
     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has

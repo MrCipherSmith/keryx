@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 2,
+  "id": "170",
+  "slug": "tui-queue-dock-move-queue-off-transcript",
+  "title": "TUI queue-dock: move queue off transcript + Force/Edit/Delete UI + region click-to-focus",
+  "status": "in-progress",
+  "createdAt": "2026-08-18T13:57:36.415Z",
+  "updatedAt": "2026-08-18T14:40:31.847Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8ffabccc058d09a2adcad3aa50b4848aaabd2d22cd9f4fb50756460776123cbd",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Mouse dispatch investigation + keyboard queue-nav mode (Ctrl+Q, arrow select, Enter fires action)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Region click-to-focus (sidebar/transcript/queue-dock) + launch autofocus",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Docs: check/update any TUI shell docs mentioning queue/focus behavior",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-18T13:57:36.415Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-18T13:58:41.863Z",
+      "event": "task-added",
+      "detail": "T5: Mouse dispatch investigation + keyboard queue-nav mode (Ctrl+Q, arrow select, Enter fires action)"
+    },
+    {
+      "at": "2026-08-18T13:58:42.038Z",
+      "event": "task-added",
+      "detail": "T6: Region click-to-focus (sidebar/transcript/queue-dock) + launch autofocus"
+    },
+    {
+      "at": "2026-08-18T13:58:42.216Z",
+      "event": "task-added",
+      "detail": "T7: Docs: check/update any TUI shell docs mentioning queue/focus behavior"
+    },
+    {
+      "at": "2026-08-18T13:59:11.011Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-18T13:59:11.172Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-18T13:59:11.341Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-18T14:05:57.990Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-18T14:18:54.621Z",
+      "event": "task-done",
+      "detail": "T5: Mouse dispatch investigation + keyboard queue-nav mode (Ctrl+Q, arrow select, Enter fires action)"
+    },
+    {
+      "at": "2026-08-18T14:37:59.456Z",
+      "event": "task-done",
+      "detail": "T6: Region click-to-focus (sidebar/transcript/queue-dock) + launch autofocus"
+    },
+    {
+      "at": "2026-08-18T14:38:10.043Z",
+      "event": "ac-updated",
+      "detail": "T6 grounding correction: sidebar has no focusable content today (BoxRenderable._focusable only true when explicitly passed, sidebar never does); literally focusing it would blur the composer and create a keyboard dead-zone (no handleKeyPress). AC11 corrected to the actually-implemented, tested behavior (safe no-op, no dead-zone) — same underlying intent, no scope change."
+    },
+    {
+      "at": "2026-08-18T14:38:57.293Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-18T14:40:31.847Z",
+      "event": "task-done",
+      "detail": "T7: Docs: check/update any TUI shell docs mentioning queue/focus behavior"
+    }
+  ]
+}

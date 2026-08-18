@@ -185,10 +185,11 @@ holds and what forking copies.
   **Main queue** (default) or **Side-1** (a read-only worker, outside main
   history, single slot by default; the transcript notes `◦ side-1 queued`
   while it processes). A message sent to the main queue appears as `qN (p)`
-  and drains FIFO right after the current turn completes. Each queued item
-  can be `remove`d (dropped without running), `edit`ed (returned to the
-  composer, pulled from the queue until re-submitted), or `force`d (aborts
-  the current turn and runs immediately as a new priority turn).
+  in a dedicated panel above the composer input and drains FIFO right after
+  the current turn completes. Each queued item shows clickable Force/Edit/Delete
+  buttons in the panel; `Ctrl+Q` opens a keyboard-only selector for the same
+  actions (↑/↓ select, ←/→ choose action, Enter fire, Esc exit). The `/queue`
+  text command (`remove`/`edit`/`force`) remains available unchanged.
 
 When side-worker context is still processing, queued questions do not block the
 session state and still see recent context about the busy main turn.

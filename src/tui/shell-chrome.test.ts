@@ -707,3 +707,64 @@ otuiTest("AC1: multiline paste inserts as one composer value and submits once", 
   expect(h.chrome.input.value).toBe("");
   h.destroy();
 });
+
+// Flow 170 T6 (PRD FR-11/FR-13/FR-15): region click-to-focus. `queueDock`'s
+// own handler is wired in `tui-shell.ts` (it fires the `enterQueueNav`
+// closure that lives there, not in this module) and has no headless harness
+// to test against — same documented limitation flow 170's own plan records
+// for `launchTuiAgentShell` — so only the two handlers actually owned by
+// `createShellChrome` are covered here.
+
+otuiTest("AC12/AC14: clicking the transcript focuses the composer, deferring to an active overlay", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const scrollBox = h.renderer.root.findDescendantById("transcript") as unknown as { x: number; y: number };
+
+  // Move focus off the composer first so the click is what brings it back,
+  // not mount's own ambient default (AC1 already covers that).
+  h.chrome.menu.focus();
+  expect(h.chrome.textarea.focused).toBe(false);
+  await h.mockMouse.click(scrollBox.x + 1, scrollBox.y + 1);
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+
+  // FR-15: the same click must NOT steal focus while an overlay (here: the
+  // approval/choice dock) is active.
+  h.chrome.menu.focus();
+  expect(h.chrome.textarea.focused).toBe(false);
+  h.chrome.dock.visible = true;
+  await h.mockMouse.click(scrollBox.x + 1, scrollBox.y + 1);
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(false);
+  h.chrome.dock.visible = false;
+  h.destroy();
+});
+
+otuiTest("AC11/AC14: clicking the sidebar never steals or blocks composer focus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const sidebarBox = h.renderer.root.findDescendantById("sidebar") as unknown as { x: number; y: number };
+
+  // The sidebar is display-only (no focusable child of its own today, see
+  // shell-chrome.ts's `sidebar.onMouseDown` comment) — clicking it must
+  // leave the composer exactly as it was: focused, and still live for
+  // typing. Making the sidebar itself "focused" would blur the composer and
+  // swallow keystrokes into nothing, since a plain BoxRenderable has no
+  // `handleKeyPress` — this test is the regression guard for that.
+  expect(h.chrome.textarea.focused).toBe(true);
+  await h.mockMouse.click(sidebarBox.x + 1, sidebarBox.y);
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  await h.mockInput.pressKeys(["h", "i"]);
+  await h.flush();
+  expect(h.chrome.input.value).toBe("hi");
+
+  // FR-15 guard, kept for symmetry with the other two region handlers even
+  // though this one has no focus side effect to guard yet.
+  h.chrome.dock.visible = true;
+  await h.mockMouse.click(sidebarBox.x + 1, sidebarBox.y);
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.chrome.dock.visible = false;
+  h.destroy();
+});

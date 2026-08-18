@@ -1214,10 +1214,12 @@ where tools actually run: the non-interactive harness paths register none.
 `session` is a singular alias for `sessions`.
 
 In the TUI, submitting a normal message while the main turn is busy opens a
-selector: the **main queue** (default — drains FIFO after the current turn,
-each item `remove`/`edit`/`force`-able) or **side-1**, a read-only worker
-outside main history, processed sequentially and surfaced in the sidebar and
-transcript. `/status` and `/flows` are always allowed while busy.
+selector: the **main queue** (default — displays in a dedicated panel above
+the input, drains FIFO after the current turn, each item has clickable
+Force/Edit/Delete buttons; `Ctrl+Q` for keyboard-only mode; `/queue` command
+still available) or **side-1**, a read-only worker outside main history,
+processed sequentially and surfaced in the sidebar and transcript. `/status`
+and `/flows` are always allowed while busy.
 
 **Key files.**
 - `src/session/store.ts` — create, list, find, load, persist, compact, fork; atomic multi-file writes.
