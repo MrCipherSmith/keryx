@@ -5,6 +5,38 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.44] — 2026-08-18
+
+### Added
+
+- **TUI: `/review` sidebar badge + list/detail modal for the SAC catch-up
+  report.** A new "Review" sidebar row surfaces every item across the project
+  needing human attention — pending proposals, sessions that stopped
+  unattended, unbound wrap-up candidates, and sessions with no recorded
+  resolution (SLATE-10's `keryx workspace catch-up`, whole-project scope,
+  never limited to the current session's own workspace) — turning yellow
+  once nonzero, refreshed at the same points the Workspace row already uses
+  (session open/resume, `/new`, main turn settled). Clicking it or typing
+  `/review` opens a list+detail modal (arrows/`[`/`]`/Enter to navigate,
+  same interaction model as `/flows`/`/workspace`). Accepting a proposal is
+  an `[a]`-then-`[y]` confirm inside the Detail tab that runs `keryx
+  workspace confirm-review` then `keryx workspace review --decision
+  accepted` as two real shell commands — never through the model/tool-calling
+  loop — so the human keying the confirm is the same human-presence proof a
+  terminal invocation would be.
+
+### Security
+
+- **Permission modes: SAC's `confirm-review`/`review` commands are a hard
+  floor no mode lifts.** `trust`/`auto` could previously auto-approve `keryx
+  workspace confirm-review` and `keryx workspace review` — the commands that
+  mint and spend the confirm-token proving a human accepted a proposal
+  (SLATE-20) — closing a self-approval gap the same shape as the existing
+  `credentials` hard floor. Also hardened the independent
+  `isShellCommandAllowed`/`validateShellPattern` barrier so a hand-edited
+  `permissions.json` entry for either command can never auto-approve or be
+  remembered.
+
 ## [0.2.43] — 2026-08-18
 
 ### Added
