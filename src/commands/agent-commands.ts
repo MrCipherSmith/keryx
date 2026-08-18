@@ -129,6 +129,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    name: "/workspace",
+    description: "Show this session's SAC workspace and its slates",
+    // TUI-only: the sidebar entry, mouse click, and 3-tab modal all need the
+    // OpenTUI surface. Typed in the readline agent REPL it falls through to
+    // that surface's normal "not available here" fallback.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,

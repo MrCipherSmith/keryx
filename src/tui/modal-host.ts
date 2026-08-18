@@ -67,6 +67,20 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
+/** How much of the transcript stays visible through the backdrop, 0-1. */
+export const BACKDROP_ALPHA = 0.85;
+
+/**
+ * The backdrop's fill: the theme's own background hex, alpha-reduced so the
+ * transcript peeks through around the (fully opaque) panel. `RGBA` comes off
+ * the runtime `otui` parameter, never a top-level `@opentui/core` import —
+ * this module's own optional-dependency rule (see the file header).
+ */
+function backdropFillColor(otui: OpenTui): InstanceType<OpenTui["RGBA"]> {
+  const color = otui.RGBA.fromHex(getTheme().bg);
+  color.a = BACKDROP_ALPHA;
+  return color;
+}
 /** Inset between the opaque backdrop edge and the bordered panel. */
 export const MODAL_PANEL_MARGIN = 1;
 /** Border (2) + horizontal padding (2). Subtract from the panel to wrap text. */
@@ -272,7 +286,15 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: getTheme().bg,
+    // A translucent FILL COLOR (the color's own alpha channel), never the
+    // `opacity` prop: `opacity` composes onto every descendant (this box's
+    // own docstring above records the transcript-bleed-through regression
+    // that came from setting it on a modal ancestor), so `panel` — a real
+    // child of this box, added below — would fade along with it. Baking
+    // alpha into backgroundColor's RGBA instead only affects backdrop's own
+    // painted pixels; `panel`'s unrelated `backgroundColor` (still a plain
+    // opaque string) is untouched either way.
+    backgroundColor: backdropFillColor(otui),
     zIndex: 100,
     flexDirection: "column",
     justifyContent: "center",
