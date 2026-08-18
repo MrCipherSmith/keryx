@@ -153,3 +153,31 @@
 - Proceeding to T4: PR first, then review-orchestrator against the PR per
   operator's explicit sequencing instruction (implement -> PR -> review ->
   only merge+close if clean).
+- 2026-08-18T18:20:34.603Z - task-added: T10: Fix review finding F-001 (major): concurrent spawn_subagent bypasses untrustedContentSeen/batchContainsUntrustedWeb gate; F-002 (minor): unguarded fallback loop
+- 2026-08-18T18:27:27.856Z - task-done: T10: Fix review finding F-001 (major): concurrent spawn_subagent bypasses untrustedContentSeen/batchContainsUntrustedWeb gate; F-002 (minor): unguarded fallback loop
+- PR #339 review-orchestrator ran (logic+architecture, security, parallel):
+  security DONE, zero findings (independently re-verified ledger safety,
+  concurrency-cap DoS resistance, status-forgery impossibility, quarantine
+  isolation, finishReason non-leak — all confirmed by reading real code).
+  logic+architecture DONE_WITH_CONCERNS: 1 MAJOR (F-001: concurrent branch
+  never checked untrustedContentSeen/batchContainsUntrustedWeb before
+  dispatching — a gated spawn_subagent was fully EXECUTED (real ledger
+  admission, real provider call, real cost) then its result discarded, worse
+  than trade-off #2's original "just a reservation slot" framing; also
+  covers a case the trade-off didn't mention — untrustedContentSeen
+  persisting from a PRIOR turn with no web call in the current batch), 1
+  minor (F-002: `!plan.ok` fallback loop uncaught, unlike the executeWaves
+  happy path).
+- T10 fixed both: F-001 — compute
+  `untrustedGateBlocksSpawns = untrustedContentSeen || batchContainsUntrustedWeb`
+  before entering the concurrent branch; if true, `spawnConcurrencyCandidates`
+  fall through to the existing (already-correct) sequential loop instead of
+  `runConcurrentSpawnBatch` ever being called — sequential gate logic itself
+  untouched. F-002 — wrapped the fallback loop body in the same try/catch
+  pattern as the executeWaves path. 3 new regression tests (prior-turn
+  untrustedContentSeen with no web call in-batch: `invokeCount===0`;
+  same-batch web+spawn: `invokeCount===0`, genuinely never dispatched not
+  just discarded; `!plan.ok` fallback throw degrades gracefully). Full suite:
+  4157 pass/0 fail (up from 4153 baseline by the 3 new tests +1 flake not
+  reproducing) — no regressions.
+- Committing T10's fix and pushing to PR #339 for re-review before merge.

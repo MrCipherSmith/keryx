@@ -1287,8 +1287,20 @@ async function runAgentTurnCore(
     const spawnConcurrencyCandidates = calls.filter(
       (call) => call.name === "spawn_subagent" && reservationByCallId.get(call.id)?.ok === true,
     );
+    // Review finding F-001 (flow 171 T10): the sequential loop below blocks EVERY
+    // `spawn_subagent` call once `untrustedContentSeen` is true (persists across
+    // turns, see the comment at this function's `untrustedContentSeen` init) or
+    // once this batch itself contains untrusted `web_fetch`/`web_search` content
+    // (`spawn_subagent` is never in that exemption list) — so a candidate that
+    // would be blocked there must never reach `runConcurrentSpawnBatch` here,
+    // which has NO knowledge of this gate and would otherwise really spawn the
+    // child, run it to completion, and only discard the result. Skip the whole
+    // concurrent branch (never call `runConcurrentSpawnBatch`) whenever either
+    // condition holds; the candidates fall through to the per-call loop below,
+    // which already gates them correctly one at a time.
+    const untrustedGateBlocksSpawns = untrustedContentSeen || batchContainsUntrustedWeb;
     const concurrentSpawnResults: Map<string, InteractiveToolResult> | undefined =
-      spawnConcurrencyCandidates.length >= 2
+      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns
         ? await runConcurrentSpawnBatch(spawnConcurrencyCandidates, toolByName, io, deps)
         : undefined;
 
@@ -1662,7 +1674,23 @@ async function runConcurrentSpawnBatch(
     io.onSystem?.(`\n[warning] concurrent subagent wave planning denied (${plan.reason}); running sequentially.\n`);
     const results = new Map<string, InteractiveToolResult>();
     for (const call of spawnCalls) {
-      results.set(call.id, await runOne(call));
+      // Review finding F-002 (flow 171 T10): mirror the `executeWaves` catch
+      // below — `runOne` calls `executeCall`, which is documented to catch its
+      // own internal errors and return `isError:true` rather than throw, so
+      // this is a defensive floor (e.g. a throwing `requestApproval`
+      // callback), not the normal path. Without this guard a single rejection
+      // here would propagate uncaught and crash the whole turn instead of
+      // degrading; degrade only THIS call to an error result and keep
+      // processing the rest of the fallback batch.
+      try {
+        results.set(call.id, await runOne(call));
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        results.set(call.id, {
+          output: `subagent call ${call.id} failed: sequential fallback error: ${message}`,
+          isError: true,
+        });
+      }
     }
     return results;
   }
