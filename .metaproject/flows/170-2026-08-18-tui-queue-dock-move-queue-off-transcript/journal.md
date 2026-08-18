@@ -112,3 +112,21 @@
 - 2026-08-18T14:38:10.043Z - ac-updated: T6 grounding correction: sidebar has no focusable content today (BoxRenderable._focusable only true when explicitly passed, sidebar never does); literally focusing it would blur the composer and create a keyboard dead-zone (no handleKeyPress). AC11 corrected to the actually-implemented, tested behavior (safe no-op, no dead-zone) — same underlying intent, no scope change.
 - 2026-08-18T14:38:57.293Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-18T14:40:31.847Z - task-done: T7: Docs: check/update any TUI shell docs mentioning queue/focus behavior
+- 2026-08-18T14:53:17.312Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/332 (warning: PR is not a draft)
+- 2026-08-18T14:53:32.398Z - ac-confirmed: AC1: shell-chrome.test.ts: queueDock construction/visibility verified; paintMainQueue no longer targets transcript, confirmed by code review and full suite
+- 2026-08-18T14:53:32.586Z - ac-confirmed: AC2: forceMainQueue unchanged, now wired to button + queue-nav Enter (queue-nav.test.ts + code review)
+- 2026-08-18T14:53:32.783Z - ac-confirmed: AC3: editMainQueue unchanged, position-preserving reinsertMainQueueItem untouched, wired to button + queue-nav
+- 2026-08-18T14:53:32.924Z - ac-confirmed: AC4: removeMainQueue unchanged, wired to button + queue-nav; independent review confirmed no regression
+- 2026-08-18T14:53:33.051Z - ac-confirmed: AC5: queueDock.visible = mainQueue.length > 0, mirrors existing dock.visible pattern, verified by review
+- 2026-08-18T14:53:33.182Z - ac-confirmed: AC6: Ctrl+Q queue-nav mode implemented and tested (queue-nav.test.ts); reaches all 3 actions via keyboard
+- 2026-08-18T14:53:33.312Z - ac-confirmed: AC7: /queue remove|edit|force [N] text command untouched, parseQueueCommand/call sites unmodified
+- 2026-08-18T14:53:33.445Z - ac-confirmed: AC8: queueDock inserted between transcript and existing choice-dock in main's child order per TRD §1.2 stacking decision
+- 2026-08-18T14:53:33.622Z - ac-confirmed: AC9: OpenTUI mouse bubbling investigated with evidence (bundled source read); event.stopPropagation() on each button confirms direct-fire not focus-then-second-click, verified by code review
+- 2026-08-18T14:53:33.794Z - ac-confirmed: AC10: queueDock.onMouseDown enters queue-nav without firing an action when click is not on a button (buttons stop propagation before reaching dock handler)
+- 2026-08-18T14:53:33.969Z - ac-confirmed: AC11: Corrected via flow ac update: sidebar click is a verified, tested no-op (no focusable content, avoids keyboard dead-zone) rather than literal focus-move
+- 2026-08-18T14:53:34.154Z - ac-confirmed: AC12: scroll.onMouseDown calls chrome.input.focus() + event.preventDefault() (fixes OpenTUI's own auto-focus-walk stealing focus back), verified by code review
+- 2026-08-18T14:53:34.330Z - ac-confirmed: AC13: chrome.input.focus() called right after createShellChrome() resolves; confirmed harmless/idempotent alongside createShellChrome's own internal autofocus
+- 2026-08-18T14:53:34.506Z - ac-confirmed: AC14: All 3 region handlers early-return on overlayActive(), which already folds in addOverlaySource-registered queue-nav state; verified by reading overlayActive()'s actual body, not assumed
+- 2026-08-18T14:53:34.682Z - ac-confirmed: AC15: Full suite 4126 pass/0 fail pre-merge, 241/241 src/tui re-verified on main post-merge; main-queue.test.ts unmodified and passing
+- 2026-08-18T14:53:40.924Z - completing
+- 2026-08-18T14:53:42.930Z - done: all gates passed

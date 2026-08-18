@@ -3,17 +3,78 @@
   "id": "170",
   "slug": "tui-queue-dock-move-queue-off-transcript",
   "title": "TUI queue-dock: move queue off transcript + Force/Edit/Delete UI + region click-to-focus",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-18T13:57:36.415Z",
-  "updatedAt": "2026-08-18T14:40:31.847Z",
+  "updatedAt": "2026-08-18T14:53:42.930Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:8ffabccc058d09a2adcad3aa50b4848aaabd2d22cd9f4fb50756460776123cbd",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-18T14:53:32.398Z",
+      "note": "shell-chrome.test.ts: queueDock construction/visibility verified; paintMainQueue no longer targets transcript, confirmed by code review and full suite"
+    },
+    "AC2": {
+      "at": "2026-08-18T14:53:32.586Z",
+      "note": "forceMainQueue unchanged, now wired to button + queue-nav Enter (queue-nav.test.ts + code review)"
+    },
+    "AC3": {
+      "at": "2026-08-18T14:53:32.783Z",
+      "note": "editMainQueue unchanged, position-preserving reinsertMainQueueItem untouched, wired to button + queue-nav"
+    },
+    "AC4": {
+      "at": "2026-08-18T14:53:32.924Z",
+      "note": "removeMainQueue unchanged, wired to button + queue-nav; independent review confirmed no regression"
+    },
+    "AC5": {
+      "at": "2026-08-18T14:53:33.051Z",
+      "note": "queueDock.visible = mainQueue.length > 0, mirrors existing dock.visible pattern, verified by review"
+    },
+    "AC6": {
+      "at": "2026-08-18T14:53:33.182Z",
+      "note": "Ctrl+Q queue-nav mode implemented and tested (queue-nav.test.ts); reaches all 3 actions via keyboard"
+    },
+    "AC7": {
+      "at": "2026-08-18T14:53:33.312Z",
+      "note": "/queue remove|edit|force [N] text command untouched, parseQueueCommand/call sites unmodified"
+    },
+    "AC8": {
+      "at": "2026-08-18T14:53:33.445Z",
+      "note": "queueDock inserted between transcript and existing choice-dock in main's child order per TRD §1.2 stacking decision"
+    },
+    "AC9": {
+      "at": "2026-08-18T14:53:33.622Z",
+      "note": "OpenTUI mouse bubbling investigated with evidence (bundled source read); event.stopPropagation() on each button confirms direct-fire not focus-then-second-click, verified by code review"
+    },
+    "AC10": {
+      "at": "2026-08-18T14:53:33.794Z",
+      "note": "queueDock.onMouseDown enters queue-nav without firing an action when click is not on a button (buttons stop propagation before reaching dock handler)"
+    },
+    "AC11": {
+      "at": "2026-08-18T14:53:33.968Z",
+      "note": "Corrected via flow ac update: sidebar click is a verified, tested no-op (no focusable content, avoids keyboard dead-zone) rather than literal focus-move"
+    },
+    "AC12": {
+      "at": "2026-08-18T14:53:34.153Z",
+      "note": "scroll.onMouseDown calls chrome.input.focus() + event.preventDefault() (fixes OpenTUI's own auto-focus-walk stealing focus back), verified by code review"
+    },
+    "AC13": {
+      "at": "2026-08-18T14:53:34.330Z",
+      "note": "chrome.input.focus() called right after createShellChrome() resolves; confirmed harmless/idempotent alongside createShellChrome's own internal autofocus"
+    },
+    "AC14": {
+      "at": "2026-08-18T14:53:34.506Z",
+      "note": "All 3 region handlers early-return on overlayActive(), which already folds in addOverlaySource-registered queue-nav state; verified by reading overlayActive()'s actual body, not assumed"
+    },
+    "AC15": {
+      "at": "2026-08-18T14:53:34.682Z",
+      "note": "Full suite 4126 pass/0 fail pre-merge, 241/241 src/tui re-verified on main post-merge; main-queue.test.ts unmodified and passing"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/332"
   },
   "tasks": [
     {
@@ -184,6 +245,95 @@
       "at": "2026-08-18T14:40:31.847Z",
       "event": "task-done",
       "detail": "T7: Docs: check/update any TUI shell docs mentioning queue/focus behavior"
+    },
+    {
+      "at": "2026-08-18T14:53:17.312Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/332 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-18T14:53:32.398Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-chrome.test.ts: queueDock construction/visibility verified; paintMainQueue no longer targets transcript, confirmed by code review and full suite"
+    },
+    {
+      "at": "2026-08-18T14:53:32.586Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: forceMainQueue unchanged, now wired to button + queue-nav Enter (queue-nav.test.ts + code review)"
+    },
+    {
+      "at": "2026-08-18T14:53:32.783Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: editMainQueue unchanged, position-preserving reinsertMainQueueItem untouched, wired to button + queue-nav"
+    },
+    {
+      "at": "2026-08-18T14:53:32.924Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: removeMainQueue unchanged, wired to button + queue-nav; independent review confirmed no regression"
+    },
+    {
+      "at": "2026-08-18T14:53:33.051Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: queueDock.visible = mainQueue.length > 0, mirrors existing dock.visible pattern, verified by review"
+    },
+    {
+      "at": "2026-08-18T14:53:33.182Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Ctrl+Q queue-nav mode implemented and tested (queue-nav.test.ts); reaches all 3 actions via keyboard"
+    },
+    {
+      "at": "2026-08-18T14:53:33.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: /queue remove|edit|force [N] text command untouched, parseQueueCommand/call sites unmodified"
+    },
+    {
+      "at": "2026-08-18T14:53:33.445Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: queueDock inserted between transcript and existing choice-dock in main's child order per TRD §1.2 stacking decision"
+    },
+    {
+      "at": "2026-08-18T14:53:33.622Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: OpenTUI mouse bubbling investigated with evidence (bundled source read); event.stopPropagation() on each button confirms direct-fire not focus-then-second-click, verified by code review"
+    },
+    {
+      "at": "2026-08-18T14:53:33.794Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: queueDock.onMouseDown enters queue-nav without firing an action when click is not on a button (buttons stop propagation before reaching dock handler)"
+    },
+    {
+      "at": "2026-08-18T14:53:33.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Corrected via flow ac update: sidebar click is a verified, tested no-op (no focusable content, avoids keyboard dead-zone) rather than literal focus-move"
+    },
+    {
+      "at": "2026-08-18T14:53:34.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: scroll.onMouseDown calls chrome.input.focus() + event.preventDefault() (fixes OpenTUI's own auto-focus-walk stealing focus back), verified by code review"
+    },
+    {
+      "at": "2026-08-18T14:53:34.330Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: chrome.input.focus() called right after createShellChrome() resolves; confirmed harmless/idempotent alongside createShellChrome's own internal autofocus"
+    },
+    {
+      "at": "2026-08-18T14:53:34.506Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: All 3 region handlers early-return on overlayActive(), which already folds in addOverlaySource-registered queue-nav state; verified by reading overlayActive()'s actual body, not assumed"
+    },
+    {
+      "at": "2026-08-18T14:53:34.682Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Full suite 4126 pass/0 fail pre-merge, 241/241 src/tui re-verified on main post-merge; main-queue.test.ts unmodified and passing"
+    },
+    {
+      "at": "2026-08-18T14:53:40.924Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-18T14:53:42.930Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
