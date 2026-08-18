@@ -55,7 +55,16 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
-import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
+import {
+  loadInspectorFlows,
+  loadInspectorSlates,
+  loadInspectorWorkspace,
+  loadInspectorWorkspaces,
+  type SlateInspectorItem,
+  type WorkspaceInfo,
+} from "./inspector-sources";
+import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
+import { readSlate } from "../session/slate";
 import {
   buildSessionInfoSnapshot,
   isSessionInfoCommand,
@@ -1597,6 +1606,42 @@ export async function launchTuiAgentShell(opts: {
     // The directory the agent's tools act on — directly under Model, matching the
     // readline header's `provider/model … · <cwd>` order (gap G-2).
     mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd());
+    // SAC workspace (SLATE-16 resolve-or-create): absent until the session's
+    // first action-intent turn binds one, so this row starts empty and is
+    // refreshed — not mounted once like Directory/Branch/PR above, which are
+    // static for the session's lifetime.
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-workspace-k", content: otui.t`${otui.dim("Workspace")}`, marginTop: 1 }));
+    const sbWorkspaceV = new otui.TextRenderable(r, {
+      id: "sb-workspace-v",
+      content: otui.t`${otui.dim("—")}`,
+      onMouseDown: () => {
+        showWorkspace();
+      },
+    });
+    sidebar.add(sbWorkspaceV);
+    let currentWorkspace: WorkspaceInfo | undefined;
+    let currentSlates: SlateInspectorItem[] = [];
+    const refreshWorkspaceSidebar = async (): Promise<void> => {
+      const dir = slateSession?.dir;
+      const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
+      if (workspaceId === undefined) {
+        currentWorkspace = undefined;
+        currentSlates = [];
+        sbWorkspaceV.content = otui.t`${otui.dim("—")}`;
+        return;
+      }
+      const cwd = opts.session?.cwd ?? process.cwd();
+      const [workspace, slates] = await Promise.all([
+        loadInspectorWorkspace(cwd, workspaceId),
+        loadInspectorSlates(cwd, workspaceId),
+      ]);
+      currentWorkspace = workspace;
+      currentSlates = slates;
+      sbWorkspaceV.content =
+        workspace === undefined
+          ? otui.t`${otui.dim("—")}`
+          : otui.t`${otui.dim(`${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`;
+    };
     sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
     const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
     sidebar.add(sbContext);
@@ -2215,6 +2260,7 @@ export async function launchTuiAgentShell(opts: {
       );
     }
     slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+    void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
 
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
@@ -2364,6 +2410,31 @@ export async function launchTuiAgentShell(opts: {
         const items = await loadInspectorFlows(inspectorCwd());
         openFlows(otui, chrome, {
           items,
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
+    };
+    const showWorkspace = (): void => {
+      void (async () => {
+        const dir = slateSession?.dir;
+        const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
+        if (workspaceId === undefined) {
+          io.onSystem?.("No workspace bound to this session yet — the agent binds one automatically on its first real task.\n");
+          return;
+        }
+        const cwd = inspectorCwd();
+        const [workspace, slates] = await Promise.all([
+          loadInspectorWorkspace(cwd, workspaceId),
+          loadInspectorSlates(cwd, workspaceId),
+        ]);
+        if (workspace === undefined) {
+          io.onSystem?.(`Workspace ${workspaceId} could not be loaded.\n`);
+          return;
+        }
+        openWorkspace(otui, chrome, {
+          workspace,
+          slates,
           renderer: r,
           ...inspectorKeys,
         });
@@ -3056,6 +3127,7 @@ export async function launchTuiAgentShell(opts: {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
             startNewSession();
             slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+            void refreshWorkspaceSidebar(); // new session: no bound workspace yet
             // The old session's subagents (sidebar list + inspector) belong to
             // the transcript that just left — a fresh session starts with none.
             sessions.clear();
@@ -3199,6 +3271,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isFlowsCommand(command.name)) {
           showFlows();
+          return;
+        }
+        if (isWorkspaceCommand(command.name)) {
+          showWorkspace();
           return;
         }
         if (command.name === "/copy") {
@@ -3602,6 +3678,10 @@ export async function launchTuiAgentShell(opts: {
         mainTurnAbortController = undefined;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
+        // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
+        // FIRST action — the sidebar can only reflect that once the turn
+        // that decided it has actually settled.
+        void refreshWorkspaceSidebar();
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
         try {
           flushSessionCheckpoint();
