@@ -145,7 +145,7 @@ From the root of the project you want to instrument:
 keryx init
 ```
 
-`init` is interactive by default: it asks which of the 9 optional modules to enable — `gdgraph`, `gdctx`, `gdwiki`, `gdskills`, `health`, `testing`, `memory`, `tasks`, and `security` (all default on) — and, for `gdskills`, which install profile to use. It also offers one opt-in module, the MCP server, which defaults **off** (see [Wiring the workspace into an editor/agent](#wiring-the-workspace-into-an-editoragent-mcp) below). Pass `--yes` to accept defaults non-interactively.
+`init` is interactive by default. The first question is a shortcut — *"Install everything with recommended defaults?"* (default **Y**) — answering yes enables all 9 optional modules with their recommended settings and skips every question after it, equivalent to passing `--yes`. Answering no falls through to the per-module questions: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`, `health`, `testing`, `memory`, `tasks`, and `security` (all default on), and, for `gdskills`, which install profile to use. It also offers one opt-in module, the MCP server, which defaults **off** (see [Wiring the workspace into an editor/agent](#wiring-the-workspace-into-an-editoragent-mcp) below). Pass `--yes` on the command line to accept defaults non-interactively, skipping the shortcut question too.
 
 It scaffolds `.metaproject/` with:
 
