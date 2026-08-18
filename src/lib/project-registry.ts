@@ -170,7 +170,7 @@ function validEntry(candidate: unknown): candidate is ProjectEntry {
  * filesystem, produced a second entry with a second id, which is exactly what
  * "idempotent by path" was supposed to prevent.
  */
-function projectIdentity(projectPath: string): string {
+export function projectIdentity(projectPath: string): string {
   const absolute = path.resolve(projectPath);
   try {
     return realpathSync.native(absolute);

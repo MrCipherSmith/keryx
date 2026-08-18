@@ -14,6 +14,7 @@
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
+import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
@@ -115,6 +116,28 @@ export interface AgentIO {
    * allowlist, never offer "always") — see {@link ApprovalMeta}.
    */
   requestApproval?: (tool: string, input: string, meta?: ApprovalMeta) => Promise<ApprovalResponse>;
+  /**
+   * A `trust`/`auto` permission-mode decision just skipped `requestApproval`
+   * entirely for this call — it is about to run with no prompt. Optional and
+   * side-effect-free from the driver's point of view (the call runs regardless
+   * of whether this is wired), but omitting it in a real UI recreates exactly
+   * the failure mode `spawn_subagent`'s read_only auto-approval line already
+   * guards against elsewhere: "an auto-approval the user cannot notice is an
+   * auto-approval they cannot object to." Never called for risk `read` — that
+   * was already silent before permission modes existed, and stays that way.
+   */
+  onAutoApproved?: (tool: string, input: string, meta: { destructive: boolean; credentials: boolean }) => void;
+  /**
+   * The session's current permission mode (see `permission-mode.ts`).
+   * Read fresh on every gated call, never cached — this is how a live `/mode`
+   * toggle takes effect on the very next tool call. Absent (or `undefined`)
+   * behaves exactly as {@link DEFAULT_PERMISSION_MODE} (`ask`, today's
+   * unchanged behavior): the DEFAULT-DENY-when-no-approver floor above still
+   * applies whenever the resolved decision is `ask`. Only an explicit `trust`/
+   * `auto` from this getter ever bypasses `requestApproval` — never a missing
+   * getter, never a missing `requestApproval`.
+   */
+  permissionMode?: () => PermissionMode;
 }
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
@@ -1212,7 +1235,7 @@ async function runAgentTurnCore(
       }
 
       executedAny = true;
-      const result = await executeCall(call, toolByName, io.requestApproval);
+      const result = await executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved);
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -1452,11 +1475,13 @@ function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean
   return response.fingerprint === undefined || response.fingerprint === fingerprint;
 }
 
-/** Resolve, gate (risk + approval), validate, and invoke a call → a content result. */
+/** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
 async function executeCall(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
+  permissionMode: AgentIO["permissionMode"],
+  onAutoApproved: AgentIO["onAutoApproved"],
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -1475,11 +1500,16 @@ async function executeCall(
 
   // Risk gate:
   // - `read` auto-allows
-  // - `shell` / `destructive` require approval (DEFAULT-DENY when no approver)
+  // - `shell` / `destructive` require approval (DEFAULT-DENY when no approver),
+  //   UNLESS the permission mode (see `permission-mode.ts`) resolves to `auto`
+  //   for this specific call — a `trust`/`auto` mode is itself the explicit
+  //   opt-in that stands in for the approver, so `requestApproval` is skipped
+  //   entirely rather than called and answered synthetically.
   // - `delegate` (spawn_subagent): DEFAULT-DENY when no approver, same as `shell`;
   //   when an approver is present, ask (TUI may auto-approve read_only subagents)
   // - anything else is denied
   const risk = tool.definition.risk;
+  const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   if (risk === "shell" || risk === "destructive") {
     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
@@ -1488,30 +1518,40 @@ async function executeCall(
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
-    const fingerprint = toolCallHash(call.name, call.input);
-    const response =
-      requestApproval === undefined
-        ? false
-        : await requestApproval(call.name, call.input, {
-            fingerprint,
-            destructive,
-            ...(credentials ? { credentials } : {}),
-          });
-    if (!isApprovalFor(response, fingerprint)) {
-      return { output: `command not approved by the user; not executed`, isError: true };
+    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials });
+    if (decision === "auto") {
+      onAutoApproved?.(call.name, call.input, { destructive, credentials });
+    } else {
+      const fingerprint = toolCallHash(call.name, call.input);
+      const response =
+        requestApproval === undefined
+          ? false
+          : await requestApproval(call.name, call.input, {
+              fingerprint,
+              destructive,
+              ...(credentials ? { credentials } : {}),
+            });
+      if (!isApprovalFor(response, fingerprint)) {
+        return { output: `command not approved by the user; not executed`, isError: true };
+      }
     }
   } else if (risk === "delegate") {
     // Fail-closed like `shell`: a delegate with no approver present is denied,
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
-    const fingerprint = toolCallHash(call.name, call.input);
-    const response =
-      requestApproval === undefined
-        ? false
-        : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
-    if (!isApprovalFor(response, fingerprint)) {
-      return { output: `subagent spawn not approved by the user; not executed`, isError: true };
+    const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false });
+    if (decision === "auto") {
+      onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
+    } else {
+      const fingerprint = toolCallHash(call.name, call.input);
+      const response =
+        requestApproval === undefined
+          ? false
+          : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
+      if (!isApprovalFor(response, fingerprint)) {
+        return { output: `subagent spawn not approved by the user; not executed`, isError: true };
+      }
     }
   } else if (risk !== "read") {
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };

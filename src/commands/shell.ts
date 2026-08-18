@@ -49,7 +49,14 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
-import { loadShellPermissions, shellPermissionsFingerprint } from "../lib/shell-permissions";
+import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
+import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
+import {
+  DEFAULT_PERMISSION_MODE,
+  isPermissionMode,
+  PERMISSION_MODES,
+  type PermissionMode,
+} from "./permission-mode";
 import {
   collapseToolOutput,
   colorEnabled,
@@ -138,6 +145,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/status",
   "/flows",
   "/theme",
+  "/mode",
   "/exit",
 ];
 
@@ -821,6 +829,15 @@ async function runAgentRepl(
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
   /**
+   * The CLI-flag override only (`--permission-mode` / `--ask`/`--trust`/
+   * `--auto`, see `parseShellCliFlags`). `undefined` means "no flag was
+   * passed" — the session then falls back to the project's stored default
+   * (`getProjectPermissionMode(sessionCwd)`) and finally
+   * `DEFAULT_PERMISSION_MODE`. That fallback chain is resolved once, inside
+   * this function, so it lives in exactly one place.
+   */
+  initialPermissionMode?: PermissionMode,
+  /**
    * SLATE-3a (flow 161, AC5) side-channel: the caller's `slateSessionBox`
    * (declared in `shellCommand`'s agent-mode branch, BEFORE the readline
    * `buildInteractiveAgentTools({..., getSessionDir})` call that reads it).
@@ -1052,6 +1069,30 @@ async function runAgentRepl(
 
   const sessionCwd = sessionOpts?.cwd ?? process.cwd();
   const sessionsOn = sessionOpts !== undefined && sessionOpts.enabled !== false;
+
+  // Fallback chain: CLI flag > this project's stored default > the global
+  // default (`ask`, unchanged behavior for anyone who never opts in). Resolved
+  // once, here — `/mode` below only ever reassigns the `let`, never re-derives
+  // this chain, so a session that clears its project default mid-run does not
+  // retroactively change.
+  let permissionMode: PermissionMode =
+    initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
+  agentIo.permissionMode = () => permissionMode;
+  agentIo.onAutoApproved = (tool, input, meta) => {
+    stopSpinner();
+    // NOT dimmed (see `AgentIO.onAutoApproved`'s docstring): unlike the shell
+    // "Always"-remembered grant below, which the user explicitly opted into
+    // for that exact command, a mode-driven auto-approval was never okayed
+    // action-by-action — only the mode itself was chosen, once.
+    const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+    // `meta.credentials` never reaches here — resolveApprovalDecision's hard
+    // floor means a credentials-touching call is never `auto`, in any mode.
+    // Only `destructive` is worth flagging: it means `auto` mode (not `trust`,
+    // which always asks for a destructive command) just bypassed it.
+    const flag = meta.destructive ? style.yellow(" [destructive]") : "";
+    out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag} ${style.dim(preview)}\n`);
+  };
+
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
@@ -1257,6 +1298,49 @@ async function runAgentRepl(
             );
           }
         }
+      } else if (command === "/mode") {
+        const modeArgs = rest.split(/\s+/).filter((p) => p.length > 0);
+        const wanted = modeArgs[0] ?? "";
+        const saveFlag = modeArgs.includes("save");
+
+        if (wanted.length === 0) {
+          const stored = getProjectPermissionMode(sessionCwd);
+          agentIo.onSystem?.(
+            `Permission mode: ${permissionMode}` +
+              (stored !== undefined ? ` (project default: ${stored})\n` : " (no project default set)\n") +
+              `Usage: /mode <${PERMISSION_MODES.join("|")}> [save] · /mode clear\n`,
+          );
+        } else if (wanted === "clear") {
+          setProjectPermissionMode(sessionCwd, undefined);
+          agentIo.onSystem?.(`Cleared the stored project default. This session stays on: ${permissionMode}\n`);
+        } else if (!isPermissionMode(wanted)) {
+          agentIo.onSystem?.(`Unknown mode '${wanted}'. Choose one of: ${PERMISSION_MODES.join(", ")}\n`);
+        } else {
+          // `auto` skips confirmation for EVERY action, including destructive
+          // ones (only credential-touching commands still ask — a hard floor
+          // no mode lifts). One-time explicit confirmation before it takes
+          // effect, on the same shared line-iterator `requestApproval` already
+          // uses mid-turn — never a silent flip.
+          let confirmed = true;
+          if (wanted === "auto") {
+            agentIo.onSystem?.(
+              "⚠ auto mode skips confirmation for EVERY action, including destructive commands.\n" +
+                "Only credential-touching commands still ask. Type 'yes' to confirm: ",
+            );
+            const answer = ((await readLine()) ?? "").trim();
+            confirmed = /^y(es)?$/i.test(answer);
+          }
+          if (!confirmed) {
+            agentIo.onSystem?.("Cancelled — mode unchanged.\n");
+          } else {
+            permissionMode = wanted;
+            agentIo.onSystem?.(`Permission mode: ${permissionMode}\n`);
+            if (saveFlag) {
+              const saved = setProjectPermissionMode(sessionCwd, permissionMode);
+              agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
+            }
+          }
+        }
       } else if (command === "/search-provider") {
         const args = parseSearchProviderArgs(parts.slice(1));
         const all = searchProviderController.configurable();
@@ -1452,6 +1536,15 @@ export interface ShellCliFlags {
   resumeId?: string;
   /** `-r` without id → open resume picker (TUI) or latest (non-TUI). */
   resumePick?: boolean;
+  /**
+   * `--permission-mode <ask|trust|auto>` or the `--ask`/`--trust`/`--auto`
+   * shorthands. `undefined` means no flag was passed — `runAgentRepl` then
+   * falls back to the project's stored default, then `DEFAULT_PERMISSION_MODE`.
+   * Agent-mode only (chat mode has no tools to gate); silently ignored on the
+   * `tui-chat`/readline-chat surfaces for that reason, not rejected — a
+   * leftover flag from a shell alias should not fail the whole launch.
+   */
+  permissionModeFlag?: PermissionMode;
 }
 
 /**
@@ -1468,6 +1561,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let continueLast: boolean | undefined;
   let resumeId: string | undefined;
   let resumePick: boolean | undefined;
+  let permissionModeFlag: PermissionMode | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -1494,6 +1588,13 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       } else {
         resumePick = true;
       }
+    } else if (arg === "--permission-mode") {
+      const next = args[++i];
+      if (next !== undefined && isPermissionMode(next)) {
+        permissionModeFlag = next;
+      }
+    } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
+      permissionModeFlag = arg.slice(2) as PermissionMode;
     }
   }
   return {
@@ -1505,6 +1606,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(continueLast === true ? { continueLast: true } : {}),
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
+    ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
   };
 }
 
@@ -1731,6 +1833,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
         },
+        ...(flags.permissionModeFlag !== undefined ? { initialPermissionMode: flags.permissionModeFlag } : {}),
         versionCheck,
       })
     ) {
@@ -1883,7 +1986,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         cwd: process.cwd(),
         ...(flags.continueLast === true ? { continueLast: true } : {}),
         ...(resumeId !== undefined ? { resumeId } : {}),
-      }, slateSessionBox);
+      }, flags.permissionModeFlag, slateSessionBox);
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

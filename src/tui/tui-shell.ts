@@ -93,12 +93,20 @@ import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
+  parseShellExecCommand,
   shellPermissionsFingerprint,
   shellPermissionsPath,
   loadShellPermissions,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
+import {
+  DEFAULT_PERMISSION_MODE,
+  isPermissionMode,
+  PERMISSION_MODES,
+  type PermissionMode,
+} from "../commands/permission-mode";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
   compactSession,
@@ -1380,6 +1388,13 @@ export function pickSessionInTui(
   });
 }
 
+/** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
+const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
+  ask: "Every mutating action asks first (today's default)",
+  trust: "Auto-approves safe actions; still asks for destructive/credential ones",
+  auto: "Skips confirmation for everything except credential-touching commands",
+};
+
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
  * NO concurrent readline (that leaked terminal query responses, flows 065/066).
@@ -1419,6 +1434,14 @@ export async function launchTuiAgentShell(opts: {
     resumeId?: string;
     pickOnStart?: boolean;
   };
+  /**
+   * The CLI-flag override only (`--permission-mode` / `--ask`/`--trust`/
+   * `--auto`, see `parseShellCliFlags` in `commands/shell.ts`). `undefined`
+   * means no flag was passed — the session then falls back to the project's
+   * stored default (`getProjectPermissionMode(sessionCwd)`) and finally
+   * `DEFAULT_PERMISSION_MODE`.
+   */
+  initialPermissionMode?: PermissionMode;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -1988,6 +2011,33 @@ export async function launchTuiAgentShell(opts: {
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
+
+    // Fallback chain: CLI flag > this project's stored default > the global
+    // default (`ask`, unchanged behavior for anyone who never opts in) —
+    // parity with `runAgentRepl` in `commands/shell.ts`. `/mode` below only
+    // ever reassigns the `let`, never re-derives this chain.
+    let permissionMode: PermissionMode =
+      opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
+    io.permissionMode = () => permissionMode;
+    io.onAutoApproved = (tool, input, meta) => {
+      // NOT dimmed — same principle as the read_only subagent auto-approval
+      // above: a mode-driven auto-approval was never okayed action-by-action,
+      // only the mode itself was chosen, once, so the transcript line is the
+      // only record of it.
+      const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+      // `meta.credentials` never reaches here — resolveApprovalDecision's hard
+      // floor means a credentials-touching call is never `auto`, in any mode.
+      const label = meta.destructive
+        ? `◇ auto-approved (${permissionMode}) [destructive]`
+        : `◇ auto-approved (${permissionMode})`;
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content: otui.t`${otui.yellow(label)} ${otui.dim(preview)}`,
+        }),
+      );
+    };
+
     // Definite assignment: every control-flow path calls `applyOpened` before
     // paint/save; `!` satisfies TS2454 (assignments inside nested closures are
     // invisible to control-flow analysis).
@@ -2942,6 +2992,82 @@ export async function launchTuiAgentShell(opts: {
               chrome.showToast(`Theme: ${themeLabel(id)}`);
             },
           });
+          return;
+        }
+        if (command.name === "/mode") {
+          const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
+          const wanted = modeArgs[0] ?? "";
+          const saveFlag = modeArgs.includes("save");
+
+          const applyMode = async (next: PermissionMode): Promise<void> => {
+            if (next === "auto") {
+              // `auto` skips confirmation for EVERY action, including
+              // destructive ones (only credential-touching commands still
+              // ask — a hard floor no mode lifts). One-time explicit
+              // confirmation before it takes effect, never a silent flip.
+              chrome.hideMenu();
+              const confirmId = await chrome.withOverlay(() =>
+                showComposerChoice(otui, r, chrome.dock, {
+                  title: "Switch to auto mode?",
+                  subtitle:
+                    "Skips confirmation for EVERY action, including destructive commands. " +
+                    "Only credential-touching commands still ask.",
+                  cancelId: "cancel",
+                  options: [
+                    { id: "confirm", label: "Confirm", description: "I understand the risk" },
+                    { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
+                  ],
+                }),
+              );
+              input.focus();
+              if (confirmId !== "confirm") {
+                chrome.showToast("Cancelled — mode unchanged.");
+                return;
+              }
+            }
+            permissionMode = next;
+            chrome.showToast(`Permission mode: ${next}`);
+            if (saveFlag) {
+              const saved = setProjectPermissionMode(sessionCwd, next);
+              chrome.showToast(saved ? "Saved as this project's default." : "Could not save the project default.");
+            }
+          };
+
+          if (wanted === "clear") {
+            setProjectPermissionMode(sessionCwd, undefined);
+            chrome.showToast(`Cleared project default. Session stays on: ${permissionMode}`);
+            return;
+          }
+          if (wanted.length > 0) {
+            if (!isPermissionMode(wanted)) {
+              io.onSystem?.(`Unknown mode '${wanted}'. Choose one of: ${PERMISSION_MODES.join(", ")}\n`);
+              return;
+            }
+            void applyMode(wanted);
+            return;
+          }
+          // No arg: a picker, same shape as `/theme`'s.
+          const stored = getProjectPermissionMode(sessionCwd);
+          chrome.hideMenu();
+          void (async () => {
+            const id = await chrome.withOverlay(() =>
+              showComposerChoice(otui, r, chrome.dock, {
+                title: `Permission mode (current: ${permissionMode})`,
+                subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
+                cancelId: permissionMode,
+                options: PERMISSION_MODES.map((m) => ({
+                  id: m,
+                  label: m,
+                  description: MODE_PICKER_DESCRIPTIONS[m],
+                  recommended: m === permissionMode,
+                })),
+              }),
+            );
+            input.focus();
+            if (isPermissionMode(id) && id !== permissionMode) {
+              await applyMode(id);
+            }
+          })();
           return;
         }
         if (command.name === "/model") {
