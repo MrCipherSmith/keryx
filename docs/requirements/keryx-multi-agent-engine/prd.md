@@ -1,11 +1,12 @@
 # Multi-Agent Engine — Product Requirements
-Version: 0.2.0
+Version: 0.4.0
 
 > **Status note:** the requirements below have been **implemented** as flows
 > 088–101 (see `README.md` for the runtime evidence and the two minor deferrals:
 > live `keryx agents` snapshot against a running run, and a dedicated
 > `orchestrator-state` fold). This PRD is retained as the original requirements
-> record.
+> record. **The Phase D addendum below (FR11/FR12, SC7/SC8, R8/R9) has been
+> implemented as flow 171 (tasks T5–T7).**
 
 ## Problem
 
@@ -47,6 +48,31 @@ harness.
   actions via the dispatch contract.
 - **Operators** observing and controlling a running fleet (`keryx agents`).
 
+## Problem (Phase D addendum, 2026-08-18)
+
+Two gaps confirmed by direct code investigation, not present in flows 088-101:
+
+- **No real concurrency on the interactive path.** `planWaves`
+  (`parallel/scheduler.ts`) already computes bounded-concurrency,
+  dependency-ordered wave plans and is unit-tested — but it is a PLANNER only;
+  nothing executes a plan. `src/commands/agent.ts`'s tool-call loop processes
+  every `spawn_subagent` call in a batch strictly one at a time (`await`s each
+  child's entire turn before starting the next), so in practice every batch is
+  one wave of size one regardless of what `planWaves` could compute. A
+  three-project reference study (xAI Grok Build, OpenAI Codex CLI, sst/opencode
+  — see `brainstorm.md`) found Keryx is the only one of the four studied that
+  never runs sibling spawns concurrently (opencode's default dispatch path
+  delegates to the Vercel AI SDK, not directly inspected in this study — see
+  `brainstorm.md`'s hedge on that specific point).
+- **A child's own budget exhaustion is invisible to the parent.** When a
+  spawned child hits its own internal step/tool-call limit and the model never
+  produces a clean finish, `spawn-subagent-tool.ts` still returns
+  `isError:false` — identical in shape to a deliberate, successful completion.
+  Only a parent-granted wall-clock timeout or a thrown error are currently
+  distinguished. The same reference study found this distinct-status pattern
+  in 2 of 3 comparators (Grok Build, Codex); opencode shares Keryx's exact gap
+  for this one case.
+
 ## Requirements
 
 ### Functional
@@ -84,6 +110,22 @@ harness.
 - **FR10 — Roadmap extension points (documented, not built now):** cost-aware
   tier escalation, event-sourced orchestrator state, worktree isolation for
   parallel mutators, bounded peer messaging.
+- **FR11 — Bounded concurrent execution of sibling `spawn_subagent` calls
+  (Phase D).** When a single model turn emits multiple `spawn_subagent` tool
+  calls, they MUST be planned via the existing `planWaves` (dependency-free
+  inputs from this call site ⇒ effectively one `maxConcurrency`-bounded wave)
+  and executed concurrently within that wave, not one-at-a-time. Tool calls of
+  OTHER types in the same batch are explicitly out of scope for this
+  requirement and keep today's sequential semantics (a batch mixing
+  `spawn_subagent` with e.g. `shell_exec` is not re-ordered by this
+  requirement — only the run of `spawn_subagent` calls among themselves).
+- **FR12 — Structured child-completion status (Phase D).** Every
+  `spawn_subagent` result MUST carry a status distinguishing *why* the child
+  did not cleanly complete, not just a boolean: `Completed | BudgetExhausted |
+  Timeout | Denied | Error | NoProgress`. `BudgetExhausted`/`NoProgress` MUST
+  be set from the child's own internal limit/no-progress path (currently
+  silently folded into a false "success") without requiring the model to
+  self-report it in prose.
 
 ### Non-functional
 
@@ -115,6 +157,17 @@ harness.
 - SC5: Child free-text that matches instruction-shaped patterns is flagged/
   quarantined before it can steer the next dispatch.
 - SC6: `npm`/`bun` dependency guard tests and determinism tests still pass.
+- SC7 (Phase D): N sibling `spawn_subagent` calls in one turn complete in
+  wall-clock time bounded by the slowest child, not the sum of all children
+  (proven by a test with injected, independently-timed fake children).
+  Concurrency never exceeds `maxConcurrency`, and the aggregate budget ledger
+  still never over-grants across concurrently-running children (property test
+  extending AC3's existing sequential-spawn coverage to concurrent spawns).
+- SC8 (Phase D): a child whose own step/tool-call budget is exhausted before a
+  clean finish returns `status: "BudgetExhausted"`, never `status: "Completed"`
+  nor bare `isError:false`; existing timeout/error/denial paths keep returning
+  their own distinct status values (no regression to `Timeout`/`Denied`/
+  `Error`'s existing signal).
 
 ## Risks
 
@@ -133,6 +186,19 @@ harness.
   quarantine/re-scan before re-dispatch (FR9).
 - **R7 — Dependency-policy violation from a monitoring/SDK lib (Critic).**
   *Mitigation:* hand-rolled dep-free core (NFR3).
+- **R8 — Concurrent children racing on shared, mutable parent state (Phase D).**
+  The interactive turn loop, `RemainingBudgetLedger`, and any shared TUI fleet
+  state were all written assuming one child executes at a time. *Mitigation:*
+  the ledger's grant/decrement step MUST stay synchronous/atomic per
+  reservation (no `await` between check and decrement) so concurrent grants
+  cannot race past the shared remaining budget — verify this explicitly, do
+  not assume it holds just because the ledger's existing sequential tests pass.
+- **R9 — A richer status enum invites callers to over-fit retry logic to
+  specific values (Phase D).** *Mitigation:* document `BudgetExhausted`/
+  `NoProgress`/`Timeout` as advisory signals for the ORCHESTRATOR MODEL's own
+  judgment (retry, extend, accept-partial, give up), not as a mechanical
+  auto-retry the harness performs unprompted — the parent still owns the
+  decision (D-02-adjacent: status enrichment is not a new authority).
 
 ## Recommendation
 
@@ -143,3 +209,13 @@ and peer-messaging extensions land on stable contracts without rework. Defer
 cost/token budgeting to a named extension point. This is the smallest change that
 makes model selection real *and* fail-closed, and it reuses the entire existing
 lifecycle/scheduler/result path unchanged.
+
+**Phase D (2026-08-18, implemented, flow 171):** wired the already-existing
+`planWaves` plan to a real concurrent executor for sibling `spawn_subagent`
+calls (FR11) via `executeWaves` in `scheduler.ts` and `runConcurrentSpawnBatch`
+in `agent.ts`; added the `Completed | BudgetExhausted | Timeout | Denied |
+Error | NoProgress` status (FR12) via `SubagentCompletionStatus` in
+`spawn-subagent-tool.ts`. Both are additive to the implemented A→B→C engine —
+no contract breakage, no change to model resolution, budget/policy inheritance,
+or the D-02 invariant. SC7/SC8 and R8/R9 covered by tests; two trade-offs
+documented (T6 findings).

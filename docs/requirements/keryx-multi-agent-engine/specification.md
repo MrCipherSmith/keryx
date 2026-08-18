@@ -1,11 +1,12 @@
 # Multi-Agent Engine — Specification
-Version: 0.2.0
+Version: 0.4.0
 
-> **Status note:** **implemented** as flows 088–101; see `README.md` for the
-> runtime evidence. The original CLI surface `keryx agents --json` sketched in
-> this document shipped as `keryx agents monitor <events-file> [--json]` (an
-> offline fold over a captured events file); the prose below is retained as the
-> design record.
+> **Status note:** **implemented** as flows 088–101 (Phase A–C) and flow 171
+> (Phase D); see `README.md` for the runtime evidence. The original CLI surface
+> `keryx agents --json` sketched in this document shipped as `keryx agents
+> monitor <events-file> [--json]` (an offline fold over a captured events file);
+> the prose below is retained as the design record. **Phase D (§ below) is now
+> implemented** (flow 171, tasks T5–T7).
 
 ## Module Identity
 
@@ -169,6 +170,105 @@ scanned for instruction-shaped patterns (control-tag imitations, `Human:`/
 (marker line prepended), **never silently executed**. Child free-text stays
 `trustLevel:"derived"` and is quarantined from becoming orchestrator instructions.
 
+## Phase D — Concurrent Waves + Structured Completion Status
+
+**Status: implemented (added 2026-08-18, shipped flow 171).** Additive
+to everything above — no change to model resolution, budget/policy
+inheritance, contracts, or D-02.
+
+### D1. Wave executor (closes the plan/execute gap)
+
+`planWaves` (`src/harness/parallel/scheduler.ts`) already produces a
+`Wave[]` — this spec adds the missing executor that actually runs one:
+
+```ts
+export interface WaveExecutorDeps<TTask, TResult> {
+  /** Runs one task to completion. Must not throw for an ordinary child
+   *  failure — failures are values (see D2), not exceptions, so a wave never
+   *  aborts its siblings because one child errored. */
+  run: (task: TTask, reservation: BudgetReservation) => Promise<TResult>;
+}
+
+/** Execute a `planWaves` plan: waves run strictly in order (later waves may
+ *  depend on earlier ones per `ChildTask.dependsOn`); tasks WITHIN one wave
+ *  run concurrently via `Promise.all`, bounded by the wave's own size (already
+ *  ≤ `maxConcurrency` by construction — the executor adds no separate cap). */
+export async function executeWaves<TTask extends { taskId: string }, TResult>(
+  tasks: readonly TTask[],
+  waves: readonly Wave[],
+  deps: WaveExecutorDeps<TTask, TResult>,
+): Promise<Map<string, TResult>>;
+```
+
+Integration point: `src/commands/agent.ts`'s tool-call loop (~line 1192-1238).
+When a model turn's `calls` contains 2+ `spawn_subagent` invocations, build
+`ChildTask[]` from them (no `dependsOn` between sibling same-turn spawns —
+they are independent by construction, since a model cannot see one child's
+result before issuing the next call in the same response), call `planWaves`
+with `AgentDeps.maxSubagentConcurrency` (implemented as an optional field on
+`AgentDeps` with default 3, not config-file-loaded — same deferred state as
+existing `maxTreeDepth`/`maxChildrenPerRun`), then `executeWaves` instead of
+the current serial `for` loop for that sub-batch specifically. Tool calls of
+non-`spawn_subagent` types in the same batch keep the existing sequential path
+— this is a scoped, additive branch, not a rewrite of the whole loop.
+
+**`maxSubagentConcurrency` default:** implemented as `DEFAULT_MAX_SUBAGENT_
+CONCURRENCY = 3` (not grok-build's 32 — reasoning: cannot assume uniform
+provider rate-limit headroom). No env/config-file wiring yet; the field lives
+on `AgentDeps` as an injected constant, matching the pattern of existing
+`maxTreeDepth`/`maxChildrenPerRun`.
+
+### D2. Structured completion status
+
+```ts
+export type SubagentCompletionStatus =
+  | "Completed"       // clean finish, model produced a final result
+  | "BudgetExhausted"  // child's OWN maxToolCalls/step budget ran out, no clean finish
+  | "Timeout"           // parent-granted wall-clock maxRuntimeMs elapsed (existing path)
+  | "Denied"            // MAE admission denial (existing path, e.g. depth/count cap)
+  | "Error"             // thrown/internal error (existing path)
+  | "NoProgress";       // agent.ts's existing no-progress detector fired, distinct from budget exhaustion
+
+export interface StructuredSubagentResult {
+  status: SubagentCompletionStatus;
+  output: string;               // unchanged shape: bounded summary text
+  isError: boolean;              // derived from status (false only for "Completed"), kept for backward compat
+  partial?: string;               // best-effort partial output, when status !== "Completed"
+}
+```
+
+Backward compatibility: existing callers reading only `{output, isError}` see
+no change — `isError` is still `true` for every non-`Completed` status, so a
+caller that never looks at `status` behaves exactly as today. `status` is
+purely additive.
+
+Wiring: `spawn-subagent-tool.ts`'s internal-budget path currently takes the
+same branch as a clean finish (~line 844-872, `isError:false`). This spec
+requires that branch to first check whether `agent.ts`'s turn result carries a
+`finishReason` of `"budget"` (from `finishWithBudgetSummary`, ~line 1349) or
+`"no-progress"` (from the existing no-progress detector, ~line 1318) — both
+already computed internally, neither currently threaded out of `runAgentTurn`'s
+return value to its caller. Threading that reason out is the only new plumbing
+D2 requires; no new detection logic.
+
+### D Acceptance Criteria
+
+- **AC9:** N sibling `spawn_subagent` calls in one turn, each backed by an
+  injected fake child with a distinct artificial delay, complete in wall-clock
+  time bounded by `max(delays)` (property/integration test with fake timers or
+  injected clocks — deterministic, no real sleep).
+- **AC10:** Concurrent grants against the shared `RemainingBudgetLedger` never
+  exceed the parent's remaining budget — extend AC3's existing property test
+  to interleaved/concurrent grant calls, not just sequential ones.
+- **AC11:** A child whose own step/tool-call budget exhausts before a clean
+  finish returns `status: "BudgetExhausted"`; a child hitting the existing
+  no-progress detector returns `status: "NoProgress"`; neither is
+  `"Completed"`. Existing `Timeout`/`Denied`/`Error` paths are unchanged and
+  covered by regression tests (no silent status drift on the paths that
+  already worked).
+- **AC12:** A dispatch/response shape with no caller reading `status` behaves
+  identically to pre-Phase-D Keryx (regression test mirroring AC7's pattern).
+
 ## CLI / Skill Surface
 
 - `keryx agents` — interactive multi-subagent view (tree, per-child status,
@@ -193,6 +293,9 @@ scanned for instruction-shaped patterns (control-tag imitations, `Human:`/
 - **Observability** (`keryx-execution-observability`): usage/retry taxonomy,
   per-run evidence reused by the fold.
 - **Task Manager / flow**: orchestrators dispatch subagents; D-02 unchanged.
+- **Interactive turn loop** (`src/commands/agent.ts`, Phase D): the tool-call
+  execution loop gains a scoped concurrent-`spawn_subagent` branch using
+  `executeWaves` (D1); every other tool type's dispatch order is unchanged.
 
 ## Acceptance Criteria
 

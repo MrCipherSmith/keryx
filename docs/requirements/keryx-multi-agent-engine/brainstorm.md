@@ -1,5 +1,5 @@
 # Multi-Agent Engine — Brainstorm & Decision History
-Version: 0.2.0
+Version: 0.3.0
 
 > **Status note:** the design decisions recorded here have been **implemented**
 > (flows 088–101). This brainstorm is retained as decision history; it is not a
@@ -99,3 +99,44 @@ A plus gating provider class by the child's resolved `PolicyProfile`
 Implement **B + caps + shared ledger + quarantine** as the first slice on
 contracts shaped for C, so escalation, event-sourcing, worktrees, and peer
 messaging attach later without contract rework. Defer cost enforcement.
+
+## Phase D (added 2026-08-18): concurrency + completion-status reference study
+
+**Specification-ready, not implemented** — this section and its conclusions
+are requirements-only decision history, same as the rest of this file; no
+runtime code has changed as a result of it.
+
+Triggered by a live bug report (voice, operator session): sub-agents dispatched
+from Keryx's interactive shell appeared to run one at a time, and a sub-agent
+that failed to finish cleanly gave the parent no way to tell. Verified against
+Keryx's own code first (`src/commands/agent.ts`'s tool-call loop, `await`s each
+`spawn_subagent` fully before starting the next; `spawn-subagent-tool.ts`'s
+internal-budget-exhaustion path returns `isError:false`, indistinguishable from
+a clean finish) — both confirmed true. Cloned three shallow reference repos
+(`~/forks/{grok-build,opencode,codex}`) and re-read them specifically for these
+two questions (distinct from the four references studied for the original A→B→C
+work above — note `grok-build` here is xAI's own official repo, a different
+project from `grok-cli` studied above).
+
+| Project | Sibling-spawn concurrency | Completion-status distinctness |
+|---|---|---|
+| **grok-build** (xai-org) | Bounded pool, default **32** concurrent (`AdmissionDecision`, `FuturesUnordered` in the coordinator actor; `admission.rs`, `coordinator.rs`) | Typed `PromptCompletionKind::MaxTurnsReached{limit}` → `SubagentResult{success:false, cancelled:true, error:Some(...)}`; separate `Cancelled{category,...}` variant (no-progress, interrupt, etc.) — never confused with a clean finish |
+| **codex** (openai) | Fire-and-forget `spawn_agent` (returns once the child's turn STARTS, not when it finishes); parent `wait_agent` uses `FuturesUnordered` to await several at once; usage hint literally states an N-slot concurrency ceiling | `AgentStatus{Completed, Errored, Interrupted, Shutdown, NotFound}` + a richer persisted `ThreadGoalStatus{Active,Paused,Blocked,UsageLimited,BudgetLimited,Complete}` — `TurnAbortReason::BudgetLimited` maps to `Interrupted`, never `Completed` |
+| **opencode** (sst) | Concurrent in its experimental native runtime (`FiberSet.run({startImmediately:true})` per tool-call event, synced only at the end via `awaitEmpty`); default path delegates dispatch to the Vercel AI SDK (opaque in a shallow clone, but that SDK is documented to run same-step tool calls concurrently too) | **Partial** — explicit errors/cancellation ARE distinct (`<task_error>` vs `<task_result>` tag), but step/budget exhaustion specifically is NOT: `MAX_STEPS_PROMPT` just nudges the model to wrap up in-band; the resulting `finish` reason is whatever the model naturally emits, and the task tool reports `"completed"` either way — **the same specific gap Keryx has**, not the general case |
+| **Keryx** (before Phase D) | **Strictly sequential** — the outlier of the four | **No structured field at all** — only `{output, isError}`; even the general case (not just step-budget) is unmarked except for the two paths (timeout, thrown error) that already set `isError:true` |
+
+**Reading:** concurrency is a clear, unanimous gap — nobody else studied runs
+sibling spawns sequentially, and the primitive to fix it (`planWaves`) already
+exists in Keryx unused for this purpose, so this is a wiring gap, not a missing
+capability. Completion-status distinctness is *mostly* a clear gap too, but
+opencode's one shared weak spot (step-budget exhaustion specifically) is a
+useful signal that this exact case is easy to miss even in a mature reference
+implementation — worth being deliberate about in the spec rather than assuming
+"add an enum" automatically covers it.
+
+**Proposed status set (spec §Phase D), richer than any single reference
+studied:** `Completed | BudgetExhausted | Timeout | Denied | Error | NoProgress`
+— `codex`/`grok-build` both collapse budget-exhaustion and no-progress into one
+"stopped early" bucket (`Interrupted` / `cancelled:true`); Keryx's proposal keeps
+them distinguishable so the parent can pick a differentiated response (extend
+budget vs. try a different task framing) instead of a uniform retry.

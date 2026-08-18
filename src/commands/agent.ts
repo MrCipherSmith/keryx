@@ -18,6 +18,7 @@ import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode }
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
+import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
 import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
@@ -192,6 +193,22 @@ export interface AgentDeps {
    * (tests, any non-TUI/non-shell driver) is unaffected.
    */
   resetSubagentBudget?: () => void;
+  /**
+   * D1c (flow 171, Phase D): cap on how many sibling `spawn_subagent` calls in
+   * the SAME tool-call batch run CONCURRENTLY, via `planWaves`/`executeWaves`
+   * (`../harness/parallel/scheduler`) instead of one at a time. Only takes
+   * effect when a batch actually contains 2+ `spawn_subagent` calls whose
+   * per-turn tool budget reservation is granted — a batch with 0-1 always
+   * uses the plain sequential path, completely unaffected. Optional; default
+   * {@link DEFAULT_MAX_SUBAGENT_CONCURRENCY}. This is the first real
+   * `HarnessRunConfig.subagents.maxConcurrency` plumbing (see
+   * `docs/requirements/keryx-multi-agent-engine/specification.md` §Phase D):
+   * threaded the same shallow way `maxTreeDepth`/`maxChildren` already are at
+   * `spawn-subagent-tool.ts`'s own `invoke()` call site (a caller-supplied
+   * constant, not yet read from a manifest/config file loader — no such
+   * loader exists for `subagents.*` fields today).
+   */
+  maxSubagentConcurrency?: number;
 }
 
 export interface RunAgentTurnOptions {
@@ -244,6 +261,32 @@ export interface RunAgentTurnOptions {
 }
 
 /**
+ * D2a (flow 171, Phase D): internal-only result of one `runAgentTurn`/
+ * `runAgentTurnCore` call. Purely additive — every existing call site
+ * (`shell.ts`, `tui-shell.ts`, `goal-command.ts`, `deep-enrich.ts`,
+ * `spawn-subagent-tool.ts`) already discards or merely `await`s the returned
+ * promise without reading a value, so widening `Promise<void>` to
+ * `Promise<RunAgentTurnResult>` changes nothing for them.
+ */
+export interface RunAgentTurnResult {
+  /**
+   * Why the tool-call loop stopped WITHOUT a clean model-driven finish, when
+   * that happened. `undefined` on every other exit path (aborted, provider
+   * error, text-only finish, `ask_user` denial, …) — this field only
+   * distinguishes the two specific "the loop itself cut the turn short"
+   * cases already detected below (`finishWithBudgetSummary`'s budget-
+   * exhausted branch and the no-progress branch), it adds no new detection.
+   *
+   * NEVER model-facing: this is a plain return value, never written into
+   * `history`, never passed to any `io.on*` callback, and never appears in
+   * the text a provider/model sees. Consumed today only by
+   * `spawn-subagent-tool.ts` (D2b) to compute `SubagentCompletionStatus` for
+   * a child turn.
+   */
+  finishReason?: "budget" | "no-progress";
+}
+
+/**
  * Default unique tool-signature budget per user turn for interactive agent
  * (`keryx shell` / TUI). Sized so multi-step operator prompts (read several
  * docs, run a probe matrix, write a report) complete without the user needing
@@ -263,6 +306,22 @@ export const DEFAULT_MAX_READ_TOOL_CALLS = 40;
 
 /** Default unique non-read/unknown-risk signature budget inside the total pool. */
 export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 8;
+
+/**
+ * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
+ * turn's tool-call batch run CONCURRENTLY (flow 171, Phase D / D1c). The
+ * reference study (`docs/requirements/keryx-multi-agent-engine/brainstorm.md`)
+ * found grok-build defaults to 32 — NOT copied here, deliberately: that
+ * default assumes provider-side rate-limit headroom Keryx cannot assume for
+ * every configured provider/local-model combination (a lightly-provisioned
+ * local Ollama endpoint, for instance, has none of it, and a burst of
+ * concurrent children hammering it at once is a self-inflicted outage, not a
+ * speedup). A low single-digit ceiling still gives real wall-clock savings
+ * over the old fully-sequential dispatch for the common "review these N
+ * things" fan-out, while staying safe as the default for an unknown
+ * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
+ */
+export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
 
 /**
  * Resolve unique tool-signature budget for an interactive agent turn.
@@ -838,9 +897,9 @@ export async function runAgentTurn(
   history: NormalizedMessage[],
   userLine: string,
   options: RunAgentTurnOptions = {},
-): Promise<void> {
+): Promise<RunAgentTurnResult> {
   try {
-    await runAgentTurnCore(io, deps, history, userLine, options);
+    return await runAgentTurnCore(io, deps, history, userLine, options);
   } finally {
     // `closeSlateOnFlowDone` never throws — it swallows every failure
     // itself (see its own doc comment) — but the `finally` block does not
@@ -919,7 +978,7 @@ async function runAgentTurnCore(
   history: NormalizedMessage[],
   userLine: string,
   options: RunAgentTurnOptions = {},
-): Promise<void> {
+): Promise<RunAgentTurnResult> {
   history.push({ role: "user", content: userLine, provenance: "project" });
   io.onHistoryChange?.("user");
   const signal = options.signal;
@@ -927,7 +986,7 @@ async function runAgentTurnCore(
 
   if (isAborted()) {
     io.onSystem?.("\n[stopped] Model turn interrupted by user.\n");
-    return;
+    return {};
   }
 
   const toolByName = new Map(deps.tools.map((t) => [t.definition.name, t]));
@@ -1089,7 +1148,7 @@ async function runAgentTurnCore(
       for await (const event of deps.provider.stream(request, streamOptions)) {
         if (isAborted()) {
           system("\n[stopped] Model turn interrupted by user.\n");
-          return;
+          return {};
         }
         if (event.kind === "reasoning_delta") {
           reasoningText += event.text ?? "";
@@ -1132,7 +1191,7 @@ async function runAgentTurnCore(
     } catch (cause) {
       if (isAborted()) {
         system("\n[stopped] Model turn interrupted by user.\n");
-        return;
+        return {};
       }
       system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
@@ -1147,10 +1206,10 @@ async function runAgentTurnCore(
 
     if (isAborted()) {
       system("\n[stopped] Model turn interrupted by user.\n");
-      return;
+      return {};
     }
     if (errored) {
-      return;
+      return {};
     }
     if (calls.length === 0) {
       const shouldReprompt = actionRequest && (assistantText.length === 0 || modelClaimedAction(assistantText));
@@ -1177,22 +1236,78 @@ async function runAgentTurnCore(
             "Use a chat-safe fallback (`keryx shell --chat`) or switch to a tool-capable model.\n",
         );
       }
-      return; // error, or a text-only finish → turn complete
+      return {}; // error, or a text-only finish → turn complete
     }
 
     if (isAborted()) {
       system("\n[stopped] Model turn interrupted by user.\n");
-      return;
+      return {};
     }
 
     // Execute each tool call and append its result, then loop to re-request.
     let exhaustedBudget: "total" | "read" | "non-read" | undefined;
     let executedAny = false;
     const batchContainsUntrustedWeb = calls.some((call) => call.name === "web_fetch" || call.name === "web_search");
+
+    // D1 (flow 171, Phase D / D1b): when this batch contains 2+
+    // `spawn_subagent` calls, run that sub-batch CONCURRENTLY (bounded by
+    // `deps.maxSubagentConcurrency`) via `planWaves`/`executeWaves`
+    // (`../harness/parallel/scheduler`) instead of dispatching them one at a
+    // time in the loop below. Scoped, ADDITIVE branch — a batch with 0-1
+    // `spawn_subagent` calls, and every non-`spawn_subagent` call in a mixed
+    // batch, falls through the per-call loop exactly as before, untouched.
+    //
+    // Reservation (`reserveToolAttempt`, the per-turn unique-signature dedup
+    // budget) is computed for EVERY call in `calls` HERE, in one forward
+    // pass, in the SAME array order the per-call loop below iterates — so
+    // the running `budget` state this produces is identical to what today's
+    // interleaved reserve-then-execute sequence would produce. Only a call
+    // whose reservation is GRANTED here can join the concurrent group; a
+    // call that would be denied (hash/total/read/non-read budget exhausted)
+    // is never dispatched, matching the sequential path's "skip, never
+    // execute" contract. The loop below looks these results UP instead of
+    // recomputing them, so no call's budget slot is charged twice.
+    //
+    // One narrow, deliberate trade-off: this pre-pass cannot know whether a
+    // LATER call in the batch will be blocked by the untrusted-content gate
+    // just below (it depends on an EARLIER call's own execution RESULT, not
+    // its call shape, and results aren't known yet at pre-pass time) — a
+    // call this pre-pass reserves that the loop later blocks as
+    // untrusted-tainted still consumes a reservation slot here, unlike the
+    // plain sequential path (which never reaches `reserveToolAttempt` for a
+    // blocked call at all). This only matters for a batch that mixes
+    // `spawn_subagent` concurrency with `web_fetch`/`web_search` untrusted
+    // content in the SAME turn; accepted as a documented, narrow trade-off
+    // rather than threading live results back into a synchronous pre-pass.
+    const reservationByCallId = new Map<string, ReturnType<typeof reserveToolAttempt>>();
+    for (const call of calls) {
+      const callRisk = toolByName.get(call.name)?.definition.risk;
+      reservationByCallId.set(call.id, reserveToolAttempt(budget, call.name, call.input, callRisk));
+    }
+    const spawnConcurrencyCandidates = calls.filter(
+      (call) => call.name === "spawn_subagent" && reservationByCallId.get(call.id)?.ok === true,
+    );
+    // Review finding F-001 (flow 171 T10): the sequential loop below blocks EVERY
+    // `spawn_subagent` call once `untrustedContentSeen` is true (persists across
+    // turns, see the comment at this function's `untrustedContentSeen` init) or
+    // once this batch itself contains untrusted `web_fetch`/`web_search` content
+    // (`spawn_subagent` is never in that exemption list) — so a candidate that
+    // would be blocked there must never reach `runConcurrentSpawnBatch` here,
+    // which has NO knowledge of this gate and would otherwise really spawn the
+    // child, run it to completion, and only discard the result. Skip the whole
+    // concurrent branch (never call `runConcurrentSpawnBatch`) whenever either
+    // condition holds; the candidates fall through to the per-call loop below,
+    // which already gates them correctly one at a time.
+    const untrustedGateBlocksSpawns = untrustedContentSeen || batchContainsUntrustedWeb;
+    const concurrentSpawnResults: Map<string, InteractiveToolResult> | undefined =
+      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns
+        ? await runConcurrentSpawnBatch(spawnConcurrencyCandidates, toolByName, io, deps)
+        : undefined;
+
     for (const call of calls) {
       if (isAborted()) {
         system("\n[stopped] Model turn interrupted by user.\n");
-        return;
+        return {};
       }
       if (deps.unattended === true && call.name === "ask_user") {
         // SLATE-11 (AC3): no human is present to answer — deny BEFORE the real
@@ -1203,7 +1318,7 @@ async function runAgentTurnCore(
         // calls processed, nothing pushed into history beyond what was already
         // there before this call.
         await emitTerminalState(io, deps, options, "ask_user_unanswerable");
-        return;
+        return {};
       }
       if (untrustedContentSeen || (batchContainsUntrustedWeb && call.name !== "web_fetch" && call.name !== "web_search")) {
         const result: InteractiveToolResult = {
@@ -1217,7 +1332,14 @@ async function runAgentTurnCore(
       }
       io.onToolCall?.(call.name, call.input);
       const risk = toolByName.get(call.name)?.definition.risk;
-      const reservation = reserveToolAttempt(budget, call.name, call.input, risk);
+      // Look up the reservation the pre-pass above already computed for this
+      // exact call (same array, same order, same `budget` object) — the `??`
+      // fallback recomputes only if the lookup is ever unexpectedly empty
+      // (unreachable in practice: the pre-pass iterates this same `calls`
+      // array in full), so a defensive gap here can never silently skip
+      // budget accounting.
+      const reservation =
+        reservationByCallId.get(call.id) ?? reserveToolAttempt(budget, call.name, call.input, risk);
       if (!reservation.ok) {
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
@@ -1235,7 +1357,17 @@ async function runAgentTurnCore(
       }
 
       executedAny = true;
-      const result = await executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved);
+      // A call already dispatched (and settled) by the concurrent
+      // `spawn_subagent` sub-batch above uses that precomputed result
+      // instead of executing again — `runConcurrentSpawnBatch` guarantees
+      // one entry per candidate it was given, success or degraded-error, so
+      // this lookup never silently falls through to a second, duplicate
+      // dispatch for a call that already ran. Every other call (including a
+      // lone `spawn_subagent` not part of a qualifying concurrent group)
+      // executes exactly as before.
+      const result =
+        concurrentSpawnResults?.get(call.id) ??
+        (await executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved));
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -1316,6 +1448,14 @@ async function runAgentTurnCore(
     // a new signature beyond a pool, or only re-issues exhausted hashes.
     const noProgress = !executedAny && calls.length > 0;
     if (exhaustedBudget !== undefined || noProgress) {
+      // D2a (flow 171, Phase D): surface WHICH of the two conditions above
+      // stopped this turn, for `spawn-subagent-tool.ts` (D2b) to distinguish
+      // `BudgetExhausted` from `NoProgress` on a child's own turn. Both
+      // branches below (unattended terminal-state / interactive wrap-up) hit
+      // this same `if`, so `finishReason` is computed once and returned from
+      // either exit — this is not new detection, only labeling of the
+      // already-computed `exhaustedBudget`/`noProgress` values above.
+      const finishReason: "budget" | "no-progress" = exhaustedBudget !== undefined ? "budget" : "no-progress";
       if (deps.unattended === true) {
         // SLATE-11 (AC3): in place of `finishWithBudgetSummary`'s free-text
         // "Do NOT call tools." push AND its text-only wrap-up model round,
@@ -1323,7 +1463,7 @@ async function runAgentTurnCore(
         // `deps.provider.stream(...)` call. `history` reflects only what the
         // tool-execution loop itself already wrote before this branch.
         await emitTerminalState(io, deps, options, "budget_exhausted");
-        return;
+        return { finishReason };
       }
       await finishWithBudgetSummary(io, deps, history, parentRunId, {
         maxUnique: maxToolCalls,
@@ -1337,7 +1477,7 @@ async function runAgentTurnCore(
         ...(exhaustedBudget !== undefined ? { exhaustedBudget } : {}),
         noProgress,
       });
-      return;
+      return { finishReason };
     }
   }
 }
@@ -1473,6 +1613,148 @@ function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean
     return false;
   }
   return response.fingerprint === undefined || response.fingerprint === fingerprint;
+}
+
+/**
+ * Nominal per-child runtime "budget" fed into `planWaves`'s fold (flow 171,
+ * Phase D / D1b). NOT a real budget ceiling: the REAL per-child MAE admission
+ * (`RemainingBudgetLedger`, tree-depth/child-count caps, the actual wall-clock
+ * deadline) happens entirely INSIDE `spawn_subagent`'s own `invoke()`
+ * (`../harness/tool/builtin/spawn-subagent-tool.ts`), independent of this
+ * value and this call. `planWaves` here is used purely for its WAVE-BUILDING
+ * behavior (concurrency bounding, deterministic ordering) — sized generously
+ * enough (paired with a `parentRemaining` that is always an exact multiple of
+ * it, below) that its budget fold can never deny a candidate for a reason
+ * that has nothing to do with real subagent budget/policy inheritance, which
+ * is explicitly out of scope for this flow (D-02 invariant, PRD non-goals).
+ */
+const NOMINAL_CONCURRENT_SPAWN_RUNTIME_MS = 5 * 60_000;
+
+/**
+ * Run a sub-batch of ALREADY-RESERVED `spawn_subagent` calls (2+, per the
+ * caller's own gate) CONCURRENTLY, bounded by `deps.maxSubagentConcurrency`
+ * (flow 171, Phase D / D1a-b). Builds one `ChildTask` per call (no
+ * `dependsOn` — same-turn sibling spawns are independent by construction,
+ * since the model cannot see one child's result before issuing the next call
+ * in the same response), plans via `planWaves`, then dispatches via
+ * `executeWaves`, which runs every task within a wave through `deps.run`
+ * concurrently (bounded by wave size) and every wave strictly in order.
+ *
+ * Contract with the caller (the tool-call loop in `runAgentTurnCore`): the
+ * returned Map ALWAYS has exactly one entry per `spawnCalls` element — never
+ * fewer — so the caller can look up a result and never needs to fall back to
+ * re-executing a call that was already handed to this function (which would
+ * mean dispatching the same `spawn_subagent` call twice).
+ */
+async function runConcurrentSpawnBatch(
+  spawnCalls: PendingCall[],
+  toolByName: Map<string, InteractiveTool>,
+  io: AgentIO,
+  deps: AgentDeps,
+): Promise<Map<string, InteractiveToolResult>> {
+  const maxConcurrency = deps.maxSubagentConcurrency ?? DEFAULT_MAX_SUBAGENT_CONCURRENCY;
+  const perTaskRuntimeMs = NOMINAL_CONCURRENT_SPAWN_RUNTIME_MS;
+  const tasks: ChildTask[] = spawnCalls.map((call) => ({
+    taskId: call.id,
+    dependsOn: [],
+    budgetRequest: { reservationId: call.id, maxRuntimeMs: perTaskRuntimeMs },
+  }));
+  const runOne = (call: PendingCall): Promise<InteractiveToolResult> =>
+    executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved);
+
+  const plan = planWaves(tasks, {
+    maxConcurrency,
+    parentRemaining: { maxRuntimeMs: perTaskRuntimeMs * tasks.length },
+  });
+  if (!plan.ok) {
+    // Unreachable in practice (a degenerate `maxConcurrency` or a taskId
+    // collision — `PendingCall.id`s are provider-assigned and unique within
+    // one batch), but fail SAFE rather than fail closed on the whole batch:
+    // run this sub-batch sequentially instead of losing the calls entirely.
+    io.onSystem?.(`\n[warning] concurrent subagent wave planning denied (${plan.reason}); running sequentially.\n`);
+    const results = new Map<string, InteractiveToolResult>();
+    for (const call of spawnCalls) {
+      // Review finding F-002 (flow 171 T10): mirror the `executeWaves` catch
+      // below — `runOne` calls `executeCall`, which is documented to catch its
+      // own internal errors and return `isError:true` rather than throw, so
+      // this is a defensive floor (e.g. a throwing `requestApproval`
+      // callback), not the normal path. Without this guard a single rejection
+      // here would propagate uncaught and crash the whole turn instead of
+      // degrading; degrade only THIS call to an error result and keep
+      // processing the rest of the fallback batch.
+      try {
+        results.set(call.id, await runOne(call));
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        results.set(call.id, {
+          output: `subagent call ${call.id} failed: sequential fallback error: ${message}`,
+          isError: true,
+        });
+      }
+    }
+    return results;
+  }
+
+  try {
+    return await executeWaves(tasks, plan.waves, {
+      run: (task) => {
+        const call = spawnCalls.find((c) => c.id === task.taskId);
+        if (call === undefined) {
+          // Unreachable: `tasks` is built 1:1 from `spawnCalls` above, so
+          // every `task.taskId` `executeWaves` hands back here came from a
+          // `taskId` this closure itself minted.
+          return Promise.resolve({
+            output: `internal error: unknown concurrent spawn taskId ${task.taskId}`,
+            isError: true,
+          });
+        }
+        return runOne(call);
+      },
+    });
+  } catch (cause) {
+    // PRD R9 guard: this is a defensive floor, never a retry — no mechanical
+    // auto-retry is added here or anywhere else keyed off a wave failure.
+    // `WaveExecutionError` means one or more siblings in the SAME wave
+    // rejected; per T5's finding, `spawn_subagent`'s own `invoke()` already
+    // catches its internal errors and returns `isError:true` rather than
+    // throwing, so this should be near-unreachable via the real call path —
+    // reachable in practice via a throwing `requestApproval` callback or any
+    // other `executeCall` path not already internally caught.
+    //
+    // Scope of the fallback below (code-verifier finding, flow 171 T9): an
+    // EARLIER-wave success and a SAME-wave sibling success are PRESERVED via
+    // `WaveExecutionError.partialResults` — only the call(s) genuinely
+    // missing a settled result (the ones actually in `failedTaskIds`, or one
+    // whose wave never even started because an earlier wave already failed)
+    // get the synthesized `isError:true` fallback here. A future reader must
+    // not go back to unconditionally overwriting the whole sub-batch — that
+    // silently replaces a genuinely completed subagent's real output with a
+    // generic error, which is the exact bug this fixed.
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const isWaveError = cause instanceof WaveExecutionError;
+    io.onSystem?.(
+      `\n[warning] concurrent subagent wave failed${isWaveError ? "" : " (unexpected)"} (degraded): ${message}\n`,
+    );
+    // `WaveExecutionError` is generic over its result type; this catch site
+    // is the sole consumer of the `executeWaves` call above, which was
+    // invoked with `TResult = InteractiveToolResult` (inferred from `run`'s
+    // return type), so narrowing the caught error's `partialResults` here is
+    // safe, not an unchecked assumption.
+    const partialResults =
+      cause instanceof WaveExecutionError ? (cause as WaveExecutionError<InteractiveToolResult>).partialResults : undefined;
+    const results = new Map<string, InteractiveToolResult>();
+    for (const call of spawnCalls) {
+      const settled = partialResults?.get(call.id);
+      results.set(
+        call.id,
+        settled ?? {
+          output: `subagent call ${call.id} failed: concurrent wave error: ${message}`,
+          isError: true,
+        },
+      );
+    }
+    return results;
+  }
 }
 
 /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */

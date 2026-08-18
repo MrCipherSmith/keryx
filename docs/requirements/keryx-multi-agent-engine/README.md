@@ -1,5 +1,5 @@
 # Keryx Multi-Agent / Subagent Orchestration Engine
-Version: 0.2.0
+Version: 0.4.0
 
 ## Purpose
 
@@ -19,9 +19,13 @@ monitoring, and safety machinery, documented as a phased architecture (A → B �
 
 ## Status
 
-**implemented** — the A → B → C roadmap described in this package has shipped as
-flows 088–101, with all eight acceptance criteria (AC1–AC8) covered by tests in
-`src/harness/child/*.test.ts` and `src/harness/monitor/reduce.test.ts`.
+**implemented (A → B → C → D).** The A → B → C roadmap described in this package
+has shipped as flows 088–101, with all eight acceptance criteria (AC1–AC8)
+covered by tests in `src/harness/child/*.test.ts` and `src/harness/monitor/
+reduce.test.ts`. Phase D (concurrent sibling spawns + structured completion
+status, AC9-AC12) has now shipped as flow 171 (tasks T5–T7), with the wave
+executor, concurrent spawn batch integration, and structured completion status
+all implemented and tested.
 
 Runtime evidence:
 
@@ -68,6 +72,45 @@ let `keryx agents` produce a live snapshot against a *running* run — today bot
 folds (`reduceAgents` and `reduceState`) operate on a captured events file, not a
 live in-process stream.
 
+**Phase D — implemented (added 2026-08-18, shipped flow 171).** Two gaps found by
+direct code investigation while comparing Keryx against three reference
+open-source coding agents (xAI Grok Build, sst/opencode, OpenAI Codex CLI — see
+`brainstorm.md` for the comparison) have now been closed:
+
+1. **Interactive `spawn_subagent` calls in one turn now run concurrently.** The
+   tool-call loop in `src/commands/agent.ts` now detects batches of 2+ 
+   `spawn_subagent` calls and runs them concurrently via `executeWaves` instead
+   of serializing each one. This reuses the existing `planWaves` planner to
+   compute `maxConcurrency`-bounded, dependency-ordered waves, then executes
+   them with a new `executeWaves` executor function.
+2. **A child that exhausts its own internal step/tool-call budget now returns a
+   distinct status.** `spawn-subagent-tool.ts` now returns a `status` field 
+   distinguishing six completion reasons: `Completed | BudgetExhausted | 
+   Timeout | Denied | Error | NoProgress`. `BudgetExhausted` and `NoProgress`
+   are newly surfaced from `agent.ts`'s existing internal detectors; the parent
+   can now act on these distinct outcomes instead of seeing only `isError`.
+
+Runtime evidence:
+
+- **Phase D — concurrent waves:** `src/harness/parallel/scheduler.ts`
+  (`executeWaves`, `WaveExecutorDeps<TTask,TResult>`, `WaveExecutionError{
+  waveIndex, failedTaskIds, causes}`) + tests in `scheduler.test.ts` (flow
+  171 T5); `src/commands/agent.ts` integration via `runConcurrentSpawnBatch`
+  with `AgentDeps.maxSubagentConcurrency` (default 3, on `AgentDeps` not
+  `HarnessRunConfig` — unlike the original spec sketch, no env/config-file
+  wiring yet, same deferred state as `maxTreeDepth`/`maxChildrenPerRun`) (T6).
+- **Phase D — structured completion status:** `SubagentCompletionStatus` type
+  (`"Completed"|"BudgetExhausted"|"Timeout"|"Denied"|"Error"|"NoProgress"`) +
+  `StructuredSubagentResult{status, output, isError, partial?}` added to
+  `src/harness/tool/builtin/spawn-subagent-tool.ts` (T7); backward compatible
+  (isError still present, derived from status). `finishReason` threaded out of
+  `RunAgentTurnResult` from `runAgentTurn` in `agent.ts` to map `"budget"` →
+  `BudgetExhausted` and `"no-progress"` → `NoProgress`.
+- **Concurrency safety:** PRD R8 ledger race verified already safe by
+  construction (synchronous grant path, no `await` between check and decrement);
+  regression test in `ledger.test.ts` (T5).
+- **Test results:** `bun test` 4153 pass / 0 fail (flow 171 T7 report).
+
 Builds on the existing harness primitives in `src/harness/` (child spawn +
 isolation + contract, `planWaves` scheduler, provider port, canonical
 `subagent-dispatch`/`subagent-result`/`agent-event`/`orchestrator-state`
@@ -104,6 +147,13 @@ contracts).
 - **Roadmap (C)**: adaptive cost-aware model escalation, event-sourced
   orchestrator state, git-worktree isolation for parallel mutators, bounded peer
   messaging — documented with extension points.
+- **Roadmap (D), added 2026-08-18**: bounded concurrent execution of sibling
+  `spawn_subagent` calls within one interactive turn (wiring `planWaves`'s
+  existing wave PLAN to a real wave EXECUTOR — no new scheduling algorithm), and
+  a structured child-completion status distinguishing *why* a child did not
+  finish cleanly (budget exhausted, timed out, denied, errored, no progress) so
+  the parent can decide retry vs. extend vs. accept-partial instead of only
+  seeing `{output: string, isError: boolean}`.
 
 **Non-goals (this release)**
 - Token/dollar **cost budgeting enforcement** — the budget lattice stays

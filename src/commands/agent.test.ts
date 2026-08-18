@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   buildAgentSystemInstruction,
+  DEFAULT_MAX_SUBAGENT_CONCURRENCY,
   DEFAULT_MAX_TOOL_CALLS,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
   ENV_AGENT_MAX_TOOL_CALLS,
@@ -19,7 +20,7 @@ import {
 import type { AgentDeps, AgentIO } from "./agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { compactMessages } from "../session/compact";
-import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
   NormalizedMessage,
@@ -1225,7 +1226,11 @@ test("SLATE-5: a turn with no slateSession option never touches the filesystem f
   const { io } = collectingIo();
   // No `options` at all — the pre-existing call shape every earlier test in
   // this file already uses.
-  await expect(runAgentTurn(io, deps, [], "run the tests")).resolves.toBeUndefined();
+  // D2a (flow 171, Phase D): `runAgentTurn` now resolves a `RunAgentTurnResult`
+  // (`{finishReason?}`) instead of `void` — purely additive, per this task's
+  // own AC8-equivalent contract for `commands/agent.ts` itself. A clean
+  // text-only finish carries no `finishReason`.
+  await expect(runAgentTurn(io, deps, [], "run the tests")).resolves.toEqual({});
 });
 
 test("SLATE-5: a second action-intent turn in the SAME running attempt does not re-open (no re-archive, accumulated Seeds survive)", async () => {
@@ -1486,7 +1491,7 @@ test("F-003: a malformed slate.json during the flow-done close check never masks
 
   // Must not throw — a `finally`-block throw would otherwise replace this
   // turn's genuine successful completion with an unrelated slate-read error.
-  await expect(runAgentTurn(io, deps, [], "hello there", { slateSession })).resolves.toBeUndefined();
+  await expect(runAgentTurn(io, deps, [], "hello there", { slateSession })).resolves.toEqual({});
 
   // The turn itself completed normally and produced its real output.
   expect(text.join("")).toContain("all good");
@@ -1521,7 +1526,7 @@ test("review finding: a malformed slate.json on the OPEN trigger never blocks th
   const { io, text, system } = collectingIo();
 
   // "implement" is an action-intent token, so this exercises the open trigger.
-  await expect(runAgentTurn(io, deps, [], "implement the feature", { slateSession })).resolves.toBeUndefined();
+  await expect(runAgentTurn(io, deps, [], "implement the feature", { slateSession })).resolves.toEqual({});
 
   // The turn itself completed normally and produced its real output — the
   // user's request was processed despite the corrupted slate.json.
@@ -2246,8 +2251,547 @@ test("flow 165: a slateSession that was never opened (ref.opened === false) writ
   // silently defeat this test's own "never actually opened" premise. A
   // non-action-intent phrase keeps `ref.opened` genuinely false for the
   // whole turn, so this test exercises the guard it claims to.
-  await expect(runAgentTurn(io, deps, history, "no changes needed here", { slateSession })).resolves.toBeUndefined();
+  // D2a: budget-exhausted stop (two distinct signatures against `maxToolCalls:
+  // 1`) surfaces `finishReason: "budget"` on the returned `RunAgentTurnResult`.
+  await expect(runAgentTurn(io, deps, history, "no changes needed here", { slateSession })).resolves.toEqual({
+    finishReason: "budget",
+  });
 
   expect(terminalStates.length).toBe(1); // io.onTerminalState still fires — only the disk write is guarded
   await expect(readFile(path.join(dir, "terminal-state.json"), "utf8")).rejects.toThrow();
+});
+
+// ============================================================================
+// D1 (flow 171, Phase D) — concurrent `spawn_subagent` waves in the tool-call
+// batch loop. AC1/AC3/AC4 below mirror scheduler.test.ts's own
+// `executeWaves` coverage (T5) at the `agent.ts` integration point: fully
+// deterministic, no real `setTimeout` sleep, no real elapsed wall-clock time.
+// ============================================================================
+
+/** A minimal `spawn_subagent`-shaped delegate tool with an injectable `invoke`. */
+function delegateSpawnTool(invoke: InteractiveTool["invoke"]): InteractiveTool {
+  return {
+    definition: {
+      name: "spawn_subagent",
+      description: "spawn a subagent",
+      inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
+      risk: "delegate",
+    },
+    invoke,
+  };
+}
+
+/** collectingIo, plus an auto-approving `requestApproval` (delegate risk needs one) and full result outputs in call order. */
+function collectingIoForSpawnTests(): { io: AgentIO; toolResultOutputs: string[] } {
+  const toolResultOutputs: string[] = [];
+  return {
+    toolResultOutputs,
+    io: {
+      write: () => {},
+      onToolResult: (_name, r) => toolResultOutputs.push(r.output),
+      requestApproval: async () => true,
+    },
+  };
+}
+
+/** Flushes the microtask queue `n` times — mirrors scheduler.test.ts's own helper (T5), reused here at the `agent.ts` integration boundary. */
+async function flushMicrotasks(n = 10): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    await Promise.resolve();
+  }
+}
+
+/**
+ * A minimal deterministic fake clock (mirrors scheduler.test.ts's own
+ * `FakeClock`, T5) for proving "wall-clock time bounded by max(delay), not
+ * sum(delay)" WITHOUT any real timer: `wait(delayTicks)` resolves only once
+ * `advance()` has been called `delayTicks` times after the call to `wait`.
+ */
+class FakeClock {
+  private tick = 0;
+  private pending: Array<{ at: number; resolve: () => void }> = [];
+
+  wait(delayTicks: number): Promise<void> {
+    const at = this.tick + delayTicks;
+    return new Promise<void>((resolve) => {
+      this.pending.push({ at, resolve });
+    });
+  }
+
+  advance(): void {
+    this.tick += 1;
+    const due = this.pending.filter((p) => p.at <= this.tick);
+    this.pending = this.pending.filter((p) => p.at > this.tick);
+    for (const p of due) p.resolve();
+  }
+
+  get now(): number {
+    return this.tick;
+  }
+}
+
+test("AC1 (flow 171 D1): N sibling spawn_subagent calls in one turn complete in wall-clock time bounded by max(delay), not sum(delay)", async () => {
+  expect(DEFAULT_MAX_SUBAGENT_CONCURRENCY).toBeGreaterThanOrEqual(3); // sanity: enough to run all 3 siblings in one wave below
+
+  const clock = new FakeClock();
+  const delays: Record<string, number> = { d1: 3, d2: 7, d3: 1 };
+  const completedAt: Record<string, number> = {};
+  let invokesStarted = 0;
+
+  const spawnTool = delegateSpawnTool(async (input) => {
+    const taskId = String(input.task);
+    invokesStarted += 1;
+    const delay = delays[taskId];
+    if (delay === undefined) throw new Error(`no fixture delay for ${taskId}`);
+    await clock.wait(delay);
+    completedAt[taskId] = clock.now;
+    return { output: `done:${taskId}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "d1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "d2" }) },
+      { kind: "tool_call_start", toolCallId: "c3", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ task: "d3" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "all done" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  const turnPromise = runAgentTurn(io, deps, history, "spawn three things");
+
+  // Let every sibling's executeCall chain (stream consumption, validation,
+  // approval, invoke) run up to its own `clock.wait()` call and register a
+  // pending entry BEFORE the clock starts advancing — polled rather than a
+  // fixed microtask count, since consuming the scripted provider's async
+  // generator alone costs one microtask hop PER yielded event.
+  for (let i = 0; i < 200 && invokesStarted < 3; i++) {
+    await Promise.resolve();
+  }
+  expect(invokesStarted).toBe(3); // sanity: all three siblings dispatched BEFORE any clock tick
+
+  // Drive the fake clock forward tick by tick, exactly max(delays)=7 ticks.
+  // If the three siblings ran SEQUENTIALLY instead of concurrently, d1 would
+  // not resolve until tick 3, d2 not until 3+7=10, d3 not until 10+1=11
+  // (sum(delays)=11) — 7 ticks would leave the batch still unsettled.
+  for (let i = 0; i < 7; i++) {
+    await Promise.resolve();
+    clock.advance();
+    await flushMicrotasks();
+  }
+
+  await turnPromise;
+
+  expect(completedAt["d1"]).toBe(3);
+  expect(completedAt["d2"]).toBe(7);
+  expect(completedAt["d3"]).toBe(1);
+  // The whole batch finished within max(delays) = 7 ticks, well under
+  // sum(delays) = 11 — the property AC1 requires.
+  expect(clock.now).toBe(7);
+});
+
+test("AC3 (flow 171 D1): concurrent spawn_subagent results are spliced back in ORIGINAL call order, independent of which child settles first", async () => {
+  const resolvers: Record<string, (result: InteractiveToolResult) => void> = {};
+  const spawnTool = delegateSpawnTool(
+    (input) =>
+      new Promise<InteractiveToolResult>((resolve) => {
+        resolvers[String(input.task)] = resolve;
+      }),
+  );
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "first" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "second" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  const turnPromise = runAgentTurn(io, deps, history, "spawn two, out of order");
+
+  // Poll (rather than a fixed microtask count) until BOTH siblings' `invoke`
+  // have registered their resolver — consuming the scripted provider's async
+  // generator alone costs one microtask hop PER yielded event, so a fixed
+  // small count is fragile (see AC1's own test, which hit exactly this).
+  for (let i = 0; i < 200 && (resolvers["first"] === undefined || resolvers["second"] === undefined); i++) {
+    await Promise.resolve();
+  }
+  expect(resolvers["first"]).toBeDefined();
+  expect(resolvers["second"]).toBeDefined();
+
+  // Deliberately settle the SECOND call's child BEFORE the FIRST's — this is
+  // the off-by-one trap plan.md's Risks section calls out: a naive splice
+  // keyed on completion order (rather than original call order) would report
+  // "second" before "first".
+  resolvers["second"]?.({ output: "result-for-second", isError: false });
+  await flushMicrotasks();
+  resolvers["first"]?.({ output: "result-for-first", isError: false });
+  await turnPromise;
+
+  // Both `io.onToolResult` callback order AND the `history` tool messages
+  // must reflect the ORIGINAL call order (c1="first" before c2="second"),
+  // never the completion order (second resolved first, above).
+  expect(toolResultOutputs).toEqual(["result-for-first", "result-for-second"]);
+  const toolMessages = history.filter((m) => m.role === "tool");
+  expect(toolMessages.map((m) => m.content)).toEqual(["result-for-first", "result-for-second"]);
+});
+
+test("AC4 (flow 171 D1): a mixed batch (spawn_subagent, non-spawn, spawn_subagent) still dispatches the non-spawn call correctly, exactly once, in its original position", async () => {
+  const probeInputs: string[] = [];
+  const probe: InteractiveTool = {
+    definition: {
+      name: "probe",
+      description: "",
+      inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      risk: "read",
+    },
+    invoke: async (input) => {
+      probeInputs.push(String(input.path));
+      return { output: `probed:${String(input.path)}`, isError: false };
+    },
+  };
+  const spawnTool = delegateSpawnTool(async (input) => ({
+    output: `spawned:${String(input.task)}`,
+    isError: false,
+  }));
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "middle" }) },
+      { kind: "tool_call_start", toolCallId: "c3", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool, probe],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "spawn, probe, spawn");
+
+  // The non-spawn `probe` call ran exactly once, with its own correct input
+  // — untouched by the concurrent spawn_subagent branch alongside it.
+  expect(probeInputs).toEqual(["middle"]);
+  // The final result order matches the model's ORIGINAL call order
+  // (s1, middle, s2) regardless of the concurrent dispatch used for the two
+  // spawn_subagent siblings — this is D1's additive-branch contract: every
+  // OTHER tool type in the same batch is unaffected.
+  expect(toolResultOutputs).toEqual(["spawned:s1", "probed:middle", "spawned:s2"]);
+});
+
+test("D1 regression: a batch with exactly ONE spawn_subagent call never takes the concurrent branch (0-1 case stays on the plain sequential path)", async () => {
+  let invokeCount = 0;
+  const spawnTool = delegateSpawnTool(async (input) => {
+    invokeCount += 1;
+    return { output: `spawned:${String(input.task)}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "solo" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "spawn just one");
+
+  expect(invokeCount).toBe(1);
+  expect(toolResultOutputs).toEqual(["spawned:solo"]);
+});
+
+test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave never overwrites an EARLIER wave's real successes — only the genuinely-failed call gets the synthesized error", async () => {
+  expect(DEFAULT_MAX_SUBAGENT_CONCURRENCY).toBe(3); // sanity: 4 calls must split into a 3-call wave then a 1-call wave
+
+  const invoked: string[] = [];
+  const spawnTool = delegateSpawnTool(async (input) => {
+    const taskId = String(input.task);
+    invoked.push(taskId);
+    return { output: `spawned:${taskId}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "tool_call_start", toolCallId: "c3", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ task: "s3" }) },
+      { kind: "tool_call_start", toolCallId: "c4", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c4", input: JSON.stringify({ task: "s4" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+
+  const toolResultOutputs: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onToolResult: (_name, r) => toolResultOutputs.push(r.output),
+    // c1/c2/c3 (taskIds "c1".."c3", sorted first by `planWaves`' byTaskId
+    // order) land in wave 0 and approve normally; c4 lands alone in wave 1
+    // (default `maxSubagentConcurrency` = 3, so 4 candidates split 3-then-1)
+    // and its approval callback THROWS — the finding's documented
+    // reproduction path (a throwing `requestApproval`, not a literal
+    // ledger/tool bug) for an exception inside a LATER wave.
+    requestApproval: async (_tool, input) => {
+      if (input.includes('"s4"')) {
+        throw new Error("approval channel exploded");
+      }
+      return true;
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "spawn four things");
+
+  // Wave 0 (s1, s2, s3) fully succeeded — before the fix, catching
+  // `WaveExecutionError` unconditionally overwrote every call in the
+  // sub-batch, so these would have been replaced by the generic "concurrent
+  // wave error" fallback even though they genuinely completed.
+  expect(invoked).toEqual(["s1", "s2", "s3"]); // s4 never reached invoke() — it failed at the approval gate
+  expect(toolResultOutputs).toEqual([
+    "spawned:s1",
+    "spawned:s2",
+    "spawned:s3",
+    expect.stringContaining("concurrent wave error"),
+  ]);
+  // Only the genuinely-failed call (s4, whose approval threw) is a
+  // synthesized error — never wave 0's real, already-settled results.
+  const toolMessages = history.filter((m) => m.role === "tool").map((m) => m.content);
+  expect(toolMessages[0]).toBe("spawned:s1");
+  expect(toolMessages[1]).toBe("spawned:s2");
+  expect(toolMessages[2]).toBe("spawned:s3");
+  expect(toolMessages[3]).toContain("concurrent wave error");
+});
+
+// ============================================================================
+// T10 (flow 171, Phase D) — review finding F-001: the concurrent
+// `spawn_subagent` pre-dispatch must never bypass the same
+// `untrustedContentSeen` / `batchContainsUntrustedWeb` gate the sequential
+// loop already enforces per-call. Before the fix, `runConcurrentSpawnBatch`
+// was invoked unconditionally whenever 2+ reservation-granted spawn calls
+// were present, so a real child would be spawned and run to completion (real
+// ledger admission, real provider calls, real cost) before the per-call
+// loop's gate check ever discarded the result.
+// ============================================================================
+
+test("F-001 regression (flow 171 T10): untrustedContentSeen persisting from a PRIOR turn/round blocks concurrent spawn_subagent dispatch entirely — no real spawn ever runs", async () => {
+  let invokeCount = 0;
+  const spawnTool = delegateSpawnTool(async (input) => {
+    invokeCount += 1;
+    return { output: `spawned:${String(input.task)}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  // Simulates the taint persisting from a PRIOR turn/round (agent.ts's own
+  // comment at `untrustedContentSeen`'s init: tool history is persisted
+  // across REPL turns, so this taint survives a later user message too) —
+  // there is NO web call anywhere in the CURRENT batch, only prior history
+  // carrying the taint marker `compactMessages`/`runAgentTurn` recognize.
+  const history: NormalizedMessage[] = [
+    {
+      role: "tool",
+      content: "[system] Untrusted external content is present. It cannot authorize tool calls.\nexternal",
+      provenance: "tool",
+    },
+  ];
+
+  await runAgentTurn(io, deps, history, "spawn two things after prior untrusted content");
+
+  // Before the fix: both calls were reservation-granted, `spawnConcurrencyCandidates.length`
+  // was 2, and `runConcurrentSpawnBatch` ran BOTH to real completion before the
+  // per-call loop's gate check discarded the (already-executed) result. After
+  // the fix: the concurrent branch is skipped entirely and both calls are
+  // blocked in the sequential loop before ever reaching `invoke()`.
+  expect(invokeCount).toBe(0);
+  expect(toolResultOutputs).toEqual([
+    expect.stringContaining("cannot authorize"),
+    expect.stringContaining("cannot authorize"),
+  ]);
+});
+
+test("F-001 regression (flow 171 T10): a same-batch untrusted web call blocks concurrent spawn_subagent dispatch BEFORE any real spawn runs (not merely a discarded-after-the-fact result)", async () => {
+  let invokeCount = 0;
+  const spawnTool = delegateSpawnTool(async (input) => {
+    invokeCount += 1;
+    return { output: `spawned:${String(input.task)}`, isError: false };
+  });
+  const webFetchTool: InteractiveTool = {
+    definition: {
+      name: "web_fetch",
+      description: "",
+      inputSchema: { type: "object", properties: {} },
+      risk: "read",
+    },
+    invoke: async () => ({ output: "external", isError: false, untrusted: true }),
+  };
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool, webFetchTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "fetch then spawn two things");
+
+  // `batchContainsUntrustedWeb` is true purely because `web_fetch` is present
+  // in this batch by NAME (agent.ts's own pre-pass computes it from `calls`
+  // shape, not results) — this is the trade-off #2 case already disclosed in
+  // the T6 journal entry, now asserting the spawn calls are genuinely NEVER
+  // dispatched, not merely "executed then discarded".
+  expect(invokeCount).toBe(0);
+  expect(toolResultOutputs[0]).toBe("external");
+  expect(toolResultOutputs[1]).toContain("cannot authorize");
+  expect(toolResultOutputs[2]).toContain("cannot authorize");
+});
+
+test("F-002 regression (flow 171 T10): the `!plan.ok` sequential fallback degrades a single call's throwing requestApproval to a per-call error result instead of crashing the whole turn", async () => {
+  const invoked: string[] = [];
+  const spawnTool = delegateSpawnTool(async (input) => {
+    const taskId = String(input.task);
+    invoked.push(taskId);
+    return { output: `spawned:${taskId}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+
+  const toolResultOutputs: string[] = [];
+  const systemMessages: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onToolResult: (_name, r) => toolResultOutputs.push(r.output),
+    onSystem: (s) => systemMessages.push(s),
+    requestApproval: async (_tool, input) => {
+      if (input.includes('"s2"')) {
+        throw new Error("approval channel exploded");
+      }
+      return true;
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    // Forces `planWaves` to deny the plan (`maxConcurrency` must be a
+    // positive integer) — this drives execution into the "unreachable in
+    // practice" `!plan.ok` fallback loop this finding is about, instead of
+    // the `executeWaves` happy path (already covered by the T9 test above).
+    maxSubagentConcurrency: 0,
+  };
+  const history: NormalizedMessage[] = [];
+
+  // Before the fix, s2's rejecting `requestApproval` would propagate uncaught
+  // through the fallback loop's bare `await runOne(call)` and reject the
+  // whole `runAgentTurn` promise — this `await` not throwing IS the
+  // regression assertion.
+  await runAgentTurn(io, deps, history, "spawn two things, one approval throws");
+
+  expect(invoked).toEqual(["s1"]); // s2 never reached invoke() — it failed at the approval gate
+  expect(toolResultOutputs).toEqual(["spawned:s1", expect.stringContaining("sequential fallback error")]);
+  expect(systemMessages.some((s) => s.includes("running sequentially"))).toBe(true);
 });

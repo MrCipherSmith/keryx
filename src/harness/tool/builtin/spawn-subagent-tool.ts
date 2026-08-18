@@ -22,7 +22,7 @@ import type { SubagentContext } from "../../child/orchestrate";
 import type { PolicyProfile } from "../../policy/types";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
-import { runAgentTurn, type AgentDeps, type AgentIO } from "../../../commands/agent";
+import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
 import type { ProviderPort } from "../../provider/types";
 import {
   readSlate,
@@ -37,6 +37,63 @@ import { emitSubagentFleet } from "../../../tui/subagent-bridge";
 import { withFileLock } from "../../../lib/fs";
 
 export type SubagentMode = "read_only" | "general";
+
+/**
+ * D2 (flow 171, Phase D / spec §D2): structured completion status for one
+ * `spawn_subagent` dispatch, distinguishing a genuinely clean finish from the
+ * cases that previously all collapsed into a bare `isError:false`/`true`:
+ *
+ * - `"Completed"` — clean finish, the child produced a final result.
+ * - `"BudgetExhausted"` — the child's OWN `maxToolCalls`/step budget ran out
+ *   before a clean finish (`runAgentTurn`'s `finishReason: "budget"`, D2a).
+ * - `"Timeout"` — the PARENT-granted wall-clock `maxRuntimeMs` elapsed
+ *   (existing path, now labeled).
+ * - `"Denied"` — MAE admission denial, e.g. depth/count/budget cap (existing
+ *   path, now labeled).
+ * - `"Error"` — a thrown/internal error, or a local input-validation failure
+ *   before the child ever spawned (existing paths, now labeled).
+ * - `"NoProgress"` — `runAgentTurn`'s existing no-progress detector fired
+ *   (`finishReason: "no-progress"`, D2a), distinct from budget exhaustion.
+ *
+ * PRD R9 guard: this status is advisory for the PARENT MODEL's own judgment
+ * (retry/extend/accept-partial/give up) only. Do not add mechanical
+ * auto-retry logic anywhere in the harness keyed off these values.
+ */
+export type SubagentCompletionStatus =
+  | "Completed"
+  | "BudgetExhausted"
+  | "Timeout"
+  | "Denied"
+  | "Error"
+  | "NoProgress";
+
+/**
+ * `spawn_subagent`'s actual result shape (spec §D2). A strict structural
+ * superset of {@link InteractiveToolResult} — `status` and `partial` are
+ * purely additive, so a caller reading only `{output, isError}` (every
+ * caller before this flow) sees no behavior change (AC8). `isError` is
+ * always derived from `status`: `false` only for `"Completed"`.
+ */
+export interface StructuredSubagentResult {
+  status: SubagentCompletionStatus;
+  output: string;
+  isError: boolean;
+  /** Best-effort partial output, populated only when `status !== "Completed"`. */
+  partial?: string;
+}
+
+/**
+ * `createSpawnSubagentTool`'s actual return shape: an {@link InteractiveTool}
+ * whose `invoke` resolves the more specific {@link StructuredSubagentResult}
+ * rather than the generic {@link InteractiveToolResult}. A structural
+ * subtype — every existing caller typed against the generic `InteractiveTool`
+ * (e.g. `AgentDeps.tools: InteractiveTool[]`) keeps working unchanged; a
+ * caller that specifically wants `status`/`partial` (tests, this flow's own
+ * D2b consumer) can use this narrower type instead.
+ */
+export interface SpawnSubagentTool extends InteractiveTool {
+  invoke: (input: Record<string, unknown>) => Promise<StructuredSubagentResult>;
+}
 
 /**
  * Hard cap on a child summary before it enters the parent's history.
@@ -232,7 +289,7 @@ const childReadOnlyPolicy = shellChildReadOnlyProfile;
  * turns already spent. A caller that never invokes it keeps a single pool for
  * the tool instance's whole lifetime, same as before.
  */
-export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): InteractiveTool {
+export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubagentTool {
   const idSeq = deps.idSeq ?? (() => randomUUID());
   const clock = deps.clock ?? (() => new Date().toISOString());
   const parentRunId = deps.parentRunId ?? idSeq();
@@ -277,10 +334,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
       },
       risk: "delegate",
     },
-    invoke: async (input): Promise<InteractiveToolResult> => {
+    invoke: async (input): Promise<StructuredSubagentResult> => {
       const task = typeof input.task === "string" ? input.task.trim() : "";
       if (task.length === 0) {
-        return { output: "spawn_subagent requires a non-empty 'task'", isError: true };
+        // Local input-validation failure — the child never spawns, so this is
+        // neither an MAE `"Denied"` (that status is reserved for an actual
+        // admission denial from `spawnSubagent`, below) nor a clean finish;
+        // categorized as `"Error"` like the other pre-completion failure path.
+        return { status: "Error", output: "spawn_subagent requires a non-empty 'task'", isError: true };
       }
       const mode: SubagentMode = input.mode === "general" ? "general" : "read_only";
       const maxToolCalls =
@@ -346,6 +407,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           task,
         });
         return {
+          status: "Denied",
           output: `spawn_subagent denied by MAE: ${spawned.reason}`,
           isError: true,
         };
@@ -809,6 +871,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           "over a broad/guessed one, and fall back to a different tool rather than repeating a failed call.\n\n" +
           "Return a concise summary of findings and any recommended next steps for the parent agent.";
         const turn = runAgentTurn(io, childDeps, history, userLine, { signal: childAbort.signal });
+        // D2b (flow 171, Phase D): the child's OWN `finishReason` (D2a,
+        // `commands/agent.ts`) is only meaningful once `turn` has actually
+        // settled on the "done" (not timed-out) path below — captured into
+        // `turnResult` there and read via `turnResult?.finishReason` at the
+        // success-path status check further down. Never surfaced to the
+        // model: it is a plain local variable, never written into `history`
+        // or any `io.on*` callback.
+        let turnResult: RunAgentTurnResult | undefined;
         if (deadlineMs > 0) {
           let timer: ReturnType<typeof setTimeout> | undefined;
           const expired = new Promise<"timeout">((resolve) => {
@@ -831,15 +901,20 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             await foldChildSlateAndCleanup("incomplete");
             const partial = assistant.trim();
             return {
+              status: "Timeout",
               output:
                 `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
                 `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
                 (partial.length > 0 ? `\n--- partial output ---\n${boundSummary(partial)}` : ""),
               isError: true,
+              ...(partial.length > 0 ? { partial: boundSummary(partial) } : {}),
             };
           }
+          // `turn` already settled ("done" branch above) — re-awaiting the same
+          // promise just reads its cached resolved value, no re-execution.
+          turnResult = await turn;
         } else {
-          await turn;
+          turnResult = await turn;
         }
         closed = true;
         releaseBudget();
@@ -852,6 +927,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
                 .join("\n")
                 .trim() || "(subagent produced no text)";
         const folded = foldChildSummary(raw);
+        // D2b: a clean stream/text finish is NOT automatically "Completed" —
+        // check whether `runAgentTurnCore` itself cut the turn short for one
+        // of D2a's two internal reasons FIRST. No new detection here; this
+        // only labels what `finishReason` (D2a) already computed.
+        const finishReason = turnResult?.finishReason;
+        const status: SubagentCompletionStatus =
+          finishReason === "budget" ? "BudgetExhausted" : finishReason === "no-progress" ? "NoProgress" : "Completed";
+        // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
+        // judgment only — do not add auto-retry/auto-extend logic here keyed
+        // off it.
+        const isError = status !== "Completed";
         emitSubagentFleet({
           kind: "upsert",
           id: workerId,
@@ -863,12 +949,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
         });
         await foldChildSlateAndCleanup("completed");
         return {
+          status,
+          isError,
           output:
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
             `MAE reservation: tools≤${spawned.reservation.maxToolCalls ?? maxToolCalls} ` +
             `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
             `--- summary ---\n${boundSummary(folded.text)}`,
-          isError: false,
+          ...(status !== "Completed" ? { partial: boundSummary(folded.text) } : {}),
         };
       } catch (cause) {
         closed = true;
@@ -884,7 +972,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           task,
         });
         await foldChildSlateAndCleanup("incomplete");
-        return { output: `subagent ${label} failed: ${msg}`, isError: true };
+        return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
       }
     },
   };

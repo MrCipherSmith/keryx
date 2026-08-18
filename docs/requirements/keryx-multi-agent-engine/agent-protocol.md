@@ -1,9 +1,11 @@
 # Multi-Agent Engine — Agent Protocol
-Version: 0.2.0
+Version: 0.4.0
 
-> **Status note:** **implemented** (flows 088–101). The protocol below is the
-> shipped behavior; runtime sources live under `src/harness/child/` and
-> `src/harness/monitor/`.
+> **Status note:** **implemented** (flows 088–101, phases A–C; flow 171, phase D).
+> The protocol below is the shipped behavior; runtime sources live under
+> `src/harness/child/` and `src/harness/monitor/`. **Phase D (see
+> `specification.md` §Phase D) is now implemented.** The Concurrency and Result
+> handling sections below describe the current (post-Phase-D) behavior.
 
 Defines how a parent orchestrator and its subagents behave. Complements the
 existing `.metaproject/rules/core/subagent-status-protocol.md` and
@@ -72,8 +74,12 @@ re-opens an earlier denial. The same input twice yields deep-equal output.
 
 ## Concurrency
 
-- `planWaves` groups children into dependency-ordered, `maxConcurrency`-capped
-  waves; the budget fold runs against the shared ledger.
+- `planWaves` groups children into dependency-ordered, `maxSubagentConcurrency`-capped
+  waves; the budget fold runs against the shared ledger. Tasks within a wave
+  execute concurrently via `executeWaves` (a real executor that runs each wave's
+  tasks in parallel with `Promise.allSettled`); the interactive path
+  (`src/commands/agent.ts` tool-call loop) detects 2+ `spawn_subagent` calls
+  and runs them concurrently instead of serializing each one.
 - Cancellation: a `cancelled` task and its transitive dependents are excluded from
   all waves; a running child is cancelled via `NormalizedRequest.signal`
   (`AbortSignal`).
@@ -85,7 +91,15 @@ re-opens an earlier denial. The same input twice yields deep-equal output.
 
 - Child replies STATUS-first (`STATUS: <TOKEN>` + prose) or a canonical object;
   `parseChildResult` normalizes to the canonical `subagent-result`
-  (`DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | FAILED`).
+  (`DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | FAILED`). **This is
+  the model-facing status the CHILD self-reports in its own reply prose.**
+- The interactive `spawn_subagent` TOOL's return shape carries a `status` field
+  (`SubagentCompletionStatus`: `Completed | BudgetExhausted | Timeout | Denied |
+  Error | NoProgress`) distinguishing how and why a child completed (or did not).
+  `BudgetExhausted` is set when the child's own internal step/tool-call budget
+  exhausts before a clean finish; `NoProgress` when the no-progress detector
+  fires; the parent can now act on these distinct outcomes. The return shape is
+  backward compatible (`isError` still present, derived from `status`).
 - The disposition survives onto the parent `EvidenceRecord`
   (`artifact.kind = child-result:${status}`); `NEEDS_CONTEXT` names the missing
   bounded artifact.
