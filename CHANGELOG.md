@@ -5,6 +5,28 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.43] — 2026-08-18
+
+### Added
+
+- **TUI: main queue moves off-transcript into its own dock.** `keryx shell`'s
+  main message queue (queue while the agent is busy, flow 167) no longer
+  renders as `> qN (p)` markers interleaved in the transcript — it's now a
+  persistent panel above the composer, positioned so it stays visible
+  alongside the existing approval-gate/wiki-enrich choice dock rather than
+  competing with it. Each queued item gets clickable **Force** / **Edit** /
+  **Delete** buttons, plus a `Ctrl+Q` keyboard-only path (arrow keys select
+  item/action, Enter fires, Esc exits). The existing `/queue remove|edit|force
+  [N]` text command keeps working unchanged.
+- **TUI: region click-to-focus + launch autofocus.** Clicking the
+  transcript/output area or empty space now focuses the composer; clicking
+  the queue dock enters queue-nav (a click on one of its buttons still fires
+  that action directly, not just focus). The composer is focused
+  automatically the moment the shell finishes launching, so typing can start
+  immediately. Clicking the sidebar is an intentional no-op — it has no
+  focusable content today, so literally focusing it would blur the composer
+  into a keyboard dead-zone.
+
 ## [0.2.42] — 2026-08-18
 
 ### Added
