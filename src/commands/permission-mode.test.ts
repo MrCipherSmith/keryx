@@ -22,10 +22,22 @@ test("isPermissionMode accepts only the three closed names", () => {
 test("read always auto-approves regardless of mode", () => {
   for (const mode of PERMISSION_MODES) {
     expect(
-      resolveApprovalDecision({ mode, risk: "read", destructive: false, credentials: false }),
+      resolveApprovalDecision({
+        mode,
+        risk: "read",
+        destructive: false,
+        credentials: false,
+        sacReviewConfirmation: false,
+      }),
     ).toBe("auto");
     expect(
-      resolveApprovalDecision({ mode, risk: "read", destructive: true, credentials: true }),
+      resolveApprovalDecision({
+        mode,
+        risk: "read",
+        destructive: true,
+        credentials: true,
+        sacReviewConfirmation: true,
+      }),
     ).toBe("auto");
   }
 });
@@ -34,7 +46,29 @@ test("credentials is a hard floor no mode lifts, including auto", () => {
   for (const mode of PERMISSION_MODES) {
     for (const risk of ["shell", "destructive", "delegate"] as const) {
       expect(
-        resolveApprovalDecision({ mode, risk, destructive: false, credentials: true }),
+        resolveApprovalDecision({
+          mode,
+          risk,
+          destructive: false,
+          credentials: true,
+          sacReviewConfirmation: false,
+        }),
+      ).toBe("ask");
+    }
+  }
+});
+
+test("sacReviewConfirmation is a hard floor no mode lifts, including auto", () => {
+  for (const mode of PERMISSION_MODES) {
+    for (const risk of ["shell", "destructive", "delegate"] as const) {
+      expect(
+        resolveApprovalDecision({
+          mode,
+          risk,
+          destructive: false,
+          credentials: false,
+          sacReviewConfirmation: true,
+        }),
       ).toBe("ask");
     }
   }
@@ -42,44 +76,104 @@ test("credentials is a hard floor no mode lifts, including auto", () => {
 
 test("ask mode always asks for non-read actions, even benign ones", () => {
   expect(
-    resolveApprovalDecision({ mode: "ask", risk: "shell", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "ask",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("ask");
   expect(
-    resolveApprovalDecision({ mode: "ask", risk: "delegate", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "ask",
+      risk: "delegate",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("ask");
 });
 
 test("trust mode auto-approves a benign shell command", () => {
   expect(
-    resolveApprovalDecision({ mode: "trust", risk: "shell", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "trust",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("auto");
 });
 
 test("trust mode still asks for a destructive command", () => {
   expect(
-    resolveApprovalDecision({ mode: "trust", risk: "shell", destructive: true, credentials: false }),
+    resolveApprovalDecision({
+      mode: "trust",
+      risk: "shell",
+      destructive: true,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("ask");
 });
 
 test("trust mode still asks when the tool's own static risk is destructive", () => {
   expect(
-    resolveApprovalDecision({ mode: "trust", risk: "destructive", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "trust",
+      risk: "destructive",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("ask");
 });
 
 test("trust mode auto-approves a general delegate spawn that isn't flagged destructive", () => {
   expect(
-    resolveApprovalDecision({ mode: "trust", risk: "delegate", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "trust",
+      risk: "delegate",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("auto");
 });
 
 test("auto mode bypasses the prompt even for a destructive command", () => {
   expect(
-    resolveApprovalDecision({ mode: "auto", risk: "shell", destructive: true, credentials: false }),
+    resolveApprovalDecision({
+      mode: "auto",
+      risk: "shell",
+      destructive: true,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("auto");
   expect(
-    resolveApprovalDecision({ mode: "auto", risk: "destructive", destructive: false, credentials: false }),
+    resolveApprovalDecision({
+      mode: "auto",
+      risk: "destructive",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+    }),
   ).toBe("auto");
+});
+
+test("auto mode still asks when the action touches SAC confirm-review", () => {
+  expect(
+    resolveApprovalDecision({
+      mode: "auto",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: true,
+    }),
+  ).toBe("ask");
 });
 
 test("mode is a closed set — TypeScript, not this test, rejects anything else", () => {

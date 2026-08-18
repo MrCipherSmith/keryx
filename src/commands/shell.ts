@@ -1017,7 +1017,7 @@ async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
-      const rememberable = !evaled.destructive && !evaled.credentials;
+      const rememberable = !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
