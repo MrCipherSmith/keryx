@@ -5,6 +5,25 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.45] — 2026-08-18
+
+### Added
+
+- **Concurrent `spawn_subagent` waves + structured completion status.**
+  Sibling `spawn_subagent` calls issued in one interactive turn now run
+  concurrently (bounded by a new `maxSubagentConcurrency`, default 3) instead
+  of strictly sequentially, by wiring the already-existing `planWaves`
+  scheduler to a new `executeWaves` executor. Non-`spawn_subagent` tool calls
+  in the same batch, and result ordering back to the model, are unaffected. A
+  spawned child's result now also carries a structured completion status
+  (`Completed | BudgetExhausted | Timeout | Denied | Error | NoProgress`),
+  closing a gap where a child that exhausted its own internal step budget
+  returned `isError:false` — indistinguishable from a clean finish — with no
+  change to the existing `{output, isError}` shape callers already rely on.
+  Grounded in a live bug report plus a three-project reference study (xAI Grok
+  Build, OpenAI Codex CLI, sst/opencode). See
+  `docs/requirements/keryx-multi-agent-engine/` (Phase D).
+
 ## [0.2.44] — 2026-08-18
 
 ### Added
