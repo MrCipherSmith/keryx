@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 2,
+  "id": "169",
+  "slug": "rlm-wiki-enrich-classify-gate-deep-subag",
+  "title": "RLM wiki-enrich: classify gate + deep subagent path + batching + per-page staleness",
+  "status": "in-progress",
+  "createdAt": "2026-08-18T07:03:21.450Z",
+  "updatedAt": "2026-08-18T08:33:35.438Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:bb8c21d900090d723ee37ad90148f39c170002464b7a1dc52e89a65a71b326eb",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Per-page staleness: extend enrich-resume.json with completedNodeHashes + graphMaybeStale pre-check",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "deep-path child turn: spawnSubagent + runAgentTurn + filtered read-only METAPROJECT_OPERATIONS tool grant",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "light-path batching + skip-path + rlm.enabled=false byte-for-byte parity branch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Update wiki-enrich docs (README/docs-site) for optional RLM mode + wiki.config.json",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Fix code-verifier findings: break enrich.ts<->staleness.ts cycle, drop/fix unused exports, add missing unit tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Fix review findings: FR-7 false-unchanged staleness gate, unhandled exceptions crash whole RLM run, non-positive maxRuntimeMs disables timeout",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-18T07:03:21.450Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-18T07:05:20.572Z",
+      "event": "task-added",
+      "detail": "T5: Per-page staleness: extend enrich-resume.json with completedNodeHashes + graphMaybeStale pre-check"
+    },
+    {
+      "at": "2026-08-18T07:05:20.773Z",
+      "event": "task-added",
+      "detail": "T6: deep-path child turn: spawnSubagent + runAgentTurn + filtered read-only METAPROJECT_OPERATIONS tool grant"
+    },
+    {
+      "at": "2026-08-18T07:05:20.992Z",
+      "event": "task-added",
+      "detail": "T7: light-path batching + skip-path + rlm.enabled=false byte-for-byte parity branch"
+    },
+    {
+      "at": "2026-08-18T07:05:21.197Z",
+      "event": "task-added",
+      "detail": "T8: Update wiki-enrich docs (README/docs-site) for optional RLM mode + wiki.config.json"
+    },
+    {
+      "at": "2026-08-18T07:05:48.841Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-18T07:05:51.017Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-18T07:05:54.361Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-18T07:10:45.307Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-18T07:20:50.817Z",
+      "event": "task-done",
+      "detail": "T5: Per-page staleness: extend enrich-resume.json with completedNodeHashes + graphMaybeStale pre-check"
+    },
+    {
+      "at": "2026-08-18T07:34:12.706Z",
+      "event": "task-done",
+      "detail": "T6: deep-path child turn: spawnSubagent + runAgentTurn + filtered read-only METAPROJECT_OPERATIONS tool grant"
+    },
+    {
+      "at": "2026-08-18T07:34:38.975Z",
+      "event": "ac-updated",
+      "detail": "T6 grounding correction: runAgentTurn's InteractiveTool path does not route through ToolRegistry/replay, so ToolDefinition.replay records nothing for deep-path tool calls; AC7 corrected to describe the explicit toolCalls log actually implemented, same audit intent, no scope change"
+    },
+    {
+      "at": "2026-08-18T07:58:33.383Z",
+      "event": "task-done",
+      "detail": "T7: light-path batching + skip-path + rlm.enabled=false byte-for-byte parity branch"
+    },
+    {
+      "at": "2026-08-18T07:59:09.845Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-18T08:01:07.161Z",
+      "event": "task-done",
+      "detail": "T8: Update wiki-enrich docs (README/docs-site) for optional RLM mode + wiki.config.json"
+    },
+    {
+      "at": "2026-08-18T08:06:36.971Z",
+      "event": "task-added",
+      "detail": "T9: Fix code-verifier findings: break enrich.ts<->staleness.ts cycle, drop/fix unused exports, add missing unit tests"
+    },
+    {
+      "at": "2026-08-18T08:11:13.582Z",
+      "event": "task-done",
+      "detail": "T9: Fix code-verifier findings: break enrich.ts<->staleness.ts cycle, drop/fix unused exports, add missing unit tests"
+    },
+    {
+      "at": "2026-08-18T08:18:25.767Z",
+      "event": "task-added",
+      "detail": "T10: Fix review findings: FR-7 false-unchanged staleness gate, unhandled exceptions crash whole RLM run, non-positive maxRuntimeMs disables timeout"
+    },
+    {
+      "at": "2026-08-18T08:33:35.438Z",
+      "event": "task-done",
+      "detail": "T10: Fix review findings: FR-7 false-unchanged staleness gate, unhandled exceptions crash whole RLM run, non-positive maxRuntimeMs disables timeout"
+    }
+  ]
+}

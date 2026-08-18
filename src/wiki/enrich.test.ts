@@ -8,11 +8,15 @@ import {
   hasCredential,
   hasYamlFrontmatter,
   isWikiEnrichIntent,
+  loadResumeState,
   planWikiEnrich,
   repairEnrichedFrontmatter,
+  resumeStatePath,
+  saveResumeState,
   validateEnrichedMarkdown,
   wikiEnrich,
   type ProviderFactory,
+  type ResumeState,
 } from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 
@@ -323,4 +327,74 @@ test("mapPool runs with concurrency > 1", async () => {
   });
   expect(out).toEqual([2, 4, 6, 8]);
   expect(seen.sort()).toEqual([1, 2, 3, 4]);
+});
+
+test("T5/resume state — round-trips completedNodeHashes through save + load", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-resume-"));
+  try {
+    const state: ResumeState = {
+      updatedAt: new Date().toISOString(),
+      provider: "anthropic",
+      model: "claude",
+      completed: ["components/alpha.md"],
+      completedNodeHashes: { "components/alpha.md": "abc123" },
+      failed: [],
+    };
+    saveResumeState(root, state);
+
+    const loaded = loadResumeState(root);
+    expect(loaded.completed).toEqual(["components/alpha.md"]);
+    expect(loaded.completedNodeHashes).toEqual({ "components/alpha.md": "abc123" });
+
+    const onDisk = JSON.parse(await readFile(resumeStatePath(root), "utf8"));
+    expect(onDisk.completedNodeHashes).toEqual({ "components/alpha.md": "abc123" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T5/resume state — backward compat: old JSON without completedNodeHashes loads fine", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-resume-"));
+  try {
+    const file = resumeStatePath(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        completed: ["components/alpha.md"],
+        failed: [],
+      }),
+      "utf8",
+    );
+
+    const loaded = loadResumeState(root);
+    expect(loaded.completed).toEqual(["components/alpha.md"]);
+    expect(loaded.completedNodeHashes).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T5/resume state — malformed completedNodeHashes (non-string values) degrades to absent, never throws", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-resume-"));
+  try {
+    const file = resumeStatePath(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        completed: [],
+        completedNodeHashes: { "components/alpha.md": 12345 },
+        failed: [],
+      }),
+      "utf8",
+    );
+
+    const loaded = loadResumeState(root);
+    expect(loaded.completedNodeHashes).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
