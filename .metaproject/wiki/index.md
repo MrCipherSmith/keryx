@@ -31,11 +31,12 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-15T18:31:23.026Z | pages: 46 -->
+<!-- generated: 2026-08-18T08:45:30.515Z | pages: 47 -->
 
 ### Architecture
 
 - [OS Sandbox](architecture/os-sandbox.md) (accepted) - The OS sandbox is a kernel-enforced containment layer that sits *below* keryx's policy engine, structural command guard, env allowlist, and approval gate. Those layers decide **whether a command may start**; the OS sandbox constrains **what the process can do once running** — which paths it can write, which secrets it can read, and which network it can reach — using macOS Seatbelt (`sandbox-exec`) or Linux bubblewrap (`bwrap`). It adds no npm dependencies: containment is delegated to system binaries. When containment cannot be applied, a run is **refused**, never silently downgraded.
+- [Permission Modes](architecture/permission-modes.md) (accepted) - The interactive agent session (`keryx shell`, both the OpenTUI surface and the readline fallback) has three user-selectable permission modes — `ask`, `trust`, `auto` — that decide whether a mutating tool call (`shell_exec`, `spawn_subagent`, any tool declaring `risk: "destructive"`) prompts for approval before it runs. They sit **above** the existing per-call approval gate in `src/commands/agent.ts`'s `executeCall`, deciding whether `AgentIO.requestApproval` is even invoked — never replacing it, and never touching the separate `src/harness/policy`/`src/harness/mutation` evidence engine that governs `harness run`/`harness exec`/`keryx serve` (see "Explicitly out of scope" below).
 - [Project Map](architecture/project-map.md) (accepted) - This page is the deterministic architecture map for the project. It captures the repository as a graph of code files and assets, including import relationships between top-level modules.
 - [Quality Map](architecture/quality-map.md) (accepted)
 - [Testing Map](architecture/testing-map.md) (accepted) - This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
