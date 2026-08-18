@@ -181,3 +181,18 @@
   4157 pass/0 fail (up from 4153 baseline by the 3 new tests +1 flake not
   reproducing) — no regressions.
 - Committing T10's fix and pushing to PR #339 for re-review before merge.
+- 2026-08-18T18:33:50.640Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/339 (warning: PR is not a draft)
+- 2026-08-18T18:34:04.167Z - ac-confirmed: AC1: scheduler.test.ts + agent.test.ts: N concurrent spawn_subagent calls with distinct fake delays complete in max(delay), not sum, via fake clocks; verified by code-verifier + independent re-review
+- 2026-08-18T18:34:04.254Z - ac-confirmed: AC2: ledger.test.ts regression test (30 concurrent-looking callers) + planWaves' maxConcurrency enforcement; confirmed already-safe-by-construction (fully synchronous grant path), independently re-verified by both review passes
+- 2026-08-18T18:34:04.341Z - ac-confirmed: AC3: agent.test.ts: result order preserved independent of completion order (second spawn resolves before first, output order still first-then-second)
+- 2026-08-18T18:34:04.430Z - ac-confirmed: AC4: agent.test.ts: mixed [spawn, probe, spawn] batch regression — non-spawn_subagent dispatch order/behavior unaffected
+- 2026-08-18T18:34:04.519Z - ac-confirmed: AC5: spawn-subagent-tool.test.ts: BudgetExhausted status test, distinct from Completed/isError:false
+- 2026-08-18T18:34:04.609Z - ac-confirmed: AC6: spawn-subagent-tool.test.ts: NoProgress status test, distinct from BudgetExhausted
+- 2026-08-18T18:34:04.695Z - ac-confirmed: AC7: spawn-subagent-tool.test.ts: Timeout/Denied/Error paths keep isError:true, gained matching status labels, regression-tested
+- 2026-08-18T18:34:04.781Z - ac-confirmed: AC8: spawn-subagent-tool.test.ts AC8 backward-compat test: {output,isError}-only caller sees identical behavior to pre-Phase-D across all 4 pre-existing paths
+- 2026-08-18T18:34:04.871Z - ac-confirmed: AC9: ledger.ts/orchestrate.ts read in full by 2 independent passes (T5 implementer + logic/architecture + security reviewers): admit()/spawnSubagent() fully synchronous, no await between check and decrement — no fix needed, documented with evidence
+- 2026-08-18T18:34:04.960Z - ac-confirmed: AC10: no auto-retry logic added anywhere; explicit code comments at WaveExecutorDeps.run and the status-setting sites warn against it; confirmed by review, not a runtime test, per AC's own text
+- 2026-08-18T18:34:05.049Z - ac-confirmed: AC11: full bun test suite green throughout (4153->4157 pass/0 fail across T5-T10), independently re-run post-merge on main: 125/125 on the 4 directly-touched test files
+- 2026-08-18T18:34:05.137Z - ac-confirmed: AC12: T8 flipped all 6 requirements-package files + roadmap.md from specification-ready to implemented with runtime evidence (file:line + test file citations), matching A-B-C's own status-note convention
+- 2026-08-18T18:34:08.133Z - completing
+- 2026-08-18T18:34:09.874Z - done: all gates passed

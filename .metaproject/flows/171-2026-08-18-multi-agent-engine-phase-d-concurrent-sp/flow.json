@@ -3,17 +3,66 @@
   "id": "171",
   "slug": "multi-agent-engine-phase-d-concurrent-sp",
   "title": "Multi-Agent Engine Phase D: concurrent spawn_subagent waves + structured completion status",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-18T16:28:02.331Z",
-  "updatedAt": "2026-08-18T18:13:17.411Z",
+  "updatedAt": "2026-08-18T18:34:09.874Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5a30d53001a9b7c5d62bc76fab2ad403de9cf50b07494e6be69d94e55ca6f491",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-18T18:34:04.167Z",
+      "note": "scheduler.test.ts + agent.test.ts: N concurrent spawn_subagent calls with distinct fake delays complete in max(delay), not sum, via fake clocks; verified by code-verifier + independent re-review"
+    },
+    "AC2": {
+      "at": "2026-08-18T18:34:04.254Z",
+      "note": "ledger.test.ts regression test (30 concurrent-looking callers) + planWaves' maxConcurrency enforcement; confirmed already-safe-by-construction (fully synchronous grant path), independently re-verified by both review passes"
+    },
+    "AC3": {
+      "at": "2026-08-18T18:34:04.341Z",
+      "note": "agent.test.ts: result order preserved independent of completion order (second spawn resolves before first, output order still first-then-second)"
+    },
+    "AC4": {
+      "at": "2026-08-18T18:34:04.430Z",
+      "note": "agent.test.ts: mixed [spawn, probe, spawn] batch regression — non-spawn_subagent dispatch order/behavior unaffected"
+    },
+    "AC5": {
+      "at": "2026-08-18T18:34:04.519Z",
+      "note": "spawn-subagent-tool.test.ts: BudgetExhausted status test, distinct from Completed/isError:false"
+    },
+    "AC6": {
+      "at": "2026-08-18T18:34:04.609Z",
+      "note": "spawn-subagent-tool.test.ts: NoProgress status test, distinct from BudgetExhausted"
+    },
+    "AC7": {
+      "at": "2026-08-18T18:34:04.695Z",
+      "note": "spawn-subagent-tool.test.ts: Timeout/Denied/Error paths keep isError:true, gained matching status labels, regression-tested"
+    },
+    "AC8": {
+      "at": "2026-08-18T18:34:04.781Z",
+      "note": "spawn-subagent-tool.test.ts AC8 backward-compat test: {output,isError}-only caller sees identical behavior to pre-Phase-D across all 4 pre-existing paths"
+    },
+    "AC9": {
+      "at": "2026-08-18T18:34:04.871Z",
+      "note": "ledger.ts/orchestrate.ts read in full by 2 independent passes (T5 implementer + logic/architecture + security reviewers): admit()/spawnSubagent() fully synchronous, no await between check and decrement — no fix needed, documented with evidence"
+    },
+    "AC10": {
+      "at": "2026-08-18T18:34:04.960Z",
+      "note": "no auto-retry logic added anywhere; explicit code comments at WaveExecutorDeps.run and the status-setting sites warn against it; confirmed by review, not a runtime test, per AC's own text"
+    },
+    "AC11": {
+      "at": "2026-08-18T18:34:05.049Z",
+      "note": "full bun test suite green throughout (4153->4157 pass/0 fail across T5-T10), independently re-run post-merge on main: 125/125 on the 4 directly-touched test files"
+    },
+    "AC12": {
+      "at": "2026-08-18T18:34:05.137Z",
+      "note": "T8 flipped all 6 requirements-package files + roadmap.md from specification-ready to implemented with runtime evidence (file:line + test file citations), matching A-B-C's own status-note convention"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/339"
   },
   "tasks": [
     {
@@ -148,6 +197,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Fix review finding F-001 (major): concurrent spawn_subagent bypasses untrustedContentSeen/batchContainsUntrustedWeb gate; F-002 (minor): unguarded fallback loop",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -223,6 +287,90 @@
       "at": "2026-08-18T18:13:17.411Z",
       "event": "task-done",
       "detail": "T9: Fix code-verifier finding: WaveExecutionError discards earlier-wave successes in multi-wave batches"
+    },
+    {
+      "at": "2026-08-18T18:20:34.603Z",
+      "event": "task-added",
+      "detail": "T10: Fix review finding F-001 (major): concurrent spawn_subagent bypasses untrustedContentSeen/batchContainsUntrustedWeb gate; F-002 (minor): unguarded fallback loop"
+    },
+    {
+      "at": "2026-08-18T18:27:27.856Z",
+      "event": "task-done",
+      "detail": "T10: Fix review finding F-001 (major): concurrent spawn_subagent bypasses untrustedContentSeen/batchContainsUntrustedWeb gate; F-002 (minor): unguarded fallback loop"
+    },
+    {
+      "at": "2026-08-18T18:33:50.640Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/339 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-18T18:34:04.167Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: scheduler.test.ts + agent.test.ts: N concurrent spawn_subagent calls with distinct fake delays complete in max(delay), not sum, via fake clocks; verified by code-verifier + independent re-review"
+    },
+    {
+      "at": "2026-08-18T18:34:04.254Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ledger.test.ts regression test (30 concurrent-looking callers) + planWaves' maxConcurrency enforcement; confirmed already-safe-by-construction (fully synchronous grant path), independently re-verified by both review passes"
+    },
+    {
+      "at": "2026-08-18T18:34:04.341Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent.test.ts: result order preserved independent of completion order (second spawn resolves before first, output order still first-then-second)"
+    },
+    {
+      "at": "2026-08-18T18:34:04.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agent.test.ts: mixed [spawn, probe, spawn] batch regression — non-spawn_subagent dispatch order/behavior unaffected"
+    },
+    {
+      "at": "2026-08-18T18:34:04.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: spawn-subagent-tool.test.ts: BudgetExhausted status test, distinct from Completed/isError:false"
+    },
+    {
+      "at": "2026-08-18T18:34:04.609Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: spawn-subagent-tool.test.ts: NoProgress status test, distinct from BudgetExhausted"
+    },
+    {
+      "at": "2026-08-18T18:34:04.695Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: spawn-subagent-tool.test.ts: Timeout/Denied/Error paths keep isError:true, gained matching status labels, regression-tested"
+    },
+    {
+      "at": "2026-08-18T18:34:04.781Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: spawn-subagent-tool.test.ts AC8 backward-compat test: {output,isError}-only caller sees identical behavior to pre-Phase-D across all 4 pre-existing paths"
+    },
+    {
+      "at": "2026-08-18T18:34:04.871Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: ledger.ts/orchestrate.ts read in full by 2 independent passes (T5 implementer + logic/architecture + security reviewers): admit()/spawnSubagent() fully synchronous, no await between check and decrement — no fix needed, documented with evidence"
+    },
+    {
+      "at": "2026-08-18T18:34:04.960Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: no auto-retry logic added anywhere; explicit code comments at WaveExecutorDeps.run and the status-setting sites warn against it; confirmed by review, not a runtime test, per AC's own text"
+    },
+    {
+      "at": "2026-08-18T18:34:05.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: full bun test suite green throughout (4153->4157 pass/0 fail across T5-T10), independently re-run post-merge on main: 125/125 on the 4 directly-touched test files"
+    },
+    {
+      "at": "2026-08-18T18:34:05.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: T8 flipped all 6 requirements-package files + roadmap.md from specification-ready to implemented with runtime evidence (file:line + test file citations), matching A-B-C's own status-note convention"
+    },
+    {
+      "at": "2026-08-18T18:34:08.133Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-18T18:34:09.874Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
