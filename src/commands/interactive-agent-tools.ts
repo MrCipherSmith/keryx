@@ -2,6 +2,7 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { randomUUID } from "node:crypto";
+import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
   shellJobKillTool,
@@ -77,6 +78,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     webSearchTool(input.searchController),
     shellExecTool(input.cwd, undefined, jobRegistry),
     ...(jobRegistry !== undefined ? [shellJobOutputTool(jobRegistry), shellJobKillTool(jobRegistry)] : []),
+    applyPatchTool(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
     workspaceCreateTool(input.cwd),

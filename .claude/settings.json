@@ -5,23 +5,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "keryx security check-input --source untrusted-external"
+            "command": "keryx security check-input --source untrusted-external --runtime claude"
           }
         ],
         "_keryxManaged": "security-agent-hooks"
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "keryx security check-output"
-          }
-        ],
-        "_keryxManaged": "security-agent-hooks"
-      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -31,11 +21,21 @@
           }
         ],
         "_keryxManaged": "ctx-agent-hooks"
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx security check-output --runtime claude"
+          }
+        ],
+        "_keryxManaged": "security-agent-hooks"
       }
     ]
   },
   "_keryxManaged": [
-    "security-agent-hooks",
-    "ctx-agent-hooks"
+    "ctx-agent-hooks",
+    "security-agent-hooks"
   ]
 }

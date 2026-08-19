@@ -6,8 +6,7 @@ description: Use for durable project knowledge - past decisions, constraints, kn
 # memory Skill
 
 Use this skill for long-term project experience: accepted decisions,
-constraints, known mistakes, lessons, and reusable patterns. Default search is
-pure and automatic influence is accepted/current/bounded.
+constraints, known mistakes, lessons, and reusable patterns.
 
 ## Workflow
 
@@ -21,9 +20,6 @@ pure and automatic influence is accepted/current/bounded.
 
 ```bash
 keryx memory search "<query>" --status accepted
-keryx memory search "<query>" --status accepted --save-report
-keryx memory transition <path> --to accepted --reason "<reason>"
-keryx memory supersede <old-path> --by <new-path>
 keryx memory new lesson --title "<title>"
 keryx memory ingest --from-review <path>
 keryx memory check
@@ -31,12 +27,8 @@ keryx memory check
 
 ## Notes
 
-- Markdown is canonical. `memory index` produces an optional disposable
-  catalog; runtime search scans Markdown directly and never treats the catalog
-  as its source of truth.
-- Default search, harness/MCP/flow/approval recall, and skill verification do
-  not persist reports. `--save-report` is the explicit report action.
-- Only accepted, current, scoped, bounded projections influence skills; draft,
-  conflict, deprecated, superseded, expired, and future entries do not.
-- Lifecycle writes use validated guarded atomic seams; init/update migration of
-  legacy artifacts is advisory and never deletes files or changes Git state.
+- Only `accepted` entries influence skills; `draft` are advisory.
+- Markdown is the source of truth; generated catalogs, embeddings, and reports
+  are disposable and ignored. Default recall does not persist a report.
+- Existing legacy `data/memory/artifacts/latest.*` files are never deleted or
+  changed automatically; init/update report an advisory migration instead.

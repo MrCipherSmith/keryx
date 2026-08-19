@@ -26,12 +26,15 @@ export function isPermissionMode(value: string): value is PermissionMode {
 export const DEFAULT_PERMISSION_MODE: PermissionMode = "ask";
 
 /**
- * The risk classes `executeCall` actually reaches this gate for. `write` /
- * `network` / `credential` are declared by {@link ToolRisk} but hard-denied
+ * The risk classes `executeCall` actually reaches this gate for. `network` /
+ * `credential` are declared by {@link ToolRisk} but hard-denied
  * unconditionally today regardless of approver or mode (agent.ts's final
- * `else if (risk !== "read")` branch) — not this layer's concern.
+ * `else if (risk !== "read")` branch) — not this layer's concern. `write`
+ * joined this gate in ADR-0010 (`apply_patch`): it is approval-gated exactly
+ * like `shell`/`destructive`, with its own escalation classifier
+ * (`src/lib/patch-risk.ts`) supplying `destructive`/`credentials`.
  */
-export type GatedToolRisk = "read" | "shell" | "destructive" | "delegate";
+export type GatedToolRisk = "read" | "shell" | "destructive" | "delegate" | "write";
 
 export interface ApprovalGateInput {
   mode: PermissionMode;
@@ -73,7 +76,8 @@ export type ApprovalGateDecision = "auto" | "ask";
  *
  *   - `ask`   — unchanged today's behavior; only `read` skips the prompt.
  *   - `trust` — auto-approve unless the action is `destructive` (static risk
- *     or per-command escalation); a destructive action still asks.
+ *     or per-action escalation — per-command for `shell`/`destructive`,
+ *     per-patch-target for `write`); a destructive action still asks.
  *   - `auto`  — bypass the prompt for everything except `credentials`. This
  *     is the deliberately dangerous mode (mirrors Claude Code's
  *     `bypassPermissions` / grok-build's yolo mode) — the caller is

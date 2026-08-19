@@ -104,6 +104,8 @@ import {
   resolveModelsForPicker,
 } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
+import { classifyDiffLine } from "../lib/md-blocks";
+import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
@@ -2014,6 +2016,60 @@ export async function launchTuiAgentShell(opts: {
               id === "allow"
                 ? otui.t`${otui.green("◇ subagent approved")}`
                 : otui.t`${otui.red("◇ subagent denied")}`,
+          }),
+        );
+        return id === "allow";
+      }
+
+      if (tool === "apply_patch") {
+        // ADR-0010/P2: render the actual diff, full — line classification
+        // (`classifyDiffLine`) is the SAME pure function `renderDiff` uses in
+        // the readline shell and in markdown diff-block rendering, so all
+        // three surfaces color a patch identically and cannot drift.
+        for (const line of extractPatchText(inputJson).split(/\r?\n/)) {
+          const kind = classifyDiffLine(line);
+          const rendered =
+            kind === "add" ? otui.green(line)
+            : kind === "del" ? otui.red(line)
+            : kind === "hunk" ? otui.cyan(line)
+            : kind === "meta" ? otui.dim(line)
+            : line;
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${rendered}` }));
+        }
+        if (meta?.destructive === true) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.yellow("deletes a file, touches .git/, or touches many files in one call")}`,
+            }),
+          );
+        }
+        if (meta?.credentials === true) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.yellow("touches the agent's own permission/credential files")}`,
+            }),
+          );
+        }
+        chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+        setMainAgent("blocked", "approval");
+        const id = await showComposerChoice(otui, r, chrome.dock, {
+          title: "Approve apply_patch?",
+          subtitle: "Diff shown above · Esc denies",
+          cancelId: "deny",
+          options: [
+            { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
+            { id: "deny", label: "Deny", description: "Do not write anything" },
+          ],
+        });
+        input.focus();
+        setMainAgent("running", id === "allow" ? "write" : "denied");
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content:
+              id === "allow" ? otui.t`${otui.green("◇ apply_patch approved")}` : otui.t`${otui.red("◇ apply_patch denied")}`,
           }),
         );
         return id === "allow";

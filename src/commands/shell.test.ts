@@ -821,6 +821,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
   });
 
   expect(toolNames.sort()).toEqual([
+    "apply_patch",
     "ask_user",
     "flow_status",
     "get_cwd",

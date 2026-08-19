@@ -19,6 +19,8 @@ For project navigation, file discovery, and code-related tasks, use the Metaproj
 
 Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason recorded in the routing audit.
 
+`keryx ctx rg` and the agent's `search_code` tool require ripgrep (`rg`) on PATH — install it with `brew install ripgrep` (macOS) or `apt install ripgrep` (Debian/Ubuntu). Without it, code search is unavailable; fall back to reading files directly.
+
 For architecture, domain models, business rules, user scenarios, auth and other flows, integrations, and known decisions, consult the Metaproject gdwiki skill and read the wiki index before deep code reads; use gdgraph to move from a wiki concept to code.
 
 For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.

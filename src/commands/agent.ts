@@ -14,6 +14,7 @@
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../lib/command-risk";
+import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -645,7 +646,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "Shared Agent Context bullet below) — a proposal is never accepted knowledge by itself; accepting one " +
     "always requires a human at a real terminal. " +
     "You may also propose shell_exec to run a command, which requires the user's explicit " +
-    "approval before it executes.\n\n" +
+    "approval before it executes. For editing project files, prefer **apply_patch** over " +
+    "shell_exec: it takes a unified diff (the same format `git diff` produces) and can create/" +
+    "modify/delete several files in ONE call — one call is one budget slot regardless of how " +
+    "many files/hunks it contains, unlike a separate shell_exec per edit. It also requires the " +
+    "user's explicit approval before it writes anything.\n\n" +
     "Tool-calling rules (critical):\n" +
     "- Persistence: when you say what you're about to do (\"Проверю ...\", \"Checking ...\"), " +
     "call the tool for it in the SAME reply, right after that sentence — never end a turn on a " +
@@ -1972,6 +1977,9 @@ async function executeCall(
   //   entirely rather than called and answered synthetically.
   // - `delegate` (spawn_subagent): DEFAULT-DENY when no approver, same as `shell`;
   //   when an approver is present, ask (TUI may auto-approve read_only subagents)
+  // - `write` (apply_patch, ADR-0010): same shape as `shell`/`destructive`, but
+  //   escalation comes from the patch's target paths (classifyPatchRisk), not
+  //   command text
   // - anything else is denied
   const risk = tool.definition.risk;
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
@@ -2017,6 +2025,30 @@ async function executeCall(
           : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: `subagent spawn not approved by the user; not executed`, isError: true };
+      }
+    }
+  } else if (risk === "write") {
+    // ADR-0010: `write` joins the shell/destructive/delegate gate. Same
+    // shape as the shell branch, but the escalation dimensions come from
+    // the patch's TARGET PATHS (classifyPatchRisk), not command text —
+    // escalation only, per ADR-0009's posture; it never denies on its own.
+    const patch = typeof input.patch === "string" ? input.patch : "";
+    const { destructive, credentials } = classifyPatchRisk(patch);
+    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation: false });
+    if (decision === "auto") {
+      onAutoApproved?.(call.name, call.input, { destructive, credentials });
+    } else {
+      const fingerprint = toolCallHash(call.name, call.input);
+      const response =
+        requestApproval === undefined
+          ? false
+          : await requestApproval(call.name, call.input, {
+              fingerprint,
+              destructive,
+              ...(credentials ? { credentials } : {}),
+            });
+      if (!isApprovalFor(response, fingerprint)) {
+        return { output: `patch not approved by the user; not executed`, isError: true };
       }
     }
   } else if (risk !== "read") {
