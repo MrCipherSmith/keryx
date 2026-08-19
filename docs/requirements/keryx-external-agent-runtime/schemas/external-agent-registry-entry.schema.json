@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/external/external-agent-registry-entry.schema.json",
+  "title": "External Agent Registry Entry",
+  "description": "One external agent CLI, described as data. Metadata only: argv construction, event parsing and failure classification live in a codec module per agent, because the CLIs differ structurally rather than parametrically (decisions.md D-06). Adding an agent is one entry here plus one codec module.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "label",
+    "binary",
+    "detect",
+    "versionPattern",
+    "knownGoodRange",
+    "sandboxModes",
+    "streamingInput",
+    "resumable"
+  ],
+  "properties": {
+    "id": {
+      "description": "Runtime id used in the dispatch `runtime.agent` field.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "label": {
+      "description": "Display name for the TUI sidebar and modal.",
+      "type": "string",
+      "minLength": 1
+    },
+    "binary": {
+      "description": "Executable name resolved on PATH. keryx never reads this agent's credential store; presence of the binary says nothing about whether the operator is logged in.",
+      "type": "string",
+      "minLength": 1
+    },
+    "detect": {
+      "description": "Argv appended to the binary to prove it exists and report a version. Must not spend subscription quota.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "versionPattern": {
+      "description": "Regular expression with one capture group extracting a version string from the detect output.",
+      "type": "string",
+      "minLength": 1
+    },
+    "knownGoodRange": {
+      "description": "Version range this agent's codec fixtures were recorded against. A version outside the range produces a recorded warning on the run; it never blocks.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min"],
+      "properties": {
+        "min": { "type": "string", "minLength": 1 },
+        "max": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "sandboxModes": {
+      "description": "Sandbox levels the CLI itself supports. This is agent capability, NOT the keryx release gate: what keryx has implemented is a separate runtime refusal, so 'this agent cannot do that' and 'keryx does not do that yet' stay distinguishable reasons. A dispatch naming a mode absent here is rejected fail-closed.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["read-only", "worktree-write"]
+      }
+    },
+    "streamingInput": {
+      "description": "Whether the CLI accepts operator messages mid-run. When false, messages are held and delivered through the resume path instead; the supervision layer branches on this field rather than on the agent id.",
+      "type": "boolean"
+    },
+    "resumable": {
+      "description": "Whether a killed session can be resumed by its id, which is what makes `force` cost a process restart rather than the accumulated work.",
+      "type": "boolean"
+    },
+    "reportsCost": {
+      "description": "Whether the CLI reports a monetary cost keryx can surface. A missing figure is displayed as missing, never as zero.",
+      "type": "boolean",
+      "default": false
+    },
+    "budgetFlag": {
+      "description": "Whether the CLI accepts a native budget ceiling keryx can forward, so exhaustion is a clean BudgetExhausted rather than an unbounded run.",
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "description": "Free-text operator-facing note, shown in the modal's Meta tab.",
+      "type": "string"
+    }
+  },
+  "examples": [
+    {
+      "id": "codex-cli",
+      "label": "Codex",
+      "binary": "codex",
+      "detect": ["--version"],
+      "versionPattern": "codex-cli ([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "knownGoodRange": { "min": "0.147.0", "max": null },
+      "sandboxModes": ["read-only", "worktree-write"],
+      "streamingInput": false,
+      "resumable": true,
+      "reportsCost": false,
+      "budgetFlag": false,
+      "notes": "Reports token usage on turn.completed but no monetary cost. Operator messages are delivered by resuming the session."
+    },
+    {
+      "id": "claude-cli",
+      "label": "Claude",
+      "binary": "claude",
+      "detect": ["--version"],
+      "versionPattern": "([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "knownGoodRange": { "min": "2.1.220", "max": null },
+      "sandboxModes": ["read-only", "worktree-write"],
+      "streamingInput": true,
+      "resumable": true,
+      "reportsCost": true,
+      "budgetFlag": true,
+      "notes": "Accepts streaming input, a native budget ceiling, and a keryx-assigned session id."
+    }
+  ]
+}

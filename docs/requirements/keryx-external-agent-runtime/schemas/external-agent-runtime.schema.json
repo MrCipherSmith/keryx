@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/external/external-agent-runtime.schema.json",
+  "title": "External Agent Runtime Selection",
+  "description": "The `runtime` block added to Metaproject Subagent Dispatch. Optional and additive: an absent block means the native keryx runtime, so every dispatch authored before this package remains valid. Validation beyond this schema is specified in specification.md section 6.1 and is fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind"],
+  "properties": {
+    "kind": {
+      "description": "Which child runtime executes this dispatch. `keryx` runs the in-process agent loop; `external` spawns a vendor CLI subprocess.",
+      "type": "string",
+      "enum": ["keryx", "external"]
+    },
+    "agent": {
+      "description": "Registry id of the external agent. Required when kind is `external`; must resolve in the external agent registry.",
+      "type": "string",
+      "minLength": 1
+    },
+    "sandbox": {
+      "description": "Permission level for the external child. Must appear in the registry entry's sandboxModes. `worktree-write` is schema-valid but refused at runtime in the read-only release.",
+      "type": "string",
+      "enum": ["read-only", "worktree-write"],
+      "default": "read-only"
+    },
+    "model": {
+      "description": "Model id passed to the external CLI. Omit or null to let the CLI resolve its own default under the operator's active subscription — the runtime never pins a model the account may not be entitled to.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "timeoutMs": {
+      "description": "Wall-clock ceiling for this run. Falls back to the configured default when absent.",
+      "type": ["integer", "null"],
+      "minimum": 1000
+    },
+    "maxCostUnits": {
+      "description": "Optional cost ceiling forwarded to the CLI's own budget cap where the registry entry reports one, and reserved against the shared RemainingBudgetLedger regardless.",
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "external" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["agent", "sandbox"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "keryx" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "not": { "required": ["agent"] }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "kind": "external",
+      "agent": "codex-cli",
+      "sandbox": "read-only"
+    },
+    {
+      "kind": "external",
+      "agent": "claude-cli",
+      "sandbox": "read-only",
+      "model": null,
+      "timeoutMs": 600000,
+      "maxCostUnits": 2.5
+    },
+    {
+      "kind": "keryx"
+    }
+  ]
+}
