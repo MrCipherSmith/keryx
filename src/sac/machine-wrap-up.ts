@@ -378,6 +378,41 @@ async function writeUnboundCandidateArtifact(
 }
 
 /**
+ * SAC durable wrap-up dispatch outcome recording (flow 173): a second,
+ * sibling best-effort artifact — mirrors `writeUnboundCandidateArtifact`
+ * exactly (same `slate-archive/` directory, same `writeFileAtomic`, same
+ * filename-suffix scheme) — recording the FULL `WrapUpGroupOutcome[]` a
+ * `runWrapUp` call produced, unconditionally (success or failure groups
+ * alike). Unlike `writeUnboundCandidateArtifact`, this write is wrapped in
+ * its OWN try/catch: a failure to record the outcome must not itself throw
+ * and must not prevent `runWrapUp` from returning its already-computed
+ * result to the caller (both real callers, `agent.ts`/`harness.ts`, already
+ * treat `runWrapUp` as best-effort and only log a thrown exception
+ * transiently — this write must never become a NEW way for that to happen).
+ * `classifySession` (`catch-up.ts`) reads this artifact back to distinguish
+ * "wrap-up genuinely failed" from "wrap-up never triggered" in the Review UI.
+ */
+async function writeWrapUpOutcomeArtifact(
+  dir: string,
+  trigger: WrapUpTrigger,
+  now: () => Date,
+  groups: WrapUpGroupOutcome[],
+): Promise<void> {
+  try {
+    const archiveDir = path.join(dir, "slate-archive");
+    await mkdir(archiveDir, { recursive: true });
+    const nowIso = now().toISOString();
+    const filename = `${nowIso.replace(/[:.]/g, "-")}-wrap-up-outcome.json`;
+    const content = { recordType: "wrap-up-outcome", trigger, generatedAt: nowIso, groups };
+    await writeFileAtomic(path.join(archiveDir, filename), `${JSON.stringify(content, null, 2)}\n`);
+  } catch {
+    // Best-effort — a failure to record the outcome (including the `mkdir`
+    // above) must not itself throw and must not prevent runWrapUp from
+    // returning its already-computed result to the caller.
+  }
+}
+
+/**
  * Attempts ONE proposal for ONE non-empty Seed-kind group — the only place
  * in this Flow's Track B that ever calls `wrapUpAuthority.issue()`/
  * `service.create()` (AC1). Builds its OWN local `TrustedWrapUpAuthority`
@@ -528,7 +563,9 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
 
   if (input.slate.workspaceId === undefined) {
     await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-    return { groups: nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const })) };
+    const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
+    await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
+    return { groups };
   }
 
   const workspaceId = input.slate.workspaceId;
@@ -546,5 +583,6 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
       }),
     ),
   );
+  await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
   return { groups };
 }

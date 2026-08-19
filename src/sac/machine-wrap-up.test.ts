@@ -503,3 +503,184 @@ test("F-002: a genuinely-thrown, non-conflict failure in ONE kind-group never di
   const files = await proposalFiles(cwd, "workspace-a");
   expect(files.length).toBe(1);
 });
+
+// --- flow 173: SAC durable wrap-up dispatch outcome recording -------------
+// `runWrapUp` persists a `{recordType: "wrap-up-outcome", ...}` artifact
+// under the session dir's `slate-archive/`, unconditionally on both of its
+// "real work happened" return paths (unbound-candidate degrade AND the
+// propose-attempt path, success or failure alike), but writes NOTHING for
+// the harmless zero-seeds no-op early return.
+
+async function readWrapUpOutcomeArtifacts(dir: string): Promise<Array<Record<string, unknown>>> {
+  const archiveDir = path.join(dir, "slate-archive");
+  let entries: string[];
+  try {
+    entries = (await readdir(archiveDir)).filter((name) => name.endsWith("-wrap-up-outcome.json"));
+  } catch {
+    return [];
+  }
+  return Promise.all(
+    entries.map(async (entry) => JSON.parse(await readFile(path.join(archiveDir, entry), "utf8")) as Record<string, unknown>),
+  );
+}
+
+test("AC1/AC2/AC3/AC9: runWrapUp writes a wrap-up-outcome artifact for the unbound-candidate degrade path", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  const slate = baseSlate({
+    // workspaceId deliberately omitted -> unbound-candidate degrade path.
+    seeds: [seed("s1", "tagged as a decision", "decision")],
+  });
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "process-termination",
+    now: () => new Date(time),
+    providerFactory: () => stubModelProvider("mechanical or model summary"),
+  });
+
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(1);
+  const artifact = artifacts[0]!;
+  expect(artifact.recordType).toBe("wrap-up-outcome");
+  expect(artifact.trigger).toBe("process-termination");
+  expect(artifact.generatedAt).toBe(time);
+  // Same groups shape already returned from this branch (every group
+  // "unbound-candidate", matching the outcome value itself).
+  expect(artifact.groups).toEqual(outcome.groups);
+  expect(outcome.groups.every((group) => group.outcome === "unbound-candidate")).toBe(true);
+});
+
+test("AC1/AC2/AC9: runWrapUp writes a wrap-up-outcome artifact recording an 'error' group outcome from the propose path", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "045-outcome-error-flow");
+
+  const slate = baseSlate({
+    workspaceId: "workspace-a",
+    course: { flowRef: "045" },
+    seeds: [seed("s1", "a risk finding whose model turn is injected to fail", "risk")],
+  });
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "explicit",
+    now: () => new Date(time),
+    providerFactory: () => perKindThrowingProvider("risk", "unused"),
+  });
+
+  expect(outcome.groups.length).toBe(1);
+  expect(outcome.groups[0]!.outcome).toBe("error");
+
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(1);
+  const artifact = artifacts[0]!;
+  expect(artifact.recordType).toBe("wrap-up-outcome");
+  expect(artifact.trigger).toBe("explicit");
+  // The resulting groups array is passed through directly (AC2: written
+  // unconditionally, success or failure).
+  expect(artifact.groups).toEqual(outcome.groups);
+});
+
+test("AC2: runWrapUp writes a wrap-up-outcome artifact for a fully successful ('proposed') propose path too", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "046-outcome-proposed-flow");
+
+  const slate = baseSlate({
+    workspaceId: "workspace-a",
+    course: { flowRef: "046" },
+    seeds: [seed("s1", "a decision finding that should succeed", "decision")],
+  });
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    providerFactory: () => stubModelProvider("summary"),
+  });
+
+  expect(outcome.groups.length).toBe(1);
+  expect(outcome.groups[0]!.outcome).toBe("proposed");
+
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(1);
+  expect(artifacts[0]!.groups).toEqual(outcome.groups);
+});
+
+test("AC3: runWrapUp writes NO wrap-up-outcome artifact for the zero-seeds no-op early return", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  const slate = baseSlate({ seeds: [] }); // zero non-empty seed groups
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "explicit",
+    now: () => new Date(time),
+  });
+
+  expect(outcome.groups).toEqual([]);
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(0);
+});
+
+test("AC2/NFR-1: a failing writeWrapUpOutcomeArtifact mkdir never poisons runWrapUp's own already-computed result", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "047-outcome-mkdir-failure-flow");
+
+  // Force writeWrapUpOutcomeArtifact's `mkdir(archiveDir, { recursive: true })`
+  // to throw: pre-create a regular FILE at the exact path it needs to `mkdir`
+  // as a directory ("slate-archive"), so Node's fs.mkdir rejects with
+  // ENOTDIR/EEXIST instead of creating the directory. This is the same class
+  // of real-world failure the fix documents (a non-directory colliding with
+  // `slate-archive`) and does not touch `writeUnboundCandidateArtifact` or any
+  // other function's own use of the session dir.
+  await writeFile(path.join(dir, "slate-archive"), "not a directory", "utf8");
+
+  const slate = baseSlate({
+    workspaceId: "workspace-a",
+    course: { flowRef: "047" },
+    seeds: [seed("s1", "a decision finding that should still succeed", "decision")],
+  });
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    providerFactory: () => stubModelProvider("summary"),
+  });
+
+  // runWrapUp itself must resolve normally with its correctly-computed
+  // outcome, not reject/throw, even though the best-effort outcome-artifact
+  // write below it failed outright before ever reaching writeFileAtomic.
+  expect(outcome.groups.length).toBe(1);
+  expect(outcome.groups[0]!.outcome).toBe("proposed");
+
+  // The proposal itself was still genuinely persisted — the mkdir failure in
+  // writeWrapUpOutcomeArtifact never prevented the real work already done by
+  // proposeOneGroup/Promise.all from reaching the caller.
+  const files = await proposalFiles(cwd, "workspace-a");
+  expect(files.length).toBe(1);
+
+  // And, as expected, no wrap-up-outcome artifact could be read back (the
+  // colliding file is still sitting where the directory should be) — the
+  // failure was swallowed, not silently "succeeded".
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(0);
+});

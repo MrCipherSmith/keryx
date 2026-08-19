@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { CatchUpBlockedItem, CatchUpItem, CatchUpProposalItem } from "../sac/catch-up";
+import type { CatchUpBlockedItem, CatchUpItem, CatchUpProposalItem, CatchUpUnknownItem } from "../sac/catch-up";
 import {
   clampScroll,
   formatReviewDetailLines,
@@ -25,6 +25,27 @@ const BLOCKED: CatchUpBlockedItem = {
     courseSnapshot: {},
     anchorsSnapshot: { root: "/tmp", touched: [] },
     occurredAt: "2026-08-16T00:00:00.000Z",
+  },
+};
+
+const UNKNOWN_NO_OUTCOME: CatchUpUnknownItem = {
+  type: "unknown",
+  sessionId: "sess-unknown-1",
+  lastSeenAt: "2026-08-19T00:00:00.000Z",
+};
+
+const UNKNOWN_WITH_OUTCOME: CatchUpUnknownItem = {
+  type: "unknown",
+  sessionId: "sess-unknown-2",
+  lastSeenAt: "2026-08-19T00:05:00.000Z",
+  wrapUpOutcome: {
+    trigger: "explicit",
+    generatedAt: "2026-08-19T00:04:00.000Z",
+    groups: [
+      { kind: "decision", outcome: "error", message: "model provider unavailable" },
+      { kind: "risk", outcome: "no_credential" },
+      { kind: "follow-up", outcome: "conflict" },
+    ],
   },
 };
 
@@ -59,6 +80,45 @@ test("detail includes the recommended command and, for a proposal, the accept hi
   expect(blocked).toContain("keryx shell -r sess-1");
   // Non-proposal items never offer an accept action.
   expect(blocked).not.toContain("[a] Accept");
+});
+
+test("flow 173: 'unknown' detail without wrapUpOutcome shows exactly today's unchanged generic message", () => {
+  const lines = formatReviewDetailLines(UNKNOWN_NO_OUTCOME, { kind: "idle" });
+  expect(lines).toEqual([
+    "Session    sess-unknown-1",
+    "Last seen  2026-08-19T00:00:00.000Z",
+    "No proposal, terminal state, or unbound-candidate artifact recorded.",
+    "",
+    "Investigate: keryx sessions list / keryx shell -r sess-unknown-1",
+  ]);
+});
+
+test("flow 173: 'unknown' detail with wrapUpOutcome shows the real trigger/timestamp/per-group failure reason", () => {
+  const lines = formatReviewDetailLines(UNKNOWN_WITH_OUTCOME, { kind: "idle" });
+  expect(lines).toEqual([
+    "Session    sess-unknown-2",
+    "Last seen  2026-08-19T00:05:00.000Z",
+    "Wrap-up dispatch (explicit, 2026-08-19T00:04:00.000Z) did not produce a proposal or unbound-candidate:",
+    "  decision: model provider unavailable",
+    "  risk: no model credential available",
+    "  follow-up: a concurrent proposal already claimed this slot",
+    "",
+    "Investigate: keryx sessions list / keryx shell -r sess-unknown-2",
+  ]);
+});
+
+test("flow 173: 'unknown' detail shows the workspace suffix regardless of wrapUpOutcome presence", () => {
+  const withWorkspace: CatchUpUnknownItem = { ...UNKNOWN_WITH_OUTCOME, workspaceId: "ws-unknown" };
+  const lines = formatReviewDetailLines(withWorkspace, { kind: "idle" });
+  expect(lines[0]).toBe("Session    sess-unknown-2  (workspace ws-unknown)");
+});
+
+test("flow 173/AC8: 'unknown' list-row text is unchanged regardless of wrapUpOutcome presence", () => {
+  const linesWithout = formatReviewListLines([UNKNOWN_NO_OUTCOME], 0);
+  expect(linesWithout[0]).toBe("> UNKNOWN  sess-unknown-1 — last seen 2026-08-19T00:00:00.000Z");
+
+  const linesWith = formatReviewListLines([UNKNOWN_WITH_OUTCOME], 0);
+  expect(linesWith[0]).toBe("> UNKNOWN  sess-unknown-2 — last seen 2026-08-19T00:05:00.000Z");
 });
 
 test("detail reflects armed / running / done accept status", () => {

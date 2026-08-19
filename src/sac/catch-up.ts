@@ -43,6 +43,7 @@ import { sessionDir } from "../session/paths";
 import { readSlate, slateLockPath, type Slate } from "../session/slate";
 import type { TerminalState } from "../session/slate-terminal-state";
 import { listSessions, type SessionSummary } from "../session/store";
+import type { WrapUpGroupOutcome, WrapUpTrigger } from "./machine-wrap-up";
 import { createLocalProposalLifecycleService, type ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
 import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
@@ -57,7 +58,21 @@ type Proposal = VisibleProposalGroup["proposals"][number];
 export type CatchUpProposalItem = { type: "proposal"; workspaceId: string; proposalId: string; fresh: boolean };
 export type CatchUpBlockedItem = { type: "blocked"; sessionId: string; workspaceId?: string; terminalState: TerminalState };
 export type CatchUpUnboundCandidateItem = { type: "unbound-candidate"; sessionId: string; evidencePath: string; summary: string };
-export type CatchUpUnknownItem = { type: "unknown"; sessionId: string; workspaceId?: string; lastSeenAt: string };
+export type CatchUpUnknownItem = {
+  type: "unknown";
+  sessionId: string;
+  workspaceId?: string;
+  lastSeenAt: string;
+  // flow 173 (SAC durable wrap-up dispatch outcome recording): populated when
+  // a `runWrapUp` dispatch attempt for this session left behind a durable
+  // `*-wrap-up-outcome.json` artifact whose every group is a failure outcome
+  // (see `isFailureOutcome`/`readNewestWrapUpOutcome` below) — lets the
+  // Review UI distinguish "wrap-up genuinely failed" from "wrap-up never
+  // triggered at all," both of which otherwise collapse into the same
+  // opaque `unknown` item. Absent (the common case) for a session with no
+  // such artifact, same as before this change.
+  wrapUpOutcome?: { trigger: WrapUpTrigger; generatedAt: string; groups: WrapUpGroupOutcome[] };
+};
 export type CatchUpItem = CatchUpProposalItem | CatchUpBlockedItem | CatchUpUnboundCandidateItem | CatchUpUnknownItem;
 
 export type CatchUpReport = {
@@ -176,6 +191,32 @@ async function classifySession(session: SessionSummary): Promise<ClassifiedSessi
     };
   }
 
+  // flow 173: a wrap-up dispatch attempt that left behind a durable
+  // outcome artifact where EVERY group failed ("error"/"no_credential"/
+  // "conflict") is more informative than the generic "unknown" fallback
+  // below — surface it as an `unknown` item WITH the real trigger/
+  // timestamp/per-group failure reason attached. Checked AFTER the
+  // unbound-candidate check above (that check already wins if both exist,
+  // since an unbound-candidate artifact is itself evidence of a completed
+  // dispatch and already fully informative on its own) and BEFORE the
+  // `isSlateEngaged`/`unknown` fallback below (never reordered ahead of
+  // `terminal-state.json`/unbound-candidate — a stale failure record must
+  // never override a session that has since resolved normally).
+  const wrapUpOutcome = await readNewestWrapUpOutcome(dir);
+  if (wrapUpOutcome !== undefined && wrapUpOutcome.groups.every(isFailureOutcome)) {
+    const workspaceId = (await safeReadSlate(dir))?.workspaceId;
+    return {
+      kind: "unknown",
+      item: {
+        type: "unknown",
+        sessionId: session.id,
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        lastSeenAt: session.updatedAt,
+        wrapUpOutcome: { trigger: wrapUpOutcome.trigger, generatedAt: wrapUpOutcome.generatedAt, groups: wrapUpOutcome.groups },
+      },
+    };
+  }
+
   // Neither signal fired. Only a session that shows SOME slate engagement
   // is considered further — an ordinary session that never opened a slate
   // at all is silently excluded, never surfaced as "unknown" noise.
@@ -287,4 +328,60 @@ function summarizeUnboundCandidate(groups: UnboundCandidateContent["groups"]): s
   const seedCount = safeGroups.reduce((sum, group) => sum + (group.seeds?.length ?? 0), 0);
   const kinds = safeGroups.map((group) => (typeof group.kind === "string" ? group.kind : "unknown")).join(", ");
   return `${seedCount} untriaged seed(s) across ${safeGroups.length} kind(s) (${kinds})`;
+}
+
+/** A group outcome that means the dispatch attempt for that Seed-kind group
+ * genuinely failed — as opposed to `"proposed"`/`"unbound-candidate"`, both
+ * of which mean a durable artifact for that success ALREADY exists and
+ * already wins classification earlier in `classifySession` (the unbound-
+ * candidate check above, or a real proposal record `collectProposals`
+ * surfaces separately) — so by the time `classifySession` reaches the new
+ * `wrapUpOutcome` check, `wrapUpOutcome.groups.every(isFailureOutcome)` is a
+ * defensive completeness check, not the primary signal. */
+function isFailureOutcome(g: WrapUpGroupOutcome): boolean {
+  return g.outcome === "error" || g.outcome === "no_credential" || g.outcome === "conflict";
+}
+
+type WrapUpOutcomeContent = { recordType?: unknown; trigger?: unknown; generatedAt?: unknown; groups?: unknown };
+
+/**
+ * flow 173: mirrors `readNewestUnboundCandidate`'s exact scan-`slate-archive/`
+ * -by-filename-suffix pattern (`*-wrap-up-outcome.json` instead of
+ * `*-unbound-candidate.json`), and the same lenient "return undefined on any
+ * read failure" posture this module's other readers already use (see
+ * `safeReadSlate`'s doc comment for the stated module-wide policy: one
+ * session's corrupted/missing artifact must never crash the whole catch-up
+ * command or hide any other item).
+ */
+async function readNewestWrapUpOutcome(
+  dir: string,
+): Promise<{ trigger: WrapUpTrigger; generatedAt: string; groups: WrapUpGroupOutcome[] } | undefined> {
+  const archiveDir = path.join(dir, "slate-archive");
+  let entries: string[];
+  try {
+    entries = (await readdir(archiveDir)).filter((name) => name.endsWith("-wrap-up-outcome.json"));
+  } catch {
+    return undefined;
+  }
+  // Filenames are `<iso-ts-with-":"/"."-as-"-">-wrap-up-outcome.json`
+  // (machine-wrap-up.ts's `writeWrapUpOutcomeArtifact`) — a fixed-width
+  // ISO-derived prefix sorts lexically in chronological order, so scanning
+  // from the end of a plain sort visits newest-first.
+  entries.sort();
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const evidencePath = path.join(archiveDir, entries[i]!);
+    const result = readConfigFile(evidencePath);
+    if (!result.ok) {
+      continue; // malformed/partial/oversized entry — try the next-newest, never throw
+    }
+    try {
+      const parsed = JSON.parse(result.text) as WrapUpOutcomeContent;
+      if (parsed.recordType !== "wrap-up-outcome") continue;
+      if (typeof parsed.trigger !== "string" || typeof parsed.generatedAt !== "string" || !Array.isArray(parsed.groups)) continue;
+      return { trigger: parsed.trigger as WrapUpTrigger, generatedAt: parsed.generatedAt, groups: parsed.groups as WrapUpGroupOutcome[] };
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
 }
