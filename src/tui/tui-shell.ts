@@ -2636,6 +2636,81 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    const runModeCommand = (line: string): void => {
+      const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
+      const wanted = modeArgs[0] ?? "";
+      const saveFlag = modeArgs.includes("save");
+
+      const applyMode = async (next: PermissionMode): Promise<void> => {
+        if (next === "auto") {
+          // `auto` skips confirmation for EVERY action, including
+          // destructive ones (only credential-touching commands still
+          // ask — a hard floor no mode lifts). One-time explicit
+          // confirmation before it takes effect, never a silent flip.
+          chrome.hideMenu();
+          const confirmId = await chrome.withOverlay(() =>
+            showComposerChoice(otui, r, chrome.dock, {
+              title: "Switch to auto mode?",
+              subtitle:
+                "Skips confirmation for EVERY action, including destructive commands. " +
+                "Only credential-touching commands still ask.",
+              cancelId: "cancel",
+              options: [
+                { id: "confirm", label: "Confirm", description: "I understand the risk" },
+                { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
+              ],
+            }),
+          );
+          input.focus();
+          if (confirmId !== "confirm") {
+            chrome.showToast("Cancelled — mode unchanged.");
+            return;
+          }
+        }
+        permissionMode = next;
+        chrome.showToast(`Permission mode: ${next}`);
+        if (saveFlag) {
+          const saved = setProjectPermissionMode(sessionCwd, next);
+          chrome.showToast(saved ? "Saved as this project's default." : "Could not save the project default.");
+        }
+      };
+
+      if (wanted === "clear") {
+        setProjectPermissionMode(sessionCwd, undefined);
+        chrome.showToast(`Cleared project default. Session stays on: ${permissionMode}`);
+        return;
+      }
+      if (wanted.length > 0) {
+        if (!isPermissionMode(wanted)) {
+          io.onSystem?.(`Unknown mode '${wanted}'. Choose one of: ${PERMISSION_MODES.join(", ")}\n`);
+          return;
+        }
+        void applyMode(wanted);
+        return;
+      }
+      // No arg: a picker, same shape as `/theme`'s.
+      const stored = getProjectPermissionMode(sessionCwd);
+      chrome.hideMenu();
+      void (async () => {
+        const id = await chrome.withOverlay(() =>
+          showComposerChoice(otui, r, chrome.dock, {
+            title: `Permission mode (current: ${permissionMode})`,
+            subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
+            cancelId: permissionMode,
+            options: PERMISSION_MODES.map((m) => ({
+              id: m,
+              label: m,
+              description: MODE_PICKER_DESCRIPTIONS[m],
+              recommended: m === permissionMode,
+            })),
+          }),
+        );
+        input.focus();
+        if (isPermissionMode(id) && id !== permissionMode) {
+          await applyMode(id);
+        }
+      })();
+    };
 
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
@@ -3262,6 +3337,10 @@ export async function launchTuiAgentShell(opts: {
             }
             return;
           }
+          case "mode": {
+            runModeCommand(line);
+            return;
+          }
           case "session-info": {
             showSessionInfo();
             return;
@@ -3567,79 +3646,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/mode") {
-          const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
-          const wanted = modeArgs[0] ?? "";
-          const saveFlag = modeArgs.includes("save");
-
-          const applyMode = async (next: PermissionMode): Promise<void> => {
-            if (next === "auto") {
-              // `auto` skips confirmation for EVERY action, including
-              // destructive ones (only credential-touching commands still
-              // ask — a hard floor no mode lifts). One-time explicit
-              // confirmation before it takes effect, never a silent flip.
-              chrome.hideMenu();
-              const confirmId = await chrome.withOverlay(() =>
-                showComposerChoice(otui, r, chrome.dock, {
-                  title: "Switch to auto mode?",
-                  subtitle:
-                    "Skips confirmation for EVERY action, including destructive commands. " +
-                    "Only credential-touching commands still ask.",
-                  cancelId: "cancel",
-                  options: [
-                    { id: "confirm", label: "Confirm", description: "I understand the risk" },
-                    { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
-                  ],
-                }),
-              );
-              input.focus();
-              if (confirmId !== "confirm") {
-                chrome.showToast("Cancelled — mode unchanged.");
-                return;
-              }
-            }
-            permissionMode = next;
-            chrome.showToast(`Permission mode: ${next}`);
-            if (saveFlag) {
-              const saved = setProjectPermissionMode(sessionCwd, next);
-              chrome.showToast(saved ? "Saved as this project's default." : "Could not save the project default.");
-            }
-          };
-
-          if (wanted === "clear") {
-            setProjectPermissionMode(sessionCwd, undefined);
-            chrome.showToast(`Cleared project default. Session stays on: ${permissionMode}`);
-            return;
-          }
-          if (wanted.length > 0) {
-            if (!isPermissionMode(wanted)) {
-              io.onSystem?.(`Unknown mode '${wanted}'. Choose one of: ${PERMISSION_MODES.join(", ")}\n`);
-              return;
-            }
-            void applyMode(wanted);
-            return;
-          }
-          // No arg: a picker, same shape as `/theme`'s.
-          const stored = getProjectPermissionMode(sessionCwd);
-          chrome.hideMenu();
-          void (async () => {
-            const id = await chrome.withOverlay(() =>
-              showComposerChoice(otui, r, chrome.dock, {
-                title: `Permission mode (current: ${permissionMode})`,
-                subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
-                cancelId: permissionMode,
-                options: PERMISSION_MODES.map((m) => ({
-                  id: m,
-                  label: m,
-                  description: MODE_PICKER_DESCRIPTIONS[m],
-                  recommended: m === permissionMode,
-                })),
-              }),
-            );
-            input.focus();
-            if (isPermissionMode(id) && id !== permissionMode) {
-              await applyMode(id);
-            }
-          })();
+          runModeCommand(line);
           return;
         }
         if (command.name === "/model") {

@@ -50,6 +50,18 @@ test("classifyBusyDispatch: /copy routes to copy", () => {
   ).toBe("copy");
 });
 
+test("classifyBusyDispatch: /mode routes to mode", () => {
+  expect(
+    classifyBusyDispatch({ line: "/mode auto", commandName: "/mode", ...base }),
+  ).toBe("mode");
+});
+
+test("classifyBusyDispatch: /model (similar name, out of scope) still routes to deferred", () => {
+  expect(
+    classifyBusyDispatch({ line: "/model", commandName: "/model", ...base }),
+  ).toBe("deferred");
+});
+
 test("classifyBusyDispatch: isSessionInfo line routes to session-info", () => {
   expect(
     classifyBusyDispatch({

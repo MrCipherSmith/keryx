@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 2,
+  "id": "175",
+  "slug": "tui-unblock-mode-while-main-is-busy",
+  "title": "TUI: unblock /mode while main is busy",
+  "status": "in-progress",
+  "createdAt": "2026-08-19T15:05:59.830Z",
+  "updatedAt": "2026-08-19T15:25:06.478Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7114dbf0f5808fe8f36e68e05c9d1e58e28751dc51fed9d53919859c147778ad",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-19T15:25:05.795Z",
+      "note": "Verified by review-logic: /mode auto in the busy switch case calls runModeCommand, which reaches applyMode via the confirmation overlay; approval gate reads permissionMode fresh per call (agent.ts:1985)."
+    },
+    "AC2": {
+      "at": "2026-08-19T15:25:05.880Z",
+      "note": "runModeCommand's applyMode skips the overlay for non-auto modes, unchanged from idle-path; verified by extraction-fidelity review."
+    },
+    "AC3": {
+      "at": "2026-08-19T15:25:05.971Z",
+      "note": "runModeCommand's clear branch reached via case \"mode\", verified by code read."
+    },
+    "AC4": {
+      "at": "2026-08-19T15:25:06.054Z",
+      "note": "No-arg picker branch reached via case \"mode\", same chrome.withOverlay call as idle-path, verified by review-logic."
+    },
+    "AC5": {
+      "at": "2026-08-19T15:25:06.140Z",
+      "note": "Auto-confirmation overlay unchanged (byte-for-byte extraction), verified by review-logic + review-style."
+    },
+    "AC6": {
+      "at": "2026-08-19T15:25:06.225Z",
+      "note": "busy-dispatch.test.ts has a dedicated /model -> deferred regression test guarding against the /mode name-similarity typo class."
+    },
+    "AC7": {
+      "at": "2026-08-19T15:25:06.309Z",
+      "note": "Idle-path behavior unchanged, confirmed byte-for-byte by review-logic's extraction-fidelity check."
+    },
+    "AC8": {
+      "at": "2026-08-19T15:25:06.394Z",
+      "note": "busy-dispatch.test.ts new case asserts classifyBusyDispatch(...) === \"mode\" for /mode."
+    },
+    "AC9": {
+      "at": "2026-08-19T15:25:06.478Z",
+      "note": "tsc --noEmit clean, full bun test 4330 pass / 1 fail (known pre-existing fwk-service.test.ts flake, unrelated, confirmed via direct isolated re-run)."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-19T15:05:59.830Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-19T15:07:06.550Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-19T15:07:06.669Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-19T15:07:06.774Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-19T15:11:13.440Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-19T15:11:13.523Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-19T15:24:27.295Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-19T15:25:05.795Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified by review-logic: /mode auto in the busy switch case calls runModeCommand, which reaches applyMode via the confirmation overlay; approval gate reads permissionMode fresh per call (agent.ts:1985)."
+    },
+    {
+      "at": "2026-08-19T15:25:05.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: runModeCommand's applyMode skips the overlay for non-auto modes, unchanged from idle-path; verified by extraction-fidelity review."
+    },
+    {
+      "at": "2026-08-19T15:25:05.971Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: runModeCommand's clear branch reached via case \"mode\", verified by code read."
+    },
+    {
+      "at": "2026-08-19T15:25:06.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: No-arg picker branch reached via case \"mode\", same chrome.withOverlay call as idle-path, verified by review-logic."
+    },
+    {
+      "at": "2026-08-19T15:25:06.140Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Auto-confirmation overlay unchanged (byte-for-byte extraction), verified by review-logic + review-style."
+    },
+    {
+      "at": "2026-08-19T15:25:06.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: busy-dispatch.test.ts has a dedicated /model -> deferred regression test guarding against the /mode name-similarity typo class."
+    },
+    {
+      "at": "2026-08-19T15:25:06.309Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Idle-path behavior unchanged, confirmed byte-for-byte by review-logic's extraction-fidelity check."
+    },
+    {
+      "at": "2026-08-19T15:25:06.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: busy-dispatch.test.ts new case asserts classifyBusyDispatch(...) === \"mode\" for /mode."
+    },
+    {
+      "at": "2026-08-19T15:25:06.478Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: tsc --noEmit clean, full bun test 4330 pass / 1 fail (known pre-existing fwk-service.test.ts flake, unrelated, confirmed via direct isolated re-run)."
+    }
+  ]
+}
