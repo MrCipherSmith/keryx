@@ -95,7 +95,6 @@ import {
 } from "../session";
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -1768,7 +1767,6 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
-        askUser: invokeAskUserHost,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
     };
@@ -1975,7 +1973,6 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
-        askUser: invokeAskUserHost,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is

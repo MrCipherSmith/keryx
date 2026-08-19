@@ -2452,7 +2452,7 @@ export async function launchTuiAgentShell(opts: {
         if (item === undefined) continue;
         const box = appendUserEcho(otui, r, transcript, {
           id: `mq-${item.id}`,
-          line: `${formatMainQueueMarker(i)} ${item.displayQuestion}`,
+          line: `${formatMainQueueMarker(i, mainQueue.length)} ${item.displayQuestion}`,
           borderColor: getTheme().highlight,
           marginTop: 0,
         });
