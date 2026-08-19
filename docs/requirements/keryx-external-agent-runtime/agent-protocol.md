@@ -1,5 +1,5 @@
 # Agent Protocol: Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
@@ -84,6 +84,13 @@ been observed to hang a parent process for tens of minutes.
    failure that D-05 and D-07 both exist to prevent.
 
 ## 4. Supervision
+
+> **NOT IMPLEMENTED as of 0.2.0.** This whole section describes intended
+> behaviour that does not exist: no trigger is implemented and the fold has no
+> consumer, so today the parent receives the child's result and nothing before
+> it. The stream itself is live and already drives the operator's transcript, so
+> what is missing is the consumer, not the mechanism. Kept here as the design it
+> is, marked so nobody reads it as the behaviour it is not.
 
 The parent does not read the stream. It receives trigger-driven updates derived
 from the existing fold, and may respond in exactly three ways: inject a

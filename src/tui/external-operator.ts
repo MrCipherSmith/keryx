@@ -176,7 +176,8 @@ export class ExternalOperator {
           agentId,
           label: signal.run.label,
           handle: undefined,
-          // False until something spawns a steerable run — see the module header.
+          // Unknown until the handle arrives, which is the only thing that can
+          // answer it; `spawned` below sets it from `handle.streaming`.
           launchedStreaming: false,
         };
         control.agentId = agentId;
@@ -194,7 +195,14 @@ export class ExternalOperator {
       }
       case "spawned": {
         const control = this.control.get(signal.id);
-        if (control !== undefined) control.handle = signal.handle;
+        if (control !== undefined) {
+          control.handle = signal.handle;
+          // Read from the handle, never assumed. Assuming false routed EVERY
+          // operator message down the resume path even for a claude run that
+          // did have an open stdin pipe — the stdin route existed and was
+          // unreachable.
+          control.launchedStreaming = signal.handle.streaming;
+        }
         // A handle appearing can unblock a `hold`ed message (§7.5), so retry now
         // rather than waiting for the next thing the operator types.
         this.flush(signal.id);

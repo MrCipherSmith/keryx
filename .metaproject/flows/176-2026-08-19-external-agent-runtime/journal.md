@@ -507,6 +507,66 @@ operator through `/delegate`'s printed line and the failed sidebar row.
 
 Nothing has been rendered on a real terminal, and no vendor process has been
 spawned. That is T19.
+
+## T17 — documentation, and the bug it exposed (2026-08-19)
+
+User-facing docs by subagent (`README.md`, `harness.md`, `cli-reference.md`,
+`modules.md`, `architecture.md`); the requirements package corrected here,
+because a status line is exactly where a reader stops and overclaiming there is
+the failure mode the docpack rules exist to prevent.
+
+### The package said things that had become false
+
+- **Status.** `specification ready (future) — nothing below is implemented` was
+  a flat untruth. Now `implemented (read-only release), never run against a real
+  process`, followed immediately by the three things that does *not* mean.
+- **Storage structure** listed nine modules; seventeen were built. `dispatch.ts`,
+  `bun-spawn-port.ts`, `codec/index.ts` and the whole TUI layer were missing.
+- **The seam's name.** The spec promised `runChild`; it shipped as `runExternal`.
+  Small, and exactly the kind of drift that makes a document stop being checkable.
+- **The capability paragraph** still explained that the registry was empty and
+  that T15 should budget for populating it. Replaced with how the three-layer
+  gate actually behaves, including that `reconcileCapabilitiesOnUpdate` will
+  write a disabled entry into every workspace's manifest on the next update.
+- **R15 marked UNMET in three places** — README status, specification §7.6 and
+  agent-protocol §4. That whole section describes behaviour that does not exist,
+  and unmarked it reads as description of behaviour that does.
+
+### The docs agent found a real bug by refusing to write what it was told
+
+The brief stated that claude runs are launched steerable and take operator
+messages on stdin. The agent verified instead of transcribing, found that
+`ExternalOperator` hard-coded `launchedStreaming: false`, and documented the
+feature as unreachable — flagging it as a code fix, not a doc fix.
+
+It was right. `shell.ts` set `steerable: true` and `runtime.ts` piped stdin, but
+the operator never learned that, so `planExternalDelivery`'s
+`streamingInput && launchedStreaming && running` was never satisfied and **every
+operator message took the resume path, including for claude**. The stdin route
+existed in the codec, the runtime and the delivery executor, and was unreachable
+end to end.
+
+Fixed by making the fact travel rather than be guessed: `ExternalRunHandle` now
+carries `streaming`, set by the supervisor from the stdin mode it actually used,
+and the operator reads it on `spawned`. Two regression tests pin both
+directions. The test fakes carry the field too — a fake that always claimed
+streaming would have hidden precisely this.
+
+That is three times in this flow a subagent's honesty caught something a
+confident report would have buried: the `--input-format` silent no-op, the
+missing `onSpawned` forwarding, and now this.
+
+### Also fixed
+
+`keryx init --external-agents` was absent from `init --help`, while the
+capability's own refusal message tells the operator to run exactly that. A flag
+nothing documents is a dead end, so it is listed now.
+
+### State
+
+Full suite 4788 pass, 1 fail — the same pre-existing order-dependent
+`same-size historical receipt corruption…`, confirmed again by name and passing
+in isolation. Typecheck clean. Roadmap → 0.16.0.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -521,3 +581,4 @@ spawned. That is T19.
 - 2026-08-19T20:00:18.919Z - task-added: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
 - 2026-08-19T20:00:19.138Z - task-added: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)
 - 2026-08-19T20:56:15.331Z - task-done: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
+- 2026-08-19T21:16:52.869Z - task-done: T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped

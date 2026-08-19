@@ -127,7 +127,7 @@ Two invariants define the system and recur across every module:
 | **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry (including mutating `sac.propose` / `sac.review`, HTTP-denied), read-only `metaproject://` Resources, single redaction choke point. |
 | **sac** | `src/sac/` | `workspace` | Shared Agent Context: file-backed workspace registry, FWK overview/read, propose/review via guarded wiki/memory/skill writers, hash-chained access receipts. Not a default `init` module. See [the operator guide](./guides/shared-agent-context.md). |
 
-| **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation. See "The agent harness" above, and [the feature-level tour](./harness.md). |
+| **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation, and (opt-in, off by default) the external child runtime that hosts a vendor coding CLI. See "The agent harness" above, and [the feature-level tour](./harness.md). |
 | **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |
 | **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. Slash inspectors: `/status`, `/flows`. |
 | **session** | `src/session/`, `src/commands/sessions.ts` | `sessions` | Per-project append-only agent sessions: list, fork (branch with `parentSessionId` ancestry), export, locate. |
@@ -172,7 +172,7 @@ This is the third system invariant (alongside the idempotent reconciler and data
 
 The instant any gate fails, the seam returns `null` and the caller runs its deterministic fallback. It **never throws**: every gate is wrapped in try/catch, there is an outer backstop, and each failure on an *enabled-but-unsatisfiable* ceiling emits a process-scoped **warn-once** (a disabled ceiling — the normal default — is silent, loads no dep, and touches no asset). `runCapabilityOrFallback(adapter, input, fallback)` is the sanctioned call pattern: it runs the adapter when present and catches any `run()` error, degrading to the fallback so an opt-in ceiling can never break a deterministic seam. The seam imports only shared libs + the Asset Resolver, keeping it acyclic (mirroring `security/guard.ts`). It **generalizes the pre-existing `security.backends` opt-in idiom** into one project-wide substrate that every Block A–E layer instantiates.
 
-The shipped `CAPABILITY_REGISTRY` is intentionally **empty** — the base tool offers no capability flags and stays byte-identical; individual blocks append descriptors to gain uniform `--<cap>`/`--no-<cap>` init/update wiring for free.
+The shipped `CAPABILITY_REGISTRY` was intentionally empty until the external agent runtime; it now holds exactly one descriptor, `gdskills.external-agents`, which is where `keryx init --external-agents` / `--no-external-agents` comes from. Registering a descriptor is all a block does to gain that uniform `--<cap>`/`--no-<cap>` init/update wiring. The descriptor is a `ceiling`, so it defaults **off** and `keryx update` materialises a newly-registered one as `enabled: false` rather than silently switching it on. It declares no optional dependency, no asset and no module config: the external runtime's settings are user-global (`externalAgents` in `~/.local/share/keryx/auth.json`), because a subscription belongs to a person rather than to a checkout, and a project-scoped copy would be a second place for the same setting to disagree with itself.
 
 ### Dependency policy
 
@@ -289,6 +289,46 @@ carries the full list with citations; the properties worth stating in prose are:
 7. **History is append-only.** Entries are content-addressed and deep-frozen;
    compaction adds a derived record and throws `EvidenceDeletionError` if any
    prior entry would disappear.
+
+### A third child runtime: vendor CLIs (`src/harness/external/`)
+
+A `subagent-dispatch` may carry an optional `runtime` block asking for a vendor
+coding CLI — `codex exec`, `claude -p` — instead of the in-process loop.
+`spawn_subagent` exposes exactly one structural seam for it (`runExternal`), and
+that seam is invoked **after** `spawnChild`: admission, the shared budget ledger
+and the depth/child caps have all already applied, so there is no second spawn
+path, no second ledger and no second event stream. The vendor's event vocabulary
+is folded onto one canonical `ExternalEvent` set, so the existing fleet folds
+consume external children unchanged.
+
+Three properties are structural rather than conventional:
+
+- **The only impure seams are a process spawn and a git worktree port.** The
+  registry, all argv construction, all event parsing and all failure
+  classification are pure functions, which is what lets a complete run be
+  exercised offline against the recorded transcripts in `fixtures/external/`.
+  Nothing in this subsystem has been run against a real vendor process.
+- **The gate resolves before configuration is read.** A remote transport or a CI
+  marker disables the capability *regardless of configuration*, and that check
+  runs first so the property is structural rather than a consequence of branch
+  order. Below it sit the user-global opt-in and the project manifest opt-in;
+  every refusal on every layer returns a named reason, because a silent no-op
+  would leave the operator reading an absence as a success.
+- **No credential is read, written, or forwarded.** keryx never opens a vendor
+  token store — not even to test whether a login exists — so availability is
+  derived from `--version` and exit codes alone and carries three states, of
+  which `not-probed` is a real one. `ANTHROPIC_*`, `CLAUDECODE`,
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and the whole `CLAUDE_CODE_*`/`KERYX_*`
+  namespaces are stripped from the child environment. No vendor sanction is
+  claimed; the residual risk is recorded as a risk in the package's `decisions.md`
+  D-01.
+
+Execution is read-only in a disposable git worktree removed on every terminal
+path, with a restricted tool roster. `worktree-write` is schema-valid and refused
+by the runtime with a code distinguishable from "this agent cannot" — the release
+gate and the agent capability are different facts. The
+[harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent)
+carries the operator-facing tour, including what is not implemented.
 
 ## Remote entry — the order is the control
 
@@ -589,4 +629,5 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **Testing gap in `rules`.** `src/rules/` has no co-located tests, unlike the rest of the codebase; its highest-risk untested logic is the heuristic `classifySection` and the policy migration/de-dup in `ensureMetaprojectReference`.
 - **Heuristic precision limits (deliberate trade-offs).** gdgraph import extraction is regex (can miss unusual syntax) and reports one representative per canonical cycle rotation; testing's failure/count parsers are bun-test-shaped (approximate for vitest/jest/playwright); health complexity is token-based, not AST.
 - **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` has no `src/ctx/` dir (logic lives entirely in `commands/ctx.ts`).
+- **External agent runtime — verified offline only, and supervision is unbuilt.** The whole `src/harness/external/` layer is tested against recorded transcripts in `fixtures/external/`; no part of it has been run against a real `codex` or `claude` process, so version drift in either CLI is caught by a parse-skip counter rather than by a passing test. The specification's folded, trigger-driven view of a *running* external child is not implemented at all — the parent receives the child's result and nothing before it. `worktree-write` is refused, so only read-only dispatches execute. `/delegate` bypasses the policy engine and the subagent admission ledger (a recorded, reasoned amendment, not an oversight). Resume argv is built and displayed for detaching by hand; keryx never spawns a resume itself.
 - **Security — gateway mode still pending.** The `security` module ships Phase 1+2+3 (deterministic engine + CLI + the write-seam integrations wired at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion — see the cross-module data-flow section) **plus** shipped Phase-4-class surfaces: merge-safe agent security hooks (`security hooks install --runtime …`, `src/security/agent-hooks.ts`), a config-checksum self-protect tamper guard (`src/security/self-protect.ts`), and a model-eval path (`security eval --with-model`, `src/security/eval/`) that forces the asset-gated injection/PII model backends on (warn-once → deterministic fallback when the asset is absent). What remains unimplemented is chiefly the always-on gateway/proxy mode (spec §16 Phase 4).

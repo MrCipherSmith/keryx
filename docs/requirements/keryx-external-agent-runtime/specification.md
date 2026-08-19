@@ -1,5 +1,5 @@
 # Specification: Keryx External Agent Runtime
-Version: 0.4.1
+Version: 0.4.2
 
 > **0.4.0 (flow 176, T8/T9 codecs).** Implementing the two codecs surfaced a
 > silent-failure trap the previous three versions all prescribed: `claude -p`
@@ -35,7 +35,20 @@ Version: 0.4.1
 | Runtime ids | `codex-cli`, `claude-cli` |
 | Source root | `src/harness/external/` |
 | Contract owner | `.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json` |
-| Status | specification ready (future) — nothing below is implemented |
+| Status | **implemented (read-only release), never run against a real process** |
+
+**What that status means, precisely.** Everything in §4–§8 exists in `src/` and
+is covered by tests that run offline against the recorded transcripts in
+`fixtures/external/`. Two things it does *not* mean:
+
+- **§7.6 is not implemented.** None of the supervision triggers exists and the
+  folded parent view has no consumer (R15 unmet — marked again inline there).
+- **No vendor process has ever been spawned by this code.** Every test uses a
+  fake spawn port. The live smoke test is tracked separately, and until it runs,
+  "implemented" means "implemented and offline-verified", not "proven".
+
+`worktree-write` remains unimplemented by design (D-04) and is refused at runtime
+with a reason distinct from "this agent cannot".
 
 **The seam, stated precisely (corrected in 0.2.0).** `spawnChild`
 (`src/harness/child/spawn.ts:119`) is a **pure authorisation and contract
@@ -50,11 +63,13 @@ Execution happens one layer up, in
 static and the call is not injectable. `SpawnSubagentToolDeps` injects the
 *provider* (`makeProvider`), not the *runner*.
 
-So there is no execution-strategy seam today; this package creates one. The
-external runtime adds an optional `runChild` strategy to
-`SpawnSubagentToolDeps`, defaulting to the current `runAgentTurn` path so every
-existing call site is unchanged — the same additive-optional-dep idiom that file
-already uses for `getSlateSession` and `onLedgerReady`.
+So there was no execution-strategy seam; this package created one. **As built it
+is `SpawnSubagentToolDeps.runExternal`** (the 0.2.0 text called it `runChild`),
+an optional hook invoked after `spawnSubagent` and defaulting to nothing at all,
+so every existing call site is unchanged — the same additive-optional-dep idiom
+that file already uses for `getSlateSession` and `onLedgerReady`. Its type is
+structural, so `spawn-subagent-tool.ts` holds no import from
+`src/harness/external/`.
 
 Authorisation is unaffected: an external child still passes through
 `spawnChild`, and there is no parallel spawn path, budget ledger, depth
@@ -62,20 +77,40 @@ accounting, or event stream.
 
 ## 2. Storage structure
 
+As built (0.4.2 — the 0.1.0 sketch omitted four of these):
+
 ```text
 src/harness/external/
-  types.ts          ExternalAgentCodec port; event and result types
-  registry.ts       ExternalAgentEntry table + lookup + detection
-  env.ts            child environment builder (deny lists, prefix sweeps)
-  prompt.ts         directive + task + working-diff assembly, size ceiling
-  supervise.ts      process lifecycle: spawn, stream pump, timeout, raced kill
-  runtime.ts        spawnChild integration; maps codec output onto child result
+  types.ts            ExternalAgentCodec port; canonical events; result types
+  registry.ts         ExternalAgentEntry table + lookup + version/availability
+  dispatch.ts         the `runtime` block and its fail-closed validator
+  env.ts              child environment builder (deny list, prefix sweeps, depth marker)
+  prompt.ts           directive + task + working-diff assembly, byte ceiling
+  supervise.ts        process lifecycle: stream pump, raced kill, skip counter
+  bun-spawn-port.ts   the real ExternalSpawnPort: process, line framing, teardown
+  runtime.ts          orchestration: gate -> validate -> isolate -> spawn -> classify
   codec/
-    codex-cli.ts    argv, parse, classify for `codex exec`
-    claude-cli.ts   argv, parse, classify for `claude -p`
+    index.ts          fail-closed codec lookup
+    codex-cli.ts      argv, parse, classify, resume for `codex exec`
+    claude-cli.ts     the same, plus the steerable (stdin) shape, for `claude -p`
+src/harness/
+  run-external-factory.ts   composes the above into `spawn_subagent`'s hook
+  external-agent-probe.ts   version probe; spends no quota
+src/capability/
+  external-agents.ts        the opt-in gate, config, transport/CI hard disable
+src/commands/
+  agents-external.ts        `keryx agents external list|probe`
+src/tui/
+  external-transcript.ts    pure event -> terminal-shaped lines
+  external-session.ts       the run store
+  external-inspector.ts     Work / Meta / Command modal
+  external-operator.ts      queues, live handles, delivery execution
+  external-delivery.ts      executes a delivery intent against a live handle
+  external-bridge.ts        module-level run signals + spawn approver
+  addressee-queue.ts        per-addressee queues on the widened main-queue moves
 fixtures/external/
-  codex-cli/*.jsonl        recorded transcripts (success, limit, auth, usage error)
-  claude-cli/*.jsonl       recorded transcripts (success, not-logged-in, budget, resume)
+  manifest.json             per file: version, argv, and captured vs hand-authored
+  codex-cli/, claude-cli/   recorded transcripts
 ```
 
 Fixtures are the primary test substrate: every codec function is pure and is
@@ -85,14 +120,21 @@ exercised against recorded transcripts on machines with neither CLI installed.
 
 The feature is an opt-in capability resolved through `src/capability/`.
 
-**Corrected in 0.2.0:** `src/capability/` is a *framework*, not a populated
-gate — `CAPABILITY_REGISTRY` in `registry.ts:23` is an empty array, and the only
-descriptor present is `REFERENCE_CAPABILITY_DESCRIPTOR`. This feature would be
-the first real entry. T15 must therefore budget for registering a descriptor
-against the `CapabilitySpec`/`CapabilityAdapter` seam in `seam.ts`, not merely
-for reading a flag, and must confirm that the golden-rule and
-no-optional-imports tests in that directory still pass with a populated
-registry.
+`src/capability/` was an empty framework before this flow — `CAPABILITY_REGISTRY`
+held nothing but a reference descriptor — so this feature is its **first real
+entry**. Registering it therefore meant satisfying the `CapabilitySpec` seam
+rather than reading a flag, and it has one consequence worth knowing:
+`reconcileCapabilitiesOnUpdate` will write a disabled entry for it into every
+existing workspace's manifest on the next `keryx update`. That is the
+framework's intended reconcile behaviour and is inert, but it is a first-time
+manifest change for workspaces that never asked for this feature.
+
+**The gate has three layers, in order:** the hard disable (transport, CI), then
+the user-global `externalAgents.enabled` switch, then the project manifest. The
+manifest is deliberately *not* a veto — a veto reading would have been silently
+switched off by the reconcile above under every workspace that had ever run
+`keryx update`. No manifest means neutral; a manifest present means the
+capability must be enabled in it.
 
 ```jsonc
 // user-global shell config

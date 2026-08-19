@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T20:56:15.331Z",
+  "updatedAt": "2026-08-19T21:16:52.869Z",
   "source": {
     "type": "description",
     "ref": null
@@ -288,7 +288,7 @@
       "id": "T17",
       "title": "Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15",
         "T16"
@@ -299,7 +299,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T18",
@@ -494,6 +495,11 @@
       "at": "2026-08-19T20:56:15.331Z",
       "event": "task-done",
       "detail": "T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask"
+    },
+    {
+      "at": "2026-08-19T21:16:52.869Z",
+      "event": "task-done",
+      "detail": "T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
     }
   ]
 }

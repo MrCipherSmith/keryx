@@ -18,11 +18,15 @@ import {
 import { attachExternalOperator, ExternalOperator } from "./external-operator";
 import { setSubagentFleetListener, type SubagentFleetEvent } from "./subagent-bridge";
 
-function handle(): ExternalRunHandle & { writes: string[]; kills: number } {
+function handle(streaming = true): ExternalRunHandle & { writes: string[]; kills: number } {
   const writes: string[] = [];
   let kills = 0;
   return {
     writes,
+    // Mirrors the real handle. A fake that always claimed streaming would hide
+    // the very routing bug this field exists to prevent: the operator used to
+    // assume `false` and send every message down the resume path.
+    streaming,
     get kills() {
       return kills;
     },
@@ -104,6 +108,39 @@ describe("bridge signals fold into the run store", () => {
     op.apply({ kind: "result", id: "r1", result: { status: "Timeout", output: "", isError: true } });
     expect(op.store.get("r1")?.status).toBe("Timeout");
     expect(op.store.get("r1")?.warnings ?? []).toHaveLength(0);
+  });
+});
+
+describe("the stdin route is reachable", () => {
+  test("a claude run spawned streaming takes an operator message on stdin", () => {
+    // Regression: `launchedStreaming` used to be hardcoded false, so EVERY
+    // operator message took the resume path — the stdin route existed in the
+    // codec, the runtime and the delivery executor, and was unreachable end to
+    // end. It is now read from the handle the supervisor built.
+    const op = new ExternalOperator({ idSeq: () => "1" });
+    op.apply(start("r1", "claude-cli"));
+    const h = handle(true);
+    op.apply({ kind: "spawned", id: "r1", handle: h });
+
+    const result = op.deliver("r1", "narrow it to the resume suite");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action).toBe("stdin");
+    expect(h.writes).toHaveLength(1);
+    expect(JSON.parse(h.writes[0] as string)).toMatchObject({ type: "user" });
+    // Delivered, so the parent's view is told (D-09).
+    expect((op.store.get("r1")?.events ?? []).some((e) => e.kind === "user_message")).toBe(true);
+  });
+
+  test("a claude run spawned one-shot falls back to resume, not silence", () => {
+    const op = new ExternalOperator({ idSeq: () => "1" });
+    op.apply(start("r1", "claude-cli"));
+    op.apply({ kind: "spawned", id: "r1", handle: handle(false) });
+
+    const result = op.deliver("r1", "narrow it");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action).not.toBe("stdin");
   });
 });
 

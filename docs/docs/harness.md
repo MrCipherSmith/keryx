@@ -162,6 +162,157 @@ reach flow state structurally.
 keryx agents monitor <events-file>    # offline fleet report over a recorded log
 ```
 
+## External children: a vendor CLI as a child agent
+
+keryx can hand a bounded, **read-only** piece of work to a coding CLI you already
+have installed — `codex exec` or `claude -p` — as a child of this same harness.
+The vendor's own client authenticates itself from its own configuration and does
+the work on your subscription; keryx supplies the isolation, the budget, the
+supervision and the completion. Two agents ship, described as data in one
+registry, with a pure codec each owning that CLI's argv, its event vocabulary and
+its failure classification.
+
+**Nothing here has ever been run against a real vendor process.** The whole layer
+is verified offline against recorded transcripts in `fixtures/external/`, on a
+machine with neither CLI installed.
+
+### Off by default, hard disabled where it matters
+
+The switch that always applies is `externalAgents.enabled: true` in the user
+config (`~/.local/share/keryx/auth.json`) — user-global, because a subscription
+belongs to a person rather than to a checkout. Inside a `.metaproject/`
+workspace the project must also have opted in, with `keryx init
+--external-agents`; outside one — and `keryx shell` runs anywhere — the
+user-global switch is the whole story, because a workspace that does not exist
+cannot hold an opinion.
+
+Above both sits a **hard disable** no configuration can flip: the capability
+refuses outright on a remote transport, or when a CI marker is set. A
+subscription reachable over a channel that reaches other people is the one thing
+the vendors' terms unambiguously forbid, so that check runs before the config is
+even read. Every refusal, on every layer, carries its own sentence — a silent
+no-op would leave you believing an agent ran.
+
+### keryx does not know whether you are logged in
+
+It never opens a vendor credential store — not `~/.codex/auth.json`, not
+Claude's, **not even to test whether a login exists**. Availability comes from
+`--version` and exit codes and nothing else, so it has three states — installed,
+not installed, and *not probed* — and the third is a real answer rather than a
+placeholder. There is no tick and no "ready": `keryx agents external list` reads
+*"installed, 0.147.0 (within the recorded range); login not verified — keryx
+cannot know"*, and that last clause is the load-bearing half of the line.
+
+A version outside the range the fixtures were recorded against is a **recorded
+warning, never a refusal** — neither CLI publishes a stable event schema, so
+hard-failing would break the feature on the vendor's next release. The count of
+transcript lines the codec did not recognise is the real drift signal, and it is
+reported per run.
+
+**No vendor sanction is claimed.** keryx starts a client you installed and
+already logged into, in the same relationship a terminal multiplexer has with it;
+it obtains, stores, forwards and proxies no token, and consumes no subscription
+tokens of its own. Whether a vendor considers headless third-party orchestration
+of its own CLI acceptable is **not addressed by either vendor's published
+terms**, and it is carried as an open risk rather than a settled question — see
+the package's
+[decisions](../requirements/keryx-external-agent-runtime/decisions.md) D-01 and
+[security policy](../requirements/keryx-external-agent-runtime/security-policy.md)
+§7.
+
+### What the child gets, and how it is asked for
+
+The child runs in a **disposable git worktree** checked out at `HEAD`, removed on
+every terminal path including a thrown error. Your uncommitted work travels in
+the prompt as a diff, since that worktree does not contain it; on overflow the
+diff is what gets cut — never the directive, never the task — and the cut is
+stated inside the prompt. The environment is copied from the parent and then
+stripped: `ANTHROPIC_*`, `CLAUDECODE`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the
+whole `CLAUDE_CODE_*` and `KERYX_*` namespaces, plus a nesting-depth marker added
+afterwards and honoured **on entry**, so a keryx started from inside an external
+child refuses to start another. The tool roster is restricted: `claude` runs with
+`--tools Read Grep Glob`, an allow-list over the built-in roster rather than a
+permission rule, and an empty strict MCP config.
+
+`ANTHROPIC_API_KEY` is stripped to make the subscription *work*, not for secrecy:
+with a key present the CLI initialises normally, retries, and then fails in a way
+that looks like a network problem rather than a configuration one.
+
+Execution is requested through an optional `runtime` block on the canonical
+`subagent-dispatch` contract, which `spawn_subagent` also accepts as an optional
+`runtime` parameter. An absent block means the native runtime, so every dispatch
+authored before this existed stays valid.
+
+```json
+{ "kind": "external", "agent": "claude-cli", "sandbox": "read-only" }
+```
+
+A fail-closed validator enforces the three constraints the JSON Schema cannot —
+the agent resolves in the registry, the sandbox is one that agent's own CLI
+supports, and `read-only` does not contradict the dispatch's `allowed_actions` —
+with distinct refusal codes, because *"this agent cannot"* and *"keryx does not
+do this yet"* are different facts about the world. The hook runs **after**
+admission: the budget ledger and the depth and child caps have already applied,
+so there is no second spawn path and no second ledger.
+
+### From the shell
+
+```
+/delegate <agent> <task>
+keryx agents external list [--json] [--no-probe]
+keryx agents external probe <id> [--json]
+```
+
+Both `agents external` subcommands are read-only and spend no quota — the only
+process either starts is `--version`. Full reference:
+[CLI reference](./cli-reference.md#agents-external).
+
+External children appear in the subagent sidebar with a `⤳` marker and open a
+modal with three tabs: **Work** (the live structured transcript, folded from the
+vendor's own event stream), **Meta** (agent, model, sandbox, session handle,
+cost, turns, tokens, worktree path, parse skips, warnings) and **Command** (the
+exact launch argv, a copy-pasteable shell form, and how to detach). Missing
+figures render as missing and never as zero; a run that announced no session
+handle says so rather than offering a command that cannot work.
+
+Messages to a running child use the existing queue semantics — `remove`, `edit`,
+`force` — per addressee, and every delivery reports which route it actually took.
+`claude` accepts messages on an open stdin channel, and `keryx shell` launches
+its runs steerable so that channel exists; `codex` has no mid-run input channel
+at all, so its messages can only travel by resume. Steerability is a spawn-time
+decision and cannot be revisited: the flag that accepts a later message also
+forbids the positional prompt a one-shot run starts with, so there is no
+conversion afterwards.
+
+`force` is **kill-plus-resume**, not an abort. Writing to a live stdin would
+queue the message behind the turn already in flight, which is the opposite of
+what `force` asks for, so the run is terminated instead and the resume command is
+recorded. It costs a restart, not the accumulated work — and where no resume
+handle was ever announced it degrades to a plain kill and says plainly that the
+message was not delivered.
+
+**keryx never spawns a resume itself.** It builds the exact resume argv through
+the agent's own codec and shows it in the Command tab; running it in a real
+terminal is yours to do. The worktree is gone by then, and the tab says so.
+
+### What this deliberately does not do
+
+- **No mutating external agents.** Read-only only. `worktree-write` is a valid
+  contract value the runtime refuses with its own named reason — distinguishable
+  from an agent that cannot do it — because its prerequisite is a credible audit
+  boundary for writes, not more spawn machinery.
+- **No supervision triggers.** The specification describes a folded,
+  trigger-driven view of a *running* child for the parent agent. None of it is
+  implemented: the parent receives the child's result and nothing before it.
+- **`/delegate` does not pass the policy engine or the subagent admission
+  ledger.** A recorded, reasoned amendment rather than an oversight; the model's
+  own `spawn_subagent` path passes both.
+- **No resume is ever spawned.** The argv is built and displayed for detaching by
+  hand.
+- **Nothing has been run against a real vendor process.** Every test drives a
+  fake process port against recorded transcripts, so "works" here means "works
+  offline against what the CLIs actually printed", not "proven end to end".
+
 ## Record and replay
 
 ```bash
@@ -204,3 +355,7 @@ Stated here rather than left to be discovered:
   recorded denial. Run approval-requiring work locally through `keryx shell`.
 - **No real replay.** See above — `validate-log` only.
 - **No branch merge.** Reconcile by forking again from a shared ancestor.
+- **No mutating external children, and no supervision of a running one.** The
+  external runtime is read-only, off by default, and has never been run against a
+  real vendor process — see
+  [what this deliberately does not do](#what-this-deliberately-does-not-do).

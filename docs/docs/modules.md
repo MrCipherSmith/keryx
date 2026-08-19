@@ -1159,6 +1159,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 | `harness extension --spec <path>` | dispatch one declared extension (the only path that reaches `checkApproval`) |
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |
 | `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
+| `agents external list [--json] [--no-probe]` / `probe <id> [--json]` | inspect the external agent registry and its three-state availability; read-only, spends no quota (`src/commands/agents-external.ts`) |
 
 **Key files.**
 - `src/harness/run/run.ts` — `runOffline`, the assembled loop: startup → context manifest → provider stream → policy decision → budget/loop guards → tool executor → redaction + append-only session → completion gate.
@@ -1168,6 +1169,24 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 - `src/harness/completion/gate.ts` — the completion verdict; `flow/managed-flow-port.ts` is its only route into Task Manager.
 - `src/harness/replay/replay.ts` — fixture build and `validate-log` comparison.
 - `src/harness/child/`, `extension/` — child dispatch with budgets, extensions and bounded waves.
+- `src/harness/external/` — the external agent runtime: a two-entry registry described as data, one pure codec per CLI (argv, event parsing, failure classification), the fail-closed `runtime` block validator, the copy-then-strip child environment, prompt assembly, supervision, and `runtime.ts` composing them.
+- `src/capability/external-agents.ts` — the opt-in gate: the user-global `externalAgents` config, the project manifest opt-in, and the remote/CI hard disable. `src/harness/run-external-factory.ts` builds the `runExternal` hook `spawn_subagent` accepts, or returns `undefined` when the capability is off.
+
+**External children.** A dispatch may carry an optional `runtime` block
+(`{"kind":"external","agent":"claude-cli","sandbox":"read-only"}`) asking for a
+vendor coding CLI — `codex exec` or `claude -p` — instead of the in-process loop.
+The hook runs *after* admission, so the budget ledger and the depth/child caps
+have already applied and no second spawn path exists. Execution is read-only in a
+disposable git worktree with a stripped environment and a restricted tool roster;
+`worktree-write` is a valid contract value the runtime refuses with its own named
+reason. The capability is **off by default**, opt-in through the user-global
+`externalAgents` config (plus `keryx init --external-agents` inside a workspace),
+and hard disabled on a remote transport or under CI. keryx never reads a vendor
+credential store, so
+availability is `available` / `binary-missing` / `not-probed` and never "ready".
+Every codec is pure, and the whole layer is tested offline against the recorded
+transcripts in `fixtures/external/` — nothing has been run against a real vendor
+process.
 
 **How it works.** Every decision core is pure with `clock` and `idSeq` injected;
 the only effect surfaces are injected adapters (`MutationAdapter`,
@@ -1210,6 +1229,7 @@ where tools actually run: the non-interactive harness paths register none.
 | `shell /flows [id]` | browse project flows, newest first; List selects with `↑/↓`, Detail scrolls with `↑/↓` and switches flows with `[`/`]`; optional one-package detail |
 | `shell /theme [name]` | no arg: TUI picker (live preview, applies on Enter/Apply); `[name]`: applies immediately on any surface |
 | `shell /interrupt` | hard-stop main turn in TUI |
+| `shell /delegate <agent> <task>` | hand a bounded read-only task to an external agent CLI; refused with a named reason when the capability is off (the default) |
 
 `session` is a singular alias for `sessions`.
 
@@ -1226,6 +1246,7 @@ and `/flows` are always allowed while busy.
 - `src/session/paths.ts` — project-keyed directory layout under the data root.
 - `src/session/compact.ts` — model-window compaction that preserves the archive.
 - `src/commands/sessions.ts`, `src/commands/shell.ts`, `src/tui/` — CLI and TUI adapters.
+- `src/tui/external-operator.ts`, `external-inspector.ts`, `external-transcript.ts`, `addressee-queue.ts`, `external-delivery.ts` — the operator surface for external children: the live run store, the Work/Meta/Command modal, per-addressee message queues, and the delivery planner. Every formatter is pure, so the whole surface is exercisable with no renderer.
 
 **How it works.** Sessions never cross project roots: the key is the git toplevel,
 or the absolute cwd outside a repository. Each session directory holds

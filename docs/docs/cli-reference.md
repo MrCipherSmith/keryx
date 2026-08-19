@@ -176,6 +176,15 @@ holds and what forking copies.
   keyed providers) to configure and validate one.
 - `/search-connect` selects which configured and tested web search provider is active:
   run without args to list connected providers, or pass an ID to switch.
+- `/delegate <agent> <task>` hands a bounded read-only task to a vendor coding
+  CLI hosted as a child agent (`keryx agents external list` for the ids). It is
+  refused with a named reason when the capability is off — which is the default.
+  The child appears in the subagent sidebar with a `⤳` marker and opens a
+  **Work / Meta / Command** modal: the live transcript, the run's metadata, and
+  the exact launch argv plus how to continue the session by hand. Operator
+  messages to a running child use the same `/queue` semantics
+  (`remove`/`edit`/`force`); `force` here is kill-plus-resume, not an abort. See
+  [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent).
 - `keryx shell` supports a hard stop for a running main turn via
   `/interrupt`.
 - Session history is durable during a turn: user input and tool results save
@@ -959,12 +968,15 @@ and exits `1`.
 
 ## agents
 
-Manage optional global bootstrap instructions for coding agents. This command is
-not project initialization: it only writes a small managed block into the selected
-global `AGENTS.md` / `CLAUDE.md` file. The block tells agents to look for
-`.metaproject/index.md` in the current directory or ancestors and route through
-Metaproject when present. It also contains an explicit guard: when no metaproject
-is installed, ignore the block and continue normally.
+Two unrelated surfaces share this noun: `bootstrap` manages global instruction
+files for coding agents, and `external` inspects the vendor CLIs keryx can host
+as child agents.
+
+`bootstrap` is not project initialization: it only writes a small managed block
+into the selected global `AGENTS.md` / `CLAUDE.md` file. The block tells agents to
+look for `.metaproject/index.md` in the current directory or ancestors and route
+through Metaproject when present. It also contains an explicit guard: when no
+metaproject is installed, ignore the block and continue normally.
 
 ```
 keryx agents bootstrap status --runtime <claude|opencode|zcode|codex|antigravity|all>
@@ -984,6 +996,60 @@ Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 (`~/.config/opencode/AGENTS.md`), `zcode` (`~/.zcode/AGENTS.md`), `codex`
 (`~/.codex/AGENTS.md`), `antigravity`
 (`~/.config/antigravity/AGENTS.md`; alias `antigravuty`), or `all`.
+
+### agents external
+
+Inspect the registry of vendor coding CLIs keryx can host as read-only child
+agents. Both subcommands are read-only and neither spends subscription quota: the
+only process either starts is the registry entry's own `--version`.
+
+```
+keryx agents external list [--json] [--no-probe]
+keryx agents external probe <id> [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `list` | `--json`, `--no-probe` | Print every registered agent with its detected availability, sandbox modes, and streaming/resume/cost facts, plus the capability gate's verdict. `--no-probe` skips detection entirely and reports every entry as `not probed`. |
+| `probe` | `<id>`, `--json` | The same report for one agent id (`codex-cli`, `claude-cli`). An unknown id lists the known ones and exits `1`. |
+
+Availability has **three** states, and the third is not a placeholder:
+
+| Marker | State | What the line says |
+|---|---|---|
+| `●` | available | installed, the detected version, how it compares to the recorded range, and *"login not verified — keryx cannot know"* |
+| `○` | binary missing | not installed; the binary it looked for is not on `PATH` |
+| `?` | not probed | not probed, plus the `probe` command that would answer |
+
+There is no tick and no "ready". keryx never reads a vendor credential store — not
+even to check whether a login exists — so a found binary proves a binary and
+nothing more. A version outside the range this build's fixtures were recorded
+against is a warning, never a refusal.
+
+```text
+# agents external
+
+capability: unavailable — the external agent runtime is disabled; set
+`externalAgents.enabled` to true in the keryx user config to opt in
+
+  ● codex-cli  Codex
+      installed, 0.147.0 (within the recorded range); login not verified — keryx cannot know
+      sandbox: read-only, worktree-write  streaming: false  resumable: true  reports cost: false
+```
+
+The `capability:` line is the gate's own verdict and always names its reason when
+unavailable. The runtime is **off by default**: it needs
+`externalAgents.enabled: true` in the user config
+(`~/.local/share/keryx/auth.json`), plus `keryx init --external-agents` when the
+cwd is a `.metaproject/` workspace. It is hard disabled regardless of
+configuration on a remote transport or under CI.
+`sandbox` lists what each CLI itself supports; only
+`read-only` is implemented in this release. See
+[the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent)
+for the runtime this registry feeds.
+
+Exit code is `0` for a successful report — including one where the capability is
+disabled or a binary is missing, both of which are answers rather than failures.
 
 ---
 

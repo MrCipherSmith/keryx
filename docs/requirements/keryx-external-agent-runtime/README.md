@@ -1,5 +1,5 @@
 # Keryx External Agent Runtime
-Version: 0.2.0
+Version: 0.5.0
 
 ## Purpose
 
@@ -19,9 +19,34 @@ and its event stream is folded into the same contracts.
 
 ## Status
 
-**specification ready (future).** Nothing in this package is implemented.
+**implemented (read-only release), never run against a real process.**
 
-What already exists and is reused (not claimed as this package's work):
+Shipped in flow 176: the registry and both codecs, the `runtime` block and its
+fail-closed validator, the child environment builder, prompt assembly, process
+supervision and the real spawn port, the orchestrating runtime, the opt-in
+capability gate with its transport/CI hard disable, `keryx agents external
+list|probe`, the `spawn_subagent` seam, and the operator surface — live
+transcript, Work/Meta/Command modal, sidebar marker, per-addressee message
+queue, and `/delegate`.
+
+Three things that status does **not** mean, stated here because a status line is
+exactly where a reader stops:
+
+- **No vendor process has ever been spawned by this code.** Every test uses a
+  fake spawn port and the recorded transcripts in `fixtures/external/`. Until the
+  live smoke test runs, "implemented" means "implemented and offline-verified".
+- **Supervision triggers do not exist** (R15 unmet). The parent agent receives an
+  external child's result and nothing before it; specification §7.6 is marked
+  inline.
+- **Mutating external agents were never in scope** for this release. The
+  permission axis is in the contract and `worktree-write` is refused at runtime
+  with a reason distinct from "this agent cannot".
+
+The feature is off by default and local-only. See
+[decisions.md](decisions.md) D-01 for the credential boundary and why no vendor
+sanction is claimed.
+
+What already existed and is reused (not claimed as this package's work):
 
 - `src/harness/child/spawn.ts` (`SpawnChildRequest` / `SpawnChildInput` /
   `SpawnChildDeps`), `ledger.ts` (`RemainingBudgetLedger`, including the
@@ -39,10 +64,8 @@ What already exists and is reused (not claimed as this package's work):
   extends rather than replaces.
 - `src/tui/modal-host.ts`, `subagent-inspector.ts`, `subagent-session.ts` and
   the pure queue helpers in `src/tui/main-queue.ts`.
-- `src/capability/` — the opt-in capability **framework** this feature ships
-  behind. Note (flow 176 T1): `CAPABILITY_REGISTRY` is currently an empty array
-  and the only entry is `REFERENCE_CAPABILITY_DESCRIPTOR`, so this feature would
-  be its first real descriptor — the seam exists, a populated registry does not.
+- `src/capability/` — the opt-in capability framework. It was an empty registry
+  before this flow; this feature is its **first real descriptor**.
 
 A working precedent for the mechanism itself lives in
 `scripts/benchmark/run-ablation-codex.ts`, which already spawns
@@ -79,9 +102,11 @@ isolated worktree against an already-authenticated CLI.
   mechanisms: the CLI's own sandbox flag, a restricted tool roster
   (`--tools`, an allow-list — verified live in flow 176 T1), and the throwaway
   checkout, which is the load-bearing one.
-- A **supervision channel**: a folded, trigger-driven view for the parent agent,
-  and a bidirectional message path so the operator can steer a running external
-  agent from the TUI using the existing main-queue semantics.
+- A **supervision channel**: a bidirectional message path so the operator can
+  steer a running external agent from the TUI using the existing main-queue
+  semantics — shipped. The folded, trigger-driven view for the *parent agent* was
+  specified in the same breath and is **not implemented** (R15); see the Status
+  note above and specification §7.6.
 - A **TUI surface**: external children appear in the subagent sidebar and open
   in the shared modal, rendering their work as a live structured transcript.
 - An **opt-in capability gate**, off by default, local-only.

@@ -106,6 +106,18 @@ export interface ExternalSpawnPort {
  */
 export interface ExternalRunHandle {
   /**
+   * Whether this run was launched with a stdin pipe, i.e. whether it can take an
+   * operator message mid-flight at all.
+   *
+   * Stated rather than probed, because the only way to probe is to attempt a
+   * write, and an attempted write is not free. A consumer that guesses instead
+   * gets the whole feature wrong in one direction or the other: assume `true`
+   * and messages vanish into a closed pipe; assume `false` and every message
+   * takes the resume path even where stdin was available — which is exactly the
+   * bug this field was added to kill.
+   */
+  readonly streaming: boolean;
+  /**
    * Deliver one encoded stdin line. Returns `false` — rather than throwing —
    * when the run was launched one-shot, because "this run has no stdin route"
    * is a normal, registry-predicted state (§7.5: a `streamingInput: true` agent
@@ -271,6 +283,7 @@ export async function superviseExternalRun(
   let killed = false;
 
   const handle: ExternalRunHandle = {
+    streaming: stdinMode === "pipe",
     writeStdin(text: string): boolean {
       if (stdinMode !== "pipe") return false;
       child.writeStdin(text);

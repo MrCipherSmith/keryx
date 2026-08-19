@@ -14,6 +14,9 @@ function fakeHandle(writeAccepts = true): ExternalRunHandle & { writes: string[]
   let kills = 0;
   return {
     writes,
+    // Mirrors the real handle: a fake that always claimed streaming would hide
+    // the very routing bug this field exists to prevent.
+    streaming: writeAccepts,
     get kills() {
       return kills;
     },
