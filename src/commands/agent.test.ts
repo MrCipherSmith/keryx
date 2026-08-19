@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   buildAgentSystemInstruction,
+  buildToollessReprompt,
   DEFAULT_MAX_SUBAGENT_CONCURRENCY,
   DEFAULT_MAX_TOOL_CALLS,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
@@ -353,6 +354,71 @@ test("runAgentTurn reprompts on a short continuation nudge like «проверя
   expect(toolResults).toContain("get_cwd:ok");
   expect(text.join("")).toContain("done");
   expect(requests.length).toBe(3);
+});
+
+// One nudge was not enough: a model that narrates a step usually narrates it
+// once more when told to use a tool, and the turn then ended — so the USER had
+// to send another continuation to get the step executed at all (keryx session
+// 4a24a760: eight manual «продолжай» in one sitting).
+test("runAgentTurn reprompts twice, escalating, when the model narrates again", async () => {
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Посмотрю реализацию 145." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "Продолжаю — посмотрю конфиг ридеров." }, { kind: "model_end" }],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, toolCalls } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "продолжай");
+
+  const reprompts = history
+    .filter((m) => m.role === "user" && m.content.startsWith("[system]"))
+    .map((m) => m.content);
+  expect(reprompts).toEqual([buildToollessReprompt(1), buildToollessReprompt(2)]);
+  expect(reprompts[1]).not.toBe(reprompts[0]);
+  expect(toolCalls).toContain("get_cwd");
+  expect(requests.length).toBe(4);
+});
+
+test("runAgentTurn abandons the reprompt budget when the model repeats itself verbatim", async () => {
+  const narration = "Посмотрю реализацию 145.";
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: narration }, { kind: "model_end" }],
+    // Byte-identical answer to the first reprompt: another nudge cannot help,
+    // so the second one is never spent.
+    [{ kind: "text_delta", text: narration }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "unreachable" }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "продолжай");
+
+  const reprompts = history.filter((m) => m.role === "user" && m.content.startsWith("[system]"));
+  expect(reprompts).toHaveLength(1);
+  expect(requests.length).toBe(2);
+  expect(system.join("")).toContain("did not emit a tool call");
 });
 
 test("runAgentTurn reports an unknown tool without throwing", async () => {

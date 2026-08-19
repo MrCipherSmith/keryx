@@ -445,12 +445,49 @@ export function resolveAgentMaxAttemptsPerHash(
  */
 export const REPEAT_FAILURE_HINT_THRESHOLD = 2;
 
-/** Collapse whitespace so "same error" comparisons ignore incidental formatting. */
-function normalizeToolError(output: string): string {
-  return output.trim().replace(/\s+/g, " ");
+/** Collapse whitespace so "same text" comparisons ignore incidental formatting. */
+function collapseWhitespace(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
 }
 
-const MAX_TOOLLESS_REPROMPTS = 1;
+/** Collapse whitespace so "same error" comparisons ignore incidental formatting. */
+function normalizeToolError(output: string): string {
+  return collapseWhitespace(output);
+}
+
+/**
+ * How many times one turn may push back on a toolless reply before giving up.
+ *
+ * A single nudge is not enough in practice: a model that narrates a step
+ * ("Смотрю реализацию 145.") typically narrates it once more when told to use a
+ * tool, and the turn then ends — so the USER has to send another continuation
+ * to get the step executed at all. One recorded session spent eight manual
+ * continuations that way. The second attempt is paired with a strictly stronger
+ * instruction ({@link buildToollessReprompt}), and {@link MAX_TOOLLESS_REPROMPTS}
+ * is only ever reached by a model that varies its prose — a verbatim repeat
+ * abandons the budget immediately (see the driver's reprompt branch), so a
+ * provider that simply cannot call tools still ends the turn as early as before.
+ */
+export const MAX_TOOLLESS_REPROMPTS = 2;
+
+/**
+ * The reprompt injected after a toolless reply to an action request. `attempt`
+ * is 1-based; the final attempt states the consequence of another prose answer
+ * so the escalation is visible to the model, not just to us.
+ */
+export function buildToollessReprompt(attempt: number): string {
+  if (attempt >= MAX_TOOLLESS_REPROMPTS) {
+    return (
+      "[system] Second reminder: this request still has no tool call. Do not describe " +
+      "the step, perform it. Reply with exactly ONE tool call and no prose. If you cannot " +
+      "call tools, say so plainly instead — another narrative answer ends this turn unexecuted."
+    );
+  }
+  return (
+    "[system] You were asked to execute or inspect, but you replied with text and no tool call. " +
+    "Resend a single compliant tool call now (with fully populated required arguments)."
+  );
+}
 
 /** Split text into word tokens for action detection (works with Cyrillic). */
 function tokensForActionDetection(text: string): string[] {
@@ -1225,6 +1262,10 @@ async function runAgentTurnCore(
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
   // finish or the tool-call guard trips.
   let toollessReprompts = 0;
+  // The previous toolless reply, normalized. A model that answers the reprompt
+  // with the SAME sentence is not going to produce a tool call on the next one,
+  // so the remaining budget is abandoned rather than spent (see below).
+  let lastToollessText: string | undefined;
   for (;;) {
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
@@ -1324,7 +1365,10 @@ async function runAgentTurnCore(
     }
     if (calls.length === 0) {
       const shouldReprompt = actionRequest && (assistantText.length === 0 || modelClaimedAction(assistantText));
-      if (shouldReprompt && toollessReprompts < MAX_TOOLLESS_REPROMPTS) {
+      const normalizedText = collapseWhitespace(assistantText);
+      const repeatedVerbatim = lastToollessText !== undefined && normalizedText === lastToollessText;
+      lastToollessText = normalizedText;
+      if (shouldReprompt && !repeatedVerbatim && toollessReprompts < MAX_TOOLLESS_REPROMPTS) {
         toollessReprompts += 1;
         const hint =
           " [system] No tool calls were emitted. Re-run this request now and emit ONE tool call instead of a narrative sentence. " +
@@ -1332,9 +1376,7 @@ async function runAgentTurnCore(
         system(hint);
         history.push({
           role: "user",
-          content:
-            "[system] You were asked to execute or inspect, but you replied with text and no tool call. " +
-            "Resend a single compliant tool call now (with fully populated required arguments).",
+          content: buildToollessReprompt(toollessReprompts),
           provenance: "project",
         });
         io.onHistoryChange?.("tool");

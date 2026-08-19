@@ -85,11 +85,18 @@ const RULES: Rule[] = [
     confidence: 0.9,
     remediation: "Treat the JWT as a live credential; do not persist it.",
   },
-  // `.env`-style assignments of sensitive keys.
+  // `.env`-style assignments of sensitive keys, and the JSON/YAML form where the
+  // NAME itself is quoted (`"ZAI_API_KEY": "…"`). Without the optional closing
+  // quote after the name, `\s*[:=]` never reached the colon, so a credential
+  // store read back as JSON — which is exactly how keryx persists provider keys
+  // in `auth.json` — was not an assignment at all. A key whose VALUE happened to
+  // carry a recognised prefix (`sk-…`) was still masked by the provider-shaped
+  // rules above, which is why one key in a two-key file could be redacted while
+  // the other was printed in full (keryx session 4a24a760).
   {
     policyId: "secrets.env-assignment",
     regex:
-      /\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))\s*[:=]\s*["']?([^\s"'#]{6,})/g,
+      /\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))["']?\s*[:=]\s*["']?([^\s"'#]{6,})/g,
     severity: "high",
     confidence: 0.85,
     remediation: "Move the secret to an untracked env file or secrets manager.",

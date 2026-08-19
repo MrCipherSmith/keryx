@@ -5,8 +5,23 @@ import type { DetectorMatch } from "../types";
 // heuristic band (0.4-0.7) per §7a so it does not over-block.
 
 const SENSITIVE_LABEL = /(key|secret|token|password|passwd|api|credential|auth)/i;
-const TOKEN = /[A-Za-z0-9+/=_-]{20,}/g;
+// A credential head (20+ token characters) plus any `.`-joined continuation
+// segments. `.` is NOT part of the head class: a dotted composite credential
+// (`<32 hex>.<16 alnum>`, the Z.AI shape; also the JWT shape) used to be seen as
+// two unrelated tokens, so only the first half was ever masked and a tail below
+// the 20-character floor was never even a candidate. Half a redacted key is a
+// disclosed key. Continuation segments need 6+ characters so an ordinary file
+// extension or method call cannot extend a span.
+const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\.[A-Za-z0-9+/=_-]{6,})*/g;
+const TOKEN_HEAD = /^[A-Za-z0-9+/=_-]+/;
 const LABEL_WINDOW = 40;
+// A long pure-hex blob is a credential alphabet, not prose. 32 hex characters
+// carry ~3.7 bits of Shannon entropy, which sits barely above the 3.6 floor
+// below — so whether a given real key is redacted comes down to how its own
+// digits happen to repeat. Shape decides this case instead of luck; the
+// sensitive-label requirement is unchanged, so a bare SHA in ordinary output is
+// still not a secret.
+const HEX_BLOB = /^[0-9a-f]{24,}$/i;
 
 // Only the text after the last newline — the label window must never reach into
 // a neighbouring line.
@@ -59,6 +74,11 @@ export function detectEntropy(content: string): DetectorMatch[] {
   let m: RegExpExecArray | null;
   while ((m = TOKEN.exec(content)) !== null) {
     const value = m[0];
+    // Every gate below judges the HEAD segment — the part that qualified as a
+    // credential candidate on its own. A dotted tail rides along into the masked
+    // span but never earns the match, so `identifier.someMethodName` cannot pass
+    // a gate its head would fail.
+    const head = TOKEN_HEAD.exec(value)?.[0] ?? value;
     // Code identifiers (camelCase / PascalCase / snake_case) routinely exceed
     // 20 chars and sit near an "api"/"key" substring embedded in a NEIGHBOURING
     // identifier — e.g. `PipelineVariablesStore` right after `...VariablesApi` —
@@ -70,17 +90,18 @@ export function detectEntropy(content: string): DetectorMatch[] {
     // digit and no base64 symbol, but plenty of slashes), which is how real
     // filenames reached agents as `[REDACTED:secret]` and could not be opened.
     // A base64 blob that contains `/` in practice also contains digits or `+`/`=`.
-    if (!/[0-9]/.test(value) && !/[+=]/.test(value)) {
+    if (!/[0-9]/.test(head) && !/[+=]/.test(head)) {
       continue;
     }
     // Hyphen/underscore-delimited word slugs — ADR filenames, flow directories,
     // kebab-case identifiers — are never credentials, even though a version-like
     // digit segment satisfies the shape gate above.
-    if (isWordSlug(value)) {
+    if (isWordSlug(head)) {
       continue;
     }
-    const entropy = shannonEntropy(value);
-    if (entropy < 3.6) {
+    const entropy = shannonEntropy(head);
+    const hexBlob = HEX_BLOB.test(head);
+    if (entropy < 3.6 && !hexBlob) {
       continue;
     }
     // The label look-back is bounded to the CURRENT LINE. It used to run over
@@ -91,8 +112,9 @@ export function detectEntropy(content: string): DetectorMatch[] {
     if (!SENSITIVE_LABEL.test(before)) {
       continue;
     }
-    // Map entropy 3.6..5.0 into confidence 0.4..0.7.
-    const confidence = Math.min(0.7, 0.4 + (entropy - 3.6) * 0.21);
+    // Map entropy 3.6..5.0 into confidence 0.4..0.7. A hex blob that only
+    // qualified on shape keeps the band's floor rather than a negative score.
+    const confidence = Math.max(0.4, Math.min(0.7, 0.4 + (entropy - 3.6) * 0.21));
     matches.push({
       category: "secret",
       policyId: "secrets.high-entropy",

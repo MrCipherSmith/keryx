@@ -58,6 +58,41 @@ test("a label on the current line still applies", () => {
   expect(detectEntropy(sameLine).length).toBeGreaterThanOrEqual(1);
 });
 
+// --- keryx session 4a24a760 (2026-08-19): a live API key survived redaction ---
+
+test("masks a dotted composite credential across its WHOLE span", () => {
+  // The Z.AI key shape: 32 hex + "." + 16 alnum. Splitting on `.` left the tail
+  // (below the 20-char floor) unexamined, so half the key was published.
+  const key = "7ab31d0c62f94e8ab5c1739de28f406b.Kq3nZt7vXb1mR9wa";
+  const matches = detectEntropy(`  "ZAI_API_KEY": "${key}"`);
+  expect(matches.length).toBe(1);
+  expect(matches[0]?.value).toBe(key);
+});
+
+test("masks a long hex credential whose entropy sits below the 3.6 floor", () => {
+  // 24 hex chars over 6 distinct symbols → ~2.59 bits, under the generic floor.
+  // A 32-char hex key averages ~3.7, so which real keys cleared the floor came
+  // down to how their own digits happened to repeat.
+  const key = "1111222233334444aaaabbbb";
+  const matches = detectEntropy(`api_key = '${key}'`);
+  expect(matches.length).toBe(1);
+  expect(matches[0]?.value).toBe(key);
+});
+
+test("a hex blob with NO sensitive label on the line is still not a secret", () => {
+  expect(detectEntropy("commit 1111222233334444aaaabbbb landed")).toEqual([]);
+});
+
+test("dots cannot assemble a candidate out of short segments", () => {
+  expect(detectEntropy("key: build.output.filename.resolved")).toEqual([]);
+});
+
+test("a short file extension is not absorbed into a secret span", () => {
+  const matches = detectEntropy("api_key file AKIAIOSFODNN7EXAMPLE0123.ts");
+  expect(matches.length).toBe(1);
+  expect(matches[0]?.value).toBe("AKIAIOSFODNN7EXAMPLE0123");
+});
+
 test("STILL flags a hyphenated token whose segments are alphanumeric, not words", () => {
   // The word-slug guard must not swallow real credentials that happen to carry
   // hyphens: every segment here is mixed alphanumeric, so it is not a slug.
