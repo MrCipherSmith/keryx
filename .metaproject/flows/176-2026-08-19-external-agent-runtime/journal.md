@@ -170,7 +170,72 @@ fixtures synthetic, and no multi-turn run with tool calls — so tool-call event
 shapes remain modelled rather than recorded.
 
 Cost: ~$0.15 of subscription quota across seven runs.
+
+## T6 + T7 — foundations and contract (2026-08-19)
+
+`src/harness/external/`: `types.ts` (codec port, canonical events, registry
+entry shape), `registry.ts` (both agents as data, version parse/compare/judge,
+availability with `not-probed` as a first-class state), `env.ts` (copy-then-strip
+child environment, depth marker, entry-side nesting guard), `dispatch.ts` (the
+`runtime` block and its fail-closed validator). 67 tests, all pure — no process,
+no filesystem, no clock — so the whole layer runs on a machine with neither CLI
+installed. `bun run typecheck` clean.
+
+Refusal reasons carry a `code`, so the two look-alike refusals stay
+distinguishable: `agent-cannot` ("this CLI does not support that sandbox") versus
+`not-implemented` ("keryx does not do that yet"). Collapsing them into one string
+is how an operator debugs the wrong thing. Order is fixed — identity, then
+capability, then release gate, then consistency — so a refusal always names the
+narrowest true reason.
+
+`run-command` is deliberately NOT in `READ_ONLY_FORBIDDEN_ACTIONS`: an external
+CLI necessarily runs commands inside its own sandbox, so rejecting the action
+would refuse every dispatch. That axis belongs to the sandbox flag and the
+worktree.
+
+### The schema lives in two places, and only one is canonical
+
+The `runtime` block was first added to
+`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json` — and the
+validator kept rejecting it. The canonical file is
+`src/gdskills/contracts/subagent-dispatch.schema.json`; the `.metaproject/` copy
+is an export. Both now carry identical content.
+
+Even after fixing that, `keryx skills contracts validate` still rejected the
+block. **The memory constraint `stale-installed-keryx-binary` reproduced
+exactly**: the `keryx` on PATH is an old build carrying its own bundled schema.
+Running `bun src/cli.ts skills contracts validate` gives the right answers —
+legacy dispatch without a `runtime` block valid (backward compatibility holds),
+dispatch with the block valid, and a bad `sandbox` enum rejected as
+`$.runtime.sandbox: Expected one of read-only, worktree-write`. Any verification
+of this flow must use a locally built binary or it proves nothing.
+
+### The suite has order-dependent tests — recorded, not swallowed
+
+Full-suite runs with these changes present gave **2 fail, then 1 fail, then 0
+fail** across three consecutive runs of identical code. The two tests involved:
+
+- `spawn-subagent-child-slate.test.ts` — "F-001: a slate_write_seed write that
+  arrives after timeout-driven cleanup begins must NOT resurrect the deleted
+  ephemeral dir". It scans `tmpdir()` for leaked directories matching
+  `slate`/`subagent` and found `keryx-catchup-corrupt-slate-…`, which a
+  *different* file's catchup test creates.
+- `src/harness/resume` — "same-size historical receipt corruption invalidates the
+  checkpoint and refuses append".
+
+Both pass in isolation. The three new test files here are entirely pure — no
+filesystem, no tmpdir, no process — so they cannot produce a leaked
+`keryx-catchup-corrupt-slate-*` directory; what they change is the file count
+(406 → 409) and therefore bun's concurrent scheduling. The conclusion is latent
+cross-file interference revealed by a perturbed schedule, not a regression.
+
+Worth stating plainly for whoever verifies this branch: **a single red full-suite
+run is not evidence of breakage here, and a single green baseline run was not
+evidence of a clean baseline.** Fixing those two tests is out of scope for this
+flow and belongs to whoever owns the slate and resume suites.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
 - 2026-08-19T18:23:01.828Z - task-done: T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)
+- 2026-08-19T18:40:45.295Z - task-done: T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps
+- 2026-08-19T18:40:45.501Z - task-done: T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)

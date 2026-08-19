@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T18:23:01.828Z",
+  "updatedAt": "2026-08-19T18:40:45.501Z",
   "source": {
     "type": "description",
     "ref": null
@@ -94,7 +94,7 @@
       "id": "T6",
       "title": "Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -104,13 +104,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -120,7 +121,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -403,6 +405,16 @@
       "at": "2026-08-19T18:23:01.828Z",
       "event": "task-done",
       "detail": "T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)"
+    },
+    {
+      "at": "2026-08-19T18:40:45.295Z",
+      "event": "task-done",
+      "detail": "T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps"
+    },
+    {
+      "at": "2026-08-19T18:40:45.501Z",
+      "event": "task-done",
+      "detail": "T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)"
     }
   ]
 }
