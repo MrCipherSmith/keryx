@@ -320,6 +320,38 @@ test("runAgentTurn reprompts once when an action request produces text-only outp
   expect(requests.length).toBe(3);
 });
 
+test("runAgentTurn reprompts on a short continuation nudge like «проверяй» / «делай»", async () => {
+  const { provider, requests } = scriptedProvider([
+    // First round: narrative text claiming an action, but no tool call.
+    [{ kind: "text_delta", text: "Проверю, как панель Review тянет пропозалы:" }, { kind: "model_end" }],
+    // Second round: corrected tool call.
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    // Third round: final answer.
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io, text, toolCalls, toolResults } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "проверяй");
+
+  expect(toolCalls).toContain("get_cwd");
+  expect(toolResults).toContain("get_cwd:ok");
+  expect(text.join("")).toContain("done");
+  expect(requests.length).toBe(3);
+});
+
 test("runAgentTurn reports an unknown tool without throwing", async () => {
   const { provider } = scriptedProvider([
     [
