@@ -15,9 +15,11 @@
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 import { defaultRetryable } from "../provider-port";
+import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
   NormalizedEvent,
+  NormalizedMessage,
   NormalizedRequest,
   NormalizedUsage,
   ProviderCapabilities,
@@ -104,6 +106,72 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * A `tool_use` block carries an OBJECT input, while the normalized call keeps the
+ * raw argument text the provider emitted. Argument text is model output and can
+ * be truncated or malformed, so a parse failure degrades to an empty object
+ * rather than throwing while the request body is being built — the request still
+ * goes out and the model sees its own call.
+ */
+/**
+ * Serialize a normalized conversation into Anthropic Messages wire form.
+ *
+ * Anthropic expresses the tool loop as content BLOCKS: `tool_use` on the
+ * assistant turn, `tool_result` on the following user turn, linked by id.
+ * Flattening every non-assistant message to plain text erased the model's own
+ * calls from the transcript it was asked to continue. Only pairs that hold
+ * together inside THIS request become blocks (`linkToolCalls`); a half-pair
+ * keeps the previous plain mapping, so a compacted or resumed window cannot
+ * produce a dangling reference.
+ */
+function toAnthropicMessages(messages: readonly NormalizedMessage[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const linked of linkToolCalls(messages)) {
+    const message = linked.message;
+    if (message.role === "assistant" && message.content.length === 0 && linked.linkedCalls.length === 0) {
+      // A tool-call turn whose calls could not be linked carries no text and no
+      // calls. Anthropic REJECTS an empty content string, and this message only
+      // exists at all because assistant tool calls are now recorded — so it must
+      // not reach the wire.
+      continue;
+    }
+    if (message.role === "tool" && linked.linkedToolCallId !== undefined) {
+      out.push({
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: linked.linkedToolCallId, content: message.content }],
+      });
+      continue;
+    }
+    if (message.role === "assistant" && linked.linkedCalls.length > 0) {
+      const blocks: Record<string, unknown>[] = [];
+      if (message.content.length > 0) {
+        blocks.push({ type: "text", text: message.content });
+      }
+      for (const call of linked.linkedCalls) {
+        blocks.push({ type: "tool_use", id: call.id, name: call.name, input: parseToolInput(call.arguments) });
+      }
+      out.push({ role: "assistant", content: blocks });
+      continue;
+    }
+    out.push({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: message.content,
+    });
+  }
+  return out;
+}
+
+function parseToolInput(rawArguments: string): Record<string, unknown> {
+  if (rawArguments.trim().length === 0) {
+    return {};
+  }
+  try {
+    return asRecord(JSON.parse(rawArguments));
+  } catch {
+    return {};
+  }
 }
 
 /** Resolve a concrete retry disposition, falling back for policy-conditional rows. */
@@ -252,10 +320,7 @@ export class AnthropicProvider implements ProviderPort {
       model: request.modelId,
       max_tokens: request.budget.maxOutputTokens,
       system: request.systemInstruction,
-      messages: request.messages.map((message) => ({
-        role: message.role === "assistant" ? "assistant" : "user",
-        content: message.content,
-      })),
+      messages: toAnthropicMessages(request.messages),
       stream: true,
       ...(request.tools !== undefined
         ? {
