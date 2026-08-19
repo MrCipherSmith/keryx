@@ -2846,7 +2846,7 @@ export async function launchTuiAgentShell(opts: {
           id: `mq-${item.id}-t`,
           flexGrow: 1,
           minWidth: 0,
-          content: otui.t`${otui.dim(`${formatMainQueueMarker(index, mainQueue.length)} ${item.displayQuestion}`)}`,
+          content: otui.t`${otui.dim(`${formatMainQueueMarker(index)} ${item.displayQuestion}`)}`,
         });
         row.add(label);
         const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));

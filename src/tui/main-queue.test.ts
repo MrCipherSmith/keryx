@@ -10,11 +10,10 @@ import {
 
 const q = (id: string, question: string): QueuedMainQuestion => ({ id, question, displayQuestion: question });
 
-test("formatMainQueueMarker renders qN (behind)", () => {
-  expect(formatMainQueueMarker(0, 3)).toBe("> q1 (2)");
-  expect(formatMainQueueMarker(1, 3)).toBe("> q2 (1)");
-  expect(formatMainQueueMarker(2, 3)).toBe("> q3 (0)"); // head drains next
-  expect(formatMainQueueMarker(0, 1)).toBe("> q1 (0)");
+test("formatMainQueueMarker renders qN (N)", () => {
+  expect(formatMainQueueMarker(0)).toBe("> q1 (1)");
+  expect(formatMainQueueMarker(1)).toBe("> q2 (2)");
+  expect(formatMainQueueMarker(2)).toBe("> q3 (3)");
 });
 
 test("removeMainQueueItem is non-destructive and splices", () => {
