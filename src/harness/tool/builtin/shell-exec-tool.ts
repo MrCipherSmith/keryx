@@ -148,7 +148,7 @@ export function extraReadDenyRoots(env: Record<string, string | undefined>): str
  * silently exposed. Found live by the M1 safety-track containment preflight canary
  * (scripts/benchmark/run-containment.ts) before any agent case ran.
  */
-function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
+export function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
   const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), canonical(homedir()));
   const writableRoots = [...base.writableRoots, ...extraWritableRoots(env)];
   const readDenyList = [...base.readDenyList, ...extraReadDenyRoots(env)];
@@ -193,6 +193,92 @@ export function resolveShellRestrictedMasks(
   };
 }
 
+/** What {@link prepareCommandSpawn} resolved: the argv/env `Bun.spawn` should use. */
+export type PreparedSpawn = { spawnArgs: string[]; env: Record<string, string> };
+
+/**
+ * Resolve env + `KERYX_SANDBOX_SHELL` posture and produce the argv/env
+ * `Bun.spawn` should run `command` with in `root`. Shared by `shell_exec`
+ * (run-to-completion, this file) and the background-job tools
+ * (`start_job`/`watch_job`, long-lived, `background-job-tool.ts`) so a
+ * background command can never get a weaker security posture than an
+ * interactive one — both go through this exact function, not a parallel copy
+ * of the sandbox-wrapping logic.
+ *
+ * Returns an error result (never throws) for every EXPECTED refusal (sandbox
+ * unavailable, mask resolution failed, sandbox refused the command). An
+ * unexpected throw (e.g. the dynamic `shell-config` import failing) is left
+ * to propagate — callers wrap this call in their own try/catch, exactly like
+ * `shell_exec`'s original single try/catch/finally around the whole spawn.
+ *
+ * `onNetClose` is called with the restricted-network proxy's close function
+ * the MOMENT it is started (before the sandbox wrap can fail), so a caller's
+ * `finally` can close it even when this function goes on to return
+ * `{ ok: false }` — mirrors the original closure-variable behavior exactly.
+ */
+export async function prepareCommandSpawn(
+  root: string,
+  command: string,
+  onNetClose: (close: () => Promise<void>) => void,
+): Promise<{ ok: true; spawn: PreparedSpawn } | { ok: false; output: string }> {
+  // Ensure keys entered in `keryx shell` (auth.json) are on process.env, then
+  // pass env explicitly so the child always sees them (some hosts inherit
+  // inconsistently when only cwd/stdout are set).
+  const { applySavedApiKeys } = await import("../../../lib/shell-config");
+  applySavedApiKeys();
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === "string") {
+      env[k] = v;
+    }
+  }
+
+  // Default argv: `sh -c <command>`. When the sandbox is enabled, wrap it in
+  // the platform launcher; fail closed if the launcher is unavailable.
+  let spawnArgs = ["/bin/sh", "-c", command];
+  const mode = resolveShellSandboxMode(process.env);
+  if (mode !== "off") {
+    let profile = shellSandboxProfile(root, mode, process.env);
+    const launcher = detectSandboxLauncher();
+    if (!launcher.available) {
+      return {
+        ok: false,
+        output: `OS sandbox requested (KERYX_SANDBOX_SHELL=${mode}) but the launcher is unavailable (${launcher.reason ?? "unknown"}); failing closed. Install it or set KERYX_SANDBOX_SHELL=off.`,
+      };
+    }
+    // Restricted network: start the loopback allowlist proxy, point the
+    // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
+    if (profile.network === "restricted") {
+      // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
+      // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
+      // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
+      const resolved = resolveShellRestrictedMasks(env, undefined, root);
+      if (!resolved.ok) {
+        return { ok: false, output: resolved.reason };
+      }
+      const { masks, tlsTerminate } = resolved;
+      const net = await setupNetworkRun(profile, {
+        ...(masks.length > 0 ? { masks } : {}),
+        ...(tlsTerminate ? { tlsTerminate: true } : {}),
+      });
+      profile = net.profile;
+      onNetClose(net.close);
+      for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;
+    }
+    const wrapped = wrapWithSandbox(
+      { path: "/bin/sh", argv: ["sh", "-c", command], env, cwd: root },
+      profile,
+      { platform: process.platform, ...(launcher.path ? { bwrapPath: launcher.path } : {}) },
+    );
+    if (!wrapped.ok) {
+      return { ok: false, output: `sandbox refused the command: ${wrapped.reason}` };
+    }
+    spawnArgs = [wrapped.command.path, ...wrapped.command.argv.slice(1)];
+  }
+
+  return { ok: true, spawn: { spawnArgs, env } };
+}
+
 /**
  * The default runner: execute `command` in `cwd = root` via `sh -c`, capturing
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
@@ -204,60 +290,13 @@ export function makeCommandRunner(root: string): CommandRunner {
     // exactly once in the finally, after success or failure.
     let netClose: () => Promise<void> = async () => {};
     try {
-      // Ensure keys entered in `keryx shell` (auth.json) are on process.env, then
-      // pass env explicitly so the child always sees them (some hosts inherit
-      // inconsistently when only cwd/stdout are set).
-      const { applySavedApiKeys } = await import("../../../lib/shell-config");
-      applySavedApiKeys();
-      const env: Record<string, string> = {};
-      for (const [k, v] of Object.entries(process.env)) {
-        if (typeof v === "string") {
-          env[k] = v;
-        }
+      const prepared = await prepareCommandSpawn(root, command, (close) => {
+        netClose = close;
+      });
+      if (!prepared.ok) {
+        return { output: `shell_exec: ${prepared.output}`, isError: true };
       }
-
-      // Default argv: `sh -c <command>`. When the sandbox is enabled, wrap it in
-      // the platform launcher; fail closed if the launcher is unavailable.
-      let spawnArgs = ["/bin/sh", "-c", command];
-      const mode = resolveShellSandboxMode(process.env);
-      if (mode !== "off") {
-        let profile = shellSandboxProfile(root, mode, process.env);
-        const launcher = detectSandboxLauncher();
-        if (!launcher.available) {
-          return {
-            output: `shell_exec: OS sandbox requested (KERYX_SANDBOX_SHELL=${mode}) but the launcher is unavailable (${launcher.reason ?? "unknown"}); failing closed. Install it or set KERYX_SANDBOX_SHELL=off.`,
-            isError: true,
-          };
-        }
-        // Restricted network: start the loopback allowlist proxy, point the
-        // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
-        if (profile.network === "restricted") {
-          // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
-          // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
-          // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
-          const resolved = resolveShellRestrictedMasks(env, undefined, root);
-          if (!resolved.ok) {
-            return { output: `shell_exec: ${resolved.reason}`, isError: true };
-          }
-          const { masks, tlsTerminate } = resolved;
-          const net = await setupNetworkRun(profile, {
-            ...(masks.length > 0 ? { masks } : {}),
-            ...(tlsTerminate ? { tlsTerminate: true } : {}),
-          });
-          profile = net.profile;
-          netClose = net.close;
-          for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;
-        }
-        const wrapped = wrapWithSandbox(
-          { path: "/bin/sh", argv: ["sh", "-c", command], env, cwd: root },
-          profile,
-          { platform: process.platform, ...(launcher.path ? { bwrapPath: launcher.path } : {}) },
-        );
-        if (!wrapped.ok) {
-          return { output: `shell_exec: sandbox refused the command: ${wrapped.reason}`, isError: true };
-        }
-        spawnArgs = [wrapped.command.path, ...wrapped.command.argv.slice(1)];
-      }
+      const { spawnArgs, env } = prepared.spawn;
 
       const proc = Bun.spawn(spawnArgs, {
         cwd: root,

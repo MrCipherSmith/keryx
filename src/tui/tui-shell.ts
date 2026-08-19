@@ -139,6 +139,8 @@ import {
   reinsertMainQueueItem,
 } from "./main-queue";
 
+import { killAllBackgroundJobs } from "../harness/tool/builtin/background-job-tool";
+import { setJobFleetListener } from "./job-bridge";
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
 import { SubagentSessionStore } from "./subagent-session";
@@ -1489,6 +1491,16 @@ export async function launchTuiAgentShell(opts: {
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
+        setJobFleetListener(undefined);
+        // No orphaned background jobs/watchers survive the shell (flow 174).
+        // Fire-and-forget, not awaited: `onDestroy` is typed `() => void`
+        // (shell-chrome.ts) — readline's equivalent (`shell.ts`'s `finally`)
+        // DOES await this same call, which is the stronger guarantee. Safe
+        // today because nothing on this path calls `process.exit()`, so the
+        // event loop stays alive for `killAll()`'s SIGKILL grace timer; if
+        // that ever changes, widen `onDestroy` to `() => void | Promise<void>`
+        // and await it here (flow 174 security review, F-003).
+        void killAllBackgroundJobs();
         resolveDone();
       },
     }));
@@ -1635,6 +1647,19 @@ export async function launchTuiAgentShell(opts: {
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
+    });
+    // start_job/watch_job (flow 174) → the same Activity panel side workers use.
+    setJobFleetListener((ev) => {
+      if (ev.kind === "remove") {
+        fleet.remove(ev.id);
+        return;
+      }
+      fleet.upsert({
+        id: ev.id,
+        label: ev.label,
+        status: ev.status,
+        ...(ev.detail !== undefined ? { detail: ev.detail } : {}),
+      });
     });
 
     /** Update the pinned main-agent slot (Activity panel). */
@@ -2427,7 +2452,7 @@ export async function launchTuiAgentShell(opts: {
         if (item === undefined) continue;
         const box = appendUserEcho(otui, r, transcript, {
           id: `mq-${item.id}`,
-          line: `${formatMainQueueMarker(i, mainQueue.length)} ${item.displayQuestion}`,
+          line: `${formatMainQueueMarker(i)} ${item.displayQuestion}`,
           borderColor: getTheme().highlight,
           marginTop: 0,
         });

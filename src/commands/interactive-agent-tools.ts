@@ -3,6 +3,7 @@
 
 import { randomUUID } from "node:crypto";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import { backgroundJobTools } from "../harness/tool/builtin/background-job-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
@@ -50,6 +51,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     webFetchTool(),
     webSearchTool(input.searchController),
     shellExecTool(input.cwd),
+    ...backgroundJobTools(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
     workspaceCreateTool(input.cwd),
