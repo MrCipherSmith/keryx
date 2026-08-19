@@ -836,6 +836,8 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "repomap",
     "search_code",
     "shell_exec",
+    "shell_job_kill",
+    "shell_job_output",
     "slate_read",
     "slate_write_seed",
     "spawn_subagent",
@@ -1234,5 +1236,198 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
   test("shell.ts never imports or calls the Track B wrap-up composer", () => {
     expect(shellSourceAc8).not.toContain("runWrapUp");
     expect(shellSourceAc8).not.toMatch(/machine-wrap-up/);
+  });
+});
+
+// --- flow 173 AC7 (re-scoped): shell.ts session-scoped JobRegistry +
+// exit-sweep wiring (source-text audit) --------------------------------
+//
+// T2/T3 (already GREEN, see journal.md) built `JobRegistry`/`createJobRegistry`
+// and wired `shell_job_output`/`shell_job_kill` into `buildInteractiveAgentTools`
+// — but `buildInteractiveAgentTools`'s `jobRegistry?` input is OPTIONAL and
+// BOTH real call sites in this file (the readline `tools: buildInteractiveAgentTools({...})`
+// at the tail of the `if (agentMode) {` branch, and the TUI `makeAgentDeps`
+// closure's own call — audited separately below) omit it today, so each call
+// falls back to `buildInteractiveAgentTools`'s own internal
+// `input.jobRegistry ?? createJobRegistry({cwd})` — a registry with no
+// external reference anyone can later call `.sweepAll()` on.
+//
+// For the READLINE surface specifically: `buildInteractiveAgentTools` is
+// called exactly ONCE per session (inside `shellCommand`'s `if (agentMode)`
+// branch, BEFORE `runAgentRepl` is invoked — NOT inside `runAgentRepl`, and
+// NOT rebuilt per turn; confirmed by reading the real file, correcting an
+// earlier assumption that `runAgentRepl` itself rebuilds the tool list).
+// Turn-to-turn persistence of a started background job is therefore already
+// structurally fine for readline once ANY registry is threaded through — the
+// real, confirmed gap is that (a) nothing HOLDS a reference to that registry
+// outside the tools closure so (b) nothing can sweep it on real session exit.
+//
+// `runAgentRepl` is explicitly "NOT unit-tested" (own doc comment) and has no
+// injection seam — same precedent as the SLATE-3a/SLATE-5/SLATE-15 audits
+// above (`readFileSync` the real source, assert on literals). This block
+// follows that exact convention.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. `import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";`
+//      added to this file's imports.
+//   2. `const jobRegistry = createJobRegistry({ cwd: agentCwd });` declared in
+//      the `if (agentMode) {` branch, alongside `slateSessionBox` (same
+//      session-scoped-closure idiom, same declaration neighborhood) —
+//      BEFORE the readline `tools: buildInteractiveAgentTools({...})` call.
+//   3. That call gains a `jobRegistry,` field.
+//   4. `agentDeps` (the `AgentDeps` object built in the same branch) gains
+//      `sweepBackgroundJobs: () => jobRegistry.sweepAll(),` — a NEW optional
+//      `AgentDeps` field (see `agent.ts`'s own audit below), mirroring the
+//      existing `resetSubagentBudget` optional-hook precedent exactly.
+//   5. `runAgentRepl`'s two REAL session-exit `return;` points — EOF
+//      (`if (line === undefined) {`) and `/exit`/`/quit` — each call
+//      `await deps.sweepBackgroundJobs?.();` immediately before `return;`
+//      (mirroring how both already call `await closeSlateSession(...)`
+//      there — see the SLATE-5 audit above). The THIRD close-trigger point,
+//      `/new`/`/clear`, must NOT gain this call — a background job survives
+//      `/new`/`/clear` by design (AC9); only real process/session exit
+//      sweeps it.
+describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sweep wiring (source-text audit)", () => {
+  const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 4200);
+  const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
+  const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
+
+  test("imports createJobRegistry from the background-job-registry module", () => {
+    expect(shellSourceAc7).toContain(
+      'import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";',
+    );
+  });
+
+  test("a session-scoped jobRegistry is declared in the readline agent-mode branch before buildInteractiveAgentTools is called", () => {
+    const jobRegistryIndex = agentModeBranchAc7.indexOf("const jobRegistry = createJobRegistry({ cwd: agentCwd });");
+    const toolsCallIndex = agentModeBranchAc7.indexOf("tools: buildInteractiveAgentTools({");
+    expect(jobRegistryIndex).toBeGreaterThanOrEqual(0);
+    expect(toolsCallIndex).toBeGreaterThan(jobRegistryIndex);
+  });
+
+  test("the readline buildInteractiveAgentTools call threads that jobRegistry through", () => {
+    const toolsCallIndex = agentModeBranchAc7.indexOf("tools: buildInteractiveAgentTools({");
+    const toolsCallBlock = agentModeBranchAc7.slice(toolsCallIndex, toolsCallIndex + 400);
+    expect(toolsCallBlock).toContain("jobRegistry,");
+  });
+
+  test("agentDeps exposes a sweepBackgroundJobs hook bound to the SAME jobRegistry instance", () => {
+    const sweepFieldIndex = agentModeBranchAc7.indexOf("sweepBackgroundJobs: () => jobRegistry.sweepAll(),");
+    expect(sweepFieldIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("runAgentRepl sweeps background jobs at exactly the two real session-exit points (EOF, /exit|/quit) — not /new|/clear", () => {
+    const sweepCall = "await deps.sweepBackgroundJobs?.();";
+    const occurrences = replBodyAc7.split(sweepCall).length - 1;
+    expect(occurrences).toBe(2);
+
+    const eofBlock = replBodyAc7.slice(
+      replBodyAc7.indexOf("if (line === undefined) {"),
+      replBodyAc7.indexOf("return; // end of input") + 1,
+    );
+    expect(eofBlock).toContain(sweepCall);
+
+    const exitIdx = replBodyAc7.indexOf('command === "/exit" || command === "/quit"');
+    expect(exitIdx).toBeGreaterThanOrEqual(0);
+    const exitBlock = replBodyAc7.slice(exitIdx, exitIdx + 300);
+    expect(exitBlock).toContain(sweepCall);
+
+    // AC9: a background job must survive /new|/clear — the sweep call must
+    // NOT appear in that close-trigger's block.
+    //
+    // F-011 fixes:
+    //  - `indexOf` here previously had no `-1` guard (unlike its TUI sibling
+    //    in `tui-shell.test.ts`, which correctly asserts
+    //    `toBeGreaterThanOrEqual(0)`): if the `/new`|`/clear` marker literal
+    //    ever drifted, `newBlockStart` would silently become `-1` and
+    //    `.slice(-1, -1 + N)` would slice from the string's LAST character
+    //    instead of throwing — a false pass on exactly the regression this
+    //    test exists to catch.
+    //  - the slice window was a hardcoded magic-number char count (900) with
+    //    no guarantee it actually covers the whole `/new`|`/clear` block;
+    //    widened to a structural boundary (the next top-level `else if`
+    //    branch, `/compact`) instead.
+    //  - `removeAll` gets the SAME negative guard as `sweepBackgroundJobs`:
+    //    `shell.ts`'s readline surface has no `BackgroundJobStore` at all
+    //    (out of scope by design — description.md: readline gets the
+    //    harness/tool layer, no visual panel/sidebar/store), so this
+    //    assertion is currently vacuous, but it is cheap and guards against
+    //    a `BackgroundJobStore`/`.removeAll()` ever being wired into this
+    //    `/new`|`/clear` block later — mirrors the TUI-side guard exactly.
+    const newBlockStart = replBodyAc7.indexOf('command === "/new" || command === "/clear"');
+    expect(newBlockStart).toBeGreaterThanOrEqual(0);
+    const newBlockEnd = replBodyAc7.indexOf('command === "/compact"', newBlockStart);
+    expect(newBlockEnd).toBeGreaterThan(newBlockStart);
+    const newBlock = replBodyAc7.slice(newBlockStart, newBlockEnd);
+    expect(newBlock).not.toContain(sweepCall);
+    expect(newBlock).not.toContain("removeAll");
+  });
+});
+
+// --- flow 173 AC7: shell.ts TUI-branch jobRegistry session-scope (source-text
+// audit) -----------------------------------------------------------------
+//
+// The TUI surface is the one with the REAL multi-rebuild bug: `makeAgentDeps`
+// (declared once inside `shellCommand`'s `if (surface !== "readline")`
+// branch) is INVOKED multiple times per session by `tui-shell.ts`
+// (`opts.makeAgentDeps(...)` — initial launch, `/model`/`/connect` switch,
+// and a read-only side-worker deps rebuild; confirmed by reading
+// `tui-shell.ts` directly, see that file's own SLATE-3a audit for the exact
+// three call sites). Each invocation calls `buildInteractiveAgentTools`
+// fresh; without a jobRegistry created OUTSIDE `makeAgentDeps` and reused on
+// every call, each rebuild gets its own throwaway internal-fallback
+// registry, so a job started before a `/model` switch becomes unreachable to
+// `shell_job_output`/`shell_job_kill` afterward.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. `const jobRegistry = createJobRegistry({ cwd });` declared ONCE in the
+//      `if (surface !== "readline") {` branch, alongside
+//      `searchProviderController` — BEFORE `const makeAgentDeps = async (`.
+//   2. The `tools: buildInteractiveAgentTools({...})` call INSIDE
+//      `makeAgentDeps`'s body gains a `jobRegistry,` field, reading the
+//      OUTER closed-over `jobRegistry`, not a fresh one per call.
+//   3. `makeAgentDeps`'s returned `AgentDeps` gains
+//      `sweepBackgroundJobs: () => jobRegistry.sweepAll(),`.
+describe("flow 173 AC7 — shell.ts TUI makeAgentDeps jobRegistry session-scope (source-text audit)", () => {
+  const shellSourceAc7Tui = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const tuiBranchStart = shellSourceAc7Tui.indexOf('if (surface !== "readline") {');
+  const makeAgentDepsStart = shellSourceAc7Tui.indexOf("const makeAgentDeps = async (", tuiBranchStart);
+  const tuiPreamble = shellSourceAc7Tui.slice(tuiBranchStart, makeAgentDepsStart);
+  const makeAgentDepsBody = shellSourceAc7Tui.slice(
+    makeAgentDepsStart,
+    shellSourceAc7Tui.indexOf("const redetect = (): Promise<DetectedProvider[]> =>"),
+  );
+
+  test("a session-scoped jobRegistry is declared OUTSIDE makeAgentDeps, before its declaration", () => {
+    // AC8 follow-up wired `onEvent: emitBackgroundJob` onto this same call —
+    // the invariant this test guards (declared once, outside makeAgentDeps)
+    // is unaffected, so the assertion targets the stable prefix rather than
+    // the exact full call.
+    expect(tuiPreamble).toContain("const jobRegistry = createJobRegistry({ cwd, onEvent: emitBackgroundJob });");
+  });
+
+  test("the TUI buildInteractiveAgentTools call (inside makeAgentDeps) threads the outer jobRegistry through", () => {
+    const toolsCallIndex = makeAgentDepsBody.indexOf("tools: buildInteractiveAgentTools({");
+    expect(toolsCallIndex).toBeGreaterThanOrEqual(0);
+    const toolsCallBlock = makeAgentDepsBody.slice(toolsCallIndex, toolsCallIndex + 400);
+    expect(toolsCallBlock).toContain("jobRegistry,");
+  });
+
+  test("makeAgentDeps returns a sweepBackgroundJobs hook bound to the SAME jobRegistry instance", () => {
+    expect(makeAgentDepsBody).toContain("sweepBackgroundJobs: () => jobRegistry.sweepAll(),");
+  });
+});
+
+// --- flow 173 AC7: agent.ts's AgentDeps gains the sweepBackgroundJobs hook
+// (source-text audit) — the type contract both wiring audits above assign
+// into. Mirrors the existing (untested-by-name, but structurally identical)
+// `resetSubagentBudget?: () => void;` optional-hook field.
+describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-text audit)", () => {
+  const agentSource = readFileSync(path.join(import.meta.dir, "agent.ts"), "utf8");
+
+  test("AgentDeps declares an optional sweepBackgroundJobs hook", () => {
+    expect(agentSource).toContain("sweepBackgroundJobs?: () => Promise<void>;");
   });
 });

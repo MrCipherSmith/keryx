@@ -35,6 +35,9 @@ import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 // RED: `../session/slate-terminal-state` does not exist yet (T11 creates it).
 import { renderTerminalStateBlock } from "../session/slate-terminal-state";
 import type { TerminalState } from "../session/slate-terminal-state";
+// RED: flow 173 (background shell jobs) T2/T3 — this module does not exist
+// yet. Colocated sibling of `shell-exec-tool.ts`; see this flow's journal.md.
+import { createJobRegistry, shellJobKillTool, shellJobOutputTool } from "../harness/tool/builtin/background-job-registry";
 
 test("resolveAgentMaxToolCalls: default is generous for multi-step prompts", () => {
   expect(DEFAULT_MAX_TOOL_CALLS).toBeGreaterThanOrEqual(48);
@@ -702,6 +705,49 @@ test("reserveToolAttempt: read calls consume both total and read pools", () => {
   expect(state.charged.size).toBe(2);
   expect(state.readCharged.size).toBe(1);
   expect(state.nonReadCharged.size).toBe(1);
+});
+
+// --- flow 173 review finding F-006: shell_job_output is exempt from the per-hash attempt cap ---
+
+test("reserveToolAttempt: shell_job_output (repeatable) can be called on the SAME job_id more than MAX_ATTEMPTS_PER_HASH times in one turn", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 10,
+    maxReadUnique: 10,
+    maxNonReadUnique: 10,
+  };
+  const input = '{"job_id":"job-1-4242"}';
+  const calls = Array.from({ length: MAX_ATTEMPTS_PER_HASH + 5 }, () =>
+    reserveToolAttempt(state, "shell_job_output", input, "read"),
+  );
+  expect(calls.every((c) => c.ok)).toBe(true);
+  // Still exactly ONE budget slot — the exemption lifts only the per-signature
+  // attempt ceiling, not the total/read-pool accounting.
+  expect(state.charged.size).toBe(1);
+  expect(state.readCharged.size).toBe(1);
+});
+
+test("reserveToolAttempt: an UNRELATED repeated tool call is still capped at MAX_ATTEMPTS_PER_HASH (no regression to the loop-safety guard)", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 10,
+    maxReadUnique: 10,
+    maxNonReadUnique: 10,
+  };
+  const calls = Array.from({ length: MAX_ATTEMPTS_PER_HASH + 1 }, () =>
+    reserveToolAttempt(state, "get_cwd", "{}", "read"),
+  );
+  expect(calls.slice(0, MAX_ATTEMPTS_PER_HASH).every((c) => c.ok)).toBe(true);
+  const last = calls[calls.length - 1];
+  if (last === undefined) throw new Error("test setup: expected a last call result");
+  expect(last.ok).toBe(false);
+  expect(!last.ok && last.kind).toBe("repeat");
 });
 
 test("reserveToolAttempt: non-read and unknown risks share a conservative sub-limit", () => {
@@ -2909,4 +2955,59 @@ test("F-002 regression (flow 171 T10): the `!plan.ok` sequential fallback degrad
   expect(invoked).toEqual(["s1"]); // s2 never reached invoke() — it failed at the approval gate
   expect(toolResultOutputs).toEqual(["spawned:s1", expect.stringContaining("sequential fallback error")]);
   expect(systemMessages.some((s) => s.includes("running sequentially"))).toBe(true);
+});
+
+// --- flow 173 (background shell jobs) AC6: shell_job_output/shell_job_kill
+// must be risk:"read" so they draw from the LARGE read pool
+// (DEFAULT_MAX_READ_TOOL_CALLS) and never the small non-read pool
+// (DEFAULT_MAX_NON_READ_TOOL_CALLS) — extends the reserveToolAttempt
+// budget-split coverage above (flow 057) with the two new tool definitions.
+
+test("AC6: shell_job_output and shell_job_kill are both classified risk:\"read\"", () => {
+  const registry = createJobRegistry();
+  expect(shellJobOutputTool(registry).definition.risk).toBe("read");
+  expect(shellJobKillTool(registry).definition.risk).toBe("read");
+});
+
+test("AC6: polling shell_job_output for several jobs never touches the small non-read pool", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 10,
+    maxReadUnique: 10,
+    maxNonReadUnique: 1, // deliberately tiny — a background-job poll must never consume this
+  };
+  const registry = createJobRegistry();
+  const risk = shellJobOutputTool(registry).definition.risk;
+
+  // Distinct job_id inputs so each is a NEW signature — the scenario a real
+  // polling loop across several background jobs would hit.
+  const first = reserveToolAttempt(state, "shell_job_output", '{"job_id":"a"}', risk);
+  const second = reserveToolAttempt(state, "shell_job_output", '{"job_id":"b"}', risk);
+
+  expect(first.ok).toBe(true);
+  expect(second.ok).toBe(true);
+  expect(state.nonReadCharged.size).toBe(0); // the tiny non-read pool was never touched
+  expect(state.readCharged.size).toBe(2);
+});
+
+test("AC6: shell_job_kill also draws from the read pool, not the non-read pool", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 10,
+    maxReadUnique: 10,
+    maxNonReadUnique: 0, // zero — any non-read charge at all would be a bug
+  };
+  const registry = createJobRegistry();
+  const risk = shellJobKillTool(registry).definition.risk;
+  const result = reserveToolAttempt(state, "shell_job_kill", '{"job_id":"a"}', risk);
+
+  expect(result.ok).toBe(true);
+  expect(state.readCharged.size).toBe(1);
+  expect(state.nonReadCharged.size).toBe(0);
 });

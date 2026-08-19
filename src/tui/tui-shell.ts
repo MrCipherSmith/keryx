@@ -159,6 +159,9 @@ import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./que
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
 import { SubagentSessionStore } from "./subagent-session";
+import { setBackgroundJobListener } from "./job-bridge";
+import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
+import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
 import {
@@ -180,6 +183,21 @@ interface SidebarRepoMetadata {
 }
 
 const SESSION_PREVIEW_MESSAGE_COUNT = 200;
+
+/**
+ * Flow 173 F-003: `risk === "read"` alone is NOT the side-worker safety
+ * boundary — `shell_job_kill` is intentionally `risk:"read"` (this flow's
+ * FROZEN AC6: tool-budget classification only, not an approval/trust signal)
+ * but it mutates state a side worker never approved: killing a job the MAIN
+ * session started, through a live reference to the main session's own
+ * `JobRegistry`. The side-worker deps builder below filters on `risk`, then
+ * additionally excludes any tool named here — a small, explicit deny-list
+ * (not a second risk tier) so a future read-risk-but-actually-mutating tool
+ * has to be added here on purpose rather than silently inheriting
+ * side-worker access via `risk === "read"` alone. `shell_job_output` stays
+ * available — it is genuinely read-only in effect.
+ */
+const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
 function parseGitHubRemote(remote: string): string | undefined {
@@ -1498,6 +1516,17 @@ export async function launchTuiAgentShell(opts: {
   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
   // it is never rebound to a placeholder no-op (flow 112, AC2).
   let mountedChrome: ShellChrome | undefined;
+  // Flow 173 F-002: `onDestroy` (Ctrl+C — `exitOnCtrlC: true` below) is a
+  // real, common exit path and must ALSO sweep background jobs (process-
+  // group SIGTERM→SIGKILL) and purge the sidebar/store list, same as
+  // `/exit`. It can fire before `deps`/`jobs` are ever assigned (Ctrl+C
+  // during the provider/model picker, well before either exists) — the
+  // exact same TDZ hazard `mountedChrome` above exists to avoid, solved the
+  // same way: a nullable ref set once real, read through optional chaining
+  // so an early Ctrl+C degrades to a safe no-op (there is nothing to sweep
+  // that early — no JobRegistry/BackgroundJobStore exists yet either).
+  let liveDeps: AgentDeps | undefined;
+  let liveJobs: BackgroundJobStore | undefined;
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
@@ -1506,7 +1535,31 @@ export async function launchTuiAgentShell(opts: {
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
-        resolveDone();
+        setBackgroundJobListener(undefined);
+        // Flow 173 F-002: previously Ctrl+C left every tracked background
+        // job's process group unswept and the in-memory job list unpurged —
+        // an orphan survives indefinitely, unsandboxed, contradicting
+        // description.md's "job lifetime is scoped to the session, full
+        // stop." `onDestroy`'s signature is strictly `() => void`
+        // (@opentui/core's .d.ts, confirmed against its compiled source:
+        // `destroy()` calls `this._onDestroy()` synchronously and never
+        // awaits it, and neither `destroy()` nor its Ctrl+C/exit-signal
+        // handlers ever call `process.exit()` — the process only exits once
+        // the event loop drains). So the OS-level sweep is fired here
+        // WITHOUT being awaited (this closure cannot `await`), but
+        // `resolveDone()` — which unblocks the `await done` this function's
+        // own caller sits on, below — is deliberately deferred until the
+        // sweep settles, so nothing downstream of `launchTuiAgentShell()`
+        // can run (and the process cannot exit) before the sweep actually
+        // happened.
+        liveJobs?.removeAll(); // store-side purge; synchronous, safe here
+        void (async () => {
+          try {
+            await liveDeps?.sweepBackgroundJobs?.();
+          } finally {
+            resolveDone();
+          }
+        })();
       },
     }));
     applyThemeId(getThemeId(), r.themeMode);
@@ -1543,6 +1596,7 @@ export async function launchTuiAgentShell(opts: {
     // `getSlateSession` getter so a dispatched subagent's Seeds actually
     // fold into this session's slate once it opens.
     let deps = await opts.makeAgentDeps(sel, () => slateSession);
+    liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -1697,8 +1751,20 @@ export async function launchTuiAgentShell(opts: {
       marginTop: 1,
     });
     sidebar.add(sbSubagents);
+    // Flow 173 (AC8): Background Jobs panel, same hug-content-box idiom as
+    // sbSubagents above (a growing viewport would cover the Model/Tools
+    // labels on a real pty — shell-pty-launch O-6).
+    const sbJobs = new otui.BoxRenderable(r, {
+      id: "sb-jobs",
+      flexDirection: "column",
+      flexShrink: 0,
+      marginTop: 1,
+    });
+    sidebar.add(sbJobs);
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
+    const jobs = new BackgroundJobStore();
+    liveJobs = jobs; // F-002: onDestroy reads this ref (TDZ-safe, see above)
     const paintFleet = (): void => {
       const list = fleet.list();
       const text = formatFleetSidebar(list, 12);
@@ -1722,11 +1788,40 @@ export async function launchTuiAgentShell(opts: {
         },
       });
     };
+    const paintJobs = (hint?: BackgroundJobStoreHint): void => {
+      // F-008: mirror `paintSubagents`'s guard above — a live job's stdout
+      // fires an `output` hint on every chunk; repainting (destroying and
+      // recreating every row) on each one is wasted work AND can destroy a
+      // `TextRenderable` mid-click (a mouse-down landing on a renderable
+      // torn down before its dispatch runs).
+      if (hint?.kind === "output") {
+        return;
+      }
+      paintBackgroundJobSidebar(otui, r, sbJobs, jobs.list(), {
+        width: SIDEBAR_TEXT_WIDTH,
+        onOpen: (id) => {
+          // `deps.jobRegistry` is `let`-captured live (see `deps` reassignment
+          // on `/model`/`/connect` below) — always defined for a real TUI
+          // session (`shell.ts`'s `makeAgentDeps` always sets it); guarded
+          // here only so a test/driver that omits it degrades to a no-op
+          // instead of throwing.
+          if (deps.jobRegistry === undefined) {
+            return;
+          }
+          openJobInspector(otui, chrome, { store: jobs, id, registry: deps.jobRegistry, renderer: r });
+        },
+      });
+    };
     fleet.subscribe(paintFleet);
     sessions.subscribe(paintSubagents);
+    jobs.subscribe(paintJobs);
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
+    });
+    // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.
+    setBackgroundJobListener((ev) => {
+      jobs.apply(ev);
     });
 
     /** Update the pinned main-agent slot (Activity panel). */
@@ -2498,6 +2593,7 @@ export async function launchTuiAgentShell(opts: {
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
       deps = await opts.makeAgentDeps(ns, () => slateSession);
+      liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
@@ -2928,7 +3024,11 @@ export async function launchTuiAgentShell(opts: {
             // `slateSession` ref, not just `.dir`.
             const base = await opts.makeAgentDeps(currentSel, () => slateSession);
             // Read-only: never allow shell/mutations from a side worker.
-            const tools = base.tools.filter((t) => t.definition.risk === "read");
+            // F-003: `risk === "read"` alone is not enough — see
+            // `SIDE_WORKER_DENIED_TOOL_NAMES`'s doc comment above.
+            const tools = base.tools.filter(
+              (t) => t.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name),
+            );
             const sideDeps: AgentDeps = {
               ...base,
               tools,
@@ -3031,6 +3131,10 @@ export async function launchTuiAgentShell(opts: {
             // SLATE-5 close trigger: shell exit (explicit command, while busy).
             void (async () => {
               await closeSlateSession(slateSession, mintTimestampAttemptId);
+              // F-002: this busy-dispatch `/exit` branch is a SEPARATE real
+              // exit path from the non-busy one below — it must sweep too.
+              await deps.sweepBackgroundJobs?.();
+              jobs.removeAll();
               r.off("theme_mode", onThemeMode);
               r.destroy();
             })();
@@ -3196,6 +3300,8 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
+            await deps.sweepBackgroundJobs?.();
+            jobs.removeAll(); // F-002: purge the sidebar/store list too, not just the OS-level registry
             r.off("theme_mode", onThemeMode);
             r.destroy();
           })();

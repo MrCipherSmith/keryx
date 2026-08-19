@@ -3,6 +3,11 @@
 
 import { randomUUID } from "node:crypto";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import {
+  shellJobKillTool,
+  shellJobOutputTool,
+  type JobRegistry,
+} from "../harness/tool/builtin/background-job-registry";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
@@ -38,18 +43,40 @@ export type InteractiveAgentToolsInput = {
   idSeq?: () => string;
   /** Injected clock for `slate_write_seed` — defaults to `new Date().toISOString()`. */
   clock?: () => string;
+  /**
+   * Background-job registry backing `shell_exec`'s `background:true` input
+   * plus `shell_job_output`/`shell_job_kill` (flow 173, T2/T3). A caller that
+   * wants jobs to survive across turns/`makeAgentDeps` rebuilds MUST create
+   * this ONCE at session scope (mirrors `getSessionDir`'s own session-lived
+   * closure) and pass the SAME instance on every call — a registry created
+   * fresh inside this function would lose every job the moment the tool list
+   * is rebuilt.
+   *
+   * Omitted (flow 173 review finding F-010): NO fallback registry is minted
+   * here. A silently-created, orphaned `JobRegistry` (the old behavior) is
+   * unreachable by any session-exit sweep and worse than simply not offering
+   * the capability — so `shell_job_output`/`shell_job_kill` are OMITTED from
+   * the returned tool list entirely, and `shell_exec` still gets
+   * `background:true` in its schema but reports a clear "background jobs are
+   * not available in this session" tool error (see `shell-exec-tool.ts`'s
+   * `invoke`, which already handles `jobRegistry === undefined` this way)
+   * rather than silently using a registry nothing else can see or clean up.
+   */
+  jobRegistry?: JobRegistry;
 };
 
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
   const getSessionDir = input.getSessionDir ?? (() => undefined);
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
+  const jobRegistry = input.jobRegistry;
   return [
     ...builtinReadOnlyTools(input.cwd),
     ...builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort),
     webFetchTool(),
     webSearchTool(input.searchController),
-    shellExecTool(input.cwd),
+    shellExecTool(input.cwd, undefined, jobRegistry),
+    ...(jobRegistry !== undefined ? [shellJobOutputTool(jobRegistry), shellJobKillTool(jobRegistry)] : []),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
     workspaceCreateTool(input.cwd),

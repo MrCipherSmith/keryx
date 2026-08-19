@@ -5,7 +5,25 @@ import { join } from "node:path";
 import { createDefaultSearchProviderController } from "../harness/search";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
+
+/**
+ * A minimal, fully injectable fake `JobRegistry` — no real subprocess, no
+ * real registry construction. Used only to prove the tool-list SHAPE when a
+ * registry IS supplied; its own behavior is covered by
+ * `background-job-registry.test.ts`.
+ */
+function stubJobRegistry(): JobRegistry {
+  return {
+    start: async () => ({ ok: true, jobId: "job-stub-1", pid: 1, output: "" }),
+    get: () => undefined,
+    list: () => [],
+    readOutput: () => ({ ok: false, error: "unknown job_id" }),
+    kill: async () => ({ ok: false, error: "unknown job_id" }),
+    sweepAll: async () => {},
+  };
+}
 
 const stubSpawn: InteractiveTool = {
   definition: {
@@ -24,6 +42,11 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     metaprojectPort: createMetaprojectAdapter(cwd),
     searchController: createDefaultSearchProviderController(),
     spawnTool: stubSpawn,
+    // Real call sites (shell.ts, tui-shell.ts) always pass a session-scoped
+    // jobRegistry — mirror that here so this "full tool list" assertion
+    // reflects a real session, not the F-010-fixed no-registry case (that
+    // has its own dedicated test below).
+    jobRegistry: stubJobRegistry(),
   });
   const names = interactiveAgentToolNames(tools);
   expect(names).toEqual([
@@ -42,6 +65,8 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "repomap",
     "search_code",
     "shell_exec",
+    "shell_job_kill",
+    "shell_job_output",
     "slate_read",
     "slate_write_seed",
     "spawn_subagent",
@@ -111,4 +136,50 @@ test("slate_read and slate_write_seed resolve a REAL session dir when getSession
   // its own, separately-handled case, not a getSessionDir failure.
   const result = await slateRead?.invoke({});
   expect(result?.isError).toBe(false);
+});
+
+// --- flow 173 review finding F-010: no silent, orphaned fallback JobRegistry ---
+//
+// `buildInteractiveAgentTools` used to mint `createJobRegistry({cwd})` when a
+// caller forgot to pass one — a fully real, functional registry that no
+// session-exit sweep could ever reach. The fix: omit `jobRegistry` entirely
+// and the two background-job tools are OMITTED from the tool list (never a
+// silently-created orphan), while `shell_exec` stays registered but reports
+// a clear error for `background:true`.
+
+test("F-010: without jobRegistry, shell_job_output/shell_job_kill are NOT registered, and shell_exec background:true fails clearly", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-no-jobregistry-"));
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(),
+    spawnTool: stubSpawn,
+    // jobRegistry intentionally omitted.
+  });
+
+  const names = interactiveAgentToolNames(tools);
+  expect(names).not.toContain("shell_job_output");
+  expect(names).not.toContain("shell_job_kill");
+  expect(names).toContain("shell_exec"); // shell_exec itself is still registered
+
+  const shellExec = tools.find((tool) => tool.definition.name === "shell_exec");
+  expect(shellExec).toBeDefined();
+  const result = await shellExec?.invoke({ command: "sleep 999", background: true });
+  expect(result?.isError).toBe(true);
+  expect(result?.output).toMatch(/background jobs are not available in this session/);
+});
+
+test("F-010: WITH jobRegistry, shell_job_output/shell_job_kill ARE registered", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-with-jobregistry-"));
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(),
+    spawnTool: stubSpawn,
+    jobRegistry: stubJobRegistry(),
+  });
+
+  const names = interactiveAgentToolNames(tools);
+  expect(names).toContain("shell_job_output");
+  expect(names).toContain("shell_job_kill");
 });
