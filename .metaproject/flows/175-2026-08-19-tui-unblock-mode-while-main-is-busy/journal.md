@@ -39,3 +39,12 @@ review-style unavailable in this runtime, same fallback as prior flows):
   matches flow 172's established precedent exactly. Zero findings.
 
 **Verdict: APPROVE.** Proceeding to commit, push, PR.
+- 2026-08-19T15:25:05.795Z - ac-confirmed: AC1: Verified by review-logic: /mode auto in the busy switch case calls runModeCommand, which reaches applyMode via the confirmation overlay; approval gate reads permissionMode fresh per call (agent.ts:1985).
+- 2026-08-19T15:25:05.880Z - ac-confirmed: AC2: runModeCommand's applyMode skips the overlay for non-auto modes, unchanged from idle-path; verified by extraction-fidelity review.
+- 2026-08-19T15:25:05.971Z - ac-confirmed: AC3: runModeCommand's clear branch reached via case "mode", verified by code read.
+- 2026-08-19T15:25:06.054Z - ac-confirmed: AC4: No-arg picker branch reached via case "mode", same chrome.withOverlay call as idle-path, verified by review-logic.
+- 2026-08-19T15:25:06.140Z - ac-confirmed: AC5: Auto-confirmation overlay unchanged (byte-for-byte extraction), verified by review-logic + review-style.
+- 2026-08-19T15:25:06.225Z - ac-confirmed: AC6: busy-dispatch.test.ts has a dedicated /model -> deferred regression test guarding against the /mode name-similarity typo class.
+- 2026-08-19T15:25:06.309Z - ac-confirmed: AC7: Idle-path behavior unchanged, confirmed byte-for-byte by review-logic's extraction-fidelity check.
+- 2026-08-19T15:25:06.394Z - ac-confirmed: AC8: busy-dispatch.test.ts new case asserts classifyBusyDispatch(...) === "mode" for /mode.
+- 2026-08-19T15:25:06.478Z - ac-confirmed: AC9: tsc --noEmit clean, full bun test 4330 pass / 1 fail (known pre-existing fwk-service.test.ts flake, unrelated, confirmed via direct isolated re-run).
