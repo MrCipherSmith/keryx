@@ -2182,3 +2182,173 @@ describe("flow 163 AC8 — tui-shell.ts's OpenTUI REPL never triggers the wrap-u
     expect(tuiSourceAc8).not.toMatch(/machine-wrap-up/);
   });
 });
+
+// --- flow 173 AC7/AC9: tui-shell.ts real exit-sweep wiring, and the
+// deliberate AC9 divergence — a background job must NOT be swept on
+// /clear|/new (source-text audit) ----------------------------------------
+//
+// `launchTuiAgentShell` calls `opts.makeAgentDeps(...)` three times per
+// session (confirmed above, SLATE-3a audit: the initial call, the
+// `/model`/`/connect` `switchTo(...)` rebuild, and the read-only
+// side-worker deps rebuild) — `shell.ts`'s own `makeAgentDeps` closure is
+// audited separately (`shell.test.ts`, "flow 173 AC7 — shell.ts TUI
+// makeAgentDeps jobRegistry session-scope") to thread ONE session-scoped
+// `jobRegistry` across all three. This file's job is the OTHER half: the
+// real session-exit trigger this file owns (`/exit`, `r.destroy()` — there
+// is no `process.on(SIGINT/SIGTERM)` handler in this codebase, confirmed by
+// grep, so `/exit` IS the graceful-exit path for AC7) must call the
+// `sweepBackgroundJobs` hook `makeAgentDeps` now returns on `AgentDeps`
+// (mirrors the already-existing `deps.resetSubagentBudget?.()` optional-hook
+// call-site precedent, used elsewhere in this same file).
+//
+// `/clear`/`/new` (the OTHER close-trigger in this file, which also calls
+// `closeSlateSession` + `sessions.clear()` + `deps.resetSubagentBudget?.()`)
+// must NOT gain this call — AC9 requires a running background job to
+// survive `/clear`/`/new`; only real session exit (`/exit`) sweeps it. This
+// is the direct TUI-surface analog of the readline-side negative assertion
+// in `shell.test.ts`'s AC7 audit above.
+//
+// `launchTuiAgentShell` has no headless injection seam (same precedent as
+// every other audit in this file/`shell.test.ts`) — source-text audit.
+//
+// PINNED SHAPE (task-implementer builds exactly this): inside the
+// `if (command.name === "/exit") {` branch's `void (async () => { ... })();`
+// IIFE, immediately after `await closeSlateSession(slateSession,
+// mintTimestampAttemptId);` and before `r.off("theme_mode", onThemeMode);`:
+//   await deps.sweepBackgroundJobs?.();
+// F-002 (review fix-round): the ORIGINAL version of this describe block
+// asserted `sweepBackgroundJobs` occurs EXACTLY ONCE in the file — true only
+// because, at the time, the busy-dispatch `/exit` branch and `onDestroy`
+// (Ctrl+C — `exitOnCtrlC: true` in `createShellRenderer`) neither swept nor
+// purged background jobs at all: a real gap (an orphaned, unsandboxed
+// process surviving Ctrl+C indefinitely), not a property worth locking in.
+// This block now asserts the CORRECT invariant instead: sweep (OS-level,
+// `deps.sweepBackgroundJobs?.()`/`liveDeps?.sweepBackgroundJobs?.()`) AND
+// purge (store-level, `jobs.removeAll()`/`liveJobs?.removeAll()`) both fire
+// at every REAL exit path — non-busy `/exit`, busy-dispatch `/exit`, and
+// `onDestroy` — and neither fires on `/clear`/`/new` (AC9: a running job
+// must survive those).
+describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real exit path, never on /clear|/new (source-text audit)", () => {
+  const tuiSourceAc7 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const sweepCall = "await deps.sweepBackgroundJobs?.();";
+  const removeAllCall = "jobs.removeAll();";
+  const onDestroySweepCall = "await liveDeps?.sweepBackgroundJobs?.();";
+  const onDestroyRemoveAllCall = "liveJobs?.removeAll();";
+
+  test("no process-level SIGINT/SIGTERM handler exists — /exit and onDestroy (Ctrl+C) are the real graceful-exit triggers this audit targets", () => {
+    expect(tuiSourceAc7).not.toMatch(/process\.on\(\s*["'](SIGINT|SIGTERM)["']/);
+  });
+
+  test("the non-busy /exit branch sweeps AND purges background jobs, right after closing the slate session", () => {
+    const exitIdx = tuiSourceAc7.indexOf('if (command.name === "/exit") {');
+    expect(exitIdx).toBeGreaterThanOrEqual(0);
+    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 500);
+    const closeIdx = exitBlock.indexOf("await closeSlateSession(slateSession, mintTimestampAttemptId);");
+    const sweepIdx = exitBlock.indexOf(sweepCall);
+    const removeIdx = exitBlock.indexOf(removeAllCall);
+    const destroyIdx = exitBlock.indexOf("r.destroy();");
+    expect(closeIdx).toBeGreaterThanOrEqual(0);
+    expect(sweepIdx).toBeGreaterThan(closeIdx);
+    expect(removeIdx).toBeGreaterThan(sweepIdx);
+    expect(destroyIdx).toBeGreaterThan(removeIdx);
+  });
+
+  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') ALSO sweeps AND purges background jobs — this is the SECOND real exit path that was previously missing it entirely", () => {
+    const exitIdx = tuiSourceAc7.indexOf('case "exit": {');
+    expect(exitIdx).toBeGreaterThanOrEqual(0);
+    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 500);
+    const closeIdx = exitBlock.indexOf("await closeSlateSession(slateSession, mintTimestampAttemptId);");
+    const sweepIdx = exitBlock.indexOf(sweepCall);
+    const removeIdx = exitBlock.indexOf(removeAllCall);
+    expect(closeIdx).toBeGreaterThanOrEqual(0);
+    expect(sweepIdx).toBeGreaterThan(closeIdx);
+    expect(removeIdx).toBeGreaterThan(sweepIdx);
+  });
+
+  test("F-002: onDestroy (Ctrl+C) ALSO sweeps AND purges background jobs, and defers resolveDone() until the sweep settles — the THIRD real exit path that was previously missing it entirely", () => {
+    const onDestroyIdx = tuiSourceAc7.indexOf("onDestroy: () => {");
+    expect(onDestroyIdx).toBeGreaterThanOrEqual(0);
+    const nextTopLevelMarker = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", onDestroyIdx);
+    expect(nextTopLevelMarker).toBeGreaterThan(onDestroyIdx);
+    const onDestroyBlock = tuiSourceAc7.slice(onDestroyIdx, nextTopLevelMarker);
+    const removeIdx = onDestroyBlock.indexOf(onDestroyRemoveAllCall);
+    const sweepIdx = onDestroyBlock.indexOf(onDestroySweepCall);
+    const resolveIdx = onDestroyBlock.indexOf("resolveDone();");
+    expect(removeIdx).toBeGreaterThanOrEqual(0);
+    expect(sweepIdx).toBeGreaterThan(removeIdx);
+    // resolveDone() is called from INSIDE the deferred async IIFE (a
+    // `finally`), after the sweep — never synchronously alongside it — so
+    // nothing downstream of `launchTuiAgentShell()` can observe `done`
+    // resolving before the sweep has actually run.
+    expect(resolveIdx).toBeGreaterThan(sweepIdx);
+  });
+
+  test("AC9: /clear|/new does NOT sweep or purge background jobs — a running job must survive it", () => {
+    const newBlockStart = tuiSourceAc7.indexOf('if (command.name === "/clear" || command.name === "/new") {');
+    expect(newBlockStart).toBeGreaterThanOrEqual(0);
+    const newBlockEnd = tuiSourceAc7.indexOf('if (command.name === "/goal") {', newBlockStart);
+    expect(newBlockEnd).toBeGreaterThan(newBlockStart);
+    const newBlock = tuiSourceAc7.slice(newBlockStart, newBlockEnd);
+    expect(newBlock).not.toContain(sweepCall);
+    expect(newBlock).not.toContain(removeAllCall);
+    expect(newBlock).not.toContain("removeAll");
+  });
+
+  test("sweepBackgroundJobs (OS-level) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
+    const plainOccurrences = tuiSourceAc7.split(sweepCall).length - 1;
+    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
+    const onDestroyOccurrences = tuiSourceAc7.split(onDestroySweepCall).length - 1;
+    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveDeps` ref, not `deps` directly)
+  });
+
+  test("jobs.removeAll() (store-level purge) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
+    const plainOccurrences = tuiSourceAc7.split(removeAllCall).length - 1;
+    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
+    const onDestroyOccurrences = tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1;
+    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveJobs` ref, not `jobs` directly)
+  });
+});
+
+// --- F-008: paintJobs must not repaint the whole sidebar on every output
+// chunk (source-text audit — `paintJobs` is a closure with no injection seam,
+// same precedent as every other audit in this file) ------------------------
+describe("flow 173 F-008 — paintJobs skips repaint on 'output' hints, mirroring paintSubagents' 'log' guard", () => {
+  const tuiSourceF008 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("paintJobs takes an optional hint and returns early on hint.kind === 'output'", () => {
+    const paintJobsIdx = tuiSourceF008.indexOf("const paintJobs = (hint?: BackgroundJobStoreHint): void => {");
+    expect(paintJobsIdx).toBeGreaterThanOrEqual(0);
+    const paintBackgroundJobSidebarIdx = tuiSourceF008.indexOf("paintBackgroundJobSidebar(otui, r, sbJobs, jobs.list(), {", paintJobsIdx);
+    expect(paintBackgroundJobSidebarIdx).toBeGreaterThan(paintJobsIdx);
+    const guardBlock = tuiSourceF008.slice(paintJobsIdx, paintBackgroundJobSidebarIdx);
+    expect(guardBlock).toContain('hint?.kind === "output"');
+    expect(guardBlock).toContain("return;");
+  });
+
+  test("jobs.subscribe(paintJobs) passes the BackgroundJobStore's hint through (subscribe/emit both carry it)", () => {
+    expect(tuiSourceF008).toContain("jobs.subscribe(paintJobs);");
+  });
+
+  test("BackgroundJobStoreHint is imported from background-job-session", () => {
+    expect(tuiSourceF008).toMatch(/import\s*\{\s*BackgroundJobStore,\s*type BackgroundJobStoreHint\s*\}\s*from\s*"\.\/background-job-session";/);
+  });
+});
+
+// --- F-003: the side-worker deps builder filters tools by risk==="read" AND
+// excludes shell_job_kill by name (source-text audit — `spawnSideWorker` is a
+// closure with no injection seam, same precedent as above) -----------------
+describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by name, keeps shell_job_output", () => {
+  const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("a module-level deny-list constant names shell_job_kill (not a risk-level change — AC6 is frozen)", () => {
+    expect(tuiSourceF003).toContain('const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);');
+  });
+
+  test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
+    const filterIdx = tuiSourceF003.indexOf("const tools = base.tools.filter(");
+    expect(filterIdx).toBeGreaterThanOrEqual(0);
+    const filterBlock = tuiSourceF003.slice(filterIdx, filterIdx + 300);
+    expect(filterBlock).toContain('t.definition.risk === "read"');
+    expect(filterBlock).toContain("SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name)");
+  });
+});

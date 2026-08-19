@@ -19,6 +19,7 @@ import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode }
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
@@ -222,6 +223,28 @@ export interface AgentDeps {
    * answer).
    */
   askUser?: AskUserFn;
+  /**
+   * Flow 173: session-teardown hook that SIGTERM→SIGKILLs every background
+   * job still tracked in this session's `JobRegistry` (by process group —
+   * see `background-job-registry.ts`'s `sweepAll`). Optional and a no-op
+   * when absent — every call site that predates this (tests, any driver that
+   * never wires a session-scoped `JobRegistry`) is unaffected. Called ONLY
+   * from a real session-exit path (`shell.ts`'s readline EOF/`/exit`/`/quit`,
+   * `tui-shell.ts`'s `/exit`) — deliberately NOT from `/new`/`/clear`, since a
+   * background job is meant to outlive those (AC9).
+   */
+  sweepBackgroundJobs?: () => Promise<void>;
+  /**
+   * Flow 173 (AC8): the SAME session-scoped `JobRegistry` instance backing
+   * `shell_exec`'s `background:true` path and `shell_job_output`/
+   * `shell_job_kill` (never a second, private registry) — exposed so a
+   * mounted TUI's job-inspector modal can call `.kill(jobId)` through the
+   * identical path the model-facing `shell_job_kill` tool itself uses.
+   * Optional and unused when absent (readline has no visual inspector to
+   * need it); `tui-shell.ts` reads it once per `makeAgentDeps` call, same as
+   * `sweepBackgroundJobs`.
+   */
+  jobRegistry?: JobRegistry;
 }
 
 export interface RunAgentTurnOptions {
@@ -378,6 +401,19 @@ export const ENV_AGENT_MAX_ATTEMPTS_PER_HASH = "KERYX_AGENT_MAX_ATTEMPTS_PER_HAS
 
 /** Hard ceiling when env requests an extreme per-signature attempt count. */
 export const MAX_AGENT_MAX_ATTEMPTS_PER_HASH = 10;
+
+/**
+ * Tool names exempt from {@link MAX_ATTEMPTS_PER_HASH} (flow 173 review
+ * finding F-006). `shell_job_output({job_id})` has exactly one input field,
+ * so polling the SAME background job repeatedly in one turn — its entire
+ * documented purpose — hashes identically every call; without this exemption
+ * the 4th poll of the same job in a turn is hard-refused, breaking the tool.
+ * Narrowly scoped by name (not a global cap raise): the call still charges
+ * exactly ONE budget slot (read/non-read + total) like any other repeated
+ * hash — only the per-signature ATTEMPT ceiling is lifted, so this does not
+ * weaken the loop-safety guard for any other tool.
+ */
+const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_output"]);
 
 /**
  * Resolve the per-signature attempt cap for an interactive agent turn.
@@ -833,7 +869,9 @@ export function reserveToolAttempt(
   const hash = toolCallHash(name, input);
   const maxAttempts = state.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const prev = state.attempts.get(hash) ?? 0;
-  if (prev >= maxAttempts) {
+  // F-006: a repeatable tool (see REPEATABLE_TOOL_NAMES) is never refused for
+  // repeating the same hash — its whole purpose is polling the same input.
+  if (prev >= maxAttempts && !REPEATABLE_TOOL_NAMES.has(name)) {
     return {
       ok: false,
       hash,

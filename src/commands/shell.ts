@@ -36,6 +36,8 @@ import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGran
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
+import { emitBackgroundJob } from "../tui/job-bridge";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -1229,6 +1231,9 @@ async function runAgentRepl(
     if (line === undefined) {
       // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
       await closeSlateSession(slateSession, mintTimestampAttemptId);
+      // Flow 173 (AC7): sweep every tracked background job (process-group
+      // SIGTERM→SIGKILL) on real session exit.
+      await deps.sweepBackgroundJobs?.();
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -1239,6 +1244,7 @@ async function runAgentRepl(
       if (command === "/exit" || command === "/quit") {
         // SLATE-5 close trigger: shell exit (explicit command).
         await closeSlateSession(slateSession, mintTimestampAttemptId);
+        await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
         return;
       }
       if (command === "/help") {
@@ -1724,6 +1730,17 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     // Search credentials stay inside the controller/transport boundary. The
     // model only sees the read-only `web_search` tool and its redacted result.
     const searchProviderController = createDefaultSearchProviderController();
+    // Flow 173 (AC7): ONE session-scoped JobRegistry, created here — OUTSIDE
+    // `makeAgentDeps` — and closed over by every call. `makeAgentDeps` is
+    // invoked multiple times per TUI session (initial launch, `/model`/
+    // `/connect` rebuild, a read-only side-worker rebuild); without this, each
+    // rebuild would fall through to `buildInteractiveAgentTools`'s own
+    // internal `jobRegistry ?? createJobRegistry(...)` fallback and mint a
+    // fresh, unreachable registry, orphaning any job started before a switch.
+    // `onEvent: emitBackgroundJob` feeds the TUI's Background Jobs sidebar/
+    // inspector live (flow 173, AC8) via `job-bridge.ts`'s module-level
+    // listener; a safe no-op whenever no TUI is mounted to register one.
+    const jobRegistry = createJobRegistry({ cwd, onEvent: emitBackgroundJob });
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -1786,6 +1803,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           searchController: searchProviderController,
           spawnTool,
           getSessionDir,
+          jobRegistry,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -1796,6 +1814,8 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        sweepBackgroundJobs: () => jobRegistry.sweepAll(),
+        jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
     };
@@ -1948,6 +1968,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       // memory in-process; search_code still falls back to the subprocess runner.
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
+      const jobRegistry = createJobRegistry({ cwd: agentCwd });
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when
@@ -1957,10 +1978,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       // every `slateSession` reassignment (see its own body below); the
       // getter here reads the box BY REFERENCE, never a snapshot.
       const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
-      // Same reset-per-turn wiring as the TUI's `makeAgentDeps` (this file,
-      // `createSpawnSubagentTool`'s `onLedgerReady`) — this readline REPL
-      // constructs its own, separate `spawn_subagent` tool instance, so it
-      // needs its own capture of the reset closure.
+      // Same reset-per-turn wiring as the TUI's makeAgentDeps (own spawn_subagent instance).
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
@@ -1995,6 +2013,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           searchController: searchProviderController,
           spawnTool,
           getSessionDir: () => slateSessionBox.current?.dir,
+          jobRegistry,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
@@ -2003,6 +2022,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is

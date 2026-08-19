@@ -16,9 +16,11 @@
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
+import type { JobRegistry } from "./background-job-registry";
 import { defaultSandboxProfile } from "../../process/sandbox/profile";
 import type { SandboxProfile } from "../../process/sandbox/profile";
 import { detectSandboxLauncher } from "../../process/sandbox/detect";
+import type { DetectOptions } from "../../process/sandbox/detect";
 import { wrapWithSandbox } from "../../process/sandbox/wrap";
 import { setupNetworkRun } from "../../process/sandbox/network-run";
 import type { MaskedCredential } from "../../process/sandbox/network-run";
@@ -194,6 +196,111 @@ export function resolveShellRestrictedMasks(
 }
 
 /**
+ * Resolve the caller's base env for a shell command: ensure keys entered in
+ * `keryx shell` (auth.json) are on `process.env` (`applySavedApiKeys`), then
+ * return a plain string-only copy so the child always sees them explicitly
+ * (some hosts inherit inconsistently when only cwd/stdout are set).
+ *
+ * Shared by BOTH the synchronous `shell_exec` path ({@link makeCommandRunner})
+ * and the background-job spawner (`background-job-registry.ts`'s
+ * `realSpawner`) — flow 173 finding F-014: the background path previously
+ * built no env at all and never called `applySavedApiKeys`.
+ */
+export async function resolveShellEnv(): Promise<Record<string, string>> {
+  const { applySavedApiKeys } = await import("../../../lib/shell-config");
+  applySavedApiKeys();
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === "string") {
+      env[k] = v;
+    }
+  }
+  return env;
+}
+
+/** The final argv/env/network-teardown a command should be spawned with. */
+export interface SandboxSpawnPlan {
+  spawnArgs: string[];
+  env: Record<string, string>;
+  /** Closes the restricted-network proxy worker (no-op unless restricted). */
+  netClose: () => Promise<void>;
+}
+
+/**
+ * Resolve `command`'s spawn plan: mode → profile → launcher detect
+ * (fail-closed when unavailable) → restricted-network masks/proxy →
+ * `wrapWithSandbox`. Mode `off` returns the plain `sh -c <command>` argv
+ * untouched.
+ *
+ * Shared by BOTH the synchronous `shell_exec` path ({@link makeCommandRunner})
+ * and the background-job spawner (`background-job-registry.ts`'s
+ * `realSpawner`) — flow 173 finding F-001: `background: true` previously
+ * bypassed this entire block (no sandbox mode resolution, no launcher
+ * detection, no fail-closed refusal), directly contradicting this flow's own
+ * `description.md` Out-of-Scope statement that background jobs "reuse that
+ * machinery." `detectOpts` is exposed only for deterministic unit tests
+ * (mirrors `detectSandboxLauncher`'s own injectable surface); every real call
+ * site omits it and gets real platform detection.
+ */
+export async function resolveSandboxedSpawn(
+  root: string,
+  command: string,
+  baseEnv: Record<string, string>,
+  detectOpts?: DetectOptions,
+): Promise<{ ok: true; plan: SandboxSpawnPlan } | { ok: false; result: InteractiveToolResult }> {
+  const env: Record<string, string> = { ...baseEnv };
+  const mode = resolveShellSandboxMode(process.env);
+  if (mode === "off") {
+    return { ok: true, plan: { spawnArgs: ["/bin/sh", "-c", command], env, netClose: async () => {} } };
+  }
+
+  let profile = shellSandboxProfile(root, mode, process.env);
+  const launcher = detectSandboxLauncher(detectOpts);
+  if (!launcher.available) {
+    return {
+      ok: false,
+      result: {
+        output: `shell_exec: OS sandbox requested (KERYX_SANDBOX_SHELL=${mode}) but the launcher is unavailable (${launcher.reason ?? "unknown"}); failing closed. Install it or set KERYX_SANDBOX_SHELL=off.`,
+        isError: true,
+      },
+    };
+  }
+
+  // Restricted network: start the loopback allowlist proxy, point the
+  // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
+  let netClose: () => Promise<void> = async () => {};
+  if (profile.network === "restricted") {
+    // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
+    // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
+    // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
+    const resolved = resolveShellRestrictedMasks(env, undefined, root);
+    if (!resolved.ok) {
+      return { ok: false, result: { output: `shell_exec: ${resolved.reason}`, isError: true } };
+    }
+    const { masks, tlsTerminate } = resolved;
+    const net = await setupNetworkRun(profile, {
+      ...(masks.length > 0 ? { masks } : {}),
+      ...(tlsTerminate ? { tlsTerminate: true } : {}),
+    });
+    profile = net.profile;
+    netClose = net.close;
+    for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;
+  }
+
+  const wrapped = wrapWithSandbox(
+    { path: "/bin/sh", argv: ["sh", "-c", command], env, cwd: root },
+    profile,
+    { platform: process.platform, ...(launcher.path ? { bwrapPath: launcher.path } : {}) },
+  );
+  if (!wrapped.ok) {
+    await netClose();
+    return { ok: false, result: { output: `shell_exec: sandbox refused the command: ${wrapped.reason}`, isError: true } };
+  }
+  const spawnArgs = [wrapped.command.path, ...wrapped.command.argv.slice(1)];
+  return { ok: true, plan: { spawnArgs, env, netClose } };
+}
+
+/**
  * The default runner: execute `command` in `cwd = root` via `sh -c`, capturing
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
  * `{ isError: ... }`. OS-contained when `KERYX_SANDBOX_SHELL` opts in.
@@ -204,66 +311,18 @@ export function makeCommandRunner(root: string): CommandRunner {
     // exactly once in the finally, after success or failure.
     let netClose: () => Promise<void> = async () => {};
     try {
-      // Ensure keys entered in `keryx shell` (auth.json) are on process.env, then
-      // pass env explicitly so the child always sees them (some hosts inherit
-      // inconsistently when only cwd/stdout are set).
-      const { applySavedApiKeys } = await import("../../../lib/shell-config");
-      applySavedApiKeys();
-      const env: Record<string, string> = {};
-      for (const [k, v] of Object.entries(process.env)) {
-        if (typeof v === "string") {
-          env[k] = v;
-        }
+      const baseEnv = await resolveShellEnv();
+      const resolved = await resolveSandboxedSpawn(root, command, baseEnv);
+      if (!resolved.ok) {
+        return resolved.result;
       }
+      netClose = resolved.plan.netClose;
 
-      // Default argv: `sh -c <command>`. When the sandbox is enabled, wrap it in
-      // the platform launcher; fail closed if the launcher is unavailable.
-      let spawnArgs = ["/bin/sh", "-c", command];
-      const mode = resolveShellSandboxMode(process.env);
-      if (mode !== "off") {
-        let profile = shellSandboxProfile(root, mode, process.env);
-        const launcher = detectSandboxLauncher();
-        if (!launcher.available) {
-          return {
-            output: `shell_exec: OS sandbox requested (KERYX_SANDBOX_SHELL=${mode}) but the launcher is unavailable (${launcher.reason ?? "unknown"}); failing closed. Install it or set KERYX_SANDBOX_SHELL=off.`,
-            isError: true,
-          };
-        }
-        // Restricted network: start the loopback allowlist proxy, point the
-        // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
-        if (profile.network === "restricted") {
-          // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
-          // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
-          // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
-          const resolved = resolveShellRestrictedMasks(env, undefined, root);
-          if (!resolved.ok) {
-            return { output: `shell_exec: ${resolved.reason}`, isError: true };
-          }
-          const { masks, tlsTerminate } = resolved;
-          const net = await setupNetworkRun(profile, {
-            ...(masks.length > 0 ? { masks } : {}),
-            ...(tlsTerminate ? { tlsTerminate: true } : {}),
-          });
-          profile = net.profile;
-          netClose = net.close;
-          for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;
-        }
-        const wrapped = wrapWithSandbox(
-          { path: "/bin/sh", argv: ["sh", "-c", command], env, cwd: root },
-          profile,
-          { platform: process.platform, ...(launcher.path ? { bwrapPath: launcher.path } : {}) },
-        );
-        if (!wrapped.ok) {
-          return { output: `shell_exec: sandbox refused the command: ${wrapped.reason}`, isError: true };
-        }
-        spawnArgs = [wrapped.command.path, ...wrapped.command.argv.slice(1)];
-      }
-
-      const proc = Bun.spawn(spawnArgs, {
+      const proc = Bun.spawn(resolved.plan.spawnArgs, {
         cwd: root,
         stdout: "pipe",
         stderr: "pipe",
-        env,
+        env: resolved.plan.env,
       });
 
       // Deadline. On expiry: SIGTERM, then SIGKILL if the process ignores it,
@@ -362,21 +421,35 @@ export function makeCommandRunner(root: string): CommandRunner {
 /**
  * The `shell_exec` tool, bound to `root`. `run` defaults to a real subprocess
  * runner and is injectable for deterministic tests. Risk `shell` → the driver
- * requires approval before this ever executes.
+ * requires approval before this ever executes (identically for `background:
+ * true` — flow 173 AC10: no separate or stricter gate).
+ *
+ * `jobRegistry` (flow 173, T2/T3) backs the optional `background: true` input:
+ * when set, `invoke` skips `run`/the synchronous deadline path ENTIRELY and
+ * delegates to `jobRegistry.start`, returning immediately with `{job_id,
+ * pid}` instead of blocking on exit. Omitted, `background` is absent/false is
+ * unaffected — the synchronous path this function already had.
  */
-export function shellExecTool(root: string, run: CommandRunner = makeCommandRunner(root)): InteractiveTool {
+export function shellExecTool(
+  root: string,
+  run: CommandRunner = makeCommandRunner(root),
+  jobRegistry?: JobRegistry,
+): InteractiveTool {
   return {
     definition: {
       name: "shell_exec",
       description:
         "Run a shell command in the project root (e.g. `git status`, `bun test`). Requires the user's approval " +
-        "before it runs. Input: { command: string }. Combined stdout+stderr is CAPPED at 20,000 bytes from the " +
-        "start of output — do not use sed/grep/cat/awk here to locate code (they can silently truncate before " +
-        "reaching what you need, and repeating the command returns the same truncated head); use search_code or " +
-        "graph_symbol instead, which are built for that and stay within the cap.",
+        "before it runs. Input: { command: string, background?: boolean }. Combined stdout+stderr is CAPPED at " +
+        "20,000 bytes from the start of output — do not use sed/grep/cat/awk here to locate code (they can " +
+        "silently truncate before reaching what you need, and repeating the command returns the same truncated " +
+        "head); use search_code or graph_symbol instead, which are built for that and stay within the cap. Set " +
+        "background:true for a long-running command (a dev server, a watch build) — it returns immediately with " +
+        "{job_id, pid} instead of blocking; poll shell_job_output(job_id) for new output and shell_job_kill" +
+        "(job_id) to stop it.",
       inputSchema: {
         type: "object",
-        properties: { command: { type: "string" } },
+        properties: { command: { type: "string" }, background: { type: "boolean" } },
         required: ["command"],
         additionalProperties: false,
       },
@@ -386,6 +459,19 @@ export function shellExecTool(root: string, run: CommandRunner = makeCommandRunn
       const command = typeof input.command === "string" ? input.command : "";
       if (command.length === 0) {
         return { output: "shell_exec requires a non-empty 'command'", isError: true };
+      }
+      if (input.background === true) {
+        if (jobRegistry === undefined) {
+          return { output: "shell_exec: background jobs are not available in this session", isError: true };
+        }
+        const started = await jobRegistry.start(command);
+        if (!started.ok) {
+          return { output: started.error, isError: true };
+        }
+        return {
+          output: JSON.stringify({ job_id: started.jobId, pid: started.pid, output: started.output }),
+          isError: false,
+        };
       }
       return run(command);
     },

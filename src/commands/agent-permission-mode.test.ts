@@ -9,6 +9,11 @@ import type { AgentIO } from "./agent";
 import type { PermissionMode } from "./permission-mode";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
+import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+// RED: flow 173 (background shell jobs) T2/T3 — this module does not exist
+// yet. Colocated sibling of `shell-exec-tool.ts`; see this flow's journal.md.
+import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
+import type { BackgroundProcessHandle, JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type {
   NormalizedEvent,
   NormalizedMessage,
@@ -404,4 +409,174 @@ test("onAutoApproved never fires for a plain read tool — that was already sile
     "go",
   );
   expect(autoApprovedCalls).toBe(0);
+});
+
+// --- flow 173 (background shell jobs) AC10: `background: true` must be
+// gated by the EXACT SAME `resolveApprovalDecision` outcome as an ordinary
+// shell_exec call, across ask/trust/auto, with the same destructive/
+// credentials hard floor — no separate or stricter gate. Extends the
+// ask/trust/auto coverage above using the REAL `shellExecTool` (not the
+// generic `fakeTool`) wired to an injectable `JobRegistry`, so "the tool
+// actually ran" is verified concretely — a job got registered — rather than
+// via a synthetic invoked flag.
+
+function fakeJobRegistryForApprovalTests(): { registry: JobRegistry } {
+  const registry = createJobRegistry({
+    initialBufferMs: 0,
+    spawn: (): BackgroundProcessHandle => ({
+      pid: 9001,
+      onOutput: () => {},
+      onExit: () => {},
+      kill: () => {},
+    }),
+  });
+  return { registry };
+}
+
+test("AC10: auto mode never calls requestApproval for shell_exec background:true (benign command)", async () => {
+  const { registry } = fakeJobRegistryForApprovalTests();
+  const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status","background":true}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(0);
+  expect(registry.list()).toHaveLength(1); // the background job actually started
+});
+
+test("AC10: auto mode still asks for a credentials-touching background command (same hard floor)", async () => {
+  const { registry } = fakeJobRegistryForApprovalTests();
+  const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);
+  const seen: { credentials?: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ credentials: meta?.credentials === true });
+      return false;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(
+        callScript("shell_exec", '{"command":"cat ~/.config/keryx/auth.json","background":true}'),
+      ),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ credentials: true }]);
+  expect(registry.list()).toHaveLength(0); // denied — no job ever started
+});
+
+test("AC10: trust mode auto-approves a benign background command without prompting", async () => {
+  const { registry } = fakeJobRegistryForApprovalTests();
+  const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "trust",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status","background":true}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(0);
+  expect(registry.list()).toHaveLength(1);
+});
+
+test("AC10: trust mode still asks for a destructive background command, and denial blocks the job from starting", async () => {
+  const { registry } = fakeJobRegistryForApprovalTests();
+  const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return false;
+    },
+    permissionMode: () => "trust",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"rm -rf /","background":true}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(1);
+  expect(registry.list()).toHaveLength(0);
+});
+
+test("AC10: ask mode (default, no permissionMode getter) still prompts for a background command exactly like any other shell_exec call", async () => {
+  const { registry } = fakeJobRegistryForApprovalTests();
+  const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    // no `permissionMode` field at all — mirrors the existing "no
+    // permissionMode getter behaves exactly like today's default (ask)" test
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status","background":true}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(1);
+  expect(registry.list()).toHaveLength(1);
 });
