@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T20:00:19.138Z",
+  "updatedAt": "2026-08-19T20:56:15.331Z",
   "source": {
     "type": "description",
     "ref": null
@@ -305,7 +305,7 @@
       "id": "T18",
       "title": "Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15",
         "T16"
@@ -316,7 +316,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T19",
@@ -488,6 +489,11 @@
       "at": "2026-08-19T20:00:19.138Z",
       "event": "task-added",
       "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
+    },
+    {
+      "at": "2026-08-19T20:56:15.331Z",
+      "event": "task-done",
+      "detail": "T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask"
     }
   ]
 }

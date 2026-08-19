@@ -1,5 +1,5 @@
 # PRD: Keryx External Agent Runtime
-Version: 0.2.0
+Version: 0.4.0
 
 ## Problem
 
@@ -129,8 +129,18 @@ a governed, observable, interruptible run — not a shell-out.
 ### Spawn authorisation
 
 - **R25.** Both the operator and the parent agent can initiate an external
-  spawn, and both paths pass the policy engine. A spawn decided by the model
-  defaults to `ask`; the default is configurable to `allow`.
+  spawn. A spawn decided by the **model** passes the policy engine and defaults
+  to `ask`; the default is configurable to `allow`.
+  **Amended 0.4.0 after implementation:** the **operator** path (`/delegate`)
+  does *not* pass `decide()`. Routing it there would ask the operator to approve
+  their own explicit command, and the machinery to do so does not exist — the
+  TUI has no tool-invocation path. The operator path is instead gated by the
+  capability, the per-agent enable, the depth ceiling and the worktree
+  containment, which is every control except the one whose purpose is to ask the
+  operator. Stated here rather than left as an undocumented divergence.
+  Consequence to accept: `/delegate` also bypasses `spawn_subagent`'s
+  `risk: "delegate"` approval and the MAE admission ledger, so an operator-
+  initiated run is not counted against the per-turn child budget.
 - **R26.** Per-run cost and turn count are surfaced in the TUI, using the CLI's
   own reported usage where available.
 

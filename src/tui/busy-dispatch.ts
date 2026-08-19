@@ -14,6 +14,14 @@ export type BusyDispatchTarget =
   | "help"
   | "interrupt"
   | "queue"
+  /**
+   * `/delegate` (flow 176 T18): starting an external child WHILE the main agent
+   * works is the point of the command, not an edge case — the operator hands a
+   * side investigation to a vendor CLI precisely so it runs alongside. Deferring
+   * it to a side worker would silently turn a paid external run into an
+   * in-process one.
+   */
+  | "delegate"
   | "session-info"
   | "flows"
   | "workspace"
@@ -43,6 +51,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/help") return "help";
   if (commandName === "/interrupt") return "interrupt";
   if (commandName === "/queue") return "queue";
+  if (commandName === "/delegate") return "delegate";
   if (commandName === "/think") return "think";
   if (commandName === "/expand") return "expand";
   if (commandName === "/copy") return "copy";

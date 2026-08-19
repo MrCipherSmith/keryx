@@ -447,6 +447,66 @@ the TUI**:
 
 Items 1–4 are one more integration task; item 5 is a live smoke test that costs
 subscription quota. Neither is T17 (docs), so the flow needs a task for them.
+
+## T18 — the operator loop (2026-08-19)
+
+By subagent, with the follow-up fixes here. External subsystem + TUI: **687
+tests, 0 fail.** Typecheck clean. Full suite varies 0–2 failures across runs,
+always the same pre-existing order-dependent test (`same-size historical receipt
+corruption…`, which passes 29/29 in isolation) — characterised at T6/T7 and not
+this work.
+
+Delivered: the live steering loop joined through a new module-level bridge and
+an `ExternalOperator`; an approver reusing the shell's existing composer-choice
+prompt; `/delegate <agent> <task>`; and an optional `runtime: "external"`
+discriminator marking external children in the existing sidebar rather than a
+parallel one. Changes to `tui-shell.ts` are nine small blocks, each justified in
+the agent's report by something that exists only in that scope.
+
+### The bug it found in my code, and the fix
+
+**The stdin route was unreachable.** `runtime.ts` called `superviseExternalRun`
+with no `stdin` field, so it defaulted to `"ignore"`; no run was ever launched
+steerable, `writeStdin` always returned false, and every operator message routed
+to resume. AC10's stdin half could not be satisfied end to end — and the agent
+reported it loudly instead of quietly routing around it, which is exactly right.
+
+Fixed properly rather than by special-casing: `ExternalAgentCodec` gains optional
+`buildStreamingArgv` / `encodeStdinMessage`, present exactly on the codec whose
+registry entry declares `streamingInput: true`. `RunExternalChildInput` gains
+`steerable`, the factory forwards it, and the shell sets it — it renders the
+transcript and offers a queue, so it pays for the open pipe. Asking for steerable
+on codex degrades to one-shot silently, which is correct: that CLI has no mid-run
+input channel at all. Five new tests pin both shapes, including that stdin is
+never inherited in either.
+
+### Two spec deviations recorded rather than papered over
+
+- **R25 amended (prd 0.4.0).** `/delegate` does not pass `decide()`. Routing it
+  there would ask the operator to approve their own explicit command, and the
+  TUI has no tool-invocation path to do it through. The operator path keeps every
+  other control — capability, per-agent enable, depth ceiling, worktree — and the
+  accepted consequence is that it also bypasses the MAE admission ledger, so an
+  operator-initiated run is not counted against the per-turn child budget.
+- **R15 is UNMET (specification 0.4.1).** None of §7.6's five supervision
+  triggers exists; the folded view has no consumer, so the parent receives an
+  external child's result and nothing before it. The seam is there — the
+  supervisor emits events live and the operator surface already consumes them —
+  so this is an unbuilt consumer, not a missing mechanism. Marked inline because
+  that section otherwise reads as shipped behaviour.
+
+### Other honest gaps from the report
+
+`user_message` reaches the store's stream, not `ExternalChildOutcome.events` (the
+supervisor's array is internal and cannot be injected mid-run). Resume argv is
+built and surfaced in the Command tab but never spawned — and note the deeper
+reason: the disposable worktree is removed the instant the run ends, so there is
+nothing left to resume *into* from the shell. A run refused at the gate leaves no
+store record, because the closure never runs; the refusal still reaches the
+operator through `/delegate`'s printed line and the failed sidebar row.
+
+Nothing has been rendered on a real terminal, and no vendor process has been
+spawned. That is T19.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -460,3 +520,4 @@ subscription quota. Neither is T17 (docs), so the flow needs a task for them.
 - 2026-08-19T19:59:49.748Z - task-done: T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume
 - 2026-08-19T20:00:18.919Z - task-added: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
 - 2026-08-19T20:00:19.138Z - task-added: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)
+- 2026-08-19T20:56:15.331Z - task-done: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask

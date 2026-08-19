@@ -9,6 +9,7 @@ import {
   formatSubagentMeta,
   formatSubagentRow,
   formatSubagentWork,
+  EXTERNAL_SUBAGENT_MARK,
   type SubagentSession,
 } from "./subagent-session";
 
@@ -181,4 +182,53 @@ test("store clips long log text and ring-buffers events while keeping the task",
   expect(events.length).toBeLessThanOrEqual(MAX_SUBAGENT_EVENTS);
   expect(events[0]?.kind).toBe("task");
   expect(events[0]?.text).toBe("keep-me");
+});
+
+// --- Flow 176 T18: the external-runtime discriminator ----------------------
+// Package: docs/requirements/keryx-external-agent-runtime §8.2.
+// An optional field on the EXISTING record, not a parallel sidebar: the two
+// kinds of child are the same thing to the operator, and splitting the list
+// would separate them purely by how they happen to be executed.
+
+test("an external child's row carries the runtime mark; a native one does not", () => {
+  const native = formatSubagentRow(session({ id: "sub:1", label: "review" }));
+  const ext = formatSubagentRow(session({ id: "sub:2", label: "review", runtime: "external" }));
+  expect(native).not.toContain(EXTERNAL_SUBAGENT_MARK);
+  expect(ext).toContain(EXTERNAL_SUBAGENT_MARK);
+});
+
+test("the mark comes out of the LABEL budget, so the row never outgrows the column", () => {
+  const width = SIDEBAR_TEXT_WIDTH;
+  const ext = formatSubagentRow(
+    session({ id: "sub:1", label: "a-very-long-subagent-label", runtime: "external", detail: "read-only" }),
+    width,
+  );
+  // A row that grows to fit a marker wraps and destroys the list's alignment.
+  expect(ext.length).toBeLessThanOrEqual(width);
+});
+
+test("Meta names the runtime and the agent, so 'which CLI spent my subscription' is answerable", () => {
+  const meta = formatSubagentMeta(
+    session({ id: "sub:1", label: "probe", runtime: "external", agentId: "codex-cli" }),
+    2_000,
+  );
+  expect(meta).toContain("external (codex-cli)");
+  expect(formatSubagentMeta(session({ id: "sub:2", label: "probe" }), 2_000)).toContain("keryx");
+});
+
+test("the mark is sticky: the terminal upsert never makes an external child look native", () => {
+  const store = new SubagentSessionStore();
+  store.apply({
+    kind: "upsert",
+    id: "sub:1",
+    label: "probe",
+    status: "running",
+    runtime: "external",
+    agentId: "codex-cli",
+  });
+  // `spawn_subagent` emits its terminal upsert from a different branch; a row
+  // that lost its mark halfway would look native exactly when it finishes.
+  store.apply({ kind: "upsert", id: "sub:1", label: "probe", status: "done", detail: "Completed" });
+  expect(store.get("sub:1")?.runtime).toBe("external");
+  expect(store.get("sub:1")?.agentId).toBe("codex-cli");
 });

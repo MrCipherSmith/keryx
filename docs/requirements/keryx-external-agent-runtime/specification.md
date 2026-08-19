@@ -1,5 +1,5 @@
 # Specification: Keryx External Agent Runtime
-Version: 0.4.0
+Version: 0.4.1
 
 > **0.4.0 (flow 176, T8/T9 codecs).** Implementing the two codecs surfaced a
 > silent-failure trap the previous three versions all prescribed: `claude -p`
@@ -543,6 +543,15 @@ updates derived from the fold:
 On any trigger the parent may inject a correcting message, kill the child, or
 escalate to the operator. The operator's modal continues to render every event
 regardless — rendering costs no tokens (D-10).
+
+> **NOT IMPLEMENTED as of 0.4.0.** None of the five triggers exists in the
+> codebase, and the folded view has no consumer: the parent agent currently
+> receives an external child's result and nothing before it. The plumbing that
+> would carry them does exist — the supervisor emits canonical events live
+> through `onEvent`, and the operator surface already consumes that stream — so
+> this is an unbuilt consumer rather than a missing seam. R15 is therefore
+> **unmet**, and saying so here is the point: the rest of this section reads as
+> shipped behaviour and is not.
 
 ### 7.7 Failure
 

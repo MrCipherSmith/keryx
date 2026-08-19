@@ -8,6 +8,7 @@ import {
   filterCommands,
   findAgentCommand,
   isCommandInMode,
+  parseDelegateCommand,
   renderCommandHelp,
 } from "./agent-commands";
 
@@ -44,6 +45,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/clear",
     "/interrupt",
     "/queue",
+    "/delegate",
     "/exit",
   ]);
 });
@@ -115,6 +117,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/clear",
     "/interrupt",
     "/queue",
+    "/delegate",
     "/exit",
   ]);
 });
@@ -217,6 +220,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/clear",
     "/interrupt",
     "/queue",
+    "/delegate",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
@@ -341,4 +345,55 @@ test("renderCommandHelp `only` restricts the list to a surface's subset", () => 
   expect(help).toContain("/help");
   expect(help).toContain("/expand");
   expect(help).not.toContain("/compact");
+});
+
+// --- /delegate (flow 176 T18) ----------------------------------------------
+// Package: docs/requirements/keryx-external-agent-runtime §8.2, prd R25.
+// Pure parsing against the registry TABLE — nothing here starts a process.
+
+test("parseDelegateCommand: agent plus task", () => {
+  expect(parseDelegateCommand("codex-cli find the flaky test")).toEqual({
+    ok: true,
+    agentId: "codex-cli",
+    task: "find the flaky test",
+  });
+});
+
+test("parseDelegateCommand: the task keeps its own whitespace and newlines", () => {
+  const parsed = parseDelegateCommand("claude-cli look at  src/a.ts\nand src/b.ts");
+  expect(parsed).toEqual({ ok: true, agentId: "claude-cli", task: "look at  src/a.ts\nand src/b.ts" });
+});
+
+test("parseDelegateCommand: an empty tail shows the usage line", () => {
+  const parsed = parseDelegateCommand("   ");
+  expect(parsed.ok).toBe(false);
+  if (parsed.ok) return;
+  expect(parsed.reason).toContain("/delegate <agent> <task>");
+});
+
+test("parseDelegateCommand: an agent with no task is refused, never dispatched", () => {
+  // Guessing which half the operator meant would spend real subscription quota
+  // on a one-word task.
+  const parsed = parseDelegateCommand("codex-cli");
+  expect(parsed.ok).toBe(false);
+  if (parsed.ok) return;
+  expect(parsed.reason).toContain("both an agent and a task");
+});
+
+test("parseDelegateCommand: an unknown agent points at `keryx agents external list`", () => {
+  const parsed = parseDelegateCommand("gpt-cli do the thing");
+  expect(parsed.ok).toBe(false);
+  if (parsed.ok) return;
+  expect(parsed.reason).toContain('unknown external agent "gpt-cli"');
+  expect(parsed.reason).toContain("keryx agents external list");
+});
+
+test("/delegate is agent-mode only and its help text names both arguments", () => {
+  const entry = AGENT_SLASH_COMMANDS.find((c) => c.name === "/delegate");
+  expect(entry).toBeDefined();
+  expect(entry?.modes).toEqual(["agent"]);
+  expect(describeCommand(entry!, "agent")).toContain("/delegate <agent> <task>");
+  expect(findAgentCommand("/delegate codex-cli hi", "agent")?.name).toBe("/delegate");
+  expect(findAgentCommand("/delegate codex-cli hi", "chat")).toBeUndefined();
+  expect(describeUnavailableCommand("/delegate codex-cli hi", "chat")).toContain("agent mode");
 });

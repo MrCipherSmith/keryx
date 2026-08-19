@@ -494,6 +494,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
+      // --- External runtime seam (flow 176) ---------------------------------
+      // Reached only when the dispatch asks for it AND the host wired the hook,
+      // so every existing call site falls straight through. Read BEFORE the
+      // first fleet upsert (flow 176 T18) so the sidebar row is marked with its
+      // runtime from the moment it appears (package specification §8.2) — a row
+      // that starts life looking native and is corrected later is a row the
+      // operator has already read.
+      const externalRuntime = readExternalRuntimeRequest(input);
+      const externalAgentId =
+        externalRuntime === undefined || typeof externalRuntime.agent !== "string"
+          ? undefined
+          : externalRuntime.agent;
+      const externalMark =
+        externalRuntime !== undefined && deps.runExternal !== undefined
+          ? ({ runtime: "external", ...(externalAgentId === undefined ? {} : { agentId: externalAgentId }) } as const)
+          : ({} as const);
       emitSubagentFleet({
         kind: "upsert",
         id: workerId,
@@ -502,14 +518,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         detail: mode === "read_only" ? "read-only" : "general",
         model: `${runModel.provider}/${runModel.model}`,
         task,
+        ...externalMark,
       });
 
-      // --- External runtime seam (flow 176) ---------------------------------
-      // Reached only when the dispatch asks for it AND the host wired the hook,
-      // so every existing call site falls straight through. Placed here because
-      // `spawnSubagent` above has already applied admission, the ledger and the
-      // depth/child caps: an external child is gated identically to a native one.
-      const externalRuntime = readExternalRuntimeRequest(input);
+      // Placed here because `spawnSubagent` above has already applied admission,
+      // the ledger and the depth/child caps: an external child is gated
+      // identically to a native one.
       if (externalRuntime !== undefined && deps.runExternal !== undefined) {
         const externalStartedAt = performance.now();
         try {
@@ -521,12 +535,21 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             status: external.isError ? "failed" : "done",
             detail: external.status,
             task,
+            ...externalMark,
           });
           return external;
         } catch (err) {
           // A throwing hook is a keryx bug, not an agent failure, and must not
           // surface as though the external agent reported something.
-          emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "error", task });
+          emitSubagentFleet({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "error",
+            task,
+            ...externalMark,
+          });
           return {
             status: "Error",
             output: `external runtime failed before the agent could report: ${(err as Error).message}`,

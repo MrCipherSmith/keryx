@@ -382,3 +382,102 @@ describe("a complete run", () => {
     expect(result?.output).toContain("git worktree add failed");
   });
 });
+
+// --- Flow 176 T18: the run-scoped observer ---------------------------------
+// The four flat callbacks are FACTORY-scoped — one closure serves every
+// dispatch — so an event arriving through them cannot say which child produced
+// it. The operator surface keys everything on the run id, and without one a
+// second run's transcript appends to the first one's record.
+describe("the run-scoped observer", () => {
+  test("every signal carries the run id, and the flat callbacks still fire", async () => {
+    const flat: string[] = [];
+    const seen: Array<[string, string]> = [];
+    const starts: unknown[] = [];
+    const hook = await createRunExternal(
+      options({
+        spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port,
+        onEvent: () => flat.push("event"),
+        onOutcome: () => flat.push("outcome"),
+        observer: {
+          onStart: (run) => starts.push(run),
+          onEvent: (id, event) => seen.push([id, event.kind]),
+          onOutcome: (id) => seen.push([id, "outcome"]),
+          onResult: (id) => seen.push([id, "result"]),
+        },
+      }),
+    );
+    const result = await hook?.(request());
+    expect(result?.status).toBe("Completed");
+    expect(flat.length).toBeGreaterThan(0);
+    const ids = new Set(seen.map(([id]) => id));
+    expect([...ids]).toEqual(["sub:11111111-2222-3333-4444-555555555555"]);
+    expect(seen.some(([, kind]) => kind === "outcome")).toBe(true);
+    expect(seen.some(([, kind]) => kind === "result")).toBe(true);
+    // Announced twice on purpose: once as soon as the agent is known (so a
+    // pre-launch refusal is attributable), once after the model is resolved.
+    expect(starts.length).toBeGreaterThanOrEqual(1);
+    expect(starts[0]).toMatchObject({
+      runId: "sub:11111111-2222-3333-4444-555555555555",
+      agentId: "codex-cli",
+      label: "flake-hunt",
+    });
+  });
+
+  test("a refusal that never reached a process is still reported to the observer", async () => {
+    const seen: unknown[] = [];
+    const hook = await createRunExternal(
+      options({
+        config: { ...ENABLED, spawnDecision: "ask" },
+        observer: { onResult: (id, result) => seen.push([id, result.status]) },
+      }),
+    );
+    const result = await hook?.(request());
+    expect(result?.status).toBe("Denied");
+    // A silent no-op is the one failure mode security-policy §5 forbids: the
+    // operator must be able to see that a dispatch did not happen.
+    expect(seen).toEqual([["sub:11111111-2222-3333-4444-555555555555", "Denied"]]);
+  });
+
+  test("an approver may refuse with its OWN sentence, and that sentence reaches the caller", async () => {
+    const hook = await createRunExternal(
+      options({
+        config: { ...ENABLED, spawnDecision: "ask" },
+        approve: async () => ({ ok: false, reason: "this host has no way to ask" }),
+      }),
+    );
+    const result = await hook?.(request());
+    expect(result?.status).toBe("Denied");
+    // "nobody could be asked" and "you said no" are different facts.
+    expect(result?.output).toBe("this host has no way to ask");
+  });
+
+  test("the object approval form is accepted alongside the boolean one", async () => {
+    const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
+    const hook = await createRunExternal(
+      options({
+        config: { ...ENABLED, spawnDecision: "ask" },
+        spawn: sp.port,
+        approve: async () => ({ ok: true }),
+      }),
+    );
+    const result = await hook?.(request());
+    expect(result?.status).toBe("Completed");
+    expect(sp.calls).toHaveLength(1);
+  });
+
+  test("the approver is told which run it is being asked about", async () => {
+    const seen: unknown[] = [];
+    const hook = await createRunExternal(
+      options({
+        config: { ...ENABLED, spawnDecision: "ask" },
+        approve: async (req) => {
+          seen.push(req.workerId);
+          return false;
+        },
+      }),
+    );
+    await hook?.(request());
+    // `/delegate` recognises its own run by this id and does not re-ask.
+    expect(seen).toEqual(["sub:11111111-2222-3333-4444-555555555555"]);
+  });
+});

@@ -13,7 +13,7 @@
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { humanFleetPhase, type FleetWorkerStatus } from "./worker-fleet";
-import type { SubagentFleetEvent, SubagentWorkKind } from "./subagent-bridge";
+import type { SubagentFleetEvent, SubagentRuntimeKind, SubagentWorkKind } from "./subagent-bridge";
 
 export type SubagentWorkEvent = {
   at: number;
@@ -38,7 +38,31 @@ export type SubagentSession = {
   startedAt: number;
   endedAt?: number;
   events: SubagentWorkEvent[];
+  /**
+   * Which runtime executed this child (flow 176, §8.2). Absent = native.
+   *
+   * An OPTIONAL DISCRIMINATOR on the existing record rather than a second,
+   * parallel sidebar: the two kinds of child are the same thing to the operator
+   * — a unit of delegated work with a status, a label and an inspector — and
+   * splitting the list would put a native child and an external one in different
+   * places purely because of how they happen to be executed. Everything that
+   * genuinely differs (argv, session handle, sandbox, reported cost) lives on
+   * `ExternalRunView` and is reached through the external inspector, so this
+   * record carries the discriminator and nothing else.
+   */
+  runtime?: SubagentRuntimeKind;
+  /** Registry id of the external CLI, when `runtime` is `"external"`. */
+  agentId?: string;
 };
+
+/**
+ * Sidebar marker for an externally-executed child.
+ *
+ * One column, prefixed to the label rather than replacing the status glyph:
+ * status and runtime are independent facts and a row must not have to choose
+ * which one to show.
+ */
+export const EXTERNAL_SUBAGENT_MARK = "⤳";
 
 const STATUS_GLYPH: Record<FleetWorkerStatus, string> = {
   queued: "○",
@@ -88,9 +112,13 @@ export function formatElapsed(ms: number): string {
 export function formatSubagentRow(session: SubagentSession, width = SIDEBAR_TEXT_WIDTH): string {
   const glyph = STATUS_GLYPH[session.status];
   const phase = humanFleetPhase(session.status, session.detail);
+  // The runtime mark is taken out of the LABEL's budget, not added to the row
+  // width: the sidebar is a fixed-width column, and a row that grows to fit a
+  // marker is a row that wraps and destroys the list's alignment.
+  const mark = session.runtime === "external" ? EXTERNAL_SUBAGENT_MARK : "";
   const budget = Math.max(4, width - glyph.length - 1);
-  const labelBudget = Math.min(12, budget);
-  const label = clip(session.label, labelBudget);
+  const labelBudget = Math.max(1, Math.min(12, budget) - mark.length);
+  const label = `${mark}${clip(session.label, labelBudget)}`;
   const used = glyph.length + 1 + label.length;
   const detBudget = width - used - 1;
   const det = detBudget >= 3 && phase.length > 0 ? ` ${clip(phase, detBudget)}` : "";
@@ -148,6 +176,14 @@ export function formatSubagentMeta(session: SubagentSession, now = Date.now()): 
     ["Label", session.label],
     ["Status", session.status],
     ["Detail", session.detail ?? "—"],
+    // Named, not just marked: the sidebar has one column for the glyph and the
+    // Meta view is where "which vendor CLI spent my subscription" is answerable.
+    [
+      "Runtime",
+      session.runtime === "external"
+        ? `external${session.agentId === undefined ? "" : ` (${session.agentId})`}`
+        : "keryx",
+    ],
     ["Model", session.model ?? "—"],
     ["Elapsed", formatElapsed(end - session.startedAt)],
     ["Task", session.task ?? "—"],
@@ -225,6 +261,20 @@ export class SubagentSessionStore {
           ? { model: prev.model }
           : {}),
       ...(taskClipped !== undefined ? { task: taskClipped } : {}),
+      // Sticky once set: `spawn_subagent` emits its terminal upsert from a
+      // different branch than its "running" one, and a child that lost its
+      // external mark halfway through would look native in the row the operator
+      // reads at the moment it finishes.
+      ...(event.runtime !== undefined
+        ? { runtime: event.runtime }
+        : prev?.runtime !== undefined
+          ? { runtime: prev.runtime }
+          : {}),
+      ...(event.agentId !== undefined
+        ? { agentId: event.agentId }
+        : prev?.agentId !== undefined
+          ? { agentId: prev.agentId }
+          : {}),
     };
     if (status === "done" || status === "failed") {
       next.endedAt = prev?.endedAt ?? this.now();

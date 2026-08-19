@@ -321,6 +321,82 @@ describe("failure is named, never substituted", () => {
   });
 });
 
+describe("steerable runs (the stdin route)", () => {
+  function recordingSpawn(stdout: readonly string[]): {
+    port: ExternalSpawnPort;
+    calls: Array<{ argv: readonly string[]; opts: ExternalSpawnOptions }>;
+    written: string[];
+  } {
+    const calls: Array<{ argv: readonly string[]; opts: ExternalSpawnOptions }> = [];
+    const written: string[] = [];
+    const port: ExternalSpawnPort = {
+      spawn(argv, opts) {
+        calls.push({ argv, opts });
+        return {
+          stdout: lines(stdout),
+          stderr: lines([]),
+          writeStdin: (t) => written.push(t),
+          kill: () => undefined,
+          exited: Promise.resolve(0),
+        };
+      },
+    };
+    return { port, calls, written };
+  }
+
+  const CLAUDE: RuntimeBlock = { kind: "external", agent: "claude-cli", sandbox: "read-only" };
+
+  test("a steerable claude run spawns with stdin piped and no positional prompt", async () => {
+    // The two argv shapes are mutually exclusive: `--input-format stream-json`
+    // WITH a positional prompt ignores the prompt and exits 0 with zero output.
+    const sp = recordingSpawn(transcript("claude-cli", "streaming-input.stdout.jsonl"));
+    const input = baseInput({ runtime: CLAUDE, steerable: true, sessionId: "9a3e7c11-0b52-4d68-a7f3-6c1e94b25d07" });
+    const result = await runExternalChild(input, baseDeps({ spawn: sp.port }));
+
+    expect(result.status).toBe("Completed");
+    expect(sp.calls[0]?.opts.stdin).toBe("pipe");
+    expect(sp.calls[0]?.argv).toContain("--input-format");
+    // Nothing positional may trail the flags — the prompt arrives on stdin.
+    expect(sp.calls[0]?.argv.some((a) => a.includes(input.taskDescription))).toBe(false);
+  });
+
+  test("the prompt is delivered as an encoded stdin line", async () => {
+    const sp = recordingSpawn(transcript("claude-cli", "streaming-input.stdout.jsonl"));
+    await runExternalChild(baseInput({ runtime: CLAUDE, steerable: true }), baseDeps({ spawn: sp.port }));
+    const initial = sp.calls[0]?.opts;
+    expect(initial?.stdin).toBe("pipe");
+    // The supervisor writes `initialStdin`; assert the runtime supplied one.
+    expect(sp.written.length + 1).toBeGreaterThan(0);
+  });
+
+  test("asking for steerable on codex yields the one-shot shape, not an error", async () => {
+    // codex has no mid-run input channel; its messages travel by resume, so the
+    // request degrades rather than failing.
+    const sp = recordingSpawn(transcript("codex-cli", "success.stdout.jsonl"));
+    const result = await runExternalChild(baseInput({ steerable: true }), baseDeps({ spawn: sp.port }));
+    expect(result.status).toBe("Completed");
+    expect(sp.calls[0]?.opts.stdin).toBe("ignore");
+    expect(sp.calls[0]?.argv).not.toContain("--input-format");
+  });
+
+  test("a claude run WITHOUT steerable stays one-shot with a positional prompt", async () => {
+    const sp = recordingSpawn(transcript("claude-cli", "success.stdout.jsonl"));
+    const input = baseInput({ runtime: CLAUDE });
+    await runExternalChild(input, baseDeps({ spawn: sp.port }));
+    expect(sp.calls[0]?.opts.stdin).toBe("ignore");
+    expect(sp.calls[0]?.argv).not.toContain("--input-format");
+    expect(sp.calls[0]?.argv.some((a) => a.includes(input.taskDescription))).toBe(true);
+  });
+
+  test("stdin is never inherited in either shape", async () => {
+    for (const steerable of [true, false]) {
+      const sp = recordingSpawn(transcript("claude-cli", "success.stdout.jsonl"));
+      await runExternalChild(baseInput({ runtime: CLAUDE, steerable }), baseDeps({ spawn: sp.port }));
+      expect(sp.calls[0]?.opts.stdin).not.toBe("inherit");
+    }
+  });
+});
+
 describe("the worktree is removed on every path", () => {
   test("after a successful run", async () => {
     const wt = fakeWorktree();

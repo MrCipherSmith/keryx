@@ -94,6 +94,18 @@ export interface RunExternalChildInput {
   readonly parentEnv: Readonly<Record<string, string | undefined>>;
   /** This child's nesting depth, written to the marker keryx honours on entry. */
   readonly depth: number;
+  /**
+   * Launch a STEERABLE run, so operator messages can reach the child mid-flight.
+   *
+   * Honoured only when the resolved codec has a streaming shape — codex has no
+   * mid-run input channel and its messages travel by resume regardless. Asking
+   * for it there is not an error; it simply yields the one-shot shape.
+   *
+   * This is a SPAWN-TIME decision and cannot be revisited: the flag that accepts
+   * a later message also forbids the positional prompt that starts a one-shot
+   * run, so there is no conversion afterwards (§5.2).
+   */
+  readonly steerable?: boolean;
 }
 
 /** The impure seams and gates. */
@@ -215,7 +227,7 @@ export async function runExternalChild(
 
   const created = await deps.worktree.create(input.worktreeId);
   try {
-    const argv = codec.buildArgv({
+    const runInput = {
       prompt: assembled.prompt,
       cwd: created.path,
       sandbox,
@@ -224,7 +236,20 @@ export async function runExternalChild(
       ...(input.runtime.maxCostUnits === undefined || input.runtime.maxCostUnits === null
         ? {}
         : { maxCostUnits: input.runtime.maxCostUnits }),
-    });
+    };
+
+    // Steerable when the caller asked AND this agent has a streaming shape.
+    // The two argv forms are mutually exclusive: a steerable run takes NO
+    // positional prompt, because `claude -p` given both `--input-format
+    // stream-json` and a positional prompt ignores the prompt and exits 0 with
+    // zero output — a silent no-op wearing a success code. So the decision is
+    // made HERE, once, before the process exists, and cannot be revisited: a
+    // one-shot run can never be sent a later message (§5.2, §7.5).
+    const streaming =
+      input.steerable === true && codec.buildStreamingArgv !== undefined && codec.encodeStdinMessage !== undefined;
+    const argv = streaming
+      ? (codec.buildStreamingArgv as NonNullable<typeof codec.buildStreamingArgv>)(runInput)
+      : codec.buildArgv(runInput);
 
     const outcome = await superviseExternalRun(
       {
@@ -233,6 +258,16 @@ export async function runExternalChild(
         env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
         prompt: assembled.prompt,
         timeoutMs: input.timeoutMs,
+        // `"ignore"` otherwise, never inherited: a CLI that inherits an open
+        // stdin announces it is reading from it and waits forever.
+        stdin: streaming ? "pipe" : "ignore",
+        ...(streaming
+          ? {
+              initialStdin: [
+                (codec.encodeStdinMessage as NonNullable<typeof codec.encodeStdinMessage>)(assembled.prompt),
+              ],
+            }
+          : {}),
       },
       {
         spawn: deps.spawn,

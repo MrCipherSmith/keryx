@@ -90,6 +90,92 @@ export interface ExternalSpawnApprovalRequest {
   readonly label: string;
   readonly task: string;
   readonly sandbox: string | undefined;
+  /**
+   * The run id (`spawn_subagent`'s `workerId`), so a host can correlate the
+   * question with the run it is about.
+   *
+   * Load-bearing for the operator loop (flow 176, T18): `/delegate` starts a run
+   * the operator has ALREADY decided on, and the host recognises it by this id
+   * rather than by re-prompting for something the operator just typed.
+   */
+  readonly workerId: string;
+}
+
+/**
+ * An approver's answer.
+ *
+ * `boolean` is kept for the hosts and tests that predate the object form, and
+ * the object form exists so a REFUSAL CAN CARRY ITS OWN SENTENCE. A host that
+ * genuinely cannot ask — no TTY, no approver attached, a non-interactive
+ * transport — must refuse (security-policy §6) and the operator has to be told
+ * WHY nothing happened, which a bare `false` cannot express (the generic
+ * "was not approved" reads as "you said no").
+ */
+export type ExternalSpawnApproval =
+  | boolean
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
+
+/** Fold an approver's answer into a verdict plus, where it has one, its named reason. */
+function foldApproval(value: ExternalSpawnApproval): { ok: true } | { ok: false; reason?: string } {
+  if (value === true) return { ok: true };
+  if (value === false) return { ok: false };
+  if (value.ok) return { ok: true };
+  return { ok: false, reason: value.reason };
+}
+
+/**
+ * Launch facts about one run, announced to {@link ExternalRunObserver.onStart}.
+ *
+ * MAY BE ANNOUNCED MORE THAN ONCE for the same `runId`, and deliberately so:
+ * the agent and the sandbox are known as soon as the runtime block is read,
+ * while the model is only known after the per-agent config has been consulted.
+ * Announcing the first set early is what lets a run REFUSED before launch still
+ * be attributable to an agent in the operator's surface; a consumer folds repeat
+ * announcements onto one record (`ExternalRunStore.start` does exactly that).
+ */
+export interface ExternalRunAnnouncement {
+  /** `spawn_subagent`'s `workerId` — the id every other observer callback keys on. */
+  readonly runId: string;
+  readonly label: string;
+  readonly task: string;
+  readonly agentId?: string;
+  readonly sandbox?: string;
+  /** Absent means the CLI resolves its own default under the active subscription. */
+  readonly model?: string;
+}
+
+/**
+ * A RUN-SCOPED view of everything the flat `onEvent`/`onWarning`/`onSpawned`/
+ * `onOutcome` options report.
+ *
+ * Those four are factory-scoped: one closure serves every dispatch, so an event
+ * arriving through them carries no way to say WHICH child produced it. That is
+ * fine for a single-run host and wrong for the operator surface, where two
+ * children can be live at once and the sidebar, the modal and the addressee
+ * queues are all keyed by run id — without the id, a second run's transcript
+ * would append to the first one's. Every callback here therefore leads with the
+ * run id. The flat options are untouched and still fire, so existing callers are
+ * unaffected.
+ */
+export interface ExternalRunObserver {
+  /** Launch facts. See {@link ExternalRunAnnouncement} — may fire more than once per run. */
+  readonly onStart?: (run: ExternalRunAnnouncement) => void;
+  /** The live handle (`kill()`, `writeStdin()`), once the child process exists. */
+  readonly onSpawned?: (runId: string, handle: ExternalRunHandle) => void;
+  /** One canonical event, as it arrives. */
+  readonly onEvent?: (runId: string, event: ExternalEvent) => void;
+  /** One advisory warning. Recorded, never thrown. */
+  readonly onWarning?: (runId: string, warning: string) => void;
+  /** The full outcome — argv, cost, parse skips — for a run that reached the runtime. */
+  readonly onOutcome?: (runId: string, outcome: ExternalChildOutcome) => void;
+  /**
+   * The result handed back to `spawn_subagent`, INCLUDING the refusals that
+   * happen before any process exists. Without it a run denied by the gate, by a
+   * disabled agent, or by the approver would simply never appear in the
+   * operator's surface — the silent no-op security-policy §5 forbids.
+   */
+  readonly onResult?: (runId: string, result: StructuredSubagentResult) => void;
 }
 
 /** Everything {@link createRunExternal} needs, all of it injectable for offline tests. */
@@ -118,11 +204,22 @@ export interface CreateRunExternalOptions {
    * refuses every run with a named reason rather than silently self-approving
    * something the operator asked to be asked about (security-policy §6).
    */
-  readonly approve?: (request: ExternalSpawnApprovalRequest) => Promise<boolean>;
+  readonly approve?: (request: ExternalSpawnApprovalRequest) => Promise<ExternalSpawnApproval>;
   /** The operator's uncommitted diff. Defaults to `git diff HEAD` in `cwd`; a detached worktree has none. */
   readonly readWorkingDiff?: () => Promise<string | undefined>;
   /** Ceiling on external nesting. Defaults to {@link DEFAULT_MAX_EXTERNAL_DEPTH}. */
   readonly maxExternalDepth?: number;
+  /**
+   * Launch steerable runs, so operator messages can reach a child mid-flight.
+   *
+   * Off by default because a steerable run costs an open stdin pipe for its
+   * whole life and only pays for itself when a host is actually watching. A
+   * host that renders the transcript and offers a message queue should set it;
+   * a headless caller should not. Honoured only where the codec has a streaming
+   * shape — on codex it degrades to one-shot silently, which is correct rather
+   * than an error, since that CLI has no mid-run input channel at all.
+   */
+  readonly steerable?: boolean;
   /** Canonical events from the run, for the TUI/monitor folds. */
   readonly onEvent?: (event: ExternalEvent) => void;
   /**
@@ -146,6 +243,12 @@ export interface CreateRunExternalOptions {
    * context, where cost figures become tokens and argv becomes an instruction.
    */
   readonly onOutcome?: (outcome: ExternalChildOutcome) => void;
+  /**
+   * Run-scoped mirror of the four callbacks above, plus launch facts and the
+   * final result. See {@link ExternalRunObserver} for why the run id cannot be
+   * recovered from the flat callbacks.
+   */
+  readonly observer?: ExternalRunObserver;
   /** Why the capability was unavailable, when {@link createRunExternal} returns undefined. */
   readonly onUnavailable?: (reason: string) => void;
   /** Session-id generator; injectable so a test's argv is deterministic. */
@@ -251,20 +354,41 @@ export async function createRunExternal(
   const maxExternalDepth = options.maxExternalDepth ?? DEFAULT_MAX_EXTERNAL_DEPTH;
 
   return async (request: RunExternalRequest): Promise<StructuredSubagentResult> => {
+    const observer = options.observer;
+    const runId = request.workerId;
+    /** Every exit path goes through here, so no refusal can escape the observer. */
+    const report = (result: StructuredSubagentResult): StructuredSubagentResult => {
+      observer?.onResult?.(runId, result);
+      return result;
+    };
+
     // `readRuntimeBlock` expects a dispatch-shaped object; the hook is handed the
     // block itself. Re-wrapping reuses the one defensive reader rather than
     // adding a second, divergent parser of the same contract.
     const block = readRuntimeBlock({ runtime: request.runtime });
     if (block === undefined || block.kind !== "external") {
-      return denied("the dispatch's runtime block is missing or is not an external runtime block");
+      return report(denied("the dispatch's runtime block is missing or is not an external runtime block"));
     }
 
     const agentId = typeof block.agent === "string" ? block.agent : undefined;
+    // Announced BEFORE the gates below, so a run refused for a disabled agent or
+    // a declined approval still lands in the operator's surface with the agent it
+    // was refused FOR — a refusal nobody can see is the silent no-op §5 forbids.
+    observer?.onStart?.({
+      runId,
+      label: request.label,
+      task: request.task,
+      ...(agentId === undefined ? {} : { agentId }),
+      ...(block.sandbox === undefined ? {} : { sandbox: block.sandbox }),
+    });
+
     if (agentId !== undefined) {
       const perAgent = agentConfig(config, agentId);
       if (!perAgent.enabled) {
-        return denied(
-          `external agent "${agentId}" is disabled; enable it under \`externalAgents.agents.${agentId}\` in the keryx user config`,
+        return report(
+          denied(
+            `external agent "${agentId}" is disabled; enable it under \`externalAgents.agents.${agentId}\` in the keryx user config`,
+          ),
         );
       }
     }
@@ -274,25 +398,32 @@ export async function createRunExternal(
         // Fail-closed on purpose. `ask` is the default precisely because an
         // agent nobody is watching can exhaust paid quota, and a host that
         // wired no approver cannot ask — so it must not proceed as if it had.
-        return denied(
-          "model-initiated external spawns require approval (`externalAgents.spawnDecision` is \"ask\") " +
-            "and this host wired no approver; set it to \"allow\" to permit unattended spawns",
+        return report(
+          denied(
+            "model-initiated external spawns require approval (`externalAgents.spawnDecision` is \"ask\") " +
+              "and this host wired no approver; set it to \"allow\" to permit unattended spawns",
+          ),
         );
       }
-      let approved: boolean;
+      let verdict: { ok: true } | { ok: false; reason?: string };
       try {
-        approved = await options.approve({
-          agentId: agentId ?? "(unnamed)",
-          label: request.label,
-          task: request.task,
-          sandbox: block.sandbox,
-        });
+        verdict = foldApproval(
+          await options.approve({
+            agentId: agentId ?? "(unnamed)",
+            label: request.label,
+            task: request.task,
+            sandbox: block.sandbox,
+            workerId: runId,
+          }),
+        );
       } catch {
         // An approver that throws has not approved anything.
-        approved = false;
+        verdict = { ok: false };
       }
-      if (!approved) {
-        return denied(`the external spawn of "${agentId ?? "(unnamed)"}" was not approved`);
+      if (!verdict.ok) {
+        return report(
+          denied(verdict.reason ?? `the external spawn of "${agentId ?? "(unnamed)"}" was not approved`),
+        );
       }
     }
 
@@ -314,6 +445,17 @@ export async function createRunExternal(
       ...(block.maxCostUnits === undefined ? {} : { maxCostUnits: block.maxCostUnits }),
     };
 
+    // Second announcement: the model is only resolved once the dispatch and the
+    // per-agent config have both been consulted. See {@link ExternalRunAnnouncement}.
+    observer?.onStart?.({
+      runId,
+      label: request.label,
+      task: request.task,
+      ...(agentId === undefined ? {} : { agentId }),
+      ...(block.sandbox === undefined ? {} : { sandbox: block.sandbox }),
+      ...(model === null || model === undefined ? {} : { model }),
+    });
+
     const workingDiff = await readWorkingDiff();
 
     try {
@@ -333,6 +475,12 @@ export async function createRunExternal(
           // Checked on ENTRY against the inherited marker: this child runs one
           // level deeper than whatever this process already is.
           depth: readExternalDepth(env) + 1,
+          // Steerability is decided HERE, before the process exists, and cannot
+          // be revisited: the flag that accepts a later operator message also
+          // forbids the positional prompt a one-shot run starts with. Honoured
+          // only where the codec has a streaming shape (claude); on codex it
+          // degrades to one-shot and messages travel by resume.
+          ...(options.steerable === true ? { steerable: true } : {}),
         },
         {
           spawn,
@@ -340,20 +488,32 @@ export async function createRunExternal(
           capability: () => ({ enabled: true }),
           ...(options.detect === undefined ? {} : { detect: options.detect }),
           maxExternalDepth,
-          ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
-          ...(options.onWarning === undefined ? {} : { onWarning: options.onWarning }),
-          ...(options.onSpawned === undefined ? {} : { onSpawned: options.onSpawned }),
+          // Both sinks fire for every signal: the flat option keeps existing
+          // callers working, the observer adds the run id they cannot recover.
+          onEvent: (event) => {
+            options.onEvent?.(event);
+            observer?.onEvent?.(runId, event);
+          },
+          onWarning: (warning) => {
+            options.onWarning?.(warning);
+            observer?.onWarning?.(runId, warning);
+          },
+          onSpawned: (handle) => {
+            options.onSpawned?.(handle);
+            observer?.onSpawned?.(runId, handle);
+          },
         },
       );
       options.onOutcome?.(outcome);
-      return toStructuredResult(outcome);
+      observer?.onOutcome?.(runId, outcome);
+      return report(toStructuredResult(outcome));
     } catch (cause) {
       // `runExternalChild` is written not to throw, but its injected ports can.
       // A thrown port must not reach `spawn_subagent` as an exception: that path
       // reports "external runtime failed before the agent could report", which
       // is true but loses which port failed.
       const message = cause instanceof Error ? cause.message : String(cause);
-      return { status: "Error", output: `external runtime failed: ${message}`, isError: true };
+      return report({ status: "Error", output: `external runtime failed: ${message}`, isError: true });
     }
   };
 }
@@ -386,10 +546,16 @@ export function createLazyRunExternal(options: CreateRunExternalOptions): RunExt
       // cache lets a transient config-read failure be retried on the next call.
       resolved = undefined;
       const message = cause instanceof Error ? cause.message : String(cause);
-      return denied(`the external agent runtime could not be resolved: ${message}`);
+      const result = denied(`the external agent runtime could not be resolved: ${message}`);
+      options.observer?.onResult?.(request.workerId, result);
+      return result;
     }
     if (hook === undefined) {
-      return denied('the external agent runtime is unavailable; run `keryx agents external list` for the reason');
+      const result = denied(
+        'the external agent runtime is unavailable; run `keryx agents external list` for the reason',
+      );
+      options.observer?.onResult?.(request.workerId, result);
+      return result;
     }
     return hook(request);
   };

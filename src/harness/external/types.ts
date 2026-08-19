@@ -140,4 +140,18 @@ export interface ExternalAgentCodec {
    * but READS it for codex (`thread_id`, emitted on `thread.started`).
    */
   buildResumeArgv(sessionRef: string, message: string, input: ExternalRunInput): readonly string[];
+  /**
+   * Argv for a STEERABLE run, when this agent has one. Optional because only
+   * `claude-cli` does — codex has no documented mid-run input channel and routes
+   * operator messages through resume instead (registry `streamingInput`).
+   *
+   * A steerable run takes NO positional prompt: the prompt and every later
+   * operator message arrive on stdin as {@link encodeStdinMessage} lines. The
+   * two shapes are mutually exclusive, and combining them is a measured silent
+   * no-op — `claude -p` with `--input-format stream-json` and a positional
+   * prompt ignores the prompt and exits 0 with zero output.
+   */
+  buildStreamingArgv?(input: ExternalRunInput): readonly string[];
+  /** Encode one stdin line for a steerable run. Present exactly when {@link buildStreamingArgv} is. */
+  encodeStdinMessage?(text: string): string;
 }
