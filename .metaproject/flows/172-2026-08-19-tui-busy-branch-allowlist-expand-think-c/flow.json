@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "id": "172",
+  "slug": "tui-busy-branch-allowlist-expand-think-c",
+  "title": "TUI busy-branch allowlist: /expand /think /copy /workspace /review",
+  "status": "in-progress",
+  "createdAt": "2026-08-19T04:56:34.997Z",
+  "updatedAt": "2026-08-19T05:33:02.242Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2155d180349f63c4c4955f854f77ed9ae13522e6ca01756b65dfb15fbe65beee",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Extract classifyBusyDispatch + write busy-dispatch.test.ts (operator-requested test coverage addendum)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-19T04:56:34.997Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-19T04:58:03.659Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-19T04:58:03.748Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-19T04:58:06.215Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-19T05:10:50.805Z",
+      "event": "ac-updated",
+      "detail": "Operator requested explicit test coverage for runLine's busy-branch dispatch (none existed for any of its 24 commands); PRD addendum §12 / TRD §8 resolve this via a new pure classifyBusyDispatch function, unit-tested directly."
+    },
+    {
+      "at": "2026-08-19T05:11:10.624Z",
+      "event": "ac-updated",
+      "detail": "Added AC9/AC10 for the classifyBusyDispatch extraction + its unit tests; revised AC8 wording since new test files are now expected."
+    },
+    {
+      "at": "2026-08-19T05:11:13.786Z",
+      "event": "task-added",
+      "detail": "T5: Extract classifyBusyDispatch + write busy-dispatch.test.ts (operator-requested test coverage addendum)"
+    },
+    {
+      "at": "2026-08-19T05:11:20.776Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-19T05:21:12.832Z",
+      "event": "task-done",
+      "detail": "T5: Extract classifyBusyDispatch + write busy-dispatch.test.ts (operator-requested test coverage addendum)"
+    },
+    {
+      "at": "2026-08-19T05:21:12.918Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-19T05:33:02.242Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

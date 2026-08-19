@@ -1,0 +1,55 @@
+// Pure classification of `runLine`'s busy-branch dispatch (flow 172 T5,
+// operator-requested test-coverage addendum; see
+// docs/requirements/keryx-tui-busy-command-allowlist/trd.md §8).
+//
+// This is a straight transcription of the busy branch's `if`-chain ordering
+// in `tui-shell.ts` (`if (chrome.isBusy()) { ... }`) into a returned tag, so
+// the dispatch logic can be unit-tested directly without mounting any
+// renderer/chrome. Deliberately has ZERO dependency on `@opentui/core`, any
+// renderer, or `chrome` — keep it that way.
+
+/** Every distinct outcome `runLine`'s busy branch can dispatch to. */
+export type BusyDispatchTarget =
+  | "exit"
+  | "help"
+  | "interrupt"
+  | "queue"
+  | "session-info"
+  | "flows"
+  | "workspace"
+  | "review"
+  | "think"
+  | "expand"
+  | "copy"
+  | "deferred"
+  | "not-a-command";
+
+/**
+ * Classifies a submitted line into the busy-branch dispatch target
+ * `runLine` would route it to, while a main agent turn is in progress.
+ * Order matters and mirrors the live `if`-chain exactly.
+ */
+export function classifyBusyDispatch(params: {
+  line: string;
+  commandName: string | undefined;
+  isSessionInfo: boolean;
+  isFlows: boolean;
+  isWorkspace: boolean;
+  isReview: boolean;
+}): BusyDispatchTarget {
+  const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview } = params;
+  if (commandName === "/exit") return "exit";
+  if (commandName === "/help") return "help";
+  if (commandName === "/interrupt") return "interrupt";
+  if (commandName === "/queue") return "queue";
+  if (commandName === "/think") return "think";
+  if (commandName === "/expand") return "expand";
+  if (commandName === "/copy") return "copy";
+  const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview;
+  if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
+  if (isBusyReadonlyCommand && isFlows) return "flows";
+  if (isBusyReadonlyCommand && isWorkspace) return "workspace";
+  if (isBusyReadonlyCommand && isReview) return "review";
+  if (commandName !== undefined || line.startsWith("/")) return "deferred";
+  return "not-a-command";
+}
