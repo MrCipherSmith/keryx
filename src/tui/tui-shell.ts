@@ -55,6 +55,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
+import { classifyBusyDispatch } from "./busy-dispatch";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -3008,92 +3009,130 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       const displayLine = summarizeSubmittedLine(line);
-      // Reuses `/status`'s and `/flows`'s own single-source-of-truth command
-      // matchers instead of a second, separately-maintained name list that
-      // could silently drift from them.
-      const isBusyReadonlyCommand = isSessionInfoCommand(line) || isFlowsCommand(line);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
       // `stopBusy` below are the only things that move.
       if (chrome.isBusy()) {
         const command = findAgentCommand(line, "agent");
-        if (command?.name === "/exit") {
-          // SLATE-5 close trigger: shell exit (explicit command, while busy).
-          void (async () => {
-            await closeSlateSession(slateSession, mintTimestampAttemptId);
-            r.off("theme_mode", onThemeMode);
-            r.destroy();
-          })();
-          return;
-        }
-        if (command?.name === "/help") {
-          transcript.add(
-            new otui.TextRenderable(r, {
-              id: `c${uid++}`,
-              content: otui.t`${otui.cyan(`❯ ${line}`)}`,
-              marginTop: 1,
-            }),
-          );
-          io.onSystem?.(
-            "Main agent is busy. Type a normal question to spawn a side worker " +
-              "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
-          );
-          return;
-        }
-        if (command?.name === "/interrupt") {
-          if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
-            mainTurnAbortController.abort();
-            io.onSystem?.("◇ main turn interrupted.\n");
+        // Reuses `/status`'s and `/flows`'s own single-source-of-truth command
+        // matchers instead of a second, separately-maintained name list that
+        // could silently drift from them.
+        const decision = classifyBusyDispatch({
+          line,
+          commandName: command?.name,
+          isSessionInfo: isSessionInfoCommand(line),
+          isFlows: isFlowsCommand(line),
+          isWorkspace: isWorkspaceCommand(line),
+          isReview: isReviewCommand(line),
+        });
+        switch (decision) {
+          case "exit": {
+            // SLATE-5 close trigger: shell exit (explicit command, while busy).
+            void (async () => {
+              await closeSlateSession(slateSession, mintTimestampAttemptId);
+              r.off("theme_mode", onThemeMode);
+              r.destroy();
+            })();
             return;
           }
-          io.onSystem?.("◇ no active main turn to interrupt.\n");
-          return;
-        }
-        if (command?.name === "/queue") {
-          const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
-          if (parsed === undefined) {
-            io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
+          case "help": {
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `c${uid++}`,
+                content: otui.t`${otui.cyan(`❯ ${line}`)}`,
+                marginTop: 1,
+              }),
+            );
+            io.onSystem?.(
+              "Main agent is busy. Type a normal question to spawn a side worker " +
+                "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
+            );
             return;
           }
-          const index = parsed.position - 1;
-          if (index < 0 || index >= mainQueue.length) {
-            io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
+          case "interrupt": {
+            if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
+              mainTurnAbortController.abort();
+              io.onSystem?.("◇ main turn interrupted.\n");
+              return;
+            }
+            io.onSystem?.("◇ no active main turn to interrupt.\n");
             return;
           }
-          if (parsed.action === "remove") {
-            removeMainQueue(index);
-            io.onSystem?.(`◇ removed q${parsed.position} from the main queue.\n`);
+          case "queue": {
+            const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
+            if (parsed === undefined) {
+              io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
+              return;
+            }
+            const index = parsed.position - 1;
+            if (index < 0 || index >= mainQueue.length) {
+              io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
+              return;
+            }
+            if (parsed.action === "remove") {
+              removeMainQueue(index);
+              io.onSystem?.(`◇ removed q${parsed.position} from the main queue.\n`);
+              return;
+            }
+            if (parsed.action === "edit") {
+              editMainQueue(index);
+              io.onSystem?.(`◇ q${parsed.position} moved to the composer — edit and submit to re-queue at the same position.\n`);
+              return;
+            }
+            forceMainQueue(index);
             return;
           }
-          if (parsed.action === "edit") {
-            editMainQueue(index);
-            io.onSystem?.(`◇ q${parsed.position} moved to the composer — edit and submit to re-queue at the same position.\n`);
+          case "think": {
+            if (toggleNewestBlock("thought") === undefined) {
+              io.onSystem?.("No reasoning yet.\n");
+            }
             return;
           }
-          forceMainQueue(index);
-          return;
-        }
-        if (isBusyReadonlyCommand && isSessionInfoCommand(line)) {
-          showSessionInfo();
-          return;
-        }
-        if (isBusyReadonlyCommand && isFlowsCommand(line)) {
-          showFlows();
-          return;
-        }
-        // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
-        if (command !== undefined || line.startsWith("/")) {
-          transcript.add(
-            new otui.TextRenderable(r, {
-              id: `c${uid++}`,
-              content: otui.t`${otui.yellow(
-                `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
-              )}`,
-              marginTop: 1,
-            }),
-          );
-          return;
+          case "expand": {
+            if (toggleNewestBlock("output") === undefined && toggleNewestBlock() === undefined) {
+              io.onSystem?.("Nothing to expand — no tool output yet.\n");
+            }
+            return;
+          }
+          case "copy": {
+            const target = newestBlock();
+            if (target === undefined || !copyBlock(target.id)) {
+              io.onSystem?.("Nothing to copy yet.\n");
+            }
+            return;
+          }
+          case "session-info": {
+            showSessionInfo();
+            return;
+          }
+          case "flows": {
+            showFlows();
+            return;
+          }
+          case "workspace": {
+            showWorkspace();
+            return;
+          }
+          case "review": {
+            showReview();
+            return;
+          }
+          case "deferred": {
+            // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `c${uid++}`,
+                content: otui.t`${otui.yellow(
+                  `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
+                )}`,
+                marginTop: 1,
+              }),
+            );
+            return;
+          }
+          case "not-a-command":
+            break;
         }
         // Recipient selector: post the message to the MAIN queue (default) or
         // the read-only side-1 worker. Shown only while main is busy. `runLine`
