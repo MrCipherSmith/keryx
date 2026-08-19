@@ -1,5 +1,5 @@
 # Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
@@ -39,7 +39,10 @@ What already exists and is reused (not claimed as this package's work):
   extends rather than replaces.
 - `src/tui/modal-host.ts`, `subagent-inspector.ts`, `subagent-session.ts` and
   the pure queue helpers in `src/tui/main-queue.ts`.
-- `src/capability/` — the opt-in capability gate this feature ships behind.
+- `src/capability/` — the opt-in capability **framework** this feature ships
+  behind. Note (flow 176 T1): `CAPABILITY_REGISTRY` is currently an empty array
+  and the only entry is `REFERENCE_CAPABILITY_DESCRIPTOR`, so this feature would
+  be its first real descriptor — the seam exists, a populated registry does not.
 
 A working precedent for the mechanism itself lives in
 `scripts/benchmark/run-ablation-codex.ts`, which already spawns
@@ -73,7 +76,9 @@ isolated worktree against an already-authenticated CLI.
   `spawnChild` so an external child inherits the existing budget ledger, depth
   caps, worktree isolation, quarantine and `agent-event` stream unchanged.
 - **Read-only execution** in a disposable worktree, held by three independent
-  mechanisms (sandbox flag, tool deny-list, throwaway checkout).
+  mechanisms: the CLI's own sandbox flag, a restricted tool roster
+  (`--tools`, an allow-list — verified live in flow 176 T1), and the throwaway
+  checkout, which is the load-bearing one.
 - A **supervision channel**: a folded, trigger-driven view for the parent agent,
   and a bidirectional message path so the operator can steer a running external
   agent from the TUI using the existing main-queue semantics.

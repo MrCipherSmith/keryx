@@ -1,5 +1,5 @@
 # Decisions: Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
@@ -196,6 +196,22 @@ implementation, escape routes were discovered only by asking the agent directly
 what it could still reach, and it named two the author had not considered.
 Anything a CLI gains in a future version is permitted by default. A guarantee
 resting on such a list is a guarantee with an expiry date nobody is told about.
+
+**Amended by flow 176 T1 (2026-08-19).** Layer two is stronger than this text
+assumed. Probing `claude 2.1.220` showed `--tools Read Grep Glob` yields a
+roster of exactly `["Glob","Grep","Read"]` — it is a genuine **allow-list**, so
+future tools are excluded by default rather than admitted. The reference
+implementation's lesson was about `--allowed-tools`, a different flag that is
+indeed not a restriction; the two were conflated in 0.1.0. Specification §5.3
+now uses `--tools`.
+
+This does **not** move the guarantee. A roster governs which tools exist, not
+what the model does with the ones it has — `Read` alone still reaches every path
+the process can — and codex constrains itself by a different mechanism
+(`-s read-only`) whose completeness we equally cannot prove. The measured
+starting point remains sobering: with four tools denied, the probe was still
+offered twenty-seven, including `NotebookEdit`, `Monitor`, `Workflow`,
+`CronCreate` and `TaskCreate`. The worktree stays the load-bearing layer.
 
 A disposable worktree survives a hole in the list: the write lands somewhere
 that is deleted afterwards. Since the entire value proposition of this release

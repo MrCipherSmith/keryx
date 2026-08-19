@@ -1,5 +1,12 @@
 # Specification: Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
+
+> **0.2.0 (flow 176, T1 discovery).** Four corrections from reading the code and
+> probing both live CLIs, replacing assumptions carried in 0.1.0. The execution
+> seam is not `spawnChild`; `--tools` is a real allow-list and supersedes the
+> deny-list as the primary tool restriction; `--safe-mode` is added; the event
+> mapping gains the types the probes actually emitted. Details inline below and
+> in the flow-176 journal.
 
 ## 1. Identity
 
@@ -12,8 +19,28 @@ Version: 0.1.0
 | Contract owner | `.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json` |
 | Status | specification ready (future) — nothing below is implemented |
 
-The runtime is a second implementation behind `spawnChild`. It does not
-introduce a parallel spawn path, a parallel budget, or a parallel event stream.
+**The seam, stated precisely (corrected in 0.2.0).** `spawnChild`
+(`src/harness/child/spawn.ts:119`) is a **pure authorisation and contract
+builder** — it evaluates the fail-closed guard order (caps → budget → policy →
+model), returns a `ChildContractExtension`, a session-entry payload and child
+provenance, and executes nothing. Its only injected dependencies are `idSeq`
+and `clock`.
+
+Execution happens one layer up, in
+`src/harness/tool/builtin/spawn-subagent-tool.ts:873`, which calls
+`runAgentTurn(io, childDeps, history, userLine, …)` **directly** — the import is
+static and the call is not injectable. `SpawnSubagentToolDeps` injects the
+*provider* (`makeProvider`), not the *runner*.
+
+So there is no execution-strategy seam today; this package creates one. The
+external runtime adds an optional `runChild` strategy to
+`SpawnSubagentToolDeps`, defaulting to the current `runAgentTurn` path so every
+existing call site is unchanged — the same additive-optional-dep idiom that file
+already uses for `getSlateSession` and `onLedgerReady`.
+
+Authorisation is unaffected: an external child still passes through
+`spawnChild`, and there is no parallel spawn path, budget ledger, depth
+accounting, or event stream.
 
 ## 2. Storage structure
 
@@ -39,6 +66,15 @@ exercised against recorded transcripts on machines with neither CLI installed.
 ## 3. Configuration
 
 The feature is an opt-in capability resolved through `src/capability/`.
+
+**Corrected in 0.2.0:** `src/capability/` is a *framework*, not a populated
+gate — `CAPABILITY_REGISTRY` in `registry.ts:23` is an empty array, and the only
+descriptor present is `REFERENCE_CAPABILITY_DESCRIPTOR`. This feature would be
+the first real entry. T15 must therefore budget for registering a descriptor
+against the `CapabilitySpec`/`CapabilityAdapter` seam in `seam.ts`, not merely
+for reading a flag, and must confirm that the golden-rule and
+no-optional-imports tests in that directory still pass with a populated
+registry.
 
 ```jsonc
 // user-global shell config
@@ -144,49 +180,72 @@ result. The prompt is last and is a single element.
 
 ```text
 claude -p --output-format stream-json --input-format stream-json --verbose
-       --disallowed-tools <DENIED...>
+       --safe-mode
+       --tools <ALLOWED...>
        --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-       --session-id <uuid>
        --max-budget-usd <n>
        --json-schema <result-schema>
        --add-dir <worktree>
-       --model <model>
+       --session-id <uuid>
        <prompt>
 ```
 
-Two constraints the argv test must pin, both learned from measured failures:
+Verified live against 2.1.220 (flow 176, T1). Constraints the argv test pins:
 
-- `--disallowed-tools`, `--mcp-config` and `--tools` are **variadic**. The
-  prompt must never sit directly behind one, or it is consumed as another value.
-  A single-valued flag (`--model`) is placed last as the separator.
-- `--verbose` accompanies `stream-json` under `-p`. The exact accepted
-  combination is pinned by the argv test against the known-good version range
-  rather than assumed stable.
+- `--tools`, `--mcp-config` and `--disallowed-tools` are **variadic**, so the
+  prompt must never sit directly behind one. This is not theoretical: a probe
+  that placed the prompt after `--mcp-config` failed with `MCP config file not
+  found: …/Rep` — the CLI had taken the prompt's first word as a file path. A
+  single-valued flag must separate them, and `--session-id <uuid>` is chosen for
+  the job rather than `--model`, because the model is deliberately left unpinned
+  (§3) while a session id is always assigned.
+- `--verbose` accompanies `stream-json` under `-p`; the combination above was
+  confirmed accepted.
+- **`--safe-mode`** disables the operator's customisations — CLAUDE.md, skills,
+  plugins, hooks, MCP servers — while leaving auth, model selection, built-in
+  tools and permissions normal. It is **not** `--bare`, which would force
+  API-key auth and defeat running on the subscription. Measured effect: without
+  it the probe emitted `system/hook_started` and `system/hook_response` events
+  because the operator's `SessionStart` hooks ran inside the child, and exposed
+  ~130 slash commands; with it, no hook events and 46 built-ins.
 
 `--permission-mode plan` is **not** used. It injects the vendor's own plan
 workflow into the system prompt, causing the agent to answer with a
 plan-approval request — exit 0, non-empty output, and therefore indistinguishable
-from a successful run. Read-only is enforced by §7.2 instead.
+from a successful run. Read-only is enforced by §5.3 and §7.2 instead.
 
-### 5.3 Denied tools (`claude-cli`)
+### 5.3 Tool roster (`claude-cli`) — allow-list, corrected in 0.2.0
 
-The deny-list must name **delegation routes**, not only direct effects, because
-an agent denied `Edit` can still reach a shell through a monitoring tool and a
-subagent through a task tool:
+**`--tools` is an allow-list over the built-in roster and it works.** Probed
+live: `--tools Read Grep Glob` produced `system/init` reporting exactly
+`["Glob","Grep","Read"]`. That is the roster the model is offered, so anything
+the CLI gains in a future version is **excluded by default** — the opposite of a
+deny-list's failure mode.
 
 ```text
-Bash, Edit, Write, NotebookEdit,
-Task, Agent, Workflow, Skill, Monitor,
-WebFetch, WebSearch,
-EnterWorktree, ExitWorktree, RemoteTrigger,
-CronCreate, CronDelete, PushNotification, SendMessage,
-TaskCreate, TaskUpdate, TaskStop, Artifact
+--tools Read Grep Glob
 ```
 
-`--allowed-tools` is not used as a restriction: it does not act as one. Anything
-the CLI gains in a later version is permitted by default; that is the standing
-cost of a deny-list and the reason §7.2's worktree, not this list, is the
-guarantee.
+This supersedes 0.1.0's deny-list, which was inherited from a reference
+implementation whose measured lesson concerned **`--allowed-tools`** — a
+permission-rule flag that indeed does not restrict the roster. `--tools` is a
+different flag and was never tested there. The two must not be conflated.
+
+The ground truth that motivated the correction: with only
+`--disallowed-tools Bash Edit Write Task`, the probe's `system/init` still
+offered 27 tools, including `Monitor`, `NotebookEdit` (a write tool),
+`Workflow`, `Skill`, `TaskCreate`/`TaskUpdate`/`TaskStop`, `WebFetch`,
+`WebSearch`, `CronCreate`, `RemoteTrigger`, `SendMessage`, `ScheduleWakeup` and
+`ToolSearch`. A deny-list would have to enumerate all of them, correctly, and
+again after every release.
+
+`--disallowed-tools` may still be passed as a redundant second layer, but it is
+not the mechanism and its list is not required to be complete. MCP tools are
+excluded separately by `--strict-mcp-config` with an empty config, confirmed by
+`mcp_servers: []` in the same probe.
+
+Neither flag is the guarantee. §7.2's worktree remains that, because a tool
+roster governs which tools exist, not what the model does with the ones it has.
 
 ## 6. Data contracts
 
@@ -218,9 +277,23 @@ dispatch remains valid. See
 Vendor events are folded onto the existing `agent-event` contract so
 `reduceAgents` and `reduceState` consume external children unchanged.
 
+Observed event types, captured live in T1 (codex 0.147.0, claude 2.1.220):
+
+- **codex** — `thread.started` (carries `thread_id`, which is the resume handle:
+  codex generates it, keryx does not assign it), `turn.started`,
+  `item.completed`, `turn.completed` (`usage` carries `input_tokens`,
+  `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`,
+  `reasoning_output_tokens` — more than 0.1.0 assumed), `turn.failed`.
+- **claude** — `system/init` (very large: it enumerates the tool roster and
+  every slash command, so the first event can be multiple KB and the parser must
+  not assume a small line), `system/hook_started` and `system/hook_response`
+  when the operator's hooks run (suppressed by `--safe-mode`),
+  `rate_limit_event`, `assistant`, `user`, `result` (`subtype`, `is_error`,
+  `num_turns`, `total_cost_usd`, `result`).
+
 | Canonical | `codex-cli` | `claude-cli` |
 |---|---|---|
-| `child_started` | first event on the stream | `system` (`subtype: init`) |
+| `child_started` | `thread.started` (capture `thread_id` for resume) | `system` (`subtype: init`) |
 | `tool_call` | `item.completed` where `item.type = command_execution` | `assistant` block `tool_use` |
 | `tool_result` | following `item.completed` payload | `user` block `tool_result` |
 | `assistant_text` | `item.completed` where `item.type = agent_message` | `assistant` block `text` |
@@ -382,7 +455,8 @@ carries it exactly as specified in §6.1; no separate authoring format exists.
 
 | Integration | Contract |
 |---|---|
-| `spawnChild` | external runtime is a second implementation, not a new path |
+| `spawnChild` | unchanged; still the sole authorisation and contract builder (it executes nothing — see §1) |
+| `SpawnSubagentToolDeps` | gains an optional `runChild` strategy; default is today's direct `runAgentTurn` call, so existing call sites are untouched |
 | `RemainingBudgetLedger` | one shared ledger; cost dimension used where reported |
 | `needsWorktree` / `WorktreePort` | existing predicate and port; real adapter already shipped |
 | `quarantineChildSummary` | applied to all external free text before parent context |

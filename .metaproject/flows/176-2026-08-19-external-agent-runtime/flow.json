@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 2,
+  "id": "176",
+  "slug": "external-agent-runtime",
+  "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
+  "status": "in-progress",
+  "createdAt": "2026-08-19T17:59:35.989Z",
+  "updatedAt": "2026-08-19T18:10:59.027Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:11158d36892175f150c68941f75c6bf157f617ba7fface1c6cd58e8d1e3e4f59",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T11",
+      "title": "Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T12",
+      "title": "TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T13",
+      "title": "Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T14",
+      "title": "Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T15",
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-19T17:59:35.989Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-19T18:02:23.409Z",
+      "event": "task-added",
+      "detail": "T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)"
+    },
+    {
+      "at": "2026-08-19T18:02:23.494Z",
+      "event": "task-added",
+      "detail": "T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps"
+    },
+    {
+      "at": "2026-08-19T18:02:23.585Z",
+      "event": "task-added",
+      "detail": "T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)"
+    },
+    {
+      "at": "2026-08-19T18:02:23.675Z",
+      "event": "task-added",
+      "detail": "T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:02:23.766Z",
+      "event": "task-added",
+      "detail": "T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:02:23.852Z",
+      "event": "task-added",
+      "detail": "T10: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:02:23.939Z",
+      "event": "task-added",
+      "detail": "T11: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:02:24.029Z",
+      "event": "task-added",
+      "detail": "T12: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:02:24.116Z",
+      "event": "task-added",
+      "detail": "T13: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:12.969Z",
+      "event": "task-done",
+      "detail": "T10: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:03:13.148Z",
+      "event": "task-done",
+      "detail": "T11: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:03:13.324Z",
+      "event": "task-done",
+      "detail": "T12: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:03:13.497Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:13.685Z",
+      "event": "task-added",
+      "detail": "T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:03:13.861Z",
+      "event": "task-added",
+      "detail": "T15: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:03:14.040Z",
+      "event": "task-added",
+      "detail": "T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:03:14.216Z",
+      "event": "task-added",
+      "detail": "T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:33.662Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-19T18:03:33.876Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-19T18:10:59.027Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}

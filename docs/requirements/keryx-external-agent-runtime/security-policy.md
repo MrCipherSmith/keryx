@@ -1,5 +1,5 @@
 # Security Policy: Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
@@ -75,11 +75,17 @@ of them is a guarantee.
 1. **The CLI's sandbox flag.** Real, vendor-implemented, and the cheapest to
    apply. Not sufficient alone: it constrains the CLI's own shell, not every
    route the agent has.
-2. **The tool deny-list.** Reduces wasted turns and closes the obvious routes.
-   **Not a guarantee.** It cannot be shown complete; escape routes in the
-   reference implementation were found only by asking the agent directly what it
-   could still reach, and it named two the author had not considered. Anything
-   the CLI gains in a later version is permitted by default.
+2. **The tool roster.** Expressed as an **allow-list** (`--tools Read Grep
+   Glob`), verified live in flow 176 T1 to reduce the offered roster to exactly
+   those three. Tools added by a future CLI version are therefore excluded by
+   default — the opposite of a deny-list's failure mode, and the reason 0.1.0's
+   deny-list was replaced. The measurement that motivated it: with four tools
+   denied, the probe was still offered twenty-seven, including `NotebookEdit`,
+   `Monitor`, `Workflow`, `CronCreate` and `TaskCreate`.
+   **Still not a guarantee.** A roster governs which tools exist, not what the
+   model does with the ones it has: `Read` alone reaches every path the process
+   can. MCP tools are excluded separately by `--strict-mcp-config` with an empty
+   config.
 3. **The disposable detached worktree.** The guarantee. A write that escapes the
    first two lands in a directory that is deleted afterwards.
 
@@ -87,12 +93,14 @@ Two corollaries follow, and both must be honoured:
 
 - The worktree is removed on **every** terminal path, including thrown errors
   and killed processes. A leaked worktree is a leaked escape hatch.
-- The project's own permission-granting settings files apply to a subprocess
-  that inherits the working directory, and they may allow far more than the
-  deny-list denies. Under `-p` there is nobody to prompt, so an allow-listed
-  tool simply runs. Running in the throwaway worktree is what makes this
-  survivable; neutralising those files in the live tree was considered and
-  rejected ([decisions.md](decisions.md) D-08).
+- The project's own settings files apply to a subprocess that inherits the
+  working directory, and under `-p` there is nobody to prompt, so a tool they
+  permit simply runs. `--safe-mode` suppresses the operator's customisations —
+  verified in flow 176 T1, where without it the child ran the operator's
+  `SessionStart` hooks and loaded their whole skill set — but it is a vendor
+  flag whose scope we do not control. Running in the throwaway worktree is what
+  makes this survivable; neutralising those files in the live tree was
+  considered and rejected ([decisions.md](decisions.md) D-08).
 
 ## 4. Untrusted output
 

@@ -1,5 +1,5 @@
 # PRD: Keryx External Agent Runtime
-Version: 0.1.0
+Version: 0.2.0
 
 ## Problem
 
@@ -83,8 +83,11 @@ a governed, observable, interruptible run — not a shell-out.
   vendor-prefix sweeps. The list and its rationale live in
   [security-policy.md](security-policy.md).
 - **R12.** Read-only is held by three independent mechanisms — the CLI's own
-  sandbox flag, a tool deny-list naming delegation routes, and the disposable
-  worktree — such that no single failure exposes the operator's working tree.
+  sandbox flag, a restricted tool roster, and the disposable worktree — such
+  that no single failure exposes the operator's working tree. The roster is
+  expressed as an **allow-list** (`--tools`) rather than a deny-list, so tools
+  added by a future CLI version are excluded by default; the worktree remains
+  the load-bearing layer regardless.
 - **R13.** keryx never reads, writes, stores, forwards or proxies a vendor
   credential. Availability is determined from `--version` and exit codes only.
 - **R14.** The feature is an opt-in capability, disabled by default, and hard
