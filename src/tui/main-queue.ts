@@ -54,15 +54,12 @@ export function parseQueueCommand(args: string): ParsedQueueCommand | undefined 
 }
 
 /**
- * Render the transcript marker for the item at `index` (0-based) within a
- * queue of `total` items: `> qN (p)`, where N is the 1-based position and p
- * is how many items are queued BEHIND it. `p === 0` for the head (nothing
- * behind — it drains next).
+ * Render the transcript marker for the item at `index` (0-based): `> qN (N)`,
+ * where N is the 1-based position.
  */
-export function formatMainQueueMarker(index: number, total: number): string {
+export function formatMainQueueMarker(index: number): string {
   const n = index + 1;
-  const behind = Math.max(0, total - index - 1);
-  return `> q${n} (${behind})`;
+  return `> q${n} (${n})`;
 }
 
 /** Remove the item at `index`; returns the caller the mutated copy (non-destructive). */
