@@ -16,7 +16,8 @@
       "notes": [
         "`--ephemeral` is deliberately ABSENT from baseArgv. It is mutually exclusive with resume: a thread started with it fails `resume` with `no rollout found for thread id … (code -32600)` — captured in resume-refused-ephemeral.stderr.txt. Resume is required for operator messages and for `force`, so persistence wins.",
         "`codex exec resume` accepts a NARROWER flag set than `codex exec`: no `-s/--sandbox`, no `-C/--cd`, no `--color`. The sandbox mode is therefore not settable on resume, and the working directory must be the process cwd rather than a flag. Both constrain the runtime's resume path.",
-        "The resume handle is `thread_id`, emitted by codex on `thread.started`. keryx reads it; it cannot assign it (unlike claude's `--session-id`)."
+        "The resume handle is `thread_id`, emitted by codex on `thread.started`. keryx reads it; it cannot assign it (unlike claude's `--session-id`).",
+        "`-s` accepts `read-only | workspace-write | danger-full-access`. keryx's own vocabulary says `worktree-write`, which codex has never heard of and would reject with `error: invalid value`; the codec translates. Dormant today because only read-only is implemented, and a latent command-line failure the moment it is not."
       ],
       "fixtures": {
         "success.stdout.jsonl": {
@@ -35,7 +36,7 @@
           "case": "resume of success.stdout.jsonl's thread; the model recalled its prior answer, proving context survives",
           "exitCode": 0
         },
-        "not-logged-in.stdout.txt": {
+        "not-logged-in.stdout.jsonl": {
           "captured": true,
           "case": "no credentials (CODEX_HOME pointed at an empty directory)",
           "exitCode": 1,
@@ -73,8 +74,16 @@
         "unset": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "CLAUDECODE", "CLAUDE_CONFIG_DIR"],
         "why": "Captured with these cleared so the fixtures reflect the subscription path the runtime actually uses."
       },
+      "streamingArgv": [
+        "claude", "-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose",
+        "--safe-mode", "--tools", "Read", "Grep", "Glob",
+        "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}",
+        "--session-id", "<uuid>"
+      ],
       "notes": [
-        "The prompt must not sit directly behind a variadic flag (`--tools`, `--mcp-config`, `--disallowed-tools`). `--session-id`/`--resume` is the single-valued separator; a capture attempt without it failed with `MCP config file not found: …/Rep` — the CLI took the prompt's first word as a path.",
+        "THERE ARE TWO INVOCATION SHAPES AND THEY ARE NOT INTERCHANGEABLE. `baseArgv` is one-shot: positional prompt, stdin ignored, NOT steerable. `streamingArgv` is steerable: no positional prompt, and the prompt plus every later operator message arrive on stdin as `{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":…}]}}` lines. Steerability must be chosen before the process starts; there is no conversion afterwards.",
+        "`--input-format stream-json` COMBINED WITH A POSITIONAL PROMPT IS A SILENT NO-OP. Measured: the CLI ignores the prompt, waits on stdin, and with stdin closed exits 0 having written zero bytes to both streams — no error, no transcript, every process-level signal reporting success. `empty-output.stdout.jsonl` is that run's (empty) output. Specification 0.1.0 through 0.3.0 all prescribed exactly this argv.",
+        "The prompt must not sit directly behind a variadic flag (`--tools`, `--mcp-config`, `--add-dir`, `--disallowed-tools`). `--session-id`/`--resume` is the single-valued separator; a capture attempt without it failed with `MCP config file not found: …/Rep` — the CLI took the prompt's first word as a path. Note `--add-dir <directories...>` is variadic too, which the specification's prose originally omitted.",
         "`--tools Read Grep Glob` yields a roster of exactly those three, verified in `system/init`. It is an allow-list, unlike `--allowed-tools`.",
         "`--safe-mode` suppresses the operator's hooks and skills; without it the child emitted `system/hook_started`/`system/hook_response` and loaded ~130 slash commands.",
         "`system/init` is multi-KB because it enumerates the tool roster and every slash command. A parser must not assume short lines."
@@ -104,6 +113,23 @@
           "exitCode": 1,
           "notes": "stderr is exactly `error: unknown option '--no-such-flag'` — terse, and notably NOT accompanied by a usage block, unlike codex."
         },
+        "streaming-input.stdout.jsonl": {
+          "captured": true,
+          "case": "steerable run: `streamingArgv`, prompt delivered on stdin as `streaming-input.stdin.jsonl`",
+          "exitCode": 0,
+          "notes": "Proves the streaming path works and that operator messages therefore have a route. Terminates `result.subtype = success`."
+        },
+        "streaming-input.stdin.jsonl": {
+          "captured": true,
+          "case": "the stdin side of the run above — one JSON user message",
+          "notes": "Not a transcript; the input format a steerable run consumes."
+        },
+        "empty-output.stdout.jsonl": {
+          "captured": true,
+          "case": "the silent no-op: `--input-format stream-json` with a positional prompt and stdin closed",
+          "exitCode": 0,
+          "notes": "ZERO BYTES, exit 0, nothing on stderr. Deliberately kept as a fixture because it is the hardest failure to detect: a classifier keyed on exit code or on stderr sees a clean success. The only signal is the absence of any terminal event. Fills the `empty output` gap earlier listed here."
+        },
         "usage-limit.SYNTHETIC.jsonl": {
           "captured": false,
           "case": "quota exhausted",
@@ -113,8 +139,8 @@
     }
   },
   "gaps": [
-    "No `empty output` fixture for either agent — neither CLI produced an empty successful result under any prompt tried, so the case is asserted in code against a synthesised zero-event stream rather than a recorded file.",
     "Both `usage-limit` fixtures are synthetic. AC6's limit case is provisional until a real quota exhaustion is captured.",
-    "No fixture exercises a multi-turn run with tool calls; success and resume are single-turn. Tool-call event shapes are therefore modelled from the flag surface and the reference implementation, not from a recording."
+    "No fixture exercises a multi-turn run with tool calls; every captured run is single-turn. So `tool_call`, `tool_result` and `thinking` mappings are modelled from the vendors' block schemas, not from a recording — the codecs read those defensively and omit `detail` when a field is missing.",
+    "codex has no `empty output` fixture. The claude one exists only because the silent-no-op argv produced it; no prompt tried made either CLI return an empty *successful* result."
   ]
 }

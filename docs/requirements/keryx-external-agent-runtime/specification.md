@@ -1,6 +1,16 @@
 # Specification: Keryx External Agent Runtime
-Version: 0.3.0
+Version: 0.4.0
 
+> **0.4.0 (flow 176, T8/T9 codecs).** Implementing the two codecs surfaced a
+> silent-failure trap the previous three versions all prescribed: `claude -p`
+> with `--input-format stream-json` *and* a positional prompt ignores the
+> prompt and exits 0 with zero output. §5.2 now defines two distinct invocation
+> shapes, and steerability becomes a spawn-time decision. Also: codex's `-s`
+> vocabulary is not keryx's and must be translated; `--add-dir` is variadic and
+> was missing from the ordering rule; the codec port's `buildResumeArgv` arity
+> is corrected to match the implemented type; and `num_turns` is dropped from
+> §6.2 because the canonical `usage` event has nowhere to put it.
+>
 > **0.3.0 (flow 176, T5 fixtures).** Transcripts were recorded from both live
 > CLIs and live in `fixtures/external/` with a `manifest.json` stating which are
 > captured and which are hand-authored. Four corrections: `--ephemeral` is
@@ -160,8 +170,15 @@ export interface ExternalAgentCodec {
   /** Pure. Null means the run succeeded; a string names the cause. */
   classifyFailure(outcome: ProcessOutcome): string | null;
 
-  /** Pure. Argv for delivering a message to a running or killed session. */
-  buildResumeArgv(sessionId: string, message: string): readonly string[];
+  /**
+   * Pure. Argv for delivering a message to a running or killed session.
+   * `sessionRef` is the agent's resume handle — keryx ASSIGNS it for claude
+   * (`--session-id`) but READS it for codex (`thread_id`, off `thread.started`).
+   * The `input` parameter is unusable by the codex codec, since `codex exec
+   * resume` cannot express any of its fields; that codec drops it and the cwd
+   * becomes the spawner's responsibility (§5.1).
+   */
+  buildResumeArgv(sessionRef: string, message: string, input: ExternalRunInput): readonly string[];
 }
 ```
 
@@ -170,15 +187,33 @@ Every function is total, side-effect free and testable without a subprocess.
 reference implementation shipped a wrong flag for months and every run failed on
 the command line before the agent was asked anything.
 
+Codecs may export more than the port. `claude-cli` adds
+`buildClaudeStreamingArgv` and `encodeClaudeStdinMessage` for the steerable
+shape (§5.2). `codex-cli` adds a plural `parseCodexEvents`, because one
+`turn.completed` line legitimately carries both a usage figure and the terminal
+event; the port's singular `parseLine` returns the terminal one, since returning
+`usage` instead would make every successful run classify as "transcript ended
+without a terminal event".
+
 ### 5.1 `codex-cli` argv
 
 ```text
-codex exec --json --color never -s read-only -C <worktree>
+codex exec --json --color never -s <codex-sandbox> -C <worktree>
            --ignore-user-config --skip-git-repo-check
-           --output-schema <result-schema-path>
+           [--output-schema <result-schema-path>]
            [-m <model>]
            <prompt>
 ```
+
+**`<codex-sandbox>` is a translation, not keryx's own word** (added in 0.4.0).
+`codex exec -s` accepts `read-only | workspace-write | danger-full-access`.
+keryx's vocabulary says `worktree-write`, which codex has never heard of and
+rejects with `error: invalid value` — the class of failure that killed every run
+of the reference implementation on the command line before the agent was asked
+anything. The codec maps `read-only → read-only` and
+`worktree-write → workspace-write`; `danger-full-access` is unreachable. Dormant
+today because only `read-only` is implemented, and a latent command-line failure
+the moment it is not.
 
 `--ignore-user-config` keeps the operator's codex profile out of the run.
 `--output-schema` requests the structured result. The prompt is last and is a
@@ -210,27 +245,66 @@ a flag, so a resume must be spawned with its **process cwd set to the worktree**
 
 ### 5.2 `claude-cli` argv
 
+**There are two invocation shapes and they are not interchangeable (corrected in
+0.4.0).**
+
+*One-shot* — positional prompt, stdin ignored, **not** steerable:
+
 ```text
-claude -p --output-format stream-json --input-format stream-json --verbose
+claude -p --output-format stream-json --verbose
        --safe-mode
        --tools <ALLOWED...>
        --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-       --max-budget-usd <n>
-       --json-schema <result-schema>
-       --add-dir <worktree>
+       [--max-budget-usd <n>] [--json-schema <result-schema>] [--add-dir <worktree>] [--model <m>]
        --session-id <uuid>
        <prompt>
 ```
 
-Verified live against 2.1.220 (flow 176, T1). Constraints the argv test pins:
+*Streaming* — steerable; **no positional prompt**, the prompt and every later
+operator message arrive on stdin:
 
-- `--tools`, `--mcp-config` and `--disallowed-tools` are **variadic**, so the
-  prompt must never sit directly behind one. This is not theoretical: a probe
-  that placed the prompt after `--mcp-config` failed with `MCP config file not
-  found: …/Rep` — the CLI had taken the prompt's first word as a file path. A
-  single-valued flag must separate them, and `--session-id <uuid>` is chosen for
-  the job rather than `--model`, because the model is deliberately left unpinned
-  (§3) while a session id is always assigned.
+```text
+claude -p --output-format stream-json --input-format stream-json --verbose
+       …same containment flags…
+       --session-id <uuid>
+```
+
+with each stdin line being
+
+```json
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"…"}]}}
+```
+
+**Why the split, and why 0.1.0–0.3.0 were wrong.** Those versions prescribed
+`--input-format stream-json` *together with* a positional prompt. Measured on
+2.1.220: the CLI **ignores the prompt**, waits for JSON on stdin, and with stdin
+closed **exits 0 having written zero bytes to stdout and stderr**. No error, no
+transcript, every process-level signal reporting success — the hardest failure
+shape there is. The empty output is kept as
+`fixtures/external/claude-cli/empty-output.stdout.jsonl` precisely because a
+classifier keyed on exit code or stderr sees nothing wrong; the only signal is
+the absence of a terminal event.
+
+The operational consequence is that **steerability is chosen at spawn time.** A
+one-shot run cannot later be sent a message, because the flag that would accept
+one also forbids the positional prompt that started it. §7.5's delivery path for
+`streamingInput: true` therefore requires the run to have been launched in
+streaming mode; otherwise messages fall back to the resume path.
+
+Constraints the argv test pins:
+
+- `--tools`, `--mcp-config`, **`--add-dir`** and `--disallowed-tools` are
+  **variadic**, so the prompt must never sit directly behind one. This is not
+  theoretical: a probe that placed the prompt after `--mcp-config` failed with
+  `MCP config file not found: …/Rep` — the CLI had taken the prompt's first word
+  as a file path. A single-valued flag must separate them, and
+  `--session-id <uuid>` is chosen for the job rather than `--model`, because the
+  model is deliberately left unpinned (§3) while a session id is always assigned.
+  When no session id is available the codec falls back to trailing the
+  zero-valued `--strict-mcp-config` instead, and never invents a uuid — two
+  concurrent runs sharing one would corrupt each other's history.
+  (`--add-dir` was missing from this list before 0.4.0; `claude --help` on
+  2.1.220 declares it `--add-dir <directories...>`.)
 - `--verbose` accompanies `stream-json` under `-p`; the combination above was
   confirmed accepted.
 - **`--safe-mode`** disables the operator's customisations — CLAUDE.md, skills,
@@ -322,6 +396,19 @@ Observed event types, captured live in T1 (codex 0.147.0, claude 2.1.220):
   when the operator's hooks run (suppressed by `--safe-mode`),
   `rate_limit_event`, `assistant`, `user`, `result` (`subtype`, `is_error`,
   `num_turns`, `total_cost_usd`, `result`).
+
+`num_turns` has **no canonical home** and is deliberately not carried: the
+`usage` event holds tokens and cost only. It survives in a failure message where
+one is produced, and is lost on a successful run. R26 asks for turn count in the
+TUI, so either `usage` gains a `turns` field in a later release or that
+requirement is met from the raw transcript the modal already renders — flagged
+rather than silently dropped.
+
+`rate_limit_event` appears on **healthy** runs (it is present in the captured
+success transcript), so it must not be folded to `retry`; doing so would inflate
+the retry-derived drift and no-progress signals on runs that are fine. It is
+recognised-but-unmapped, which the codec keeps distinct from "did not parse" so
+the parse-skip counter stays a real version-drift signal.
 
 | Canonical | `codex-cli` | `claude-cli` |
 |---|---|---|
@@ -419,17 +506,23 @@ inherits an open stdin announces that it is reading from it and waits.
 Messages use the pure helpers in `src/tui/main-queue.ts`, generalised from a
 single main queue to a queue per addressee. `remove` and `edit` are unchanged.
 
-Delivery depends on registry data:
+Delivery depends on registry data **and on how the run was launched**:
 
-- `streamingInput: true` — the message is written to the child's stdin as a
-  user message at the next turn boundary.
-- `streamingInput: false` — the message is held until the run completes, then
-  delivered by resuming the session.
+- `streamingInput: true` **and launched in streaming mode** (§5.2) — the message
+  is written to the child's stdin as an `encodeClaudeStdinMessage` line.
+- `streamingInput: true` but launched one-shot — no stdin route exists, so the
+  message falls back to the resume path below. This is why steerability is a
+  spawn-time decision and not a runtime one.
+- `streamingInput: false` (codex) — the message is held until the run completes,
+  then delivered by resuming the session.
 
 `force` is kill plus resume: the process is terminated and restarted with
-`buildResumeArgv(sessionId, message)`. Because keryx assigns the session id, the
-restart retains prior context, so intervention costs a process restart rather
-than the accumulated work.
+`buildResumeArgv(sessionRef, message, input)`. For claude keryx assigns the
+session id, so the handle is known before the child says anything; for codex the
+handle is `thread_id`, read off `thread.started`, so a run killed before that
+event **cannot be resumed at all** and `force` degrades to a plain kill. Where
+resume is available the restart retains prior context, so intervention costs a
+process restart rather than the accumulated work.
 
 Every delivery also emits a `user_message` canonical event, so the parent's
 folded view reflects what the operator said (D-09).

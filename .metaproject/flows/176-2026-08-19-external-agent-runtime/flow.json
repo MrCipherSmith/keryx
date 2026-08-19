@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T18:40:45.501Z",
+  "updatedAt": "2026-08-19T18:58:40.973Z",
   "source": {
     "type": "description",
     "ref": null
@@ -128,7 +128,7 @@
       "id": "T8",
       "title": "Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -139,13 +139,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -156,7 +157,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -415,6 +417,16 @@
       "at": "2026-08-19T18:40:45.501Z",
       "event": "task-done",
       "detail": "T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)"
+    },
+    {
+      "at": "2026-08-19T18:58:40.781Z",
+      "event": "task-done",
+      "detail": "T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:58:40.973Z",
+      "event": "task-done",
+      "detail": "T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv"
     }
   ]
 }

@@ -233,9 +233,87 @@ Worth stating plainly for whoever verifies this branch: **a single red full-suit
 run is not evidence of breakage here, and a single green baseline run was not
 evidence of a clean baseline.** Fixing those two tests is out of scope for this
 flow and belongs to whoever owns the slate and resume suites.
+
+## T8 + T9 — the two codecs, written in parallel (2026-08-19)
+
+Both were implemented by subagents dispatched concurrently, each against the
+recorded fixtures and each forbidden from touching shared files. 163 tests in
+`src/harness/external/`, typecheck clean. Their claims were re-verified here
+rather than taken on trust.
+
+### The find that justified the whole exercise
+
+The claude agent reported honestly that **`--input-format stream-json` had never
+been exercised** — every captured fixture came from a run without it. A live
+probe settled it, and the answer is bad: `claude -p` with
+`--input-format stream-json` **and** a positional prompt **ignores the prompt,
+waits on stdin, and with stdin closed exits 0 having written zero bytes to both
+streams.** No error, no transcript, every process-level signal reporting
+success.
+
+Specification 0.1.0 through 0.3.0 all prescribed exactly that argv, and the
+shipped codec inherited it. Had this reached T14 the runtime would have launched
+external children that did nothing while reporting success.
+
+Fixed by splitting into two shapes: `buildClaudeArgv` (one-shot, positional
+prompt, no `--input-format`) and `buildClaudeStreamingArgv` (steerable, no
+positional prompt, prompt and later messages fed to stdin via
+`encodeClaudeStdinMessage`). A second probe confirmed the streaming shape works
+end to end. **Operational consequence: steerability is now a spawn-time
+decision** — a one-shot run can never be sent a message afterwards, because the
+flag that accepts one forbids the prompt that started it. Specification §5.2 and
+§7.5 rewritten; spec → 0.4.0.
+
+Two probe outputs became fixtures, including the zero-byte one — kept
+deliberately, because it is the hardest failure to detect and the only signal is
+the absence of a terminal event. That also closes the `empty output` gap the
+manifest previously listed.
+
+### Other corrections the agents surfaced
+
+- **codex's `-s` vocabulary is not ours.** It accepts
+  `read-only | workspace-write | danger-full-access`; `worktree-write` would be
+  rejected with `error: invalid value`. Independently confirmed against
+  `codex exec --help`. The codec translates. Dormant while only read-only is
+  implemented, a latent command-line failure the moment it is not.
+- **`--add-dir` is variadic too** (`--add-dir <directories...>`), and the
+  ordering rule in §5.2 named only three flags.
+- **`buildResumeArgv` arity** disagreed between spec (2 params) and `types.ts`
+  (3). Spec corrected to match the code.
+- **`num_turns` has no canonical home.** R26 wants turn count in the TUI but the
+  `usage` event carries only tokens and cost. Flagged in §6.2 rather than
+  quietly dropped.
+- **`rate_limit_event` appears on healthy runs**, so folding it to `retry` would
+  inflate the drift signal. The claude codec distinguishes
+  recognised-but-unmapped from did-not-parse so the parse-skip counter stays
+  meaningful.
+- **My own manifest bug**: the codex entry named `not-logged-in.stdout.txt`
+  while the file on disk is `.jsonl`, from my rename during T5.
+
+### Judgement calls the agents made and defended
+
+`parseLine` returns the terminal event where a line folds to two, because
+returning `usage` instead would make every successful run classify as
+"transcript ended without a terminal event" — a reporting gap traded against a
+wrong verdict on every run. Success short-circuits before any failure pattern
+runs, so a run that hit 401 retries and recovered is not retroactively failed.
+codex's classifier admits structured event messages as well as filtered stream
+lines, because its 401s live inside JSONL objects that the `^error|usage:` line
+filter would never see. `assistant_text` is never admitted as evidence — that is
+the `error-word` trap.
+
+### Still unverified
+
+Tool-call, tool-result and thinking event shapes are modelled from the vendors'
+block schemas; no captured fixture exercises a multi-turn run. Both usage-limit
+fixtures remain hand-authored. The codecs are not yet wired to anything — there
+is no `codec/index.ts` and the registry does not reference them, which is T14's
+work.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
 - 2026-08-19T18:23:01.828Z - task-done: T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)
 - 2026-08-19T18:40:45.295Z - task-done: T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps
 - 2026-08-19T18:40:45.501Z - task-done: T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)
+- 2026-08-19T18:58:40.781Z - task-done: T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv
+- 2026-08-19T18:58:40.973Z - task-done: T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv
