@@ -12,6 +12,7 @@
 
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import type { CatchUpItem, CatchUpProposalItem } from "../sac/catch-up";
+import type { WrapUpGroupOutcome } from "../sac/machine-wrap-up";
 
 export const REVIEW_COMMAND = "/review";
 
@@ -104,13 +105,48 @@ function describeReviewItem(item: CatchUpItem): string[] {
         `Bind: keryx workspace propose <workspace-id> --kind <kind> --session ${item.sessionId}`,
       ];
     case "unknown":
-      return [
-        `Session    ${item.sessionId}${item.workspaceId !== undefined ? `  (workspace ${item.workspaceId})` : ""}`,
-        `Last seen  ${item.lastSeenAt}`,
-        "No proposal, terminal state, or unbound-candidate artifact recorded.",
-        "",
-        `Investigate: keryx sessions list / keryx shell -r ${item.sessionId}`,
-      ];
+      return item.wrapUpOutcome !== undefined
+        ? [
+            `Session    ${item.sessionId}${item.workspaceId !== undefined ? `  (workspace ${item.workspaceId})` : ""}`,
+            `Last seen  ${item.lastSeenAt}`,
+            `Wrap-up dispatch (${item.wrapUpOutcome.trigger}, ${item.wrapUpOutcome.generatedAt}) did not produce a proposal or unbound-candidate:`,
+            ...item.wrapUpOutcome.groups.map((g) => `  ${g.kind}: ${describeGroupOutcome(g)}`),
+            "",
+            `Investigate: keryx sessions list / keryx shell -r ${item.sessionId}`,
+          ]
+        : [
+            `Session    ${item.sessionId}${item.workspaceId !== undefined ? `  (workspace ${item.workspaceId})` : ""}`,
+            `Last seen  ${item.lastSeenAt}`,
+            "No proposal, terminal state, or unbound-candidate artifact recorded.",
+            "",
+            `Investigate: keryx sessions list / keryx shell -r ${item.sessionId}`,
+          ];
+  }
+}
+
+/** Renders one `WrapUpGroupOutcome` as a human-readable failure reason for
+ * the `"unknown"` detail view above. `"proposed"`/`"unbound-candidate"` never
+ * reach here in practice (`classifySession`'s `isFailureOutcome` filter
+ * upstream only attaches `wrapUpOutcome` when EVERY group is a failure
+ * outcome), but are handled defensively with a fallback string so this
+ * function stays total over the union — TypeScript's exhaustiveness checking
+ * (the `default` branch below) catches a future new outcome variant. */
+function describeGroupOutcome(g: WrapUpGroupOutcome): string {
+  switch (g.outcome) {
+    case "error":
+      return g.message;
+    case "no_credential":
+      return "no model credential available";
+    case "conflict":
+      return "a concurrent proposal already claimed this slot";
+    case "proposed":
+      return `proposed (${g.proposalId})`;
+    case "unbound-candidate":
+      return "unbound candidate";
+    default: {
+      const exhaustive: never = g;
+      return `unrecognized outcome: ${JSON.stringify(exhaustive)}`;
+    }
   }
 }
 

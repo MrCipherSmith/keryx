@@ -161,6 +161,26 @@ async function makeUnknownSession(cwd: string, title = "unknown session"): Promi
   return { sessionId: handle.summary.id, dir: handle.dir };
 }
 
+/** flow 173: writes a `*-wrap-up-outcome.json` artifact under the session's
+ * `slate-archive/`, mirroring `machine-wrap-up.ts`'s `writeWrapUpOutcomeArtifact`
+ * output shape exactly, for testing `classifySession`'s new read/branch. */
+async function writeWrapUpOutcomeArtifactFixture(
+  dir: string,
+  groups: Array<Record<string, unknown>>,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  const archiveDir = path.join(dir, "slate-archive");
+  await mkdir(archiveDir, { recursive: true });
+  const content = {
+    recordType: "wrap-up-outcome",
+    trigger: "explicit",
+    generatedAt: "2026-08-19T00:00:00.000Z",
+    groups,
+    ...overrides,
+  };
+  await writeFile(path.join(archiveDir, "2026-08-19T00-00-00-000Z-wrap-up-outcome.json"), `${JSON.stringify(content, null, 2)}\n`);
+}
+
 async function makeNoEngagementSession(cwd: string, title = "ordinary chat, no slate ever opened"): Promise<string> {
   const handle = createSession({ cwd, title });
   return handle.summary.id;
@@ -488,6 +508,76 @@ test("finding B fix: a corrupted (non-JSON) slate.json does not crash buildCatch
   const healthyItem = report.blocked.find((item) => item.sessionId === healthyBlocked.sessionId);
   expect(healthyItem).toBeDefined();
   expect(healthyItem?.terminalState).toMatchObject({ status: "blocked", reason: "budget_exhausted" });
+});
+
+// --- flow 173: SAC durable wrap-up dispatch outcome recording -------------
+// `classifySession` reads the newest wrap-up-outcome artifact and, when
+// every group in it is a failure outcome, attaches it to the `unknown`
+// item as `wrapUpOutcome` — surfacing WHY nothing else classified this
+// session, without changing the existing blocked/unbound-candidate priority.
+
+test("flow 173 (a): a session with a wrap-up-outcome artifact where every group failed classifies 'unknown' with wrapUpOutcome populated", async () => {
+  const cwd = await tempCwd("keryx-catchup-wrapup-allfail-");
+  const { sessionId, dir } = await makeUnknownSession(cwd, "wrap-up dispatch failed entirely");
+  await writeWrapUpOutcomeArtifactFixture(dir, [
+    { kind: "decision", outcome: "error", message: "model provider unavailable" },
+    { kind: "risk", outcome: "no_credential" },
+  ]);
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unknown.find((entry) => entry.sessionId === sessionId);
+  expect(item).toBeDefined();
+  expect(item?.wrapUpOutcome).toBeDefined();
+  expect(item?.wrapUpOutcome?.trigger).toBe("explicit");
+  expect(item?.wrapUpOutcome?.generatedAt).toBe("2026-08-19T00:00:00.000Z");
+  expect(item?.wrapUpOutcome?.groups).toEqual([
+    { kind: "decision", outcome: "error", message: "model provider unavailable" },
+    { kind: "risk", outcome: "no_credential" },
+  ]);
+  // Not classified as blocked or unbound-candidate — the new check never
+  // creates a NEW category, only enriches the existing 'unknown' one.
+  expect(sessionIds(report.blocked)).not.toContain(sessionId);
+  expect(sessionIds(report.unboundCandidates)).not.toContain(sessionId);
+});
+
+test("flow 173 (b): a session with a wrap-up-outcome artifact where one group succeeded falls through unaffected — wrapUpOutcome stays absent", async () => {
+  const cwd = await tempCwd("keryx-catchup-wrapup-mixed-");
+  const { sessionId, dir } = await makeUnknownSession(cwd, "wrap-up dispatch partially succeeded");
+  await writeWrapUpOutcomeArtifactFixture(dir, [
+    { kind: "decision", outcome: "proposed", proposalId: "wrapup-real-proposal-id" },
+    { kind: "risk", outcome: "error", message: "model provider unavailable" },
+  ]);
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unknown.find((entry) => entry.sessionId === sessionId);
+  expect(item).toBeDefined();
+  expect(item?.wrapUpOutcome).toBeUndefined();
+});
+
+test("flow 173 (c)/AC5: a session with BOTH a terminal-state.json AND a wrap-up-outcome artifact (all groups failed) still classifies 'blocked', unaffected", async () => {
+  const cwd = await tempCwd("keryx-catchup-wrapup-blocked-");
+  const handle = await makeBlockedSession(cwd, "blocked with a wrap-up-outcome artifact too");
+  await writeWrapUpOutcomeArtifactFixture(handle.dir, [{ kind: "decision", outcome: "error", message: "boom" }]);
+
+  const report = await buildCatchUp({ cwd });
+
+  expect(sessionIds(report.blocked)).toContain(handle.sessionId);
+  const blockedItem = report.blocked.find((entry) => entry.sessionId === handle.sessionId);
+  expect(blockedItem).toBeDefined();
+  expect(sessionIds(report.unknown)).not.toContain(handle.sessionId);
+});
+
+test("flow 173 (d)/AC6: a session with real Slate engagement but no wrap-up-outcome artifact at all continues to classify 'unknown' with wrapUpOutcome absent", async () => {
+  const cwd = await tempCwd("keryx-catchup-wrapup-none-");
+  const { sessionId } = await makeUnknownSession(cwd, "no wrap-up-outcome artifact ever written");
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unknown.find((entry) => entry.sessionId === sessionId);
+  expect(item).toBeDefined();
+  expect(item?.wrapUpOutcome).toBeUndefined();
 });
 
 test("F-003 fix: unknown items populated with workspaceId from slate.json when bound", async () => {
