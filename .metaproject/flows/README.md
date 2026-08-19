@@ -1,14 +1,11 @@
 # Flows
 
-Managed units of work tracked by the Task Manager module (`keryx flow`).
+Each directory is one flow: `<NNN>-<YYYY-MM-DD>-<slug>/`.
 
-Each flow lives in its own `NNN-<date>-<slug>/` directory holding CLI-owned
-state (`flow.json`) alongside its acceptance criteria, plan, tasks, and journal.
-Start one with:
+A flow is a story's journey from initialization to completion, managed by the
+Task Manager module (`keryx flow ...`). flow.json is CLI-owned state -
+do not edit it by hand. Acceptance criteria are checksum-frozen after
+`flow freeze`.
 
-```bash
-keryx flow init --title "<short problem statement>"
-```
-
-See the `flow` skill for the full lifecycle (freeze → start → tasks → verify →
-complete). This directory is empty in a fresh workspace.
+Statuses: initializing -> ready -> in-progress -> implemented -> completing ->
+done (+ blocked). See `.metaproject/skills/flow/SKILL.md`.

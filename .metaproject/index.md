@@ -16,8 +16,9 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | gdskills | Native bundled working skills, orchestration, review, and project-skill lifecycle | modules/gdskills.md |
 | health | Code quality aggregation, scoring, and quality gate | modules/health.md |
 | testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |
-| memory | Long-lived Markdown-canonical memory: pure recall, explicit reports, lifecycle, and accepted/current bounded influence | modules/memory.md |
+| memory | Markdown-canonical memory: pure recall, explicit reports, lifecycle, and accepted/current bounded influence | modules/memory.md |
 | tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |
+| security | Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts | modules/security.md |
 ## Rules
 
 | Source | Priority | Purpose | Entry |
@@ -62,35 +63,9 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | Recall past decisions, lessons, constraints, repeated mistakes, or project history | `memory` | `skills/memory/SKILL.md`; MCP `memory.search` if available | Search accepted memory before broad docs or assumptions. |
 | Create/change/debug tests or decide what tests to run | `testing` | `skills/testing/SKILL.md`; `data/testing/context.md` | Use test context and related-test intelligence before raw logs. |
 | Check quality, gate, regressions, complexity, lint/type/test status | `health` | `skills/health/SKILL.md`; MCP `health.*` if available | Read normalized health artifacts before claiming quality. |
+| Check secrets, PII, prompt injection, egress, unsafe external/tool output | `security` | `modules/security.md`; MCP `security.*` if available | Scan or check content before writing it into project artifacts. |
 | Implement, review, refactor, document, plan, analyze, or verify | `gdskills` | `skills/catalog.md`; `project-skills/`; `skills/gdskills/` | Route to local orchestrators/reviewers/quality skills before global skills. |
 | Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |
-
-### Command Intent Map (agent-callable)
-
-For a direct natural-language phrase → concrete `keryx` command, consult the
-machine-readable command registry: `keryx commands --json` (full descriptor
-schema: intents, args, output shape, model usage) or `keryx commands --intent
-"<phrase>"` to resolve one phrase. The table below is the curated quick map;
-the registry (`src/standard/command-registry.ts`) is the source of truth.
-
-| User intent | Command |
-|-------------|---------|
-| найди в коде / search code / grep | `keryx ctx rg "<pattern>"` |
-| что сломается если изменить / blast radius | `keryx gdgraph affected <file-or-symbol>` |
-| найди циклы / orphan files | `keryx gdgraph query <cycles\|orphans>` |
-| обогати вики / enrich wiki | `keryx wiki enrich [--page <slug>\|--all]` |
-| сделай индексацию вики / reindex wiki | `keryx wiki index` |
-| проверь качество / quality gate | `keryx health run` |
-| вспомни / search memory / past decisions | `keryx memory search "<query>"` |
-| прогони тесты / run tests | `keryx test run [--changed]` |
-| предложи тесты / suggest tests (model) | `keryx test suggest <file>` |
-| объясни health / explain health (model) | `keryx health explain <target> --narrate` |
-| разбей на задачи / plan flow (model) | `keryx flow plan <id>` |
-| обобщи память / reflect memory (model) | `keryx memory reflect --narrate` |
-| покажи флоу / list flows | `keryx flow list` |
-| проверь на секреты / security scan | `keryx security scan <path>` |
-| проверь песочницу на Linux / verify the sandbox on a real host | runbook: `docs/verification/linux-sandbox-verification.md` |
-| запусти команду в песочнице / как работает sandbox / изоляция, allowlist доменов, маскирование креденшлов | **agents:** `docs/requirements/keryx-os-sandbox/agent-protocol.md` · **humans:** `docs/requirements/keryx-os-sandbox/operator-guide.md` · wiki: `wiki/architecture/os-sandbox.md` |
 
 ## Agent Workflow
 
@@ -102,22 +77,24 @@ the registry (`src/standard/command-registry.ts`) is the source of truth.
 6. Prefer MCP tools/resources for enabled Metaproject capabilities when the connected agent exposes them; otherwise use the matching skill and `keryx` CLI command.
 7. Route by question type: structural questions go to gdgraph first; conceptual questions go to gdwiki first; gdctx runs in parallel to keep output compact.
 8. Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason.
-9. For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before any raw file search. The user does not need to request graph usage explicitly.
-10. For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.
-11. In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.
-12. For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.
-13. For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.
-14. For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.
-15. When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.
-16. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `keryx health run`; do not claim quality status from raw logs.
-17. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
-18. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `keryx memory search` before broad documentation reads.
-19. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
-20. Use relevant skills from `skills/`.
-21. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.
-22. Use module manifests before reading raw generated data.
-23. Prefer curated artifacts in `data/*/artifacts`.
-24. Run module CLI commands when generated data is stale.
+9. `keryx ctx rg` and the agent's `search_code` tool require ripgrep (`rg`) on PATH — install it with `brew install ripgrep` (macOS) or `apt install ripgrep` (Debian/Ubuntu). Without it, code search is unavailable; fall back to reading files directly.
+10. For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before any raw file search. The user does not need to request graph usage explicitly.
+11. For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.
+12. In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.
+13. For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.
+14. For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.
+15. For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.
+16. When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.
+17. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `keryx health run`; do not claim quality status from raw logs.
+18. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
+19. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `keryx memory search` before broad documentation reads.
+20. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
+21. Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `keryx security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.
+22. Use relevant skills from `skills/`.
+23. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.
+24. Use module manifests before reading raw generated data.
+25. Prefer curated artifacts in `data/*/artifacts`.
+26. Run module CLI commands when generated data is stale.
 
 ## Data
 
@@ -137,10 +114,11 @@ the registry (`src/standard/command-registry.ts`) is the source of truth.
 - `data/testing/recommendations.md`
 - `data/testing/artifacts/latest.md`
 - `memory/index.md`
-- `data/memory/index/` (optional disposable catalog; search does not consume it)
-- `data/memory/embeddings/` (optional disposable cache)
+- `data/memory/index/index.json`
+- `data/memory/embeddings/` (disposable cache, when enabled)
 - `runtime/memory/search/<run-id>/` (explicit reports only)
 - `flows/` (flow packages)
+- `data/security/artifacts/latest.md`
 
 ## Refresh
 
