@@ -42,3 +42,18 @@ fixed function and confirmed mkdir is now inside the try block.
 Documented the correction in trd.md.
 
 **Verdict: APPROVE (after the T5 fix).** Proceeding to commit, push, PR.
+- 2026-08-19T13:00:45.029Z - ac-confirmed: AC1: writeWrapUpOutcomeArtifact called on the propose-path failure branch, verified by review-logic + regression test.
+- 2026-08-19T13:00:45.221Z - ac-confirmed: AC2: Called unconditionally on both success paths (unbound-candidate branch and post-Promise.all propose branch), verified by tests.
+- 2026-08-19T13:00:45.411Z - ac-confirmed: AC3: Zero-seeds early return in runWrapUp untouched, no artifact write path reachable there — verified by code read + test.
+- 2026-08-19T13:00:45.606Z - ac-confirmed: AC4: classifySession's new check populates wrapUpOutcome when readNewestWrapUpOutcome returns all-failure groups, verified by catch-up.test.ts scenario (a).
+- 2026-08-19T13:00:45.820Z - ac-confirmed: AC5: terminal-state.json + artifact still classifies blocked, verified by catch-up.test.ts scenario (c) and review-logic's independent check.
+- 2026-08-19T13:00:46.028Z - ac-confirmed: AC6: No-artifact sessions unchanged, verified by catch-up.test.ts scenario (d).
+- 2026-08-19T13:00:46.227Z - ac-confirmed: AC7: describeReviewItem's two unknown branches verified by review-inspector.test.ts render assertions.
+- 2026-08-19T13:00:46.447Z - ac-confirmed: AC8: formatReviewListLines/summarizeReviewItem unchanged, verified by review-inspector.test.ts + review-style finding zero issues.
+- 2026-08-19T13:00:46.649Z - ac-confirmed: AC9: T5 fix wraps the entire function body (mkdir+write) in one try/catch; regression test forces mkdir failure and asserts runWrapUp still resolves with its computed result.
+- 2026-08-19T13:00:46.853Z - ac-confirmed: AC10: agent.ts and harness.ts confirmed untouched by the diff (git diff scope), per TRD §1.2.
+- 2026-08-19T13:00:47.047Z - ac-confirmed: AC11: code-verifier: tsc --noEmit clean, full bun test 4245 pass/0 fail after the T5 fix.
+- 2026-08-19T13:05:13.053Z - renumbered: 173 -> 174: flow id collision: another clone also allocated 173 (feat/shell-background-processes, PR #344, merged first). Renumbering mine to the next free id.
+- 2026-08-19T13:05:19.332Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/345 (warning: PR is not a draft)
+- 2026-08-19T13:05:19.512Z - completing
+- 2026-08-19T13:05:21.547Z - done: all gates passed

@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "id": "174",
+  "slug": "sac-durable-wrap-up-dispatch-outcome-rec",
+  "title": "SAC: durable wrap-up dispatch outcome recording for Review UI",
+  "status": "done",
+  "createdAt": "2026-08-19T12:37:27.541Z",
+  "updatedAt": "2026-08-19T13:05:21.547Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:202bc039adc07e3a51046219d378f38694704dda6b4489aef3e12fbb462ed9f9",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-19T13:00:45.028Z",
+      "note": "writeWrapUpOutcomeArtifact called on the propose-path failure branch, verified by review-logic + regression test."
+    },
+    "AC2": {
+      "at": "2026-08-19T13:00:45.221Z",
+      "note": "Called unconditionally on both success paths (unbound-candidate branch and post-Promise.all propose branch), verified by tests."
+    },
+    "AC3": {
+      "at": "2026-08-19T13:00:45.411Z",
+      "note": "Zero-seeds early return in runWrapUp untouched, no artifact write path reachable there — verified by code read + test."
+    },
+    "AC4": {
+      "at": "2026-08-19T13:00:45.606Z",
+      "note": "classifySession's new check populates wrapUpOutcome when readNewestWrapUpOutcome returns all-failure groups, verified by catch-up.test.ts scenario (a)."
+    },
+    "AC5": {
+      "at": "2026-08-19T13:00:45.820Z",
+      "note": "terminal-state.json + artifact still classifies blocked, verified by catch-up.test.ts scenario (c) and review-logic's independent check."
+    },
+    "AC6": {
+      "at": "2026-08-19T13:00:46.027Z",
+      "note": "No-artifact sessions unchanged, verified by catch-up.test.ts scenario (d)."
+    },
+    "AC7": {
+      "at": "2026-08-19T13:00:46.227Z",
+      "note": "describeReviewItem's two unknown branches verified by review-inspector.test.ts render assertions."
+    },
+    "AC8": {
+      "at": "2026-08-19T13:00:46.447Z",
+      "note": "formatReviewListLines/summarizeReviewItem unchanged, verified by review-inspector.test.ts + review-style finding zero issues."
+    },
+    "AC9": {
+      "at": "2026-08-19T13:00:46.649Z",
+      "note": "T5 fix wraps the entire function body (mkdir+write) in one try/catch; regression test forces mkdir failure and asserts runWrapUp still resolves with its computed result."
+    },
+    "AC10": {
+      "at": "2026-08-19T13:00:46.853Z",
+      "note": "agent.ts and harness.ts confirmed untouched by the diff (git diff scope), per TRD §1.2."
+    },
+    "AC11": {
+      "at": "2026-08-19T13:00:47.047Z",
+      "note": "code-verifier: tsc --noEmit clean, full bun test 4245 pass/0 fail after the T5 fix."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/345"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Fix: writeWrapUpOutcomeArtifact's mkdir call escapes the best-effort try/catch (logic review finding)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-19T12:37:27.541Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-19T12:38:53.618Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-19T12:38:53.830Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-19T12:38:54.047Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-19T12:47:40.268Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-19T12:50:49.464Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-19T12:56:09.769Z",
+      "event": "task-added",
+      "detail": "T5: Fix: writeWrapUpOutcomeArtifact's mkdir call escapes the best-effort try/catch (logic review finding)"
+    },
+    {
+      "at": "2026-08-19T12:59:57.814Z",
+      "event": "task-done",
+      "detail": "T5: Fix: writeWrapUpOutcomeArtifact's mkdir call escapes the best-effort try/catch (logic review finding)"
+    },
+    {
+      "at": "2026-08-19T12:59:57.905Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-19T13:00:45.029Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: writeWrapUpOutcomeArtifact called on the propose-path failure branch, verified by review-logic + regression test."
+    },
+    {
+      "at": "2026-08-19T13:00:45.221Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Called unconditionally on both success paths (unbound-candidate branch and post-Promise.all propose branch), verified by tests."
+    },
+    {
+      "at": "2026-08-19T13:00:45.411Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Zero-seeds early return in runWrapUp untouched, no artifact write path reachable there — verified by code read + test."
+    },
+    {
+      "at": "2026-08-19T13:00:45.606Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: classifySession's new check populates wrapUpOutcome when readNewestWrapUpOutcome returns all-failure groups, verified by catch-up.test.ts scenario (a)."
+    },
+    {
+      "at": "2026-08-19T13:00:45.820Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: terminal-state.json + artifact still classifies blocked, verified by catch-up.test.ts scenario (c) and review-logic's independent check."
+    },
+    {
+      "at": "2026-08-19T13:00:46.028Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: No-artifact sessions unchanged, verified by catch-up.test.ts scenario (d)."
+    },
+    {
+      "at": "2026-08-19T13:00:46.227Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: describeReviewItem's two unknown branches verified by review-inspector.test.ts render assertions."
+    },
+    {
+      "at": "2026-08-19T13:00:46.447Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: formatReviewListLines/summarizeReviewItem unchanged, verified by review-inspector.test.ts + review-style finding zero issues."
+    },
+    {
+      "at": "2026-08-19T13:00:46.649Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: T5 fix wraps the entire function body (mkdir+write) in one try/catch; regression test forces mkdir failure and asserts runWrapUp still resolves with its computed result."
+    },
+    {
+      "at": "2026-08-19T13:00:46.853Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent.ts and harness.ts confirmed untouched by the diff (git diff scope), per TRD §1.2."
+    },
+    {
+      "at": "2026-08-19T13:00:47.047Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: code-verifier: tsc --noEmit clean, full bun test 4245 pass/0 fail after the T5 fix."
+    },
+    {
+      "at": "2026-08-19T13:05:13.053Z",
+      "event": "renumbered",
+      "detail": "173 -> 174: flow id collision: another clone also allocated 173 (feat/shell-background-processes, PR #344, merged first). Renumbering mine to the next free id."
+    },
+    {
+      "at": "2026-08-19T13:05:19.332Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/345 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-19T13:05:19.512Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-19T13:05:21.547Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

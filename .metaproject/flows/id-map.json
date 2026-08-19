@@ -94,5 +94,13 @@
     "toDir": "141-2026-08-10-keryx-memory-reliability-p6-documentatio",
     "at": "2026-08-10T19:42:14.080Z",
     "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "173",
+    "to": "174",
+    "fromDir": "173-2026-08-19-sac-durable-wrap-up-dispatch-outcome-rec",
+    "toDir": "174-2026-08-19-sac-durable-wrap-up-dispatch-outcome-rec",
+    "at": "2026-08-19T13:05:13.053Z",
+    "reason": "flow id collision: another clone also allocated 173 (feat/shell-background-processes, PR #344, merged first). Renumbering mine to the next free id."
   }
 ]
