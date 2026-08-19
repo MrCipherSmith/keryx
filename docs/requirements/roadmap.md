@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.7
+Version: 0.14.9
 
 ## Status
 
@@ -7,6 +7,33 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.9** — `structured-file-edit-tools` P0/P1/P3 **implemented**:
+>   `GatedToolRisk`/`executeCall` gained a real `write` path (ADR-0010,
+>   `permission-mode.ts`/`agent.ts`), a new escalation classifier
+>   `src/lib/patch-risk.ts` (delete / `.git` touch / >8 files / credential-path
+>   → escalate, never block), and the `apply_patch` tool itself
+>   (`src/harness/tool/builtin/apply-patch-tool.ts`: multi-file unified diff,
+>   `confineToRoot`-scoped, applied via a constrained argv-only `git apply`
+>   subprocess with the patch over stdin). Registered in the interactive
+>   agent's tool set; system prompt now steers edits toward `apply_patch`
+>   over `shell_exec`. Tests: pure-function coverage for the classifier and
+>   parser, mocked-runner coverage for the tool's own logic (path-escape
+>   atomicity, structured per-file results), real-`git`-subprocess coverage
+>   (apply + reject-wholesale-on-mismatch), and `executeCall`-level gate
+>   integration tests mirroring the existing `destructive`/`delegate`
+>   coverage. P2 (diff-preview approval UI) not started — `write`-risk
+>   approvals still render raw JSON tool input.
+> - **0.14.8** — Added `structured-file-edit-tools` as a specification-ready,
+>   requirements-only package: an `apply_patch` tool (standard multi-file
+>   unified diff, applied in-process via a constrained `git apply` subprocess
+>   call) so the interactive agent no longer has to spend its non-read
+>   tool-call budget one `shell_exec` heredoc per edit. Depends on extending
+>   `GatedToolRisk`/`executeCall`/`resolveApprovalDecision` to a real
+>   `risk: "write"` path — today hard-denied unconditionally
+>   (`permission-mode.ts`'s own doc comment says so). Recommends that gate
+>   extension land first, alone, backed by a real ADR (mirrors ADR-0008/
+>   ADR-0009's precedent), before any patch-parsing code exists. No runtime
+>   implementation is claimed.
 > - **0.14.7** — `keryx-multi-agent-engine` Phase D **implemented** (flow 171,
 >   tasks T5–T7; bumped package to 0.4.0): concurrent execution of sibling
 >   `spawn_subagent` calls (FR11, SC7) via new `executeWaves` executor in
@@ -229,3 +256,4 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx OpenTUI Shell](keryx-opentui-shell/README.md) | implemented (default shell; flows 059–066) | Full-screen OpenTUI (`@opentui/core`) interactive shell replacing the line-based `node:readline` renderer: live `/` command composer, persistent composer region, component-based rendering, with the deterministic agent driver and pure render helpers unchanged. The TUI is **the default shell when `stdout.isTTY`**; `--tui`/`--no-tui` flags and a graceful readline fallback remain. ADR-0005 Accepted. Additive features shipped beyond the original Phase 0–5 spec: side-workers, multi-agent spawn wiring, dual-store session persistence. Shared interactive tools + approval across TUI and readline (`web_fetch` is not TUI-only). |
 | [Keryx OpenTUI Modal and Tabs](keryx-opentui-modal-tabs/README.md) | implemented (flow 154) | Reusable `openModal` host in `src/tui/modal-host.ts`: dimmed backdrop, titled panel, tab strip, Esc dismiss, `shell-chrome` overlay registration. No slash command of its own. |
 | [Keryx OpenTUI Session Info](keryx-opentui-session-info/README.md) | implemented (flows 155; 0.2.36–0.2.37) | `/status` inspector on the shared host (Status + Context; Workspaces / Flow only when the session referenced them). `/session-info` and `/info` are not aliases. Sibling `/flows` lists project flows on the same host. |
+| [Structured File-Edit Tools](structured-file-edit-tools/README.md) | implemented (P0/P1/P3); P2 diff-preview UI not started | `apply_patch`: a `risk: "write"` tool taking a standard multi-file unified diff, applied via a constrained `git apply` argv call (stdin, no shell string) and confined by the existing `confineToRoot`. Collapses N `shell_exec`-per-edit calls into 1 non-read budget slot. The approval gate (`GatedToolRisk`/`executeCall`/`resolveApprovalDecision`) was extended to a real `write` path — previously hard-denied unconditionally — as its own phase, backed by **ADR-0010**, with a new escalation classifier (`src/lib/patch-risk.ts`: delete / `.git` touch / many-files / credential-path). System prompt steers edits toward `apply_patch` over `shell_exec`. Open: the approval prompt still renders raw JSON for `write` risk instead of a rendered diff. |

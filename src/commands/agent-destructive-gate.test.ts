@@ -91,6 +91,34 @@ function fakeTool(name: string, risk: ToolRisk): {
   };
 }
 
+/** Like {@link fakeTool} but with a `patch` field, for ADR-0010 `write`-risk tests. */
+function fakeWriteTool(name: string): {
+  tool: InteractiveTool;
+  ran: () => boolean;
+} {
+  let invoked = false;
+  return {
+    ran: () => invoked,
+    tool: {
+      definition: {
+        name,
+        description: "test tool",
+        inputSchema: {
+          type: "object",
+          properties: { patch: { type: "string" } },
+          required: ["patch"],
+          additionalProperties: false,
+        },
+        risk: "write",
+      },
+      invoke: async () => {
+        invoked = true;
+        return { output: "ran", isError: false };
+      },
+    },
+  };
+}
+
 let seq = 0;
 const idSeq = (): string => `id-${seq++}`;
 
@@ -207,4 +235,103 @@ test("an escalated command that is denied never runs", async () => {
   );
   expect(ran()).toBe(false);
   expect(history.find((m) => m.role === "tool")?.content).toMatch(/not approved/);
+});
+
+// --- ADR-0010: `write` (apply_patch) joins the same gate ---------------------
+
+const BENIGN_PATCH = JSON.stringify({ patch: "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n" });
+const DELETE_PATCH = JSON.stringify({ patch: "--- a/src/a.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n" });
+
+test("ADR-0010: a tool declaring risk 'write' is gated by approval, not rejected outright", async () => {
+  const { tool, ran } = fakeWriteTool("apply_patch");
+  const history: NormalizedMessage[] = [];
+  const io: AgentIO = { write: () => {}, requestApproval: async () => true };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", BENIGN_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(history.find((m) => m.role === "tool")?.content).not.toMatch(/not permitted/);
+  expect(ran()).toBe(true);
+});
+
+test("ADR-0010: a 'write' tool is still DEFAULT-DENIED without an approver", async () => {
+  const { tool, ran } = fakeWriteTool("apply_patch");
+  const history: NormalizedMessage[] = [];
+  const io: AgentIO = { write: () => {} };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", BENIGN_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(ran()).toBe(false);
+  expect(history.find((m) => m.role === "tool")?.content).toMatch(/not approved/);
+});
+
+test("ADR-0010: a patch that deletes a file escalates: the approver is told", async () => {
+  const { tool } = fakeWriteTool("apply_patch");
+  const seen: { destructive: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ destructive: meta?.destructive === true });
+      return false; // deny: this test is about the SIGNAL, nothing must run
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", DELETE_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ destructive: true }]);
+});
+
+test("ADR-0010: an ordinary modify-only patch does NOT escalate", async () => {
+  const { tool } = fakeWriteTool("apply_patch");
+  const seen: { destructive: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ destructive: meta?.destructive === true });
+      return true;
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", BENIGN_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ destructive: false }]);
 });

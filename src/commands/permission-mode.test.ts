@@ -44,7 +44,7 @@ test("read always auto-approves regardless of mode", () => {
 
 test("credentials is a hard floor no mode lifts, including auto", () => {
   for (const mode of PERMISSION_MODES) {
-    for (const risk of ["shell", "destructive", "delegate"] as const) {
+    for (const risk of ["shell", "destructive", "delegate", "write"] as const) {
       expect(
         resolveApprovalDecision({
           mode,
@@ -60,7 +60,7 @@ test("credentials is a hard floor no mode lifts, including auto", () => {
 
 test("sacReviewConfirmation is a hard floor no mode lifts, including auto", () => {
   for (const mode of PERMISSION_MODES) {
-    for (const risk of ["shell", "destructive", "delegate"] as const) {
+    for (const risk of ["shell", "destructive", "delegate", "write"] as const) {
       expect(
         resolveApprovalDecision({
           mode,
@@ -173,6 +173,24 @@ test("auto mode still asks when the action touches SAC confirm-review", () => {
       credentials: false,
       sacReviewConfirmation: true,
     }),
+  ).toBe("ask");
+});
+
+test("ADR-0010: write behaves exactly like shell under every mode — ask/trust/auto, benign and destructive", () => {
+  expect(
+    resolveApprovalDecision({ mode: "ask", risk: "write", destructive: false, credentials: false, sacReviewConfirmation: false }),
+  ).toBe("ask");
+  expect(
+    resolveApprovalDecision({ mode: "trust", risk: "write", destructive: false, credentials: false, sacReviewConfirmation: false }),
+  ).toBe("auto");
+  expect(
+    resolveApprovalDecision({ mode: "trust", risk: "write", destructive: true, credentials: false, sacReviewConfirmation: false }),
+  ).toBe("ask");
+  expect(
+    resolveApprovalDecision({ mode: "auto", risk: "write", destructive: true, credentials: false, sacReviewConfirmation: false }),
+  ).toBe("auto");
+  expect(
+    resolveApprovalDecision({ mode: "auto", risk: "write", destructive: false, credentials: true, sacReviewConfirmation: false }),
   ).toBe("ask");
 });
 

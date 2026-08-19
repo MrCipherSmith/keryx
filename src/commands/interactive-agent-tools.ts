@@ -2,6 +2,7 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { randomUUID } from "node:crypto";
+import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
@@ -50,6 +51,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     webFetchTool(),
     webSearchTool(input.searchController),
     shellExecTool(input.cwd),
+    applyPatchTool(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
     workspaceCreateTool(input.cwd),
