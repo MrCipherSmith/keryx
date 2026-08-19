@@ -832,6 +832,89 @@ test("runAgentTurn: the default read budget permits more than eight distinct rea
   expect(systemMsgs.join("")).not.toMatch(/\[budget\]/i);
 });
 
+test("runAgentTurn: askUser answering 'reset' on an exhausted budget raises the ceiling and continues instead of stopping", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+    [
+      // Retried AFTER the reset — now within budget.
+      { kind: "tool_call_start", toolCallId: "c3", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "Done after reset." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const asked: unknown[] = [];
+  const askUser: AskUserFn = async (request) => {
+    asked.push(request);
+    return "reset";
+  };
+  const systemMsgs: string[] = [];
+  const text: string[] = [];
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    askUser,
+  };
+  await runAgentTurn(
+    { write: (s) => text.push(s), onSystem: (t) => systemMsgs.push(t) },
+    deps,
+    [],
+    "probe twice",
+  );
+
+  expect(asked.length).toBe(1);
+  expect(requests.length).toBe(3);
+  expect(systemMsgs.join("")).toMatch(/\[budget\] Limit increased — total 2/);
+  expect(systemMsgs.join("")).not.toMatch(/Tool loop stopped/);
+  expect(text.join("")).toContain("Done after reset.");
+});
+
+test("runAgentTurn: askUser answering 'cancel' on an exhausted budget falls through to the existing wrap-up", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "Stopped as requested." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const askUser: AskUserFn = async () => "cancel";
+  const systemMsgs: string[] = [];
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxToolCalls: 1,
+    askUser,
+  };
+  await runAgentTurn({ write: () => {}, onSystem: (t) => systemMsgs.push(t) }, deps, [], "probe twice");
+
+  expect(requests.length).toBe(2);
+  expect(systemMsgs.join("")).toMatch(/\[budget\] Stopping tools/);
+});
+
 test("runAgentTurn: identical failing calls only burn one unique slot; after 3 attempts further same hash is skipped", async () => {
   const round: Partial<NormalizedEvent>[] = [
     { kind: "tool_call_start", toolCallId: "c", toolName: "nonexistent_tool" },

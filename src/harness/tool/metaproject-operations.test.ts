@@ -30,6 +30,7 @@ const OPERATION_SCHEMA = JSON.parse(
 ) as Record<string, unknown>;
 
 const EXPECTED_NAMES = [
+  "flow_status",
   "graph_affected",
   "graph_path",
   "graph_query",
@@ -364,6 +365,52 @@ test("wiki_backlinks is a wiki-module read op present in all three projections (
 
   const mcp = toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name);
   expect(mcp).toContain("wiki_backlinks");
+});
+
+test("flow_status formats the structured port result when the method is present", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    flowStatus: async ({ id }) => ({
+      flows:
+        id === undefined
+          ? [
+              { id: "1", status: "in-progress", title: "Do X", tasksDone: 1, tasksTotal: 3, dir: "1-do-x" },
+              { id: "2", status: "done", title: "Do Y", tasksDone: 2, tasksTotal: 2, dir: "2-do-y" },
+            ]
+          : [{ id, status: "done", title: "Do Y", tasksDone: 2, tasksTotal: 2, dir: "2-do-y" }],
+    }),
+  };
+  const result = await op("flow_status").invoke(port, {});
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("Flows (2)");
+  expect(result.output).toContain("1 [in-progress] Do X (1/3 tasks)");
+
+  const filtered = await op("flow_status").invoke(port, { id: "2" });
+  expect(filtered.output).toContain("Flows (1)");
+  expect(filtered.output).toContain("2 [done] Do Y (2/2 tasks)");
+});
+
+test("flow_status reports 'not available' when the port omits the method (never throws)", async () => {
+  const { port } = recordingPort();
+  const result = await op("flow_status").invoke(port, {});
+  expect(result.isError).toBe(true);
+  expect(result.output).toMatch(/not available/);
+});
+
+test("flow_status is a flow-module read op present in all three projections (agent/harness/MCP)", () => {
+  const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "flow_status");
+  expect(descriptor?.module).toBe("flow");
+  expect(descriptor?.risk).toBe("read");
+
+  const { port } = recordingPort();
+  const interactive = toInteractiveTools(METAPROJECT_OPERATIONS, port).map((t) => t.definition.name);
+  expect(interactive).toContain("flow_status");
+
+  const harness = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(harness).toContain("metaproject:flow_status");
+
+  const mcp = toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name);
+  expect(mcp).toContain("flow_status");
 });
 
 test("a wiki_backlinks result validates against wiki-backlinks-result.schema.json", () => {

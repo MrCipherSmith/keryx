@@ -9,6 +9,7 @@ import type {
   MemoryService,
   ScoredEntry,
 } from "../../memory/types";
+import type { FlowService } from "../../flow/types";
 import { createMetaprojectAdapter, type MetaprojectAdapterDeps } from "./metaproject-adapter";
 
 const CWD = "/proj";
@@ -245,6 +246,50 @@ test("testRelated returns a structured error (never throws) when the resolver fa
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
   expect(result?.tests).toEqual([]);
   expect(result?.error).toMatch(/testing boom/);
+});
+
+// --- flow_status: Task Manager flow listing (read-risk alternative to `shell_exec`ing `keryx flow list`) ---
+
+test("flowStatus delegates to the injected flow service and lists all flows", async () => {
+  const fakeFlowService = {
+    list: async () => [
+      { id: "1", status: "in-progress", title: "Do X", tasksDone: 1, tasksTotal: 3, dir: "1-do-x" },
+      { id: "2", status: "done", title: "Do Y", tasksDone: 2, tasksTotal: 2, dir: "2-do-y" },
+    ],
+  } as unknown as FlowService;
+  const adapter = createMetaprojectAdapter("/proj", { createFlowService: () => fakeFlowService });
+
+  const all = await adapter.flowStatus?.({});
+  expect(all?.flows).toHaveLength(2);
+  expect(all?.error).toBeUndefined();
+});
+
+test("flowStatus filters to one flow by id", async () => {
+  const fakeFlowService = {
+    list: async () => [
+      { id: "1", status: "in-progress", title: "Do X", tasksDone: 1, tasksTotal: 3, dir: "1-do-x" },
+      { id: "2", status: "done", title: "Do Y", tasksDone: 2, tasksTotal: 2, dir: "2-do-y" },
+    ],
+  } as unknown as FlowService;
+  const adapter = createMetaprojectAdapter("/proj", { createFlowService: () => fakeFlowService });
+
+  const filtered = await adapter.flowStatus?.({ id: "2" });
+  expect(filtered?.flows).toEqual([
+    { id: "2", status: "done", title: "Do Y", tasksDone: 2, tasksTotal: 2, dir: "2-do-y" },
+  ]);
+});
+
+test("flowStatus returns a structured error (never throws) when the service fails", async () => {
+  const fakeFlowService = {
+    list: async () => {
+      throw new Error("flow boom");
+    },
+  } as unknown as FlowService;
+  const adapter = createMetaprojectAdapter("/proj", { createFlowService: () => fakeFlowService });
+
+  const result = await adapter.flowStatus?.({});
+  expect(result?.flows).toEqual([]);
+  expect(result?.error).toMatch(/flow boom/);
 });
 
 // --- flow 044: batch-2 adapter methods (graph_symbol / repomap / wiki_ask) ----

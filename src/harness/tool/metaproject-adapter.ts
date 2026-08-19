@@ -31,11 +31,16 @@ import { MEMORY_CLASS_VALUES, type MemoryClass, type MemoryService, type SearchF
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
+import { createFlowService } from "../../flow/service";
+import { githubAdapter } from "../../flow/tracker/github";
+import { securityFlowGate } from "../../security/guard";
+import type { FlowService } from "../../flow/types";
 import { wikiAsk } from "../../wiki/ask";
 import { wikiPagesForFile } from "../../wiki/service";
 import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
+  FlowStatusResult,
   GraphAffectedResult,
   GraphPathResult,
   GraphQueryResult,
@@ -59,6 +64,11 @@ export interface MetaprojectAdapterDeps {
   findRelatedTests: (cwd: string, target: string) => Promise<string[]>;
   /** Code-health facade factory (default: the real health service). Injectable for tests. */
   createCodeHealthService: () => CodeHealthService;
+  /**
+   * Task Manager flow-service factory (default: the real service, same wiring
+   * as `commands/flow.ts`'s own `getService()`). Injectable for tests.
+   */
+  createFlowService: () => FlowService;
   /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
   wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
   /**
@@ -80,6 +90,16 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   createMemoryService,
   findRelatedTests,
   createCodeHealthService,
+  createFlowService: () =>
+    createFlowService({
+      tracker: githubAdapter,
+      healthGate: async (cwd) => {
+        const result = await createCodeHealthService().gate({ cwd });
+        return { status: result.status, reasons: result.reasons };
+      },
+      securityGate: (cwd) => securityFlowGate(cwd),
+      now: () => new Date(),
+    }),
   wikiAsk,
   wikiPagesForFile,
   repomapCompute: async (cwd, options) => {
@@ -124,6 +144,7 @@ export function createMetaprojectAdapter(
   const deps: MetaprojectAdapterDeps = { ...DEFAULT_DEPS, ...overrides };
   const gdgraph = deps.createGdgraphService();
   const memory = deps.createMemoryService();
+  const flow = deps.createFlowService();
 
   return {
     // searchCode has no in-process facade (gdctx is CLI-only); return a structured
@@ -320,6 +341,26 @@ export function createMetaprojectAdapter(
           regressions: 0,
           error: errorMessage(cause),
         };
+      }
+    },
+
+    async flowStatus(input): Promise<FlowStatusResult> {
+      try {
+        const flows = await flow.list({ cwd });
+        const filtered =
+          input.id !== undefined && input.id.length > 0 ? flows.filter((f) => f.id === input.id) : flows;
+        return {
+          flows: filtered.map((f) => ({
+            id: f.id,
+            status: f.status,
+            title: f.title,
+            tasksDone: f.tasksDone,
+            tasksTotal: f.tasksTotal,
+            dir: f.dir,
+          })),
+        };
+      } catch (cause) {
+        return { flows: [], error: errorMessage(cause) };
       }
     },
 

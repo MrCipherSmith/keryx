@@ -17,6 +17,7 @@
 // docs/requirements/keryx-metaproject-native/schemas/metaproject-operation.schema.json.
 
 import type {
+  FlowStatusResult,
   GraphAffectedResult,
   GraphPathResult,
   GraphQueryResult,
@@ -247,6 +248,18 @@ export function formatHealth(result: HealthStatusResult): InteractiveToolResult 
   return { output: `Code health — ${parts.join(", ")}.`, isError: false };
 }
 
+/** Render a `flowStatus` result as readable text. */
+export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `flow_status failed: ${result.error}`, isError: true };
+  }
+  if (result.flows.length === 0) {
+    return { output: "No matching flows.", isError: false };
+  }
+  const lines = result.flows.map((f) => `  - ${f.id} [${f.status}] ${f.title} (${f.tasksDone}/${f.tasksTotal} tasks)`);
+  return { output: [`Flows (${result.flows.length}):`, ...lines].join("\n"), isError: false };
+}
+
 /** Render a `graphSymbol` result as readable text. */
 export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.error !== undefined) {
@@ -386,6 +399,15 @@ const WIKI_BACKLINKS_OUTPUT_SCHEMA: Record<string, unknown> = {
     error: { type: "string" },
   },
   required: ["file", "backlinks"],
+};
+
+const FLOW_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    flows: { type: "array" },
+    error: { type: "string" },
+  },
+  required: ["flows"],
 };
 
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
@@ -662,6 +684,28 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return file.error;
       }
       return formatBacklinks(await port.wikiBacklinks({ file: file.value }));
+    },
+  },
+  {
+    name: "flow_status",
+    risk: "read",
+    module: "flow",
+    description:
+      "List Task Manager flows with their status and task progress (`keryx flow list`). Input: { id?: string } " +
+      "to filter to one flow. Use this instead of `shell_exec`'ing `keryx flow list`/`keryx flow status` — same " +
+      "data, no non-read budget cost.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      additionalProperties: false,
+    },
+    outputSchema: FLOW_STATUS_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.flowStatus === undefined) {
+        return { output: "flow_status is not available in this session.", isError: true };
+      }
+      const id = typeof input.id === "string" && input.id.trim().length > 0 ? input.id.trim() : undefined;
+      return formatFlowStatus(await port.flowStatus(id !== undefined ? { id } : {}));
     },
   },
 ];

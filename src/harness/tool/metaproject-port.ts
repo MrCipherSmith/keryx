@@ -187,6 +187,30 @@ export interface GraphSymbolResult {
   error?: string;
 }
 
+/** One flow's summary — status/progress row from `keryx flow list`. */
+export interface FlowSummaryResult {
+  /** Stable flow id. */
+  id: string;
+  /** Current lifecycle status. */
+  status: string;
+  /** Flow title. */
+  title: string;
+  /** Completed task count. */
+  tasksDone: number;
+  /** Total task count. */
+  tasksTotal: number;
+  /** Flow directory (relative to `.metaproject/flows`). */
+  dir: string;
+}
+
+/** Structured result of `flowStatus` — Task Manager flows and their progress. */
+export interface FlowStatusResult {
+  /** Matching flows (all flows, or the single flow named by `id`). */
+  flows: FlowSummaryResult[];
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
 /** One ranked repomap entry — the file plus its top rendered symbols. */
 export interface RepomapFile {
   /** File path (graph node id). */
@@ -308,4 +332,14 @@ export interface MetaprojectPort {
 
   /** Wiki pages that reference a repo file — the reverse "documented in" lookup (gdwiki). */
   wikiBacklinks?(input: { file: string }): Promise<WikiBacklinksResult>;
+
+  // --- additive OPTIONAL read operation: Task Manager flow status ------------
+  // Same OPTIONAL contract as the batches above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw. Gives the
+  // interactive agent a `risk: "read"` alternative to `shell_exec` for `keryx
+  // flow list`/`status`, so checking flow progress no longer has to spend a
+  // non-read budget slot.
+
+  /** Task Manager flows and their status/progress, optionally filtered to one id (flow). */
+  flowStatus?(input: { id?: string }): Promise<FlowStatusResult>;
 }

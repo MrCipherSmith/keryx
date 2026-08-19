@@ -17,6 +17,7 @@ import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview 
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
@@ -209,6 +210,17 @@ export interface AgentDeps {
    * loader exists for `subagents.*` fields today).
    */
   maxSubagentConcurrency?: number;
+  /**
+   * Driver-triggered selector (not a model tool call) — same host-side picker
+   * the `ask_user` tool uses. Currently consulted ONLY when a per-turn budget
+   * (total/read/non-read) is exhausted: offers "increase limit and continue"
+   * vs "cancel" instead of unconditionally stopping. Absent, or a non-"reset"
+   * answer, keeps the pre-existing behavior (`finishWithBudgetSummary`'s
+   * silent wrap-up) — every existing call site that predates this is
+   * unaffected. Never consulted when `deps.unattended === true` (no human to
+   * answer).
+   */
+  askUser?: AskUserFn;
 }
 
 export interface RunAgentTurnOptions {
@@ -304,8 +316,17 @@ export const MAX_AGENT_MAX_TOOL_CALLS = 256;
 /** Default unique risk-`read` signature budget inside the total pool. */
 export const DEFAULT_MAX_READ_TOOL_CALLS = 40;
 
-/** Default unique non-read/unknown-risk signature budget inside the total pool. */
-export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 8;
+/**
+ * Default unique non-read/unknown-risk signature budget inside the total pool
+ * (shell/write/destructive/network/credential/delegate combined — every
+ * `ToolRisk` other than `"read"`). Raised from 8 (flow 033's original,
+ * conservative loop-safety value) after real interactive sessions kept
+ * hitting it on small, legitimate tasks: any file edit has to go through
+ * `shell_exec` (there is no dedicated write tool), so a handful of edits plus
+ * a verification run already exhausted a single-digit budget. Still a finite
+ * loop-safety guard, not unlimited.
+ */
+export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 32;
 
 /**
  * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
@@ -581,7 +602,7 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "You are the keryx interactive agent (project harness). You have read-only tools to " +
     "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
     "graph_affected, graph_symbol, graph_path, graph_query, memory_search, read_wiki, wiki_ask, wiki_backlinks, " +
-    "test_related, health_status, repomap, workspace_overview, workspace_read, workspace_list, workspace_show, " +
+    "test_related, health_status, flow_status, repomap, workspace_overview, workspace_read, workspace_list, workspace_show, " +
     "slate_read, slate_write_seed " +
     "(keryx metaproject), web_fetch for an exact known public HTTPS URL, and web_search when an active connected search provider is configured. " +
     "You also have workspace_create and workspace_propose, which write without asking for approval (see the " +
@@ -612,6 +633,13 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "to get the location, THEN read_file only if you need surrounding context near it.\n" +
     "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
     "to run a known keryx workflow.\n" +
+    "- Tool-call budget: shell_exec, file-mutating shell, workspace_create/workspace_propose, and spawn_subagent " +
+    "all share ONE small per-turn pool (distinct non-read actions), separate from the much larger read-tool pool. " +
+    "search_code/graph_*/memory_search/read_wiki/wiki_*/test_related/health_status/flow_status/repomap/read_file/" +
+    "list_dir do NOT touch it. Conserve the small pool: batch multiple shell steps into ONE call with `&&` instead " +
+    "of issuing them one at a time, get a command's arguments right the first time instead of trying variants, and " +
+    "for any check covered by a read tool above, use that tool instead of shelling out to the equivalent `keryx …` " +
+    "CLI command.\n" +
     "- This session has its own Slate (working-set scratch, not project knowledge): " +
     "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
     "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
@@ -650,8 +678,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     `       keryx wiki enrich --all --refresh-graph${enrichFlags}\n` +
     "  Do NOT thrash search_code/read_wiki instead of wiki enrich.\n" +
     "- Optional prep: `keryx wiki collect` then enrich.\n" +
-    "- Other keryx work (graph, health, memory, flow) → prefer `shell_exec` with the " +
-    "matching `keryx …` CLI when the user wants a full command run.\n\n" +
+    "- Other keryx work (graph, health, memory, flow, testing): use the matching read tool above " +
+    "(graph_affected/graph_query/graph_path/graph_symbol, health_status, memory_search, flow_status, test_related) " +
+    "FIRST — they return the same data as the equivalent `keryx …` CLI command without spending shell_exec's " +
+    "scarce budget slot. Reach for `shell_exec` with the CLI only when the user wants to actually RUN a workflow " +
+    "(mutate state, kick off a job) or needs an option no read tool covers.\n\n" +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
     "contents, or results. Be economical with output tokens: lead with the conclusion, " +
     "if the user asks you to run, inspect, or execute anything, call the relevant tool before " +
@@ -1502,6 +1533,18 @@ async function runAgentTurnCore(
         await emitTerminalState(io, deps, options, "budget_exhausted");
         return { finishReason };
       }
+      if (exhaustedBudget !== undefined) {
+        const resolution = await offerBudgetReset(
+          deps,
+          budget,
+          exhaustedBudget,
+          { maxToolCalls, maxReadToolCalls, maxNonReadToolCalls },
+          system,
+        );
+        if (resolution === "reset") {
+          continue;
+        }
+      }
       await finishWithBudgetSummary(io, deps, history, parentRunId, {
         maxUnique: maxToolCalls,
         maxAttempts,
@@ -1517,6 +1560,71 @@ async function runAgentTurnCore(
       return { finishReason };
     }
   }
+}
+
+/**
+ * Offer the user a way out of a hit budget ceiling INSTEAD of unconditionally
+ * stopping: "increase limit and continue" vs "cancel", via the same host-side
+ * picker `ask_user` uses (`deps.askUser`). Mutates `budget` in place on
+ * "reset" — grants another full allotment of whichever pool(s) were
+ * exhausted (always the total pool, plus the specific read/non-read
+ * sub-pool when that is what tripped) — and returns `"reset"` so the caller
+ * can `continue` the round loop with room to retry the skipped call(s).
+ * Returns `"cancel"` for any other answer, a thrown/rejected picker, or when
+ * no picker is wired (`deps.askUser === undefined`) — every one of those
+ * falls through to the existing `finishWithBudgetSummary` wrap-up unchanged.
+ */
+async function offerBudgetReset(
+  deps: AgentDeps,
+  budget: ToolBudgetState,
+  exhaustedBudget: "total" | "read" | "non-read",
+  amounts: { maxToolCalls: number; maxReadToolCalls: number; maxNonReadToolCalls: number },
+  system: (text: string) => void,
+): Promise<"reset" | "cancel"> {
+  if (deps.askUser === undefined) {
+    return "cancel";
+  }
+  const label =
+    exhaustedBudget === "read"
+      ? `read (${readBudgetUsed(budget)}/${budget.maxReadUnique})`
+      : exhaustedBudget === "non-read"
+        ? `non-read (${nonReadBudgetUsed(budget)}/${budget.maxNonReadUnique})`
+        : `total (${budgetUsed(budget)}/${budget.maxUnique})`;
+  let chosen: string;
+  try {
+    chosen = await deps.askUser({
+      question: `Tool-call budget reached this turn: ${label} unique signatures. What should I do?`,
+      options: [
+        {
+          id: "reset",
+          label: "Increase limit and continue",
+          description: "Grants this turn another allotment of the exhausted budget and resumes tool calls.",
+          recommended: true,
+        },
+        {
+          id: "cancel",
+          label: "Cancel",
+          description: "Stop calling tools now; I will summarize what happened and suggest next steps.",
+        },
+      ],
+    });
+  } catch {
+    return "cancel";
+  }
+  if (chosen !== "reset") {
+    return "cancel";
+  }
+  budget.maxUnique += amounts.maxToolCalls;
+  if (exhaustedBudget === "read") {
+    budget.maxReadUnique += amounts.maxReadToolCalls;
+  } else if (exhaustedBudget === "non-read") {
+    budget.maxNonReadUnique += amounts.maxNonReadToolCalls;
+  }
+  system(
+    `\n[budget] Limit increased — total ${budget.maxUnique}, read ${budget.maxReadUnique}, ` +
+      `non-read ${budget.maxNonReadUnique}. Continuing…\n`,
+  );
+  return "reset";
 }
 
 /**

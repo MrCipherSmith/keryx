@@ -28,6 +28,7 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
   const names = interactiveAgentToolNames(tools);
   expect(names).toEqual([
     "ask_user",
+    "flow_status",
     "get_cwd",
     "graph_affected",
     "graph_path",
