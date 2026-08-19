@@ -5,6 +5,52 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.47] — 2026-08-19
+
+### Added
+
+- **`apply_patch`: write-risk file edits via unified diff (ADR-0010).**
+  Extends the interactive agent's approval gate to a real `risk: "write"`
+  path (previously hard-denied unconditionally), backed by a patch-risk
+  escalation classifier (delete/`.git`/many-files/credential-path). Takes a
+  standard multi-file unified diff, confined to the project root, applied
+  via a constrained argv-only `git apply` subprocess — patch over stdin,
+  never shell-interpolated. One call can edit several files, collapsing N
+  `shell_exec`-per-edit calls into a single non-read budget slot. The
+  write-risk approval prompt now renders the actual diff (line-classified,
+  colored) instead of raw JSON tool input, in both the readline shell and
+  the TUI. See `docs/requirements/structured-file-edit-tools/`.
+- **Background shell jobs: `shell_exec` gains `background: true`.** Starts a
+  detached, process-group-owned job and returns immediately instead of
+  blocking the turn on the synchronous path's timeout. Two new `risk: "read"`
+  tools, `shell_job_output`/`shell_job_kill`, poll and stop it later, scoped
+  strictly to the calling session's own job registry — reuses the existing
+  shell approval gate and OS-sandbox setup unchanged. A new TUI "Background
+  Jobs" sidebar panel mirrors the existing Subagent Inspector: clickable rows
+  open a live-updating Output/Meta modal. Every job is swept
+  (SIGTERM→SIGKILL by process group) on real session exit but deliberately
+  survives `/clear`/`/new` — a background job is meant to outlive the turn
+  that started it. See `.metaproject/wiki/architecture/background-jobs.md`
+  (flow 173).
+- **Non-read tool-call budget raised 8 → 32, with a "raise and continue"
+  option instead of an unconditional stop.** The loop-safety budget shared
+  across `shell_exec`/write/destructive/network/delegate calls was small
+  enough that routine edit-plus-verify work exhausted it; hitting the limit
+  now offers a picker to raise it and continue instead of forcing a wrap-up.
+  Adds `flow_status` as a proper `risk: "read"` tool so checking flow
+  progress no longer needs `shell_exec`.
+
+### Fixed
+
+- **The agent could stall mid-task on a narrated-but-unexecuted step.** A
+  short continuation nudge like "проверяй"/"делай" wasn't recognized as an
+  action request, so the built-in toolless-reprompt safety net never engaged
+  when the model announced a next step ("Проверю ...:") without calling its
+  tool — the turn just ended, silently waiting for the user to nudge it
+  again. Broadened the action-request/claimed-action detection (plus a
+  same-reply narrate-then-act instruction in the system prompt) so the model
+  keeps working instead of stopping on a claim.
+
 ## [0.2.46] — 2026-08-19
 
 ### Added

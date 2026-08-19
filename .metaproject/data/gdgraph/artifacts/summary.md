@@ -2,25 +2,25 @@
 
 ## Stats
 
-- Source files indexed: 871
+- Source files indexed: 884
 - Imported asset files indexed: 4
-- Total nodes: 875
-- Edges: 2651
-- Import edges: 2610
+- Total nodes: 888
+- Edges: 2701
+- Import edges: 2660
 - Asset edges: 9
 - Unresolved imports: 32
 - Import resolution: 98.8%
-- Skipped generated/static directories: 13
+- Skipped generated/static directories: 7
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 203 |
+| harness | 208 |
 | commands | 93 |
-| lib | 77 |
+| lib | 79 |
+| tui | 54 |
 | sac | 48 |
-| tui | 48 |
 | security | 42 |
 | memory | 40 |
 | health | 39 |
@@ -51,14 +51,8 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
 - `dist`
-- `docs/requirements/keryx-shell-benchmark/.metaproject`
-- `docs/requirements/keryx-shell-benchmark/evidence/run-2/.metaproject`
-- `docs/requirements/keryx-shell-benchmark/evidence/run-3/.metaproject`
-- `docs/requirements/keryx-shell-benchmark/harness/.metaproject`
-- `docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`

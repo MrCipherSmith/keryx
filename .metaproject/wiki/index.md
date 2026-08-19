@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-19T12:29:46.754Z | pages: 48 -->
+<!-- generated: 2026-08-19T12:51:43.237Z | pages: 49 -->
 
 ### Architecture
 
@@ -74,6 +74,7 @@ _No pages yet._
 - [src/harness](components/src-harness.md) (accepted)
   - [src/harness/child](components/src-harness-child.md) (accepted)
   - [src/harness/provider](components/src-harness-provider.md) (accepted)
+  - [src/harness/tool](components/src-harness-tool.md) (accepted)
     - [src/harness/tool/builtin](components/src-harness-tool-builtin.md) (accepted)
 - [src/health](components/src-health.md) (accepted)
   - [src/health/metrics](components/src-health-metrics.md) (accepted)

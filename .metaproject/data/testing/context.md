@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-17T13:43:12.149Z
+generatedAt: 2026-08-19T12:50:38.360Z
 
 ## Frameworks
 
@@ -41,6 +41,7 @@ generatedAt: 2026-08-17T13:43:12.149Z
 - src/commands/agent-approval-context.test.ts
 - src/commands/agent-commands.test.ts
 - src/commands/agent-destructive-gate.test.ts
+- src/commands/agent-permission-mode.test.ts
 - src/commands/agent.test.ts
 - src/commands/agents.monitor.test.ts
 - src/commands/ctx.rg-argv.test.ts
@@ -65,6 +66,7 @@ generatedAt: 2026-08-17T13:43:12.149Z
 - src/commands/module-commands.test.ts
 - src/commands/modules.test.ts
 - src/commands/orient.dry-run.test.ts
+- src/commands/permission-mode.test.ts
 - src/commands/projects.escape.test.ts
 - src/commands/providers.test.ts
 - src/commands/rules.test.ts
@@ -97,10 +99,8 @@ generatedAt: 2026-08-17T13:43:12.149Z
 - src/flow/allocation.test.ts
 - src/flow/context-inject.test.ts
 - src/flow/context-p0.test.ts
-- src/flow/disposition.test.ts
-- src/flow/duplicate-ids.test.ts
 
-- ... 300 more
+- ... 326 more
 
 ## CI
 
