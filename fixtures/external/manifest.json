@@ -1,0 +1,120 @@
+{
+  "note": "Recorded transcripts for the external agent runtime codecs (docs/requirements/keryx-external-agent-runtime, flow 176 T5). Every codec function is pure and is tested against these files, so the whole adapter layer runs offline on a machine with neither CLI installed. `captured: true` means the bytes came from a real run on the version named; `captured: false` means the file was hand-authored and is NOT evidence of vendor behaviour — see `caveat`.",
+  "capturedOn": "2026-08-19",
+  "agents": {
+    "codex-cli": {
+      "version": "codex-cli 0.147.0",
+      "baseArgv": [
+        "codex", "exec", "--json", "--color", "never",
+        "-s", "read-only", "-C", "<cwd>",
+        "--ignore-user-config", "--skip-git-repo-check"
+      ],
+      "resumeArgv": [
+        "codex", "exec", "resume", "<thread_id>", "--json",
+        "--ignore-user-config", "--skip-git-repo-check"
+      ],
+      "notes": [
+        "`--ephemeral` is deliberately ABSENT from baseArgv. It is mutually exclusive with resume: a thread started with it fails `resume` with `no rollout found for thread id … (code -32600)` — captured in resume-refused-ephemeral.stderr.txt. Resume is required for operator messages and for `force`, so persistence wins.",
+        "`codex exec resume` accepts a NARROWER flag set than `codex exec`: no `-s/--sandbox`, no `-C/--cd`, no `--color`. The sandbox mode is therefore not settable on resume, and the working directory must be the process cwd rather than a flag. Both constrain the runtime's resume path.",
+        "The resume handle is `thread_id`, emitted by codex on `thread.started`. keryx reads it; it cannot assign it (unlike claude's `--session-id`)."
+      ],
+      "fixtures": {
+        "success.stdout.jsonl": {
+          "captured": true,
+          "case": "clean single-turn run",
+          "exitCode": 0,
+          "events": ["thread.started", "turn.started", "item.completed(agent_message)", "turn.completed"]
+        },
+        "error-word.stdout.jsonl": {
+          "captured": true,
+          "case": "SUCCESSFUL run whose agent_message begins with `error:` — the classifier trap. A naive classifier that greps stdout for /error/ marks this a failure. Exit code is 0 and a terminal turn.completed is present.",
+          "exitCode": 0
+        },
+        "resume.stdout.jsonl": {
+          "captured": true,
+          "case": "resume of success.stdout.jsonl's thread; the model recalled its prior answer, proving context survives",
+          "exitCode": 0
+        },
+        "not-logged-in.stdout.txt": {
+          "captured": true,
+          "case": "no credentials (CODEX_HOME pointed at an empty directory)",
+          "exitCode": 1,
+          "events": ["thread.started", "turn.started", "error x5 (401, Reconnecting n/5)", "item.completed", "error x5", "error (final 401)", "turn.failed"],
+          "notes": "Top-level `error` events are a stream type the 0.1.0 spec did not model, and they arrive as RETRY NOISE — ten of them precede the single terminal `turn.failed`. A classifier must not treat the first `error` as terminal."
+        },
+        "bad-argv.stderr.txt": {
+          "captured": true,
+          "case": "argv rejected by this CLI version (`--no-interactive`, the flag a reference implementation shipped for months after removal)",
+          "exitCode": 2,
+          "notes": "stderr begins `error: unexpected argument …` and contains `Usage: codex exec`. Matches the `^\\s*(error\\b|usage:)` line filter."
+        },
+        "usage-limit.SYNTHETIC.jsonl": {
+          "captured": false,
+          "case": "quota exhausted",
+          "caveat": "HAND-AUTHORED, NOT OBSERVED. A usage limit cannot be provoked on demand. The wording is derived second-hand from a reference implementation's source comment recording a 2026-08-05 capture against an older codex, so both the phrasing and the event framing are unverified. Treat the classifier test built on this as provisional and replace the file the first time a real limit is hit."
+        }
+      }
+    },
+    "claude-cli": {
+      "version": "2.1.220 (Claude Code)",
+      "baseArgv": [
+        "claude", "-p", "--output-format", "stream-json", "--verbose",
+        "--safe-mode", "--tools", "Read", "Grep", "Glob",
+        "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}",
+        "--session-id", "<uuid>", "<prompt>"
+      ],
+      "resumeArgv": [
+        "claude", "-p", "--output-format", "stream-json", "--verbose",
+        "--safe-mode", "--tools", "Read", "Grep", "Glob",
+        "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}",
+        "--resume", "<uuid>", "<prompt>"
+      ],
+      "env": {
+        "unset": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "CLAUDECODE", "CLAUDE_CONFIG_DIR"],
+        "why": "Captured with these cleared so the fixtures reflect the subscription path the runtime actually uses."
+      },
+      "notes": [
+        "The prompt must not sit directly behind a variadic flag (`--tools`, `--mcp-config`, `--disallowed-tools`). `--session-id`/`--resume` is the single-valued separator; a capture attempt without it failed with `MCP config file not found: …/Rep` — the CLI took the prompt's first word as a path.",
+        "`--tools Read Grep Glob` yields a roster of exactly those three, verified in `system/init`. It is an allow-list, unlike `--allowed-tools`.",
+        "`--safe-mode` suppresses the operator's hooks and skills; without it the child emitted `system/hook_started`/`system/hook_response` and loaded ~130 slash commands.",
+        "`system/init` is multi-KB because it enumerates the tool roster and every slash command. A parser must not assume short lines."
+      ],
+      "fixtures": {
+        "success.stdout.jsonl": {
+          "captured": true,
+          "case": "clean single-turn run",
+          "exitCode": 0,
+          "events": ["system/init", "rate_limit_event", "assistant", "result(subtype=success)"]
+        },
+        "resume.stdout.jsonl": {
+          "captured": true,
+          "case": "resume of success.stdout.jsonl's session id; the model recalled its prior answer",
+          "exitCode": 0
+        },
+        "not-logged-in.stdout.jsonl": {
+          "captured": true,
+          "case": "invalid credential (bogus ANTHROPIC_API_KEY present in env)",
+          "exitCode": 0,
+          "events": ["system/init", "system/api_retry x8", "user", "result(subtype=error_during_execution)"],
+          "notes": "IMPORTANT — this did NOT reproduce the reference implementation's reported `Not logged in · Please run /login` on stdout with exit 0. On 2.1.220 a bogus key initialises normally, then burns eight `system/api_retry` events before terminating with `result.subtype = error_during_execution`. The practical consequence is worse than a clean refusal, not better: the failure is slow. The rule to strip `ANTHROPIC_*` stands; the evidence for it is now this file rather than the borrowed anecdote."
+        },
+        "bad-argv.stderr.txt": {
+          "captured": true,
+          "case": "unknown flag",
+          "exitCode": 1,
+          "notes": "stderr is exactly `error: unknown option '--no-such-flag'` — terse, and notably NOT accompanied by a usage block, unlike codex."
+        },
+        "usage-limit.SYNTHETIC.jsonl": {
+          "captured": false,
+          "case": "quota exhausted",
+          "caveat": "HAND-AUTHORED, NOT OBSERVED. Built around the real `rate_limit_event` type seen in captured transcripts plus a terminating `result`, but the actual subtype and message a genuine limit produces are unknown. Provisional; replace on first real capture."
+        }
+      }
+    }
+  },
+  "gaps": [
+    "No `empty output` fixture for either agent — neither CLI produced an empty successful result under any prompt tried, so the case is asserted in code against a synthesised zero-event stream rather than a recorded file.",
+    "Both `usage-limit` fixtures are synthetic. AC6's limit case is provisional until a real quota exhaustion is captured.",
+    "No fixture exercises a multi-turn run with tool calls; success and resume are single-turn. Tool-call event shapes are therefore modelled from the flag surface and the reference implementation, not from a recording."
+  ]
+}

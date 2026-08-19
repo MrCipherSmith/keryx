@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T18:10:59.027Z",
+  "updatedAt": "2026-08-19T18:23:01.828Z",
   "source": {
     "type": "description",
     "ref": null
@@ -77,7 +77,7 @@
       "id": "T5",
       "title": "Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -87,7 +87,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -397,6 +398,11 @@
       "at": "2026-08-19T18:10:59.027Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-19T18:23:01.828Z",
+      "event": "task-done",
+      "detail": "T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)"
     }
   ]
 }

@@ -108,6 +108,69 @@ roster and command list — the parser must not assume short lines.
 
 Probe cost: ~$0.08 of subscription quota across four runs, all in a scratch
 directory outside the repository.
+
+## T5 fixtures — recorded, with four more corrections (2026-08-19)
+
+Transcripts live in `fixtures/external/{codex-cli,claude-cli}/` with
+`manifest.json` recording, per file, the CLI version, the exact argv, and
+whether it was **captured** or **hand-authored**. Specification and
+security-policy → 0.3.0.
+
+**1. `--ephemeral` forbids resume — the spec contradicted itself.** 0.1.0's
+codex argv carried `--ephemeral` while the registry promised `resumable: true`.
+A resume of an ephemeral thread fails: `no rollout found for thread id …
+(code -32600)` (kept as `resume-refused-ephemeral.stderr.txt`). Resume is what
+makes operator messages (R18) and `force` (R20) work for codex, so `--ephemeral`
+is dropped and runs leave a rollout in the operator's `CODEX_HOME` — the same
+thing a hand-run `codex` does. Redirecting `CODEX_HOME` is not an escape:
+`--ignore-user-config` documents that auth still resolves from it, so moving it
+loses the subscription. **Judgement call made rather than escalated**, because
+the alternative silently drops a requirement the operator asked for by name.
+
+**2. `codex exec resume` has a narrower flag set than `codex exec`** — no
+`-s/--sandbox`, no `-C/--cd`, no `--color`. So the sandbox level cannot be
+re-asserted on resume (the worktree carries the containment, D-08), and the
+resume process must be spawned with **cwd set to the worktree** rather than
+pointed at it by flag.
+
+**3. Retry events are non-terminal and arrive in bulk.** codex emits top-level
+`{"type":"error","message":"Reconnecting… n/5 …"}` — the captured
+no-credentials transcript has **ten**, with an `item.completed` in the middle,
+before its single terminal `turn.failed`. claude emits `system/api_retry` —
+**eight** before its terminal `result`. A classifier keying on the first error
+event would report every transient hiccup as a dead run. Only `turn.failed` and
+`result` are terminal; `result.subtype` (`success` vs `error_during_execution`)
+is claude's discriminator, preferred over `is_error`.
+
+**4. The claude login-refusal behaviour asserted in 0.1.0 does not reproduce.**
+The borrowed claim was that a present `ANTHROPIC_API_KEY` makes the CLI answer
+`Not logged in · Please run /login` on stdout with exit 0. On 2.1.220 a bogus
+key initialises normally, burns eight retries, then ends
+`error_during_execution`. The failure is *slow*, which is worse, so the rule to
+strip `ANTHROPIC_*` stands — but it now rests on a fixture rather than an
+anecdote.
+
+**Captured** (real runs): codex success, error-word, resume, no-credentials,
+bad-argv, ephemeral-resume refusal; claude success, resume, bad-credential,
+bad-argv. The `error-word` fixture is the classifier trap made concrete — a
+successful run whose message is literally `error: nothing is actually wrong`,
+exit 0, terminal event present. Both resumes were verified to retain context:
+each recalled its own prior answer.
+
+**Hand-authored, and named so**: `usage-limit.SYNTHETIC.jsonl` for both agents.
+A quota exhaustion cannot be provoked on demand. The codex wording is
+second-hand from a reference implementation's source comment about an older
+version; the claude one is built around the real `rate_limit_event` type plus a
+plausible terminal `result`. **AC6's limit case is provisional** until a real
+exhaustion is captured, and `manifest.json` says so in the file itself.
+
+**Gaps recorded rather than papered over**, in `manifest.json`: no `empty
+output` fixture (neither CLI produced one under any prompt tried), both limit
+fixtures synthetic, and no multi-turn run with tool calls — so tool-call event
+shapes remain modelled rather than recorded.
+
+Cost: ~$0.15 of subscription quota across seven runs.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
+- 2026-08-19T18:23:01.828Z - task-done: T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)

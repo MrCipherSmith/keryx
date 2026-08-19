@@ -1,6 +1,14 @@
 # Specification: Keryx External Agent Runtime
-Version: 0.2.0
+Version: 0.3.0
 
+> **0.3.0 (flow 176, T5 fixtures).** Transcripts were recorded from both live
+> CLIs and live in `fixtures/external/` with a `manifest.json` stating which are
+> captured and which are hand-authored. Four corrections: `--ephemeral` is
+> dropped from the codex argv because it forbids resume; `codex exec resume`
+> takes a narrower flag set than `codex exec`; retry events are non-terminal and
+> arrive in bulk; and the claude login-refusal behaviour asserted in 0.1.0 does
+> not reproduce on 2.1.220.
+>
 > **0.2.0 (flow 176, T1 discovery).** Four corrections from reading the code and
 > probing both live CLIs, replacing assumptions carried in 0.1.0. The execution
 > seam is not `spawnChild`; `--tools` is a real allow-list and supersedes the
@@ -122,7 +130,7 @@ Shipped entries:
 
 | id | binary | sandboxModes | streamingInput | resumable |
 |---|---|---|---|---|
-| `codex-cli` | `codex` | `read-only`, `worktree-write` | no (resume only) | yes |
+| `codex-cli` | `codex` | `read-only`, `worktree-write` | no (resume only) | yes — requires **not** passing `--ephemeral`; see §5.1 |
 | `claude-cli` | `claude` | `read-only`, `worktree-write` | yes | yes |
 
 Both CLIs support a writable sandbox natively, so both declare it. **This is
@@ -166,15 +174,39 @@ the command line before the agent was asked anything.
 
 ```text
 codex exec --json --color never -s read-only -C <worktree>
-           --ignore-user-config --ephemeral
+           --ignore-user-config --skip-git-repo-check
            --output-schema <result-schema-path>
            [-m <model>]
            <prompt>
 ```
 
-`--ignore-user-config` and `--ephemeral` keep the operator's own codex profile
-and session history out of the run. `--output-schema` requests the structured
-result. The prompt is last and is a single element.
+`--ignore-user-config` keeps the operator's codex profile out of the run.
+`--output-schema` requests the structured result. The prompt is last and is a
+single element.
+
+**`--ephemeral` is deliberately absent (corrected in 0.3.0).** 0.1.0 specified
+it, to keep session files off disk. It is mutually exclusive with resume: a
+thread started ephemerally fails `codex exec resume` with `no rollout found for
+thread id … (code -32600)`, captured in
+`fixtures/external/codex-cli/resume-refused-ephemeral.stderr.txt`. Resume is
+what makes operator messages (R18) and `force` (R20) work for this agent, so
+persistence wins and the run leaves a rollout in the operator's `CODEX_HOME`,
+exactly as a hand-run `codex` does. Redirecting `CODEX_HOME` to a temporary
+directory is **not** an escape: `--ignore-user-config`'s own help states auth
+still resolves from `CODEX_HOME`, so moving it loses the subscription.
+
+**`codex exec resume` takes a narrower flag set than `codex exec`** — no
+`-s/--sandbox`, no `-C/--cd`, no `--color`:
+
+```text
+codex exec resume <thread_id> --json --ignore-user-config --skip-git-repo-check
+                  <prompt>
+```
+
+Two consequences the runtime must honour. The sandbox level cannot be re-asserted
+on resume, so it is inherited from the resumed session and the worktree is doing
+the containment work (§7.2, D-08). And the working directory cannot be passed as
+a flag, so a resume must be spawned with its **process cwd set to the worktree**.
 
 ### 5.2 `claude-cli` argv
 
@@ -307,6 +339,24 @@ A line that does not parse is skipped and counted. A transcript that yields no
 `child_finished` and no `child_failed` produces `SubagentCompletionStatus:
 "Error"` with the cause `transcript ended without a terminal event`.
 
+**Retry noise is not failure (added in 0.3.0).** Both CLIs emit repeated
+non-terminal error events while retrying, and a parser that treats the first one
+as terminal will misreport every transient hiccup as a dead run:
+
+- codex emits top-level `{"type":"error","message":"Reconnecting… n/5 …"}`. The
+  captured no-credentials transcript contains **ten** of them, plus an
+  `item.completed` in the middle, before the single terminal `turn.failed`.
+- claude emits `system/api_retry`. The captured bad-credential transcript
+  contains **eight** before its terminal `result`.
+
+Only `turn.failed` (codex) and `result` (claude) are terminal. Every other error
+event maps to a counted `retry` observation that feeds the version-drift and
+no-progress signals, never to a completion status.
+
+`result.subtype` is the claude terminal discriminator: `success` versus
+`error_during_execution`. It is read in preference to `is_error`, which is
+retained only for backward compatibility.
+
 ### 6.3 Result
 
 The structured result is requested through the CLI's own schema flag and
@@ -409,7 +459,7 @@ regardless — rendering costs no tokens (D-10).
 | Cause | Status |
 |---|---|
 | binary absent, capability disabled, policy denied | `Denied` |
-| not logged in, quota or rate limit exhausted | `Denied` |
+| credentials invalid or absent, quota or rate limit exhausted | `Denied` |
 | argv rejected by this CLI version | `Error` |
 | unparseable or terminal-event-free transcript | `Error` |
 | wall-clock timeout, killed | `Timeout` |
@@ -417,11 +467,23 @@ regardless — rendering costs no tokens (D-10).
 | no canonical event past the no-progress interval | `NoProgress` |
 | terminal event, schema-valid result | `Completed` |
 
-Classifiers are per-codec and asymmetric by necessity: `codex exec` narrates
+Classifiers are per-codec and asymmetric by necessity. `codex exec` narrates
 itself on stderr and prints the contents of files it reads, so its classifier
-subtracts the prompt and considers only lines beginning `error`/`usage:`;
-`claude -p` prints its login refusal to stdout with exit code 0, so "exit 0 and
-non-empty output means success" must be checked *after* that refusal, not before.
+subtracts the prompt and considers only lines beginning `error`/`usage:`. Its
+`error-word` fixture pins the trap: a **successful** run whose `agent_message` is
+`error: nothing is actually wrong`, exit 0, terminal `turn.completed` present.
+
+**Correction from T5 on the claude side.** 0.1.0 asserted, borrowed from a
+reference implementation, that `claude -p` prints `Not logged in · Please run
+/login` to stdout with exit code 0. **That did not reproduce on 2.1.220.** With a
+bogus `ANTHROPIC_API_KEY` present, the captured transcript shows a normal
+`system/init`, eight `system/api_retry` events, and then
+`result.subtype = error_during_execution`. The practical position is worse than
+the borrowed anecdote suggested — the failure is slow rather than immediate —
+and the classifier keys on `result.subtype` plus the retry count, not on a
+stdout string. The environment rule in
+[security-policy.md](security-policy.md) §2.1 is unchanged and now rests on this
+fixture rather than on the anecdote.
 
 ## 8. Surfaces
 

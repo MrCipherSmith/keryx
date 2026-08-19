@@ -1,5 +1,5 @@
 # Security Policy: Keryx External Agent Runtime
-Version: 0.2.0
+Version: 0.3.0
 
 ## Purpose
 
@@ -37,7 +37,7 @@ broken.
 
 | Variable | Why |
 |---|---|
-| `ANTHROPIC_API_KEY` | **Presence breaks the subscription path.** Measured: with the key present the CLI answers `Not logged in · Please run /login`; with all `ANTHROPIC_*` cleared it answers on the subscription. Counter-intuitive and load-bearing. |
+| `ANTHROPIC_API_KEY` | **Presence breaks the subscription path.** Measured directly in flow 176 T5 against 2.1.220: with a bogus key present the CLI initialises normally, burns eight `system/api_retry` events, and terminates `result.subtype = error_during_execution` — a *slow* failure, worse than a clean refusal. (0.1.0 claimed, from a reference implementation, that it answers `Not logged in · Please run /login` immediately; that did not reproduce on this version. The rule is unchanged; its evidence is now `fixtures/external/claude-cli/not-logged-in.stdout.jsonl`.) |
 | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL` | The keryx session may itself be bound to a third-party or local provider. Inheriting these routes the "external" agent straight back through the model it is supposed to be independent of, while the result is still labelled with the external agent's name. |
 | `CLAUDE_CONFIG_DIR` | A settings file can carry its own `ANTHROPIC_BASE_URL`. Stripping the variables while leaving a pointer to a config that re-sets them achieves nothing. A third-party router has hijacked every session on a machine this way before. |
 | `CLAUDECODE` | Marks "you are running inside Claude Code". A child that inherits it misidentifies its own context. |
