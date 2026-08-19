@@ -58,6 +58,15 @@ export interface ExternalChildOutcome {
   readonly sessionRef?: string;
   /** The exact argv, so the modal can show it and the operator can reproduce the run by hand (§8.2). */
   readonly argv?: readonly string[];
+  /**
+   * The disposable worktree the run happened in.
+   *
+   * Reported because the operator surface shows it (§8.2 Meta) and because a
+   * detach — continuing the session by hand — needs the directory the agent
+   * actually saw, not the parent's cwd. It is already deleted by the time this
+   * is read: the value is for the record, not for opening.
+   */
+  readonly worktreePath?: string;
   /** Lines the codec did not recognise — the version-drift signal (§6.2). */
   readonly skippedLines?: number;
   /** Reported cost, where the CLI reports one. Absent means missing, never zero. */
@@ -234,7 +243,7 @@ export async function runExternalChild(
     );
 
     const cause = codec.classifyFailure(outcome);
-    return buildOutcome({ cause, outcome, argv });
+    return buildOutcome({ cause, outcome, argv, worktreePath: created.path });
   } finally {
     // Unconditional. Containment rests on this directory being disposable, so a
     // leaked worktree is a leaked escape hatch — and the `remove` itself must not
@@ -248,14 +257,16 @@ function buildOutcome(args: {
   cause: string | null;
   outcome: Awaited<ReturnType<typeof superviseExternalRun>>;
   argv: readonly string[];
+  worktreePath: string;
 }): ExternalChildOutcome {
-  const { cause, outcome, argv } = args;
+  const { cause, outcome, argv, worktreePath } = args;
   const sessionRef = findSessionRef(outcome.events);
   const costUnits = findCostUnits(outcome.events);
   const text = collectAssistantText(outcome.events);
 
   const base = {
     argv,
+    worktreePath,
     skippedLines: outcome.skippedLines,
     ...(sessionRef === undefined ? {} : { sessionRef }),
     ...(costUnits === undefined ? {} : { costUnits }),

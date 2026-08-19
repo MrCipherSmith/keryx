@@ -1,4 +1,5 @@
-// Pure main-queue helpers for the TUI busy-input router (flow 167).
+// Pure main-queue helpers for the TUI busy-input router (flow 167),
+// GENERALISED to a queue per addressee (flow 176, T16).
 //
 // The interactive shell keeps `mainQueue` state + rendering inside
 // `launchTuiAgentShell` (src/tui/tui-shell.ts); this module holds the PURE,
@@ -10,6 +11,15 @@
 // A queued main item is a stable record with its own `id` (the renderable
 // box id is derived from it) so remove/renumber can target the right entry
 // and the `qN` counter can reflow after any mutation.
+//
+// WHY THE MOVES ARE GENERIC (flow 176, package specification §7.5): an external
+// child is a second addressee for the same queue behaviour, and its items carry
+// more than a question (which run they are for, whether delivery is `force`).
+// Copying the three moves for it would have produced a second implementation of
+// `edit`-preserves-position that drifts from this one on the first bug fix, so
+// the functions were WIDENED over the item type instead. Existing call sites are
+// untouched: `T` infers to `QueuedMainQuestion` from their arguments.
+// `src/tui/addressee-queue.ts` builds the per-addressee layer on top.
 
 export interface QueuedMainQuestion {
   id: string;
@@ -62,11 +72,15 @@ export function formatMainQueueMarker(index: number): string {
   return `> q${n} (${n})`;
 }
 
-/** Remove the item at `index`; returns the caller the mutated copy (non-destructive). */
-export function removeMainQueueItem(
-  items: readonly QueuedMainQuestion[],
+/**
+ * Remove the item at `index`; returns the caller the mutated copy
+ * (non-destructive). Generic over the item type so a per-addressee queue can
+ * carry a richer record through the same move (flow 176).
+ */
+export function removeMainQueueItem<T extends QueuedMainQuestion>(
+  items: readonly T[],
   index: number,
-): QueuedMainQuestion[] {
+): T[] {
   if (index < 0 || index >= items.length) return [...items];
   const next = [...items];
   next.splice(index, 1);
@@ -79,10 +93,10 @@ export function removeMainQueueItem(
  * item itself (so the caller can re-queue it), or `undefined` when out of
  * range.
  */
-export function editMainQueueItem(
-  items: readonly QueuedMainQuestion[],
+export function editMainQueueItem<T extends QueuedMainQuestion>(
+  items: readonly T[],
   index: number,
-): { text: string; rest: QueuedMainQuestion[]; removed: QueuedMainQuestion } | undefined {
+): { text: string; rest: T[]; removed: T } | undefined {
   if (index < 0 || index >= items.length) return undefined;
   const rest = [...items];
   const removed = rest.splice(index, 1)[0]!;
@@ -94,11 +108,11 @@ export function editMainQueueItem(
  * before being pulled for editing). `at` is the original index; clamped to a
  * valid range so a reflowed-but-smaller queue never throws.
  */
-export function reinsertMainQueueItem(
-  items: readonly QueuedMainQuestion[],
+export function reinsertMainQueueItem<T extends QueuedMainQuestion>(
+  items: readonly T[],
   at: number,
-  item: QueuedMainQuestion,
-): QueuedMainQuestion[] {
+  item: T,
+): T[] {
   const next = [...items];
   const insertAt = Math.max(0, Math.min(at, next.length));
   next.splice(insertAt, 0, item);

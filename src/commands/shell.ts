@@ -36,6 +36,7 @@ import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGran
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { collapseHome } from "../lib/statusbar";
@@ -1792,6 +1793,11 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         // that opens AFTER this tool instance is built (see that file's own
         // `SpawnSubagentToolDeps.getSlateSession` doc comment).
         getSlateSession,
+        // External agent runtime (flow 176). Lazy: the gate reads config and the
+        // project manifest, and this tool is built synchronously. Off by
+        // default, so the common path resolves to a `Denied` with a named
+        // reason and nothing is ever spawned.
+        runExternal: createLazyRunExternal({ cwd }),
       });
       return {
         provider: agentProvider,

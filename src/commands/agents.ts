@@ -7,6 +7,7 @@ import {
   resolveAgentBootstrapRuntimes,
   uninstallAgentBootstrap,
 } from "../agents/bootstrap";
+import { agentsExternalCommand } from "./agents-external";
 import { reduceAgents } from "../harness/monitor/reduce";
 import type { AgentEvent, AgentsSnapshot } from "../harness/monitor/reduce";
 import { optionValue } from "../lib/args";
@@ -23,6 +24,13 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
 
   if (subcommand === "monitor") {
     monitorCommand(args.slice(1));
+    return;
+  }
+
+  // Flow 176: the external agent registry surface. Read-only and quota-free —
+  // it runs `--version` and nothing else (see agents-external.ts).
+  if (subcommand === "external") {
+    await agentsExternalCommand(args.slice(1));
     return;
   }
 
@@ -194,6 +202,8 @@ function printAgentsHelp(): void {
     `keryx agents bootstrap uninstall --runtime ${RUNTIME_USAGE} [--dry-run]`,
     "keryx agents bootstrap print",
     "keryx agents monitor <events-file> [--json]",
+    "keryx agents external list [--json] [--no-probe]",
+    "keryx agents external probe <id> [--json]",
   ]);
 }
 

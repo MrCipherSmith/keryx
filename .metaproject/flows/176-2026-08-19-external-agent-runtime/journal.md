@@ -376,6 +376,77 @@ The real spawn port has never been pointed at a real process. Its framing and
 stdin discipline are tested against a substituted `Bun.spawn`, but the
 wrapper-holds-the-pipes scenario the kill race exists for is simulated, not
 reproduced.
+
+## T15 + T16 — gate, CLI surface, operator surface (2026-08-19)
+
+Both by parallel subagents, with the call-site wiring kept back to this session
+so they could not collide. **Full suite 4728 pass / 0 fail, typecheck clean.**
+
+Verified behaviourally, not only by tests. `bun src/cli.ts agents external list`
+reports `capability: unavailable` with a named reason by default, renders every
+entry as `not probed`, and where a probe ran says *"installed, 0.147.0 (within
+the recorded range); login not verified — keryx cannot know"*. Never a tick. The
+footer states the credential boundary outright.
+
+### Decisions worth keeping
+
+- **There was no transport marker anywhere in `src/`.** `CHANNEL_SOURCE` exists
+  only in this package's brainstorm as a borrowed anecdote, and `keryx serve`
+  distinguishes callers per request, not per process. So `KERYX_TRANSPORT` was
+  defined, with **unknown values reading as remote** — an unrecognised marker
+  fails toward refusal. `KERYX_` is already swept by `buildExternalChildEnv`, so
+  a child cannot inherit it.
+- **A CI variable set to `false` is not CI.** Local tooling really does export it.
+- **The manifest is not a veto, and the first reading of it was wrong.**
+  `reconcileCapabilitiesOnUpdate` materialises a newly-registered ceiling as
+  `enabled:false` on every `keryx update`, so a veto reading would have silently
+  switched the feature off under every workspace that had ever run update.
+  Corrected: no manifest → neutral; manifest present → must be enabled.
+- **`spawnDecision: "ask"` with no approver is fail-closed**, which is the
+  shipped default: a host that cannot ask must not self-approve. Consequence to
+  be aware of — until an approver is wired or the operator sets `"allow"`, every
+  model-initiated external spawn is Denied by design.
+- **`force` never prefers stdin even where stdin exists.** Writing there queues
+  the message behind the turn already in flight, which is precisely what the
+  operator asked not to happen. So force is kill+resume, or an honest
+  `kill-only` when there is nothing to resume.
+- **`user_message` is emitted on delivery, not on queueing** — otherwise the
+  parent's folded view would report the child received something it never did.
+- **Turn count is derived from the transcript and labelled as such**, since §6.2
+  established `num_turns` has no canonical home.
+
+### Gaps closed here after their reports
+
+- The factory now forwards `onSpawned`. Without it the operator surface could
+  compute a delivery intent and a supervision kill but execute neither, because
+  both happen while the run is still in flight.
+- `ExternalChildOutcome` now carries `worktreePath`. It was being taken from the
+  port and kept internal, so the Meta view's Worktree row could only ever render
+  empty.
+- `createLazyRunExternal` resolves the gate on first use, so a synchronously
+  constructed tool needs no startup restructuring for a feature that is off by
+  default. Wired at the single `createSpawnSubagentTool` construction site in
+  `shell.ts`, which serves both the readline and TUI paths.
+
+### What is NOT operable yet — stated plainly
+
+The feature is installable, inspectable and gated, but **not yet drivable from
+the TUI**:
+
+1. **No `/delegate` command.** R25 wants both the operator and the parent to be
+   able to start an external run; only the parent path exists.
+2. **The live steering loop is not connected.** The TUI computes delivery
+   intents and the handle is now forwarded, but nothing joins the two inside
+   `tui-shell.ts`.
+3. **External children are not marked in the subagent sidebar** (§8.2). Their
+   record shape differs from `SubagentSession`, and adapting it needs a decision
+   about the sidebar's contract rather than a guess.
+4. **No approver is wired**, so the shipped `ask` default denies every
+   model-initiated spawn.
+5. **The real spawn port has still never been pointed at a real process.**
+
+Items 1–4 are one more integration task; item 5 is a live smoke test that costs
+subscription quota. Neither is T17 (docs), so the flow needs a task for them.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -385,3 +456,7 @@ reproduced.
 - 2026-08-19T18:58:40.781Z - task-done: T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv
 - 2026-08-19T18:58:40.973Z - task-done: T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv
 - 2026-08-19T19:22:47.094Z - task-done: T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation
+- 2026-08-19T19:59:49.539Z - task-done: T15: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe
+- 2026-08-19T19:59:49.748Z - task-done: T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume
+- 2026-08-19T20:00:18.919Z - task-added: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
+- 2026-08-19T20:00:19.138Z - task-added: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)

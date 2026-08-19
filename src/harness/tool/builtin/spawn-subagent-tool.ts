@@ -358,7 +358,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
         "label?: string, max_tool_calls?: number }. Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself).",
+        "trivial questions (answer yourself). Optionally accepts a 'runtime' block to " +
+        "delegate the child to an external vendor coding CLI instead of running it in-process.",
       inputSchema: {
         type: "object",
         properties: {
@@ -366,6 +367,44 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
           max_tool_calls: { type: "number" },
+          /**
+           * Flow 176 — the external runtime request
+           * (docs/requirements/keryx-external-agent-runtime §6.1, §8.3).
+           *
+           * OPTIONAL and ADDITIVE: it is absent from `required`, and an omitted
+           * block means the native keryx runtime, so every dispatch authored
+           * before this package stays valid unchanged. That is the same property
+           * `validateRuntimeBlock` enforces on the other side of the seam.
+           *
+           * `agent` is a bare string rather than an enum: the runtime registry
+           * lives in `src/harness/external/`, and this module deliberately holds
+           * no import from there (see `SpawnSubagentToolDeps.runExternal`) so the
+           * two stay independently testable. A hardcoded enum here would be a
+           * copy that silently falls behind that registry — the failure mode a
+           * second, divergent reader of one contract always produces. The
+           * authoritative list is `keryx agents external list`.
+           *
+           * `sandbox` lists only what this release implements. `worktree-write`
+           * is schema-valid in the dispatch contract and refused at runtime with
+           * a distinct reason, so offering it here would spend a dispatch to
+           * learn something the schema already knows.
+           */
+          runtime: {
+            type: "object",
+            description:
+              "Delegate this child to an external agent CLI. kind='external' requires 'agent' " +
+              "(see `keryx agents external list`) and 'sandbox'. Omit for the native runtime.",
+            properties: {
+              kind: { type: "string", enum: ["keryx", "external"] },
+              agent: { type: "string" },
+              sandbox: { type: "string", enum: ["read-only"] },
+              model: { type: ["string", "null"] },
+              timeoutMs: { type: "number" },
+              maxCostUnits: { type: "number" },
+            },
+            required: ["kind"],
+            additionalProperties: false,
+          },
         },
         required: ["task"],
         additionalProperties: false,

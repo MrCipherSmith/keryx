@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T19:22:47.094Z",
+  "updatedAt": "2026-08-19T20:00:19.138Z",
   "source": {
     "type": "description",
     "ref": null
@@ -254,7 +254,7 @@
       "id": "T15",
       "title": "Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
@@ -264,13 +264,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
       "title": "TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
@@ -280,7 +281,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T17",
@@ -290,6 +292,39 @@
       "dependsOn": [
         "T15",
         "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15",
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T18"
       ],
       "attempts": {
         "count": 0,
@@ -433,6 +468,26 @@
       "at": "2026-08-19T19:22:47.094Z",
       "event": "task-done",
       "detail": "T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T19:59:49.539Z",
+      "event": "task-done",
+      "detail": "T15: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T19:59:49.748Z",
+      "event": "task-done",
+      "detail": "T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T20:00:18.919Z",
+      "event": "task-added",
+      "detail": "T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask"
+    },
+    {
+      "at": "2026-08-19T20:00:19.138Z",
+      "event": "task-added",
+      "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
     }
   ]
 }

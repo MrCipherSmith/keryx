@@ -10,6 +10,7 @@
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
+import { EXTERNAL_AGENTS_CAPABILITY_DESCRIPTOR } from "./external-agents";
 import {
   loadCapabilityConfig,
   parseCapabilitySelections,
@@ -19,8 +20,13 @@ import {
   type CapabilitySelection,
 } from "./wiring";
 
-// The shipped registry — intentionally empty (Block 0 ships no feature).
-export const CAPABILITY_REGISTRY: readonly CapabilityDescriptor[] = [];
+// The shipped registry. Its FIRST real entry is the external agent runtime
+// (flow 176) — until then Block 0 shipped no end-user capability and this array
+// was empty. Everything below it (`init`/`update` wiring, the manifest
+// reconciliation) was already written for this moment and is unchanged.
+export const CAPABILITY_REGISTRY: readonly CapabilityDescriptor[] = [
+  EXTERNAL_AGENTS_CAPABILITY_DESCRIPTOR,
+];
 
 // A non-shipping reference descriptor: proves the wiring end-to-end in tests.
 export const REFERENCE_CAPABILITY_DESCRIPTOR: CapabilityDescriptor = {

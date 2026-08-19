@@ -141,6 +141,74 @@ test("a throwing hook becomes an Error result, not an external agent's report", 
   expect(result.output).toContain("spawn port unavailable");
 });
 
+// ---------------------------------------------------------------------------
+// The parameter schema (flow 176, T15)
+// ---------------------------------------------------------------------------
+//
+// A dispatch cannot ASK for an external child unless the tool's own schema says
+// the field exists: `additionalProperties: false` means an undeclared `runtime`
+// is an invalid call, and a provider that validates tool input would reject it
+// before the seam above ever ran.
+
+/** The `spawn_subagent` input schema, narrowed enough to assert against. */
+function inputSchema(): {
+  properties: Record<string, { type?: unknown; required?: unknown; properties?: Record<string, unknown> }>;
+  required: string[];
+  additionalProperties: boolean;
+} {
+  return makeTool().definition.inputSchema as ReturnType<typeof inputSchema>;
+}
+
+test("the schema declares `runtime`, so a dispatch can request an external child", () => {
+  const schema = inputSchema();
+  expect(schema.properties.runtime).toBeDefined();
+  expect(schema.properties.runtime?.type).toBe("object");
+});
+
+test("`runtime` is optional and additive — every pre-existing call stays valid", () => {
+  const schema = inputSchema();
+  // `task` is still the only required field, and nothing else was removed.
+  expect(schema.required).toEqual(["task"]);
+  for (const field of ["task", "mode", "label", "max_tool_calls"]) {
+    expect(schema.properties[field]).toBeDefined();
+  }
+  expect(schema.additionalProperties).toBe(false);
+});
+
+test("the runtime block requires only `kind`, and offers only the implemented sandbox", () => {
+  const runtime = inputSchema().properties.runtime as {
+    required: string[];
+    properties: Record<string, { enum?: unknown[] }>;
+  };
+  expect(runtime.required).toEqual(["kind"]);
+  expect(runtime.properties.kind?.enum).toEqual(["keryx", "external"]);
+  // `worktree-write` is schema-valid in the dispatch contract and refused at
+  // runtime by a distinct code; offering it here would spend a dispatch to
+  // learn something the schema already knows.
+  expect(runtime.properties.sandbox?.enum).toEqual(["read-only"]);
+});
+
+test("a dispatch that names an agent and sandbox reaches the hook unchanged", async () => {
+  // The schema and the seam agree: what the schema permits is what arrives.
+  const seen: unknown[] = [];
+  const tool = makeTool(async (request) => {
+    seen.push(request.runtime);
+    return EXTERNAL_RESULT;
+  });
+  await tool.invoke({
+    task: "t",
+    mode: "read_only",
+    runtime: { kind: "external", agent: "claude-cli", sandbox: "read-only", model: null, timeoutMs: 30_000 },
+  });
+  expect(seen[0]).toEqual({
+    kind: "external",
+    agent: "claude-cli",
+    sandbox: "read-only",
+    model: null,
+    timeoutMs: 30_000,
+  });
+});
+
 test("an empty task is still refused before the hook is consulted", async () => {
   // Admission ordering: local validation and MAE run first, so an external
   // dispatch cannot skip a gate the native path applies.
