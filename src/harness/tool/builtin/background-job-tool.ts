@@ -65,6 +65,8 @@ interface JobRecord {
   netClose: () => Promise<void>;
   lastEmit: number;
   timeoutTimer?: ReturnType<typeof setTimeout>;
+  /** The SIGKILL-after-grace timer from `stop()` or the watch-timeout handler — cleared once the process actually exits. */
+  graceTimer?: ReturnType<typeof setTimeout>;
 }
 
 function clip(s: string, max: number): string {
@@ -145,16 +147,13 @@ export class JobRegistry {
           if (chunk.done) break;
           if (chunk.value === undefined) continue;
           buffered += decoder.decode(chunk.value, { stream: true });
-          // A process with newline-sparse output (a `\r`-only progress meter, or
-          // one very large unterminated line) would otherwise grow `buffered`
-          // without bound for as long as the job runs — and start_job/persistent
-          // watch_job have no overall timeout. Flush a clipped partial line and
-          // reset instead of ever letting it grow past one line's worth (flow 174
-          // security review, F-001).
-          if (buffered.length > MAX_LINE_LEN) {
-            pushLine(record, buffered);
-            buffered = "";
-          }
+          // Drain every COMPLETE line first. A chunk this common (an OS pipe
+          // read can deliver tens of KB at once) is routinely many short,
+          // newline-terminated lines — checking the overflow bound before
+          // splitting them out would flush the whole burst as one clipped
+          // blob and silently drop everything past MAX_LINE_LEN (flow 174
+          // logic review, F-102: this ordering bug shipped in the original
+          // F-001 fix and lost real multi-line output).
           let nl = buffered.indexOf("\n");
           while (nl >= 0) {
             const line = buffered.slice(0, nl).replace(/\r$/, "");
@@ -164,6 +163,15 @@ export class JobRegistry {
               this.emitFleet(record, record.kind === "watch" ? `${record.eventCount} events · ${clip(line, 40)}` : clip(line, 60));
             }
             nl = buffered.indexOf("\n");
+          }
+          // Only what's left — a newline-free partial — can grow unbounded (a
+          // `\r`-only progress meter, or one very large unterminated line);
+          // start_job/persistent watch_job have no overall timeout. Flush a
+          // clipped partial and reset rather than ever letting it grow past
+          // one line's worth (flow 174 security review, F-001).
+          if (buffered.length > MAX_LINE_LEN) {
+            pushLine(record, buffered);
+            buffered = "";
           }
         }
         if (buffered.length > 0) {
@@ -182,7 +190,22 @@ export class JobRegistry {
     if (record.timeoutTimer !== undefined) {
       clearTimeout(record.timeoutTimer);
     }
-    await record.netClose();
+    // The process actually exited — any pending SIGKILL-grace timer (from
+    // stop() or the watch-timeout handler below) is now moot. Clearing it
+    // here, unconditionally, covers every exit path in one place rather than
+    // requiring each caller to remember to do it (flow 174 logic review,
+    // F-103 — an uncleared grace timer used to keep the event loop alive for
+    // up to KILL_GRACE_MS after a job had already cleanly exited).
+    if (record.graceTimer !== undefined) {
+      clearTimeout(record.graceTimer);
+    }
+    try {
+      await record.netClose();
+    } catch {
+      // A restricted-network proxy teardown failure must not leave the job
+      // stuck reporting "running" forever — the process itself already
+      // exited (flow 174 logic review, F-104).
+    }
 
     if (record.exitSummary === undefined) {
       record.status = exit === 0 ? "done" : "failed";
@@ -268,7 +291,7 @@ export class JobRegistry {
         } catch {
           // already gone
         }
-        setTimeout(() => {
+        record.graceTimer = setTimeout(() => {
           try {
             proc.kill("SIGKILL");
           } catch {
@@ -279,8 +302,19 @@ export class JobRegistry {
     }
 
     // Deliberately not awaited — start_job/watch_job return immediately, the
-    // stream/exit handling continues in the background.
-    void this.attach(root, record, proc);
+    // stream/exit handling continues in the background. `.catch` is a last-
+    // resort safety net (not the primary handling — see the try/catch around
+    // `netClose()` inside `attach()`): an unhandled rejection here would
+    // otherwise depend on the process's unhandled-rejection policy and could
+    // leave the job stuck reporting "running" forever (flow 174 logic
+    // review, F-104).
+    void this.attach(root, record, proc).catch(() => {
+      if (record.status === "running") {
+        record.status = "failed";
+        record.exitSummary = "internal error while tracking this job";
+        this.emitFleet(record, record.exitSummary, true);
+      }
+    });
 
     return { ok: true, id };
   }
@@ -295,6 +329,15 @@ export class JobRegistry {
       return { ok: true }; // already finished — stopping it again is a no-op, not an error
     }
     record.exitSummary = "stopped";
+    // Set synchronously, before any await: a concurrent watch-timeout firing
+    // between here and the process actually exiting must see this job as no
+    // longer "running" (its own guard is `if (record.status !== "running")
+    // return;`), or it re-kills an already-stopped process and stomps
+    // "stopped" back to "timeout" (flow 174 logic review, F-101 — this used
+    // to never happen at all: stop() left status stuck at "running"
+    // forever, which also meant a stopped job kept counting against
+    // MAX_CONCURRENT_JOBS and killAll()'s running-filter never converged).
+    record.status = "done";
     try {
       record.proc.kill("SIGTERM");
     } catch {
@@ -304,7 +347,7 @@ export class JobRegistry {
     await Promise.race([
       proc.exited,
       new Promise<void>((resolve) => {
-        setTimeout(() => {
+        record.graceTimer = setTimeout(() => {
           try {
             proc.kill("SIGKILL");
           } catch {
@@ -314,6 +357,10 @@ export class JobRegistry {
         }, KILL_GRACE_MS);
       }),
     ]);
+    if (record.graceTimer !== undefined) {
+      clearTimeout(record.graceTimer);
+    }
+    this.emitFleet(record, record.exitSummary, true);
     return { ok: true };
   }
 
