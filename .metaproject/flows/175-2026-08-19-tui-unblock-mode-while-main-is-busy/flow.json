@@ -3,9 +3,9 @@
   "id": "175",
   "slug": "tui-unblock-mode-while-main-is-busy",
   "title": "TUI: unblock /mode while main is busy",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-19T15:05:59.830Z",
-  "updatedAt": "2026-08-19T15:25:06.478Z",
+  "updatedAt": "2026-08-19T16:39:05.034Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/348"
   },
   "tasks": [
     {
@@ -192,6 +192,20 @@
       "at": "2026-08-19T15:25:06.478Z",
       "event": "ac-confirmed",
       "detail": "AC9: tsc --noEmit clean, full bun test 4330 pass / 1 fail (known pre-existing fwk-service.test.ts flake, unrelated, confirmed via direct isolated re-run)."
+    },
+    {
+      "at": "2026-08-19T16:38:58.002Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/348 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-19T16:39:02.765Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-19T16:39:05.034Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

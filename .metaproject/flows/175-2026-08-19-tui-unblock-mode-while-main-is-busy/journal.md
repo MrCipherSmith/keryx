@@ -48,3 +48,6 @@ review-style unavailable in this runtime, same fallback as prior flows):
 - 2026-08-19T15:25:06.309Z - ac-confirmed: AC7: Idle-path behavior unchanged, confirmed byte-for-byte by review-logic's extraction-fidelity check.
 - 2026-08-19T15:25:06.394Z - ac-confirmed: AC8: busy-dispatch.test.ts new case asserts classifyBusyDispatch(...) === "mode" for /mode.
 - 2026-08-19T15:25:06.478Z - ac-confirmed: AC9: tsc --noEmit clean, full bun test 4330 pass / 1 fail (known pre-existing fwk-service.test.ts flake, unrelated, confirmed via direct isolated re-run).
+- 2026-08-19T16:38:58.002Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/348 (warning: PR is not a draft)
+- 2026-08-19T16:39:02.765Z - completing
+- 2026-08-19T16:39:05.034Z - done: all gates passed
