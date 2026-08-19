@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -123,14 +124,39 @@ test("apply_patch: create (/dev/null source) and delete (/dev/null target) are c
 });
 
 // --- real subprocess: the default runner against an actual `git apply` ------
+//
+// F1 (found during this feature's own development): a `GIT_DIR`/`GIT_WORK_TREE`
+// leaked into these tests' inherited environment made `git init`/`add`/`commit`
+// silently operate on an UNRELATED real repository instead of `root`'s fresh
+// tmpdir, despite an explicit `cwd`. `execGitClean` strips those overrides —
+// same fix as `apply-patch-tool.ts`'s own `gitDiscoveryCleanEnv` — so these
+// tests can never repeat that regardless of what spawned the test runner.
+
+const GIT_DISCOVERY_OVERRIDE_VARS = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+];
+
+function execGitClean(command: string, cwd: string): void {
+  const cleanEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !GIT_DISCOVERY_OVERRIDE_VARS.includes(key)) {
+      cleanEnv[key] = value;
+    }
+  }
+  execSync(command, { cwd, env: cleanEnv });
+}
 
 test("makeGitApplyRunner: applies a real patch to a real file via the real git binary", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "keryx-apply-patch-real-"));
   try {
-    const { execSync } = await import("node:child_process");
-    execSync("git init -q", { cwd: root });
+    execGitClean("git init -q", root);
     writeFileSync(path.join(root, "hello.txt"), "line one\nline two\nline three\n");
-    execSync("git add hello.txt && git -c user.email=t@t.com -c user.name=t commit -q -m init", { cwd: root });
+    execGitClean("git add hello.txt && git -c user.email=t@t.com -c user.name=t commit -q -m init", root);
 
     const patch = [
       "--- a/hello.txt",
@@ -156,10 +182,9 @@ test("makeGitApplyRunner: applies a real patch to a real file via the real git b
 test("makeGitApplyRunner: a patch that doesn't match the file's real content is rejected wholesale, nothing written", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "keryx-apply-patch-real-"));
   try {
-    const { execSync } = await import("node:child_process");
-    execSync("git init -q", { cwd: root });
+    execGitClean("git init -q", root);
     writeFileSync(path.join(root, "hello.txt"), "actual content, not what the patch expects\n");
-    execSync("git add hello.txt && git -c user.email=t@t.com -c user.name=t commit -q -m init", { cwd: root });
+    execGitClean("git add hello.txt && git -c user.email=t@t.com -c user.name=t commit -q -m init", root);
 
     const patch = [
       "--- a/hello.txt",

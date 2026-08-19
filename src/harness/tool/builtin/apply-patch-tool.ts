@@ -27,10 +27,48 @@ export interface GitApplyResult {
 /** Runs `git apply --check` then `git apply` against `patch` in `cwd`. Injectable for tests. */
 export type GitApplyRunner = (patch: string, cwd: string) => Promise<GitApplyResult>;
 
+/**
+ * Git env vars that OVERRIDE repository discovery from `cwd` (`GIT_DIR` and
+ * friends). Found the hard way: a `GIT_DIR`/`GIT_WORK_TREE` leaked into a
+ * subprocess's inherited environment makes git operate on WHATEVER
+ * repository those vars name, completely ignoring the explicit `cwd` this
+ * function is given — silently applying a patch to the wrong repository. A
+ * real leak happened during this feature's own development (an ambient
+ * `keryx ctx run` wrapper's git-diffing left these set for a spawned `bun
+ * test`, which then contaminated an unrelated worktree via this exact
+ * subprocess pattern). `cwd` is the ONLY source of truth this tool has for
+ * "which repository" — strip every override before spawning, every time.
+ */
+const GIT_DISCOVERY_OVERRIDE_VARS: readonly string[] = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+];
+
+/** `process.env`, minus every var that could redirect git away from `cwd`. */
+function gitDiscoveryCleanEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !GIT_DISCOVERY_OVERRIDE_VARS.includes(key)) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
 /** One `git apply` subprocess call, patch fed over stdin, argv fixed. Never throws. */
 async function spawnGitApply(args: string[], patch: string, cwd: string): Promise<GitApplyResult> {
   try {
-    const proc = Bun.spawn(["git", ...args], { cwd, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["git", ...args], {
+      cwd,
+      env: gitDiscoveryCleanEnv(),
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     proc.stdin.write(patch);
     await proc.stdin.end();
     const [stderr] = await Promise.all([new Response(proc.stderr).text()]);
