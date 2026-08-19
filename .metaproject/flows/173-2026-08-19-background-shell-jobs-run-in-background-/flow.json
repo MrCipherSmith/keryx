@@ -3,9 +3,9 @@
   "id": "173",
   "slug": "background-shell-jobs-run-in-background-",
   "title": "Background shell jobs: run_in_background shell_exec + sidebar job inspector",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-19T08:04:19.328Z",
-  "updatedAt": "2026-08-19T12:10:52.662Z",
+  "updatedAt": "2026-08-19T12:38:18.505Z",
   "source": {
     "type": "description",
     "ref": null
@@ -54,7 +54,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/344"
   },
   "tasks": [
     {
@@ -226,6 +226,34 @@
       "at": "2026-08-19T12:10:52.662Z",
       "event": "ac-confirmed",
       "detail": "AC10: agent-permission-mode.test.ts: background:true goes through the real shellExecTool + resolveApprovalDecision identically to a sync shell_exec call across ask/trust/auto and the credentials floor"
+    },
+    {
+      "at": "2026-08-19T12:37:29.300Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/344 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-19T12:37:40.024Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-19T12:37:42.434Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-19T12:38:15.603Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/344 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-19T12:38:15.686Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-19T12:38:18.505Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

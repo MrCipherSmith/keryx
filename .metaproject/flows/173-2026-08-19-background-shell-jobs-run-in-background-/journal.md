@@ -1002,3 +1002,9 @@ T4 (review) is done. Proceeding to T5 (docs).
 - 2026-08-19T12:10:39.672Z - ac-confirmed: AC8: background-job-inspector.test.ts (paintBackgroundJobSidebar onMouseDown -> onOpen) + real wiring in tui-shell.ts (sbJobs panel, jobs.subscribe(paintJobs), setBackgroundJobListener) confirmed reachable from a real TUI session, not just unit-tested in isolation
 - 2026-08-19T12:10:39.840Z - ac-confirmed: AC9: BackgroundJobStore has no clear() method (only removeAll(), called solely from real session-exit paths); tui-shell.test.ts's flow-173 describe block slices the real /clear|/new source and asserts neither sweepBackgroundJobs nor removeAll appears in it. One sub-part (a full real /clear-driven end-to-end TUI test) remains disclosed-deferred pending a headless TUI test harness that doesn't exist yet -- not hidden, recorded as known follow-up
 - 2026-08-19T12:10:52.662Z - ac-confirmed: AC10: agent-permission-mode.test.ts: background:true goes through the real shellExecTool + resolveApprovalDecision identically to a sync shell_exec call across ask/trust/auto and the credentials floor
+- 2026-08-19T12:37:29.300Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/344 (warning: PR is not a draft)
+- 2026-08-19T12:37:40.024Z - completing
+- 2026-08-19T12:37:42.434Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-08-19T12:38:15.603Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/344 (warning: PR is not a draft)
+- 2026-08-19T12:38:15.686Z - completing
+- 2026-08-19T12:38:18.505Z - done: all gates passed
