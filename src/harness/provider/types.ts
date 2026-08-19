@@ -105,12 +105,34 @@ export interface NormalizedUsage {
   exact?: boolean;
 }
 
+/** One tool call an assistant turn emitted, as the provider reported it. */
+export interface NormalizedToolCall {
+  /** Provider-assigned call id; the anchor a tool result references. */
+  id: string;
+  name: string;
+  /** Raw JSON argument text as emitted — NOT parsed or validated here. */
+  arguments: string;
+}
+
 /** A single message in a normalized request, with provenance class. */
 export interface NormalizedMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   /** Trust provenance of the content (trusted policy vs. project/model output). */
   provenance?: "trusted" | "project" | "model" | "tool";
+  /**
+   * Assistant only: the tool calls this turn emitted.
+   *
+   * Without this the assistant's own turn was absent from every subsequent
+   * request — a tool-call-only round wrote nothing to history — so the model was
+   * asked to continue a transcript in which it had never called a tool and the
+   * results appeared as if a human had pasted them. Both adapters degrade to the
+   * old text-only form when a call cannot be linked to its result, so the field
+   * is safe to omit and safe to ignore.
+   */
+  toolCalls?: NormalizedToolCall[];
+  /** Tool only: the id of the assistant call this message answers. */
+  toolCallId?: string;
 }
 
 /** A neutral tool definition surfaced to the provider. */
