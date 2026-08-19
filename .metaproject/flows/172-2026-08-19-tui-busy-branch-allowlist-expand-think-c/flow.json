@@ -3,17 +3,58 @@
   "id": "172",
   "slug": "tui-busy-branch-allowlist-expand-think-c",
   "title": "TUI busy-branch allowlist: /expand /think /copy /workspace /review",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-19T04:56:34.997Z",
-  "updatedAt": "2026-08-19T05:33:02.242Z",
+  "updatedAt": "2026-08-19T05:37:30.881Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2155d180349f63c4c4955f854f77ed9ae13522e6ca01756b65dfb15fbe65beee",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-19T05:33:22.126Z",
+      "note": "Verified by code review: /think switch case toggles newest thought block (unchanged from idle-path body)."
+    },
+    "AC2": {
+      "at": "2026-08-19T05:33:22.329Z",
+      "note": "Verified by code review: /expand switch case toggles newest output block (unchanged from idle-path body)."
+    },
+    "AC3": {
+      "at": "2026-08-19T05:33:22.536Z",
+      "note": "Verified by code review: /copy switch case copies newest block (unchanged from idle-path body)."
+    },
+    "AC4": {
+      "at": "2026-08-19T05:33:22.729Z",
+      "note": "Verified by code review: /workspace switch case calls showWorkspace() (unchanged from idle-path body)."
+    },
+    "AC5": {
+      "at": "2026-08-19T05:33:22.916Z",
+      "note": "Verified by code review: /review switch case calls showReview() (unchanged from idle-path body)."
+    },
+    "AC6": {
+      "at": "2026-08-19T05:33:23.112Z",
+      "note": "Verified by code review: /model and other unnamed commands resolve to classifyBusyDispatch='deferred', unchanged message/behavior."
+    },
+    "AC7": {
+      "at": "2026-08-19T05:33:23.307Z",
+      "note": "Verified: idle-path arms for all 5 commands are byte-identical, untouched by this diff (confirmed by both reviewers + code-verifier)."
+    },
+    "AC8": {
+      "at": "2026-08-19T05:33:23.510Z",
+      "note": "code-verifier: tsc --noEmit clean, bun test 4195 pass/0 fail. src/sac/fwk-service.test.ts flake independently root-caused as pre-existing/unrelated (fails ~66% in total isolation, no diff involvement)."
+    },
+    "AC9": {
+      "at": "2026-08-19T05:33:23.704Z",
+      "note": "src/tui/busy-dispatch.ts exports classifyBusyDispatch, zero deps on @opentui/core/renderer/chrome, confirmed by review-logic; order-preservation vs. original if-chain verified (no collision between literal-name and readonly-matcher checks)."
+    },
+    "AC10": {
+      "at": "2026-08-19T05:33:23.897Z",
+      "note": "src/tui/busy-dispatch.test.ts: 13 tests, one per BusyDispatchTarget, all passing; verified non-vacuous by review-logic."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/342"
   },
   "tasks": [
     {
@@ -145,6 +186,70 @@
       "at": "2026-08-19T05:33:02.242Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-19T05:33:22.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified by code review: /think switch case toggles newest thought block (unchanged from idle-path body)."
+    },
+    {
+      "at": "2026-08-19T05:33:22.329Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified by code review: /expand switch case toggles newest output block (unchanged from idle-path body)."
+    },
+    {
+      "at": "2026-08-19T05:33:22.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified by code review: /copy switch case copies newest block (unchanged from idle-path body)."
+    },
+    {
+      "at": "2026-08-19T05:33:22.729Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified by code review: /workspace switch case calls showWorkspace() (unchanged from idle-path body)."
+    },
+    {
+      "at": "2026-08-19T05:33:22.917Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Verified by code review: /review switch case calls showReview() (unchanged from idle-path body)."
+    },
+    {
+      "at": "2026-08-19T05:33:23.113Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Verified by code review: /model and other unnamed commands resolve to classifyBusyDispatch='deferred', unchanged message/behavior."
+    },
+    {
+      "at": "2026-08-19T05:33:23.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Verified: idle-path arms for all 5 commands are byte-identical, untouched by this diff (confirmed by both reviewers + code-verifier)."
+    },
+    {
+      "at": "2026-08-19T05:33:23.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: code-verifier: tsc --noEmit clean, bun test 4195 pass/0 fail. src/sac/fwk-service.test.ts flake independently root-caused as pre-existing/unrelated (fails ~66% in total isolation, no diff involvement)."
+    },
+    {
+      "at": "2026-08-19T05:33:23.704Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/tui/busy-dispatch.ts exports classifyBusyDispatch, zero deps on @opentui/core/renderer/chrome, confirmed by review-logic; order-preservation vs. original if-chain verified (no collision between literal-name and readonly-matcher checks)."
+    },
+    {
+      "at": "2026-08-19T05:33:23.897Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/tui/busy-dispatch.test.ts: 13 tests, one per BusyDispatchTarget, all passing; verified non-vacuous by review-logic."
+    },
+    {
+      "at": "2026-08-19T05:37:26.647Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/342 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-19T05:37:28.933Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-19T05:37:30.881Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

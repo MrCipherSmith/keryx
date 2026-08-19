@@ -114,3 +114,16 @@ instruction (PR → review orchestrator clean → only then merge).
 - 2026-08-19T05:21:12.832Z - task-done: T5: Extract classifyBusyDispatch + write busy-dispatch.test.ts (operator-requested test coverage addendum)
 - 2026-08-19T05:21:12.918Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-19T05:33:02.242Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-19T05:33:22.126Z - ac-confirmed: AC1: Verified by code review: /think switch case toggles newest thought block (unchanged from idle-path body).
+- 2026-08-19T05:33:22.329Z - ac-confirmed: AC2: Verified by code review: /expand switch case toggles newest output block (unchanged from idle-path body).
+- 2026-08-19T05:33:22.536Z - ac-confirmed: AC3: Verified by code review: /copy switch case copies newest block (unchanged from idle-path body).
+- 2026-08-19T05:33:22.729Z - ac-confirmed: AC4: Verified by code review: /workspace switch case calls showWorkspace() (unchanged from idle-path body).
+- 2026-08-19T05:33:22.917Z - ac-confirmed: AC5: Verified by code review: /review switch case calls showReview() (unchanged from idle-path body).
+- 2026-08-19T05:33:23.113Z - ac-confirmed: AC6: Verified by code review: /model and other unnamed commands resolve to classifyBusyDispatch='deferred', unchanged message/behavior.
+- 2026-08-19T05:33:23.308Z - ac-confirmed: AC7: Verified: idle-path arms for all 5 commands are byte-identical, untouched by this diff (confirmed by both reviewers + code-verifier).
+- 2026-08-19T05:33:23.510Z - ac-confirmed: AC8: code-verifier: tsc --noEmit clean, bun test 4195 pass/0 fail. src/sac/fwk-service.test.ts flake independently root-caused as pre-existing/unrelated (fails ~66% in total isolation, no diff involvement).
+- 2026-08-19T05:33:23.704Z - ac-confirmed: AC9: src/tui/busy-dispatch.ts exports classifyBusyDispatch, zero deps on @opentui/core/renderer/chrome, confirmed by review-logic; order-preservation vs. original if-chain verified (no collision between literal-name and readonly-matcher checks).
+- 2026-08-19T05:33:23.897Z - ac-confirmed: AC10: src/tui/busy-dispatch.test.ts: 13 tests, one per BusyDispatchTarget, all passing; verified non-vacuous by review-logic.
+- 2026-08-19T05:37:26.647Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/342 (warning: PR is not a draft)
+- 2026-08-19T05:37:28.933Z - completing
+- 2026-08-19T05:37:30.881Z - done: all gates passed
