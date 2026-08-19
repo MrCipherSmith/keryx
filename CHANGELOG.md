@@ -5,6 +5,28 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.46] — 2026-08-19
+
+### Added
+
+- **TUI: unblock `/think`, `/expand`, `/copy`, `/workspace`, `/review` while
+  the main agent turn is busy.** `runLine`'s busy branch previously handled
+  only 6 of 24 slash commands (`/exit`, `/help`, `/interrupt`, `/queue`,
+  `/status`, `/flows`) while a main turn was in progress; every other command
+  was refused with a generic "main is busy — command deferred" message, even
+  ones that were already provably safe — the `Ctrl+O` block-nav keyboard path
+  that does the same thing as `/expand`/`/think`/`/copy` has never had a busy
+  gate at all, and `/workspace`/`/review` are read-only modals structurally
+  identical to the already-allowed `/status`/`/flows`. These five commands now
+  work while busy, reusing exactly the functions the idle path already calls.
+- **TUI: `runLine`'s busy-branch dispatch decision extracted into a pure,
+  unit-tested `classifyBusyDispatch` function** (`src/tui/busy-dispatch.ts`),
+  closing a gap where none of `runLine`'s 24 commands (busy or idle) had any
+  test coverage. `runLine`'s busy branch is now a thin `switch` over the
+  classifier's result; 13 unit tests cover every dispatch target directly,
+  without mounting a renderer. See
+  `docs/requirements/keryx-tui-busy-command-allowlist/` (flow 172).
+
 ## [0.2.45] — 2026-08-18
 
 ### Added
