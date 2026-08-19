@@ -5,6 +5,26 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.48] — 2026-08-19
+
+### Added
+
+- **SAC: durable wrap-up dispatch outcome recording for the Review UI.**
+  `runWrapUp` already computed rich per-group outcome data on every wrap-up
+  dispatch attempt (proposed / conflict / unbound-candidate / no-credential /
+  error with a message), but both real callers discarded the return value
+  entirely, only catching a rare thrown exception. A session whose wrap-up
+  dispatch genuinely failed was indistinguishable in the TUI's Review
+  section from a session that never reached a wrap-up trigger at all — both
+  collapsed into the same opaque "unknown" catch-up item with a generic
+  message. `runWrapUp` now persists a best-effort durable artifact under the
+  session's `slate-archive/` on every dispatch attempt, success or failure;
+  the Review detail view surfaces the real trigger, timestamp, and per-group
+  failure reason when one is recorded, and is unchanged when it isn't. No
+  changes needed to the trigger call sites — both already call `runWrapUp`
+  at all three trigger points. See
+  `docs/requirements/keryx-sac-wrapup-dispatch-outcome/`.
+
 ## [0.2.47] — 2026-08-19
 
 ### Added
