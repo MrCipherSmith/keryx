@@ -190,6 +190,22 @@ function countDigits(value: string): number {
 // Column alignment (a run of 2+ spaces) is always rejected — no phone format
 // pads its groups — and so is any group that is not a bare 2-4 digit run, which
 // is what disqualifies `12  12  0  0  0.0000`.
+// A dated identifier is not a dialling sequence. Flow packages are named
+// `NNN-YYYY-MM-DD-<slug>`, so the prefix `001-2026-07-09` satisfies every phone
+// heuristic above it: 11 digits, no whitespace, hyphen-separated 2-4 digit
+// groups. Every `ls .metaproject/flows` therefore reached agents as
+// `[REDACTED:phone]-managed-review-feedback-loop`, and the directory could not
+// be opened — the listing is how an agent discovers a flow in the first place.
+//
+// The guard keys on the calendar date itself (a real month and day, 19xx/20xx),
+// not on the surrounding shape, so it cannot be widened by an arbitrary digit
+// run: `415-555-0199` has no valid month/day pair and stays a phone number.
+const CALENDAR_DATE = /(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])/;
+
+function containsCalendarDate(value: string): boolean {
+  return CALENDAR_DATE.test(value);
+}
+
 function hasPhoneSeparatorShape(value: string): boolean {
   if (/\s{2,}/.test(value)) {
     return false;
@@ -229,6 +245,9 @@ export function detectPii(content: string): DetectorMatch[] {
           continue;
         }
         if (!hasPhoneSeparatorShape(value)) {
+          continue;
+        }
+        if (containsCalendarDate(value)) {
           continue;
         }
       }

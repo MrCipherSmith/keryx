@@ -34,6 +34,30 @@ test("does NOT flag a whole report through the detector", () => {
   expect(phones(report)).toEqual([]);
 });
 
+// Flow packages are named `NNN-YYYY-MM-DD-<slug>`, and that prefix satisfied
+// every phone heuristic — so `ls .metaproject/flows` reached agents fully masked
+// and no flow directory could be opened (keryx session 4a24a760, 2026-08-19).
+test("does NOT flag the ISO-dated prefix of a flow directory name", () => {
+  expect(phones("001-2026-07-09-managed-review-feedback-loop")).toEqual([]);
+  expect(phones("144-2026-08-11-agent-mode-web-fetch")).toEqual([]);
+});
+
+test("does NOT flag a flow-directory listing, path-qualified or bare", () => {
+  const listing = [
+    "001-2026-07-09-managed-review-feedback-loop",
+    ".metaproject/flows/144-2026-08-11-agent-mode-web-fetch/flow.json",
+    "176-2026-08-19-security-detector-false-positives",
+  ].join("\n");
+  expect(phones(listing)).toEqual([]);
+});
+
+test("does NOT flag other dated identifiers built on a calendar date", () => {
+  expect(phones("release-2026-01-31-hotfix")).toEqual([]);
+  // A date with a non-calendar month/day is not exempted — the guard keys on a
+  // real date, so it cannot be widened into a blanket digit-run escape hatch.
+  expect(phones("call 415-555-0199 now")).toEqual(["415-555-0199"]);
+});
+
 test("STILL flags an international phone number with single-space groups", () => {
   expect(phones("Reach the rota at +1 415 555 0199 today.")).toEqual(["+1 415 555 0199"]);
 });
