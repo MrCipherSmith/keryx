@@ -21,6 +21,7 @@ export type BusyDispatchTarget =
   | "think"
   | "expand"
   | "copy"
+  | "mode"
   | "deferred"
   | "not-a-command";
 
@@ -45,6 +46,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/think") return "think";
   if (commandName === "/expand") return "expand";
   if (commandName === "/copy") return "copy";
+  if (commandName === "/mode") return "mode";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";
