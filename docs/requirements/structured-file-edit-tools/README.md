@@ -1,5 +1,5 @@
 # Structured File-Edit Tools
-Version: 0.2.0
+Version: 0.3.0
 
 ## Purpose
 
@@ -53,7 +53,7 @@ proposed ADR in [specification.md](specification.md) §7.
 |-------|------|---------|
 | **P0** | Approval-gate extension | **implemented** — `GatedToolRisk`/`executeCall`/`resolveApprovalDecision` handle `risk: "write"`, backed by ADR-0010 |
 | **P1** | `apply_patch` tool (single/multi-file) | **implemented** — in-process target parsing + `confineToRoot` scoping + `git apply` (stdin, argv-only), wired into `buildInteractiveAgentTools` |
-| **P2** | Diff-preview approval UI | not implemented — approval prompt still shows raw JSON tool input for `write` risk, same as every other risk today |
+| **P2** | Diff-preview approval UI | **implemented** — readline (`shell.ts`) and TUI (`tui-shell.ts`) both render the full patch via the shared `classifyDiffLine` classification (`renderDiff` on readline, `otui`-native coloring on TUI) instead of raw JSON |
 | **P3** | System-prompt + budget guidance | **implemented** — `buildAgentSystemInstruction` now points the agent at `apply_patch` for edits |
 
 P0 landed as its own reviewable unit (`permission-mode.ts`, `agent.ts`'s gate
@@ -62,9 +62,11 @@ branch, `src/lib/patch-risk.ts` + tests) before the tool itself, backed by
 
 ## Status
 
-**P0 + P1 + P3 implemented; P2 (diff-preview approval UI) not started.**
-Iron Law #6: this line is the accurate claim — see "Honest baseline" below
-for the file-level breakdown.
+**All four phases (P0/P1/P2/P3) implemented.** Iron Law #6: this line is the
+accurate claim — see "Honest baseline" below for the file-level breakdown.
+The "remember this pattern" auto-allow mechanic remains an explicit,
+documented non-goal (see Scope) — no future phase is planned for it in this
+package.
 
 ## Document Index
 
@@ -125,5 +127,5 @@ for the file-level breakdown.
 | Patch escalation classifier (delete / `.git` / many-files / credential paths) | **implemented** (`src/lib/patch-risk.ts`) |
 | Registered in the interactive agent's tool set | **implemented** (`interactive-agent-tools.ts`) |
 | System prompt steers edits toward `apply_patch` over `shell_exec` | **implemented** (`buildAgentSystemInstruction`) |
-| Diff rendering in the approval prompt (`classifyDiffLine` reuse) | **not implemented** (P2) — approval UI shows raw JSON input for `write`, unchanged from every other risk |
+| Diff rendering in the approval prompt (`classifyDiffLine` reuse) | **implemented** (`shell.ts`, `tui-shell.ts`) |
 | "Remember this pattern" auto-allow for edits | **not implemented** — explicit non-goal (see Scope) |

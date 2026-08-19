@@ -73,6 +73,24 @@ export function parsePatchTargets(patch: string): PatchTarget[] {
   return targets;
 }
 
+/**
+ * Parse `apply_patch` tool input JSON (or a raw patch string) → the patch
+ * text. Mirrors `shell-permissions.ts`'s `parseShellExecCommand` for the
+ * approval-prompt rendering path (P2): the same "JSON object with the field,
+ * or fall back to the raw string" shape.
+ */
+export function extractPatchText(inputJson: string): string {
+  try {
+    const parsed: unknown = JSON.parse(inputJson);
+    if (parsed !== null && typeof parsed === "object" && typeof (parsed as { patch?: unknown }).patch === "string") {
+      return (parsed as { patch: string }).patch;
+    }
+  } catch {
+    // raw string
+  }
+  return inputJson;
+}
+
 /** Escalation threshold for "touches too many files in one call". An EXPEDIENT, not a boundary. */
 export const MAX_FILES_BEFORE_ESCALATION = 8;
 

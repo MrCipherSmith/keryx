@@ -50,6 +50,7 @@ import {
 } from "../tui/session-info";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
+import { extractPatchText } from "../lib/patch-risk";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -966,6 +967,33 @@ async function runAgentRepl(
     },
     requestApproval: async (tool, input, meta) => {
       stopSpinner();
+      if (tool === "apply_patch") {
+        // ADR-0010/P2: render the actual diff (full, never truncated — the
+        // 120-char preview below is fine for a shell command, not for a
+        // multi-file patch a human needs to actually read) instead of the
+        // raw JSON tool input. Shares `renderDiff`/`classifyDiffLine` with
+        // the TUI and with markdown diff-block rendering, so this cannot
+        // drift from either.
+        const patch = extractPatchText(input);
+        out(`\n${GUTTER}${style.yellow("Approve apply_patch?")}\n`);
+        out(`${indentBlock(renderDiff(patch), GUTTER)}\n`);
+        if (meta?.destructive === true) {
+          out(`${GUTTER}${style.yellow("deletes a file, touches .git/, or touches many files in one call")}\n`);
+        }
+        if (meta?.credentials === true) {
+          out(`${GUTTER}${style.yellow("touches the agent's own permission/credential files")}\n`);
+        }
+        out(`\n${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        if (!approved) {
+          return false;
+        }
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
       if (tool !== "shell_exec") {
         const preview = input.length > 120 ? `${input.slice(0, 117)}…` : input;
         out(`\n${GUTTER}${style.yellow(`Approve ${tool}?`)} ${style.dim(preview)}\n`);

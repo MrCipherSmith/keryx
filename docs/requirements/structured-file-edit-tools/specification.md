@@ -1,5 +1,5 @@
 # Specification: Structured File-Edit Tools
-Version: 0.2.0
+Version: 0.3.0
 
 ## 1. Identity
 
@@ -221,7 +221,8 @@ before its own "remember" feature existed.
 | `src/harness/tool/builtin/apply-patch-tool.test.ts` | **new** — injected `git apply` runner, same DI pattern as `shell-exec-tool.test.ts` |
 | `src/commands/interactive-agent-tools.ts` | register `applyPatchTool(input.cwd)` |
 | `src/commands/interactive-agent-tools.test.ts` | update the fixed tool-name-list assertion (same pattern as the `flow_status` addition) |
-| TUI approval renderer (`src/tui/tui-shell.ts` or wherever `requestApproval` is implemented) | `write`-risk diff rendering |
+| `src/commands/shell.ts` (readline `requestApproval`) | `apply_patch` branch: `renderDiff`-rendered patch, destructive/credential hints |
+| `src/tui/tui-shell.ts` (TUI `requestApproval`) | `apply_patch` branch: per-line `classifyDiffLine` + `otui` coloring, same hints |
 | `src/commands/agent.ts` `buildAgentSystemInstruction` | mention `apply_patch`, steer away from `shell_exec` for edits (P3) |
 
 ## 6. Acceptance criteria
@@ -271,7 +272,7 @@ hard-denied).
 | `apply_patch` tool | `src/harness/tool/builtin/apply-patch-tool.ts` | done, unit + real-`git`-subprocess tested (`apply-patch-tool.test.ts`) |
 | Tool registration | `src/commands/interactive-agent-tools.ts` | done |
 | System-prompt steering (P3) | `src/commands/agent.ts` (`buildAgentSystemInstruction`) | done |
-| §4 diff-preview approval UI (P2) | TUI/readline approval renderer | **not started** — `write`-risk approvals currently show raw JSON tool input, same as every other risk |
+| §4 diff-preview approval UI (P2) | `src/commands/shell.ts` (readline), `src/tui/tui-shell.ts` (TUI) | done — both branch on `tool === "apply_patch"` before falling through to the shell-command approval path; `extractPatchText` (`src/lib/patch-risk.ts`) replaces `parseShellExecCommand` for this tool |
 
 Deviation from §3.3 step 2 as originally specified: the pre-check "is `cwd` a
 git work tree" step was dropped. `git apply` does not itself require a `.git`

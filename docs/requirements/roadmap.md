@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.9
+Version: 0.14.10
 
 ## Status
 
@@ -7,6 +7,18 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.10** — `structured-file-edit-tools` P2 **implemented**, closing the
+>   package: the approval prompt for `apply_patch` (`risk: "write"`) now
+>   renders the full patch via the shared `classifyDiffLine` classifier
+>   instead of raw JSON tool input — `renderDiff` on the readline shell
+>   (`src/commands/shell.ts`), per-line `otui`-native coloring on the TUI
+>   (`src/tui/tui-shell.ts`), both branching on `tool === "apply_patch"`
+>   before the pre-existing shell-command approval path (which would
+>   otherwise have misread a patch's JSON as a shell command). New
+>   `extractPatchText` (`src/lib/patch-risk.ts`) mirrors
+>   `parseShellExecCommand`'s shape for this tool. All four phases
+>   (P0/P1/P2/P3) are now implemented; the only remaining documented
+>   non-goal is a "remember this pattern" auto-allow mechanic for edits.
 > - **0.14.9** — `structured-file-edit-tools` P0/P1/P3 **implemented**:
 >   `GatedToolRisk`/`executeCall` gained a real `write` path (ADR-0010,
 >   `permission-mode.ts`/`agent.ts`), a new escalation classifier
@@ -256,4 +268,4 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx OpenTUI Shell](keryx-opentui-shell/README.md) | implemented (default shell; flows 059–066) | Full-screen OpenTUI (`@opentui/core`) interactive shell replacing the line-based `node:readline` renderer: live `/` command composer, persistent composer region, component-based rendering, with the deterministic agent driver and pure render helpers unchanged. The TUI is **the default shell when `stdout.isTTY`**; `--tui`/`--no-tui` flags and a graceful readline fallback remain. ADR-0005 Accepted. Additive features shipped beyond the original Phase 0–5 spec: side-workers, multi-agent spawn wiring, dual-store session persistence. Shared interactive tools + approval across TUI and readline (`web_fetch` is not TUI-only). |
 | [Keryx OpenTUI Modal and Tabs](keryx-opentui-modal-tabs/README.md) | implemented (flow 154) | Reusable `openModal` host in `src/tui/modal-host.ts`: dimmed backdrop, titled panel, tab strip, Esc dismiss, `shell-chrome` overlay registration. No slash command of its own. |
 | [Keryx OpenTUI Session Info](keryx-opentui-session-info/README.md) | implemented (flows 155; 0.2.36–0.2.37) | `/status` inspector on the shared host (Status + Context; Workspaces / Flow only when the session referenced them). `/session-info` and `/info` are not aliases. Sibling `/flows` lists project flows on the same host. |
-| [Structured File-Edit Tools](structured-file-edit-tools/README.md) | implemented (P0/P1/P3); P2 diff-preview UI not started | `apply_patch`: a `risk: "write"` tool taking a standard multi-file unified diff, applied via a constrained `git apply` argv call (stdin, no shell string) and confined by the existing `confineToRoot`. Collapses N `shell_exec`-per-edit calls into 1 non-read budget slot. The approval gate (`GatedToolRisk`/`executeCall`/`resolveApprovalDecision`) was extended to a real `write` path — previously hard-denied unconditionally — as its own phase, backed by **ADR-0010**, with a new escalation classifier (`src/lib/patch-risk.ts`: delete / `.git` touch / many-files / credential-path). System prompt steers edits toward `apply_patch` over `shell_exec`. Open: the approval prompt still renders raw JSON for `write` risk instead of a rendered diff. |
+| [Structured File-Edit Tools](structured-file-edit-tools/README.md) | implemented (P0–P3, package complete) | `apply_patch`: a `risk: "write"` tool taking a standard multi-file unified diff, applied via a constrained `git apply` argv call (stdin, no shell string) and confined by the existing `confineToRoot`. Collapses N `shell_exec`-per-edit calls into 1 non-read budget slot. The approval gate (`GatedToolRisk`/`executeCall`/`resolveApprovalDecision`) was extended to a real `write` path — previously hard-denied unconditionally — backed by **ADR-0010**, with a new escalation classifier (`src/lib/patch-risk.ts`: delete / `.git` touch / many-files / credential-path). System prompt steers edits toward `apply_patch` over `shell_exec`. The approval prompt (readline and TUI) renders the full patch via `classifyDiffLine` instead of raw JSON. Documented non-goal: a "remember this pattern" auto-allow mechanic for edits. |

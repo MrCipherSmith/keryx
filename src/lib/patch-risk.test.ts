@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { classifyPatchRisk, MAX_FILES_BEFORE_ESCALATION, parsePatchTargets } from "./patch-risk";
+import { classifyPatchRisk, extractPatchText, MAX_FILES_BEFORE_ESCALATION, parsePatchTargets } from "./patch-risk";
 
 function modifyHunk(path: string): string {
   return [`--- a/${path}`, `+++ b/${path}`, "@@ -1,1 +1,1 @@", "-old", "+new", ""].join("\n");
@@ -83,6 +83,17 @@ test("classifyPatchRisk: credentials and destructive are independent — a benig
   const result = classifyPatchRisk(modifyHunk(".local/share/keryx/permissions.json"));
   expect(result.credentials).toBe(true);
   expect(result.destructive).toBe(false);
+});
+
+test("extractPatchText: pulls 'patch' out of the tool's JSON input", () => {
+  const patch = modifyHunk("src/a.ts");
+  expect(extractPatchText(JSON.stringify({ patch }))).toBe(patch);
+});
+
+test("extractPatchText: falls back to the raw string when input is not JSON with a 'patch' field", () => {
+  const raw = "not json at all";
+  expect(extractPatchText(raw)).toBe(raw);
+  expect(extractPatchText(JSON.stringify({ other: "field" }))).toBe(JSON.stringify({ other: "field" }));
 });
 
 test("classifyPatchRisk: empty/non-diff input is not destructive and touches no credentials", () => {
