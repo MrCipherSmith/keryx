@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T18:58:40.973Z",
+  "updatedAt": "2026-08-19T19:22:47.094Z",
   "source": {
     "type": "description",
     "ref": null
@@ -235,7 +235,7 @@
       "id": "T14",
       "title": "Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7",
         "T8",
@@ -247,7 +247,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
@@ -427,6 +428,11 @@
       "at": "2026-08-19T18:58:40.973Z",
       "event": "task-done",
       "detail": "T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv"
+    },
+    {
+      "at": "2026-08-19T19:22:47.094Z",
+      "event": "task-done",
+      "detail": "T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
     }
   ]
 }

@@ -309,6 +309,73 @@ block schemas; no captured fixture exercises a multi-turn run. Both usage-limit
 fixtures remain hand-authored. The codecs are not yet wired to anything — there
 is no `codec/index.ts` and the registry does not reference them, which is T14's
 work.
+
+## T14 — the runtime, the real process port, and the seam (2026-08-19)
+
+Two independent pieces went to parallel subagents (`supervise.ts` + `codec/index.ts`;
+`prompt.ts`), and the orchestration, the real spawn port and the tool seam were
+written here. **Full suite: 4593 pass, 0 fail. Typecheck clean.**
+
+**`runtime.ts`** composes the whole run in a fixed, cheapest-first order —
+capability gate, nesting depth, contract validation, codec resolution, version
+probe, prompt assembly, worktree, spawn, classify, cleanup. The worktree is
+created last among the setup steps and removed in a `finally`, so no path leaves
+one behind, including a spawn port that throws; a leaked worktree is a leaked
+escape hatch, because containment rests on that directory being disposable.
+
+**`bun-spawn-port.ts`** is the real `ExternalSpawnPort` and was missing from the
+plan entirely — the supervisor's port had no production implementation, so
+nothing could actually run. It owns exactly three things the supervisor must
+not: process creation, line framing, stream teardown. Framing lives here because
+claude's `system/init` spans read chunks by construction, and a multi-byte
+character split across chunks would corrupt the JSON; both cases are tested.
+
+**The tool seam** is an optional `runExternal` dep on `SpawnSubagentToolDeps`,
+invoked **after** `spawnSubagent` so admission, the shared ledger and the
+depth/child caps have already applied — an external child is gated identically to
+a native one, which is the substance of AC17. The hook's type is deliberately
+structural (`unknown` in, `StructuredSubagentResult` out) so
+`spawn-subagent-tool.ts` needs no import from `src/harness/external/` at all.
+Seven tests pin that the seam is **inert** without the hook: a runtime block with
+no hook, a hook with no block, a malformed block, and a `keryx` block all fall
+straight through to the native path unchanged.
+
+### Judgement calls made here
+
+- **The status vocabulary is mapped structurally where possible and by text
+  where the port leaves no choice.** `timedOut` is a fact supervision knows;
+  `cause === null` is Completed; the rest infers Denied-vs-Error from markers in
+  a free-text cause. This is a **known weakness, documented at the marker list**:
+  the right fix is for `classifyFailure` to return `{code, message}`, which is a
+  port change and a later task. Matching only runs on already-failed runs, so a
+  false positive costs a mislabelled status, never a wrong verdict on a healthy
+  run.
+- **`ledger.release(..., {maxToolCalls: 0})`** for external children: they spend
+  the vendor's own tool budget, not this ledger's, and their cost is accounted in
+  the run's reported usage instead.
+- **A throwing hook returns `Error`, not an agent report.** A broken keryx seam
+  must never be presented as something the vendor said.
+- Added `isRecognisedCodexLine` to the codex codec, closing the gap the
+  supervision agent flagged: without it a healthy codex run scored a phantom
+  parse-skip for its unmapped `turn.started`, permanently polluting the
+  version-drift signal.
+
+### What T14 does NOT deliver
+
+**No host wires `runExternal` yet.** The seam exists, is tested and is inert; the
+closure that supplies it — capability descriptor, config shape, transport/CI hard
+disable, `keryx agents external list|probe` — is T15, and building it there means
+one change to the critical file instead of two. Nothing external can run until
+then, which is the correct default given R14.
+
+The `spawn_subagent` tool's own parameter schema does not yet declare `runtime`,
+so a model cannot request an external child; only a programmatic dispatch can.
+Also T15.
+
+The real spawn port has never been pointed at a real process. Its framing and
+stdin discipline are tested against a substituted `Bun.spawn`, but the
+wrapper-holds-the-pipes scenario the kill race exists for is simulated, not
+reproduced.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -317,3 +384,4 @@ work.
 - 2026-08-19T18:40:45.501Z - task-done: T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)
 - 2026-08-19T18:58:40.781Z - task-done: T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv
 - 2026-08-19T18:58:40.973Z - task-done: T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv
+- 2026-08-19T19:22:47.094Z - task-done: T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation

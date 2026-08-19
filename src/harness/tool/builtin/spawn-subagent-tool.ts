@@ -262,6 +262,44 @@ export interface SpawnSubagentToolDeps {
    * unchanged.
    */
   onLedgerReady?: (controls: { resetBudget: () => void }) => void;
+  /**
+   * External-agent runtime seam (flow 176; docs/requirements/keryx-external-agent-runtime).
+   *
+   * When a dispatch carries `runtime.kind === "external"` AND this hook is
+   * supplied, the child is executed by a vendor CLI subprocess instead of the
+   * in-process `runAgentTurn` loop below. Optional and additive: every existing
+   * call site omits it, so their behaviour is byte-for-byte unchanged — the
+   * same idiom `getSlateSession` and `onLedgerReady` above already use.
+   *
+   * The hook is invoked AFTER `spawnSubagent`, deliberately. Admission, the
+   * shared budget ledger and the depth/child caps have already applied by then,
+   * so an external child is governed by exactly the same gates as a native one
+   * and no second spawn path exists — which is the substance of that package's
+   * AC17. The type is deliberately structural (`unknown` runtime block, a
+   * `StructuredSubagentResult` back) so this module needs no import from
+   * `src/harness/external/`, and the two stay independently testable.
+   */
+  runExternal?: (request: {
+    readonly runtime: unknown;
+    readonly task: string;
+    readonly mode: SubagentMode;
+    readonly workerId: string;
+    readonly label: string;
+  }) => Promise<StructuredSubagentResult>;
+}
+
+/**
+ * The dispatch's `runtime` block when it asks for an external agent, else
+ * undefined.
+ *
+ * Reads defensively and never validates: the real validation is the fail-closed
+ * `validateRuntimeBlock` inside the external runtime, and duplicating it here
+ * would create a second, divergent reader of the same contract.
+ */
+function readExternalRuntimeRequest(input: Record<string, unknown>): Record<string, unknown> | undefined {
+  const raw = input.runtime;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  return (raw as { kind?: unknown }).kind === "external" ? (raw as Record<string, unknown>) : undefined;
 }
 
 function sha256(text: string): string {
@@ -426,6 +464,45 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         model: `${runModel.provider}/${runModel.model}`,
         task,
       });
+
+      // --- External runtime seam (flow 176) ---------------------------------
+      // Reached only when the dispatch asks for it AND the host wired the hook,
+      // so every existing call site falls straight through. Placed here because
+      // `spawnSubagent` above has already applied admission, the ledger and the
+      // depth/child caps: an external child is gated identically to a native one.
+      const externalRuntime = readExternalRuntimeRequest(input);
+      if (externalRuntime !== undefined && deps.runExternal !== undefined) {
+        const externalStartedAt = performance.now();
+        try {
+          const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
+          emitSubagentFleet({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: external.isError ? "failed" : "done",
+            detail: external.status,
+            task,
+          });
+          return external;
+        } catch (err) {
+          // A throwing hook is a keryx bug, not an agent failure, and must not
+          // surface as though the external agent reported something.
+          emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "error", task });
+          return {
+            status: "Error",
+            output: `external runtime failed before the agent could report: ${(err as Error).message}`,
+            isError: true,
+          };
+        } finally {
+          // The reservation is given back on every path. `maxToolCalls: 0`
+          // because an external child spends the vendor's own tool budget, not
+          // this ledger's — its cost is accounted in the run's reported usage.
+          ledger.release(spawned.reservation.reservationId, {
+            maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
+            maxToolCalls: 0,
+          });
+        }
+      }
 
       const cwd = deps.cwd;
       const tools =

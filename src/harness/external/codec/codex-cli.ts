@@ -196,6 +196,33 @@ export function parseCodexLine(line: string): ExternalEvent | undefined {
   return events[events.length - 1];
 }
 
+/** Stream types this codec knows about, whether or not they map to an event. */
+const RECOGNISED_TYPES: ReadonlySet<string> = new Set([
+  "thread.started",
+  "turn.started",
+  "item.completed",
+  "turn.completed",
+  "turn.failed",
+  "error",
+]);
+
+/**
+ * Whether this codec RECOGNISES a line, even when the line maps to no canonical
+ * event.
+ *
+ * `parseLine` returning undefined conflates two different facts: "the codec has
+ * never seen this" and "the codec deliberately does not map it". Only the first
+ * is version drift. Without this hook a healthy codex run scores a skip for its
+ * unmapped `turn.started`, and the drift signal is permanently noisy — so the
+ * supervisor's skip counter is only meaningful when this is passed to it.
+ */
+export function isRecognisedCodexLine(line: string): boolean {
+  const record = readJsonObject(line);
+  if (record === undefined) return false;
+  const type = asString(record.type);
+  return type !== undefined && RECOGNISED_TYPES.has(type);
+}
+
 /** Stream lines worth reading at all: codex prefixes its real complaints this way. */
 const NARRATED_FAILURE_LINE = /^\s*(error\b|usage:)/i;
 
