@@ -9,9 +9,12 @@
 // it, honestly noted in the flow report.
 
 import * as vscode from "vscode";
-import { formatAuditLine, type AuditEvent } from "./audit-log";
+import { registerKeryxHoverProvider } from "./hover-provider";
 import { KeryxBinaryNotFoundError, runKeryx } from "./keryx-cli";
+import { createKeryxOutputChannel, type KeryxOutputChannel } from "./output-channel";
+import { createKeryxStatusBar, type KeryxStatusBar } from "./status-bar";
 import { initPromptMessage, interpretStatus, shouldPromptInit, shouldRevealAfterInit } from "./status-logic";
+import { refreshAll, registerKeryxTreeViews, type KeryxTreeProviders } from "./tree-view";
 import { checkKeryxVersion, versionWarningMessage } from "./version-logic";
 
 // The extension's declared minimum keryx version (spec.md §3). Advisory
@@ -21,12 +24,9 @@ const MIN_KERYX_VERSION = "0.2.0";
 
 const VIEW_CONTAINER_ID = "keryx";
 
-let outputChannel: vscode.OutputChannel;
-
-function audit(event: Omit<AuditEvent, "timestamp">): void {
-  const line = formatAuditLine({ ...event, timestamp: new Date().toISOString() });
-  outputChannel.appendLine(line);
-}
+let outputChannel: KeryxOutputChannel;
+let statusBar: KeryxStatusBar | undefined;
+let treeProviders: KeryxTreeProviders | undefined;
 
 function workspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -74,16 +74,18 @@ async function runInitFlow(cwd: string): Promise<void> {
   }
 
   const initResult = await runKeryx(["init", "--yes"], cwd);
-  audit({
-    actor: "user",
-    action: "keryx.init",
-    outcome: initResult.exitCode === 0 ? "success" : "failure",
-  });
+  outputChannel.audit("user", "keryx.init", initResult.exitCode, initResult.exitCode === 0 ? undefined : initResult.stderr.trim());
 
   const statusAfterInit = await runKeryx(["status"], cwd);
   const afterState = interpretStatus(statusAfterInit.stdout);
 
   if (shouldRevealAfterInit(initResult.exitCode, afterState)) {
+    if (treeProviders) {
+      refreshAll(treeProviders);
+    }
+    if (statusBar) {
+      await statusBar.refresh();
+    }
     await revealTreeView();
   } else if (initResult.exitCode !== 0) {
     void vscode.window.showErrorMessage(
@@ -94,7 +96,7 @@ async function runInitFlow(cwd: string): Promise<void> {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel("Keryx");
+  outputChannel = createKeryxOutputChannel();
   context.subscriptions.push(outputChannel);
 
   const initCommand = vscode.commands.registerCommand("keryx.init", async () => {
@@ -104,11 +106,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return;
     }
     const result = await runKeryx(["init", "--yes"], cwd);
-    audit({
-      actor: "user",
-      action: "keryx.init",
-      outcome: result.exitCode === 0 ? "success" : "failure",
-    });
+    outputChannel.audit("user", "keryx.init", result.exitCode, result.exitCode === 0 ? undefined : result.stderr.trim());
     if (result.exitCode === 0) {
       await revealTreeView();
     } else {
@@ -117,10 +115,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   const refreshCommand = vscode.commands.registerCommand("keryx.refresh", async () => {
-    audit({ actor: "user", action: "keryx.refresh", outcome: "success" });
-    // T7-T10's tree data providers register their own refresh; this command
-    // exists (and is declared in package.json) so it is addressable from the
-    // Command Palette and view title bar before those providers land.
+    outputChannel.audit("user", "keryx.refresh", 0);
+    if (treeProviders) {
+      refreshAll(treeProviders);
+    }
+    if (statusBar) {
+      await statusBar.refresh();
+    }
   });
 
   context.subscriptions.push(initCommand, refreshCommand);
@@ -129,6 +130,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (!cwd) {
     return;
   }
+
+  context.subscriptions.push(registerKeryxHoverProvider(cwd));
+
+  treeProviders = registerKeryxTreeViews(context, cwd);
+
+  statusBar = await createKeryxStatusBar(cwd);
+  context.subscriptions.push(statusBar);
 
   try {
     await runInitFlow(cwd);
@@ -145,6 +153,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
-  // No teardown required: registered commands/output channel are disposed
-  // via context.subscriptions.
+  // No teardown required: registered commands/output channel/status bar are
+  // disposed via context.subscriptions.
+  statusBar = undefined;
+  treeProviders = undefined;
 }
