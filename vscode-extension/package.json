@@ -1,0 +1,75 @@
+{
+  "name": "keryx-vscode",
+  "displayName": "Keryx",
+  "description": "Visual layer over keryx: init/status flow, code health & security signal in the status bar, and Metaproject-aware tree views.",
+  "version": "0.1.0",
+  "publisher": "mrciphersmith",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "keryx",
+          "title": "Keryx",
+          "icon": "media/keryx.svg"
+        }
+      ]
+    },
+    "views": {
+      "keryx": [
+        {
+          "id": "keryx.status",
+          "name": "Status",
+          "contextualTitle": "Keryx"
+        },
+        {
+          "id": "keryx.projects",
+          "name": "Projects",
+          "contextualTitle": "Keryx"
+        },
+        {
+          "id": "keryx.recentTurns",
+          "name": "Recent Turns",
+          "contextualTitle": "Keryx"
+        },
+        {
+          "id": "keryx.needsAttention",
+          "name": "Needs Your Attention",
+          "contextualTitle": "Keryx"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "keryx.init",
+        "title": "Keryx: Initialize Project",
+        "category": "Keryx"
+      },
+      {
+        "command": "keryx.refresh",
+        "title": "Keryx: Refresh",
+        "category": "Keryx",
+        "icon": "$(refresh)"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "typecheck": "tsc -p ./ --noEmit",
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.85.0",
+    "bun-types": "^1.4.0",
+    "typescript": "^5"
+  }
+}

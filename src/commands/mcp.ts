@@ -56,7 +56,7 @@ export async function mcpCommand(
   process.exitCode = 1;
 }
 
-const RUNTIME_USAGE = `<cursor|claude|opencode|generic|all>`;
+const RUNTIME_USAGE = `<cursor|claude|opencode|vscode|generic|all>`;
 
 function parseRequestedRuntimes(args: string[], fallback: string): string[] {
   const runtimeArg = optionValue(args, "--runtime") ?? fallback;
@@ -164,7 +164,7 @@ export function printMcpHelp(): void {
   ]);
   heading("Notes");
   console.log(
-    `  ${style.dim("`install` writes a project-local MCP client config (cursor → .cursor/mcp.json, claude → .mcp.json, opencode → opencode.json), sets modules.mcp.enabled=true, and prints a snippet for `generic`.")}`,
+    `  ${style.dim("`install` writes a project-local MCP client config (cursor → .cursor/mcp.json, claude → .mcp.json, opencode → opencode.json, vscode → .vscode/mcp.json), sets modules.mcp.enabled=true, and prints a snippet for `generic`. `vscode` is opt-in only — not included in `all`.")}`,
   );
   console.log(
     `  ${style.dim("Requires the optional @modelcontextprotocol/sdk to serve. Disabled by default (modules.mcp.enabled=false). `install` only probes the SDK — it never installs it or opens a network connection.")}`,
