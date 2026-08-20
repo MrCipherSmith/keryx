@@ -2697,20 +2697,21 @@ describe("flow 179 — /search-provider bare-arg wizard", () => {
 // Esc/selected result, the empty-list guard, and the args-given path
 // staying byte-identical).
 //
-// Concern for flow-orchestrator: unlike `searchProviderWizardInTui`
-// (exported by flow 179 specifically so this file could drive it through
-// a real interactive pipeline), `pickSearchProviderStep` and
-// `selectSearchProviderAndReport` were left unexported by flow 180 T2.
-// That is what forces this fallback to a source-text audit instead of the
-// real-interaction test the flow 180 T3 dispatch note asked for. Exporting
-// both (purely additive, no behavior change — the same pattern already
-// used for `searchProviderWizardInTui`, `pickShellApproval`,
-// `adaptiveSelectHeight`, `selectBoxHeight`, and
-// `filterConnectedDetectedProviders`, all of which exist in this file's
-// export list only so tests can reach them directly) would let a future
-// pass replace this audit with real `otuiTest`/`mockInput`/`waitForFrame`
-// coverage. Left as a recommendation, not applied here, per this task's
-// "do not modify tui-shell.ts" constraint.
+// Historical note: at T3 time (commit 71c28de), `pickSearchProviderStep`
+// and `selectSearchProviderAndReport` were unexported, which forced this
+// block to fall back to a source-text audit for their generic list/Esc/
+// select behavior too. Flow 180 T5 (commit 2cba647) exported both — purely
+// additive, the same pattern already used for `searchProviderWizardInTui`,
+// `pickShellApproval`, `adaptiveSelectHeight`, `selectBoxHeight`, and
+// `filterConnectedDetectedProviders` — and added the "flow 180 T5 —
+// pickSearchProviderStep (real key-driven interaction)" and "flow 180 T5 —
+// selectSearchProviderAndReport (real function invocation)" describe
+// blocks below, which drive both functions through the real interactive
+// pipeline instead of an audit. This block itself is intentionally left
+// in place: it still proves flow 180's actual NEW surface — the bare-arg
+// WIRING around the reused function — which this file still has no
+// headless seam to drive interactively (same SLATE-2a/SLATE-3a/SLATE-15/
+// flow 163 AC8/flow 173 constraint).
 describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (source-text audit)", () => {
   const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   const branchIdx = tuiSource.indexOf('if (command.name === "/search-connect") {');
