@@ -1018,7 +1018,7 @@ function describeSearchProviderList(
  * the bare-arg picker (flow 180 AC2, AC4) so the 3 result branches are not
  * duplicated between the two entry points.
  */
-async function selectSearchProviderAndReport(
+export async function selectSearchProviderAndReport(
   controller: SearchProviderController,
   onSystem: ((text: string) => void) | undefined,
   providerId: SearchProviderId,
@@ -1134,7 +1134,7 @@ function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolea
 }
 
 /** Step 1: select a provider from `controller.configurable()`. `undefined` on Esc (cancel, AC4). */
-function pickSearchProviderStep(
+export function pickSearchProviderStep(
   otui: OpenTui,
   r: Renderer,
   providers: readonly SearchProviderDescriptor[],
