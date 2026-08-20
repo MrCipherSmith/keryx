@@ -77,7 +77,8 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { createDefaultSearchProviderController } from "../harness/search";
-import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
+import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
+import type { SearchFieldDescriptor } from "../harness/search/types";
 import {
   commandsForMode,
   describeUnavailableCommand,
@@ -1009,6 +1010,295 @@ function describeSearchProviderList(
 ): string {
   const rows = providers.map((provider) => `  ${provider.id} (${provider.displayName})`);
   return `${title}${rows.length > 0 ? `\n${rows.join("\n")}` : "\n  (none)"}\n`;
+}
+
+/** Result of a search-provider field prompt: entered value, or `back` (Esc). */
+type SearchFieldStepResult = { kind: "value"; value: string } | { kind: "back" };
+
+/** One `descriptor.fields` entry, seeded with its current/default value. */
+function promptSearchFieldStep(
+  otui: OpenTui,
+  r: Renderer,
+  field: SearchFieldDescriptor,
+  value: string,
+): Promise<SearchFieldStepResult> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-field-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "sf-title", content: otui.t`${otui.bold(field.label)} ${otui.dim(`${field.required ? "required" : "optional"} · Enter · Esc to go back`)}` }));
+    const input = new otui.InputRenderable(r, { id: "sf-input", value, marginTop: 1 });
+    box.add(input);
+    input.focus();
+    // Blur before detaching: a delayed duplicate ENTER can otherwise still
+    // reach this input after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); input.blur(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
+    });
+    input.on(otui.InputRenderableEvents.ENTER, () => {
+      const entered = input.value.trim();
+      cleanup();
+      resolve({ kind: "value", value: entered });
+    });
+  });
+}
+
+/** Credential entry for `descriptor.credentialSchema`; same result shape as `promptApiKeyStep`. */
+function promptSearchCredentialStep(otui: OpenTui, r: Renderer, opts: { label: string }): Promise<KeyStepResult> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-credential-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "sc-title", content: otui.t`${otui.bold(`Paste your ${opts.label}`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    box.add(
+      new otui.TextRenderable(r, {
+        id: "sc-note",
+        content: otui.t`${otui.dim("Saved to your keryx config dir (owner-only, 0600)")}`,
+        marginTop: 1,
+      }),
+    );
+    const keyInput = new otui.InputRenderable(r, { id: "sc-input", placeholder: "...", marginTop: 1 });
+    box.add(keyInput);
+    keyInput.focus();
+    // Blur before detaching: a delayed duplicate ENTER can otherwise still
+    // reach this input after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); keyInput.blur(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
+    });
+    keyInput.on(otui.InputRenderableEvents.ENTER, () => {
+      const value = keyInput.value.trim();
+      cleanup();
+      resolve(value.length > 0 ? { kind: "key", value } : { kind: "skip" });
+    });
+  });
+}
+
+/** "Set as active provider after a successful test?" toggle; `undefined` on Esc (back). */
+function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolean | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-active-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "sa-title", content: otui.t`${otui.bold("Set as active provider after a successful test?")} ${otui.dim("(↑/↓, Enter · Esc to go back)")}` }));
+    const select = new otui.SelectRenderable(r, {
+      id: "sa-select",
+      width: 60,
+      height: selectBoxHeight(2, true),
+      options: [
+        { name: "Yes", description: "select it once the test passes" },
+        { name: "No", description: "leave it configured but inactive" },
+      ],
+      selectedTextColor: "#ffd166",
+    });
+    box.add(select);
+    select.focus();
+    // Step 3 awaits `controller.test()` right after this step resolves, long
+    // enough for a delayed duplicate ITEM_SELECTED to reach this already-removed
+    // select if it stays the renderer's focus target — blur before detaching.
+    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
+    });
+    select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = select.getSelectedOption();
+      cleanup();
+      resolve(chosen === null ? undefined : chosen.name === "Yes");
+    });
+  });
+}
+
+/** Step 1: select a provider from `controller.configurable()`. `undefined` on Esc (cancel, AC4). */
+function pickSearchProviderStep(
+  otui: OpenTui,
+  r: Renderer,
+  providers: readonly SearchProviderDescriptor[],
+): Promise<SearchProviderDescriptor | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-provider-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "spp-title", content: otui.t`${otui.bold("Select a search provider")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
+    // Match by the composed label (unique via `id`), mirroring `pickProviderStep`.
+    const labelOf = (p: SearchProviderDescriptor): string => `${p.id} (${p.displayName})`;
+    const select = new otui.SelectRenderable(r, {
+      id: "spp-select",
+      width: 60,
+      height: selectBoxHeight(providers.length, true),
+      showScrollIndicator: true,
+      options: providers.map((p) => ({ name: labelOf(p), description: p.kind })),
+      selectedTextColor: "#ffd166",
+    });
+    box.add(select);
+    select.focus();
+    // Blur before detaching: a delayed duplicate ITEM_SELECTED can otherwise
+    // still reach this select after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
+    });
+    select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = select.getSelectedOption();
+      cleanup();
+      resolve(chosen === null ? undefined : providers.find((p) => labelOf(p) === chosen.name));
+    });
+  });
+}
+
+type SearchProviderFieldsSeed = { fields: Record<string, string>; credential: string | undefined; setActive: boolean };
+
+type SearchProviderStep2Result = { kind: "back" } | ({ kind: "done" } & SearchProviderFieldsSeed);
+
+/**
+ * Step 2 (AC5): `descriptor.fields` in order, then a credential prompt (only
+ * when `credentialSchema.required` — the 3 remote providers, 0 fields, skip
+ * straight to it), then the active-provider toggle. Esc at any sub-step goes
+ * back one; off the front sub-step it reports `back` (up to step 1) rather
+ * than closing the modal.
+ */
+async function runSearchProviderFieldsStep(
+  otui: OpenTui,
+  r: Renderer,
+  provider: SearchProviderDescriptor,
+  seed: SearchProviderFieldsSeed,
+): Promise<SearchProviderStep2Result> {
+  type SubStep = { kind: "field"; field: SearchFieldDescriptor } | { kind: "credential" } | { kind: "toggle" };
+  const subSteps: SubStep[] = [
+    ...provider.fields.map((field): SubStep => ({ kind: "field", field })),
+    ...(provider.credentialSchema.required ? [{ kind: "credential" } as const] : []),
+    { kind: "toggle" },
+  ];
+  const fields: Record<string, string> = { ...seed.fields };
+  let credential = seed.credential;
+  let setActive = seed.setActive;
+  let index = 0;
+  while (index < subSteps.length) {
+    const step = subSteps[index];
+    if (step === undefined) break;
+    if (step.kind === "field") {
+      const result = await promptSearchFieldStep(otui, r, step.field, fields[step.field.id] ?? step.field.defaultValue ?? "");
+      if (result.kind === "back") {
+        index -= 1;
+        if (index < 0) return { kind: "back" };
+        continue;
+      }
+      fields[step.field.id] = result.value;
+      index += 1;
+      continue;
+    }
+    if (step.kind === "credential") {
+      const result = await promptSearchCredentialStep(otui, r, {
+        label: provider.credentialSchema.label ?? `${provider.displayName} credential`,
+      });
+      if (result.kind === "back") {
+        index -= 1;
+        if (index < 0) return { kind: "back" };
+        continue;
+      }
+      credential = result.kind === "key" ? result.value : undefined;
+      index += 1;
+      continue;
+    }
+    const toggle = await promptSetActiveProviderStep(otui, r);
+    if (toggle === undefined) {
+      index -= 1;
+      if (index < 0) return { kind: "back" };
+      continue;
+    }
+    setActive = toggle;
+    index += 1;
+  }
+  return { kind: "done", fields, credential, setActive };
+}
+
+/**
+ * Step 3 (AC6): `configure()` then `test()`. On success, `select()` too when
+ * the toggle was Yes — the exact call `/search-connect` already makes. `retry`
+ * (Esc on the failure screen) sends the caller back to step 2 without closing
+ * the modal.
+ */
+function runSearchProviderTestStep(
+  otui: OpenTui,
+  r: Renderer,
+  controller: SearchProviderController,
+  provider: SearchProviderDescriptor,
+  fields: Record<string, string>,
+  credential: string | undefined,
+  setActive: boolean,
+): Promise<"done" | "retry"> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-test-picker");
+    r.root.add(box);
+    const status = new otui.TextRenderable(r, { id: "st-title", content: otui.t`${otui.bold(`Testing '${provider.id}'`)} ${otui.dim("...")}` });
+    box.add(status);
+    let settled: "success" | "failure" | undefined;
+    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (settled === "failure" && key.name === "escape") {
+        cleanup();
+        resolve("retry");
+        key.preventDefault();
+        key.stopPropagation();
+      } else if (settled === "success" && (key.name === "return" || key.name === "linefeed" || key.name === "kpenter")) {
+        cleanup();
+        resolve("done");
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    void (async () => {
+      controller.configure(provider.id, { ...provider.defaults, ...fields }, credential);
+      const tested = await controller.test(provider.id);
+      if (!tested.ok) {
+        settled = "failure";
+        const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+        status.content = otui.t`${otui.red("✗")} ${otui.bold(`'${provider.id}' test failed: ${reason}`)} ${otui.dim("(Esc to go back and retry)")}`;
+        return;
+      }
+      settled = "success";
+      if (!setActive) {
+        status.content = otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested successfully`)} ${otui.dim("(Enter to close)")}`;
+        return;
+      }
+      const selected = await controller.select(provider.id);
+      status.content = selected.ok
+        ? otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured, tested, and set as active`)} ${otui.dim("(Enter to close)")}`
+        : otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested`)} ${otui.dim(`but could not be set active (${selected.reason ?? "unknown"})`)} ${otui.dim("(Enter to close)")}`;
+    })();
+  });
+}
+
+/**
+ * The `/search-provider` bare-arg wizard (AC1): provider select → fields/
+ * credential/active-toggle → test result. Mirrors `selectProviderModelInTui`'s
+ * step/Esc-back shape but drives `SearchProviderController` instead of the
+ * LLM-provider picker; `/search-provider <id> ...` and `/search-connect` stay
+ * on their existing text-parsing paths (AC2, AC3) — this is only wired into
+ * the bare-arg branch.
+ */
+export async function searchProviderWizardInTui(
+  otui: OpenTui,
+  r: Renderer,
+  controller: SearchProviderController,
+): Promise<void> {
+  const providers = controller.configurable();
+  providerLoop: while (true) {
+    const provider = await pickSearchProviderStep(otui, r, providers);
+    if (provider === undefined) {
+      return; // Esc at step 1: cancel, no state mutated (AC4)
+    }
+    let seed: SearchProviderFieldsSeed = { fields: { ...provider.defaults }, credential: undefined, setActive: false };
+    while (true) {
+      const step2 = await runSearchProviderFieldsStep(otui, r, provider, seed);
+      if (step2.kind === "back") {
+        continue providerLoop;
+      }
+      seed = { fields: step2.fields, credential: step2.credential, setActive: step2.setActive };
+      const result = await runSearchProviderTestStep(otui, r, controller, provider, seed.fields, seed.credential, seed.setActive);
+      if (result === "done") {
+        return;
+      }
+      // "retry": Esc on the failure screen loops back into step 2 with the
+      // just-entered values preserved so a typo'd field/credential can be fixed.
+    }
+  }
 }
 
 /** Ask for a local provider endpoint, keeping its configured value editable. */
@@ -3625,9 +3915,8 @@ export async function launchTuiAgentShell(opts: {
             const args = parseSearchProviderArgs(line.slice(16));
             const all = searchProviderController.configurable();
             if (args.providerId === undefined) {
-              io.onSystem?.(
-                describeSearchProviderList("Search providers (use /search-provider <id> [key=...]):", all),
-              );
+              await chrome.withOverlay(() => searchProviderWizardInTui(otui, r, searchProviderController));
+              input.focus();
               return;
             }
             const descriptor = all.find((candidate) => candidate.id === args.providerId);

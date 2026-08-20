@@ -32,6 +32,7 @@ import {
   adaptiveSelectHeight,
   selectBoxHeight,
   filterConnectedDetectedProviders,
+  searchProviderWizardInTui,
   shortenCwd,
   type BlockSink,
 } from "./tui-shell";
@@ -55,6 +56,14 @@ import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "..
 import type { DetectedProvider } from "../commands/select";
 import { readSlate, writeSlate } from "../session/slate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
+import type {
+  SearchConnectionResult,
+  SearchProviderController,
+  SearchProviderDescriptor,
+  SearchProviderId,
+  SearchSelectionResult,
+} from "../harness/search";
+import type { SearchFieldDescriptor } from "../harness/search/types";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -2351,4 +2360,304 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
     expect(filterBlock).toContain('t.definition.risk === "read"');
     expect(filterBlock).toContain("SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name)");
   });
+});
+
+// ===========================================================================
+// Flow 179 — /search-provider bare-arg wizard (searchProviderWizardInTui)
+// ===========================================================================
+//
+// Drives the REAL `searchProviderWizardInTui` (exported from tui-shell.ts)
+// against a minimal fake `SearchProviderController` — configure/test/select
+// spies plus a scripted `configurable()` list — so every case controls its
+// outcome deterministically without touching the real search-config file the
+// concrete class reads/writes. Navigation goes through the shell's own
+// `onKeypress`-driven renderables, the same seam flow 109 established above:
+// `SelectRenderable` via arrow keys + Enter, `InputRenderable` via typed text
+// + Enter, Esc via the same `pressEscapeAndSettle` helper (the lone-ESC
+// parser-timeout accommodation applies here too, since the wizard's own Esc
+// handling goes through the identical `onKeypress` wrapper).
+describe("flow 179 — /search-provider bare-arg wizard", () => {
+  const SEARXNG_FIELDS: SearchFieldDescriptor[] = [
+    { id: "baseUrl", label: "Base URL", required: true, defaultValue: "http://localhost" },
+    { id: "port", label: "Port", required: true, defaultValue: "8080" },
+  ];
+
+  const SEARXNG_DESCRIPTOR: SearchProviderDescriptor = {
+    id: "searxng",
+    displayName: "SearXNG",
+    kind: "local",
+    fields: SEARXNG_FIELDS,
+    defaults: { baseUrl: "http://localhost", port: "8080" },
+    credentialSchema: { required: false, secret: true },
+    documentationUrl: "https://docs.searxng.org/admin/installation.html",
+    capabilities: { localLoopback: true, supportsPublicationDate: true },
+    testConnection: async () => ({ ok: true }),
+    search: async () => ({ query: "", results: [] }),
+  };
+
+  // Stands in for any of the 3 zero-field remote providers (brave/tavily/exa
+  // in the real registry): 0 fields, a required credential.
+  const BRAVE_DESCRIPTOR: SearchProviderDescriptor = {
+    id: "brave",
+    displayName: "Brave Search API",
+    kind: "remote",
+    fields: [],
+    defaults: {},
+    credentialSchema: { required: true, label: "Brave Search API key", secret: true },
+    documentationUrl: "https://api.search.brave.com/app/documentation",
+    capabilities: { localLoopback: false, supportsPublicationDate: false },
+    testConnection: async () => ({ ok: true }),
+    search: async () => ({ query: "", results: [] }),
+  };
+
+  type SearchControllerCall =
+    | { kind: "configure"; providerId: SearchProviderId; fields: Record<string, string>; credential: string | undefined }
+    | { kind: "test"; providerId: SearchProviderId }
+    | { kind: "select"; providerId: SearchProviderId };
+
+  /**
+   * Minimal fake `SearchProviderController` (flow 179 T3 dispatch note):
+   * records every configure/test/select call and lets each test script
+   * `test()`'s result deterministically, rather than driving the real class
+   * (which reads/writes the on-disk search-config file).
+   */
+  function fakeSearchProviderController(opts: {
+    providers: readonly SearchProviderDescriptor[];
+    testResult?: () => SearchConnectionResult;
+    selectResult?: SearchSelectionResult;
+  }): { controller: SearchProviderController; calls: SearchControllerCall[] } {
+    const calls: SearchControllerCall[] = [];
+    const fake = {
+      configurable: (): readonly SearchProviderDescriptor[] => opts.providers,
+      configure: (providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void => {
+        calls.push({ kind: "configure", providerId, fields, credential });
+      },
+      test: async (providerId: SearchProviderId): Promise<SearchConnectionResult> => {
+        calls.push({ kind: "test", providerId });
+        return (opts.testResult ?? (() => ({ ok: true })))();
+      },
+      select: async (providerId: SearchProviderId): Promise<SearchSelectionResult> => {
+        calls.push({ kind: "select", providerId });
+        return opts.selectResult ?? { ok: true };
+      },
+    };
+    // `SearchProviderController` is a concrete class with private fields, so
+    // TS only structurally accepts a real instance — the fake above has every
+    // PUBLIC member the wizard actually calls (configurable/configure/test/
+    // select), so the cast is the standard escape for a class-typed fake.
+    return { controller: fake as unknown as SearchProviderController, calls };
+  }
+
+  otuiTest("AC1/AC4: step 1 lists exactly configurable() providers; Esc at step 1 cancels with no controller calls", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const { controller, calls } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR, BRAVE_DESCRIPTOR] });
+
+    const done = searchProviderWizardInTui(otui.core, renderer, controller);
+    const step1Frame = await waitForFrame(
+      (frame) => frame.includes("searxng (SearXNG)") && frame.includes("brave (Brave Search API)"),
+    );
+    expect(step1Frame).toContain("Select a search provider");
+
+    await pressEscapeAndSettle({ mockInput, flush });
+    await done; // cancels: the wizard's promise resolves without mutating any state
+
+    expect(calls).toEqual([]);
+    renderer.destroy();
+  });
+
+  otuiTest("AC5: a 0-field provider (brave) skips the fields sub-step straight to the credential prompt", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const { controller, calls } = fakeSearchProviderController({ providers: [BRAVE_DESCRIPTOR] });
+
+    const done = searchProviderWizardInTui(otui.core, renderer, controller);
+    await waitForFrame((frame) => frame.includes("brave (Brave Search API)"));
+    mockInput.pressEnter(); // brave is the only option
+    await flush();
+
+    const credentialFrame = await waitForFrame((frame) => frame.includes("Paste your"));
+    expect(credentialFrame).toContain("Brave Search API key"); // credentialSchema.label, not a field prompt
+
+    // Esc at step 2's FIRST sub-step (there are no fields, so credential is
+    // first) returns to step 1 (AC5), rather than closing the modal.
+    await pressEscapeAndSettle({ mockInput, flush });
+    const step1Frame = await waitForFrame((frame) => frame.includes("brave (Brave Search API)"));
+    expect(step1Frame).toContain("Select a search provider");
+
+    // Esc at step 1 cancels the whole wizard (AC4).
+    await pressEscapeAndSettle({ mockInput, flush });
+    await done;
+
+    expect(calls).toEqual([]);
+    renderer.destroy();
+  });
+
+  otuiTest(
+    "AC5: multi-field provider (searxng) walks both fields in order seeded with defaultValue; Esc steps back one sub-step at a time, then to step 1",
+    async () => {
+      const otui = requireOtui();
+      const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+      const { controller, calls } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR] });
+
+      const done = searchProviderWizardInTui(otui.core, renderer, controller);
+      await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      mockInput.pressEnter(); // searxng is the only option
+      await flush();
+
+      const baseUrlFrame = await waitForFrame((frame) => frame.includes("Base URL"));
+      expect(baseUrlFrame).toContain("http://localhost"); // seeded with defaultValue
+      mockInput.pressEnter(); // accept the default baseUrl
+      await flush();
+
+      const portFrame = await waitForFrame((frame) => frame.includes("Port"));
+      expect(portFrame).toContain("8080"); // seeded with defaultValue
+      mockInput.pressEnter(); // accept the default port
+      await flush();
+
+      await waitForFrame((frame) => frame.includes("Set as active provider"));
+
+      // Esc at the toggle goes back one sub-step: the port field (not closing the modal).
+      await pressEscapeAndSettle({ mockInput, flush });
+      const portAgain = await waitForFrame((frame) => frame.includes("Port"));
+      expect(portAgain).toContain("8080");
+
+      // Esc at the port field goes back one sub-step: the base URL field.
+      await pressEscapeAndSettle({ mockInput, flush });
+      const baseUrlAgain = await waitForFrame((frame) => frame.includes("Base URL"));
+      expect(baseUrlAgain).toContain("http://localhost");
+
+      // Esc at step 2's FIRST sub-step returns to step 1 (AC5).
+      await pressEscapeAndSettle({ mockInput, flush });
+      const step1Frame = await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      expect(step1Frame).toContain("Select a search provider");
+
+      // Esc at step 1 cancels the whole wizard (AC4).
+      await pressEscapeAndSettle({ mockInput, flush });
+      await done;
+
+      expect(calls).toEqual([]);
+      renderer.destroy();
+    },
+  );
+
+  otuiTest("AC6: success path with the active toggle set to Yes calls configure() -> test() -> select() with the provider id", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const { controller, calls } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR] });
+
+    const done = searchProviderWizardInTui(otui.core, renderer, controller);
+    await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+    mockInput.pressEnter(); // searxng
+    await flush();
+    await waitForFrame((frame) => frame.includes("Base URL"));
+    mockInput.pressEnter(); // accept default baseUrl
+    await flush();
+    await waitForFrame((frame) => frame.includes("Port"));
+    mockInput.pressEnter(); // accept default port
+    await flush();
+    await waitForFrame((frame) => frame.includes("Set as active provider"));
+    mockInput.pressEnter(); // "Yes" is the default-selected first option
+    await flush();
+
+    const successFrame = await waitForFrame((frame) => frame.includes("configured, tested, and set as active"));
+    expect(successFrame).toContain("'searxng'");
+    mockInput.pressEnter(); // close on success
+    await flush();
+    await done;
+
+    // The exact call `/search-connect` already makes: `select(providerId)`.
+    expect(calls).toEqual([
+      { kind: "configure", providerId: "searxng", fields: { baseUrl: "http://localhost", port: "8080" }, credential: undefined },
+      { kind: "test", providerId: "searxng" },
+      { kind: "select", providerId: "searxng" },
+    ]);
+    renderer.destroy();
+  });
+
+  otuiTest("AC6: success path with the active toggle set to No calls configure() -> test(), never calls select()", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const { controller, calls } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR] });
+
+    const done = searchProviderWizardInTui(otui.core, renderer, controller);
+    await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+    mockInput.pressEnter(); // searxng
+    await flush();
+    await waitForFrame((frame) => frame.includes("Base URL"));
+    mockInput.pressEnter(); // accept default baseUrl
+    await flush();
+    await waitForFrame((frame) => frame.includes("Port"));
+    mockInput.pressEnter(); // accept default port
+    await flush();
+    await waitForFrame((frame) => frame.includes("Set as active provider"));
+    mockInput.pressArrow("down"); // move off "Yes" onto "No"
+    mockInput.pressEnter();
+    await flush();
+
+    const successFrame = await waitForFrame((frame) => frame.includes("configured and tested successfully"));
+    expect(successFrame).toContain("'searxng'");
+    mockInput.pressEnter(); // close on success
+    await flush();
+    await done;
+
+    expect(calls.map((call) => call.kind)).toEqual(["configure", "test"]);
+    renderer.destroy();
+  });
+
+  otuiTest(
+    "AC6/AC7: failure path shows the failure reason; Esc -> retry re-enters step 2 at the FIRST sub-step with previously entered values preserved as seeds",
+    async () => {
+      const otui = requireOtui();
+      const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+      const { controller, calls } = fakeSearchProviderController({
+        providers: [SEARXNG_DESCRIPTOR],
+        testResult: () => ({ ok: false, reason: "transport-failed" }),
+      });
+
+      const done = searchProviderWizardInTui(otui.core, renderer, controller);
+      await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      mockInput.pressEnter(); // searxng
+      await flush();
+      await waitForFrame((frame) => frame.includes("Base URL"));
+      mockInput.pressEnter(); // accept default baseUrl
+      await flush();
+      await waitForFrame((frame) => frame.includes("Port"));
+      await mockInput.typeText("9"); // cursor sits after the seeded "8080" -> "80809"
+      mockInput.pressEnter();
+      await flush();
+      await waitForFrame((frame) => frame.includes("Set as active provider"));
+      mockInput.pressArrow("down"); // "No" — keep this test focused on the failure/retry path
+      mockInput.pressEnter();
+      await flush();
+
+      const failureFrame = await waitForFrame((frame) => frame.includes("test failed"));
+      expect(failureFrame).toContain("connection validation failed");
+      expect(failureFrame).toContain("Esc to go back and retry");
+
+      await pressEscapeAndSettle({ mockInput, flush }); // "retry": re-enters step 2
+
+      // Retry lands on the FIRST sub-step (base URL) — NOT the port field or
+      // the toggle the user was last on.
+      const retryFrame = await waitForFrame((frame) => frame.includes("Base URL"));
+      expect(retryFrame).toContain("http://localhost");
+      mockInput.pressEnter(); // accept baseUrl again
+      await flush();
+
+      const portRetryFrame = await waitForFrame((frame) => frame.includes("Port"));
+      expect(portRetryFrame).toContain("80809"); // the previously entered value, preserved as the seed
+
+      // Cleanly end the wizard: back out to step 1, then cancel.
+      await pressEscapeAndSettle({ mockInput, flush }); // port -> base URL
+      await pressEscapeAndSettle({ mockInput, flush }); // base URL -> step 1
+      const step1Frame = await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      expect(step1Frame).toContain("Select a search provider");
+      await pressEscapeAndSettle({ mockInput, flush }); // cancel
+      await done;
+
+      expect(calls.filter((call) => call.kind === "test")).toHaveLength(1);
+      expect(calls.filter((call) => call.kind === "configure")).toHaveLength(1);
+      renderer.destroy();
+    },
+  );
 });
