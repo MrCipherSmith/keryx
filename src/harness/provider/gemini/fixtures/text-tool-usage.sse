@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"The weather in "}]},"index":0}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"NYC is: "}]},"index":0}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_weather","id":"call_01FixtureWeather0001","args":{"location":"New York, NY"}}}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":25,"candidatesTokenCount":42,"totalTokenCount":67}}
+

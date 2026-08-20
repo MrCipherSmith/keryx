@@ -24,7 +24,9 @@ import { providerByName, resolveProviderBaseUrl } from "../../commands/providers
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatProvider } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
+import { GeminiProvider } from "./gemini/gemini-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
+import { OpenAiProvider } from "./openai/openai-provider";
 import type { ProviderPort } from "./types";
 
 /** Mirrors `OllamaProvider`'s internal identity (unchanged since the flow 183 extraction). */
@@ -59,6 +61,14 @@ export interface MakeProviderOpts {
  *   - `"anthropic"` + a non-empty `ANTHROPIC_API_KEY` -> `AnthropicProvider`.
  *   - `"anthropic"` + no/empty key -> the offline `FakeProvider` (fail-closed:
  *     never constructs `AnthropicProvider`, never touches the network).
+ *   - `"openai"` + a non-empty `OPENAI_API_KEY` -> `OpenAiProvider` (native
+ *     Responses API adapter, flow 183 T6) — same fail-closed shape as
+ *     `"anthropic"`: no/empty key -> `FakeProvider`, never constructed
+ *     without a credential.
+ *   - `"gemini"` + a non-empty `GEMINI_API_KEY` (falling back to
+ *     `GOOGLE_API_KEY` when absent/empty) -> `GeminiProvider` (native
+ *     generateContent/streamGenerateContent adapter, flow 183 T7) — same
+ *     fail-closed shape as `"anthropic"`/`"openai"`.
  *   - `"ollama"` -> `OllamaProvider` (loopback grant, optional `baseUrl`).
  *   - a registered OpenAI-compatible provider (OpenRouter, DeepSeek, Z.AI,
  *     Cerebras, Groq, Moonshot, Grok, Rapid-MLX, …) -> the extracted
@@ -80,6 +90,25 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       return new FakeProvider([]);
     }
     return new AnthropicProvider({ fetch: opts.fetch, grant: { network: true, apiKey } });
+  }
+  if (name === "openai") {
+    const apiKey = env.OPENAI_API_KEY;
+    if (apiKey === undefined || apiKey.length === 0) {
+      return new FakeProvider([]);
+    }
+    return new OpenAiProvider({ fetch: opts.fetch, grant: { network: true, apiKey } });
+  }
+  if (name === "gemini") {
+    // GEMINI_API_KEY preferred; GOOGLE_API_KEY as fallback when the former is
+    // absent/empty (both are documented; GEMINI_API_KEY is primary per
+    // specification.md §2's naming note). Never constructs GeminiProvider
+    // without a credential (same fail-closed shape as anthropic/openai above).
+    const apiKey =
+      env.GEMINI_API_KEY !== undefined && env.GEMINI_API_KEY.length > 0 ? env.GEMINI_API_KEY : env.GOOGLE_API_KEY;
+    if (apiKey === undefined || apiKey.length === 0) {
+      return new FakeProvider([]);
+    }
+    return new GeminiProvider({ fetch: opts.fetch, grant: { network: true, apiKey } });
   }
   if (name === "ollama") {
     return new OllamaProvider({

@@ -51,6 +51,7 @@ import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatProvider } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
+import { OpenAiProvider } from "./openai/openai-provider";
 import type { NormalizedRequest, StreamOptions } from "./types";
 
 // PINNED API under test — T6 impl exports these; import fails until then
@@ -91,6 +92,26 @@ describe("makeProvider — shared provider-selection factory (review-polish item
 
   test('"anthropic" with an EMPTY-STRING ANTHROPIC_API_KEY also falls back to the fake provider (fail-closed, not a truthy empty string)', () => {
     const provider = makeProvider("anthropic", "claude-x", makeOpts({ env: { ANTHROPIC_API_KEY: "" } }));
+    expect(provider).toBeInstanceOf(FakeProvider);
+  });
+
+  // flow 183, T6 / AC1: `OpenAiProvider implements ProviderPort`, constructed
+  // via `makeProvider("openai", ...)`, same fail-closed shape as "anthropic".
+  test('"openai" WITH OPENAI_API_KEY constructs an OpenAiProvider', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: { OPENAI_API_KEY: "test-key-1" } }));
+    expect(provider).toBeInstanceOf(OpenAiProvider);
+    expect(provider.describe().descriptor.providerId).toBe("openai");
+  });
+
+  test('"openai" WITHOUT OPENAI_API_KEY falls back to the offline FakeProvider (never OpenAiProvider, never network)', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: {} }));
+    expect(provider).not.toBeInstanceOf(OpenAiProvider);
+    expect(provider).toBeInstanceOf(FakeProvider);
+    expect(provider.describe().descriptor.providerId).toBe("fake-provider");
+  });
+
+  test('"openai" with an EMPTY-STRING OPENAI_API_KEY also falls back to the fake provider (fail-closed, not a truthy empty string)', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: { OPENAI_API_KEY: "" } }));
     expect(provider).toBeInstanceOf(FakeProvider);
   });
 
