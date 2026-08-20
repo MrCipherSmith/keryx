@@ -609,6 +609,107 @@ test("serializes a normalized role:tool message as a framed user message (no bar
   expect(framed?.content).toContain("Tool result:");
 });
 
+// --- flow 177: the tool-call loop reaches the provider -----------------------
+
+test("a linked assistant call is sent as tool_calls and its result as role:tool", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-linked"),
+    messages: [
+      { role: "user", content: "покажи cwd" },
+      {
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: [{ id: "c1", name: "get_cwd", arguments: '{"a":1}' }],
+      },
+      { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-linked" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<Record<string, unknown>>;
+  };
+  const assistant = body.messages.find((m) => m.role === "assistant");
+  expect(assistant?.tool_calls).toEqual([
+    { id: "c1", type: "function", function: { name: "get_cwd", arguments: '{"a":1}' } },
+  ]);
+  const result = body.messages.find((m) => m.role === "tool");
+  expect(result?.tool_call_id).toBe("c1");
+  expect(result?.content).toBe("/tmp");
+  // The framed degradation is for UNLINKED results only.
+  expect(JSON.stringify(body.messages)).not.toContain("Tool result:");
+});
+
+test("an orphaned result keeps the framed-user degradation (compaction cut the pair)", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-orphan"),
+    messages: [
+      { role: "user", content: "[Compacted earlier context]" },
+      { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-orphan" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<Record<string, unknown>>;
+  };
+  expect(body.messages.map((m) => m.role)).not.toContain("tool");
+  expect(JSON.stringify(body.messages)).toContain("Tool result:");
+});
+
+test("an unlinked, text-less tool-call turn is dropped rather than sent as an empty assistant message", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-empty-assistant"),
+    messages: [
+      { role: "user", content: "pick one" },
+      {
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: [{ id: "a1", name: "ask_user", arguments: "{}" }],
+      },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-empty-assistant" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<Record<string, unknown>>;
+  };
+  expect(body.messages.filter((m) => m.role === "assistant")).toEqual([]);
+});
+
+test("an unanswered assistant call is sent without tool_calls", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-unanswered"),
+    messages: [
+      { role: "user", content: "go" },
+      {
+        role: "assistant",
+        content: "working",
+        provenance: "model",
+        toolCalls: [{ id: "c1", name: "get_cwd", arguments: "{}" }],
+      },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-unanswered" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<Record<string, unknown>>;
+  };
+  const assistant = body.messages.find((m) => m.role === "assistant");
+  expect(assistant?.tool_calls).toBeUndefined();
+  expect(assistant?.content).toBe("working");
+});
+
 // --- flow 056: reasoning_delta surfacing (OpenRouter/DeepSeek) ----------------
 
 function reasoningFetchMock(sse: string): { fetch: typeof fetch; calls: CapturedCall[] } {

@@ -356,6 +356,70 @@ test("runAgentTurn reprompts on a short continuation nudge like «проверя
   expect(requests.length).toBe(3);
 });
 
+// The model used to be handed a transcript in which it had never called a tool:
+// a tool-call-only round wrote nothing to history, so the next request read as
+// "user asks" → "user pastes output". Prose is the trained continuation of that
+// shape (flow 177).
+test("runAgentTurn records the assistant turn that made the tool call", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "покажи cwd");
+
+  const second = requests[1]?.messages ?? [];
+  const assistantIdx = second.findIndex((m) => m.role === "assistant");
+  const toolIdx = second.findIndex((m) => m.role === "tool");
+  expect(assistantIdx).toBeGreaterThanOrEqual(0);
+  expect(assistantIdx).toBeLessThan(toolIdx); // the call precedes its answer
+  expect(second[assistantIdx]?.toolCalls).toEqual([{ id: "c1", name: "get_cwd", arguments: "{}" }]);
+  expect(second[toolIdx]?.toolCallId).toBe("c1");
+});
+
+test("runAgentTurn records ONE assistant turn when a round emits both text and a call", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "text_delta", text: "Смотрю." },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "покажи cwd");
+
+  const assistants = (requests[1]?.messages ?? []).filter((m) => m.role === "assistant");
+  expect(assistants).toHaveLength(1);
+  expect(assistants[0]?.content).toBe("Смотрю.");
+  expect(assistants[0]?.toolCalls?.[0]?.id).toBe("c1");
+});
+
 // One nudge was not enough: a model that narrates a step usually narrates it
 // once more when told to use a tool, and the turn then ended — so the USER had
 // to send another continuation to get the step executed at all (keryx session
@@ -1905,7 +1969,9 @@ test("SLATE-2a: with options.slateSession undefined, tool-call history is BYTE-F
   // No `options` at all — pre-Phase-3 call shape, must stay byte-for-byte identical.
   await runAgentTurn(io, deps, history, "hello");
 
-  expect(history.map((m) => m.role)).toEqual(["user", "tool", "assistant"]);
+  // The leading assistant turn is the model's own tool call (flow 177); the
+  // claim under test is that NO Anchors-block user message is injected.
+  expect(history.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"]);
   expect(history.some((m) => m.content.includes("src/foo.ts") && m.role === "user")).toBe(false);
 });
 
@@ -2070,15 +2136,18 @@ test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budge
   // Exactly ONE provider.stream call — no second (wrap-up) round happened.
   expect(requests.length).toBe(1);
 
-  // History: the initial user push + the two tool-loop entries the calls
-  // loop itself wrote (call1's real result, call2's budget-refusal message)
-  // — and NOTHING beyond that (no "[system] Tool loop stopped..." message,
-  // no wrap-up assistant text).
-  expect(history.length).toBe(3);
+  // History: the initial user push + the assistant turn carrying the calls
+  // (flow 177) + the two tool-loop entries the calls loop itself wrote
+  // (call1's real result, call2's budget-refusal message) — and NOTHING
+  // beyond that (no "[system] Tool loop stopped..." message, no wrap-up
+  // assistant text).
+  expect(history.length).toBe(4);
   expect(history[0]?.role).toBe("user");
-  expect(history[1]?.role).toBe("tool");
-  expect(history[1]?.content).toBe("probed");
+  expect(history[1]?.role).toBe("assistant");
+  expect(history[1]?.toolCalls).toHaveLength(2);
   expect(history[2]?.role).toBe("tool");
+  expect(history[2]?.content).toBe("probed");
+  expect(history[3]?.role).toBe("tool");
   expect(history.some((m) => m.content.includes("Do NOT call tools"))).toBe(false);
   expect(history.some((m) => m.content.includes("Tool loop stopped"))).toBe(false);
 
@@ -2227,9 +2296,13 @@ test("SLATE-11: unattended ask_user interception — the real ask callback is NE
 
   expect(askCallCount).toBe(0);
   expect(requests.length).toBe(1); // no re-request after interception.
-  expect(history.length).toBe(1); // only the user's own turn message.
+  // The user's own turn plus the assistant turn carrying the intercepted call
+  // (flow 177) — and no tool result, because `ask_user` never produced one.
+  expect(history.length).toBe(2);
   expect(history[0]?.role).toBe("user");
   expect(history[0]?.content).toBe("pick one");
+  expect(history[1]?.role).toBe("assistant");
+  expect(history.some((m) => m.role === "tool")).toBe(false);
 
   expect(terminalStates.length).toBe(1);
   expect(terminalStates[0]?.status).toBe("blocked");
@@ -2285,14 +2358,17 @@ test("F-003: unattended ask_user interception stops the WHOLE turn on the FIRST 
   expect(requests.length).toBe(1);
 
   // Exactly one tool-result message (from the FIRST call, "probe" with path
-  // "a") landed in history, alongside the user's own turn message — nothing
-  // for `ask_user` itself (intercepted before any result is produced) and
-  // NOTHING for the third call (it never ran).
-  expect(history.length).toBe(2);
+  // "a") landed in history, alongside the user's own turn message and the
+  // assistant turn carrying the batch (flow 177) — nothing for `ask_user`
+  // itself (intercepted before any result is produced) and NOTHING for the
+  // third call (it never ran).
+  expect(history.length).toBe(3);
   expect(history[0]?.role).toBe("user");
   expect(history[0]?.content).toBe("do these three things");
-  expect(history[1]?.role).toBe("tool");
-  expect(history[1]?.content).toBe("probed");
+  expect(history[1]?.role).toBe("assistant");
+  expect(history[1]?.toolCalls?.map((c) => c.id)).toEqual(["c1", "a1", "c3"]);
+  expect(history[2]?.role).toBe("tool");
+  expect(history[2]?.content).toBe("probed");
   expect(history.filter((m) => m.role === "tool").length).toBe(1);
 
   // A structured TerminalState fired exactly once for the interception.

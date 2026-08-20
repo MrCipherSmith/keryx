@@ -21,7 +21,7 @@ import {
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
-import type { NormalizedMessage } from "../harness/provider/types";
+import type { NormalizedMessage, NormalizedToolCall } from "../harness/provider/types";
 import {
   keryxDataDir,
   projectKeyFromPath,
@@ -77,6 +77,34 @@ interface TranscriptLine {
   provenance?: NormalizedMessage["provenance"];
   ts: string;
   kind?: "message" | "compaction";
+  /** Assistant tool calls, so a resumed session keeps the tool-call loop. */
+  toolCalls?: NormalizedToolCall[];
+  /** The assistant call a tool result answers. */
+  toolCallId?: string;
+}
+
+/**
+ * Keep only well-formed calls from a transcript line. A transcript is a file on
+ * disk that another process (or a hand edit) may have touched, so a malformed
+ * entry is dropped rather than handed to an adapter that would serialize it into
+ * a provider request.
+ */
+function readToolCalls(value: unknown): NormalizedToolCall[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const calls: NormalizedToolCall[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== "object") {
+      continue;
+    }
+    const { id, name, arguments: args } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || id.length === 0 || typeof name !== "string" || name.length === 0) {
+      continue;
+    }
+    calls.push({ id, name, arguments: typeof args === "string" ? args : "" });
+  }
+  return calls.length > 0 ? calls : undefined;
 }
 
 function nowIso(): string {
@@ -251,6 +279,8 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
       ts,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
+      ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
+      ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
     };
     lines.push(JSON.stringify(row));
   }
@@ -308,6 +338,7 @@ function readJsonl(file: string): NormalizedMessage[] {
       if (typeof o.content !== "string") {
         continue;
       }
+      const toolCalls = readToolCalls(o.toolCalls);
       out.push({
         role: o.role,
         content: o.content,
@@ -316,6 +347,10 @@ function readJsonl(file: string): NormalizedMessage[] {
         o.provenance === "model" ||
         o.provenance === "tool"
           ? { provenance: o.provenance }
+          : {}),
+        ...(toolCalls !== undefined ? { toolCalls } : {}),
+        ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
+          ? { toolCallId: o.toolCallId }
           : {}),
       });
     } catch {

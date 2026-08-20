@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { compactMessages, indexOfKeepFrom } from "./compact";
+import { linkToolCalls } from "../harness/provider/tool-call-linking";
 import type { NormalizedMessage } from "../harness/provider/types";
 
 function u(content: string): NormalizedMessage {
@@ -50,4 +51,26 @@ test("compactMessages keeps last user turns and summarizes the rest", () => {
   expect(r.context.some((m) => m.content === "third task")).toBe(true);
   expect(r.context.some((m) => m.content === "fourth")).toBe(true);
   expect(r.context.some((m) => m.content === "first task" && m !== r.context[0])).toBe(false);
+});
+
+// A compacted window can start in the middle of a tool round, leaving a result
+// whose assistant call was cut away. That half-pair must not reach a provider as
+// a dangling `tool_call_id` — the linker degrades it (flow 177).
+test("a cut between an assistant call and its result leaves no dangling link", () => {
+  const call: NormalizedMessage = {
+    role: "assistant",
+    content: "",
+    provenance: "model",
+    toolCalls: [{ id: "c1", name: "get_cwd", arguments: "{}" }],
+  };
+  const result: NormalizedMessage = { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" };
+  const h = [u("first"), call, result, u("second"), u("third"), u("fourth")];
+
+  const r = compactMessages(h, { keepLastUserTurns: 2 });
+  expect(r.noop).toBe(false);
+  // The call was cut away; whether the result survived or not, nothing in the
+  // remaining window claims to answer a call that is no longer present.
+  const linked = linkToolCalls(r.context);
+  expect(linked.every((l) => l.linkedToolCallId === undefined)).toBe(true);
+  expect(linked.every((l) => l.linkedCalls.length === 0)).toBe(true);
 });

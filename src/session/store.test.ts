@@ -73,6 +73,72 @@ test("sessions are isolated per project", () => {
   }
 });
 
+// A resumed session must keep the tool-call loop: without the two fields below
+// the replayed transcript again reads as "user pastes output", which is the
+// shape that made models narrate instead of calling (flow 177).
+test("a resumed session preserves assistant tool calls and their result ids", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-toolcalls-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(
+      created.handle,
+      [
+        { role: "user", content: "покажи cwd", provenance: "project" },
+        {
+          role: "assistant",
+          content: "",
+          provenance: "model",
+          toolCalls: [{ id: "c1", name: "get_cwd", arguments: "{}" }],
+        },
+        { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+      ],
+      { provider: "p", model: "m" },
+    );
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history[1]?.toolCalls).toEqual([{ id: "c1", name: "get_cwd", arguments: "{}" }]);
+    expect(resumed.history[2]?.toolCallId).toBe("c1");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("a transcript line with malformed tool-call fields drops them instead of replaying them", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-toolcalls-bad-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(created.handle, [{ role: "user", content: "hi", provenance: "project" }], {
+      provider: "p",
+      model: "m",
+    });
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "hi", ts: "t", kind: "message" }),
+      JSON.stringify({
+        role: "assistant",
+        content: "",
+        ts: "t",
+        kind: "message",
+        toolCalls: [{ id: "", name: "x" }, { name: "no-id" }, "nonsense"],
+        toolCallId: 42,
+      }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    // The line itself still loads — only the malformed fields are dropped.
+    expect(resumed.history.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(resumed.history[1]?.toolCalls).toBeUndefined();
+    expect(resumed.history[1]?.toolCallId).toBeUndefined();
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("openSession continue/resume and dual context/archive roundtrip", () => {
   const dataDir = tempData();
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-pr-"));

@@ -22,6 +22,7 @@
 import { isLoopbackHost, isPrivateEgressHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
+import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
   NormalizedEvent,
@@ -246,18 +247,44 @@ export class OllamaProvider implements ProviderPort {
     }
 
     const url = `${baseUrl.replace(/\/+$/, "")}${grant.chatPath ?? "/v1/chat/completions"}`;
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<Record<string, unknown>> = [];
     if (request.systemInstruction.length > 0) {
       messages.push({ role: "system", content: request.systemInstruction });
     }
-    for (const message of request.messages) {
+    // OpenAI/OpenRouter require a `role:"tool"` message to carry a
+    // `tool_call_id` referencing a preceding assistant `tool_calls`, and require
+    // every declared call to be answered. `linkToolCalls` reports which pairs
+    // actually hold together inside THIS request; a half-pair (compaction cut a
+    // window, a resumed transcript starts mid-turn, a batch was abandoned) keeps
+    // the framed `user` degradation this adapter has always used, so the request
+    // stays valid instead of being rejected for a dangling link.
+    for (const linked of linkToolCalls(request.messages)) {
+      const message = linked.message;
       if (message.role === "tool") {
-        // OpenAI/OpenRouter require a `role:"tool"` message to carry a
-        // `tool_call_id` referencing a preceding assistant `tool_calls` — which the
-        // normalized layer does NOT track. Degrade to a framed `user` message so the
-        // tool result stays legible and the request is valid across OpenAI-compatible
-        // providers (a bare `role:"tool"` is rejected by OpenRouter/OpenAI).
+        if (linked.linkedToolCallId !== undefined) {
+          messages.push({ role: "tool", tool_call_id: linked.linkedToolCallId, content: message.content });
+          continue;
+        }
         messages.push({ role: "user", content: `Tool result:\n${message.content}` });
+        continue;
+      }
+      if (message.role === "assistant" && message.content.length === 0 && linked.linkedCalls.length === 0) {
+        // A tool-call turn whose calls could not be linked (the batch was
+        // abandoned, or compaction cut the results away) carries no text and no
+        // calls — an empty assistant message that says nothing. Dropping it
+        // keeps the request identical to what it was before tool linking.
+        continue;
+      }
+      if (message.role === "assistant" && linked.linkedCalls.length > 0) {
+        messages.push({
+          role: "assistant",
+          content: message.content,
+          tool_calls: linked.linkedCalls.map((call) => ({
+            id: call.id,
+            type: "function",
+            function: { name: call.name, arguments: call.arguments },
+          })),
+        });
         continue;
       }
       messages.push({ role: message.role, content: message.content });

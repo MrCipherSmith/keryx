@@ -682,3 +682,107 @@ describe("emitted NormalizedEvents vs. harness-event.schema.json (same gap W6 Fa
     expect(result.errors).toEqual([]);
   });
 });
+
+// --- flow 177: the tool-call loop reaches the provider -----------------------
+
+test("a linked assistant call is sent as a tool_use block and its result as tool_result", async () => {
+  const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-tool-loop"),
+    messages: [
+      { role: "user", content: "what is the cwd" },
+      {
+        role: "assistant",
+        content: "checking",
+        provenance: "model",
+        toolCalls: [{ id: "c1", name: "get_cwd", arguments: '{"a":1}' }],
+      },
+      { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-tool-loop" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<{ role: string; content: unknown }>;
+  };
+  expect(body.messages[1]).toEqual({
+    role: "assistant",
+    content: [
+      { type: "text", text: "checking" },
+      { type: "tool_use", id: "c1", name: "get_cwd", input: { a: 1 } },
+    ],
+  });
+  expect(body.messages[2]).toEqual({
+    role: "user",
+    content: [{ type: "tool_result", tool_use_id: "c1", content: "/tmp" }],
+  });
+});
+
+test("malformed call arguments degrade to an empty tool_use input instead of throwing", async () => {
+  const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-bad-args"),
+    messages: [
+      { role: "user", content: "go" },
+      {
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: [{ id: "c1", name: "get_cwd", arguments: '{"truncated' }],
+      },
+      { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-bad-args" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+  };
+  const useBlock = body.messages[1]?.content.find((b) => b.type === "tool_use");
+  expect(useBlock?.input).toEqual({});
+});
+
+test("an unlinked, text-less tool-call turn never reaches the wire (Anthropic rejects empty content)", async () => {
+  const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-empty-assistant"),
+    messages: [
+      { role: "user", content: "pick one" },
+      // The batch was intercepted before any tool ran, so this turn has no text
+      // and nothing answers its call.
+      {
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: [{ id: "a1", name: "ask_user", arguments: "{}" }],
+      },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-empty-assistant" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<{ role: string; content: unknown }>;
+  };
+  expect(body.messages).toEqual([{ role: "user", content: "pick one" }]);
+});
+
+test("an unlinked pair keeps the previous plain-text mapping", async () => {
+  const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-unlinked"),
+    messages: [
+      { role: "user", content: "[Compacted earlier context]" },
+      { role: "tool", content: "/tmp", provenance: "tool", toolCallId: "c1" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-unlinked" }));
+
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    messages: Array<{ role: string; content: unknown }>;
+  };
+  expect(body.messages[1]).toEqual({ role: "user", content: "/tmp" });
+});
