@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":5,"method":"elicitation/create","params":{"message":"Allow codex to run `ls -la`?","requestedSchema":{"type":"object","properties":{}},"codex_elicitation":"exec-approval","codex_command":["ls","-la"]}}
+{"jsonrpc":"2.0","id":5,"result":{"action":"decline"}}

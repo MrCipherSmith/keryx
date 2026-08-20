@@ -1,0 +1,59 @@
+{
+  "note": "Recorded transcripts for the MCP-shaped codex elicitation exchange (docs/requirements/keryx-mcp-client, flow 182 T13, specification.md §5.3). Every fixture is a JSONL sequence of the raw JSON-RPC messages involved in one elicitation round-trip, in wire order. `captured: true` means the bytes came from a real `codex mcp-server` run; `captured: false` means the file was hand-authored and is NOT evidence of vendor behaviour — see `caveat`.",
+  "capturedOn": "2026-08-20",
+  "provenance": "T5 (flow 182, earlier in this flow) DID run a real live probe against codex-cli 0.147.0 on 2026-08-20 and its findings (field names, the non-standard {action,decision} response envelope, the confirmed-valid `approved`/`abort` decision values, the always-empty `requestedSchema`, the `codex/event`/`exec_approval_request` correlation mechanism, the ~55-60s self-abort window) are real and recorded in this flow's context.md (\"T5 live probe findings\") and journal.md. HOWEVER, the raw JSON transcript bytes T5 itself captured were not preserved anywhere in flow bookkeeping (context.md/journal.md/flow.json all contain only prose summaries, not the literal payloads) — confirmed by an exhaustive search of `.metaproject/flows/182-.../` and `.metaproject/workspaces/` before writing this manifest. Rather than hand-author fixtures from those prose summaries, T13 ran its OWN fresh live probe against the same real `codex mcp-server` (codex-cli 0.147.0, same binary, `-c approval_policy=\"on-request\" -c sandbox_mode=\"read-only\"`, a disposable scratch cwd) using this package's own `connectCodexMcpClient` (`src/mcp-client/client.ts`) — the exact module under test — via a throwaway probe script, and reconstructed the literal wire JSON-RPC envelopes from the parsed values it observed. That reconstruction is LOSSLESS, not approximate: `parseElicitationCreateRequest` (`wire.ts`) preserves `message`/`requestedSchema` verbatim and spreads every other `params` key into `vendor` unmodified (no value transformation, only key routing), and `parseCodexEventNotification` stores `params.msg` verbatim as `raw` — so `params = {message, requestedSchema, ...vendor}` for the elicitation request, and `params = {msg: raw}` for the codex/event notification, exactly reproduce the original wire objects. `approve.jsonl`, `deny.jsonl`, and `timeout.jsonl` below are therefore genuinely `captured: true` — independently RE-CONFIRMING every load-bearing T5 finding (the exact same vendor field names, the exact same confirmed `approved`/`abort` decision values, the exact same trivial-empty `requestedSchema`, the exact same `codex/event` correlation mechanism) against a live process in this task, not merely trusting the prior prose summary.",
+  "agent": {
+    "codex-cli": {
+      "version": "codex-cli 0.147.0",
+      "transport": "stdio MCP (`codex mcp-server`), not `codex exec` — see docs/requirements/keryx-mcp-client/specification.md §3",
+      "captureMethod": "connectCodexMcpClient(['codex','mcp-server','-c','approval_policy=\"on-request\"','-c','sandbox_mode=\"read-only\"'], {cwd: <disposable mkdtemp scratch dir>, env: {...process.env, FORCE_COLOR:'0', NO_COLOR:'1'}}), then callTool('codex', {prompt: '<run a touch command>', sandbox:'read-only', 'approval-policy':'on-request', cwd: <same scratch dir>}, {timeoutMs: 90000}). One process per fixture. Note: the live host's own `~/.codex/config.toml` is still consulted (codex mcp-server has no `--ignore-user-config` equivalent), so captured transcripts also carry harmless `mcp_startup_update`/`mcp_startup_complete` events for the operator's own configured sub-MCP-servers (some of which fail to start for lack of their own credentials, e.g. `github`/`figma`) — irrelevant noise, stripped from these fixtures, which keep only the `exec_approval_request`/`elicitation/create`/response/`turn_aborted` messages this package's parser actually reads.",
+      "toolCallArgumentKeys": {
+        "note": "Reconfirmed live via `client.listTools()` against a real `codex mcp-server`: the `codex` tool's own JSON-schema `inputSchema` names `approval-policy` and `sandbox` (dash-cased), matching T5's original finding — distinct from the TOML spawn-config keys (`sandbox_mode`, `approval_policy`, underscore-cased, passed via `-c`). `codex_call_id` etc. are elicitation VENDOR fields, unrelated to this tool-call argument schema."
+      },
+      "vendorFieldsConfirmedLive": [
+        "codex_call_id",
+        "codex_elicitation",
+        "codex_command",
+        "codex_cwd",
+        "codex_parsed_cmd",
+        "codex_mcp_tool_call_id",
+        "codex_event_id"
+      ],
+      "fixtures": {
+        "approve.jsonl": {
+          "captured": true,
+          "case": "clean approve round-trip: codex/event(exec_approval_request) -> elicitation/create -> {action:\"accept\",decision:\"approved\"}, tool call completes successfully (verified the file was actually created by codex after the accept)",
+          "exitCode": null,
+          "events": ["codex/event(exec_approval_request)", "elicitation/create", "response(result: accept/approved)"],
+          "notes": "Captured 2026-08-20 in this task (T13), re-confirming T5's exact findings: available_decisions == [\"approved\", {...}, \"abort\"], requestedSchema == {type:object, properties:{}} (trivial empty), all 7 documented vendor fields present. The underlying tool call's own outcome (not part of this file — see fixtures.test.ts) was `{kind:\"result\", isError:false}` with codex confirming it ran `touch probe-write-test.txt`."
+        },
+        "deny.jsonl": {
+          "captured": true,
+          "case": "clean deny round-trip: codex/event(exec_approval_request) -> elicitation/create -> {action:\"decline\",decision:\"abort\"}",
+          "notes": "Captured 2026-08-20 in this task (T13). Uses \"abort\", not \"denied\" — T5 explicitly found \"denied\" is not always a valid value; \"abort\" is the confirmed-safe deny value, reconfirmed here. IMPORTANT, and itself a live reconfirmation of a T5 finding: the OUTER `tools/call` promise did NOT resolve to a normal result after this clean decline — it resolved to this module's `{kind:\"timeout\"}` outcome (see `client.ts`'s `McpToolCallOutcome`), exactly matching T5's documented finding that 'the outer tools/call can outlive a cleanly-declined elicitation and hit the SDK's own client timeout.' That outer-timeout behavior is proven separately by `supervise-mcp.test.ts`'s existing offline timeout tests and by this flow's new live AC3 test (`live-elicitation.smoke.test.ts`); this fixture file only captures the elicitation exchange itself, which completed cleanly."
+        },
+        "timeout.jsonl": {
+          "captured": true,
+          "case": "openai/codex#11816's condition: an elicitation/create left unanswered (the onElicitation handler's promise deliberately never resolves), followed by codex's own `codex/event` `turn_aborted`/`reason:\"interrupted\"` notification.",
+          "notes": "Captured 2026-08-20 in this task (T13) by never answering the elicitation and letting the outer `tools/call` run to its own 90s client-side timeout. The captured `turn_aborted` event (duration_ms: 89731, i.e. ~89.7s) fired at a duration close to THIS PROBE's own 90s outer timeout, not the ~55-60s unprompted self-abort window T5's context.md separately documents for a run with no outer timeout racing it at all — the exact causal trigger (client-side cancellation vs. codex's own independent ceiling) was not isolated in this capture, and this note says so rather than silently implying a 55-60s reproduction. The event's SHAPE (msgType `turn_aborted`, `reason: \"interrupted\"`) is what T13 needed to pin as a fixture and is exactly what was captured live; the field values (timings) belong to this specific 90s-bounded run."
+        },
+        "malformed-empty-content.SYNTHETIC.jsonl": {
+          "captured": false,
+          "case": "openai/codex#23383's condition, per T5's (and this session's own reconfirmed) finding: NOT a schema-malformed payload (requestedSchema is always the trivial empty object on every elicitation observed, live-reconfirmed by approve.jsonl/deny.jsonl/timeout.jsonl above) but an elicitation/create with NO correlating codex/event at all — the real, live manifestation of 'malformed/empty content' this package defends against. Response declines WITHOUT a decision field (uncorrelated).",
+          "caveat": "captured: false because provoking this specific shape (a genuine elicitation with its sibling codex/event notification dropped or never sent) was not reproduced against the live process in this task — codex always sent the notification first in every capture attempted. Hand-authored using the exact vendor field names/values pattern confirmed live above; the example command/message/call-id text is illustrative."
+        },
+        "missing-codex-call-id.SYNTHETIC.jsonl": {
+          "captured": false,
+          "case": "PRD Requirement 5's version-skew case: codex_call_id absent from an elicitation/create's params entirely, simulating a pre-fix codex build (e.g. the v0.105.0 report cited in brainstorm.md). Response declines WITHOUT a decision field (uncorrelated, since there is no call_id to correlate on).",
+          "caveat": "captured: false BY CONSTRUCTION, not by gap: this task's own live probe reconfirmed codex_call_id IS present on the pinned min version (0.147.0) on every capture, so no real capture of it missing exists or can exist against a compliant codex build. This fixture is built by taking approve.jsonl's real elicitation/create and removing codex_call_id, exercising the degraded-handling path PRD Requirement 5 requires exist even though it is not currently triggered on the pinned version."
+        }
+      }
+    }
+  },
+  "gaps": [
+    "malformed-empty-content and missing-codex-call-id remain hand-authored (`.SYNTHETIC.`) — see each fixture's own caveat above for exactly why a live capture is not currently possible for either case on the pinned codex-cli version.",
+    "The `patch-approval` elicitation variant's vendor field set was only observed through the SDK-stripped view during T5's probe (see context.md/tasks.md's T13 note) and was not attempted again in this task's own probe (out of scope, per the flow-182 dispatch instructions) — no fixture here covers it.",
+    "timeout.jsonl's `turn_aborted` was captured racing this probe's own 90s outer timeout, not in isolation — see that fixture's own note. A future capture with a longer outer timeout (>60s, <90s) could isolate codex's fully-unprompted ~55-60s self-abort from any client-side timeout interaction, but was not pursued here given the ~90s wall-clock cost per attempt.",
+    "No fixture exercises missing-codex_mcp_tool_call_id or missing-codex_event_id individually — only codex_call_id's absence is modelled, since that is the one field PRD Requirement 5 names by number."
+  ]
+}
