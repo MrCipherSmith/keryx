@@ -1,5 +1,5 @@
 # Keryx Native Distribution — Decisions
-Version: 0.2.0
+Version: 0.3.0
 
 ## D-01: Standalone binary via `bun build --compile`, not thin wrappers
 
@@ -58,6 +58,20 @@ deliberate philosophy about minimal, legible CI surface (a tag is the only
 trigger, no `workflow_dispatch`, provenance traceable from the tag alone);
 adding four runners where one already does the job would work against that
 stated discipline, not extend it.
+
+**Amended by flow 184 (`keryx-native-distribution`), 2026-08-20.** The
+decision stands, but implementing it hit a real, reproducible blocker not
+named above: a plain `bun install` only writes the CURRENT runner's
+platform variant of an `optionalDependencies` package with `os`/`cpu`
+fields to disk (e.g. `@opentui/core-darwin-x64` is pinned in the lockfile
+but never installed on an ubuntu-x64 runner), regardless of what the
+lockfile resolves. Cross-compiling for any target other than the runner's
+own therefore failed with `Could not resolve: "@opentui/core-<other
+platform>"` — reproduced locally before the fix, not assumed. Fix:
+`bun install --os='*' --cpu='*'` before the build loop, forcing every
+platform variant onto disk regardless of the runner's own OS/arch. Single-
+runner cross-compilation is still correct and still avoids an OS matrix —
+this was a missing install flag, not a flaw in D-02's premise.
 
 ## D-03: Homebrew first, personal tap not core submission
 

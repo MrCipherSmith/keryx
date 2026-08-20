@@ -139,9 +139,20 @@ jobs:
       # `set -euo pipefail` matters here specifically: without it, one target's
       # `bun build` failure inside the loop would not stop the loop, and a broken
       # binary could still reach `gh release create` below.
+      #
+      # `bun install --os='*' --cpu='*'` first: a plain `bun install` (already run
+      # above) only fetches the CURRENT runner's platform variant of packages like
+      # `@opentui/core`'s per-platform native binaries (`@opentui/core-darwin-x64`,
+      # `@opentui/core-linux-arm64`, …) — `os`/`cpu` fields on an optionalDependency
+      # filter the file-system install to the matching platform regardless of what
+      # is pinned in the lockfile. Without this, cross-compiling for any target
+      # other than the runner's own (bun-linux-x64 on ubuntu-latest) fails with
+      # `Could not resolve: "@opentui/core-<other-platform>"` — confirmed by
+      # reproducing the failure locally before finding this fix, not assumed.
       - name: Build and smoke-test the standalone binaries
         run: |
           set -euo pipefail
+          bun install --os='*' --cpu='*'
           mkdir -p ./.release
           for target in bun-darwin-arm64 bun-darwin-x64 bun-linux-x64 bun-linux-arm64; do
             asset="./.release/keryx-$target"
