@@ -32,8 +32,27 @@ import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
 import { resolveAvailability, type DetectionOutcome } from "./registry";
 import { superviseExternalRun, type ExternalRunHandle, type ExternalSpawnPort } from "./supervise";
+import type { SupervisionConfig, SupervisionTrigger } from "./supervision";
 import { getExternalCodec } from "./codec";
 import type { ExternalEvent } from "./types";
+
+/**
+ * Fraction of `maxCostUnits`/`timeoutMs` that counts as a §7.6 `budget_threshold`
+ * crossing. Hardcoded rather than caller-configurable (AC12's scope is the
+ * trigger mechanism itself, not a tuning surface for it — see the note on
+ * {@link RunExternalChildDeps.onSupervisionTrigger}).
+ */
+const DEFAULT_BUDGET_THRESHOLD_FRACTION = 0.8;
+
+/**
+ * Milliseconds of silence that counts as a §7.6 `no_progress` trigger.
+ * Hardcoded, same reasoning as {@link DEFAULT_BUDGET_THRESHOLD_FRACTION}. Thirty
+ * seconds reads as a reasonable "the child has gone quiet" window for a single
+ * CLI agent turn — long enough that normal thinking/tool-call gaps do not fire
+ * it, short enough that a genuinely stuck child is flagged well before the
+ * run's overall `timeoutMs` ceiling.
+ */
+const DEFAULT_NO_PROGRESS_INTERVAL_MS = 30_000;
 
 /**
  * The completion vocabulary, restated locally.
@@ -130,6 +149,15 @@ export interface RunExternalChildDeps {
   readonly onSpawned?: (handle: ExternalRunHandle) => void;
   /** Recorded, not thrown: an out-of-range CLI version is a warning (registry `judgeVersion`). */
   readonly onWarning?: (warning: string) => void;
+  /**
+   * §7.6 supervision triggers (AC12), forwarded from `superviseExternalRun`
+   * unchanged. This is the wire-out ONLY: nothing in this module reacts to a
+   * fired trigger by injecting a message, killing the child, or escalating —
+   * per §7.6 that reaction is the PARENT's decision, and there is no existing
+   * consumer plumbing for it. A caller that wants a reaction implements it in
+   * this callback; this runtime just delivers the trigger.
+   */
+  readonly onSupervisionTrigger?: (trigger: SupervisionTrigger) => void;
 }
 
 /**
@@ -326,6 +354,23 @@ export async function runExternalChild(
         ? (codec.buildStreamingArgv as NonNullable<typeof codec.buildStreamingArgv>)(runInput)
         : codec.buildArgv(runInput);
 
+      // §7.6/AC12: thresholds are hardcoded defaults here, not threaded through
+      // `RunExternalChildInput`, `RuntimeBlock` or the `subagent-dispatch`
+      // schema — making them caller-tunable is a separate feature nobody asked
+      // for and is explicitly out of this task's scope. `declaredScopePath` is
+      // the disposable worktree: containment in this package is already
+      // worktree-based (§7.2), so a tool call outside it is exactly what
+      // `scope_drift` exists to catch.
+      const supervisionConfig: SupervisionConfig = {
+        budgetThresholdFraction: DEFAULT_BUDGET_THRESHOLD_FRACTION,
+        noProgressIntervalMs: DEFAULT_NO_PROGRESS_INTERVAL_MS,
+        declaredScopePath: created.path,
+        timeoutMs: input.timeoutMs,
+        ...(input.runtime.maxCostUnits === undefined || input.runtime.maxCostUnits === null
+          ? {}
+          : { maxCostUnits: input.runtime.maxCostUnits }),
+      };
+
       const outcome = await superviseExternalRun(
         {
           argv,
@@ -343,6 +388,7 @@ export async function runExternalChild(
                 ],
               }
             : {}),
+          supervisionConfig,
         },
         {
           spawn: deps.spawn,
@@ -356,6 +402,7 @@ export async function runExternalChild(
             : { isRecognisedLine: codec.isRecognisedLine.bind(codec) }),
           ...(deps.onEvent === undefined ? {} : { onEvent: deps.onEvent }),
           ...(deps.onSpawned === undefined ? {} : { onSpawned: deps.onSpawned }),
+          ...(deps.onSupervisionTrigger === undefined ? {} : { onSupervisionTrigger: deps.onSupervisionTrigger }),
         },
       );
 

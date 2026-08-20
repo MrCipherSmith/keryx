@@ -759,3 +759,82 @@ analysis):
 this task, by design (operator is sequencing them one at a time).
 - 2026-08-20T07:04:50.713Z - task-done: T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts
 - 2026-08-20T07:04:57.814Z - ac-confirmed: AC13: runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified).
+- 2026-08-20T08:19:22.024Z - task-added: T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker
+
+## 2026-08-20 — T21: AC12 closed (operator: "проверь очень тщательно" — the most sensitive change in the flow)
+
+Investigated ordering first: AC5 (bridge `ExternalEvent`↔`AgentEvent`) and AC12
+are independent — `reduceAgents` has exactly one caller (`keryx agents
+monitor`, the internal orchestration log CLI) and 7 of `ExternalEvent`'s 10
+kinds have no `AgentEvent.type` counterpart at all, so AC5 is a real,
+separate architectural fork. None of §7.6's five triggers need the bridge —
+all five are computable directly from `ExternalEvent`, mirroring the
+already-shipped `foldExternalTranscript` (`external-transcript.ts`). AC12
+implemented first, AC5 left open, both confirmed independent and recorded
+as such rather than assumed.
+
+Second scoping fork, presented to and resolved by the operator before
+implementation: `no_progress`/`budget_threshold`'s elapsed-time half must
+fire during total silence, which a pure event-driven fold cannot do — needs
+a genuine background timer. Operator chose the full version (a real
+periodic ticker, touching `supervise.ts`'s delicate `Promise.race` control
+flow) over the event-driven-only simplification, explicitly asking for
+extra care given the file's own header calls itself "THE ONE IMPURE SEAM."
+
+Implementation: new `src/harness/external/supervision.ts`
+(`detectSupervisionTriggers`, pure, injected `now`/`sinceLastEventMs`, "at
+most one firing per kind per call" structurally guaranteed by construction,
+not just tested). `supervise.ts` gained `SuperviseInput.supervisionConfig`
+(optional — omitted means the entire mechanism is inert, no timer ever
+constructed) and `SuperviseDeps.onSupervisionTrigger`, a per-run dedup Set,
+an event-driven call site inside the existing `onEvent` loop, and a new
+self-rescheduling `setTimeout`-based ticker (`startSupervisionTicker`) for
+the silence-driven half — deliberately NEVER joined to the
+`Promise.race([drained, wall.promise, terminalSeen.promise])`, cancelled in
+the same top-level `finally` that already tears down `wall`/`cancelSettle`.
+`runtime.ts` builds a real `SupervisionConfig` every run (hardcoded
+`budgetThresholdFraction: 0.8`, `noProgressIntervalMs: 30_000`,
+`declaredScopePath` = the disposable worktree path — deliberately NOT
+threaded through `subagent-dispatch.schema.json`/`RuntimeBlock`, out of
+this task's scope). No "parent reacts to a trigger" logic (inject/kill/
+escalate) was built — only the wire-out, matching what AC12's text and the
+handoff's own framing actually ask for; §7.6's "the parent MAY react" is
+future work for whoever builds that consumer.
+
+Verification, given the explicit care request — did NOT just trust the
+implementer's own report:
+- Re-ran `bun run typecheck` and the full suite myself directly: clean both
+  times (one run showed the known pre-existing `fwk-service.test.ts` flake,
+  unrelated, already documented in this journal for AC13).
+- Read the `finally` block and the `Promise.race` myself and independently
+  traced all four exit paths (drained/timeout/terminal/broken-port-throw)
+  to confirm the ticker cannot leak and cannot influence the race.
+- Stress-ran the timer-sensitive test files (`supervise.test.ts` +
+  `supervision.test.ts`) 5 consecutive times before AND after the fix
+  below — zero flakiness either time.
+
+review-logic (independent, exhaustive per the operator's ask) found ONE
+real, latent bug: the background ticker's `tick()` callback had no
+try/catch, unlike the event-driven site (accidentally protected by
+`guard()`'s stream-failure handler) — a throwing `onSupervisionTrigger`
+reaching the ticker path would be an unhandled exception in a raw
+`setTimeout` callback, crashing the WHOLE keryx process, not just the one
+run. Latent today (no consumer reacts to triggers yet) but structural and
+exactly the kind of thing that surfaces later when someone builds the
+kill/inject/escalate reaction §7.6 describes. Fixed: `evaluateSupervision`
+now wraps `deps.onSupervisionTrigger?.(trigger)` in try/catch, recording a
+failure to `stderrLines` the same way `guard()` already does for stream
+failures — same "recorded, not thrown" convention this file already uses
+everywhere else. Added a dedicated regression test proving a throwing
+callback via the TICKER path (not the event path) no longer crashes the
+run and is recorded in `outcome.stderr`. Re-verified: typecheck clean,
+targeted suite 59/59 x5 runs, full suite clean.
+
+review-style (independent, full diff including the fix): zero findings —
+naming/duplication/placement/comment-density all consistent with this
+module's established conventions; one trivial sub-threshold nitpick (a
+doc-comment misquoting AC12's text by one word) not worth a fix.
+
+**AC12 confirmed.** AC5 remains the only open criterion (16/17 now).
+- 2026-08-20T08:19:55.233Z - task-done: T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker
+- 2026-08-20T08:20:04.377Z - ac-confirmed: AC12: detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues.

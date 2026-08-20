@@ -667,3 +667,74 @@ describe("structured result validation (AC13)", () => {
     expect(result.output).not.toContain("not valid JSON");
   });
 });
+
+describe("§7.6 supervision wiring (AC12)", () => {
+  const CLAUDE_RT: RuntimeBlock = { kind: "external", agent: "claude-cli", sandbox: "read-only" };
+
+  test("runtime.ts builds a real SupervisionConfig and it reaches the live supervisor — not just declared and unused", async () => {
+    // The AC13 lesson, restated: `resultSchemaPath` sat declared-but-unused in
+    // production for a whole flow before a task wired it through. This proves
+    // the equivalent claim for supervision — `deps.onSupervisionTrigger` must
+    // actually be invoked by a real `runExternalChild` call, not merely accepted
+    // as a parameter.
+    const fired: string[] = [];
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({
+        spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port,
+        onSupervisionTrigger: (t) => fired.push(t.kind),
+      }),
+    );
+    // This fixture's only assistant text is "ok" (not a question, no tool
+    // call), so `phase_changed` — from the first assistant_text — is the one
+    // trigger a real run through the real wiring produces here.
+    expect(fired).toContain("phase_changed");
+    expect(result.status).not.toBe("Denied");
+  });
+
+  test("declaredScopePath is the run's OWN worktree, not the parent's cwd or an unused placeholder", async () => {
+    // A tool_call whose detail targets a path outside `/wt/wt-1` — the exact
+    // worktree `fakeWorktree()` creates for this run's `worktreeId` — must fire
+    // scope_drift. Firing at all, with THIS path in the message, proves
+    // `declaredScopePath` was wired to `created.path`, not a default that could
+    // never see a real mismatch.
+    const outOfScopeToolCall = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "test-session" }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "/etc/passwd" } }] },
+      }),
+      JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+    ];
+    const fired: Array<{ kind: string; message: string }> = [];
+    const result = await runExternalChild(
+      baseInput({ runtime: CLAUDE_RT }),
+      baseDeps({
+        spawn: fakeSpawn(outOfScopeToolCall).port,
+        onSupervisionTrigger: (t) => fired.push({ kind: t.kind, message: t.message }),
+      }),
+    );
+    const scopeDrift = fired.find((t) => t.kind === "scope_drift");
+    expect(scopeDrift).toBeDefined();
+    expect(scopeDrift?.message).toContain("/wt/wt-1");
+    expect(scopeDrift?.message).toContain("/etc/passwd");
+    expect(result.status).not.toBe("Denied");
+  });
+
+  test("a healthy in-scope run never fires scope_drift", async () => {
+    const inScopeToolCall = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "test-session" }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "/wt/wt-1/src/a.ts" } }] },
+      }),
+      JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+    ];
+    const fired: string[] = [];
+    await runExternalChild(
+      baseInput({ runtime: CLAUDE_RT }),
+      baseDeps({ spawn: fakeSpawn(inScopeToolCall).port, onSupervisionTrigger: (t) => fired.push(t.kind) }),
+    );
+    expect(fired).not.toContain("scope_drift");
+  });
+});

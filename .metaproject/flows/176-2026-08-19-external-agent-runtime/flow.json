@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T07:04:57.814Z",
+  "updatedAt": "2026-08-20T08:20:04.377Z",
   "source": {
     "type": "description",
     "ref": null
@@ -71,6 +71,10 @@
     "AC13": {
       "at": "2026-08-20T07:04:57.813Z",
       "note": "runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
+    },
+    "AC12": {
+      "at": "2026-08-20T08:20:04.376Z",
+      "note": "detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
     }
   },
   "pr": {
@@ -415,6 +419,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -685,6 +704,21 @@
       "at": "2026-08-20T07:04:57.814Z",
       "event": "ac-confirmed",
       "detail": "AC13: runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
+    },
+    {
+      "at": "2026-08-20T08:19:22.024Z",
+      "event": "task-added",
+      "detail": "T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker"
+    },
+    {
+      "at": "2026-08-20T08:19:55.233Z",
+      "event": "task-done",
+      "detail": "T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker"
+    },
+    {
+      "at": "2026-08-20T08:20:04.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
     }
   ]
 }

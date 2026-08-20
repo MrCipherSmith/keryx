@@ -29,6 +29,8 @@
 //   5. A NON-ZERO EXIT IS NEVER THROWN. A failed process is a `ProcessOutcome`
 //      and `classifyFailure` names the cause (§7.7). Throwing is reserved for a
 //      genuinely broken port.
+import { detectSupervisionTriggers } from "./supervision";
+import type { SupervisionConfig, SupervisionTrigger, SupervisionTriggerKind } from "./supervision";
 import type { ExternalAgentCodec, ExternalEvent, ProcessOutcome } from "./types";
 import { isTerminalEvent } from "./types";
 
@@ -162,6 +164,14 @@ export interface SuperviseInput {
   readonly killGraceMs?: number;
   /** Grace given to the streams after a terminal event. Defaults to {@link DEFAULT_TERMINAL_SETTLE_MS}. */
   readonly terminalSettleMs?: number;
+  /**
+   * Thresholds for the §7.6 supervision triggers (AC12). OMITTED IS A COMPLETE
+   * NO-OP: no background timer starts, `detectSupervisionTriggers` is never
+   * called, and `deps.onSupervisionTrigger` is never invoked — every existing
+   * caller that does not pass this field sees byte-identical behaviour to
+   * before this field existed.
+   */
+  readonly supervisionConfig?: SupervisionConfig;
 }
 
 /** Callbacks and ports {@link superviseExternalRun} needs. */
@@ -200,6 +210,17 @@ export interface SuperviseDeps {
   readonly isRecognisedLine?: (line: string) => boolean;
   /** Receives the live handle once the child exists. See {@link ExternalRunHandle}. */
   readonly onSpawned?: (handle: ExternalRunHandle) => void;
+  /**
+   * Called at most once per {@link SupervisionTriggerKind}, for the lifetime of
+   * this one run, when {@link SuperviseInput.supervisionConfig} is present and a
+   * §7.6 trigger condition is met (AC12). Never called at all when
+   * `supervisionConfig` is omitted.
+   *
+   * This is ONLY the wire-out: no reaction (inject a message, kill, escalate)
+   * happens here or anywhere in this file. §7.6 says the parent MAY react to a
+   * fired trigger; deciding whether and how is the caller's job.
+   */
+  readonly onSupervisionTrigger?: (trigger: SupervisionTrigger) => void;
 }
 
 /**
@@ -270,6 +291,11 @@ export async function superviseExternalRun(
   // simply forgets the field still gets the safe wiring (§7.4).
   const stdinMode: ExternalStdinMode = input.stdin ?? "ignore";
 
+  // Read once, before anything is awaited, so every supervision check below
+  // measures elapsed time against the same instant (§7.6's budget_threshold and
+  // no_progress; a no-op read when `supervisionConfig` is omitted).
+  const runStartedAt = new Date();
+
   // Allowed to throw: a port that cannot create a process is broken, and that is
   // the one case rule 5 reserves throwing for.
   const child = deps.spawn.spawn(input.argv, { cwd: input.cwd, env: input.env, stdin: stdinMode });
@@ -296,6 +322,54 @@ export async function superviseExternalRun(
   };
   deps.onSpawned?.(handle);
   for (const line of input.initialStdin ?? []) handle.writeStdin(line);
+
+  // ---------------------------------------------------------------------
+  // §7.6 supervision (AC12). COMPLETELY INDEPENDENT of the drained/wall/
+  // terminal race below: `evaluateSupervision` never resolves or rejects
+  // anything that race is waiting on, so it cannot change what ends a run or
+  // what `verdict`/`killed` mean. A no-op in every respect when
+  // `input.supervisionConfig` is omitted — no timer is started below, and this
+  // closure returns immediately every time it is called.
+  // ---------------------------------------------------------------------
+  const firedSupervisionTriggers = new Set<SupervisionTriggerKind>();
+  let lastEventAt = runStartedAt;
+  const evaluateSupervision = (): void => {
+    const supervisionConfig = input.supervisionConfig;
+    if (supervisionConfig === undefined) return;
+    const now = (): Date => new Date();
+    const sinceLastEventMs = now().getTime() - lastEventAt.getTime();
+    const triggers = detectSupervisionTriggers(events, supervisionConfig, runStartedAt, now, sinceLastEventMs);
+    for (const trigger of triggers) {
+      if (firedSupervisionTriggers.has(trigger.kind)) continue;
+      firedSupervisionTriggers.add(trigger.kind);
+      // Recorded, not thrown (mirrors `guard`'s rule for stream-read failures):
+      // this callback is reachable from the background ticker's own bare
+      // `setTimeout` callback, which has no surrounding `try/catch` of its
+      // own — an uncaught throw there would be an unhandled exception in a
+      // timer callback, crashing the whole process rather than just this
+      // run. A future consumer reacting to a trigger (kill/inject/escalate,
+      // §7.6) must not be able to take the process down with it.
+      try {
+        deps.onSupervisionTrigger?.(trigger);
+      } catch (error) {
+        stderrLines.push(`[keryx] onSupervisionTrigger failed (ignored): ${describeError(error)}`);
+      }
+    }
+  };
+
+  // The background ticker: `no_progress` and `budget_threshold`'s elapsed-time
+  // half must fire even while the child stays completely silent, so they
+  // cannot depend on `onEvent` ever being called again — hence a timer
+  // independent of the stream, not another entry in the event-driven call site
+  // below. Started only when supervision is configured at all.
+  let supervisionTicker: { readonly cancel: () => void } | undefined;
+  if (input.supervisionConfig !== undefined) {
+    const tickMs = Math.max(
+      input.supervisionConfig.noProgressIntervalMs / SUPERVISION_TICK_DIVISOR,
+      SUPERVISION_TICK_FLOOR_MS,
+    );
+    supervisionTicker = startSupervisionTicker(tickMs, evaluateSupervision);
+  }
 
   const terminalSeen = deferred<Verdict>();
   let cancelSettle: (() => void) | undefined;
@@ -333,6 +407,11 @@ export async function superviseExternalRun(
         // Incremental, deliberately: the TUI and the supervision triggers are
         // defined over a live stream (§7.6).
         deps.onEvent?.(event);
+        // Updated BEFORE evaluating, so `sinceLastEventMs` reads ~0 for the
+        // event that just arrived — this call site can only ever report
+        // `no_progress` via the background ticker, never here.
+        lastEventAt = new Date();
+        evaluateSupervision();
         if (terminal === undefined && isTerminalEvent(event)) terminal = event;
       }
 
@@ -380,10 +459,14 @@ export async function superviseExternalRun(
   try {
     verdict = await Promise.race([drained, wall.promise, terminalSeen.promise]);
   } finally {
-    // Both timers are cleared on every path, including the clean one, so a fast
-    // run does not hold the event loop open for its full ceiling.
+    // All timers are cleared on every path, including the clean one, so a fast
+    // run does not hold the event loop open for its full ceiling. This is the
+    // ONE cleanup path for the supervision ticker too — extended here rather
+    // than given a second `finally`, so there is exactly one place that can
+    // leak a timer if it is ever forgotten.
     wall.cancel();
     cancelSettle?.();
+    supervisionTicker?.cancel();
   }
 
   const build = (exitCode: number, timedOut: boolean): SupervisedOutcome => ({
@@ -485,6 +568,53 @@ function afterMs<T>(ms: number, value: T): { readonly promise: Promise<T>; reado
   return {
     promise,
     cancel: () => {
+      if (handle !== undefined) clearTimeout(handle);
+    },
+  };
+}
+
+/**
+ * How many slices the configured `noProgressIntervalMs` is divided into to get
+ * the supervision ticker's tick interval. A quarter is coarse enough to avoid
+ * needless wakeups on a long interval, fine enough that a trigger fires close
+ * to its configured window rather than up to a whole window late.
+ */
+const SUPERVISION_TICK_DIVISOR = 4;
+
+/**
+ * Floor on the supervision ticker's tick interval, so a deliberately tiny
+ * `noProgressIntervalMs` in a test (mirroring this file's `timeoutMs: 25`-style
+ * small-real-value convention) cannot turn into a busy loop.
+ */
+const SUPERVISION_TICK_FLOOR_MS = 5;
+
+/**
+ * A REPEATING cancellable timer, for the one thing {@link afterMs} does not do.
+ *
+ * Reschedules itself from inside its own callback rather than using
+ * `setInterval`, so a slow `tick()` cannot cause overlapping ticks to queue up
+ * — the next tick is always scheduled `intervalMs` after the PREVIOUS ONE
+ * FINISHED, not on a fixed wall-clock cadence. `cancel()` is idempotent and,
+ * once called, guarantees no further `tick()` call, including one already
+ * in flight in the event queue when `cancel()` runs.
+ */
+function startSupervisionTicker(intervalMs: number, tick: () => void): { readonly cancel: () => void } {
+  let cancelled = false;
+  let handle: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleNext = (): void => {
+    if (cancelled) return;
+    handle = setTimeout(() => {
+      if (cancelled) return;
+      tick();
+      scheduleNext();
+    }, intervalMs);
+  };
+  scheduleNext();
+
+  return {
+    cancel: () => {
+      cancelled = true;
       if (handle !== undefined) clearTimeout(handle);
     },
   };

@@ -487,6 +487,162 @@ describe("onEvent fires incrementally", () => {
   });
 });
 
+describe("§7.6 supervision (AC12)", () => {
+  test("omitting supervisionConfig leaves a clean run's outcome byte-identical to before this feature existed", async () => {
+    // Repeats "a clean run > codex: the recorded transcript yields the
+    // canonical events in order" verbatim, as the explicit regression proof
+    // that NOT passing `supervisionConfig` changes nothing: no timer, no
+    // trigger, same events/exitCode/timedOut/killed as every caller that
+    // predates this field.
+    const fake = fakePort({ stdout: transcript("codex-cli/success.stdout.jsonl"), exitCode: 0 });
+    const fired: string[] = [];
+    const outcome = await superviseExternalRun(input(), {
+      spawn: fake.port,
+      codec: codexCliCodec,
+      onSupervisionTrigger: (t) => fired.push(t.kind),
+    });
+
+    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "usage", "child_finished"]);
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.timedOut).toBe(false);
+    expect(outcome.killed).toBe(false);
+    expect(fake.kills()).toBe(0);
+    // The point: a deps.onSupervisionTrigger callback IS provided, and it is
+    // still never called, because `input.supervisionConfig` was never set.
+    expect(fired).toEqual([]);
+  });
+
+  test("an event-driven trigger (phase_changed) fires live through a real run, proving the onEvent call site's wiring end to end", async () => {
+    const fake = fakePort({ stdout: transcript("codex-cli/success.stdout.jsonl"), exitCode: 0 });
+    const fired: string[] = [];
+    const outcome = await superviseExternalRun(
+      input({
+        supervisionConfig: {
+          budgetThresholdFraction: 0.99,
+          noProgressIntervalMs: 60_000,
+          declaredScopePath: "/tmp/worktree",
+          timeoutMs: 60_000,
+        },
+      }),
+      { spawn: fake.port, codec: codexCliCodec, onSupervisionTrigger: (t) => fired.push(t.kind) },
+    );
+
+    // The fixture's only assistant text is "ok" — not a question, and there is
+    // no tool_call in this transcript — so phase_changed (from the first
+    // assistant_text) is the only trigger the live stream can produce here.
+    expect(fired).toEqual(["phase_changed"]);
+    expect(outcome.exitCode).toBe(0);
+  });
+
+  test("no_progress fires exactly once against the live background timer, even while the run stays silent well past the interval", async () => {
+    // Only the fixture's first line (child_started) is emitted, then the port
+    // holds — no further canonical event ever arrives, so only the background
+    // ticker (not the event-driven call site) can produce a trigger here.
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl").slice(0, 1),
+      holdStdout: true,
+      holdExit: true,
+    });
+    const fired: string[] = [];
+    const run = superviseExternalRun(
+      input({
+        timeoutMs: 5_000,
+        supervisionConfig: {
+          // High enough that the elapsed-time half of budget_threshold cannot
+          // fire during this test's short wait.
+          budgetThresholdFraction: 0.99,
+          noProgressIntervalMs: 20,
+          declaredScopePath: "/tmp/worktree",
+          timeoutMs: 5_000,
+        },
+      }),
+      { spawn: fake.port, codec: codexCliCodec, onSupervisionTrigger: (t) => fired.push(t.kind) },
+    );
+
+    // Several ticks' worth of silence past the 20ms interval (tick interval is
+    // floored/quartered internally; 120ms is comfortably past multiple ticks).
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(fired.filter((kind) => kind === "no_progress")).toHaveLength(1);
+
+    fake.release();
+    await run;
+  });
+
+  test("the background ticker is cancelled when the run ends — no further onSupervisionTrigger calls after resolution", async () => {
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl").slice(0, 1),
+      holdStdout: true,
+      holdExit: true,
+    });
+    const fired: string[] = [];
+    const outcome = await superviseExternalRun(
+      input({
+        timeoutMs: 30,
+        killGraceMs: 10,
+        supervisionConfig: {
+          budgetThresholdFraction: 0.99,
+          noProgressIntervalMs: 10,
+          declaredScopePath: "/tmp/worktree",
+          timeoutMs: 30,
+        },
+      }),
+      { spawn: fake.port, codec: codexCliCodec, onSupervisionTrigger: (t) => fired.push(t.kind) },
+    );
+
+    // The run has ended (timed out — the port never drains and never exits).
+    expect(outcome.timedOut).toBe(true);
+    const countAtResolution = fired.length;
+
+    // Wait well past several more would-be ticks. If the ticker were not
+    // cancelled in the same `finally` as `wall`/`cancelSettle`, this would
+    // observe more `no_progress` firings after the run already resolved.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(fired.length).toBe(countAtResolution);
+
+    fake.release();
+  });
+
+  test("a throwing onSupervisionTrigger is recorded, not thrown — including when the ticker (not an event) is what fires it", async () => {
+    // The fixture holds after its first line, so only the background ticker
+    // (never the event-driven call site) can produce the no_progress trigger
+    // that exercises this — a throw reaching the ticker's own bare `setTimeout`
+    // callback unprotected would be an unhandled exception in a timer,
+    // crashing the whole process rather than just this run (review finding,
+    // fix round). If `superviseExternalRun` below resolves at all rather than
+    // the test process dying, the protection is working.
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl").slice(0, 1),
+      holdStdout: true,
+      holdExit: true,
+    });
+    const outcome = await superviseExternalRun(
+      input({
+        timeoutMs: 30,
+        killGraceMs: 10,
+        supervisionConfig: {
+          budgetThresholdFraction: 0.99,
+          noProgressIntervalMs: 10,
+          declaredScopePath: "/tmp/worktree",
+          timeoutMs: 30,
+        },
+      }),
+      {
+        spawn: fake.port,
+        codec: codexCliCodec,
+        onSupervisionTrigger: () => {
+          throw new Error("boom from a supervision-trigger reaction");
+        },
+      },
+    );
+
+    expect(outcome.timedOut).toBe(true);
+    expect(outcome.stderr).toContain("onSupervisionTrigger failed (ignored)");
+    expect(outcome.stderr).toContain("boom from a supervision-trigger reaction");
+
+    fake.release();
+  });
+});
+
 describe("toLineStream", () => {
   test("reassembles a line split across chunk boundaries", async () => {
     // `claude`'s multi-KB `system/init` spans chunks by construction, so this is
