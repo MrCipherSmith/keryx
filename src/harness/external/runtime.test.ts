@@ -192,7 +192,12 @@ describe("detection", () => {
         onWarning: (w) => warnings.push(w),
       }),
     );
-    expect(result.status).toBe("Completed");
+    // Detection only warns — it never denies the run. This fixture's plain-text
+    // answer fails AC13's structured-result validation (proven elsewhere below),
+    // which is a separate concern from detection; what matters here is that the
+    // run was not refused for being out of range.
+    expect(result.status).not.toBe("Denied");
+    expect(result.partial).toBe("ok");
     expect(warnings.join(" ")).toContain("outside the range");
   });
 
@@ -201,7 +206,10 @@ describe("detection", () => {
       baseInput(),
       baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
     );
-    expect(result.status).toBe("Completed");
+    // Not probed never denies the run; this fixture's plain-text answer then
+    // fails AC13's structured-result validation (proven elsewhere below).
+    expect(result.status).not.toBe("Denied");
+    expect(result.partial).toBe("ok");
   });
 });
 
@@ -216,25 +224,37 @@ describe("prompt assembly refuses rather than truncating the task", () => {
   test("a truncated working diff warns but still runs", async () => {
     const warnings: string[] = [];
     const result = await runExternalChild(
-      baseInput({ workingDiff: `+${"x".repeat(5000)}\n`.repeat(20), maxPromptBytes: 4096 }),
+      // 8192 leaves room for the directive, the now-embedded required-result
+      // schema and the task (~6.3KB together) plus a slice of the diff — enough
+      // to still force truncation of this 100KB diff without also tripping the
+      // head's own over-ceiling refusal.
+      baseInput({ workingDiff: `+${"x".repeat(5000)}\n`.repeat(20), maxPromptBytes: 8192 }),
       baseDeps({
         spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port,
         onWarning: (w) => warnings.push(w),
       }),
     );
-    expect(result.status).toBe("Completed");
+    // Truncation only warns — it never denies the run. This fixture's plain-text
+    // answer then fails AC13's structured-result validation (proven elsewhere).
+    expect(result.status).not.toBe("Denied");
+    expect(result.partial).toBe("ok");
     expect(warnings.join(" ")).toContain("truncated");
   });
 });
 
 describe("a successful run", () => {
-  test("returns Completed with the agent's text, its resume handle and the argv", async () => {
+  test("preserves the agent's resume handle and argv even when structured validation fails", async () => {
     const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
     const result = await runExternalChild(baseInput(), baseDeps({ spawn: sp.port }));
 
-    expect(result.status).toBe("Completed");
-    expect(result.isError).toBe(false);
-    expect(result.output).toBe("ok");
+    // This fixture's plain-text answer ("ok") is not valid JSON, so AC13 turns
+    // it into a named Error rather than a silent "Completed" — see "structured
+    // result validation (AC13)" below for the Completed/invalid-JSON/
+    // invalid-schema matrix. What this test still pins: the run's identifying
+    // metadata is not lost when validation fails.
+    expect(result.status).toBe("Error");
+    expect(result.isError).toBe(true);
+    expect(result.partial).toBe("ok");
     // codex GENERATES its own handle; without it the run cannot be resumed at all.
     expect(result.sessionRef).toBe("01a01b40-ddbd-75e3-9204-ed00ca6e3a86");
     expect(result.argv?.[0]).toBe("codex");
@@ -296,13 +316,18 @@ describe("failure is named, never substituted", () => {
   });
 
   test("a successful run whose answer contains the word `error` is NOT a failure", async () => {
-    // The classifier trap: the model's own prose is not evidence about the process.
+    // The classifier trap: the model's own prose is not evidence about the
+    // process. `classifyFailure` must return null here — proven by the status
+    // being an AC13 structured-validation Error (this fixture's prose is not
+    // JSON), rather than a Denied/Error carrying `classifyFailure`'s own cause
+    // text, which is what a fooled classifier would have produced instead.
     const result = await runExternalChild(
       baseInput(),
       baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "error-word.stdout.jsonl")).port }),
     );
-    expect(result.status).toBe("Completed");
-    expect(result.output).toContain("error: nothing is actually wrong");
+    expect(result.status).toBe("Error");
+    expect(result.output).toContain("not valid JSON");
+    expect(result.partial).toContain("error: nothing is actually wrong");
   });
 
   test("an empty transcript is an Error, not a silent success", async () => {
@@ -328,22 +353,27 @@ describe("regressions found by the live smoke (T19)", () => {
     // Measured against a real `claude -p`: `result.result` repeats the text the
     // `assistant` blocks already streamed, so appending both returned "ok\nok"
     // for a one-word reply — and would duplicate an entire report for a real one.
+    // The collected text itself is asserted via `partial`: AC13 now turns this
+    // plain-text fixture into a structured-validation Error, which is a
+    // separate concern from what text got collected.
     const result = await runExternalChild(
       baseInput({ runtime: CLAUDE_RT }),
       baseDeps({ spawn: fakeSpawn(transcript("claude-cli", "success.stdout.jsonl")).port }),
     );
-    expect(result.status).toBe("Completed");
-    expect(result.output).toBe("ok");
+    expect(result.status).toBe("Error");
+    expect(result.partial).toBe("ok");
   });
 
   test("codex, whose terminal event carries no text, still reports the assistant message", async () => {
     // The other half of the same rule: preferring the terminal text must not
-    // lose the answer for an agent that puts it only in the stream.
+    // lose the answer for an agent that puts it only in the stream. The
+    // collected text survives on `partial` once AC13's structured-result
+    // validation turns this plain-text fixture into an Error.
     const result = await runExternalChild(
       baseInput(),
       baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
     );
-    expect(result.output).toBe("ok");
+    expect(result.partial).toBe("ok");
   });
 
   test("cost survives the terminal line that also carries it", async () => {
@@ -370,7 +400,9 @@ describe("regressions found by the live smoke (T19)", () => {
   test("a healthy run scores zero parse skips for both agents", async () => {
     // The codec's recogniser must reach the supervisor, or `turn.started`
     // (codex) and `rate_limit_event` (claude) each cost a phantom skip and the
-    // version-drift signal is noise at rest.
+    // version-drift signal is noise at rest. `skippedLines` is a property of
+    // parsing the transcript and survives AC13's structured-result validation
+    // (a separate, later concern) unchanged.
     for (const [runtime, fixture] of [
       [EXTERNAL, "codex-cli/success.stdout.jsonl"],
       [CLAUDE_RT, "claude-cli/success.stdout.jsonl"],
@@ -380,7 +412,7 @@ describe("regressions found by the live smoke (T19)", () => {
         baseInput({ runtime }),
         baseDeps({ spawn: fakeSpawn(transcript(agent, name)).port }),
       );
-      expect(result.status).toBe("Completed");
+      expect(result.status).not.toBe("Denied");
       expect(result.skippedLines).toBe(0);
     }
   });
@@ -418,7 +450,10 @@ describe("steerable runs (the stdin route)", () => {
     const input = baseInput({ runtime: CLAUDE, steerable: true, sessionId: "9a3e7c11-0b52-4d68-a7f3-6c1e94b25d07" });
     const result = await runExternalChild(input, baseDeps({ spawn: sp.port }));
 
-    expect(result.status).toBe("Completed");
+    // This fixture's plain-text answer ("ok") fails AC13's structured-result
+    // validation, which is a separate concern from the argv/stdin shape this
+    // test targets — it only asserts the run was not denied outright.
+    expect(result.status).not.toBe("Denied");
     expect(sp.calls[0]?.opts.stdin).toBe("pipe");
     expect(sp.calls[0]?.argv).toContain("--input-format");
     // Nothing positional may trail the flags — the prompt arrives on stdin.
@@ -439,7 +474,10 @@ describe("steerable runs (the stdin route)", () => {
     // request degrades rather than failing.
     const sp = recordingSpawn(transcript("codex-cli", "success.stdout.jsonl"));
     const result = await runExternalChild(baseInput({ steerable: true }), baseDeps({ spawn: sp.port }));
-    expect(result.status).toBe("Completed");
+    // This fixture's plain-text answer fails AC13's structured-result
+    // validation, a separate concern from the one-shot-shape degrade this test
+    // targets — it only asserts the run was not denied outright.
+    expect(result.status).not.toBe("Denied");
     expect(sp.calls[0]?.opts.stdin).toBe("ignore");
     expect(sp.calls[0]?.argv).not.toContain("--input-format");
   });
@@ -503,6 +541,129 @@ describe("the worktree is removed on every path", () => {
       baseInput(),
       baseDeps({ worktree: port, spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
     );
+    // The real result here is an AC13 structured-validation Error (this
+    // fixture's plain text is not valid JSON) — the failing `remove` must not
+    // turn that into something else, nor mask it back into a false success.
+    expect(result.status).toBe("Error");
+    expect(result.partial).toBe("ok");
+  });
+});
+
+describe("structured result validation (AC13)", () => {
+  // A minimal, schema-valid `subagent-result` document. Not a recorded fixture:
+  // these tests exercise the validation wiring itself, not a real CLI's output
+  // shape (that is what `fixtures/external/` and AC16 are for).
+  const VALID_RESULT = {
+    contract_version: "1.0.0",
+    run_id: "run-1",
+    dispatch_id: "dispatch-1",
+    status: "DONE",
+    summary: "the investigation is done",
+    acceptance: [],
+    artifacts: [],
+    changed_files: [],
+    findings: [],
+    questions: [],
+    errors: [],
+    metrics: {},
+    timestamp_utc: "2026-08-19T00:00:00.000Z",
+  };
+
+  // A codex transcript carrying an arbitrary final `agent_message` text —
+  // mirrors the shape of `fixtures/external/codex-cli/success.stdout.jsonl`
+  // (thread.started / turn.started / item.completed / turn.completed) with the
+  // text swapped for whatever this test needs to validate.
+  function codexTranscript(text: string): string[] {
+    return [
+      JSON.stringify({ type: "thread.started", thread_id: "test-thread-id" }),
+      JSON.stringify({ type: "turn.started" }),
+      JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text } }),
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }),
+    ];
+  }
+
+  test("a schema-valid structured result is Completed", async () => {
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(codexTranscript(JSON.stringify(VALID_RESULT))).port }),
+    );
     expect(result.status).toBe("Completed");
+    expect(result.isError).toBe(false);
+    expect(JSON.parse(result.output)).toEqual(VALID_RESULT);
+  });
+
+  test("syntactically valid JSON missing required subagent-result fields is Error, not a silent downgrade", async () => {
+    // Valid JSON, but missing `status`, `acceptance`, etc. — the schema, not the
+    // parser, is what must catch this.
+    const incomplete = { contract_version: "1.0.0", run_id: "run-1", summary: "partial" };
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(codexTranscript(JSON.stringify(incomplete))).port }),
+    );
+    expect(result.status).toBe("Error");
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("subagent-result schema validation");
+    // The original text is not lost — it moves to `partial`.
+    expect(result.partial).toBe(JSON.stringify(incomplete));
+  });
+
+  test("plain prose that is not JSON at all is Error, naming a parse failure", async () => {
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(codexTranscript("Here is my report: everything looks fine.")).port }),
+    );
+    expect(result.status).toBe("Error");
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("not valid JSON");
+    expect(result.partial).toBe("Here is my report: everything looks fine.");
+  });
+
+  test("resultSchemaPath is wired to a real file containing the loaded subagent-result schema", async () => {
+    const sp = fakeSpawn(codexTranscript(JSON.stringify(VALID_RESULT)));
+    await runExternalChild(baseInput(), baseDeps({ spawn: sp.port }));
+
+    const argv = sp.calls[0]?.argv ?? [];
+    const flagIndex = argv.indexOf("--output-schema");
+    expect(flagIndex).toBeGreaterThanOrEqual(0);
+    const schemaPathArg = argv[flagIndex + 1];
+    expect(schemaPathArg).toBeDefined();
+
+    // The file must have existed AT ARGV-BUILD TIME (this reads it after the run,
+    // by which point the runtime's cleanup may already have removed it — so this
+    // assertion only holds if the wiring is real: the codec receives a genuine
+    // path, not an empty placeholder. Re-run with a spy that reads the file
+    // synchronously inside the spawn call, before cleanup can run.
+    let observedSchema: unknown;
+    const readingSpawn: ExternalSpawnPort = {
+      spawn(spawnArgv, opts) {
+        const idx = spawnArgv.indexOf("--output-schema");
+        const schemaPath = spawnArgv[idx + 1];
+        if (schemaPath !== undefined) {
+          observedSchema = JSON.parse(readFileSync(schemaPath, "utf8"));
+        }
+        return sp.port.spawn(spawnArgv, opts);
+      },
+    };
+    await runExternalChild(baseInput(), baseDeps({ spawn: readingSpawn }));
+
+    const realSchema = JSON.parse(
+      readFileSync(fileURLToPath(new URL("../../gdskills/contracts/subagent-result.schema.json", import.meta.url)), "utf8"),
+    );
+    expect(observedSchema).toEqual(realSchema);
+  });
+
+  test("cause !== null paths (Denied/Error via classifyFailure) are unaffected by structured validation", async () => {
+    // A Timeout/Denied/Error outcome never reaches the validation step: it is
+    // gated on `built.status === "Completed"`, so this must be byte-identical to
+    // pre-AC13 behaviour.
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "not-logged-in.stdout.jsonl"), 1).port }),
+    );
+    expect(result.status).toBe("Denied");
+    expect(result.isError).toBe(true);
+    // Never rewritten into a JSON-parse/schema-validation message.
+    expect(result.output).not.toContain("subagent-result schema validation");
+    expect(result.output).not.toContain("not valid JSON");
   });
 });

@@ -691,3 +691,71 @@ places.
 - 2026-08-20T05:26:16.075Z - task-done: T2: Implement per plan
 - 2026-08-20T05:26:16.162Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-20T05:27:53.565Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-20T06:34:57.869Z - task-added: T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts
+
+## 2026-08-20 — T20: AC13 closed (picked up cold from the handoff, per operator's explicit sequencing)
+
+Read the handoff cold as intended. Before implementing, investigated (per
+operator instruction, "не минимум, а нормально") whether Claude Code's local
+session-transcript file (~/.claude/projects/...) could serve AC12/AC13
+better than the existing stdout stream-json parsing — verdict: no, it's an
+undocumented, per-vendor, filesystem-path-guessing mechanism incompatible
+with the disposable-worktree design and codex's architecture (no equivalent
+there), and it solves neither AC's actual gap (AC13 is a one-field wiring
+bug; AC12 already has a live event stream, just no consumer). Not pursued;
+recorded as a rejected option, not a silent omission.
+
+Implemented AC13 as "minimum + prompt" (operator-approved scope, deliberately
+short of AC13's own "maximum" option — a caller-supplied custom result
+schema — which answers an adjacent, unasked question per the scoping
+analysis):
+- `runtime.ts`: new `prepareResultSchema()` loads `subagent-result` via
+  `src/gdskills/contracts.ts`'s existing `loadSchema`, stages it to a temp
+  file (mirrors the `tls-ca.ts`/`spawn-subagent-tool.ts` mkdtemp idiom),
+  fail-closed on any load/write error (refuses the whole run before any
+  worktree/process exists, not a silent skip). `resultSchemaPath` now
+  actually reaches `runInput`, so both codecs' pre-existing, previously-dead
+  `--output-schema`/`--json-schema` argv wiring is exercised for the first
+  time. After `buildOutcome` returns `"Completed"`, its `output` is now
+  `JSON.parse`d and validated against the schema (`validateJson`); a parse
+  failure or any validation error remaps the result to `"Error"` via the new
+  `structuredResultError()`, preserving argv/worktreePath/skippedLines/
+  sessionRef/costUnits and moving the original text to `partial` — the
+  literal AC13 fix.
+- `prompt.ts`: new optional `resultSchemaText` field; when present, a new
+  "# Required output schema" section is embedded in the prompt (between the
+  runtime directive and the task), participating in the SAME non-cuttable
+  byte floor as the directive/task — only the working diff remains cuttable.
+  When absent, output is byte-identical to before (backward compatible).
+  This is the "+prompt" half of the operator-approved scope: the external
+  agent now actually sees the shape it's asked to fill in, instead of being
+  told only "in the requested output schema" with no specifics.
+- Verified independently (not just trusting the implementer's own report,
+  per this session's established practice): re-ran `bun run typecheck` and
+  the full `bun test` suite myself directly — 4802/4803 pass both times,
+  the sole failure both runs was the handoff-flagged pre-existing
+  `src/sac/fwk-service.test.ts` flake (confirmed passes 24/24 in isolation),
+  not a regression.
+- review-logic (2 parallel code-reviewer agents, native review-*/spawn-
+  subagent agent types unavailable in this runtime): zero findings — traced
+  fail-closed ordering, validation scoping to the Completed path only, every
+  exit-path cleanup (schema temp dir vs. worktree, two nested finally
+  blocks), field preservation, and prompt byte-budget arithmetic in depth.
+- review-style: one real minor finding — `structuredResultError()`
+  hand-re-listed `ExternalChildOutcome`'s optional fields instead of
+  spreading `built`'s remainder, a maintenance trap where a future field
+  addition would silently drop on exactly the AC13 error path this function
+  exists to make un-silent. Fixed directly (spread + destructure the fields
+  to override), re-verified: typecheck clean, targeted tests 99/99, full
+  suite re-run clean (same known flake, not a new one).
+- 11 pre-existing `runtime.test.ts` tests + 3 in `run-external-factory.test.ts`
+  had `"Completed"` expectations against fixtures whose recorded final text
+  is plain prose — now correctly `"Error"` under AC13 (this is the fix
+  working as intended, not a regression); each updated assertion verified to
+  still cover what it originally targeted (worktree cleanup, env stripping,
+  argv shape, event streaming, cost/session-ref preservation, etc.).
+
+**AC13 confirmed.** AC5 and AC12 remain open per the handoff — not touched
+this task, by design (operator is sequencing them one at a time).
+- 2026-08-20T07:04:50.713Z - task-done: T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts
+- 2026-08-20T07:04:57.814Z - ac-confirmed: AC13: runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified).

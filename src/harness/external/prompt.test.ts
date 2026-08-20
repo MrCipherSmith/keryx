@@ -283,6 +283,59 @@ describe("a ceiling too small for the directive and the task is refused, not tru
   });
 });
 
+describe("the required output schema (resultSchemaText)", () => {
+  const SCHEMA_TEXT = JSON.stringify({ type: "object", required: ["status"] }, null, 2);
+
+  test("appears after the directive and before the task, with the schema text intact", () => {
+    const result = okPrompt(buildExternalPrompt(input({ resultSchemaText: SCHEMA_TEXT })));
+    expect(result.prompt).toContain("# Required output schema");
+    expect(result.prompt).toContain("Your final message must be valid JSON matching this schema.");
+    expect(result.prompt).toContain(SCHEMA_TEXT);
+
+    const directiveAt = result.prompt.indexOf(EXTERNAL_RUNTIME_DIRECTIVE);
+    const schemaHeadingAt = result.prompt.indexOf("# Required output schema");
+    const taskAt = result.prompt.indexOf("# Task");
+    expect(directiveAt).toBe(0);
+    expect(schemaHeadingAt).toBeGreaterThan(directiveAt);
+    expect(taskAt).toBeGreaterThan(schemaHeadingAt);
+  });
+
+  test("is omitted entirely, and the prompt is byte-identical to before, when resultSchemaText is not passed", () => {
+    const withoutSchema = okPrompt(buildExternalPrompt(input()));
+    expect(withoutSchema.prompt).not.toContain("# Required output schema");
+
+    // Regression proof: adding the optional field must not perturb the output
+    // of any caller that never passes it.
+    const other = okPrompt(buildExternalPrompt(input({ workingDiff: SMALL_DIFF })));
+    expect(other.prompt).not.toContain("# Required output schema");
+  });
+
+  test("counts toward the non-cuttable byte floor — the schema section is never what gets cut", () => {
+    const bigDiff = `${DIFF_LINES.join("\n")}\n${"+ a line of context that repeats\n".repeat(400)}`;
+    const ceiling = bytes(EXTERNAL_RUNTIME_DIRECTIVE) + bytes(SCHEMA_TEXT) + 900;
+    const result = okPrompt(
+      buildExternalPrompt(input({ workingDiff: bigDiff, resultSchemaText: SCHEMA_TEXT, maxPromptBytes: ceiling })),
+    );
+    // The diff is cut (as it always is on overflow) while the schema survives
+    // whole — it is never truncated or dropped.
+    expect(result.truncated).toBe(true);
+    expect(result.prompt).toContain(SCHEMA_TEXT);
+    expect(bytes(result.prompt)).toBeLessThanOrEqual(ceiling);
+  });
+
+  test("a ceiling that fits the directive and task alone, but not also the schema, is refused rather than emitting a truncated schema", () => {
+    const headOnly = okPrompt(buildExternalPrompt(input()));
+    const tooSmallForSchema = bytes(headOnly.prompt) + 10;
+    const result = buildExternalPrompt(
+      input({ resultSchemaText: SCHEMA_TEXT, maxPromptBytes: tooSmallForSchema }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.code).toBe("over-ceiling");
+    expect(result.requiredBytes).toBeGreaterThan(tooSmallForSchema);
+  });
+});
+
 describe("purity", () => {
   test("the same input yields the same prompt", () => {
     const one = buildExternalPrompt(input({ workingDiff: SMALL_DIFF }));

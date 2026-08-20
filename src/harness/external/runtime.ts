@@ -22,6 +22,10 @@
 // The worktree is removed on EVERY terminal path, including thrown errors. A
 // leaked worktree is a leaked escape hatch: containment (D-08) rests on that
 // directory being disposable, not on the tool roster being complete.
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { loadSchema, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
 import { validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
@@ -155,6 +159,65 @@ function refuse(status: ExternalCompletionStatus, output: string): ExternalChild
   return { status, output, isError: true };
 }
 
+/** The `subagent-result` schema, loaded once and staged to a temp file for the codec's `--output-schema`/`--json-schema` flag. */
+interface ResultSchemaPrep {
+  readonly schema: Awaited<ReturnType<typeof loadSchema>>;
+  readonly schemaText: string;
+  readonly schemaPath: string;
+  readonly schemaDir: string;
+}
+
+/**
+ * Load `subagent-result` and stage it to a fresh temp dir (mirrors
+ * `tls-ca.ts`'s `createRunCa` idiom: `mkdtemp` then `writeFile`, caller disposes
+ * later).
+ *
+ * Fail-closed: a load or write failure here is a SETUP failure, not something to
+ * silently skip — skipping it would let the run proceed unguarded, which is
+ * exactly the silent downgrade AC13 names, just moved one step earlier.
+ */
+async function prepareResultSchema(): Promise<
+  ({ readonly ok: true } & ResultSchemaPrep) | { readonly ok: false; readonly reason: string }
+> {
+  let schemaDir: string | undefined;
+  try {
+    const schema = await loadSchema("subagent-result");
+    const schemaText = JSON.stringify(schema, null, 2);
+    schemaDir = await mkdtemp(path.join(tmpdir(), "keryx-external-result-schema-"));
+    const schemaPath = path.join(schemaDir, "subagent-result.schema.json");
+    await writeFile(schemaPath, schemaText, "utf8");
+    return { ok: true, schema, schemaText, schemaPath, schemaDir };
+  } catch (error) {
+    if (schemaDir !== undefined) {
+      await rm(schemaDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `failed to prepare the required result schema for validation: ${message}` };
+  }
+}
+
+/**
+ * Override a `"Completed"` outcome with a named `"Error"` when its output fails
+ * `subagent-result` validation (AC13): structural fields survive, the original
+ * text moves to `partial` rather than being lost, and the status can never read
+ * as a silent success.
+ */
+function structuredResultError(reason: string, built: ExternalChildOutcome): ExternalChildOutcome {
+  // Spread whatever `buildOutcome` already attached (argv, worktreePath,
+  // skippedLines, sessionRef, costUnits, ...) instead of re-listing each
+  // optional field by hand — a field `ExternalChildOutcome` gains later must
+  // not have to be remembered here too, or it silently drops on exactly the
+  // AC13 error path this function exists to make un-silent.
+  const { status: _status, isError: _isError, output, ...rest } = built;
+  return {
+    ...rest,
+    status: "Error",
+    output: reason,
+    isError: true,
+    ...(output.length > 0 ? { partial: output } : {}),
+  };
+}
+
 /**
  * Run one external child end to end.
  *
@@ -207,90 +270,134 @@ export async function runExternalChild(
     }
   }
 
-  const assembled = buildExternalPrompt({
-    taskTitle: input.taskTitle,
-    taskDescription: input.taskDescription,
-    acceptanceCriteria: input.acceptanceCriteria,
-    ...(input.workingDiff === undefined ? {} : { workingDiff: input.workingDiff }),
-    maxPromptBytes: input.maxPromptBytes,
-  });
-  if (!assembled.ok) {
-    // The prompt module refuses rather than cutting the directive or the task.
-    // Spawning a child handed half a task is worse than not spawning one.
-    return refuse("Error", assembled.reason);
-  }
-  if (assembled.truncated) {
-    deps.onWarning?.(
-      `working diff truncated: ${assembled.droppedBytes} bytes dropped to fit the ${input.maxPromptBytes}-byte prompt ceiling`,
-    );
-  }
+  // R22/AC13: request a structured, schema-validated final message. Loaded and
+  // staged BEFORE prompt assembly so the prompt can embed it, and fail-closed —
+  // a load/write failure here is a setup failure, not something to skip past,
+  // since skipping it would let the run proceed unguarded (the very silent
+  // downgrade AC13 forbids, just relocated one step earlier).
+  const schemaPrep = await prepareResultSchema();
+  if (!schemaPrep.ok) return refuse("Error", schemaPrep.reason);
+  const { schema: resultSchema, schemaText: resultSchemaText, schemaPath: resultSchemaPath, schemaDir } = schemaPrep;
 
-  const created = await deps.worktree.create(input.worktreeId);
   try {
-    const runInput = {
-      prompt: assembled.prompt,
-      cwd: created.path,
-      sandbox,
-      ...(input.runtime.model === undefined || input.runtime.model === null ? {} : { model: input.runtime.model }),
-      ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
-      ...(input.runtime.maxCostUnits === undefined || input.runtime.maxCostUnits === null
-        ? {}
-        : { maxCostUnits: input.runtime.maxCostUnits }),
-    };
+    const assembled = buildExternalPrompt({
+      taskTitle: input.taskTitle,
+      taskDescription: input.taskDescription,
+      acceptanceCriteria: input.acceptanceCriteria,
+      ...(input.workingDiff === undefined ? {} : { workingDiff: input.workingDiff }),
+      resultSchemaText,
+      maxPromptBytes: input.maxPromptBytes,
+    });
+    if (!assembled.ok) {
+      // The prompt module refuses rather than cutting the directive or the task.
+      // Spawning a child handed half a task is worse than not spawning one.
+      return refuse("Error", assembled.reason);
+    }
+    if (assembled.truncated) {
+      deps.onWarning?.(
+        `working diff truncated: ${assembled.droppedBytes} bytes dropped to fit the ${input.maxPromptBytes}-byte prompt ceiling`,
+      );
+    }
 
-    // Steerable when the caller asked AND this agent has a streaming shape.
-    // The two argv forms are mutually exclusive: a steerable run takes NO
-    // positional prompt, because `claude -p` given both `--input-format
-    // stream-json` and a positional prompt ignores the prompt and exits 0 with
-    // zero output — a silent no-op wearing a success code. So the decision is
-    // made HERE, once, before the process exists, and cannot be revisited: a
-    // one-shot run can never be sent a later message (§5.2, §7.5).
-    const streaming =
-      input.steerable === true && codec.buildStreamingArgv !== undefined && codec.encodeStdinMessage !== undefined;
-    const argv = streaming
-      ? (codec.buildStreamingArgv as NonNullable<typeof codec.buildStreamingArgv>)(runInput)
-      : codec.buildArgv(runInput);
-
-    const outcome = await superviseExternalRun(
-      {
-        argv,
-        cwd: created.path,
-        env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
+    const created = await deps.worktree.create(input.worktreeId);
+    try {
+      const runInput = {
         prompt: assembled.prompt,
-        timeoutMs: input.timeoutMs,
-        // `"ignore"` otherwise, never inherited: a CLI that inherits an open
-        // stdin announces it is reading from it and waits forever.
-        stdin: streaming ? "pipe" : "ignore",
-        ...(streaming
-          ? {
-              initialStdin: [
-                (codec.encodeStdinMessage as NonNullable<typeof codec.encodeStdinMessage>)(assembled.prompt),
-              ],
-            }
-          : {}),
-      },
-      {
-        spawn: deps.spawn,
-        codec,
-        // Without this the skip counter conflates "never seen this line" with
-        // "deliberately unmapped", and only the first is version drift. The
-        // T19 smoke scored one phantom skip on every healthy run for want of
-        // it — a drift signal that is noise at rest is not a signal.
-        ...(codec.isRecognisedLine === undefined
+        cwd: created.path,
+        sandbox,
+        ...(input.runtime.model === undefined || input.runtime.model === null ? {} : { model: input.runtime.model }),
+        ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+        ...(input.runtime.maxCostUnits === undefined || input.runtime.maxCostUnits === null
           ? {}
-          : { isRecognisedLine: codec.isRecognisedLine.bind(codec) }),
-        ...(deps.onEvent === undefined ? {} : { onEvent: deps.onEvent }),
-        ...(deps.onSpawned === undefined ? {} : { onSpawned: deps.onSpawned }),
-      },
-    );
+          : { maxCostUnits: input.runtime.maxCostUnits }),
+        resultSchemaPath,
+      };
 
-    const cause = codec.classifyFailure(outcome);
-    return buildOutcome({ cause, outcome, argv, worktreePath: created.path });
+      // Steerable when the caller asked AND this agent has a streaming shape.
+      // The two argv forms are mutually exclusive: a steerable run takes NO
+      // positional prompt, because `claude -p` given both `--input-format
+      // stream-json` and a positional prompt ignores the prompt and exits 0 with
+      // zero output — a silent no-op wearing a success code. So the decision is
+      // made HERE, once, before the process exists, and cannot be revisited: a
+      // one-shot run can never be sent a later message (§5.2, §7.5).
+      const streaming =
+        input.steerable === true && codec.buildStreamingArgv !== undefined && codec.encodeStdinMessage !== undefined;
+      const argv = streaming
+        ? (codec.buildStreamingArgv as NonNullable<typeof codec.buildStreamingArgv>)(runInput)
+        : codec.buildArgv(runInput);
+
+      const outcome = await superviseExternalRun(
+        {
+          argv,
+          cwd: created.path,
+          env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
+          prompt: assembled.prompt,
+          timeoutMs: input.timeoutMs,
+          // `"ignore"` otherwise, never inherited: a CLI that inherits an open
+          // stdin announces it is reading from it and waits forever.
+          stdin: streaming ? "pipe" : "ignore",
+          ...(streaming
+            ? {
+                initialStdin: [
+                  (codec.encodeStdinMessage as NonNullable<typeof codec.encodeStdinMessage>)(assembled.prompt),
+                ],
+              }
+            : {}),
+        },
+        {
+          spawn: deps.spawn,
+          codec,
+          // Without this the skip counter conflates "never seen this line" with
+          // "deliberately unmapped", and only the first is version drift. The
+          // T19 smoke scored one phantom skip on every healthy run for want of
+          // it — a drift signal that is noise at rest is not a signal.
+          ...(codec.isRecognisedLine === undefined
+            ? {}
+            : { isRecognisedLine: codec.isRecognisedLine.bind(codec) }),
+          ...(deps.onEvent === undefined ? {} : { onEvent: deps.onEvent }),
+          ...(deps.onSpawned === undefined ? {} : { onSpawned: deps.onSpawned }),
+        },
+      );
+
+      const cause = codec.classifyFailure(outcome);
+      const built = buildOutcome({ cause, outcome, argv, worktreePath: created.path });
+      if (built.status !== "Completed") return built;
+
+      // AC13: a "Completed" run's final message must itself be a valid
+      // `subagent-result` document. A parse failure or a schema violation is an
+      // Error, never a silent downgrade to free text — the original text is
+      // preserved on `partial` rather than lost.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(built.output);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return structuredResultError(`structured result is not valid JSON: ${message}`, built);
+      }
+      const validationErrors = await validateJson(parsed, resultSchema);
+      if (validationErrors.length > 0) {
+        const detail = validationErrors
+          .slice(0, 3)
+          .map((e) => `${e.path}: ${e.message}`)
+          .join("; ");
+        return structuredResultError(
+          `structured result failed subagent-result schema validation: ${detail}`,
+          built,
+        );
+      }
+      return built;
+    } finally {
+      // Unconditional. Containment rests on this directory being disposable, so a
+      // leaked worktree is a leaked escape hatch — and the `remove` itself must not
+      // mask the run's real result, hence the swallowed rejection.
+      await deps.worktree.remove(input.worktreeId).catch(() => undefined);
+    }
   } finally {
-    // Unconditional. Containment rests on this directory being disposable, so a
-    // leaked worktree is a leaked escape hatch — and the `remove` itself must not
-    // mask the run's real result, hence the swallowed rejection.
-    await deps.worktree.remove(input.worktreeId).catch(() => undefined);
+    // Same swallowed-rejection discipline as the worktree removal above: the
+    // schema temp file is disposable and its cleanup must never mask the run's
+    // real result, on any exit path — including a refusal before the worktree
+    // was ever created.
+    await rm(schemaDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 

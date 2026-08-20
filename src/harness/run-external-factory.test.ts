@@ -265,8 +265,15 @@ describe("a complete run", () => {
       options({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port, worktree: wt.port }),
     );
     const result = await hook?.(request());
-    expect(result?.status).toBe("Completed");
-    expect(result?.isError).toBe(false);
+    // This fixture's plain-text answer ("ok") is not valid JSON, so the
+    // underlying runtime's AC13 structured-result validation (flow 176 T20)
+    // turns it into a named Error rather than a silent "Completed" — see
+    // `runtime.test.ts`'s "structured result validation (AC13)" for the
+    // Completed/invalid-JSON/invalid-schema matrix. What this test still pins:
+    // a recorded transcript folds through the factory to a non-empty,
+    // non-silent result.
+    expect(result?.status).toBe("Error");
+    expect(result?.isError).toBe(true);
     expect(result?.output.length).toBeGreaterThan(0);
     // The worktree is created and removed on the terminal path: containment
     // rests on that directory being disposable.
@@ -407,7 +414,10 @@ describe("the run-scoped observer", () => {
       }),
     );
     const result = await hook?.(request());
-    expect(result?.status).toBe("Completed");
+    // This fixture's plain-text answer fails AC13's structured-result
+    // validation (a separate concern from the observer signals this test
+    // targets); it only asserts the run was not denied outright.
+    expect(result?.status).not.toBe("Denied");
     expect(flat.length).toBeGreaterThan(0);
     const ids = new Set(seen.map(([id]) => id));
     expect([...ids]).toEqual(["sub:11111111-2222-3333-4444-555555555555"]);
@@ -461,7 +471,10 @@ describe("the run-scoped observer", () => {
       }),
     );
     const result = await hook?.(request());
-    expect(result?.status).toBe("Completed");
+    // This fixture's plain-text answer fails AC13's structured-result
+    // validation, a separate concern from the approval-form acceptance this
+    // test targets; it only asserts the run was not denied outright.
+    expect(result?.status).not.toBe("Denied");
     expect(sp.calls).toHaveLength(1);
   });
 

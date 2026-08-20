@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T05:27:53.565Z",
+  "updatedAt": "2026-08-20T07:04:57.814Z",
   "source": {
     "type": "description",
     "ref": null
@@ -67,6 +67,10 @@
     "AC17": {
       "at": "2026-08-20T05:26:07.971Z",
       "note": "spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/."
+    },
+    "AC13": {
+      "at": "2026-08-20T07:04:57.813Z",
+      "note": "runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
     }
   },
   "pr": {
@@ -396,6 +400,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -651,6 +670,21 @@
       "at": "2026-08-20T05:27:53.565Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T06:34:57.869Z",
+      "event": "task-added",
+      "detail": "T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts"
+    },
+    {
+      "at": "2026-08-20T07:04:50.713Z",
+      "event": "task-done",
+      "detail": "T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts"
+    },
+    {
+      "at": "2026-08-20T07:04:57.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
     }
   ]
 }

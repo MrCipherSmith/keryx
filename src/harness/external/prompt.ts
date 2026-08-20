@@ -60,6 +60,12 @@ export const EXTERNAL_RUNTIME_DIRECTIVE = [
  */
 export const PROMPT_TRUNCATION_MARKER = "TRUNCATION NOTICE:";
 
+/** Heading opening the required-output-schema section. */
+const RESULT_SCHEMA_HEADING = "# Required output schema";
+
+/** Intro sentence opening the required-output-schema section. */
+const RESULT_SCHEMA_INTRO = "Your final message must be valid JSON matching this schema.";
+
 /** Heading opening the working-diff section. */
 const DIFF_HEADING = "# Operator working diff";
 
@@ -81,6 +87,11 @@ export interface ExternalPromptInput {
   readonly acceptanceCriteria: readonly string[];
   /** The operator's uncommitted diff. The only cuttable part of the prompt. */
   readonly workingDiff?: string;
+  /**
+   * JSON Schema text describing the required final-message shape, when the
+   * caller requests structured validation. Embedded verbatim, never truncated.
+   */
+  readonly resultSchemaText?: string;
   /** Byte ceiling for the whole argv element (`maxPromptBytes`, specification §3). */
   readonly maxPromptBytes: number;
 }
@@ -195,9 +206,15 @@ function renderDiffNoticeOnly(intro: string): string {
   return `${DIFF_HEADING}\n${intro}`;
 }
 
-/** Directive plus task. The part of the prompt that is never cut. */
+/** Directive plus task, plus the required-output-schema section when requested. Never cut. */
 function renderHead(input: ExternalPromptInput): string {
-  const lines: string[] = [EXTERNAL_RUNTIME_DIRECTIVE, "", "# Task", ""];
+  const lines: string[] = [EXTERNAL_RUNTIME_DIRECTIVE, ""];
+
+  if (input.resultSchemaText !== undefined) {
+    lines.push(RESULT_SCHEMA_HEADING, "", RESULT_SCHEMA_INTRO, "", input.resultSchemaText, "");
+  }
+
+  lines.push("# Task", "");
 
   const title = input.taskTitle.trim();
   if (title.length > 0) lines.push(title, "");
