@@ -70,6 +70,11 @@ export function buildDefaultMaskProviders(
     out.push({ envKey: p.envKey, baseUrl: p.baseUrl });
   }
   out.push({ envKey: "ANTHROPIC_API_KEY", baseUrl: "https://api.anthropic.com" });
+  // flow 183: the new native OpenAI/Gemini adapters' credentials, same
+  // auto-mask coverage as every other provider's key.
+  out.push({ envKey: "OPENAI_API_KEY", baseUrl: "https://api.openai.com" });
+  out.push({ envKey: "GEMINI_API_KEY", baseUrl: "https://generativelanguage.googleapis.com" });
+  out.push({ envKey: "GOOGLE_API_KEY", baseUrl: "https://generativelanguage.googleapis.com" });
   return out;
 }
 

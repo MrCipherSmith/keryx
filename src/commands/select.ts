@@ -6,8 +6,11 @@
 // single injected-`fetch` `GET {baseUrl}/api/tags` to enumerate Ollama chat
 // models (fail-SOFT — a throw / non-2xx simply omits ollama), adds `anthropic`
 // ONLY when `deps.env.ANTHROPIC_API_KEY` is a non-empty string (a STATIC
-// `claude-*` list, ZERO network calls, the key never leaves `env`), and ALWAYS
-// offers `fake`. It is deterministic: no `Date.now`/`Math.random`.
+// `claude-*` list, ZERO network calls, the key never leaves `env`), and
+// (flow 183 T9) `openai`/`gemini` the same way — `deps.env.OPENAI_API_KEY` /
+// `deps.env.GEMINI_API_KEY` (falling back to `GOOGLE_API_KEY`), each a
+// static curated list, zero network calls, key never leaves `env` — and
+// ALWAYS offers `fake`. It is deterministic: no `Date.now`/`Math.random`.
 //
 // `pickProviderModel(io, detected)` renders a numbered provider menu then a
 // numbered model menu over the injected `ShellIO`, re-prompting on
@@ -70,6 +73,24 @@ const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
 
 /** Static `claude-*` model list surfaced when `ANTHROPIC_API_KEY` is present. */
 const ANTHROPIC_MODELS: readonly string[] = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
+
+/**
+ * Static OpenAI model list surfaced when `OPENAI_API_KEY` is present (flow
+ * 183 T9). No live listing endpoint is wired (`OpenAiProvider.describe()`
+ * declares `modelListing: false`) — this curated set mirrors
+ * `ANTHROPIC_MODELS`'s pattern exactly. Current as of this writing; update
+ * when OpenAI's model lineup moves on.
+ */
+const OPENAI_MODELS: readonly string[] = ["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"];
+
+/**
+ * Static Gemini model list surfaced when `GEMINI_API_KEY`/`GOOGLE_API_KEY`
+ * is present (flow 183 T9). No live listing endpoint is wired
+ * (`GeminiProvider.describe()` declares `modelListing: false`) — mirrors
+ * `ANTHROPIC_MODELS`'s pattern. Current as of this writing; update when
+ * Gemini's model lineup moves on.
+ */
+const GEMINI_MODELS: readonly string[] = ["gemini-3.7-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"];
 
 /**
  * Fetch OpenRouter's LIVE model list (`GET /api/v1/models`, public — no key) so the
@@ -175,6 +196,19 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
     // The credential is read from `env` only — never placed on the returned
     // shape (which has no field for it) and never logged.
     detected.push({ name: "anthropic", models: [...ANTHROPIC_MODELS] });
+  }
+
+  // flow 183 T9: openai/gemini as first-class picker entries, same shape as
+  // anthropic above — key presence gates visibility, the key itself never
+  // reaches the returned shape or gets logged.
+  const openaiKey = deps.env.OPENAI_API_KEY;
+  if (typeof openaiKey === "string" && openaiKey.length > 0) {
+    detected.push({ name: "openai", models: [...OPENAI_MODELS] });
+  }
+
+  const geminiKey = deps.env.GEMINI_API_KEY ?? deps.env.GOOGLE_API_KEY;
+  if (typeof geminiKey === "string" && geminiKey.length > 0) {
+    detected.push({ name: "gemini", models: [...GEMINI_MODELS] });
   }
 
   // Hosted OpenAI-compatible providers (OpenRouter, DeepSeek, Z.AI GLM, Cerebras,

@@ -48,8 +48,10 @@
 // invoke fetch merely by CONSTRUCTING a provider.
 import { describe, expect, test } from "bun:test";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
+import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
+import { OpenAiProvider } from "./openai/openai-provider";
 import type { NormalizedRequest, StreamOptions } from "./types";
 
 // PINNED API under test — T6 impl exports these; import fails until then
@@ -90,6 +92,26 @@ describe("makeProvider — shared provider-selection factory (review-polish item
 
   test('"anthropic" with an EMPTY-STRING ANTHROPIC_API_KEY also falls back to the fake provider (fail-closed, not a truthy empty string)', () => {
     const provider = makeProvider("anthropic", "claude-x", makeOpts({ env: { ANTHROPIC_API_KEY: "" } }));
+    expect(provider).toBeInstanceOf(FakeProvider);
+  });
+
+  // flow 183, T6 / AC1: `OpenAiProvider implements ProviderPort`, constructed
+  // via `makeProvider("openai", ...)`, same fail-closed shape as "anthropic".
+  test('"openai" WITH OPENAI_API_KEY constructs an OpenAiProvider', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: { OPENAI_API_KEY: "test-key-1" } }));
+    expect(provider).toBeInstanceOf(OpenAiProvider);
+    expect(provider.describe().descriptor.providerId).toBe("openai");
+  });
+
+  test('"openai" WITHOUT OPENAI_API_KEY falls back to the offline FakeProvider (never OpenAiProvider, never network)', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: {} }));
+    expect(provider).not.toBeInstanceOf(OpenAiProvider);
+    expect(provider).toBeInstanceOf(FakeProvider);
+    expect(provider.describe().descriptor.providerId).toBe("fake-provider");
+  });
+
+  test('"openai" with an EMPTY-STRING OPENAI_API_KEY also falls back to the fake provider (fail-closed, not a truthy empty string)', () => {
+    const provider = makeProvider("openai", "gpt-4.1", makeOpts({ env: { OPENAI_API_KEY: "" } }));
     expect(provider).toBeInstanceOf(FakeProvider);
   });
 
@@ -207,7 +229,11 @@ function makeSseFetchMock() {
 test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for stream()", async () => {
   const { fetch: fetchMock, calls } = makeSseFetchMock();
   const provider = makeProvider("rapid-mlx", "qwen3.5-9b-4bit", makeOpts({ env: {}, fetch: fetchMock }));
-  expect(provider).toBeInstanceOf(OllamaProvider);
+  // flow 183 T5 (deliberate, not incidental — see make-provider.ts's header
+  // comment): the compat-registry branch now constructs the extracted
+  // `OpenAiCompatEngine` engine directly instead of `OllamaProvider`. The
+  // observable streamed behavior below (events, model_end) is unchanged.
+  expect(provider).toBeInstanceOf(OpenAiCompatEngine);
 
   const request = buildRequest();
   const opts: StreamOptions = { attemptId: "rapid-loopback-attempt" };
