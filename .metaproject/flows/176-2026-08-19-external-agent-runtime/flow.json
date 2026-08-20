@@ -5,13 +5,70 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T05:11:54.601Z",
+  "updatedAt": "2026-08-20T05:26:16.162Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:11158d36892175f150c68941f75c6bf157f617ba7fface1c6cd58e8d1e3e4f59",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T05:25:46.551Z",
+      "note": "dispatch.test.ts + registry.test.ts: unknown agent -> unknown-agent; sandbox absent from sandboxModes -> agent-cannot, exercised against a synthetic entry since both shipped entries declare both modes. Pure, offline."
+    },
+    "AC2": {
+      "at": "2026-08-20T05:25:46.638Z",
+      "note": "dispatch.test.ts: read-only rejected for write/network/spawn-subagent, each named in the reason; run-command alone accepted, since an external CLI necessarily runs commands in its own sandbox."
+    },
+    "AC3": {
+      "at": "2026-08-20T05:25:46.723Z",
+      "note": "dispatch.test.ts: worktree-write passes schema and sandboxModes, then refused with code not-implemented — asserted distinct from AC1's unknown-agent code."
+    },
+    "AC4": {
+      "at": "2026-08-20T05:25:46.808Z",
+      "note": "codex-cli.test.ts + claude-cli.test.ts: argv asserted element-by-element across every optional-field combination, incl. that no prompt follows a variadic flag and that --input-format never accompanies a positional prompt."
+    },
+    "AC6": {
+      "at": "2026-08-20T05:25:46.894Z",
+      "note": "codex-cli.test.ts + claude-cli.test.ts against recorded fixtures: not-logged-in (claude exit 0 via result.subtype), bad argv, empty output, and the error-word trap (successful run whose message begins 'error:'). LIMIT CASE PROVISIONAL: usage-limit fixtures are hand-authored and marked SYNTHETIC in the manifest; a real exhaustion has never been captured."
+    },
+    "AC7": {
+      "at": "2026-08-20T05:25:58.058Z",
+      "note": "env.test.ts: every named denial and both prefix sweeps removed from a synthetic parent env; depth marker added AFTER the KERYX_ sweep so the sweep cannot eat it; parent env not mutated."
+    },
+    "AC8": {
+      "at": "2026-08-20T05:25:58.149Z",
+      "note": "runtime.test.ts: worktree removed after success, after failure, when the spawn port throws, and a failing remove does not mask the result. Working-tree containment OBSERVED LIVE in scripts/smoke/external-agents.ts across three real runs (byte-unchanged, no worktree leaked). Caveat: no fixture transcript specifically containing write attempts was used — a fake port cannot write, so the assertion would be theatre; the guarantee rests on the disposable worktree, which is what was tested."
+    },
+    "AC9": {
+      "at": "2026-08-20T05:25:58.239Z",
+      "note": "external-agents.test.ts + runtime.test.ts: capability disabled, remote transport and CI each refuse with a named reason and create no process; verified behaviourally via bun src/cli.ts agents external list under CI=true and KERYX_TRANSPORT=remote."
+    },
+    "AC10": {
+      "at": "2026-08-20T05:25:58.324Z",
+      "note": "external-operator.test.ts: user_message emitted on DELIVERY not queueing; streaming handle -> stdin write; non-streaming -> resume argv. The stdin route was unreachable until T17 (launchedStreaming was hardcoded false) and is now pinned in both directions; proven end to end against a real claude run in the T19 smoke."
+    },
+    "AC11": {
+      "at": "2026-08-20T05:25:58.409Z",
+      "note": "external-delivery.test.ts + external-operator.test.ts: force builds the resume argv carrying the session handle and the message BEFORE killing, and degrades to kill-only with lost:true when no handle was ever announced."
+    },
+    "AC14": {
+      "at": "2026-08-20T05:26:07.715Z",
+      "note": "runtime.test.ts: a failing agent returns its own named status and exactly one process is created — nothing is retried with another agent, runtime or the parent's model. decisions.md D-07."
+    },
+    "AC15": {
+      "at": "2026-08-20T05:26:07.800Z",
+      "note": "package.json dependencies unchanged across the whole flow; @opentui/core remains the pre-existing optional dependency and the TUI modules degrade without it."
+    },
+    "AC16": {
+      "at": "2026-08-20T05:26:07.886Z",
+      "note": "fixtures/external/{codex-cli,claude-cli}/ with manifest.json naming, per file, the CLI version, the exact argv, and captured-vs-hand-authored. Captured: success, resume, no-credentials, bad-argv, error-word, ephemeral-resume refusal, streaming-input, empty-output. Hand-authored and marked SYNTHETIC: both usage-limit files."
+    },
+    "AC17": {
+      "at": "2026-08-20T05:26:07.971Z",
+      "note": "spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -35,7 +92,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +100,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,7 +115,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped"
     },
     {
       "id": "T4",
@@ -506,6 +565,86 @@
       "at": "2026-08-20T05:11:54.601Z",
       "event": "task-done",
       "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
+    },
+    {
+      "at": "2026-08-20T05:25:46.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: dispatch.test.ts + registry.test.ts: unknown agent -> unknown-agent; sandbox absent from sandboxModes -> agent-cannot, exercised against a synthetic entry since both shipped entries declare both modes. Pure, offline."
+    },
+    {
+      "at": "2026-08-20T05:25:46.638Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: dispatch.test.ts: read-only rejected for write/network/spawn-subagent, each named in the reason; run-command alone accepted, since an external CLI necessarily runs commands in its own sandbox."
+    },
+    {
+      "at": "2026-08-20T05:25:46.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: dispatch.test.ts: worktree-write passes schema and sandboxModes, then refused with code not-implemented — asserted distinct from AC1's unknown-agent code."
+    },
+    {
+      "at": "2026-08-20T05:25:46.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: codex-cli.test.ts + claude-cli.test.ts: argv asserted element-by-element across every optional-field combination, incl. that no prompt follows a variadic flag and that --input-format never accompanies a positional prompt."
+    },
+    {
+      "at": "2026-08-20T05:25:46.894Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: codex-cli.test.ts + claude-cli.test.ts against recorded fixtures: not-logged-in (claude exit 0 via result.subtype), bad argv, empty output, and the error-word trap (successful run whose message begins 'error:'). LIMIT CASE PROVISIONAL: usage-limit fixtures are hand-authored and marked SYNTHETIC in the manifest; a real exhaustion has never been captured."
+    },
+    {
+      "at": "2026-08-20T05:25:58.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: env.test.ts: every named denial and both prefix sweeps removed from a synthetic parent env; depth marker added AFTER the KERYX_ sweep so the sweep cannot eat it; parent env not mutated."
+    },
+    {
+      "at": "2026-08-20T05:25:58.149Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: runtime.test.ts: worktree removed after success, after failure, when the spawn port throws, and a failing remove does not mask the result. Working-tree containment OBSERVED LIVE in scripts/smoke/external-agents.ts across three real runs (byte-unchanged, no worktree leaked). Caveat: no fixture transcript specifically containing write attempts was used — a fake port cannot write, so the assertion would be theatre; the guarantee rests on the disposable worktree, which is what was tested."
+    },
+    {
+      "at": "2026-08-20T05:25:58.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: external-agents.test.ts + runtime.test.ts: capability disabled, remote transport and CI each refuse with a named reason and create no process; verified behaviourally via bun src/cli.ts agents external list under CI=true and KERYX_TRANSPORT=remote."
+    },
+    {
+      "at": "2026-08-20T05:25:58.324Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: external-operator.test.ts: user_message emitted on DELIVERY not queueing; streaming handle -> stdin write; non-streaming -> resume argv. The stdin route was unreachable until T17 (launchedStreaming was hardcoded false) and is now pinned in both directions; proven end to end against a real claude run in the T19 smoke."
+    },
+    {
+      "at": "2026-08-20T05:25:58.409Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: external-delivery.test.ts + external-operator.test.ts: force builds the resume argv carrying the session handle and the message BEFORE killing, and degrades to kill-only with lost:true when no handle was ever announced."
+    },
+    {
+      "at": "2026-08-20T05:26:07.715Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: runtime.test.ts: a failing agent returns its own named status and exactly one process is created — nothing is retried with another agent, runtime or the parent's model. decisions.md D-07."
+    },
+    {
+      "at": "2026-08-20T05:26:07.800Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: package.json dependencies unchanged across the whole flow; @opentui/core remains the pre-existing optional dependency and the TUI modules degrade without it."
+    },
+    {
+      "at": "2026-08-20T05:26:07.886Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: fixtures/external/{codex-cli,claude-cli}/ with manifest.json naming, per file, the CLI version, the exact argv, and captured-vs-hand-authored. Captured: success, resume, no-credentials, bad-argv, error-word, ephemeral-resume refusal, streaming-input, empty-output. Hand-authored and marked SYNTHETIC: both usage-limit files."
+    },
+    {
+      "at": "2026-08-20T05:26:07.971Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/."
+    },
+    {
+      "at": "2026-08-20T05:26:16.075Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T05:26:16.162Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

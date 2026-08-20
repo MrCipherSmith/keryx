@@ -618,6 +618,46 @@ run and no smoke worktree remained registered — the guarantee D-08 rests on,
 observed rather than asserted for the first time.
 
 Full suite 4794 pass, 0 fail. Typecheck clean.
+
+## Acceptance criteria — 14 of 17 confirmed, 3 deliberately not (2026-08-20)
+
+Each confirmation carries the specific evidence rather than a tick. The three
+left unconfirmed were checked before deciding, and confirming them would have
+been the one thing this flow spent itself avoiding.
+
+**AC5 — half unmet.** The codecs parse every recorded fixture into the canonical
+event sequence, and that half is solid. The other half — "and `reduceAgents`
+folds that sequence without modification" — is **not demonstrated by anything**.
+`ExternalEvent` and `reduce.ts`'s `AgentEvent` are different types and nothing
+bridges them. Two module headers claim the fold works unchanged; that claim is
+aspirational and should be either implemented or removed from the comments.
+
+**AC12 — unmet.** Supervision triggers do not exist (R15). Already marked in
+specification §7.6, agent-protocol §4 and the package README.
+
+**AC13 — unmet, and the reason is upstream of the criterion.** `resultSchemaPath`
+is set only in tests: the runtime never passes it, so no structured result is
+ever requested, so R22's validation against `subagent-result` never runs and
+"a schema-invalid result yields Error" has nothing to fire on. The codecs *build*
+the flag correctly (`--output-schema` / `--json-schema`); nothing asks them to.
+
+**AC8 confirmed with a stated limit**: worktree removal is tested on every path
+including a throwing port, and working-tree containment was observed live across
+three real runs. No transcript "containing write attempts" was used, because a
+fake port cannot write and the assertion would be theatre — the guarantee rests
+on the disposable worktree, and that is what was tested.
+
+**AC6 confirmed with a stated limit**: the usage-limit fixtures are hand-authored
+and marked SYNTHETIC. A real quota exhaustion has never been captured, so that
+one branch pins our mapping rather than the vendor's wording.
+
+T2 and T3 (the scaffold's generic "implement per plan" / "add tests") are closed
+as skipped: the work happened in T5–T19, which carry the evidence.
+
+**The flow cannot legitimately complete.** Completion requires every AC
+confirmed, and three are not. That is the correct state, not an obstacle to route
+around: the feature is genuinely useful and genuinely incomplete in three named
+places.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -634,3 +674,19 @@ Full suite 4794 pass, 0 fail. Typecheck clean.
 - 2026-08-19T20:56:15.331Z - task-done: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
 - 2026-08-19T21:16:52.869Z - task-done: T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped
 - 2026-08-20T05:11:54.601Z - task-done: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)
+- 2026-08-20T05:25:46.551Z - ac-confirmed: AC1: dispatch.test.ts + registry.test.ts: unknown agent -> unknown-agent; sandbox absent from sandboxModes -> agent-cannot, exercised against a synthetic entry since both shipped entries declare both modes. Pure, offline.
+- 2026-08-20T05:25:46.638Z - ac-confirmed: AC2: dispatch.test.ts: read-only rejected for write/network/spawn-subagent, each named in the reason; run-command alone accepted, since an external CLI necessarily runs commands in its own sandbox.
+- 2026-08-20T05:25:46.723Z - ac-confirmed: AC3: dispatch.test.ts: worktree-write passes schema and sandboxModes, then refused with code not-implemented — asserted distinct from AC1's unknown-agent code.
+- 2026-08-20T05:25:46.808Z - ac-confirmed: AC4: codex-cli.test.ts + claude-cli.test.ts: argv asserted element-by-element across every optional-field combination, incl. that no prompt follows a variadic flag and that --input-format never accompanies a positional prompt.
+- 2026-08-20T05:25:46.894Z - ac-confirmed: AC6: codex-cli.test.ts + claude-cli.test.ts against recorded fixtures: not-logged-in (claude exit 0 via result.subtype), bad argv, empty output, and the error-word trap (successful run whose message begins 'error:'). LIMIT CASE PROVISIONAL: usage-limit fixtures are hand-authored and marked SYNTHETIC in the manifest; a real exhaustion has never been captured.
+- 2026-08-20T05:25:58.058Z - ac-confirmed: AC7: env.test.ts: every named denial and both prefix sweeps removed from a synthetic parent env; depth marker added AFTER the KERYX_ sweep so the sweep cannot eat it; parent env not mutated.
+- 2026-08-20T05:25:58.149Z - ac-confirmed: AC8: runtime.test.ts: worktree removed after success, after failure, when the spawn port throws, and a failing remove does not mask the result. Working-tree containment OBSERVED LIVE in scripts/smoke/external-agents.ts across three real runs (byte-unchanged, no worktree leaked). Caveat: no fixture transcript specifically containing write attempts was used — a fake port cannot write, so the assertion would be theatre; the guarantee rests on the disposable worktree, which is what was tested.
+- 2026-08-20T05:25:58.239Z - ac-confirmed: AC9: external-agents.test.ts + runtime.test.ts: capability disabled, remote transport and CI each refuse with a named reason and create no process; verified behaviourally via bun src/cli.ts agents external list under CI=true and KERYX_TRANSPORT=remote.
+- 2026-08-20T05:25:58.324Z - ac-confirmed: AC10: external-operator.test.ts: user_message emitted on DELIVERY not queueing; streaming handle -> stdin write; non-streaming -> resume argv. The stdin route was unreachable until T17 (launchedStreaming was hardcoded false) and is now pinned in both directions; proven end to end against a real claude run in the T19 smoke.
+- 2026-08-20T05:25:58.409Z - ac-confirmed: AC11: external-delivery.test.ts + external-operator.test.ts: force builds the resume argv carrying the session handle and the message BEFORE killing, and degrades to kill-only with lost:true when no handle was ever announced.
+- 2026-08-20T05:26:07.715Z - ac-confirmed: AC14: runtime.test.ts: a failing agent returns its own named status and exactly one process is created — nothing is retried with another agent, runtime or the parent's model. decisions.md D-07.
+- 2026-08-20T05:26:07.800Z - ac-confirmed: AC15: package.json dependencies unchanged across the whole flow; @opentui/core remains the pre-existing optional dependency and the TUI modules degrade without it.
+- 2026-08-20T05:26:07.886Z - ac-confirmed: AC16: fixtures/external/{codex-cli,claude-cli}/ with manifest.json naming, per file, the CLI version, the exact argv, and captured-vs-hand-authored. Captured: success, resume, no-credentials, bad-argv, error-word, ephemeral-resume refusal, streaming-input, empty-output. Hand-authored and marked SYNTHETIC: both usage-limit files.
+- 2026-08-20T05:26:07.971Z - ac-confirmed: AC17: spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/.
+- 2026-08-20T05:26:16.075Z - task-done: T2: Implement per plan
+- 2026-08-20T05:26:16.162Z - task-done: T3: Add/adjust tests and make them pass
