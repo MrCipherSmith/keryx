@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 2,
+  "id": "179",
+  "slug": "tui-stepper-modal-for-search-provider-se",
+  "title": "TUI: stepper modal for /search-provider (select provider, enter fields, test connection)",
+  "status": "done",
+  "createdAt": "2026-08-20T10:09:11.139Z",
+  "updatedAt": "2026-08-20T11:07:44.259Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b34100229af127a1e3acf22a8d20a48d6d8b75bad9a73a7a75a2f33ab035b629",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T11:07:35.893Z",
+      "note": "PR #356 merged (0a35025): bare /search-provider opens searchProviderWizardInTui (tui-shell.ts), 3-step flow verified by test 'AC1/AC4'."
+    },
+    "AC2": {
+      "at": "2026-08-20T11:07:36.006Z",
+      "note": "review-orchestrator (T4) confirmed args-given branch byte-identical to pre-change; diff --stat shows only new bare-arg code inserted, existing branch untouched."
+    },
+    "AC3": {
+      "at": "2026-08-20T11:07:36.104Z",
+      "note": "/search-connect handler unmodified across all 4 commits (6d5150a, a3767f3, 113d9ed, 3777617); wizard's toggle reuses controller.select() directly."
+    },
+    "AC4": {
+      "at": "2026-08-20T11:07:36.194Z",
+      "note": "Test 'AC1/AC4': step 1 lists exactly configurable() providers; Esc resolves undefined with calls=[] (zero mutation)."
+    },
+    "AC5": {
+      "at": "2026-08-20T11:07:36.296Z",
+      "note": "Tests 'AC5' (brave 0-field, searxng 2-field): field loop seeded with defaultValue, 0-field skips to credential, Esc-back at each sub-step verified."
+    },
+    "AC6": {
+      "at": "2026-08-20T11:07:36.401Z",
+      "note": "Tests 'AC6' (toggle Yes/No, failure/retry): configure->test->select only on Yes; failure shows reason, Esc->retry re-enters step 2 without closing modal."
+    },
+    "AC7": {
+      "at": "2026-08-20T11:07:36.499Z",
+      "note": "6 new tests in tui-shell.test.ts covering all required scenarios; bun test src/tui/tui-shell.test.ts: 79 pass, 0 fail (verified independently, not just trusted from subagent reports)."
+    },
+    "AC8": {
+      "at": "2026-08-20T11:07:36.607Z",
+      "note": "git diff --stat main HEAD across all 4 commits: only src/tui/tui-shell.ts and src/tui/tui-shell.test.ts changed; verified by flow-orchestrator directly twice."
+    },
+    "AC9": {
+      "at": "2026-08-20T11:07:36.710Z",
+      "note": "keryx health run --changed --since main --source typescript,complexity: PASS, project score 93, no gate conditions triggered."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/356"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T10:09:11.139Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T10:11:40.282Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T10:11:45.495Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T10:12:53.299Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-20T10:25:15.933Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T10:47:41.203Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T10:57:57.120Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T11:07:20.460Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/356 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T11:07:35.893Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #356 merged (0a35025): bare /search-provider opens searchProviderWizardInTui (tui-shell.ts), 3-step flow verified by test 'AC1/AC4'."
+    },
+    {
+      "at": "2026-08-20T11:07:36.006Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: review-orchestrator (T4) confirmed args-given branch byte-identical to pre-change; diff --stat shows only new bare-arg code inserted, existing branch untouched."
+    },
+    {
+      "at": "2026-08-20T11:07:36.104Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: /search-connect handler unmodified across all 4 commits (6d5150a, a3767f3, 113d9ed, 3777617); wizard's toggle reuses controller.select() directly."
+    },
+    {
+      "at": "2026-08-20T11:07:36.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Test 'AC1/AC4': step 1 lists exactly configurable() providers; Esc resolves undefined with calls=[] (zero mutation)."
+    },
+    {
+      "at": "2026-08-20T11:07:36.296Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Tests 'AC5' (brave 0-field, searxng 2-field): field loop seeded with defaultValue, 0-field skips to credential, Esc-back at each sub-step verified."
+    },
+    {
+      "at": "2026-08-20T11:07:36.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Tests 'AC6' (toggle Yes/No, failure/retry): configure->test->select only on Yes; failure shows reason, Esc->retry re-enters step 2 without closing modal."
+    },
+    {
+      "at": "2026-08-20T11:07:36.499Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 6 new tests in tui-shell.test.ts covering all required scenarios; bun test src/tui/tui-shell.test.ts: 79 pass, 0 fail (verified independently, not just trusted from subagent reports)."
+    },
+    {
+      "at": "2026-08-20T11:07:36.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: git diff --stat main HEAD across all 4 commits: only src/tui/tui-shell.ts and src/tui/tui-shell.test.ts changed; verified by flow-orchestrator directly twice."
+    },
+    {
+      "at": "2026-08-20T11:07:36.711Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: keryx health run --changed --since main --source typescript,complexity: PASS, project score 93, no gate conditions triggered."
+    },
+    {
+      "at": "2026-08-20T11:07:41.684Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T11:07:44.259Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

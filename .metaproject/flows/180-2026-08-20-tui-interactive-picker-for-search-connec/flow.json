@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 2,
+  "id": "180",
+  "slug": "tui-interactive-picker-for-search-connec",
+  "title": "TUI: interactive picker for /search-connect (mirror /connect's onlyConnected pattern)",
+  "status": "done",
+  "createdAt": "2026-08-20T11:23:00.455Z",
+  "updatedAt": "2026-08-20T12:02:09.120Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:22e37a5db354af3fde77dce9573762364b0cb09b46713b57f0f8eeffec1357e2",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T12:02:00.052Z",
+      "note": "PR #357 merged (5ae924d): bare /search-connect opens pickSearchProviderStep over selectable() via chrome.withOverlay; verified by real interactive tests."
+    },
+    "AC2": {
+      "at": "2026-08-20T12:02:00.171Z",
+      "note": "Selection routes through selectSearchProviderAndReport -> controller.select(id); Esc verified to resolve before any select() call (real key-driven test)."
+    },
+    "AC3": {
+      "at": "2026-08-20T12:02:00.303Z",
+      "note": "Empty selectable() returns from the guard before pickSearchProviderStep is ever called (structural + test verification); existing 'no connected providers' message preserved byte-identical."
+    },
+    "AC4": {
+      "at": "2026-08-20T12:02:00.450Z",
+      "note": "review-orchestrator (T4) byte-diff confirmed /search-connect <id> path unchanged, now via the shared helper with identical messages."
+    },
+    "AC5": {
+      "at": "2026-08-20T12:02:00.625Z",
+      "note": "searchProviderWizardInTui and its step helpers untouched across all commits; confirmed via diff and source read."
+    },
+    "AC6": {
+      "at": "2026-08-20T12:02:00.742Z",
+      "note": "95 tests in tui-shell.test.ts (up from 79 pre-flow-180): real key-driven coverage for pickSearchProviderStep/selectSearchProviderAndReport (T5), source-text audit only for the genuinely-untestable outer dispatch closure (matches flow 179 precedent). bun test: 95 pass, 0 fail."
+    },
+    "AC7": {
+      "at": "2026-08-20T12:02:00.887Z",
+      "note": "git diff --stat main HEAD across all commits: only src/tui/tui-shell.ts and src/tui/tui-shell.test.ts changed."
+    },
+    "AC8": {
+      "at": "2026-08-20T12:02:01.035Z",
+      "note": "keryx health run --changed --since main --source typescript,complexity: PASS, project score 93, no gate conditions triggered."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/357"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Export pickSearchProviderStep/selectSearchProviderAndReport and convert T3's audit tests to real interactive coverage",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T11:23:00.455Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T11:23:51.237Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T11:23:51.346Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T11:24:11.143Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-20T11:30:29.003Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T11:38:36.451Z",
+      "event": "task-added",
+      "detail": "T5: Export pickSearchProviderStep/selectSearchProviderAndReport and convert T3's audit tests to real interactive coverage"
+    },
+    {
+      "at": "2026-08-20T11:38:55.870Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T11:46:09.131Z",
+      "event": "task-done",
+      "detail": "T5: Export pickSearchProviderStep/selectSearchProviderAndReport and convert T3's audit tests to real interactive coverage"
+    },
+    {
+      "at": "2026-08-20T11:54:14.457Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T12:01:26.414Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/357 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T12:02:00.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #357 merged (5ae924d): bare /search-connect opens pickSearchProviderStep over selectable() via chrome.withOverlay; verified by real interactive tests."
+    },
+    {
+      "at": "2026-08-20T12:02:00.171Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Selection routes through selectSearchProviderAndReport -> controller.select(id); Esc verified to resolve before any select() call (real key-driven test)."
+    },
+    {
+      "at": "2026-08-20T12:02:00.304Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Empty selectable() returns from the guard before pickSearchProviderStep is ever called (structural + test verification); existing 'no connected providers' message preserved byte-identical."
+    },
+    {
+      "at": "2026-08-20T12:02:00.450Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-orchestrator (T4) byte-diff confirmed /search-connect <id> path unchanged, now via the shared helper with identical messages."
+    },
+    {
+      "at": "2026-08-20T12:02:00.625Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: searchProviderWizardInTui and its step helpers untouched across all commits; confirmed via diff and source read."
+    },
+    {
+      "at": "2026-08-20T12:02:00.743Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: 95 tests in tui-shell.test.ts (up from 79 pre-flow-180): real key-driven coverage for pickSearchProviderStep/selectSearchProviderAndReport (T5), source-text audit only for the genuinely-untestable outer dispatch closure (matches flow 179 precedent). bun test: 95 pass, 0 fail."
+    },
+    {
+      "at": "2026-08-20T12:02:00.887Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: git diff --stat main HEAD across all commits: only src/tui/tui-shell.ts and src/tui/tui-shell.test.ts changed."
+    },
+    {
+      "at": "2026-08-20T12:02:01.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx health run --changed --since main --source typescript,complexity: PASS, project score 93, no gate conditions triggered."
+    },
+    {
+      "at": "2026-08-20T12:02:06.540Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T12:02:09.120Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}
