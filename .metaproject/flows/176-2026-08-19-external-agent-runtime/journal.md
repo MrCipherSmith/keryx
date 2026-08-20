@@ -690,3 +690,4 @@ places.
 - 2026-08-20T05:26:07.971Z - ac-confirmed: AC17: spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/.
 - 2026-08-20T05:26:16.075Z - task-done: T2: Implement per plan
 - 2026-08-20T05:26:16.162Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-20T05:27:53.565Z - task-done: T4: Self-review and prepare draft PR
