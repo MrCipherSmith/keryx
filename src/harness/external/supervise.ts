@@ -305,8 +305,20 @@ export async function superviseExternalRun(
       stdoutLines.push(line);
       if (line.trim().length === 0) continue;
 
-      const event = deps.codec.parseLine(line);
-      if (event === undefined) {
+      // The plural form when the codec has one: a single line can carry both a
+      // usage figure and the terminal event, and the singular form must drop one
+      // of them. Taking only the singular made R26's cost reporting structurally
+      // impossible — the T19 live smoke showed `cost: MISSING` for an agent that
+      // does report cost.
+      const parsed =
+        deps.codec.parseEvents !== undefined
+          ? deps.codec.parseEvents(line)
+          : ((): readonly ExternalEvent[] => {
+              const one = deps.codec.parseLine(line);
+              return one === undefined ? [] : [one];
+            })();
+
+      if (parsed.length === 0) {
         // Counted, not fatal (rule 4). A vendor that adds a stream type in a
         // patch release must degrade to a drift signal, not to a dead run.
         if (deps.isRecognisedLine?.(line) === true) continue;
@@ -315,12 +327,16 @@ export async function superviseExternalRun(
         continue;
       }
 
-      events.push(event);
-      // Incremental, deliberately: the TUI and the supervision triggers are
-      // defined over a live stream (§7.6).
-      deps.onEvent?.(event);
+      let terminal: ExternalEvent | undefined;
+      for (const event of parsed) {
+        events.push(event);
+        // Incremental, deliberately: the TUI and the supervision triggers are
+        // defined over a live stream (§7.6).
+        deps.onEvent?.(event);
+        if (terminal === undefined && isTerminalEvent(event)) terminal = event;
+      }
 
-      if (cancelSettle === undefined && isTerminalEvent(event)) {
+      if (cancelSettle === undefined && terminal !== undefined) {
         const settle = afterMs<Verdict>(input.terminalSettleMs ?? DEFAULT_TERMINAL_SETTLE_MS, "terminal");
         cancelSettle = settle.cancel;
         void settle.promise.then(terminalSeen.resolve);

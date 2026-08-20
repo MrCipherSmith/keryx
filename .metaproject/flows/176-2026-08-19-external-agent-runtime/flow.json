@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-19T21:16:52.869Z",
+  "updatedAt": "2026-08-20T05:11:54.601Z",
   "source": {
     "type": "description",
     "ref": null
@@ -324,7 +324,7 @@
       "id": "T19",
       "title": "Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T18"
       ],
@@ -334,7 +334,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -500,6 +501,11 @@
       "at": "2026-08-19T21:16:52.869Z",
       "event": "task-done",
       "detail": "T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-20T05:11:54.601Z",
+      "event": "task-done",
+      "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
     }
   ]
 }

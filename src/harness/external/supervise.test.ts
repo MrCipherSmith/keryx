@@ -166,7 +166,7 @@ describe("a clean run", () => {
     const fake = fakePort({ stdout: transcript("codex-cli/success.stdout.jsonl"), exitCode: 0 });
     const outcome = await superviseExternalRun(input(), { spawn: fake.port, codec: codexCliCodec });
 
-    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "child_finished"]);
+    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "usage", "child_finished"]);
     const started = outcome.events[0];
     // The resume handle codex GENERATES and keryx reads; a run that loses it
     // cannot be resumed at all, so it is pinned rather than assumed.
@@ -196,7 +196,7 @@ describe("a clean run", () => {
       isRecognisedLine: isRecognisedClaudeLine,
     });
 
-    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "child_finished"]);
+    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "usage", "child_finished"]);
     expect(classifyClaudeFailure(outcome)).toBeNull();
   });
 
@@ -413,7 +413,7 @@ describe("unparseable lines are counted, not fatal (§6.2)", () => {
     // Two injected junk lines plus codex's own unmapped `turn.started`.
     expect(outcome.skippedLines).toBe(3);
     expect(skipped).toContain("not json at all");
-    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "child_finished"]);
+    expect(kinds(outcome.events)).toEqual(["child_started", "assistant_text", "usage", "child_finished"]);
     expect(classifyCodexFailure(outcome)).toBeNull();
   });
 
@@ -480,7 +480,9 @@ describe("onEvent fires incrementally", () => {
     fake.release();
     const outcome = await run;
 
-    expect(seen).toHaveLength(3);
+    // Four, not three: the terminal line also carries a `usage` event, and the
+    // supervisor emits both rather than dropping one (see `codec.parseEvents`).
+    expect(seen).toHaveLength(4);
     expect(kinds(seen)).toEqual(kinds(outcome.events));
   });
 });

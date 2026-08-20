@@ -639,10 +639,12 @@ export const claudeCliCodec: ExternalAgentCodec = {
   id: "claude-cli",
   buildArgv: buildClaudeArgv,
   parseLine: parseClaudeLine,
+  parseEvents: parseClaudeEvents,
   classifyFailure: classifyClaudeFailure,
   // Present because this agent declares `streamingInput: true`. codex omits
   // both and its operator messages travel by resume instead.
   buildStreamingArgv: buildClaudeStreamingArgv,
   encodeStdinMessage: encodeClaudeStdinMessage,
+  isRecognisedLine: isRecognisedClaudeLine,
   buildResumeArgv: buildClaudeResumeArgv,
 };

@@ -307,8 +307,10 @@ export const codexCliCodec: ExternalAgentCodec = {
   id: "codex-cli",
   buildArgv: buildCodexArgv,
   parseLine: parseCodexLine,
+  parseEvents: parseCodexEvents,
   classifyFailure: classifyCodexFailure,
   buildResumeArgv: (sessionRef, message) => buildCodexResumeArgv(sessionRef, message),
+  isRecognisedLine: isRecognisedCodexLine,
 };
 
 // ---------------------------------------------------------------------------

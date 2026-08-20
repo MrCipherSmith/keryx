@@ -567,6 +567,57 @@ nothing documents is a dead end, so it is listed now.
 Full suite 4788 pass, 1 fail — the same pre-existing order-dependent
 `same-size historical receipt corruption…`, confirmed again by name and passing
 in isolation. Typecheck clean. Roadmap → 0.16.0.
+
+## T19 — the live smoke, and the three bugs only it could find (2026-08-20)
+
+The real spawn port and the real git worktree port pointed at the real CLIs,
+through the whole runtime. Three cases: codex one-shot, claude one-shot, claude
+steerable. **All three Completed.** Kept as `scripts/smoke/external-agents.ts`,
+deliberately outside `bun test` because it spends subscription quota — and
+deliberately kept, because the whole design rests on vendor CLI behaviour that
+drifts and no offline test can see a drift.
+
+Everything before this was verified against recorded transcripts with a fake
+process port. That verification was real, and it was also not the same thing as
+running the binary. The first live run proved the difference three times over.
+
+**1. `"ok\nok"` — every claude answer was duplicated.** `collectAssistantText`
+appended the terminal event's text to the assistant stream, and claude's
+`result.result` repeats what its `assistant` blocks already carried. A one-word
+reply exposed it; a real report would have been silently doubled. Fixed by
+letting a terminal event's text *win outright* rather than append, with the
+stream as the fallback — correct for codex too, whose terminal event carries no
+text at all, and without branching on the agent.
+
+**2. Every healthy run scored a phantom parse-skip.** Both codecs had a line
+recogniser; the runtime never passed it to the supervisor. So the version-drift
+counter read 1 at rest — for codex's unmapped `turn.started` and claude's
+`rate_limit_event`, which appears on *successful* runs. A drift signal that is
+noise at rest is not a signal. Now 0 for both, so a genuine schema change will
+actually stand out.
+
+**3. Cost was structurally unreportable.** The supervisor called only the
+singular `parseLine`, which on a terminal line returns the terminal event and
+drops the `usage` beside it. Both codecs already had a plural parse; nothing
+used it. So R26's cost reporting could never have worked, and the smoke showed
+`cost: MISSING` for the agent whose registry entry says `reportsCost: true` and
+whose transcripts carry `total_cost_usd`. Added `parseEvents?` to the port, wired
+both codecs, and the supervisor prefers it. Now `$0.0296` for claude and still
+`MISSING` for codex — which is right, since codex reports no monetary cost at
+all and a missing figure must stay missing rather than become zero.
+
+Four supervisor tests had pinned the event sequence without `usage`; those
+expectations were the bug's fingerprint, not the fix's cost, and are updated
+with a comment saying why.
+
+All three now have offline regression tests, so the fixes do not depend on
+anyone re-running a paid smoke to stay fixed.
+
+**Containment held.** The repository working tree was byte-unchanged across every
+run and no smoke worktree remained registered — the guarantee D-08 rests on,
+observed rather than asserted for the first time.
+
+Full suite 4794 pass, 0 fail. Typecheck clean.
 - 2026-08-19T18:03:33.662Z - frozen: 17 criteria; checksum recorded
 - 2026-08-19T18:03:33.876Z - started
 - 2026-08-19T18:10:59.027Z - task-done: T1: Collect remaining context
@@ -582,3 +633,4 @@ in isolation. Typecheck clean. Roadmap → 0.16.0.
 - 2026-08-19T20:00:19.138Z - task-added: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)
 - 2026-08-19T20:56:15.331Z - task-done: T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask
 - 2026-08-19T21:16:52.869Z - task-done: T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped
+- 2026-08-20T05:11:54.601Z - task-done: T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)

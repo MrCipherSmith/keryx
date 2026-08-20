@@ -272,6 +272,13 @@ export async function runExternalChild(
       {
         spawn: deps.spawn,
         codec,
+        // Without this the skip counter conflates "never seen this line" with
+        // "deliberately unmapped", and only the first is version drift. The
+        // T19 smoke scored one phantom skip on every healthy run for want of
+        // it — a drift signal that is noise at rest is not a signal.
+        ...(codec.isRecognisedLine === undefined
+          ? {}
+          : { isRecognisedLine: codec.isRecognisedLine.bind(codec) }),
         ...(deps.onEvent === undefined ? {} : { onEvent: deps.onEvent }),
         ...(deps.onSpawned === undefined ? {} : { onSpawned: deps.onSpawned }),
       },
@@ -356,10 +363,24 @@ function findCostUnits(events: readonly ExternalEvent[]): number | undefined {
  * is already safe wherever it is read.
  */
 function collectAssistantText(events: readonly ExternalEvent[]): string {
+  // A terminal event's text WINS OUTRIGHT rather than being appended.
+  //
+  // Measured in the live smoke (flow 176 T19): claude's `result.result` is the
+  // same final answer its `assistant` blocks already carried, so appending both
+  // returned "ok\nok" for a one-word reply — and would have duplicated an entire
+  // report for a real one. codex has the opposite shape: its `turn.completed`
+  // carries no text, so the assistant messages are all there is. Preferring the
+  // terminal text when present, and falling back to the stream when it is not,
+  // is correct for both without branching on the agent.
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event?.kind === "child_finished" && event.text !== undefined && event.text.trim().length > 0) {
+      return event.text.trim();
+    }
+  }
   const parts: string[] = [];
   for (const event of events) {
     if (event.kind === "assistant_text") parts.push(event.text);
-    else if (event.kind === "child_finished" && event.text !== undefined) parts.push(event.text);
   }
   return parts.join("\n").trim();
 }

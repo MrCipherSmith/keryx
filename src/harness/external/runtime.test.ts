@@ -321,6 +321,71 @@ describe("failure is named, never substituted", () => {
   });
 });
 
+describe("regressions found by the live smoke (T19)", () => {
+  const CLAUDE_RT: RuntimeBlock = { kind: "external", agent: "claude-cli", sandbox: "read-only" };
+
+  test("a terminal event's text is not appended to the assistant stream that already carried it", async () => {
+    // Measured against a real `claude -p`: `result.result` repeats the text the
+    // `assistant` blocks already streamed, so appending both returned "ok\nok"
+    // for a one-word reply — and would duplicate an entire report for a real one.
+    const result = await runExternalChild(
+      baseInput({ runtime: CLAUDE_RT }),
+      baseDeps({ spawn: fakeSpawn(transcript("claude-cli", "success.stdout.jsonl")).port }),
+    );
+    expect(result.status).toBe("Completed");
+    expect(result.output).toBe("ok");
+  });
+
+  test("codex, whose terminal event carries no text, still reports the assistant message", async () => {
+    // The other half of the same rule: preferring the terminal text must not
+    // lose the answer for an agent that puts it only in the stream.
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
+    );
+    expect(result.output).toBe("ok");
+  });
+
+  test("cost survives the terminal line that also carries it", async () => {
+    // The supervisor took only the singular `parseLine`, which on a terminal
+    // line returns the terminal event and drops the `usage` beside it — so R26's
+    // cost reporting was structurally impossible. The live smoke showed
+    // `cost: MISSING` for claude, whose transcripts do carry `total_cost_usd`.
+    const result = await runExternalChild(
+      baseInput({ runtime: CLAUDE_RT }),
+      baseDeps({ spawn: fakeSpawn(transcript("claude-cli", "success.stdout.jsonl")).port }),
+    );
+    expect(result.costUnits).toBeGreaterThan(0);
+  });
+
+  test("an agent that reports no cost still reports none, not zero", async () => {
+    // codex declares `reportsCost: false`; a missing figure must stay missing.
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
+    );
+    expect(result.costUnits).toBeUndefined();
+  });
+
+  test("a healthy run scores zero parse skips for both agents", async () => {
+    // The codec's recogniser must reach the supervisor, or `turn.started`
+    // (codex) and `rate_limit_event` (claude) each cost a phantom skip and the
+    // version-drift signal is noise at rest.
+    for (const [runtime, fixture] of [
+      [EXTERNAL, "codex-cli/success.stdout.jsonl"],
+      [CLAUDE_RT, "claude-cli/success.stdout.jsonl"],
+    ] as const) {
+      const [agent, name] = fixture.split("/") as [string, string];
+      const result = await runExternalChild(
+        baseInput({ runtime }),
+        baseDeps({ spawn: fakeSpawn(transcript(agent, name)).port }),
+      );
+      expect(result.status).toBe("Completed");
+      expect(result.skippedLines).toBe(0);
+    }
+  });
+});
+
 describe("steerable runs (the stdin route)", () => {
   function recordingSpawn(stdout: readonly string[]): {
     port: ExternalSpawnPort;

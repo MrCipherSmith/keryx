@@ -132,6 +132,20 @@ export interface ExternalAgentCodec {
   buildArgv(input: ExternalRunInput): readonly string[];
   /** One transcript line to zero or one canonical events. Unparseable lines yield undefined. */
   parseLine(line: string): ExternalEvent | undefined;
+  /**
+   * One transcript line to ALL its canonical events, in stream order. Preferred
+   * by the supervisor when present.
+   *
+   * It exists because one line can legitimately carry two facts and the singular
+   * form must pick one. Both shipped agents put the turn's cost and the terminal
+   * event on the same line, so `parseLine` returns the terminal one — losing
+   * terminality would misclassify every successful run, while losing the cost
+   * only loses a number. But losing it every time means R26's cost reporting can
+   * never work: the T19 live smoke showed `cost: MISSING` for `claude`, whose
+   * registry entry declares `reportsCost: true` and whose transcripts do carry
+   * `total_cost_usd`. This is the seam that lets both survive.
+   */
+  parseEvents?(line: string): readonly ExternalEvent[];
   /** Null means the run succeeded; a string names the cause in operator-readable terms. */
   classifyFailure(outcome: ProcessOutcome): string | null;
   /**
@@ -154,4 +168,14 @@ export interface ExternalAgentCodec {
   buildStreamingArgv?(input: ExternalRunInput): readonly string[];
   /** Encode one stdin line for a steerable run. Present exactly when {@link buildStreamingArgv} is. */
   encodeStdinMessage?(text: string): string;
+  /**
+   * Whether this codec RECOGNISES a line, even when the line maps to no event.
+   *
+   * Without it the supervisor's parse-skip counter conflates "never seen this"
+   * with "deliberately unmapped", and only the first is version drift. Measured:
+   * every healthy run in the T19 smoke scored one phantom skip — codex for its
+   * unmapped `turn.started`, claude for a `rate_limit_event` that appears on
+   * successful runs — so the drift signal was noise at rest.
+   */
+  isRecognisedLine?(line: string): boolean;
 }
