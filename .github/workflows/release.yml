@@ -178,9 +178,19 @@ jobs:
               # emulation. `file` reporting the expected target platform/arch is
               # a real, if weaker, integrity check; it is not a substitute for
               # "it ran" and is not reported as one.
+              # A default arm is required, not decorative: without one, a
+              # future target added to the for-loop above with no matching
+              # case arm here would silently leave `$expect` holding the
+              # PREVIOUS iteration's value instead of failing, and the
+              # `grep -q "$expect"` integrity check below could spuriously
+              # pass for a target it was never meant to check.
               case "$target" in
                 bun-darwin-*) expect="Mach-O" ;;
                 bun-linux-*)  expect="ELF" ;;
+                *)
+                  echo "::error::no expected file(1) signature configured for target $target"
+                  exit 1
+                  ;;
               esac
               if ! file "$asset" | grep -q "$expect"; then
                 echo "::error::$asset does not look like a $expect binary for $target"

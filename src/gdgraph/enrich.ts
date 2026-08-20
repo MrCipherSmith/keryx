@@ -51,7 +51,6 @@ export async function enrichBuildWithSymbols(
     languages: config.treesitter.languages,
     grammarsPath: config.treesitter.grammarsPath,
   };
-  const spec = createTreesitterSpec(cwd, treesitterConfig);
 
   // Gate 1 (manifest-enabled) + dep + grammar + isAvailable. `null` ⇒ degrade
   // with NO symbol files written; the seam emits the single warn-once on an
@@ -59,8 +58,13 @@ export async function enrichBuildWithSymbols(
   // literal `await import("web-tree-sitter")` fast path first (T6) so a
   // `bun build --compile` binary can genuinely parse instead of always
   // degrading — see `resolveTreesitterCapability`.
+  //
+  // `createTreesitterSpec` is only built here when an injected `resolve` is
+  // supplied (tests): `resolveTreesitterCapability` builds its own equivalent
+  // spec internally from `treesitterConfig`, so building one unconditionally
+  // on the default path would be dead work on every real `gdgraph build` call.
   const adapter = resolve
-    ? await resolve(cwd, spec)
+    ? await resolve(cwd, createTreesitterSpec(cwd, treesitterConfig))
     : await resolveTreesitterCapability(cwd, treesitterConfig);
   if (!adapter) {
     return { enriched: false, symbols: 0, calls: 0 };

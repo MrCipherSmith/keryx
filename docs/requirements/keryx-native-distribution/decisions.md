@@ -1,5 +1,5 @@
 # Keryx Native Distribution — Decisions
-Version: 0.3.0
+Version: 0.3.1
 
 ## D-01: Standalone binary via `bun build --compile`, not thin wrappers
 
@@ -46,6 +46,21 @@ tree-sitter dependency or the decision itself. The fix (a
 gdgraph/treesitter-specific literal-import fast path, not a change to
 `seam.ts`'s generic contract) is tracked as this flow's T6. See
 [specification.md](specification.md) §2's amendment for the full record.
+
+**Amended (review-fix round, 2026-08-21) — disclosure, not a fix.** T6 fixed
+the bundling gap for `gdgraph.treesitter` specifically, by adapter-level
+literal import, not by changing the generic seam. `src/memory/embedding/
+adapter.ts`, `src/security/detect/pii/ner-adapter.ts`, and
+`src/security/detect/injection/adapter.ts` still route their optional
+dependencies through the same generic `resolveCapability`/
+`await import(spec.optionalDependency)` seam this decision's original
+reasoning found broken for `web-tree-sitter` (oven-sh/bun#11732) — the same
+class of bug is likely present for all three inside a compiled binary,
+un-fixed. This flow deliberately did not touch them (real, separate work,
+out of scope here). Treat the standalone binary's no-runtime-dependency
+claim as proven for tree-sitter parsing, MCP, and the TUI shell only — not
+yet for memory embedding or security PII/injection detection — until a
+future flow verifies and, if needed, fixes those three the same way.
 
 ## D-02: Single-runner cross-compile, no OS matrix
 

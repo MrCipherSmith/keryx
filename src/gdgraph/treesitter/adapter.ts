@@ -103,18 +103,24 @@ export async function resolveTreesitterCapability(
 ): Promise<CapabilityAdapter<BuildInput, SymbolLayer> | null> {
   const spec = createTreesitterSpec(cwd, config);
 
-  const literalDep = await loadTreesitterDepLiteral();
-  if (literalDep === undefined) {
-    // Literal import failed (dependency not actually installed) — defer to the
-    // seam's normal variable-based gate 2, unchanged.
-    return resolve(cwd, spec);
-  }
-
   try {
-    // Gate 1: manifest-enabled — identical check the seam performs, no dep
-    // load, no warning when disabled (the normal default path).
+    // Gate 1 FIRST — identical check the seam performs, no dep load, no
+    // warning when disabled (the normal default path per `seam.ts`'s own
+    // contract: "Disabled ⇒ null with NO dep load, NO asset touch, and NO
+    // warning"). This MUST run before the literal `import("web-tree-sitter")`
+    // below: with the check after, every `gdgraph build` call paid the
+    // literal-import cost even with the capability disabled — the bug this
+    // ordering fixes.
     if (!(await isCapabilityEnabled(cwd, spec.id))) {
       return null;
+    }
+
+    const literalDep = await loadTreesitterDepLiteral();
+    if (literalDep === undefined) {
+      // Literal import failed (dependency not actually installed) — defer to
+      // the seam's normal variable-based gate 2, unchanged. The seam
+      // re-checks gate 1, which is cheap and idempotent.
+      return await resolve(cwd, spec);
     }
 
     // Gate 2 replaced: the dependency is already loaded via the literal
