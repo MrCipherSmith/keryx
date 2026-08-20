@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultModelFor,
   hasCredential,
+  keyedProviderCandidates,
   resolveAutoProvider,
   runModelTurn,
   type ProviderFactory,
@@ -94,6 +95,25 @@ describe("runModelTurn", () => {
     expect(hasCredential("ollama", {})).toBe(true);
     expect(hasCredential("anthropic", {})).toBe(false);
     expect(hasCredential("openrouter", { OPENROUTER_API_KEY: "k" })).toBe(true);
+  });
+
+  // flow 183: openai/gemini must be recognised the same way anthropic is —
+  // review found this was silently missing (auto-detection dead for both).
+  test("defaultModelFor + hasCredential recognise openai/gemini", () => {
+    expect(defaultModelFor("openai")).toContain("gpt-5.6");
+    expect(defaultModelFor("gemini")).toContain("gemini-2.5");
+    expect(hasCredential("openai", {})).toBe(false);
+    expect(hasCredential("openai", { OPENAI_API_KEY: "sk-test" })).toBe(true);
+    expect(hasCredential("gemini", {})).toBe(false);
+    expect(hasCredential("gemini", { GEMINI_API_KEY: "k" })).toBe(true);
+    // GOOGLE_API_KEY fallback when GEMINI_API_KEY is absent.
+    expect(hasCredential("gemini", { GOOGLE_API_KEY: "k" })).toBe(true);
+  });
+
+  test("keyedProviderCandidates includes openai and gemini", () => {
+    const candidates = keyedProviderCandidates();
+    expect(candidates).toContain("openai");
+    expect(candidates).toContain("gemini");
   });
 
   test("resolveAutoProvider prefers keyed credentials, not ollama-by-default", () => {

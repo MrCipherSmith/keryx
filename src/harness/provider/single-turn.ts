@@ -39,6 +39,10 @@ export const DEFAULT_PROVIDER = "anthropic";
 const DEFAULT_MODELS: Record<string, string> = {
   anthropic: "claude-haiku-4-5-20251001",
   ollama: "llama3.2",
+  // flow 183: keep in sync with select.ts's OPENAI_MODELS/GEMINI_MODELS
+  // curated defaults.
+  openai: "gpt-5.6-luna",
+  gemini: "gemini-2.5-flash-lite",
 };
 
 /** Resolve the default model id for a provider. */
@@ -57,6 +61,14 @@ export function hasCredential(provider: string, env: Record<string, string | und
   }
   if (provider === "anthropic") {
     const key = env.ANTHROPIC_API_KEY;
+    return key !== undefined && key.length > 0;
+  }
+  if (provider === "openai") {
+    const key = env.OPENAI_API_KEY;
+    return key !== undefined && key.length > 0;
+  }
+  if (provider === "gemini") {
+    const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
     return key !== undefined && key.length > 0;
   }
   const compat = providerByName(provider);
@@ -80,6 +92,8 @@ export function hasCredential(provider: string, env: Record<string, string | und
 export function keyedProviderCandidates(): string[] {
   return [
     "anthropic",
+    "openai",
+    "gemini",
     ...OPENAI_COMPAT_PROVIDERS.filter((provider) => provider.requiresApiKey !== false).map((p) => p.name),
   ];
 }

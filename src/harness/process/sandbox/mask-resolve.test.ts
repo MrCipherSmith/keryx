@@ -190,15 +190,33 @@ describe("resolveCredentialMasks", () => {
 });
 
 describe("buildDefaultMaskProviders", () => {
-  test("appends Anthropic after openai-compat entries", () => {
+  test("appends Anthropic, then OpenAI/Gemini/Google, after openai-compat entries", () => {
     const list = buildDefaultMaskProviders([
       { envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },
     ]);
-    expect(list.at(-1)).toEqual({
-      envKey: "ANTHROPIC_API_KEY",
-      baseUrl: "https://api.anthropic.com",
-    });
     expect(list[0]?.envKey).toBe("DEEPSEEK_API_KEY");
+    expect(list.map((p) => p.envKey)).toEqual([
+      "DEEPSEEK_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "OPENAI_API_KEY",
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY",
+    ]);
+  });
+
+  // flow 183: the native OpenAI/Gemini adapters' credentials must be
+  // auto-masked the same way every other provider's key already is.
+  test("includes OPENAI_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY with their vendor base URLs", () => {
+    const list = buildDefaultMaskProviders([]);
+    expect(list).toContainEqual({ envKey: "OPENAI_API_KEY", baseUrl: "https://api.openai.com" });
+    expect(list).toContainEqual({
+      envKey: "GEMINI_API_KEY",
+      baseUrl: "https://generativelanguage.googleapis.com",
+    });
+    expect(list).toContainEqual({
+      envKey: "GOOGLE_API_KEY",
+      baseUrl: "https://generativelanguage.googleapis.com",
+    });
   });
 });
 
