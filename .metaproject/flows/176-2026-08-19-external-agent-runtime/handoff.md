@@ -10,7 +10,7 @@ Read this first if you are picking the work up cold. The full chronology is in
 | | |
 |---|---|
 | Branch | `feat/keryx-external-agent-runtime` (pushed, in sync with origin) |
-| PR | **draft [#354](https://github.com/MrCipherSmith/keryx/pull/354)** against `main` |
+| PR | **draft #354** against `main` (`gh pr view 354`) |
 | Flow | `in-progress`, tasks 19/19, **acceptance criteria 14/17** |
 | Suite | 4794 pass, 0 fail; `bun run typecheck` clean; no new dependencies |
 | Package | `docs/requirements/keryx-external-agent-runtime/` |
