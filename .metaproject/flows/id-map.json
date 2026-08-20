@@ -102,5 +102,13 @@
     "toDir": "174-2026-08-19-sac-durable-wrap-up-dispatch-outcome-rec",
     "at": "2026-08-19T13:05:13.053Z",
     "reason": "flow id collision: another clone also allocated 173 (feat/shell-background-processes, PR #344, merged first). Renumbering mine to the next free id."
+  },
+  {
+    "from": "176",
+    "to": "178",
+    "fromDir": "176-2026-08-19-external-agent-runtime",
+    "toDir": "178-2026-08-19-external-agent-runtime",
+    "at": "2026-08-20T08:59:24.321Z",
+    "reason": "flow id collision: another clone also allocated 176 (security-detector-false-positives, PR #353, merged first). Renumbering mine to the next free id."
   }
 ]

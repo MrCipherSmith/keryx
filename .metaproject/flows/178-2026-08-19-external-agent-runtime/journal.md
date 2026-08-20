@@ -895,3 +895,7 @@ exported and tested but not yet imported by production code (`runtime.ts`)
 feature, not part of AC5.
 - 2026-08-20T08:49:52.176Z - task-done: T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents
 - 2026-08-20T08:49:59.137Z - ac-confirmed: AC5: agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings.
+- 2026-08-20T08:59:24.321Z - renumbered: 176 -> 178: flow id collision: another clone also allocated 176 (security-detector-false-positives, PR #353, merged first). Renumbering mine to the next free id.
+- 2026-08-20T08:59:30.818Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/354 (warning: PR is not a draft)
+- 2026-08-20T08:59:30.905Z - completing
+- 2026-08-20T08:59:32.780Z - done: all gates passed

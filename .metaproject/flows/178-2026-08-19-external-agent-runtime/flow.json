@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "176",
+  "id": "178",
   "slug": "external-agent-runtime",
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T08:49:59.137Z",
+  "updatedAt": "2026-08-20T08:59:32.780Z",
   "source": {
     "type": "description",
     "ref": null
@@ -82,7 +82,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/354"
   },
   "tasks": [
     {
@@ -753,6 +753,25 @@
       "at": "2026-08-20T08:49:59.137Z",
       "event": "ac-confirmed",
       "detail": "AC5: agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings."
+    },
+    {
+      "at": "2026-08-20T08:59:24.321Z",
+      "event": "renumbered",
+      "detail": "176 -> 178: flow id collision: another clone also allocated 176 (security-detector-false-positives, PR #353, merged first). Renumbering mine to the next free id."
+    },
+    {
+      "at": "2026-08-20T08:59:30.818Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/354 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T08:59:30.905Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T08:59:32.780Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
