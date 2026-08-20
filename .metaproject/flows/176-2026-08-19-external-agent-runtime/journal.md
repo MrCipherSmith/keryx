@@ -838,3 +838,60 @@ doc-comment misquoting AC12's text by one word) not worth a fix.
 **AC12 confirmed.** AC5 remains the only open criterion (16/17 now).
 - 2026-08-20T08:19:55.233Z - task-done: T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker
 - 2026-08-20T08:20:04.377Z - ac-confirmed: AC12: detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues.
+- 2026-08-20T08:32:54.182Z - task-added: T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents
+
+## 2026-08-20 — T22: AC5 closed — 17/17, flow's requirements fully met
+
+The handoff framed this as an open fork ("map onto AgentEvent, or widen the
+monitor — do not just delete the comment and confirm the AC"). Careful
+re-reading of AC5's OWN text resolved it without needing a fresh design
+debate: "reduceAgents folds that sequence WITHOUT MODIFICATION TO THE FOLD"
+already rules out widening (which would mean extending
+`AgentEvent.type`'s enum + `agent-event.schema.json`) — the only reading
+consistent with the criterion's literal words is a pure bridge feeding the
+existing, unmodified fold. Recorded here because it's a good example of a
+"real question" resolving to a narrower one on closer reading, not because
+the operator's judgment was unneeded — the SCOPE decision (build the bridge
++ fixture proof only; do NOT wire a live `agent-event.jsonl` writer for
+external runs into production, since nothing consumes one today and nobody
+asked for `keryx agents monitor` to show external activity) was still a
+real choice, presented and confirmed before implementation.
+
+New `src/harness/external/agent-event-bridge.ts`: `bridgeExternalEvent`/
+`bridgeExternalEvents`, pure, injected `now`/`eventId` for determinism.
+Three of `ExternalEvent`'s 10 kinds map to status-changing `AgentEvent`
+types (`child_started`→`dispatch_created`, `child_finished`→
+`dispatch_completed`, `child_failed`→`run_failed`); the other seven
+(including `usage`, whose token/cost data still needs to reach the fold)
+map to the status-neutral `artifact_written`, deliberately — `reduceAgents`
+reads `data.model`/`.source`/`.budgetRemaining`/`.usage` unconditionally
+from every event regardless of `type`, so a status-neutral placeholder
+still carries `usage` data through the unmodified fold; the seven kinds
+without any fold-relevant payload carry only a human-readable `message` for
+someone dumping a bridged stream to read. Named as a deliberate compromise
+in-code, matching this package's own established convention (`runtime.ts`'s
+`DENIED_CAUSE_MARKERS`) of documenting known weaknesses rather than hiding
+them. `run_id`/`dispatch_id` come from the caller-supplied context (a
+single-child run, so identical on every event); `event_id` is a fresh
+`randomUUID()` per event; `timestamp_utc` is bridge-observation time, not
+vendor-side time (`ExternalEvent` carries no timestamp at all) — documented
+as a real, stated limitation.
+
+Verified independently (typecheck + full suite myself: 4864 pass/0 fail;
+confirmed via `git status` that `reduce.ts`, `agent-event.schema.json`,
+both codecs, and `ExternalEvent`'s type show zero changes — the literal
+proof AC5's text demands). review-logic: zero findings, traced status
+transitions against real fixtures for both codecs (success + not-logged-in
+paths), confirmed `usage` summing handles the all-fields-absent case
+without `NaN`, confirmed `event_id` is genuinely unique per event (not
+hoisted outside the per-event map). review-style: zero findings.
+
+**AC5 confirmed — 17/17 acceptance criteria met.** Flow 176's full
+requirement set (per acceptance-criteria.md) is now satisfied for the
+first time since the flow was created. `bridgeExternalEvent(s)` is
+exported and tested but not yet imported by production code (`runtime.ts`)
+— intentional, per the scope decision above; wiring a live
+`agent-event.jsonl` writer for external runs is a separate, unrequested
+feature, not part of AC5.
+- 2026-08-20T08:49:52.176Z - task-done: T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents
+- 2026-08-20T08:49:59.137Z - ac-confirmed: AC5: agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings.

@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "in-progress",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T08:20:04.377Z",
+  "updatedAt": "2026-08-20T08:49:59.137Z",
   "source": {
     "type": "description",
     "ref": null
@@ -75,6 +75,10 @@
     "AC12": {
       "at": "2026-08-20T08:20:04.376Z",
       "note": "detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
+    },
+    "AC5": {
+      "at": "2026-08-20T08:49:59.137Z",
+      "note": "agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings."
     }
   },
   "pr": {
@@ -434,6 +438,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -719,6 +738,21 @@
       "at": "2026-08-20T08:20:04.377Z",
       "event": "ac-confirmed",
       "detail": "AC12: detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
+    },
+    {
+      "at": "2026-08-20T08:32:54.182Z",
+      "event": "task-added",
+      "detail": "T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents"
+    },
+    {
+      "at": "2026-08-20T08:49:52.176Z",
+      "event": "task-done",
+      "detail": "T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents"
+    },
+    {
+      "at": "2026-08-20T08:49:59.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings."
     }
   ]
 }
