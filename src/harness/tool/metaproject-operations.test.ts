@@ -40,6 +40,8 @@ const EXPECTED_NAMES = [
   "read_wiki",
   "repomap",
   "search_code",
+  "skill_load",
+  "skills_catalog",
   "test_related",
   "wiki_ask",
   "wiki_backlinks",
@@ -431,6 +433,169 @@ test("a wiki_backlinks result validates against wiki-backlinks-result.schema.jso
     ),
   ) as Record<string, unknown>;
   const result = { file: "src/harness/run/run.ts", backlinks: [".metaproject/wiki/architecture/harness.md"] };
+  const validation = validateAgainstSchemaObject(schema, result);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
+});
+
+// --- skills_catalog / skill_load (docs/requirements/keryx-skills-runtime-tools) ---
+
+test("skills_catalog formats the structured port result when the method is present", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsCatalog: async () => ({
+      skills: [
+        { name: "flow-orchestrator", path: ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", category: "orchestration", description: "Task Manager orchestrator.", triggers: ["создай фло"] },
+        { name: "gdgraph-router", path: ".metaproject/skills/gdskills/core/gdgraph-router/SKILL.md", category: "core", description: "" },
+      ],
+      generatedAt: "2026-08-20T00:00:00.000Z",
+    }),
+  };
+  const result = await op("skills_catalog").invoke(port, {});
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("Skills (2)");
+  expect(result.output).toContain("flow-orchestrator (orchestration) — Task Manager orchestrator.");
+  expect(result.output).toContain("[triggers: создай фло]");
+  expect(result.output).toContain("gdgraph-router (core) — (no description)");
+});
+
+test("skills_catalog reports an empty catalog distinctly from 'not available'", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsCatalog: async () => ({ skills: [], generatedAt: "2026-08-20T00:00:00.000Z" }),
+  };
+  const result = await op("skills_catalog").invoke(port, {});
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("No skills found under .metaproject/skills/gdskills/");
+});
+
+test("skills_catalog reports 'not available' when the port omits the method (never throws)", async () => {
+  const { port } = recordingPort();
+  const result = await op("skills_catalog").invoke(port, {});
+  expect(result.isError).toBe(true);
+  expect(result.output).toMatch(/not available/);
+});
+
+test("skills_catalog is a gdskills-module read op present in all three projections (agent/harness/MCP)", () => {
+  const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "skills_catalog");
+  expect(descriptor?.module).toBe("gdskills");
+  expect(descriptor?.risk).toBe("read");
+
+  const { port } = recordingPort();
+  const interactive = toInteractiveTools(METAPROJECT_OPERATIONS, port).map((t) => t.definition.name);
+  expect(interactive).toContain("skills_catalog");
+
+  const harness = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(harness).toContain("metaproject:skills_catalog");
+
+  const mcp = toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name);
+  expect(mcp).toContain("skills_catalog");
+});
+
+test("skill_load returns the content verbatim as output when found", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    loadSkill: async ({ name }) => ({
+      name,
+      path: ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      content: "---\nname: flow-orchestrator\n---\n\n# Flow Orchestrator\n",
+      found: true,
+    }),
+  };
+  const result = await op("skill_load").invoke(port, { name: "flow-orchestrator" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toBe("---\nname: flow-orchestrator\n---\n\n# Flow Orchestrator\n");
+});
+
+test("skill_load reports 'no skill found' when found is false (never throws)", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    loadSkill: async ({ name }) => ({ name, path: "", content: "", found: false }),
+  };
+  const result = await op("skill_load").invoke(port, { name: "does-not-exist" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("no skill found for 'does-not-exist'");
+});
+
+test("skill_load requires a non-empty 'name' input", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    loadSkill: async ({ name }) => ({ name, path: "", content: "", found: false }),
+  };
+  const result = await op("skill_load").invoke(port, {});
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("requires a non-empty 'name'");
+});
+
+test("skill_load reports 'not available' when the port omits the method (never throws)", async () => {
+  const { port } = recordingPort();
+  const result = await op("skill_load").invoke(port, { name: "flow-orchestrator" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toMatch(/not available/);
+});
+
+test("skill_load is a gdskills-module read op present in all three projections (agent/harness/MCP)", () => {
+  const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "skill_load");
+  expect(descriptor?.module).toBe("gdskills");
+  expect(descriptor?.risk).toBe("read");
+
+  const { port } = recordingPort();
+  const interactive = toInteractiveTools(METAPROJECT_OPERATIONS, port).map((t) => t.definition.name);
+  expect(interactive).toContain("skill_load");
+
+  const harness = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(harness).toContain("metaproject:skill_load");
+
+  const mcp = toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name);
+  expect(mcp).toContain("skill_load");
+});
+
+test("a skills_catalog result validates against skills-catalog-result.schema.json", () => {
+  const schema = JSON.parse(
+    readFileSync(
+      path.join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "docs",
+        "requirements",
+        "keryx-skills-runtime-tools",
+        "schemas",
+        "skills-catalog-result.schema.json",
+      ),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+  const result = {
+    skills: [
+      { name: "flow-orchestrator", path: ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", category: "orchestration", description: "Task Manager orchestrator." },
+    ],
+    generatedAt: "2026-08-20T00:00:00.000Z",
+  };
+  const validation = validateAgainstSchemaObject(schema, result);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
+});
+
+test("a skill_load result validates against skill-load-result.schema.json", () => {
+  const schema = JSON.parse(
+    readFileSync(
+      path.join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "docs",
+        "requirements",
+        "keryx-skills-runtime-tools",
+        "schemas",
+        "skill-load-result.schema.json",
+      ),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+  const result = { name: "flow-orchestrator", path: ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", content: "# Flow Orchestrator\n", found: true };
   const validation = validateAgainstSchemaObject(schema, result);
   expect(validation.errors).toEqual([]);
   expect(validation.valid).toBe(true);

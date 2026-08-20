@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "keryx-skills-runtime-tools/skill-load-result.schema.json",
+  "title": "SkillLoadResult",
+  "description": "Output contract for the skill_load MetaprojectOperation. Draft — see docs/requirements/keryx-skills-runtime-tools/specification.md section 3.2.",
+  "type": "object",
+  "required": ["name", "path", "content", "found"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The requested skill name or path, echoed back."
+    },
+    "path": {
+      "type": "string",
+      "description": "Resolved project-relative path to the SKILL.md that was read. Empty string when found is false."
+    },
+    "content": {
+      "type": "string",
+      "description": "The SKILL.md body verbatim, including frontmatter. Never formatted, summarized, or truncated (specification.md section 3.2). Empty string when found is false."
+    },
+    "found": {
+      "type": "boolean",
+      "description": "False when name/path does not resolve to a known skill; content and path are empty rather than the call erroring (specification.md acceptance criterion AC3)."
+    }
+  }
+}

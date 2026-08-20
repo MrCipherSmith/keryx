@@ -13,7 +13,8 @@
 // `Math.random`, and every method returns a structured result INSTEAD of throwing
 // (a backing error becomes a structured empty/error result).
 
-import { readFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findPath } from "../../gdgraph/path";
@@ -50,6 +51,9 @@ import type {
   MetaprojectPort,
   RepomapResult,
   SearchCodeResult,
+  SkillLoadResult,
+  SkillsCatalogEntry,
+  SkillsCatalogResult,
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
@@ -83,6 +87,13 @@ export interface MetaprojectAdapterDeps {
    * tool is truly read-only. Injectable for tests.
    */
   repomapCompute: (cwd: string, options: RepomapOptions) => Promise<GdgraphRepomapResult>;
+  /**
+   * Clock for `skillsCatalog`'s `generatedAt` (default: real wall-clock ISO
+   * time). Injectable for tests — the only concession to this file's stated
+   * "reads nothing from Date.now" determinism, kept isolated to this one
+   * field rather than threading a clock through every method.
+   */
+  now: () => string;
 }
 
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
@@ -102,6 +113,7 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
     }),
   wikiAsk,
   wikiPagesForFile,
+  now: () => new Date().toISOString(),
   repomapCompute: async (cwd, options) => {
     const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
     return computeRepomap(graph, config, options);
@@ -135,6 +147,163 @@ function confineToWiki(cwd: string, candidate: string): string | null {
     return null; // escapes the wiki root
   }
   return target;
+}
+
+/**
+ * Confine `candidate` to the gdskills root (`<cwd>/.metaproject/skills/gdskills`).
+ * Unlike `confineToWiki` (whose `candidate` is wiki-root-relative), `candidate`
+ * here is PROJECT-root-relative — matching `SkillsCatalogEntry.path`'s own
+ * contract (specification.md §3.2: `skill_load`'s `name` accepts either a bare
+ * name or "an exact project-relative path", the same string `skills_catalog`
+ * returns) — so it resolves against `cwd`, then verifies the result still
+ * falls inside the gdskills root. Returns the absolute path, or `null` when it
+ * resolves outside the gdskills root (whether via `..`, an absolute path, or
+ * simply pointing elsewhere in the project).
+ */
+function confineToSkills(cwd: string, candidate: string): string | null {
+  const skillsRoot = join(cwd, ".metaproject", "skills", "gdskills");
+  const target = resolve(cwd, candidate);
+  const rel = relative(skillsRoot, target);
+  if (rel === "") {
+    return null; // the root dir itself is not a skill
+  }
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return null; // escapes the gdskills root
+  }
+  return target;
+}
+
+/** Strip a single layer of matching `"`/`'` quotes, if present. */
+function stripSkillFieldQuotes(value: string): string {
+  if (value.length >= 2) {
+    const first = value[0];
+    const last = value[value.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return value.slice(1, -1);
+    }
+  }
+  return value;
+}
+
+/**
+ * Forgiving frontmatter parse for a SKILL.md's `description`/`triggers` fields.
+ * Never throws: a malformed or absent frontmatter block yields `{}`, degrading
+ * that one catalog entry rather than failing the whole `skillsCatalog` call.
+ */
+function parseSkillFrontmatter(content: string): { description?: string; triggers?: string[] } {
+  if (!content.startsWith("---")) {
+    return {};
+  }
+  const end = content.indexOf("\n---", 3);
+  if (end === -1) {
+    return {};
+  }
+  const lines = content.slice(3, end).split("\n");
+  let description: string | undefined;
+  const triggers: string[] = [];
+  let inTriggers = false;
+  for (const line of lines) {
+    const descMatch = /^description:\s*(.*)$/.exec(line);
+    if (descMatch !== null && descMatch[1] !== undefined) {
+      description = stripSkillFieldQuotes(descMatch[1].trim());
+      inTriggers = false;
+      continue;
+    }
+    if (/^triggers:\s*$/.test(line)) {
+      inTriggers = true;
+      continue;
+    }
+    if (inTriggers) {
+      const itemMatch = /^\s+-\s*(.+)$/.exec(line);
+      if (itemMatch !== null && itemMatch[1] !== undefined) {
+        triggers.push(stripSkillFieldQuotes(itemMatch[1].trim()));
+        continue;
+      }
+      inTriggers = false;
+    }
+  }
+  return { ...(description !== undefined ? { description } : {}), ...(triggers.length > 0 ? { triggers } : {}) };
+}
+
+/**
+ * Parse `.metaproject/skills/catalog.md`'s `| Skill | Category | Purpose |
+ * Entry |` table into `name -> purpose`, for `walkSkillCatalog`'s description
+ * fallback (specification.md §3.1). Returns an empty map on any read/parse
+ * failure — the fallback degrading to "" is acceptable, a thrown error is not.
+ */
+async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> {
+  const summaries = new Map<string, string>();
+  let content: string;
+  try {
+    content = await readFile(join(cwd, ".metaproject", "skills", "catalog.md"), "utf8");
+  } catch {
+    return summaries;
+  }
+  const rowPattern = /^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$/;
+  for (const line of content.split("\n")) {
+    const match = rowPattern.exec(line);
+    if (match === null) {
+      continue;
+    }
+    const [, name, , purpose] = match;
+    if (name === undefined || purpose === undefined || name === "Skill" || /^-+$/.test(name)) {
+      continue; // header or separator row
+    }
+    summaries.set(name, purpose);
+  }
+  return summaries;
+}
+
+/**
+ * Walk `.metaproject/skills/gdskills/<category>/<name>/SKILL.md` (exact
+ * basename only — per-assistant variants like SKILL.opencode.md are not
+ * catalog entries) and return every discovered skill, sorted by path. Never
+ * throws: a missing gdskills root or an unreadable category/skill directory
+ * yields fewer entries, not a failure.
+ */
+async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
+  const root = join(cwd, ".metaproject", "skills", "gdskills");
+  const entries: SkillsCatalogEntry[] = [];
+  let categoryDirs: Dirent[];
+  try {
+    categoryDirs = await readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const catalogSummaries = await parseCatalogSummaries(cwd);
+  for (const categoryDir of categoryDirs) {
+    if (!categoryDir.isDirectory()) {
+      continue;
+    }
+    const categoryPath = join(root, categoryDir.name);
+    let skillDirs: Dirent[];
+    try {
+      skillDirs = await readdir(categoryPath, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const skillDir of skillDirs) {
+      if (!skillDir.isDirectory()) {
+        continue;
+      }
+      const skillMdPath = join(categoryPath, skillDir.name, "SKILL.md");
+      let content: string;
+      try {
+        content = await readFile(skillMdPath, "utf8");
+      } catch {
+        continue; // no SKILL.md in this directory
+      }
+      const { description, triggers } = parseSkillFrontmatter(content);
+      entries.push({
+        name: skillDir.name,
+        path: relative(cwd, skillMdPath),
+        category: categoryDir.name,
+        description: description ?? catalogSummaries.get(skillDir.name) ?? "",
+        ...(triggers !== undefined ? { triggers } : {}),
+      });
+    }
+  }
+  return entries.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export function createMetaprojectAdapter(
@@ -443,6 +612,48 @@ export function createMetaprojectAdapter(
         return { file: input.file, backlinks: [...backlinks].sort() };
       } catch (cause) {
         return { file: input.file, backlinks: [], error: errorMessage(cause) };
+      }
+    },
+
+    // --- gdskills runtime discovery (docs/requirements/keryx-skills-runtime-tools) --
+
+    async skillsCatalog(): Promise<SkillsCatalogResult> {
+      // walkSkillCatalog is internally defensive (every fs op is try/catched;
+      // a missing root or unreadable directory yields fewer entries, never a
+      // throw) — no outer try/catch needed. Unlike most other MetaprojectPort
+      // results, skills-catalog-result.schema.json declares no `error` field
+      // (additionalProperties: false), so there is nowhere to put one anyway.
+      const skills = await walkSkillCatalog(cwd);
+      return { skills, generatedAt: deps.now() };
+    },
+
+    async loadSkill(input): Promise<SkillLoadResult> {
+      const catalog = await walkSkillCatalog(cwd);
+      const byName = catalog.find((entry) => entry.name === input.name);
+      if (byName !== undefined) {
+        try {
+          const content = await readFile(join(cwd, byName.path), "utf8");
+          return { name: input.name, path: byName.path, content, found: true };
+        } catch {
+          return { name: input.name, path: "", content: "", found: false };
+        }
+      }
+      // Not a bare name — try it as an exact path, confined to the gdskills
+      // root, and require it to match a real catalog entry (never opens an
+      // arbitrary file the walk itself did not already discover).
+      const confined = confineToSkills(cwd, input.name);
+      if (confined === null) {
+        return { name: input.name, path: "", content: "", found: false };
+      }
+      const byPath = catalog.find((entry) => join(cwd, entry.path) === confined);
+      if (byPath === undefined) {
+        return { name: input.name, path: "", content: "", found: false };
+      }
+      try {
+        const content = await readFile(confined, "utf8");
+        return { name: input.name, path: byPath.path, content, found: true };
+      } catch {
+        return { name: input.name, path: "", content: "", found: false };
       }
     },
   };
