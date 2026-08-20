@@ -40,6 +40,8 @@ const EXPECTED_NAMES = [
   "read_wiki",
   "repomap",
   "search_code",
+  "skill_load",
+  "skills_catalog",
   "test_related",
   "wiki_ask",
   "wiki_backlinks",

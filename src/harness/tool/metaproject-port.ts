@@ -270,6 +270,45 @@ export interface WikiBacklinksResult {
   error?: string;
 }
 
+/**
+ * One discovered skill under `.metaproject/skills/gdskills/` —
+ * skills-catalog-result.schema.json (docs/requirements/keryx-skills-runtime-tools).
+ */
+export interface SkillsCatalogEntry {
+  /** Skill name (its containing directory's basename), e.g. "flow-orchestrator". */
+  name: string;
+  /** Project-relative path to the skill's SKILL.md. */
+  path: string;
+  /** Category — the directory one level under `gdskills/` (core, orchestration, review, quality, planning, platform, shared). */
+  category: string;
+  /** From SKILL.md frontmatter `description`; "" when absent/unparsable. */
+  description: string;
+  /** From SKILL.md frontmatter `triggers`, when present. */
+  triggers?: string[];
+}
+
+/** Structured result of `skillsCatalog` — skills-catalog-result.schema.json. */
+export interface SkillsCatalogResult {
+  /** Every skill discovered under `.metaproject/skills/gdskills/`. */
+  skills: SkillsCatalogEntry[];
+  /** ISO timestamp of the live read — never a cache-write timestamp. */
+  generatedAt: string;
+  /** Set when the backing read failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** Structured result of `skill_load` — skill-load-result.schema.json. */
+export interface SkillLoadResult {
+  /** The requested skill name or path, echoed back. */
+  name: string;
+  /** Resolved project-relative path to the SKILL.md that was read; "" when not found. */
+  path: string;
+  /** The SKILL.md body verbatim, including frontmatter; "" when not found. */
+  content: string;
+  /** False when name/path did not resolve to a known skill — never a thrown error. */
+  found: boolean;
+}
+
 /** Structured result of `describeContext` — a lightweight project summary. */
 export interface ContextSummaryResult {
   /** The project root the port is bound to. */
@@ -342,4 +381,16 @@ export interface MetaprojectPort {
 
   /** Task Manager flows and their status/progress, optionally filtered to one id (flow). */
   flowStatus?(input: { id?: string }): Promise<FlowStatusResult>;
+
+  // --- additive OPTIONAL read operations: gdskills runtime discovery ---------
+  // Same OPTIONAL contract as the batches above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw. Gives
+  // `.metaproject/skills/gdskills/` a structured discovery/load path instead
+  // of relying solely on CLAUDE.md/index.md prose routing (docs/requirements/
+  // keryx-skills-runtime-tools).
+
+  /** Every skill discovered under `.metaproject/skills/gdskills/` (gdskills). */
+  skillsCatalog?(input: Record<string, never>): Promise<SkillsCatalogResult>;
+  /** One skill's full SKILL.md body, by name or exact path (gdskills). */
+  loadSkill?(input: { name: string }): Promise<SkillLoadResult>;
 }

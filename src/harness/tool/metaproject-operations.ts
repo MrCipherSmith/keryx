@@ -26,6 +26,8 @@ import type {
   MemorySearchResult,
   MetaprojectPort,
   RepomapResult,
+  SkillLoadResult,
+  SkillsCatalogResult,
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
@@ -47,7 +49,7 @@ export interface MetaprojectOperation {
   // Note: the wiki facade is "gdwiki" internally but this tag deliberately uses the MCP
   // discovery layer's alias "wiki" (src/mcp/discovery.ts MODULE_MANIFEST_KEY, mirroring
   // "flow" -> "tasks") — the same convention every wiki-related MCP tool already follows.
-  module: "gdgraph" | "gdctx" | "wiki" | "memory" | "health" | "testing" | "flow";
+  module: "gdgraph" | "gdctx" | "wiki" | "memory" | "health" | "testing" | "flow" | "gdskills";
   /** Human/model-facing summary of what the operation does. */
   description: string;
   /** Metaproject reads are always `read`. */
@@ -136,6 +138,29 @@ export function formatWiki(result: WikiPageResult): InteractiveToolResult {
     return { output: result.error ?? `read_wiki failed for ${result.path}`, isError: true };
   }
   return { output: result.content.length > 0 ? result.content : "(empty page)", isError: false };
+}
+
+/** Render a structured `skillsCatalog` result as readable text for the model. */
+export function formatSkillsCatalog(result: SkillsCatalogResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `skills_catalog failed: ${result.error}`, isError: true };
+  }
+  if (result.skills.length === 0) {
+    return { output: "No skills found under .metaproject/skills/gdskills/.", isError: false };
+  }
+  const lines = result.skills.map((skill) => {
+    const triggers = skill.triggers !== undefined && skill.triggers.length > 0 ? ` [triggers: ${skill.triggers.join(", ")}]` : "";
+    return `  - ${skill.name} (${skill.category}) — ${skill.description || "(no description)"}${triggers}\n    ${skill.path}`;
+  });
+  return { output: [`Skills (${result.skills.length}):`, ...lines].join("\n"), isError: false };
+}
+
+/** Render a structured `skillLoad` result as readable text for the model. */
+export function formatSkillLoad(result: SkillLoadResult): InteractiveToolResult {
+  if (!result.found) {
+    return { output: `skill_load: no skill found for '${result.name}'.`, isError: true };
+  }
+  return { output: result.content, isError: false };
 }
 
 // --- object result schemas (structured tool output) ---------------------------
@@ -408,6 +433,29 @@ const FLOW_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
     error: { type: "string" },
   },
   required: ["flows"],
+};
+
+// Mirrors docs/requirements/keryx-skills-runtime-tools/schemas/skills-catalog-result.schema.json
+const SKILLS_CATALOG_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    skills: { type: "array" },
+    generatedAt: { type: "string" },
+    error: { type: "string" },
+  },
+  required: ["skills", "generatedAt"],
+};
+
+// Mirrors docs/requirements/keryx-skills-runtime-tools/schemas/skill-load-result.schema.json
+const SKILL_LOAD_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    path: { type: "string" },
+    content: { type: "string" },
+    found: { type: "boolean" },
+  },
+  required: ["name", "path", "content", "found"],
 };
 
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
@@ -706,6 +754,52 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       }
       const id = typeof input.id === "string" && input.id.trim().length > 0 ? input.id.trim() : undefined;
       return formatFlowStatus(await port.flowStatus(id !== undefined ? { id } : {}));
+    },
+  },
+  {
+    name: "skills_catalog",
+    risk: "read",
+    module: "gdskills",
+    description:
+      "List every skill discovered under .metaproject/skills/gdskills/ — name, category, description, and " +
+      "triggers for each. Use this instead of reading .metaproject/index.md or catalog.md to find which skill " +
+      "applies to a task. No input.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    outputSchema: SKILLS_CATALOG_OUTPUT_SCHEMA,
+    invoke: async (port) => {
+      if (port.skillsCatalog === undefined) {
+        return { output: "skills_catalog is not available in this session.", isError: true };
+      }
+      return formatSkillsCatalog(await port.skillsCatalog({}));
+    },
+  },
+  {
+    name: "skill_load",
+    risk: "read",
+    module: "gdskills",
+    description:
+      "Load one skill's full SKILL.md content by name (e.g. \"flow-orchestrator\") or exact project-relative " +
+      "path, as returned by `skills_catalog`. Input: { name: string }.",
+    inputSchema: {
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+      additionalProperties: false,
+    },
+    outputSchema: SKILL_LOAD_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.loadSkill === undefined) {
+        return { output: "skill_load is not available in this session.", isError: true };
+      }
+      const name = requireString(input, "name", "skill_load");
+      if ("error" in name) {
+        return name.error;
+      }
+      return formatSkillLoad(await port.loadSkill({ name: name.value }));
     },
   },
 ];
