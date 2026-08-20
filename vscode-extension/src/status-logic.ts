@@ -48,3 +48,16 @@ export function initPromptMessage(state: KeryxStatusState): string {
 export function shouldRevealAfterInit(initExitCode: number, statusAfterInit: KeryxStatusState): boolean {
   return initExitCode === 0 && statusAfterInit === "ready";
 }
+
+/**
+ * The message shown when `keryx init --yes` exits 0 but the workspace still
+ * isn't "ready" afterwards (e.g. still "incomplete" — a module needs a
+ * follow-up step init doesn't fully automate, or the run only partially
+ * completed). This is neither the reveal-success path nor the exit-code
+ * failure path, so without an explicit message here the user would get zero
+ * feedback after clicking "Run keryx init" — never allowed (never-silent
+ * requirement).
+ */
+export function initSucceededButNotReadyMessage(statusAfterInit: KeryxStatusState): string {
+  return `keryx init completed, but the workspace is still "${statusAfterInit}". Run \`keryx status\` for details.`;
+}

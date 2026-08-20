@@ -7,7 +7,7 @@
 // the full finding on the missing staleness field).
 
 import * as vscode from "vscode";
-import { runKeryx } from "./keryx-cli";
+import { KeryxAbortedError, runKeryx } from "./keryx-cli";
 import {
   hoverCacheKey,
   isCacheEntryFresh,
@@ -20,7 +20,13 @@ const DEBOUNCE_MS = 300;
 
 export class KeryxHoverProvider implements vscode.HoverProvider {
   private readonly cache = new Map<string, HoverCacheEntry>();
-  private debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  // Real cancellation, not just a "latest wins" flag: the previous in-flight
+  // request (its debounce timer AND its child process, if already spawned)
+  // is aborted whenever a newer hover request supersedes it. This stops
+  // rapid hovers over different symbols from racing — and stops burning
+  // CPU/child-process work on a result nobody will see, not just hiding a
+  // stale result after the fact.
+  private currentAbort: AbortController | undefined;
 
   constructor(private readonly cwd: string) {}
 
@@ -52,31 +58,78 @@ export class KeryxHoverProvider implements vscode.HoverProvider {
       return new vscode.Hover(new vscode.MarkdownString(renderHoverMarkdown(cached!.result)), range);
     }
 
-    await debounce(DEBOUNCE_MS);
+    // Supersede any still-in-flight request from a previous hover — cancels
+    // both its debounce wait and (if it already started) its `runKeryx` child
+    // process via the shared AbortSignal.
+    this.currentAbort?.abort();
+    const abortController = new AbortController();
+    this.currentAbort = abortController;
 
-    const result = await runKeryx(["wiki", "ask", word], this.cwd);
-    if (result.exitCode !== 0) {
-      return undefined;
+    try {
+      await debounce(DEBOUNCE_MS, abortController.signal);
+
+      const result = await runKeryx(["wiki", "ask", word], this.cwd, undefined, undefined, abortController.signal);
+      if (result.exitCode !== 0) {
+        return undefined;
+      }
+
+      const parsed = parseWikiAskMarkdown(word, result.stdout);
+      this.cache.set(key, { result: parsed, cachedAtMs: Date.now() });
+
+      if (parsed.citations.length === 0) {
+        return undefined;
+      }
+
+      const markdown = new vscode.MarkdownString(renderHoverMarkdown(parsed));
+      markdown.isTrusted = false;
+      return new vscode.Hover(markdown, range);
+    } catch (error) {
+      // Aborted because a newer hover request superseded this one — not a
+      // real error, just discard the stale result.
+      if (error instanceof KeryxAbortedError || abortController.signal.aborted) {
+        return undefined;
+      }
+      throw error;
+    } finally {
+      if (this.currentAbort === abortController) {
+        this.currentAbort = undefined;
+      }
     }
-
-    const parsed = parseWikiAskMarkdown(word, result.stdout);
-    this.cache.set(key, { result: parsed, cachedAtMs: Date.now() });
-
-    if (parsed.citations.length === 0) {
-      return undefined;
-    }
-
-    const markdown = new vscode.MarkdownString(renderHoverMarkdown(parsed));
-    markdown.isTrusted = false;
-    return new vscode.Hover(markdown, range);
   }
 }
 
-function debounce(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function debounce(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new KeryxAbortedError());
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new KeryxAbortedError());
+      },
+      { once: true },
+    );
+  });
 }
 
-/** Register the hover provider for all source files, returning its Disposable. */
+/**
+ * Register the hover provider for all source files AND wire cache
+ * invalidation on save, returning a single composite Disposable (matching
+ * `context.subscriptions.push(...)`'s pattern elsewhere in `extension.ts`).
+ * Previously this returned only the hover-provider registration and
+ * discarded the `KeryxHoverProvider` instance itself, so nothing could ever
+ * call `invalidateFile` — the hover cache would silently serve stale answers
+ * past an edit for its full TTL.
+ */
 export function registerKeryxHoverProvider(cwd: string): vscode.Disposable {
-  return vscode.languages.registerHoverProvider({ scheme: "file" }, new KeryxHoverProvider(cwd));
+  const provider = new KeryxHoverProvider(cwd);
+  const providerRegistration = vscode.languages.registerHoverProvider({ scheme: "file" }, provider);
+  const saveListener = vscode.workspace.onDidSaveTextDocument((document) => {
+    provider.invalidateFile(document.uri.fsPath);
+  });
+  return vscode.Disposable.from(providerRegistration, saveListener);
 }

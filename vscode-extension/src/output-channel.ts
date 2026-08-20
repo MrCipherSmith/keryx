@@ -59,6 +59,18 @@ export class KeryxOutputChannel implements vscode.Disposable {
    * the server's own resume contract. Returns the highest `seq` rendered (or
    * `afterSeq` unchanged if the fetch produced no new events), so a caller
    * can persist it for the next resume.
+   *
+   * KNOWN GAP (recorded honestly, not silently left unexplained): this
+   * method is fully implemented and unit-tested at the parsing/formatting
+   * level (`output-channel-logic.test.ts`), but as of this PR has ZERO
+   * production call sites — nothing in `extension.ts` ever invokes it.
+   * Wiring it up needs a concrete answer to "when is a turn considered
+   * in-flight from this extension's perspective?" (spec.md's turn-event SSE
+   * pipe assumes a turn concept this scaffold doesn't yet originate or track
+   * anywhere), and that trigger was not resolved in this flow. Do not invent
+   * a fake "active turn" concept just to give this a call site — leave it
+   * unwired until a real trigger exists, and treat this comment as the
+   * record of that decision for the next flow that picks it up.
    */
   async pipeTurnEvents(baseUrl: string, turnId: string, afterSeq?: number): Promise<number | undefined> {
     const headers: Record<string, string> = {};

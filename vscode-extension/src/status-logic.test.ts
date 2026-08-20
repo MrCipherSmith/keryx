@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   initPromptMessage,
+  initSucceededButNotReadyMessage,
   interpretStatus,
   shouldPromptInit,
   shouldRevealAfterInit,
@@ -56,4 +57,18 @@ test("AC2: shouldRevealAfterInit is true only on exit 0 AND a ready status after
   expect(shouldRevealAfterInit(0, "incomplete")).toBe(false);
   expect(shouldRevealAfterInit(1, "ready")).toBe(false);
   expect(shouldRevealAfterInit(1, "incomplete")).toBe(false);
+});
+
+// Review finding: exit 0 but NOT ready (e.g. still "incomplete") must not be
+// silent — `extension.ts`'s runInitFlow needs a third message for this path,
+// distinct from both the reveal-success and the exit-code-failure branches.
+
+test("initSucceededButNotReadyMessage names the resulting state and is never empty", () => {
+  const incomplete = initSucceededButNotReadyMessage("incomplete");
+  expect(incomplete).toContain("incomplete");
+  expect(incomplete.length).toBeGreaterThan(0);
+
+  const notInitialized = initSucceededButNotReadyMessage("not-initialized");
+  expect(notInitialized).toContain("not-initialized");
+  expect(notInitialized).not.toBe(incomplete);
 });

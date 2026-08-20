@@ -12,6 +12,14 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+// Node's `execFile`/`execFileAsync` default `maxBuffer` is 1MB. A large JSON
+// payload (e.g. `keryx wiki ask` on a big result set, or graph/health output)
+// can exceed that and throw `ERR_CHILD_PROCESS_STDOUT_MAXBUFFER`, which is
+// indistinguishable from any other failure to a caller that just sees a
+// rejected promise. 10MB comfortably covers any realistic CLI output this
+// extension shells out for.
+const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
+
 export interface CliResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -28,6 +36,14 @@ export class KeryxBinaryNotFoundError extends Error {
   }
 }
 
+/** Raised when a `runKeryx` call is aborted via its `signal` before completion (e.g. a superseded hover request). */
+export class KeryxAbortedError extends Error {
+  constructor() {
+    super("keryx command was aborted.");
+    this.name = "KeryxAbortedError";
+  }
+}
+
 /**
  * Run a `keryx` subcommand in `cwd`, returning stdout/stderr/exit code
  * instead of throwing on a non-zero exit (the 3-state `status` contract and
@@ -40,15 +56,25 @@ export class KeryxBinaryNotFoundError extends Error {
  * `"keryx"`) purely so tests can exercise the ENOENT branch deterministically
  * against a guaranteed-missing name instead of depending on `keryx` being
  * absent from the test runner's PATH.
+ *
+ * `signal` is optional and lets a caller (e.g. the hover provider) cancel an
+ * in-flight call — and the underlying child process — when a newer request
+ * supersedes it, rather than just discarding the eventual result.
  */
 export async function runKeryx(
   args: readonly string[],
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
   binary = "keryx",
+  signal?: AbortSignal,
 ): Promise<CliResult> {
   try {
-    const { stdout, stderr } = await execFileAsync(binary, [...args], { cwd, env });
+    const { stdout, stderr } = await execFileAsync(binary, [...args], {
+      cwd,
+      env,
+      maxBuffer: MAX_BUFFER_BYTES,
+      signal,
+    });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException & {
@@ -58,6 +84,9 @@ export async function runKeryx(
     };
     if (nodeError.code === "ENOENT") {
       throw new KeryxBinaryNotFoundError(error);
+    }
+    if (signal?.aborted) {
+      throw new KeryxAbortedError();
     }
     // A non-zero exit from execFile still carries stdout/stderr — surface it
     // as a result, not an exception, so callers can parse output normally.

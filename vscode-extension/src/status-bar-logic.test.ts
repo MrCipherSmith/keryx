@@ -28,12 +28,21 @@ test("parseSecurityConfigState reads 'configChecksum: ok' from `keryx security s
   expect(parseSecurityConfigState("  configChecksum: ok\n")).toBe("ok");
 });
 
-test("parseSecurityConfigState treats any other checksum value as broken", () => {
+test("parseSecurityConfigState treats the known 'mismatch' token as broken (case-insensitive, matches real CLI output)", () => {
   expect(parseSecurityConfigState("  configChecksum: mismatch\n")).toBe("broken");
+  // src/commands/security.ts:183's handleStatus actually prints uppercase.
+  expect(parseSecurityConfigState("  configChecksum: MISMATCH\n")).toBe("broken");
 });
 
 test("parseSecurityConfigState treats missing output as unknown, never throws", () => {
   expect(parseSecurityConfigState("")).toBe("unknown");
+});
+
+test("Review fix: parseSecurityConfigState treats an unrecognized-but-matched token as unknown, not a false 'broken'", () => {
+  // A future/incompatible CLI output format this module has never seen must
+  // not be misread as a real security config mismatch.
+  expect(parseSecurityConfigState("  configChecksum: unexpected-token\n")).toBe("unknown");
+  expect(parseSecurityConfigState("  configChecksum: stale-v2-format\n")).toBe("unknown");
 });
 
 // --- severity rollup -----------------------------------------------------

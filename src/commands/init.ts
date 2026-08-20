@@ -133,9 +133,20 @@ import {
 import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 
 // Runtime a user can opt into wiring during interactive init; `skip` writes no
-// client config (the manifest still enables the module).
-type McpInitRuntime = "cursor" | "claude" | "opencode" | "generic" | "skip";
-const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "opencode", "generic", "skip"];
+// client config (the manifest still enables the module). Mirrors
+// `src/mcp/client-config.ts`'s `MCP_CLIENT_RUNTIMES` (T5) minus `codex`,
+// which has no project-local client-config writer here (see that module's
+// header comment) — `"vscode"` is included since `VSCODE_RUNTIME` is a real,
+// supported client-config target there.
+type McpInitRuntime = "cursor" | "claude" | "opencode" | "vscode" | "generic" | "skip";
+export const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = [
+  "cursor",
+  "claude",
+  "opencode",
+  "vscode",
+  "generic",
+  "skip",
+];
 
 type InitOptions = {
   help: boolean;

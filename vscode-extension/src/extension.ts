@@ -13,7 +13,13 @@ import { registerKeryxHoverProvider } from "./hover-provider";
 import { KeryxBinaryNotFoundError, runKeryx } from "./keryx-cli";
 import { createKeryxOutputChannel, type KeryxOutputChannel } from "./output-channel";
 import { createKeryxStatusBar, type KeryxStatusBar } from "./status-bar";
-import { initPromptMessage, interpretStatus, shouldPromptInit, shouldRevealAfterInit } from "./status-logic";
+import {
+  initPromptMessage,
+  initSucceededButNotReadyMessage,
+  interpretStatus,
+  shouldPromptInit,
+  shouldRevealAfterInit,
+} from "./status-logic";
 import { refreshAll, registerKeryxTreeViews, type KeryxTreeProviders } from "./tree-view";
 import { checkKeryxVersion, versionWarningMessage } from "./version-logic";
 
@@ -92,6 +98,14 @@ async function runInitFlow(cwd: string): Promise<void> {
       `keryx init failed: ${initResult.stderr.trim() || "see the Keryx output channel"}`,
     );
     outputChannel.appendLine(initResult.stderr);
+  } else {
+    // Exit 0 but not "ready" (e.g. still "incomplete"): neither the
+    // success/reveal branch nor the error branch above fires. Never leave
+    // this path silent — show an informational message naming the resulting
+    // state and audit-log it too.
+    const message = initSucceededButNotReadyMessage(afterState);
+    void vscode.window.showInformationMessage(message);
+    outputChannel.appendLine(`[keryx.init] ${message}`);
   }
 }
 
@@ -135,7 +149,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   treeProviders = registerKeryxTreeViews(context, cwd);
 
-  statusBar = await createKeryxStatusBar(cwd);
+  statusBar = await createKeryxStatusBar(cwd, outputChannel);
   context.subscriptions.push(statusBar);
 
   try {

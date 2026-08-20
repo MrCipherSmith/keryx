@@ -40,13 +40,26 @@ export function parseHealthGate(healthStatusOutput: string): HealthGateState {
 
 export type SecurityConfigState = "ok" | "broken" | "unknown";
 
+// The known-bad checksum token `src/commands/security.ts:183`'s `handleStatus`
+// actually prints (verified by reading the command, not guessed — it prints
+// literal "MISMATCH", uppercase). Matched case-insensitively since a future
+// CLI revision could change casing without changing meaning. Anything else —
+// including a value this module has never seen because the CLI's output
+// format changed — must NOT be classified as "broken": that would conflate a
+// real config mismatch with an unrecognized token and produce a false
+// security warning in the status bar.
+const KNOWN_BROKEN_CHECKSUM_VALUES = new Set(["mismatch"]);
+
 /** Parse `keryx security status`'s stdout (`src/commands/security.ts`, `configChecksum: <value>`). */
 export function parseSecurityConfigState(securityStatusOutput: string): SecurityConfigState {
   const match = /^\s*configChecksum:\s*(\S+)/m.exec(securityStatusOutput);
   const value = match?.[1];
   if (value === "ok") return "ok";
   if (value === undefined) return "unknown";
-  return "broken";
+  if (KNOWN_BROKEN_CHECKSUM_VALUES.has(value.toLowerCase())) return "broken";
+  // An unrecognized-but-matched token (e.g. a future CLI output format this
+  // module doesn't know about yet) is neutral, not a false alarm.
+  return "unknown";
 }
 
 export interface StatusBarInputs {
