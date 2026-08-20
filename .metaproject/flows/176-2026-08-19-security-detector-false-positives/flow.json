@@ -3,9 +3,9 @@
   "id": "176",
   "slug": "security-detector-false-positives",
   "title": "Security detectors: ISO-dated flow prefixes masked as phones, dotted/hex credentials under-masked, and agent tool-call nudge noise",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-19T17:54:34.193Z",
-  "updatedAt": "2026-08-19T18:09:51.650Z",
+  "updatedAt": "2026-08-20T04:59:28.321Z",
   "source": {
     "type": "description",
     "ref": null
@@ -41,7 +41,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/350"
   },
   "tasks": [
     {
@@ -93,7 +93,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -101,7 +101,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -182,6 +183,25 @@
       "at": "2026-08-19T18:09:51.650Z",
       "event": "ac-confirmed",
       "detail": "AC9"
+    },
+    {
+      "at": "2026-08-20T02:55:13.459Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/350 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T02:55:22.370Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T02:55:24.025Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-20T04:59:28.321Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
