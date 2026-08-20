@@ -186,6 +186,74 @@ describe("AC1 — detectProviders: ollama /api/tags, env-gated anthropic, always
     expect(Object.keys(anthropic)).not.toContain("apiKey");
   });
 
+  // flow 183 T9 — openai/gemini as first-class picker entries, same shape as
+  // the anthropic block above.
+  test("openai is present with a non-empty model list when OPENAI_API_KEY is set", async () => {
+    const deps: DetectProvidersDeps = {
+      fetch: fixedFetch("", 500),
+      env: { OPENAI_API_KEY: "sk-test-not-a-real-key" },
+    };
+    const detected = await detectProviders(deps);
+    const openai = must(
+      detected.find((d) => d.name === "openai"),
+      "expected an openai entry when OPENAI_API_KEY is set",
+    );
+    expect(openai.models.length).toBeGreaterThan(0);
+  });
+
+  test("openai is absent when OPENAI_API_KEY is unset", async () => {
+    const deps: DetectProvidersDeps = { fetch: fixedFetch("", 500), env: {} };
+    const detected = await detectProviders(deps);
+    expect(detected.find((d) => d.name === "openai")).toBeUndefined();
+  });
+
+  test("gemini is present with a non-empty model list when GEMINI_API_KEY is set", async () => {
+    const deps: DetectProvidersDeps = {
+      fetch: fixedFetch("", 500),
+      env: { GEMINI_API_KEY: "test-not-a-real-key" },
+    };
+    const detected = await detectProviders(deps);
+    const gemini = must(
+      detected.find((d) => d.name === "gemini"),
+      "expected a gemini entry when GEMINI_API_KEY is set",
+    );
+    expect(gemini.models.length).toBeGreaterThan(0);
+  });
+
+  test("gemini falls back to GOOGLE_API_KEY when GEMINI_API_KEY is unset", async () => {
+    const deps: DetectProvidersDeps = {
+      fetch: fixedFetch("", 500),
+      env: { GOOGLE_API_KEY: "test-not-a-real-key" },
+    };
+    const detected = await detectProviders(deps);
+    expect(detected.find((d) => d.name === "gemini")).toBeDefined();
+  });
+
+  test("gemini is absent when neither GEMINI_API_KEY nor GOOGLE_API_KEY is set", async () => {
+    const deps: DetectProvidersDeps = { fetch: fixedFetch("", 500), env: {} };
+    const detected = await detectProviders(deps);
+    expect(detected.find((d) => d.name === "gemini")).toBeUndefined();
+  });
+
+  test("openai/gemini detection makes NO network call — static lists only, credentials never leave env", async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      return new Response("", { status: 500 });
+    }) as unknown as typeof fetch;
+    const deps: DetectProvidersDeps = {
+      fetch: fetchFn,
+      env: { OPENAI_API_KEY: "sk-test-not-a-real-key", GEMINI_API_KEY: "test-not-a-real-key" },
+    };
+    const detected = await detectProviders(deps);
+    // Exactly one fetch call total — the ollama /api/tags probe.
+    expect(calls).toBe(1);
+    const openai = must(detected.find((d) => d.name === "openai"), "expected an openai entry");
+    const gemini = must(detected.find((d) => d.name === "gemini"), "expected a gemini entry");
+    expect(Object.keys(openai)).not.toContain("apiKey");
+    expect(Object.keys(gemini)).not.toContain("apiKey");
+  });
+
   test("fake is ALWAYS present with a non-empty model list", async () => {
     const deps: DetectProvidersDeps = { fetch: fixedFetch("", 500), env: {} };
     const detected = await detectProviders(deps);
