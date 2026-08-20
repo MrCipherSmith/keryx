@@ -2661,3 +2661,166 @@ describe("flow 179 — /search-provider bare-arg wizard", () => {
     },
   );
 });
+
+// --- flow 180 — tui-shell.ts bare `/search-connect` interactive picker
+// (source-text audit) ----------------------------------------------------
+//
+// `launchTuiAgentShell` has no headless injection seam (same file-wide
+// constraint the SLATE-2a/SLATE-3a/SLATE-15/flow 163 AC8/flow 173
+// describe blocks above document and rely on) — its `/search-connect`
+// branch (tui-shell.ts, inside the giant command-dispatch closure) cannot
+// be driven through a real `otuiTest`/`mockInput`/`waitForFrame` pipeline
+// from this file, so this is a source-text audit, following the exact
+// precedent those blocks set.
+//
+// This does NOT mean the picker's interactive behavior (renders exactly
+// the given provider list, Esc resolves `undefined`, selecting resolves
+// the chosen descriptor) goes unproven: flow 180 T2 (commit 55a9997)
+// reused `pickSearchProviderStep` UNCHANGED from flow 179 — the exact same
+// function, only ever called here with a different `providers` argument
+// (`selectable()` instead of `configurable()`) — and flow 179's own
+// "AC1/AC4: step 1 lists exactly configurable() providers; Esc at step 1
+// cancels with no controller calls" test (above) already drives that
+// generic list/Esc/select behavior through the real SelectRenderable/
+// onKeypress pipeline. Re-driving the same generic behavior here would
+// duplicate that coverage without touching flow 179's own tests/code
+// (out of scope per this flow's dispatch). What this audit proves instead
+// is flow 180's actual NEW surface: the bare-arg WIRING around that
+// reused function (which list it is called with, what happens with the
+// Esc/selected result, the empty-list guard, and the args-given path
+// staying byte-identical).
+//
+// Concern for flow-orchestrator: unlike `searchProviderWizardInTui`
+// (exported by flow 179 specifically so this file could drive it through
+// a real interactive pipeline), `pickSearchProviderStep` and
+// `selectSearchProviderAndReport` were left unexported by flow 180 T2.
+// That is what forces this fallback to a source-text audit instead of the
+// real-interaction test the flow 180 T3 dispatch note asked for. Exporting
+// both (purely additive, no behavior change — the same pattern already
+// used for `searchProviderWizardInTui`, `pickShellApproval`,
+// `adaptiveSelectHeight`, `selectBoxHeight`, and
+// `filterConnectedDetectedProviders`, all of which exist in this file's
+// export list only so tests can reach them directly) would let a future
+// pass replace this audit with real `otuiTest`/`mockInput`/`waitForFrame`
+// coverage. Left as a recommendation, not applied here, per this task's
+// "do not modify tui-shell.ts" constraint.
+describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (source-text audit)", () => {
+  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const branchIdx = tuiSource.indexOf('if (command.name === "/search-connect") {');
+  const nextBranchIdx = tuiSource.indexOf('if (command.name === "/think")');
+  const branchBlock = tuiSource.slice(branchIdx, nextBranchIdx);
+
+  test("the /search-connect branch exists exactly once", () => {
+    expect(branchIdx).toBeGreaterThanOrEqual(0);
+    expect(tuiSource.indexOf('if (command.name === "/search-connect") {', branchIdx + 1)).toBe(-1);
+  });
+
+  test("AC1: bare-arg branch reads searchProviderController.selectable() (not configurable()) as the picker's candidate list", () => {
+    expect(branchBlock).toContain("const selectable = searchProviderController.selectable();");
+  });
+
+  test("AC1: 1+ connected providers opens the picker via chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))", () => {
+    expect(branchBlock).toContain("chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))");
+  });
+
+  test("AC3: an empty selectable() list shows the existing 'no connected providers' message and returns before the picker call", () => {
+    const emptyGuardIdx = branchBlock.indexOf("if (selectable.length === 0) {");
+    expect(emptyGuardIdx).toBeGreaterThanOrEqual(0);
+    const pickerCallIdx = branchBlock.indexOf("pickSearchProviderStep(otui, r, selectable)");
+    expect(pickerCallIdx).toBeGreaterThan(emptyGuardIdx); // the picker call textually follows the empty-guard block
+
+    const emptyGuardBlock = branchBlock.slice(emptyGuardIdx, pickerCallIdx);
+    expect(emptyGuardBlock).toContain("No connected search providers found. Run /search-provider first.");
+    expect(emptyGuardBlock).toContain("return;");
+    // Confirms the empty-guard's own body never reaches the picker call —
+    // the only occurrence inside this slice would be a genuine wiring bug.
+    expect(emptyGuardBlock).not.toContain("pickSearchProviderStep(otui, r, selectable)");
+  });
+
+  test("AC2: Esc (picked === undefined) returns before selectSearchProviderAndReport/select is ever called", () => {
+    const pickedIdx = branchBlock.indexOf("const picked = await chrome.withOverlay");
+    expect(pickedIdx).toBeGreaterThanOrEqual(0);
+    const escGuardIdx = branchBlock.indexOf("if (picked === undefined) {", pickedIdx);
+    expect(escGuardIdx).toBeGreaterThanOrEqual(0);
+    const reportCallIdx = branchBlock.indexOf("selectSearchProviderAndReport(searchProviderController, io.onSystem, picked.id)");
+    expect(reportCallIdx).toBeGreaterThan(escGuardIdx); // the report/select call textually follows the Esc guard
+
+    const escGuardBlock = branchBlock.slice(escGuardIdx, reportCallIdx);
+    expect(escGuardBlock).toContain("return;"); // Esc branch returns, skipping the call below entirely
+  });
+
+  test("AC2: selecting a provider in the picker routes through the shared selectSearchProviderAndReport(controller, onSystem, id) helper", () => {
+    expect(branchBlock).toContain("await selectSearchProviderAndReport(searchProviderController, io.onSystem, picked.id);");
+  });
+
+  test("AC4: /search-connect <id> (args given) still resolves the id via configurable() and routes through the SAME shared helper", () => {
+    const argsGivenIdx = branchBlock.indexOf("const normalizedProviderId = searchProviderController.configurable()");
+    expect(argsGivenIdx).toBeGreaterThanOrEqual(0);
+    const argsGivenBlock = branchBlock.slice(argsGivenIdx);
+    expect(argsGivenBlock).toContain("Unknown provider '${providerId}'.");
+    expect(argsGivenBlock).toContain("await selectSearchProviderAndReport(searchProviderController, io.onSystem, normalizedProviderId);");
+  });
+
+  test("AC5: /search-provider's own bare/args-given branches are untouched — this flow only wires /search-connect", () => {
+    const searchProviderBranchIdx = tuiSource.indexOf('if (command.name === "/search-provider") {');
+    expect(searchProviderBranchIdx).toBeGreaterThanOrEqual(0);
+    expect(searchProviderBranchIdx).toBeLessThan(branchIdx); // /search-provider's branch precedes /search-connect's, unmoved
+    const searchProviderBlock = tuiSource.slice(searchProviderBranchIdx, branchIdx);
+    expect(searchProviderBlock).toContain("searchProviderWizardInTui(otui, r, searchProviderController)");
+    // The wizard's own entry point is untouched by flow 180 — no picker/select wiring added here.
+    expect(searchProviderBlock).not.toContain("selectSearchProviderAndReport");
+  });
+});
+
+// --- flow 180 AC2/AC4 — selectSearchProviderAndReport shared helper
+// (source-text audit) ------------------------------------------------------
+//
+// `selectSearchProviderAndReport` (tui-shell.ts, just above
+// `pickSearchProviderStep`) is a plain top-level async function — not part
+// of `launchTuiAgentShell`'s closure — but it is not exported (unlike
+// `searchProviderWizardInTui`), so it cannot be invoked directly from this
+// file either; see the concern recorded on the describe block above. This
+// audits its body directly: it is the SAME 3-branch result handling
+// `/search-connect <id>` used inline before flow 180 T2 extracted it (byte-
+// identical move, confirmed against commit 55a9997's diff), now shared by
+// both the args-given path and the new bare-arg picker path (AC2, AC4).
+describe("flow 180 AC2/AC4 — selectSearchProviderAndReport shared helper (source-text audit)", () => {
+  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnIdx = tuiSource.indexOf("async function selectSearchProviderAndReport(");
+  const fnEndIdx = tuiSource.indexOf("\n}\n", fnIdx);
+  const fnBody = tuiSource.slice(fnIdx, fnEndIdx);
+
+  test("the helper exists exactly once and is called from both /search-connect entry points", () => {
+    expect(fnIdx).toBeGreaterThanOrEqual(0);
+    expect(tuiSource.indexOf("async function selectSearchProviderAndReport(", fnIdx + 1)).toBe(-1);
+    const callSites = tuiSource.split("await selectSearchProviderAndReport(searchProviderController, io.onSystem,").length - 1;
+    expect(callSites).toBe(2); // the bare-picker path (picked.id) and the args-given path (normalizedProviderId)
+  });
+
+  test("calls controller.select(providerId) exactly once per invocation", () => {
+    expect(fnBody).toContain("const result = await controller.select(providerId);");
+  });
+
+  test("failure/not-configured: reports the not-configured message", () => {
+    expect(fnBody).toContain('result.reason === "not-configured"');
+    expect(fnBody).toContain("Cannot select '${providerId}': provider is not configured.");
+  });
+
+  test("failure/not-connected: reports the not-connected message with the retry hint", () => {
+    expect(fnBody).toContain('result.reason === "not-connected"');
+    expect(fnBody).toContain("Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).");
+  });
+
+  test("failure/other: falls back to a generic reason message", () => {
+    expect(fnBody).toContain("Cannot select '${providerId}': ${result.reason}.");
+  });
+
+  test("success: reports the exact success message /search-connect <id> already used", () => {
+    expect(fnBody).toContain("Search provider '${providerId}' selected.");
+  });
+
+  test("no branch returns without a message — every path (3 failure reasons + success) reports something to onSystem", () => {
+    const onSystemCalls = fnBody.split("onSystem?.(").length - 1;
+    expect(onSystemCalls).toBe(4); // not-configured, not-connected, generic-reason, success
+  });
+});
