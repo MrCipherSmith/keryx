@@ -151,12 +151,18 @@ function confineToWiki(cwd: string, candidate: string): string | null {
 
 /**
  * Confine `candidate` to the gdskills root (`<cwd>/.metaproject/skills/gdskills`).
- * Returns the absolute path, or `null` when it escapes via `..` or an absolute
- * path. Mirrors `confineToWiki`'s exact contract.
+ * Unlike `confineToWiki` (whose `candidate` is wiki-root-relative), `candidate`
+ * here is PROJECT-root-relative — matching `SkillsCatalogEntry.path`'s own
+ * contract (specification.md §3.2: `skill_load`'s `name` accepts either a bare
+ * name or "an exact project-relative path", the same string `skills_catalog`
+ * returns) — so it resolves against `cwd`, then verifies the result still
+ * falls inside the gdskills root. Returns the absolute path, or `null` when it
+ * resolves outside the gdskills root (whether via `..`, an absolute path, or
+ * simply pointing elsewhere in the project).
  */
 function confineToSkills(cwd: string, candidate: string): string | null {
   const skillsRoot = join(cwd, ".metaproject", "skills", "gdskills");
-  const target = resolve(skillsRoot, candidate);
+  const target = resolve(cwd, candidate);
   const rel = relative(skillsRoot, target);
   if (rel === "") {
     return null; // the root dir itself is not a skill

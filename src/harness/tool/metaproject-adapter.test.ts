@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "bun:test";
 import type { AffectedOptions, AffectedResult } from "../../gdgraph/affected";
 import type { GdgraphService } from "../../gdgraph/service";
@@ -490,4 +493,144 @@ test("wikiBacklinks returns a structured error (never throws) when the facade fa
   const result = await adapter.wikiBacklinks?.({ file: "src/x.ts" });
   expect(result?.backlinks).toEqual([]);
   expect(result?.error).toMatch(/backlinks boom/);
+});
+
+// --- skillsCatalog / loadSkill (docs/requirements/keryx-skills-runtime-tools) -----
+// Real filesystem, mkdtemp-isolated (matches src/gdskills/install.test.ts's own
+// convention for testing real fs walks rather than mocking one).
+
+/** Build a temp project root with a small synthetic .metaproject/skills/gdskills/ tree. */
+async function withSkillsFixture(fn: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-skills-catalog-"));
+  try {
+    const gdskillsRoot = path.join(root, ".metaproject", "skills", "gdskills");
+
+    const flowOrchestratorDir = path.join(gdskillsRoot, "orchestration", "flow-orchestrator");
+    await mkdir(flowOrchestratorDir, { recursive: true });
+    await writeFile(
+      path.join(flowOrchestratorDir, "SKILL.md"),
+      '---\nname: flow-orchestrator\ndescription: "Task Manager-aware implementation orchestrator."\ntriggers:\n  - "создай фло"\n  - "create flow"\n---\n\n# Flow Orchestrator\n',
+    );
+    // A per-assistant variant that must NOT become its own catalog entry.
+    await writeFile(
+      path.join(flowOrchestratorDir, "SKILL.opencode.md"),
+      "---\nname: flow-orchestrator\n---\nopencode-only variant body\n",
+    );
+    // A non-SKILL.md file in the same directory, to prove loadSkill only ever
+    // resolves catalog-discovered paths, never an arbitrary sibling file.
+    await writeFile(path.join(flowOrchestratorDir, "orchestrator-prompt.md"), "not a skill file\n");
+
+    const noFrontmatterDir = path.join(gdskillsRoot, "core", "gdgraph-router");
+    await mkdir(noFrontmatterDir, { recursive: true });
+    await writeFile(path.join(noFrontmatterDir, "SKILL.md"), "no frontmatter here, just a plain body\n");
+
+    await fn(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("skillsCatalog discovers every skill, excluding per-assistant SKILL.*.md variants", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.skillsCatalog?.({});
+    expect(result?.error).toBeUndefined();
+    expect(result?.skills).toHaveLength(2);
+
+    const byName = new Map(result?.skills.map((s) => [s.name, s]));
+    const flowOrchestrator = byName.get("flow-orchestrator");
+    expect(flowOrchestrator?.category).toBe("orchestration");
+    expect(flowOrchestrator?.path).toBe(path.join(".metaproject", "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"));
+    expect(flowOrchestrator?.description).toBe("Task Manager-aware implementation orchestrator.");
+    expect(flowOrchestrator?.triggers).toEqual(["создай фло", "create flow"]);
+
+    // No entry sourced from the SKILL.opencode.md variant or the sibling non-skill file.
+    expect([...byName.keys()].sort()).toEqual(["flow-orchestrator", "gdgraph-router"]);
+  });
+});
+
+test("skillsCatalog degrades a skill with no/malformed frontmatter instead of failing the whole catalog", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.skillsCatalog?.({});
+    const noFrontmatter = result?.skills.find((s) => s.name === "gdgraph-router");
+    expect(noFrontmatter?.description).toBe("");
+    expect(noFrontmatter?.triggers).toBeUndefined();
+    expect(result?.error).toBeUndefined();
+  });
+});
+
+test("skillsCatalog returns an empty list, not an error, when the gdskills root does not exist", async () => {
+  const emptyRoot = await mkdtemp(path.join(tmpdir(), "keryx-skills-empty-"));
+  try {
+    const adapter = createMetaprojectAdapter(emptyRoot);
+    const result = await adapter.skillsCatalog?.({});
+    expect(result?.skills).toEqual([]);
+    expect(result?.error).toBeUndefined();
+  } finally {
+    await rm(emptyRoot, { recursive: true, force: true });
+  }
+});
+
+test("skillsCatalog's generatedAt comes from the injected clock, never a bare Date.now call", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root, { now: () => "FIXED-TIMESTAMP" });
+    const result = await adapter.skillsCatalog?.({});
+    expect(result?.generatedAt).toBe("FIXED-TIMESTAMP");
+  });
+});
+
+test("loadSkill by bare name returns byte-identical content to the real file", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.loadSkill?.({ name: "flow-orchestrator" });
+    expect(result?.found).toBe(true);
+    expect(result?.path).toBe(path.join(".metaproject", "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"));
+    expect(result?.content).toBe(
+      '---\nname: flow-orchestrator\ndescription: "Task Manager-aware implementation orchestrator."\ntriggers:\n  - "создай фло"\n  - "create flow"\n---\n\n# Flow Orchestrator\n',
+    );
+  });
+});
+
+test("loadSkill by exact catalog path returns the same content as by name", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const catalogPath = path.join(".metaproject", "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md");
+    const result = await adapter.loadSkill?.({ name: catalogPath });
+    expect(result?.found).toBe(true);
+    expect(result?.path).toBe(catalogPath);
+    expect(result?.content).toContain("# Flow Orchestrator");
+  });
+});
+
+test("loadSkill returns found:false for an unknown name (never throws)", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.loadSkill?.({ name: "does-not-exist" });
+    expect(result?.found).toBe(false);
+    expect(result?.path).toBe("");
+    expect(result?.content).toBe("");
+  });
+});
+
+test("loadSkill rejects a path-traversal attempt and never reads outside the gdskills root", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.loadSkill?.({ name: "../../../../../../../../etc/passwd" });
+    expect(result?.found).toBe(false);
+    expect(result?.content).toBe("");
+  });
+});
+
+test("loadSkill rejects a real on-disk path that the catalog walk never discovered (not a SKILL.md)", async () => {
+  await withSkillsFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    // This file genuinely exists on disk, inside the gdskills root — but it is
+    // not a SKILL.md, so the walk never listed it as a catalog entry. loadSkill
+    // must refuse it rather than falling back to a bare confine+read.
+    const strayPath = path.join(".metaproject", "skills", "gdskills", "orchestration", "flow-orchestrator", "orchestrator-prompt.md");
+    const result = await adapter.loadSkill?.({ name: strayPath });
+    expect(result?.found).toBe(false);
+    expect(result?.content).toBe("");
+  });
 });
