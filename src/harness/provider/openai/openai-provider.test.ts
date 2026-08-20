@@ -192,6 +192,49 @@ describe("AC1 — the documented empty-message context-overflow bug never surfac
   });
 });
 
+// Review finding: response.failed/response.incomplete had zero coverage —
+// every other terminal-event branch (response.completed, error) already had
+// a dedicated test; these two did not.
+describe("AC1 — response.incomplete and response.failed terminate as provider_error, not silently dropped", () => {
+  test("response.incomplete (e.g. truncated by max_output_tokens) classifies per its error code", async () => {
+    const sse = [
+      'event: response.created\ndata: {"type":"response.created","sequence_number":0,"response":{"id":"resp_incomplete","status":"in_progress"}}\n\n',
+      'event: response.incomplete\ndata: {"type":"response.incomplete","sequence_number":1,"response":{"id":"resp_incomplete","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"error":null}}\n\n',
+    ].join("");
+    const { fetch: fetchMock } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const deps: OpenAiProviderDeps = { fetch: fetchMock, grant: validGrant() };
+    const provider = new OpenAiProvider(deps);
+    const events = await collectEvents(provider.stream(buildRequest("request-incomplete"), { attemptId: "attempt-incomplete" }));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe("provider_error");
+    // No error.code on this shape -> falls through to "unknown", per the
+    // adapter's own classification rule (code undefined/empty -> unknown).
+    expect(events[0]!.error?.kind).toBe("unknown");
+    expect(events[0]!.error?.message.length).toBeGreaterThan(0);
+  });
+
+  test("response.failed with a real error code classifies as invalid_request, not silently dropped", async () => {
+    const sse = [
+      'event: response.created\ndata: {"type":"response.created","sequence_number":0,"response":{"id":"resp_failed","status":"in_progress"}}\n\n',
+      'event: response.failed\ndata: {"type":"response.failed","sequence_number":1,"response":{"id":"resp_failed","status":"failed","error":{"code":"server_error","message":"internal error"}}}\n\n',
+    ].join("");
+    const { fetch: fetchMock } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const deps: OpenAiProviderDeps = { fetch: fetchMock, grant: validGrant() };
+    const provider = new OpenAiProvider(deps);
+    const events = await collectEvents(provider.stream(buildRequest("request-failed"), { attemptId: "attempt-failed" }));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe("provider_error");
+    expect(events[0]!.error?.kind).toBe("invalid_request");
+    expect(events[0]!.error?.message).toContain("internal error");
+  });
+});
+
 // --- AC4: SSRF/egress guard --------------------------------------------------
 
 describe("AC4 — SSRF/egress guard denies private/loopback/link-local/metadata hosts", () => {

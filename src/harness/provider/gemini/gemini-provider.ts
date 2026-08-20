@@ -430,8 +430,14 @@ export class GeminiProvider implements ProviderPort {
       return;
     }
 
-    const modelId = request.modelId.length > 0 ? request.modelId : DEFAULT_MODEL.modelId;
-    const url = `${baseUrl.replace(/\/+$/, "")}/v1beta/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`;
+    // `request.modelId` goes straight through unguarded, matching every
+    // other adapter's convention (AnthropicProvider, OpenAiProvider, the
+    // compat engine — none silently substitute a default for an empty
+    // caller-supplied model id; a caller bug should fail loudly against the
+    // vendor API rather than silently answer from a different model than
+    // requested). `DEFAULT_MODEL.modelId` still backs `describe()`/
+    // `descriptorDocument()` below, unaffected by this.
+    const url = `${baseUrl.replace(/\/+$/, "")}/v1beta/models/${encodeURIComponent(request.modelId)}:streamGenerateContent?alt=sse`;
     // x-goog-api-key header — confirmed current/preferred form over the
     // older `?key=` query param (research flagged the query-param path as
     // unconfirmed-still-working; the header is used here).
