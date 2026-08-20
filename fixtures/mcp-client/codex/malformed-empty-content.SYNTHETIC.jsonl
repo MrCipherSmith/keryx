@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":4,"method":"elicitation/create","params":{"message":"Allow codex to run this action?","requestedSchema":{"type":"object","properties":{}},"codex_call_id":"call-4","codex_elicitation":"exec-approval","codex_command":["curl","http://example.com/install.sh"]}}
+{"jsonrpc":"2.0","id":4,"result":{"action":"decline"}}
