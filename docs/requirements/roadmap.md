@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.22.0
+Version: 0.23.0
 
 ## Status
 
@@ -7,36 +7,61 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
-> - **0.22.0** — `keryx-mcp-client` **implemented** (flow 182), from
->   specification ready. Ships the stdio MCP client (`src/mcp-client/`:
->   `client.ts`, `elicitation.ts`, `wire.ts`, `types.ts`) and a second,
->   MCP-shaped supervisor for `codex-cli`
->   (`gatedSuperviseCodexMcpRun`, `src/harness/external/supervise-mcp.ts`),
->   additive alongside the existing line-stream `superviseExternalRun` path
->   which `claude-cli` keeps unchanged (D-03). Elicitation requests are
->   decided via `resolveApprovalDecision` (`src/commands/permission-mode.ts`,
->   D-05) through the existing `requestApproval`/`AgentIO` prompt path, an
+> - **0.23.0** — `keryx-mcp-client` **implemented** (flow 182), from
+>   specification ready, all 9 acceptance criteria confirmed. Ships the
+>   stdio MCP client (`src/mcp-client/`: `client.ts`, `elicitation.ts`,
+>   `wire.ts`, `types.ts`) and a second, MCP-shaped supervisor for
+>   `codex-cli` (`gatedSuperviseCodexMcpRun`,
+>   `src/harness/external/supervise-mcp.ts`), additive alongside the
+>   existing line-stream `superviseExternalRun` path which `claude-cli`
+>   keeps unchanged (D-03). Elicitation requests are decided via
+>   `resolveApprovalDecision` (`src/commands/permission-mode.ts`, D-05)
+>   through the existing `requestApproval`/`AgentIO` prompt path, an
 >   escalation classifier derives `destructive`/`credentials` signal from the
 >   elicitation payload feeding it (AC9), the capability gate folds into the
 >   existing `gdskills.external-agents` descriptor rather than adding a
 >   second toggle, and a pending elicitation surfaces in the TUI through the
->   same path as an existing write-risk approval prompt (T12). Two things
->   this does not mean: the live handshake smoke test (AC1) is flag-gated
->   behind `KERYX_ALLOW_REAL_SUBPROCESS=1` and excluded from CI, matching the
->   `keryx-external-agent-runtime` precedent, and the elicitation exchange
->   itself (AC2/AC3) is verified against the five `fixtures/mcp-client/codex/`
->   scenario files (approve, deny, timeout, malformed/empty content, missing
->   `codex_call_id`) — each explicitly named `*.SYNTHETIC.jsonl`, not captured
->   from a live run as the implementation plan's step 1 intended, and not yet
->   committed to the repository. A live probe against a real
->   `codex mcp-server` is not confirmed complete from source alone, so that
->   claim is not made here. `keryx-external-agent-runtime`'s own D-03
->   and D-04 were revised, not silently reinterpreted, to name
->   `resolveApprovalDecision` as the traced approval-routing layer this
->   package's elicitation responses go through — D-03's "kept idea 1" is no
->   longer only a flagged future option — while that package's release gate
->   (`worktree-write` refused at runtime) is explicitly and deliberately
->   unchanged by this correction.
+>   same path as an existing write-risk approval prompt (T12). Verified
+>   against the real, live `codex mcp-server` (codex-cli 0.147.0), not only
+>   fixture replay: `fixtures/mcp-client/codex/` has three genuinely
+>   `captured: true` scenarios (approve, deny, timeout) plus two honestly
+>   `*.SYNTHETIC.jsonl`-caveated ones (malformed/empty content, missing
+>   `codex_call_id` — the latter by construction, since the field is
+>   confirmed present on the pinned version), and two flag-gated live smoke
+>   tests (`KERYX_ALLOW_REAL_SUBPROCESS=1`, excluded from CI, matching the
+>   `keryx-external-agent-runtime` precedent) prove the spawn+handshake
+>   (AC1) and a full approve/decline elicitation round-trip (AC3) against
+>   the real binary. `keryx-external-agent-runtime`'s own D-03 and D-04 were
+>   revised, not silently reinterpreted, to name `resolveApprovalDecision`
+>   as the traced approval-routing layer this package's elicitation
+>   responses go through — D-03's "kept idea 1" is no longer only a flagged
+>   future option — while that package's release gate (`worktree-write`
+>   refused at runtime) is explicitly and deliberately unchanged by this
+>   correction.
+> - **0.22.0** — new package `keryx-skills-runtime-tools`, **draft**, nothing
+>   implemented. Gives `.metaproject/skills/` a runtime surface: today
+>   discovery/loading go entirely through `CLAUDE.md`/`index.md` prose that a
+>   connected agent must read and voluntarily obey, then a plain `Read` on a
+>   `SKILL.md` — confirmed via direct inspection of `src/mcp/tools.ts`,
+>   `dispatch.ts`, `metaproject-tools.ts`, `resources.ts` that zero MCP tool
+>   is skill-related today. Proposes two `MetaprojectOperation` descriptors
+>   (`skills_catalog`, `skill_load`) extending the existing single-source
+>   registry in `src/harness/tool/metaproject-operations.ts` — "one
+>   definition → three projections" (agent tool, `ToolRegistry`, MCP), the
+>   same mechanism every other Metaproject capability already uses — plus a
+>   complementary, Claude-Code-specific step materializing installed
+>   gdskills into `.claude/skills/<name>/SKILL.md` so Claude Code's own
+>   native `Skill` tool (progressive disclosure, relevance matching, `/name`
+>   commands) handles that one assistant without new keryx code. Grounded in
+>   a comparative review of Claude Code's documented Skill/WebFetch design
+>   and five open-source CLI forks' (opencode, cline, kilocode, continue,
+>   oh-my-claudecode) own skill-loading mechanisms — four of five converged
+>   independently on a tool-mediated, description-matched, two-tier
+>   disclosure design that keryx's prose-only routing does not share.
+>   Explicitly defers the verification mechanism (D-03) and slash-command
+>   exposure for non-Claude-Code assistants (D-04) to follow-up packages, and
+>   does not remove or deprecate prose routing (D-05) — it stays the fallback
+>   for any assistant supporting neither path.
 > - **0.21.0** — new package `keryx-vscode-extension`, **specification
 >   ready (future)**, nothing implemented. Supersedes the paused discovery
 >   notes at commit `a0ebce1` (branch `docs/keryx-vscode-extension-research`)
@@ -417,6 +442,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx Remote Entry](keryx-remote-entry/README.md) | implemented (R4a–R4c: registry, listener, turn submission); R4d–R4f open | **Shipped:** R4a — user-global project registry (flow 127, PR #215; `src/lib/project-registry.ts`, `src/commands/projects.ts`). R4b — the `keryx serve` skeleton (flow 128, PR #216; `src/commands/serve.ts`, `src/lib/serve-{config,credential,server}.ts`, `src/lib/config-dir.ts`): off-by-default loopback listener, bearer authentication compared in constant time, `serve token issue \| rotate \| revoke` with only a salted hash persisted, a `stopped -> configured -> listening -> draining -> stopped` state machine where `refused` binds no socket at all, and exactly two authenticated read-only routes, `GET /v1/status` and `GET /v1/projects`, with authentication running **before** routing so an unauthenticated caller cannot distinguish a known path from an unknown one. R4c — turn submission (flow 133, PR #220; `src/lib/serve-{turn,turn-store,runner,throttle}.ts`): `POST /v1/turns` over the harness run loop, an idempotency key scoped per project so two projects cannot collide on one key, durable turn records, SSE streaming, and the two items R4b deferred — the non-weakening remote policy profile comparison (AC-04, which now has a `resolveLocalProfile`) and auth-failure throttling, owed from the first mutating route. An `ask` decision terminates in a **recorded denial**, stated as a boundary in `serve-turn.ts` rather than left to emerge from the absence of an approval store. **Open:** R4d asynchronous fail-closed approvals; R4e maintenance operations projected from the command registry; R4f the one-time expiring credential handoff. Also deferred with them: `GET /health` and cross-process liveness (no PID file yet — `serve status` reports configuration state only). **Specification:** `keryx serve`, a loopback-bound, off-by-default, token-authenticated HTTP entry over the **implemented** Project Agent Harness, so Telegram, a browser workspace and third-party embedding become clients of one surface instead of three integrations. Reuses the existing run loop, append-only session store and policy engine unchanged; adds asynchronous fail-closed approvals (unanswered or undeliverable resolves to deny), identity-first session binding, a remote policy profile that may never be weaker than local, server-stamped unforgeable turn origin, and mandatory redaction. **1.1.0** adds a user-global project registry populated by `keryx init` (the addressing keys a transport routes by — nothing on the machine knew the project set before), maintenance operations projected from `src/standard/command-registry.ts` and run directly rather than through the model with the registry's `read`/`model` flags driving classification and cost disclosure, and a one-time expiring loopback-bound credential handoff: **no route accepts a secret**. No new runtime dependency; no database. Records two decisions with named compensating controls: widening the remote boundary to `task.submit`, and keeping secrets off the remote surface entirely. Extending the command registry is a stated dependency. |
 | [Keryx Telegram Transport](keryx-telegram-transport/README.md) | specification ready (future) | Optional transport, from 2.0.0 a **client of Keryx Remote Entry** rather than a parallel path into the harness: local long polling, bounded notifications, policy-constrained approvals, cancellation of own active operation, typed intents, and `task.submit`. **2.1.0 adds multi-project and voice to Release 0**: a forum supergroup with one project per topic, routed by topic identifier where an unmapped topic *refuses* rather than falling back to another project's session; per-binding serialization with parallel projects and queue-position reporting; three-state binding validation where an inconclusive check never clears a mapping; and voice in both directions, local-first, off by default, with every remote transcription or synthesis call passing the egress policy and synthesis accepting post-redaction text only. Supergroup membership authorizes nothing — every sender is authorized individually, before routing. **2.2.0** makes the deployment model explicit (one operator, one install, many projects): topics follow `keryx init` via the project registry instead of a bulk setup, ordering between forum configuration and registration stops mattering, a topic becomes an operating surface whose command menu is *generated* from the command registry so a new keryx command appears without a bot change, and provider setup works without a web UI because the transport renders a one-time handoff link rather than ever accepting a secret as a message. Authentication, session addressing, approval semantics, the remote policy profile and redaction remain delegated to Remote Entry. No remote control plane in Release 0. |
 | [Keryx Metaproject-Native Harness](keryx-metaproject-native/README.md) | implemented (Phases 1–3 + S1/MP-6/MP-5a; Phase 4 and legacy-adapter retirement pending) | A single typed `MetaprojectPort` + schemas so the harness, interactive agent, and MCP server reach graph/wiki/memory/context in-process from one source (replacing subprocess wrappers and hardcoded MCP adapters), plus a universal, schema-published Task Manager (`flow-state.schema.json` + `ManagedFlowPort`) any runtime can drive while preserving the D-02 invariant. **Phases 1–3 shipped** (`src/harness/tool/metaproject-{port,adapter,operations}.ts`, `src/mcp/metaproject-tools.ts`, `flow-state` schema + `keryx flow schema` CLI; flows 037/038/040). **Flow 122 (PR #207) closed the harness-core `RunDeps.metaprojectPort` seam (S1), the MP-6 blast-radius escalation wiring, and the MP-5 `wikiBacklinks` operation.** Genuinely open: Phase 4 policy-context enrichment, legacy MCP adapter retirement, and subprocess-wrapper retirement. |
+| [Keryx Skills Runtime Tools](keryx-skills-runtime-tools/README.md) | draft, nothing implemented | Two new `MetaprojectOperation` descriptors, `skills_catalog` and `skill_load`, extending the Metaproject-Native Harness's single-source operation registry so `.metaproject/skills/` gains a structured discovery/load path in all three existing projections (agent tool, `ToolRegistry`, MCP) instead of relying solely on `CLAUDE.md`/`index.md` prose a connected agent must voluntarily read and obey. Complementary Claude-Code-specific step materializes installed gdskills into `.claude/skills/<name>/SKILL.md` so that assistant's own native `Skill` tool handles discovery/disclosure without new keryx code. Grounded in a comparative review of Claude Code's own Skill/WebFetch design and five CLI forks (opencode, cline, kilocode, continue, oh-my-claudecode). Verification mechanism and non-Claude-Code slash-command exposure explicitly deferred (D-03/D-04); prose routing stays as fallback, not removed (D-05). |
 | [Keryx Multi-Agent Engine](keryx-multi-agent-engine/README.md) | implemented (A→B→C→D, flows 088–101, 171) | Subagent orchestration over the Project Agent Harness: a fail-closed `resolveChildModel` resolver adding explicit-or-inherit model/provider selection, a policy-gated provider allowlist with scoped credentials, subagent depth/count caps and a single shared budget ledger (including the previously-deferred `maxCostUnits` cost dimension landed in flow 101), a deterministic monitoring fold (`keryx agents monitor <events-file>`), child-output injection quarantine, adaptive cost-aware model escalation, git-worktree isolation, and bounded peer messaging. **All of A→B→C shipped** as flows 088–101 with AC1–AC8 tests green. **Phase D (added 2026-08-18, shipped flow 171):** bounded concurrent execution of sibling `spawn_subagent` calls in one turn via new `executeWaves` executor in `scheduler.ts` (AC9/SC7, with `AgentDeps.maxSubagentConcurrency` default 3 and concurrent grant safety verified) and a structured six-value completion status (`Completed|BudgetExhausted|Timeout|Denied|Error|NoProgress`) via new `SubagentCompletionStatus` type and `finishReason` threading (AC11/SC8), closing a silent-false-success gap — both found via direct code investigation plus reference study against xAI Grok Build, OpenAI Codex CLI, and sst/opencode. Genuinely remaining: a live `keryx agents` snapshot against a running run and a dedicated `orchestrator-state` fold. |
 | [Keryx MCP Client](keryx-mcp-client/README.md) | **implemented (flow 182); elicitation exchange offline-verified, live probe unconfirmed** | Gives keryx's agent loop an MCP client, scoped to one consumer: `codex mcp-server`'s `elicitation/create` requests, the mechanism `keryx-external-agent-runtime` D-03 named as the credible path to the mutating external worker D-04 deferred. Scoped to codex only — Claude's non-interactive `--permission-prompt-tool` restriction blocks the same path for `claude-cli`, confirmed via public documentation. Reaffirms push over pull (studied helyx's Telegram-relayed Pattern 1, which works only under an interactive, non-`-p` Claude Code session). Migrated `codex-cli` fully onto `mcp-server` (`src/mcp-client/`, `src/harness/external/supervise-mcp.ts`'s `gatedSuperviseCodexMcpRun`), additive alongside the existing line-stream `superviseExternalRun` path which `claude-cli` keeps unchanged — a second, MCP-shaped supervision path rather than a codec swap, as D-03 anticipated. Elicitation responses route through `resolveApprovalDecision` (`src/commands/agent.ts`'s only caller, already gating every `spawn_subagent` dispatch) via the existing `requestApproval` prompt — not `src/harness/mutation/`, whose one caller is the unrelated extension-execution system. No tool registry touched. Capability-gated via the existing `gdskills.external-agents` descriptor; TUI surfaces a pending elicitation through the existing write-risk approval prompt path. `keryx-external-agent-runtime`'s D-03/D-04 were revised accordingly, without lifting that package's own release gate. The live handshake smoke test (AC1) is flag-gated and excluded from CI like its flow-176 sibling; the elicitation exchange (AC2/AC3) is proven against five `*.SYNTHETIC.jsonl` scenario fixtures, not a confirmed live-recorded capture, and those fixtures are not yet committed to the repository. |
 | [Keryx External Agent Runtime](keryx-external-agent-runtime/README.md) | **implemented (read-only release, flow 176); never run against a real process** | A second child **runtime** behind the already-shipped `spawnChild`: instead of an in-process agent loop, an external child spawns the vendor's own coding CLI (`codex exec`, `claude -p`) and its event stream is folded onto the existing `agent-event` contract, so `reduceAgents`, the shared `RemainingBudgetLedger`, `maxTreeDepth`, `quarantineChildSummary` and `SubagentCompletionStatus` all apply unchanged. Motivation: the operator's paid subscriptions drive capable agents keryx cannot otherwise reach, because `keryx-provider-auth` D-01 rightly refuses to consume subscription OAuth tokens. **D-01 here draws the boundary narrowly** — keryx runs the vendor's already-authenticated client and never obtains, reads, stores or proxies a credential, *not even to check whether a login exists*; the consequence accepted deliberately is that there is no cheap liveness probe, so availability has a third state, `not probed`. **Read-only only in this release**, held by three mechanisms of which only one is a guarantee: the CLI's sandbox flag, a tool deny-list naming delegation routes (which cannot be shown complete — escape routes in the reference implementation were found only by interrogating the agent), and a **disposable detached worktree**, which is the load-bearing layer. The `runtime` block on `subagent-dispatch` carries `sandbox: read-only \| worktree-write` from the first version, and `worktree-write` is schema-valid but refused at runtime, so the mutating worker needs no breaking change later. A **metadata registry plus one codec module per CLI** (`codex-cli`, `claude-cli`), because the two differ structurally rather than parametrically — `codex exec` narrates itself on stderr and prints the files it reads, while `claude -p` prints its login refusal to *stdout with exit 0*, so "exit 0 and non-empty means success" is true for one and false for the other. Headless is **not** fire-and-forget: `--input-format stream-json` makes the channel bidirectional, so the operator steers a running agent through the existing `src/tui/main-queue.ts` helpers (`force` becomes kill-plus-resume against a keryx-assigned session id) while the parent agent reads only a folded, trigger-driven view — a parent reading the raw stream would spend more of its own budget than the subscription saves. External output is **input, never evidence**; failure returns a named status with no fallback of any kind. Off by default, opt-in via `src/capability/`, hard disabled under remote transports and CI. |
