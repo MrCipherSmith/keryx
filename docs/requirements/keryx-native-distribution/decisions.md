@@ -1,5 +1,5 @@
 # Keryx Native Distribution — Decisions
-Version: 0.1.0
+Version: 0.2.0
 
 ## D-01: Standalone binary via `bun build --compile`, not thin wrappers
 
@@ -17,6 +17,35 @@ Bun cross-compiles `--compile` binaries for macOS/Linux from one machine
 entrypoint produced a working 72.1MB binary with its highest-bundling-risk
 optional dependency (`web-tree-sitter`, WASM) confirmed functional by a real
 `gdgraph build` run, not just a launch check.
+
+**Amended by flow 184 (`keryx-native-distribution`), 2026-08-20.** The
+`web-tree-sitter` claim in the reasoning above was wrong: the "confirmed
+functional" `gdgraph build` run's "1 nodes, 0 edges" output is the
+DETERMINISTIC FALLBACK's output, not a genuine tree-sitter parse. The
+compiled binary could not actually load `web-tree-sitter`
+(`Cannot find package 'web-tree-sitter'`), because `src/capability/seam.ts`'s
+generic `await import(spec.optionalDependency)` resolves a **runtime string
+variable**, which Bun's `--compile` bundler cannot trace statically
+(confirmed against oven-sh/bun#11732). The decision to build a real
+standalone binary (this D-01's actual decision) is unaffected — it does not
+rest on tree-sitter specifically — but the supporting evidence line does not
+hold as written.
+
+Re-verification the same flow found the decision's foundation intact from a
+different angle: `@modelcontextprotocol/sdk` and `@opentui/core`, which
+already use literal import specifiers throughout, both independently
+bundle-and-work correctly in the compiled binary — MCP via a real client
+round-trip (`tools/list` returned 34 real tools, not just "process exited
+without error"), OpenTUI via a real `createCliRenderer()` construction with
+genuine terminal-control-sequence output, zero `node_modules` present.
+`web-tree-sitter` itself was also confirmed to bundle-and-work when reached
+through a **literal** `await import("web-tree-sitter")` rather than through
+the generic seam — proving the standalone-binary approach is sound, and
+narrowing the actual gap to one capability's import path, not the whole
+tree-sitter dependency or the decision itself. The fix (a
+gdgraph/treesitter-specific literal-import fast path, not a change to
+`seam.ts`'s generic contract) is tracked as this flow's T6. See
+[specification.md](specification.md) §2's amendment for the full record.
 
 ## D-02: Single-runner cross-compile, no OS matrix
 
