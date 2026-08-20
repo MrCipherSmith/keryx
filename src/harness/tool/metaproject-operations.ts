@@ -142,9 +142,6 @@ export function formatWiki(result: WikiPageResult): InteractiveToolResult {
 
 /** Render a structured `skillsCatalog` result as readable text for the model. */
 export function formatSkillsCatalog(result: SkillsCatalogResult): InteractiveToolResult {
-  if (result.error !== undefined) {
-    return { output: `skills_catalog failed: ${result.error}`, isError: true };
-  }
   if (result.skills.length === 0) {
     return { output: "No skills found under .metaproject/skills/gdskills/.", isError: false };
   }
@@ -441,7 +438,6 @@ const SKILLS_CATALOG_OUTPUT_SCHEMA: Record<string, unknown> = {
   properties: {
     skills: { type: "array" },
     generatedAt: { type: "string" },
-    error: { type: "string" },
   },
   required: ["skills", "generatedAt"],
 };

@@ -293,8 +293,6 @@ export interface SkillsCatalogResult {
   skills: SkillsCatalogEntry[];
   /** ISO timestamp of the live read — never a cache-write timestamp. */
   generatedAt: string;
-  /** Set when the backing read failed — structured-empty, not thrown. */
-  error?: string;
 }
 
 /** Structured result of `skill_load` — skill-load-result.schema.json. */

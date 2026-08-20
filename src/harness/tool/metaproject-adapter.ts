@@ -226,6 +226,35 @@ function parseSkillFrontmatter(content: string): { description?: string; trigger
 }
 
 /**
+ * Parse `.metaproject/skills/catalog.md`'s `| Skill | Category | Purpose |
+ * Entry |` table into `name -> purpose`, for `walkSkillCatalog`'s description
+ * fallback (specification.md §3.1). Returns an empty map on any read/parse
+ * failure — the fallback degrading to "" is acceptable, a thrown error is not.
+ */
+async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> {
+  const summaries = new Map<string, string>();
+  let content: string;
+  try {
+    content = await readFile(join(cwd, ".metaproject", "skills", "catalog.md"), "utf8");
+  } catch {
+    return summaries;
+  }
+  const rowPattern = /^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$/;
+  for (const line of content.split("\n")) {
+    const match = rowPattern.exec(line);
+    if (match === null) {
+      continue;
+    }
+    const [, name, , purpose] = match;
+    if (name === undefined || purpose === undefined || name === "Skill" || /^-+$/.test(name)) {
+      continue; // header or separator row
+    }
+    summaries.set(name, purpose);
+  }
+  return summaries;
+}
+
+/**
  * Walk `.metaproject/skills/gdskills/<category>/<name>/SKILL.md` (exact
  * basename only — per-assistant variants like SKILL.opencode.md are not
  * catalog entries) and return every discovered skill, sorted by path. Never
@@ -241,6 +270,7 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   } catch {
     return [];
   }
+  const catalogSummaries = await parseCatalogSummaries(cwd);
   for (const categoryDir of categoryDirs) {
     if (!categoryDir.isDirectory()) {
       continue;
@@ -268,7 +298,7 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
         name: skillDir.name,
         path: relative(cwd, skillMdPath),
         category: categoryDir.name,
-        description: description ?? "",
+        description: description ?? catalogSummaries.get(skillDir.name) ?? "",
         ...(triggers !== undefined ? { triggers } : {}),
       });
     }
@@ -588,12 +618,13 @@ export function createMetaprojectAdapter(
     // --- gdskills runtime discovery (docs/requirements/keryx-skills-runtime-tools) --
 
     async skillsCatalog(): Promise<SkillsCatalogResult> {
-      try {
-        const skills = await walkSkillCatalog(cwd);
-        return { skills, generatedAt: deps.now() };
-      } catch (cause) {
-        return { skills: [], generatedAt: deps.now(), error: errorMessage(cause) };
-      }
+      // walkSkillCatalog is internally defensive (every fs op is try/catched;
+      // a missing root or unreadable directory yields fewer entries, never a
+      // throw) — no outer try/catch needed. Unlike most other MetaprojectPort
+      // results, skills-catalog-result.schema.json declares no `error` field
+      // (additionalProperties: false), so there is nowhere to put one anyway.
+      const skills = await walkSkillCatalog(cwd);
+      return { skills, generatedAt: deps.now() };
     },
 
     async loadSkill(input): Promise<SkillLoadResult> {

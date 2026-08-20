@@ -534,7 +534,6 @@ test("skillsCatalog discovers every skill, excluding per-assistant SKILL.*.md va
   await withSkillsFixture(async (root) => {
     const adapter = createMetaprojectAdapter(root);
     const result = await adapter.skillsCatalog?.({});
-    expect(result?.error).toBeUndefined();
     expect(result?.skills).toHaveLength(2);
 
     const byName = new Map(result?.skills.map((s) => [s.name, s]));
@@ -556,7 +555,30 @@ test("skillsCatalog degrades a skill with no/malformed frontmatter instead of fa
     const noFrontmatter = result?.skills.find((s) => s.name === "gdgraph-router");
     expect(noFrontmatter?.description).toBe("");
     expect(noFrontmatter?.triggers).toBeUndefined();
-    expect(result?.error).toBeUndefined();
+  });
+});
+
+test("skillsCatalog falls back to catalog.md's one-line summary when a SKILL.md has no description", async () => {
+  await withSkillsFixture(async (root) => {
+    await mkdir(path.join(root, ".metaproject", "skills"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "skills", "catalog.md"),
+      [
+        "# Metaproject Skills Catalog",
+        "",
+        "| Skill | Category | Purpose | Entry |",
+        "|---|---|---|---|",
+        "| gdgraph-router | core | Route graph questions to gdgraph. | gdskills/core/gdgraph-router/SKILL.md |",
+        "",
+      ].join("\n"),
+    );
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.skillsCatalog?.({});
+    const noFrontmatter = result?.skills.find((s) => s.name === "gdgraph-router");
+    expect(noFrontmatter?.description).toBe("Route graph questions to gdgraph.");
+    // The skill WITH its own frontmatter description is unaffected by catalog.md.
+    const flowOrchestrator = result?.skills.find((s) => s.name === "flow-orchestrator");
+    expect(flowOrchestrator?.description).toBe("Task Manager-aware implementation orchestrator.");
   });
 });
 
@@ -566,7 +588,6 @@ test("skillsCatalog returns an empty list, not an error, when the gdskills root 
     const adapter = createMetaprojectAdapter(emptyRoot);
     const result = await adapter.skillsCatalog?.({});
     expect(result?.skills).toEqual([]);
-    expect(result?.error).toBeUndefined();
   } finally {
     await rm(emptyRoot, { recursive: true, force: true });
   }
