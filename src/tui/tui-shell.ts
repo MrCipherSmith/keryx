@@ -1029,7 +1029,9 @@ function promptSearchFieldStep(
     const input = new otui.InputRenderable(r, { id: "sf-input", value, marginTop: 1 });
     box.add(input);
     input.focus();
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    // Blur before detaching: a delayed duplicate ENTER can otherwise still
+    // reach this input after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); input.blur(); r.root.remove(box); };
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
     });
@@ -1057,7 +1059,9 @@ function promptSearchCredentialStep(otui: OpenTui, r: Renderer, opts: { label: s
     const keyInput = new otui.InputRenderable(r, { id: "sc-input", placeholder: "...", marginTop: 1 });
     box.add(keyInput);
     keyInput.focus();
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    // Blur before detaching: a delayed duplicate ENTER can otherwise still
+    // reach this input after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); keyInput.blur(); r.root.remove(box); };
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
     });
@@ -1124,7 +1128,9 @@ function pickSearchProviderStep(
     });
     box.add(select);
     select.focus();
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    // Blur before detaching: a delayed duplicate ITEM_SELECTED can otherwise
+    // still reach this select after the box is removed (see promptSetActiveProviderStep).
+    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
     });
