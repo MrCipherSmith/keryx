@@ -1087,7 +1087,10 @@ function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolea
     });
     box.add(select);
     select.focus();
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    // Step 3 awaits `controller.test()` right after this step resolves, long
+    // enough for a delayed duplicate ITEM_SELECTED to reach this already-removed
+    // select if it stays the renderer's focus target — blur before detaching.
+    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
     });
