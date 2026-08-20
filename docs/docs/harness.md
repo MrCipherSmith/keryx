@@ -215,10 +215,9 @@ it obtains, stores, forwards and proxies no token, and consumes no subscription
 tokens of its own. Whether a vendor considers headless third-party orchestration
 of its own CLI acceptable is **not addressed by either vendor's published
 terms**, and it is carried as an open risk rather than a settled question — see
-the package's
-[decisions](../requirements/keryx-external-agent-runtime/decisions.md) D-01 and
-[security policy](../requirements/keryx-external-agent-runtime/security-policy.md)
-§7.
+the package's decisions (`docs/requirements/keryx-external-agent-runtime/decisions.md`
+D-01) and security policy (`docs/requirements/keryx-external-agent-runtime/security-policy.md`
+§7).
 
 ### What the child gets, and how it is asked for
 
