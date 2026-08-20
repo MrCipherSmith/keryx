@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 2,
+  "id": "181",
+  "slug": "skills-runtime-tools-skills-catalog-skil",
+  "title": "Skills runtime tools: skills_catalog + skill_load MetaprojectOperations (R1+R2 from keryx-skills-runtime-tools docpack)",
+  "status": "done",
+  "createdAt": "2026-08-20T13:03:54.313Z",
+  "updatedAt": "2026-08-20T16:13:05.429Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4bc92aa420f3e4eb26766bb3b1e4eef73ad102e66667c60972cf1138e056d231",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T16:09:00.109Z",
+      "note": "PR #359 merged (4b78e77): MetaprojectOperation['module'] widened to include 'gdskills' at metaproject-operations.ts:50; every pre-existing operation's module tag unchanged, verified via full diff."
+    },
+    "AC2": {
+      "at": "2026-08-20T16:09:00.218Z",
+      "note": "skillsCatalog walks .metaproject/skills/gdskills/**/SKILL.md (name/path/category/description/triggers); tests confirm real discovery, catalog.md description-fallback (added in T4 review round), and schema conformance against skills-catalog-result.schema.json."
+    },
+    "AC3": {
+      "at": "2026-08-20T16:09:00.323Z",
+      "note": "loadSkill byte-identical content test + not-found (found:false, empty content/path, never throws) both covered in metaproject-adapter.test.ts, verified against skill-load-result.schema.json."
+    },
+    "AC4": {
+      "at": "2026-08-20T16:09:00.419Z",
+      "note": "Both operations risk:read; toInteractiveTools/toToolDefinitions/toMcpTools reachability all covered by dedicated tests mirroring wiki_backlinks/flow_status precedent; no bespoke src/mcp/metaproject-tools.ts wiring needed (confirmed by review)."
+    },
+    "AC5": {
+      "at": "2026-08-20T16:09:00.521Z",
+      "note": "skillsCatalog/loadSkill are pure fs reads confined under .metaproject/skills/gdskills (confineToSkills, catalog-gated lookup) -- no network/shell/write anywhere in the new code, confirmed by review focus area 2."
+    },
+    "AC6": {
+      "at": "2026-08-20T16:09:00.615Z",
+      "note": "No behavior change to the 13 pre-existing operations, shell.ts, .claude/skills/, or gdskills install/sync/catalog.ts -- full diff reviewed, additive only."
+    },
+    "AC7": {
+      "at": "2026-08-20T16:09:00.715Z",
+      "note": "389 pass/0 fail locally across the 4 directly-affected test files pre-merge; CI typecheck-and-tests green after 2 fix rounds (2 more pre-existing hardcoded tool-list tests CI caught beyond T3's local scope) plus 1 unrelated-flake re-run (serve.process.test.ts SIGINT timing)."
+    },
+    "AC8": {
+      "at": "2026-08-20T16:09:00.810Z",
+      "note": "bun run typecheck clean throughout (ground truth); keryx health run WARN was the installed global keryx binary's own stale-build limitation (typescript source unavailable), independently corroborated by T4's reviewer; CI's real typecheck-and-tests job (which runs the actual tsc+bun test) passed green on PR #359 after fixes."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/359"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T13:03:54.313Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T13:05:49.299Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T13:05:49.406Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T13:06:12.900Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-20T14:57:03.153Z",
+      "event": "blocked",
+      "detail": "T2 (task-implementer) stalled with zero progress for 600s on two consecutive identical dispatches; both attempts exhausted, no code changes were made either time. Likely environmental/session issue, not a dispatch-content problem, since the second attempt used the exact same instructions."
+    },
+    {
+      "at": "2026-08-20T15:07:08.208Z",
+      "event": "unblocked",
+      "detail": "resumed as in-progress"
+    },
+    {
+      "at": "2026-08-20T15:17:52.986Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T15:24:24.561Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T15:39:22.173Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T16:08:40.824Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/359 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T16:09:00.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #359 merged (4b78e77): MetaprojectOperation['module'] widened to include 'gdskills' at metaproject-operations.ts:50; every pre-existing operation's module tag unchanged, verified via full diff."
+    },
+    {
+      "at": "2026-08-20T16:09:00.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: skillsCatalog walks .metaproject/skills/gdskills/**/SKILL.md (name/path/category/description/triggers); tests confirm real discovery, catalog.md description-fallback (added in T4 review round), and schema conformance against skills-catalog-result.schema.json."
+    },
+    {
+      "at": "2026-08-20T16:09:00.323Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: loadSkill byte-identical content test + not-found (found:false, empty content/path, never throws) both covered in metaproject-adapter.test.ts, verified against skill-load-result.schema.json."
+    },
+    {
+      "at": "2026-08-20T16:09:00.419Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Both operations risk:read; toInteractiveTools/toToolDefinitions/toMcpTools reachability all covered by dedicated tests mirroring wiki_backlinks/flow_status precedent; no bespoke src/mcp/metaproject-tools.ts wiring needed (confirmed by review)."
+    },
+    {
+      "at": "2026-08-20T16:09:00.521Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: skillsCatalog/loadSkill are pure fs reads confined under .metaproject/skills/gdskills (confineToSkills, catalog-gated lookup) -- no network/shell/write anywhere in the new code, confirmed by review focus area 2."
+    },
+    {
+      "at": "2026-08-20T16:09:00.615Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: No behavior change to the 13 pre-existing operations, shell.ts, .claude/skills/, or gdskills install/sync/catalog.ts -- full diff reviewed, additive only."
+    },
+    {
+      "at": "2026-08-20T16:09:00.715Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 389 pass/0 fail locally across the 4 directly-affected test files pre-merge; CI typecheck-and-tests green after 2 fix rounds (2 more pre-existing hardcoded tool-list tests CI caught beyond T3's local scope) plus 1 unrelated-flake re-run (serve.process.test.ts SIGINT timing)."
+    },
+    {
+      "at": "2026-08-20T16:09:00.811Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun run typecheck clean throughout (ground truth); keryx health run WARN was the installed global keryx binary's own stale-build limitation (typescript source unavailable), independently corroborated by T4's reviewer; CI's real typecheck-and-tests job (which runs the actual tsc+bun test) passed green on PR #359 after fixes."
+    },
+    {
+      "at": "2026-08-20T16:13:02.997Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T16:13:05.429Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}
