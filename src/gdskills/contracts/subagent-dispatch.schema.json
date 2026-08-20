@@ -92,6 +92,46 @@
         "inherit": { "type": "boolean" }
       }
     },
+    "runtime": {
+      "description": "Which child runtime executes this dispatch (flow 176; docs/requirements/keryx-external-agent-runtime). Additive and optional: an absent block means the native keryx runtime, so every dispatch authored before this package stays valid. Constraints this schema cannot express — the agent resolving in the registry, the sandbox appearing in that agent's supported modes, and read-only versus allowed_actions — are enforced fail-closed by the pure validator in src/harness/external/dispatch.ts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "`keryx` runs the in-process agent loop; `external` spawns a vendor CLI subprocess.",
+          "type": "string",
+          "enum": ["keryx", "external"]
+        },
+        "agent": {
+          "description": "Registry id of the external agent. Required when kind is `external`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "sandbox": {
+          "description": "Permission level for the external child. `worktree-write` is schema-valid but refused at runtime in the read-only release, with a reason distinguishable from an unsupported-by-this-agent refusal.",
+          "type": "string",
+          "enum": ["read-only", "worktree-write"]
+        },
+        "model": {
+          "description": "Model id passed to the external CLI. Omit or null to let the CLI resolve its own default under the operator's active subscription — keryx never pins a model the account may not be entitled to.",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "timeoutMs": { "type": ["integer", "null"], "minimum": 1000 },
+        "maxCostUnits": { "type": ["number", "null"], "exclusiveMinimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "external" } }, "required": ["kind"] },
+          "then": { "required": ["agent", "sandbox"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "keryx" } }, "required": ["kind"] },
+          "then": { "not": { "required": ["agent"] } }
+        }
+      ]
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": true,

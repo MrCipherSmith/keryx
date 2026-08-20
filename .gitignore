@@ -22,6 +22,11 @@ coverage/
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
 .metaproject/data/gdctx/artifacts/
+# `keryx ctx` writes its logs relative to the CURRENT directory, so a routed
+# command started from a subdirectory creates a nested .metaproject/data/gdctx
+# tree there. The patterns above are root-anchored and miss those; this one is
+# not. Twice caught disposable logs being staged into a docs package.
+**/.metaproject/data/gdctx/
 .metaproject/data/gdwiki/artifacts/
 .metaproject/data/gdwiki/link-check/
 .metaproject/data/health/history/

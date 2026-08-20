@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a01b3f-39e6-7690-8c1e-47540600ae78"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"error: nothing is actually wrong"}}
+{"type":"turn.completed","usage":{"input_tokens":33505,"cached_input_tokens":9984,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}

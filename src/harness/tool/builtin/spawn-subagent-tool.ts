@@ -262,6 +262,44 @@ export interface SpawnSubagentToolDeps {
    * unchanged.
    */
   onLedgerReady?: (controls: { resetBudget: () => void }) => void;
+  /**
+   * External-agent runtime seam (flow 176; docs/requirements/keryx-external-agent-runtime).
+   *
+   * When a dispatch carries `runtime.kind === "external"` AND this hook is
+   * supplied, the child is executed by a vendor CLI subprocess instead of the
+   * in-process `runAgentTurn` loop below. Optional and additive: every existing
+   * call site omits it, so their behaviour is byte-for-byte unchanged — the
+   * same idiom `getSlateSession` and `onLedgerReady` above already use.
+   *
+   * The hook is invoked AFTER `spawnSubagent`, deliberately. Admission, the
+   * shared budget ledger and the depth/child caps have already applied by then,
+   * so an external child is governed by exactly the same gates as a native one
+   * and no second spawn path exists — which is the substance of that package's
+   * AC17. The type is deliberately structural (`unknown` runtime block, a
+   * `StructuredSubagentResult` back) so this module needs no import from
+   * `src/harness/external/`, and the two stay independently testable.
+   */
+  runExternal?: (request: {
+    readonly runtime: unknown;
+    readonly task: string;
+    readonly mode: SubagentMode;
+    readonly workerId: string;
+    readonly label: string;
+  }) => Promise<StructuredSubagentResult>;
+}
+
+/**
+ * The dispatch's `runtime` block when it asks for an external agent, else
+ * undefined.
+ *
+ * Reads defensively and never validates: the real validation is the fail-closed
+ * `validateRuntimeBlock` inside the external runtime, and duplicating it here
+ * would create a second, divergent reader of the same contract.
+ */
+function readExternalRuntimeRequest(input: Record<string, unknown>): Record<string, unknown> | undefined {
+  const raw = input.runtime;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  return (raw as { kind?: unknown }).kind === "external" ? (raw as Record<string, unknown>) : undefined;
 }
 
 function sha256(text: string): string {
@@ -320,7 +358,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
         "label?: string, max_tool_calls?: number }. Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself).",
+        "trivial questions (answer yourself). Optionally accepts a 'runtime' block to " +
+        "delegate the child to an external vendor coding CLI instead of running it in-process.",
       inputSchema: {
         type: "object",
         properties: {
@@ -328,6 +367,44 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
           max_tool_calls: { type: "number" },
+          /**
+           * Flow 176 — the external runtime request
+           * (docs/requirements/keryx-external-agent-runtime §6.1, §8.3).
+           *
+           * OPTIONAL and ADDITIVE: it is absent from `required`, and an omitted
+           * block means the native keryx runtime, so every dispatch authored
+           * before this package stays valid unchanged. That is the same property
+           * `validateRuntimeBlock` enforces on the other side of the seam.
+           *
+           * `agent` is a bare string rather than an enum: the runtime registry
+           * lives in `src/harness/external/`, and this module deliberately holds
+           * no import from there (see `SpawnSubagentToolDeps.runExternal`) so the
+           * two stay independently testable. A hardcoded enum here would be a
+           * copy that silently falls behind that registry — the failure mode a
+           * second, divergent reader of one contract always produces. The
+           * authoritative list is `keryx agents external list`.
+           *
+           * `sandbox` lists only what this release implements. `worktree-write`
+           * is schema-valid in the dispatch contract and refused at runtime with
+           * a distinct reason, so offering it here would spend a dispatch to
+           * learn something the schema already knows.
+           */
+          runtime: {
+            type: "object",
+            description:
+              "Delegate this child to an external agent CLI. kind='external' requires 'agent' " +
+              "(see `keryx agents external list`) and 'sandbox'. Omit for the native runtime.",
+            properties: {
+              kind: { type: "string", enum: ["keryx", "external"] },
+              agent: { type: "string" },
+              sandbox: { type: "string", enum: ["read-only"] },
+              model: { type: ["string", "null"] },
+              timeoutMs: { type: "number" },
+              maxCostUnits: { type: "number" },
+            },
+            required: ["kind"],
+            additionalProperties: false,
+          },
         },
         required: ["task"],
         additionalProperties: false,
@@ -417,6 +494,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
+      // --- External runtime seam (flow 176) ---------------------------------
+      // Reached only when the dispatch asks for it AND the host wired the hook,
+      // so every existing call site falls straight through. Read BEFORE the
+      // first fleet upsert (flow 176 T18) so the sidebar row is marked with its
+      // runtime from the moment it appears (package specification §8.2) — a row
+      // that starts life looking native and is corrected later is a row the
+      // operator has already read.
+      const externalRuntime = readExternalRuntimeRequest(input);
+      const externalAgentId =
+        externalRuntime === undefined || typeof externalRuntime.agent !== "string"
+          ? undefined
+          : externalRuntime.agent;
+      const externalMark =
+        externalRuntime !== undefined && deps.runExternal !== undefined
+          ? ({ runtime: "external", ...(externalAgentId === undefined ? {} : { agentId: externalAgentId }) } as const)
+          : ({} as const);
       emitSubagentFleet({
         kind: "upsert",
         id: workerId,
@@ -425,7 +518,53 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         detail: mode === "read_only" ? "read-only" : "general",
         model: `${runModel.provider}/${runModel.model}`,
         task,
+        ...externalMark,
       });
+
+      // Placed here because `spawnSubagent` above has already applied admission,
+      // the ledger and the depth/child caps: an external child is gated
+      // identically to a native one.
+      if (externalRuntime !== undefined && deps.runExternal !== undefined) {
+        const externalStartedAt = performance.now();
+        try {
+          const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
+          emitSubagentFleet({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: external.isError ? "failed" : "done",
+            detail: external.status,
+            task,
+            ...externalMark,
+          });
+          return external;
+        } catch (err) {
+          // A throwing hook is a keryx bug, not an agent failure, and must not
+          // surface as though the external agent reported something.
+          emitSubagentFleet({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "error",
+            task,
+            ...externalMark,
+          });
+          return {
+            status: "Error",
+            output: `external runtime failed before the agent could report: ${(err as Error).message}`,
+            isError: true,
+          };
+        } finally {
+          // The reservation is given back on every path. `maxToolCalls: 0`
+          // because an external child spends the vendor's own tool budget, not
+          // this ledger's — its cost is accounted in the run's reported usage.
+          ledger.release(spawned.reservation.reservationId, {
+            maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
+            maxToolCalls: 0,
+          });
+        }
+      }
 
       const cwd = deps.cwd;
       const tools =

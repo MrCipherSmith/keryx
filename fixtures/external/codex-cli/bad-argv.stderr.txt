@@ -1,0 +1,8 @@
+error: unexpected argument '--no-interactive' found
+
+  tip: to pass '--no-interactive' as a value, use '-- --no-interactive'
+
+Usage: codex exec [OPTIONS] [PROMPT]
+       codex exec [OPTIONS] <COMMAND> [ARGS]
+
+For more information, try '--help'.

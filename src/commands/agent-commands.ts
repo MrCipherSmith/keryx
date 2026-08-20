@@ -13,6 +13,8 @@
 // registry keeps the definition mode-aware and only ever flattens THROUGH a mode
 // (see {@link describeCommand} / {@link commandsForMode}).
 
+import { EXTERNAL_AGENTS, getExternalAgent } from "../harness/external/registry";
+
 /** The two shell modes. `agent` has tools; `chat` is a plain conversation. */
 export type ShellMode = "chat" | "agent";
 
@@ -164,12 +166,73 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    name: "/delegate",
+    description: "Hand a task to an external agent CLI — /delegate <agent> <task>",
+    // Agent-mode only, same reasoning as /workspace and /review: chat mode has
+    // no tools, no subagent sidebar and no inspector, so a run started there
+    // would produce output with nowhere to appear. The capability is also off by
+    // default (flow 176) — a session without it gets a named refusal at run time,
+    // never a missing command.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/exit",
     description: "Leave the shell (/quit works too)",
     modes: BOTH,
     modeDescriptions: { agent: "Leave agent mode (/quit works too)" },
   },
 ];
+
+/** Usage line for `/delegate`, shown on every parse refusal so the fix is one read away. */
+export const DELEGATE_USAGE = "/delegate <agent> <task>  (agents: `keryx agents external list`)";
+
+/** A parsed `/delegate` invocation, or the named reason it could not be parsed. */
+export type ParsedDelegateCommand =
+  | { readonly ok: true; readonly agentId: string; readonly task: string }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Parse the argument tail of `/delegate <agent> <task>` — the `/delegate` token
+ * itself is already consumed by the caller, exactly as `parseQueueCommand`
+ * expects.
+ *
+ * Every refusal NAMES its cause and points at `keryx agents external list`,
+ * because the three ways this goes wrong are indistinguishable from the
+ * composer: a typo'd agent, an agent keryx does not ship a codec for, and an
+ * agent that is installed but not enabled. Only the first two are visible here;
+ * the third is a runtime refusal from the capability gate, and it carries its own
+ * sentence. A bare "unknown command" for any of them would send the operator
+ * looking in the wrong place.
+ *
+ * Pure — it validates against the registry TABLE and starts nothing.
+ */
+export function parseDelegateCommand(args: string): ParsedDelegateCommand {
+  const trimmed = args.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, reason: `usage: ${DELEGATE_USAGE}` };
+  }
+  const match = /^(\S+)\s+([\s\S]+)$/.exec(trimmed);
+  if (match === null) {
+    // One token only: an agent with no task, or a task with no agent. Both are
+    // the same fix, and guessing which one the operator meant would silently
+    // dispatch a one-word task to a CLI that costs real money to run.
+    return { ok: false, reason: `\`/delegate\` needs both an agent and a task — usage: ${DELEGATE_USAGE}` };
+  }
+  const agentId = match[1] ?? "";
+  const task = (match[2] ?? "").trim();
+  if (task.length === 0) {
+    return { ok: false, reason: `\`/delegate\` needs a task — usage: ${DELEGATE_USAGE}` };
+  }
+  if (getExternalAgent(agentId) === undefined) {
+    return {
+      ok: false,
+      reason:
+        `unknown external agent "${agentId}"; keryx drives ${EXTERNAL_AGENTS.map((e) => e.id).join(", ")}. ` +
+        "Run `keryx agents external list` to see which of them are installed and enabled here.",
+    };
+  }
+  return { ok: true, agentId, task };
+}
 
 /** True when `command` is offered in `mode`. Pure. */
 export function isCommandInMode(command: AgentSlashCommand, mode: ShellMode): boolean {

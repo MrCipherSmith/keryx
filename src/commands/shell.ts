@@ -36,8 +36,10 @@ import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGran
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import { emitBackgroundJob } from "../tui/job-bridge";
+import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -1792,6 +1794,34 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         // that opens AFTER this tool instance is built (see that file's own
         // `SpawnSubagentToolDeps.getSlateSession` doc comment).
         getSlateSession,
+        // External agent runtime (flow 176). Lazy: the gate reads config and the
+        // project manifest, and this tool is built synchronously. Off by
+        // default, so the common path resolves to a `Denied` with a named
+        // reason and nothing is ever spawned.
+        // The three seams flow 176 T18 added, all of them routed through the
+        // module-level bridge in `tui/external-bridge.ts` for the same reason
+        // `emitBackgroundJob` above is: this factory is built before any
+        // renderer exists and must work identically in a readline session that
+        // never mounts one.
+        //
+        // `approve` is NOT optional-in-practice. `externalAgents.spawnDecision`
+        // defaults to "ask" and `createRunExternal` fails closed with no
+        // approver, so before this line every model-initiated external spawn was
+        // denied on a correctly-configured machine and the feature could not run
+        // at all. `approveExternalSpawn` still refuses — with a named reason —
+        // whenever no interactive host has registered itself, so a headless or
+        // non-interactive session cannot self-approve.
+        runExternal: createLazyRunExternal({
+          cwd,
+          observer: externalRunBridgeObserver,
+          approve: approveExternalSpawn,
+          // The shell renders the live transcript and offers a per-addressee
+          // message queue, so a steerable run pays for its open stdin pipe.
+          // Without this every run launches one-shot and the operator's
+          // messages can only ever reach the child by resume — which is what
+          // §7.5's stdin route existed for.
+          steerable: true,
+        }),
       });
       return {
         provider: agentProvider,

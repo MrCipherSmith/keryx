@@ -24,6 +24,18 @@ export interface ShellConfig {
    * owner-only plaintext, loaded into the process env at startup. Flow 085.
    */
   apiKeys?: Record<string, string>;
+  /**
+   * External agent runtime settings (flow 176;
+   * docs/requirements/keryx-external-agent-runtime §3).
+   *
+   * Deliberately typed `unknown` rather than as the parsed shape: this file is
+   * the raw on-disk view, the block is operator-editable, and
+   * `parseExternalAgentsConfig` in `src/capability/external-agents.ts` is the one
+   * validator. Typing it as the parsed interface here would both create an
+   * import cycle (that module reads its config through `loadShellConfig`) and
+   * make a hand-edited, half-valid block look type-safe to every reader.
+   */
+  externalAgents?: unknown;
 }
 
 /** Absolute path to the `auth.json` config file. */

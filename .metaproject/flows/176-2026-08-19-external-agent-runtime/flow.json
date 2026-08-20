@@ -1,0 +1,758 @@
+{
+  "schemaVersion": 2,
+  "id": "176",
+  "slug": "external-agent-runtime",
+  "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
+  "status": "in-progress",
+  "createdAt": "2026-08-19T17:59:35.989Z",
+  "updatedAt": "2026-08-20T08:49:59.137Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:11158d36892175f150c68941f75c6bf157f617ba7fface1c6cd58e8d1e3e4f59",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T05:25:46.551Z",
+      "note": "dispatch.test.ts + registry.test.ts: unknown agent -> unknown-agent; sandbox absent from sandboxModes -> agent-cannot, exercised against a synthetic entry since both shipped entries declare both modes. Pure, offline."
+    },
+    "AC2": {
+      "at": "2026-08-20T05:25:46.638Z",
+      "note": "dispatch.test.ts: read-only rejected for write/network/spawn-subagent, each named in the reason; run-command alone accepted, since an external CLI necessarily runs commands in its own sandbox."
+    },
+    "AC3": {
+      "at": "2026-08-20T05:25:46.723Z",
+      "note": "dispatch.test.ts: worktree-write passes schema and sandboxModes, then refused with code not-implemented — asserted distinct from AC1's unknown-agent code."
+    },
+    "AC4": {
+      "at": "2026-08-20T05:25:46.808Z",
+      "note": "codex-cli.test.ts + claude-cli.test.ts: argv asserted element-by-element across every optional-field combination, incl. that no prompt follows a variadic flag and that --input-format never accompanies a positional prompt."
+    },
+    "AC6": {
+      "at": "2026-08-20T05:25:46.894Z",
+      "note": "codex-cli.test.ts + claude-cli.test.ts against recorded fixtures: not-logged-in (claude exit 0 via result.subtype), bad argv, empty output, and the error-word trap (successful run whose message begins 'error:'). LIMIT CASE PROVISIONAL: usage-limit fixtures are hand-authored and marked SYNTHETIC in the manifest; a real exhaustion has never been captured."
+    },
+    "AC7": {
+      "at": "2026-08-20T05:25:58.058Z",
+      "note": "env.test.ts: every named denial and both prefix sweeps removed from a synthetic parent env; depth marker added AFTER the KERYX_ sweep so the sweep cannot eat it; parent env not mutated."
+    },
+    "AC8": {
+      "at": "2026-08-20T05:25:58.149Z",
+      "note": "runtime.test.ts: worktree removed after success, after failure, when the spawn port throws, and a failing remove does not mask the result. Working-tree containment OBSERVED LIVE in scripts/smoke/external-agents.ts across three real runs (byte-unchanged, no worktree leaked). Caveat: no fixture transcript specifically containing write attempts was used — a fake port cannot write, so the assertion would be theatre; the guarantee rests on the disposable worktree, which is what was tested."
+    },
+    "AC9": {
+      "at": "2026-08-20T05:25:58.239Z",
+      "note": "external-agents.test.ts + runtime.test.ts: capability disabled, remote transport and CI each refuse with a named reason and create no process; verified behaviourally via bun src/cli.ts agents external list under CI=true and KERYX_TRANSPORT=remote."
+    },
+    "AC10": {
+      "at": "2026-08-20T05:25:58.324Z",
+      "note": "external-operator.test.ts: user_message emitted on DELIVERY not queueing; streaming handle -> stdin write; non-streaming -> resume argv. The stdin route was unreachable until T17 (launchedStreaming was hardcoded false) and is now pinned in both directions; proven end to end against a real claude run in the T19 smoke."
+    },
+    "AC11": {
+      "at": "2026-08-20T05:25:58.409Z",
+      "note": "external-delivery.test.ts + external-operator.test.ts: force builds the resume argv carrying the session handle and the message BEFORE killing, and degrades to kill-only with lost:true when no handle was ever announced."
+    },
+    "AC14": {
+      "at": "2026-08-20T05:26:07.715Z",
+      "note": "runtime.test.ts: a failing agent returns its own named status and exactly one process is created — nothing is retried with another agent, runtime or the parent's model. decisions.md D-07."
+    },
+    "AC15": {
+      "at": "2026-08-20T05:26:07.800Z",
+      "note": "package.json dependencies unchanged across the whole flow; @opentui/core remains the pre-existing optional dependency and the TUI modules degrade without it."
+    },
+    "AC16": {
+      "at": "2026-08-20T05:26:07.886Z",
+      "note": "fixtures/external/{codex-cli,claude-cli}/ with manifest.json naming, per file, the CLI version, the exact argv, and captured-vs-hand-authored. Captured: success, resume, no-credentials, bad-argv, error-word, ephemeral-resume refusal, streaming-input, empty-output. Hand-authored and marked SYNTHETIC: both usage-limit files."
+    },
+    "AC17": {
+      "at": "2026-08-20T05:26:07.971Z",
+      "note": "spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/."
+    },
+    "AC13": {
+      "at": "2026-08-20T07:04:57.813Z",
+      "note": "runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
+    },
+    "AC12": {
+      "at": "2026-08-20T08:20:04.376Z",
+      "note": "detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
+    },
+    "AC5": {
+      "at": "2026-08-20T08:49:59.137Z",
+      "note": "agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T11",
+      "title": "Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T12",
+      "title": "TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T13",
+      "title": "Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T14",
+      "title": "Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T15",
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T15",
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-19T17:59:35.989Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-19T18:02:23.409Z",
+      "event": "task-added",
+      "detail": "T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)"
+    },
+    {
+      "at": "2026-08-19T18:02:23.494Z",
+      "event": "task-added",
+      "detail": "T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps"
+    },
+    {
+      "at": "2026-08-19T18:02:23.585Z",
+      "event": "task-added",
+      "detail": "T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)"
+    },
+    {
+      "at": "2026-08-19T18:02:23.675Z",
+      "event": "task-added",
+      "detail": "T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:02:23.766Z",
+      "event": "task-added",
+      "detail": "T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:02:23.852Z",
+      "event": "task-added",
+      "detail": "T10: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:02:23.939Z",
+      "event": "task-added",
+      "detail": "T11: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:02:24.029Z",
+      "event": "task-added",
+      "detail": "T12: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:02:24.116Z",
+      "event": "task-added",
+      "detail": "T13: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:12.969Z",
+      "event": "task-done",
+      "detail": "T10: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:03:13.148Z",
+      "event": "task-done",
+      "detail": "T11: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:03:13.324Z",
+      "event": "task-done",
+      "detail": "T12: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:03:13.497Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:13.685Z",
+      "event": "task-added",
+      "detail": "T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T18:03:13.861Z",
+      "event": "task-added",
+      "detail": "T15: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T18:03:14.040Z",
+      "event": "task-added",
+      "detail": "T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T18:03:14.216Z",
+      "event": "task-added",
+      "detail": "T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-19T18:03:33.662Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-19T18:03:33.876Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-19T18:10:59.027Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-19T18:23:01.828Z",
+      "event": "task-done",
+      "detail": "T5: Record JSONL fixtures for codex-cli and claude-cli (success, not-logged-in, limit, bad argv, empty, resume, error-word)"
+    },
+    {
+      "at": "2026-08-19T18:40:45.295Z",
+      "event": "task-done",
+      "detail": "T6: Foundations: external/types.ts codec port, registry.ts with both entries, env.ts deny lists and prefix sweeps"
+    },
+    {
+      "at": "2026-08-19T18:40:45.501Z",
+      "event": "task-done",
+      "detail": "T7: Contract: runtime block on subagent-dispatch schema + pure validator (agent, sandboxModes, read-only vs allowed_actions, worktree-write refusal)"
+    },
+    {
+      "at": "2026-08-19T18:58:40.781Z",
+      "event": "task-done",
+      "detail": "T8: Codec codex-cli: argv, JSONL parser, failure classifier (subtract prompt, error/usage lines only), resume argv"
+    },
+    {
+      "at": "2026-08-19T18:58:40.973Z",
+      "event": "task-done",
+      "detail": "T9: Codec claude-cli: argv, stream-json parser, failure classifier (login refusal on stdout with exit 0), resume argv"
+    },
+    {
+      "at": "2026-08-19T19:22:47.094Z",
+      "event": "task-done",
+      "detail": "T14: Runtime: supervise.ts process lifecycle + raced kill, runtime.ts spawnChild integration, worktree lifecycle, ledger, result validation"
+    },
+    {
+      "at": "2026-08-19T19:59:49.539Z",
+      "event": "task-done",
+      "detail": "T15: Capability gate, config shape, remote/CI hard disable, keryx agents external list|probe"
+    },
+    {
+      "at": "2026-08-19T19:59:49.748Z",
+      "event": "task-done",
+      "detail": "T16: TUI: external session kind, modal tabs Work/Meta/Command, per-addressee queue on generalised main-queue helpers, force as kill+resume"
+    },
+    {
+      "at": "2026-08-19T20:00:18.919Z",
+      "event": "task-added",
+      "detail": "T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask"
+    },
+    {
+      "at": "2026-08-19T20:00:19.138Z",
+      "event": "task-added",
+      "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
+    },
+    {
+      "at": "2026-08-19T20:56:15.331Z",
+      "event": "task-done",
+      "detail": "T18: Operator loop: /delegate command, live steering (join onSpawned handle to the addressee queue), external marker in the subagent sidebar, approver for spawnDecision=ask"
+    },
+    {
+      "at": "2026-08-19T21:16:52.869Z",
+      "event": "task-done",
+      "detail": "T17: Docs: README and docs site updated alongside the code; package status moved off spec-ready only for what shipped"
+    },
+    {
+      "at": "2026-08-20T05:11:54.601Z",
+      "event": "task-done",
+      "detail": "T19: Live smoke: point the real spawn port at a real codex and claude run end to end (spends subscription quota)"
+    },
+    {
+      "at": "2026-08-20T05:25:46.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: dispatch.test.ts + registry.test.ts: unknown agent -> unknown-agent; sandbox absent from sandboxModes -> agent-cannot, exercised against a synthetic entry since both shipped entries declare both modes. Pure, offline."
+    },
+    {
+      "at": "2026-08-20T05:25:46.638Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: dispatch.test.ts: read-only rejected for write/network/spawn-subagent, each named in the reason; run-command alone accepted, since an external CLI necessarily runs commands in its own sandbox."
+    },
+    {
+      "at": "2026-08-20T05:25:46.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: dispatch.test.ts: worktree-write passes schema and sandboxModes, then refused with code not-implemented — asserted distinct from AC1's unknown-agent code."
+    },
+    {
+      "at": "2026-08-20T05:25:46.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: codex-cli.test.ts + claude-cli.test.ts: argv asserted element-by-element across every optional-field combination, incl. that no prompt follows a variadic flag and that --input-format never accompanies a positional prompt."
+    },
+    {
+      "at": "2026-08-20T05:25:46.894Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: codex-cli.test.ts + claude-cli.test.ts against recorded fixtures: not-logged-in (claude exit 0 via result.subtype), bad argv, empty output, and the error-word trap (successful run whose message begins 'error:'). LIMIT CASE PROVISIONAL: usage-limit fixtures are hand-authored and marked SYNTHETIC in the manifest; a real exhaustion has never been captured."
+    },
+    {
+      "at": "2026-08-20T05:25:58.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: env.test.ts: every named denial and both prefix sweeps removed from a synthetic parent env; depth marker added AFTER the KERYX_ sweep so the sweep cannot eat it; parent env not mutated."
+    },
+    {
+      "at": "2026-08-20T05:25:58.149Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: runtime.test.ts: worktree removed after success, after failure, when the spawn port throws, and a failing remove does not mask the result. Working-tree containment OBSERVED LIVE in scripts/smoke/external-agents.ts across three real runs (byte-unchanged, no worktree leaked). Caveat: no fixture transcript specifically containing write attempts was used — a fake port cannot write, so the assertion would be theatre; the guarantee rests on the disposable worktree, which is what was tested."
+    },
+    {
+      "at": "2026-08-20T05:25:58.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: external-agents.test.ts + runtime.test.ts: capability disabled, remote transport and CI each refuse with a named reason and create no process; verified behaviourally via bun src/cli.ts agents external list under CI=true and KERYX_TRANSPORT=remote."
+    },
+    {
+      "at": "2026-08-20T05:25:58.324Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: external-operator.test.ts: user_message emitted on DELIVERY not queueing; streaming handle -> stdin write; non-streaming -> resume argv. The stdin route was unreachable until T17 (launchedStreaming was hardcoded false) and is now pinned in both directions; proven end to end against a real claude run in the T19 smoke."
+    },
+    {
+      "at": "2026-08-20T05:25:58.409Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: external-delivery.test.ts + external-operator.test.ts: force builds the resume argv carrying the session handle and the message BEFORE killing, and degrades to kill-only with lost:true when no handle was ever announced."
+    },
+    {
+      "at": "2026-08-20T05:26:07.715Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: runtime.test.ts: a failing agent returns its own named status and exactly one process is created — nothing is retried with another agent, runtime or the parent's model. decisions.md D-07."
+    },
+    {
+      "at": "2026-08-20T05:26:07.800Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: package.json dependencies unchanged across the whole flow; @opentui/core remains the pre-existing optional dependency and the TUI modules degrade without it."
+    },
+    {
+      "at": "2026-08-20T05:26:07.886Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: fixtures/external/{codex-cli,claude-cli}/ with manifest.json naming, per file, the CLI version, the exact argv, and captured-vs-hand-authored. Captured: success, resume, no-credentials, bad-argv, error-word, ephemeral-resume refusal, streaming-input, empty-output. Hand-authored and marked SYNTHETIC: both usage-limit files."
+    },
+    {
+      "at": "2026-08-20T05:26:07.971Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: spawn-subagent-external-seam.test.ts: the hook is invoked AFTER spawnSubagent, so admission, the shared ledger and the depth/child caps have already applied; seven tests pin that the seam is inert without it. No second spawn path, ledger, depth accounting or event stream exists — verified by review of src/harness/child/ and by the tool holding no import from src/harness/external/."
+    },
+    {
+      "at": "2026-08-20T05:26:16.075Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T05:26:16.162Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T05:27:53.565Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T06:34:57.869Z",
+      "event": "task-added",
+      "detail": "T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts"
+    },
+    {
+      "at": "2026-08-20T07:04:50.713Z",
+      "event": "task-done",
+      "detail": "T20: AC13: wire resultSchemaPath in runtime.ts (subagent-result schema) + embed schema shape in prompt.ts"
+    },
+    {
+      "at": "2026-08-20T07:04:57.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: runtime.ts: prepareResultSchema() loads subagent-result and stages it to resultSchemaPath, fail-closed. After buildOutcome returns Completed, the output is JSON-parsed and validateJson-checked against the schema; a parse or validation failure remaps to structuredResultError (status: Error), preserving argv/worktreePath/skippedLines/sessionRef/costUnits and moving the raw text to partial. prompt.ts embeds the schema shape in a new never-truncated section so the agent knows what to fill in. Independently re-verified: typecheck clean, full suite 4802/4803 (1 known pre-existing unrelated flake), 2 independent code-reviewer passes (logic: zero findings; style: one real finding, fixed and re-verified)."
+    },
+    {
+      "at": "2026-08-20T08:19:22.024Z",
+      "event": "task-added",
+      "detail": "T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker"
+    },
+    {
+      "at": "2026-08-20T08:19:55.233Z",
+      "event": "task-done",
+      "detail": "T21: AC12: supervision triggers (phase_changed/budget_threshold/no_progress/agent_asked/scope_drift) — pure fold + live wiring with background ticker"
+    },
+    {
+      "at": "2026-08-20T08:20:04.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: detectSupervisionTriggers (supervision.ts): pure fold, all 5 triggers, at most one firing per kind structurally guaranteed. Live wiring in supervise.ts: event-driven call site inside the existing onEvent loop plus an independent self-rescheduling ticker for silence-driven triggers (no_progress, budget_threshold elapsed-time), deliberately never joined to the Promise.race control flow, cancelled in the same finally as wall/cancelSettle. runtime.ts builds a real SupervisionConfig every run (hardcoded defaults, no dispatch-schema changes). Independently verified per explicit operator request for extreme care: re-ran typecheck+full suite myself, personally traced all 4 exit paths for ticker leaks, stress-ran timer tests 5x before and after a fix. review-logic found and I fixed one real latent bug (throwing onSupervisionTrigger could crash the process via the unprotected ticker path) with a dedicated regression test; review-style found zero issues."
+    },
+    {
+      "at": "2026-08-20T08:32:54.182Z",
+      "event": "task-added",
+      "detail": "T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents"
+    },
+    {
+      "at": "2026-08-20T08:49:52.176Z",
+      "event": "task-done",
+      "detail": "T22: AC5: bridge ExternalEvent -> AgentEvent (pure, fixture-tested), feeding the existing unmodified reduceAgents"
+    },
+    {
+      "at": "2026-08-20T08:49:59.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: agent-event-bridge.ts: pure bridgeExternalEvent(s), reduce.ts/agent-event.schema.json/both codecs/ExternalEvent's type confirmed untouched (git status verified). 3/10 ExternalEvent kinds map to status-changing AgentEvent types (dispatch_created/completed, run_failed); the other 7 including usage map to the status-neutral artifact_written, deliberately, since reduceAgents reads data.model/source/budgetRemaining/usage unconditionally regardless of type. End-to-end fixture tests feed real codec-parsed fixtures through the bridge into the real, unmodified reduceAgents for both codex-cli and claude-cli, success and failure paths. Independently verified: typecheck+full suite clean (4864/0 fail), git-confirmed zero diff on reduce.ts/schema/codecs/types. review-logic and review-style both zero findings."
+    }
+  ]
+}

@@ -241,6 +241,18 @@ What is in it today:
   `subagent-dispatch`/`subagent-result` contracts, token budgets per child,
   bounded parallel scheduling, and an offline fleet report over a recorded event
   log (`keryx agents monitor <events-file>`).
+- **Vendor CLIs as child agents — off by default.** keryx can hand a bounded,
+  **read-only** task to a coding CLI you already have installed (`codex exec`,
+  `claude -p`) and host it as a child of the same harness: a disposable git
+  worktree, a stripped environment, a restricted tool roster, the same budget
+  ledger and depth caps, and the same completion. `keryx agents external list`
+  shows the registry; `/delegate <agent> <task>` starts a run. It takes an
+  explicit opt-in in your own user config, and is hard disabled on a remote
+  transport and under CI. keryx never reads a vendor credential store — not even to check
+  whether you are logged in — so it reports *"installed … login not verified —
+  keryx cannot know"* rather than a tick. **No vendor sanction is claimed**, and
+  nothing here has yet been run against a real vendor process: the whole layer is
+  verified offline against recorded transcripts.
 - **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
@@ -434,6 +446,7 @@ graph falls back to its deterministic resolver when a grammar is absent.
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
+| External agents are read-only, and unproven against a live vendor process | A delegated CLI can read and search but never write; `worktree-write` is refused with a named reason. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. Everything is verified offline against recorded transcripts | Use keryx's own child agents for work that must mutate the tree |
 
 Full detail, including known defects and platform caveats:
 [limitations](docs/docs/limitations.md).

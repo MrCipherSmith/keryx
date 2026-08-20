@@ -121,3 +121,13 @@ test("classifyBusyDispatch: plain non-slash question routes to not-a-command", (
     }),
   ).toBe("not-a-command");
 });
+
+// Flow 176 T18: handing a side investigation to a vendor CLI while the main
+// agent works is the point of `/delegate`, so it must NOT fall through to
+// `deferred` (which would turn a paid external run into an in-process side
+// worker).
+test("classifyBusyDispatch: /delegate routes to delegate even while main is busy", () => {
+  expect(
+    classifyBusyDispatch({ line: "/delegate codex-cli find the flake", commandName: "/delegate", ...base }),
+  ).toBe("delegate");
+});

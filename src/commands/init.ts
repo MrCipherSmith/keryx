@@ -1128,6 +1128,9 @@ function printInitHelp(): void {
     { flag: "--no-memory", desc: "Do not enable Documentation Memory." },
     { flag: "--no-tasks", desc: "Do not enable Task Manager." },
     { flag: "--no-security", desc: "Do not enable Metaproject Security." },
+    // Listed because the external-agent capability's own refusal message tells
+    // the operator to run this, and a flag nothing documents is a dead end.
+    { flag: "--external-agents", desc: "Enable the external agent runtime (vendor CLIs) in this workspace." },
     { flag: "--no-gdgraph-hook", desc: "Do not install the gdgraph post-commit hook." },
     { flag: "--no-gdskills-hook", desc: "Do not install the gdskills post-commit hook." },
     { flag: "--no-health-hook", desc: "Do not install the health post-commit hook." },

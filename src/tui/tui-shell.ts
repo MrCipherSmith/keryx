@@ -83,6 +83,7 @@ import {
   describeUnavailableCommand,
   filterCommands,
   findAgentCommand,
+  parseDelegateCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
 import {
@@ -161,6 +162,11 @@ import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./que
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
 import { SubagentSessionStore } from "./subagent-session";
+// Flow 176 T18 — the external-agent operator loop. Everything but the four call
+// sites below lives in `external-operator.ts`; this file only constructs it,
+// attaches it, routes a sidebar click and dispatches `/delegate`.
+import { attachExternalOperator, type ExternalOperator } from "./external-operator";
+import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
@@ -1529,6 +1535,11 @@ export async function launchTuiAgentShell(opts: {
   // that early — no JobRegistry/BackgroundJobStore exists yet either).
   let liveDeps: AgentDeps | undefined;
   let liveJobs: BackgroundJobStore | undefined;
+  // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
+  // is installed before the operator exists, and leaving the module-level
+  // external bridge pointing at a destroyed shell would let a still-settling
+  // vendor run repaint a renderer that is gone.
+  let detachExternal: (() => void) | undefined;
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
@@ -1538,6 +1549,8 @@ export async function launchTuiAgentShell(opts: {
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
         setBackgroundJobListener(undefined);
+        detachExternal?.(); // flow 176 T18: clears the run listener AND the approver
+
         // Flow 173 F-002: previously Ctrl+C left every tracked background
         // job's process group unswept and the in-memory job list unpurged —
         // an orphan survives indefinitely, unsandboxed, contradicting
@@ -1786,6 +1799,14 @@ export async function launchTuiAgentShell(opts: {
       paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
         width: SIDEBAR_TEXT_WIDTH,
         onOpen: (id) => {
+          // Flow 176 T18: one list, two inspectors. An external child's Work
+          // tab is a vendor transcript and its Meta/Command tabs carry argv,
+          // session handle and cost — none of which the native inspector can
+          // render, because none of them exist on a `SubagentSession`.
+          if (external.has(id)) {
+            openExternalInspector(otui, chrome, { store: external.store, id, renderer: r });
+            return;
+          }
           openSubagentInspector(otui, chrome, { store: sessions, id, renderer: r });
         },
       });
@@ -1825,6 +1846,85 @@ export async function launchTuiAgentShell(opts: {
     setBackgroundJobListener((ev) => {
       jobs.apply(ev);
     });
+    // --- Flow 176 T18: the external-agent operator loop --------------------
+    // `attachExternalOperator` registers the module-level bridge listener AND
+    // the spawn approver. The approver is the load-bearing half:
+    // `externalAgents.spawnDecision` defaults to "ask" and the factory fails
+    // closed with no approver, so without this line a correctly-configured
+    // machine denies every model-initiated external spawn. It reuses
+    // `showComposerChoice` — the SAME dock prompt `risk: "delegate"` tools go
+    // through below — rather than inventing a second approval surface.
+    const external: ExternalOperator = (() => {
+      const attached = attachExternalOperator({
+        cwd: opts.session?.cwd ?? process.cwd(),
+        // A message that waited in a run's queue and then turned out to be
+        // undeliverable has no caller to return its reason to, so it is surfaced
+        // here instead of dropped (§7.5: an operator who thinks a message landed
+        // stops watching for the reply).
+        onDelivery: (runId, result) => {
+          io.onSystem?.(
+            result.ok
+              ? `◇ ${runId}: ${result.note}\n`
+              : `◇ ${runId}: message not delivered — ${result.reason}\n`,
+          );
+        },
+        ask: async (request) => {
+          chrome.hideMenu(); // release menuNav before the dock takes over
+          setMainAgent("blocked", "approval");
+          const preview = request.task.length > 80 ? `${request.task.slice(0, 77)}…` : request.task;
+          const id = await showComposerChoice(otui, r, chrome.dock, {
+            title: `Run the external agent ${request.agentId}?`,
+            subtitle: preview,
+            cancelId: "deny",
+            options: [
+              {
+                id: "allow",
+                label: `Allow ${request.agentId}`,
+                description: `Spends your ${request.agentId} subscription · sandbox ${request.sandbox ?? "read-only"}`,
+              },
+              { id: "deny", label: "Deny", description: "Do not start the external agent" },
+            ],
+          });
+          input.focus();
+          setMainAgent("running", id === "allow" ? "external" : "denied");
+          return id === "allow"
+            ? { ok: true }
+            : { ok: false, reason: `you declined the external spawn of ${request.agentId}` };
+        },
+      });
+      detachExternal = attached.detach;
+      return attached.operator;
+    })();
+    // Deliberately NOT subscribed to for repaints. The sidebar rows come from
+    // `sessions` (external children emit the same fleet upserts), and an
+    // external run fires a store hint per transcript LINE — repainting on each
+    // one destroys and recreates every row, which F-008 above records as able to
+    // tear down a `TextRenderable` mid-click. The live transcript belongs in the
+    // inspector, which subscribes to this store itself.
+    /**
+     * `/delegate <agent> <task>` (specification §8.2, prd R25).
+     *
+     * Parsing and every refusal sentence live in `agent-commands.ts` next to the
+     * registry entry; this is only the dispatch. Fire-and-forget on purpose — an
+     * external run has its own sidebar row and inspector, and awaiting it here
+     * would block the composer for the length of a vendor run.
+     */
+    const runDelegate = (line: string): void => {
+      const parsed = parseDelegateCommand(line.trim().replace(/^\/\S+\s*/, ""));
+      if (!parsed.ok) {
+        io.onSystem?.(`◇ ${parsed.reason}\n`);
+        return;
+      }
+      io.onSystem?.(`◇ delegating to ${parsed.agentId}…\n`);
+      void (async () => {
+        const outcome = await external.delegate({ agentId: parsed.agentId, task: parsed.task });
+        io.onSystem?.(
+          outcome.ok
+            ? `◇ ${parsed.agentId} ${outcome.result.status}: ${outcome.result.output}\n`
+            : `◇ /delegate refused: ${outcome.reason}\n`,
+        );
+      })();
+    };
 
     /** Update the pinned main-agent slot (Activity panel). */
     const setMainAgent = (
@@ -3318,6 +3418,12 @@ export async function launchTuiAgentShell(opts: {
             forceMainQueue(index);
             return;
           }
+          case "delegate": {
+            // Allowed while main is busy: handing a side investigation to a
+            // vendor CLI while the main agent works is the point of the command.
+            runDelegate(line);
+            return;
+          }
           case "think": {
             if (toggleNewestBlock("thought") === undefined) {
               io.onSystem?.("No reasoning yet.\n");
@@ -3459,6 +3565,14 @@ export async function launchTuiAgentShell(opts: {
             // The old session's subagents (sidebar list + inspector) belong to
             // the transcript that just left — a fresh session starts with none.
             sessions.clear();
+            // Flow 176 T18: external runs are cleared HERE (a full session
+            // reset) and deliberately NOT on each new parent turn like native
+            // subagents are. A `/delegate` run is operator-initiated and
+            // outlives the turn it was started in — that is the point of
+            // delegating while the main agent works — and `ExternalRunStore`
+            // drops unknown ids silently, so clearing it per turn would freeze a
+            // live vendor transcript mid-run with no visible cause.
+            external.clear();
             deps.resetSubagentBudget?.();
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
@@ -3698,6 +3812,10 @@ export async function launchTuiAgentShell(opts: {
           // The queue only exists while main is busy (FIFO-drain empties it
           // the instant a turn frees up), so outside a busy turn it is empty.
           io.onSystem?.("◇ main queue is empty.\n");
+          return;
+        }
+        if (command.name === "/delegate") {
+          runDelegate(line);
           return;
         }
         if (command.name === "/connect" || command.name === "/provider") {
