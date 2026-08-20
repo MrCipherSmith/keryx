@@ -1012,6 +1012,33 @@ function describeSearchProviderList(
   return `${title}${rows.length > 0 ? `\n${rows.join("\n")}` : "\n  (none)"}\n`;
 }
 
+/**
+ * `controller.select(id)` plus the existing success/failure messages — the
+ * exact call and copy `/search-connect <id>` already used, now shared with
+ * the bare-arg picker (flow 180 AC2, AC4) so the 3 result branches are not
+ * duplicated between the two entry points.
+ */
+export async function selectSearchProviderAndReport(
+  controller: SearchProviderController,
+  onSystem: ((text: string) => void) | undefined,
+  providerId: SearchProviderId,
+): Promise<void> {
+  const result = await controller.select(providerId);
+  if (!result.ok) {
+    if (result.reason === "not-configured") {
+      onSystem?.(`Cannot select '${providerId}': provider is not configured.\n`);
+    } else if (result.reason === "not-connected") {
+      onSystem?.(
+        `Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).\n`,
+      );
+    } else {
+      onSystem?.(`Cannot select '${providerId}': ${result.reason}.\n`);
+    }
+    return;
+  }
+  onSystem?.(`Search provider '${providerId}' selected.\n`);
+}
+
 /** Result of a search-provider field prompt: entered value, or `back` (Esc). */
 type SearchFieldStepResult = { kind: "value"; value: string } | { kind: "back" };
 
@@ -1107,7 +1134,7 @@ function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolea
 }
 
 /** Step 1: select a provider from `controller.configurable()`. `undefined` on Esc (cancel, AC4). */
-function pickSearchProviderStep(
+export function pickSearchProviderStep(
   otui: OpenTui,
   r: Renderer,
   providers: readonly SearchProviderDescriptor[],
@@ -3950,12 +3977,23 @@ export async function launchTuiAgentShell(opts: {
             const providerId = args.providerId;
             if (providerId === undefined) {
               const selectable = searchProviderController.selectable();
-              io.onSystem?.(
-                describeSearchProviderList("Connected search providers (use /search-connect <id> to select):", selectable),
-              );
               if (selectable.length === 0) {
+                // Mirrors `/connect`'s empty-state handling (AC3): no picker
+                // for zero candidates, keep the existing list+hint message.
+                io.onSystem?.(
+                  describeSearchProviderList("Connected search providers (use /search-connect <id> to select):", selectable),
+                );
                 io.onSystem?.("No connected search providers found. Run /search-provider first.\n");
+                return;
               }
+              // AC1: single-step overlay picker over exactly `selectable()`,
+              // mirroring `/connect`'s `chrome.withOverlay(() => ...)` shape.
+              const picked = await chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable));
+              input.focus();
+              if (picked === undefined) {
+                return; // Esc: cancel, no select() call made (AC2)
+              }
+              await selectSearchProviderAndReport(searchProviderController, io.onSystem, picked.id);
               return;
             }
             const normalizedProviderId = searchProviderController.configurable().find((candidate) => candidate.id === providerId)?.id;
@@ -3963,20 +4001,7 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`Unknown provider '${providerId}'.\n`);
               return;
             }
-            const result = await searchProviderController.select(normalizedProviderId);
-            if (!result.ok) {
-              if (result.reason === "not-configured") {
-                io.onSystem?.(`Cannot select '${providerId}': provider is not configured.\n`);
-              } else if (result.reason === "not-connected") {
-                io.onSystem?.(
-                  `Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).\n`,
-                );
-              } else {
-                io.onSystem?.(`Cannot select '${providerId}': ${result.reason}.\n`);
-              }
-              return;
-            }
-            io.onSystem?.(`Search provider '${providerId}' selected.\n`);
+            await selectSearchProviderAndReport(searchProviderController, io.onSystem, normalizedProviderId);
           })();
           return;
         }

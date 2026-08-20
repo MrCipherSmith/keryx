@@ -29,10 +29,12 @@ import {
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  pickSearchProviderStep,
   adaptiveSelectHeight,
   selectBoxHeight,
   filterConnectedDetectedProviders,
   searchProviderWizardInTui,
+  selectSearchProviderAndReport,
   shortenCwd,
   type BlockSink,
 } from "./tui-shell";
@@ -2376,78 +2378,83 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
 // + Enter, Esc via the same `pressEscapeAndSettle` helper (the lone-ESC
 // parser-timeout accommodation applies here too, since the wizard's own Esc
 // handling goes through the identical `onKeypress` wrapper).
+// Shared search-provider test fixtures (flow 179 T3 dispatch note): reused by
+// both the flow 179 wizard describe block below and flow 180's
+// `pickSearchProviderStep`/`selectSearchProviderAndReport` describe block
+// further down (flow 180 T5) — hoisted to file scope, rather than duplicated
+// per-block, once a second describe block needed the same fakes.
+const SEARXNG_FIELDS: SearchFieldDescriptor[] = [
+  { id: "baseUrl", label: "Base URL", required: true, defaultValue: "http://localhost" },
+  { id: "port", label: "Port", required: true, defaultValue: "8080" },
+];
+
+const SEARXNG_DESCRIPTOR: SearchProviderDescriptor = {
+  id: "searxng",
+  displayName: "SearXNG",
+  kind: "local",
+  fields: SEARXNG_FIELDS,
+  defaults: { baseUrl: "http://localhost", port: "8080" },
+  credentialSchema: { required: false, secret: true },
+  documentationUrl: "https://docs.searxng.org/admin/installation.html",
+  capabilities: { localLoopback: true, supportsPublicationDate: true },
+  testConnection: async () => ({ ok: true }),
+  search: async () => ({ query: "", results: [] }),
+};
+
+// Stands in for any of the 3 zero-field remote providers (brave/tavily/exa
+// in the real registry): 0 fields, a required credential.
+const BRAVE_DESCRIPTOR: SearchProviderDescriptor = {
+  id: "brave",
+  displayName: "Brave Search API",
+  kind: "remote",
+  fields: [],
+  defaults: {},
+  credentialSchema: { required: true, label: "Brave Search API key", secret: true },
+  documentationUrl: "https://api.search.brave.com/app/documentation",
+  capabilities: { localLoopback: false, supportsPublicationDate: false },
+  testConnection: async () => ({ ok: true }),
+  search: async () => ({ query: "", results: [] }),
+};
+
+type SearchControllerCall =
+  | { kind: "configure"; providerId: SearchProviderId; fields: Record<string, string>; credential: string | undefined }
+  | { kind: "test"; providerId: SearchProviderId }
+  | { kind: "select"; providerId: SearchProviderId };
+
+/**
+ * Minimal fake `SearchProviderController` (flow 179 T3 dispatch note):
+ * records every configure/test/select call and lets each test script
+ * `test()`'s result deterministically, rather than driving the real class
+ * (which reads/writes the on-disk search-config file).
+ */
+function fakeSearchProviderController(opts: {
+  providers: readonly SearchProviderDescriptor[];
+  testResult?: () => SearchConnectionResult;
+  selectResult?: SearchSelectionResult;
+}): { controller: SearchProviderController; calls: SearchControllerCall[] } {
+  const calls: SearchControllerCall[] = [];
+  const fake = {
+    configurable: (): readonly SearchProviderDescriptor[] => opts.providers,
+    configure: (providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void => {
+      calls.push({ kind: "configure", providerId, fields, credential });
+    },
+    test: async (providerId: SearchProviderId): Promise<SearchConnectionResult> => {
+      calls.push({ kind: "test", providerId });
+      return (opts.testResult ?? (() => ({ ok: true })))();
+    },
+    select: async (providerId: SearchProviderId): Promise<SearchSelectionResult> => {
+      calls.push({ kind: "select", providerId });
+      return opts.selectResult ?? { ok: true };
+    },
+  };
+  // `SearchProviderController` is a concrete class with private fields, so
+  // TS only structurally accepts a real instance — the fake above has every
+  // PUBLIC member the wizard actually calls (configurable/configure/test/
+  // select), so the cast is the standard escape for a class-typed fake.
+  return { controller: fake as unknown as SearchProviderController, calls };
+}
+
 describe("flow 179 — /search-provider bare-arg wizard", () => {
-  const SEARXNG_FIELDS: SearchFieldDescriptor[] = [
-    { id: "baseUrl", label: "Base URL", required: true, defaultValue: "http://localhost" },
-    { id: "port", label: "Port", required: true, defaultValue: "8080" },
-  ];
-
-  const SEARXNG_DESCRIPTOR: SearchProviderDescriptor = {
-    id: "searxng",
-    displayName: "SearXNG",
-    kind: "local",
-    fields: SEARXNG_FIELDS,
-    defaults: { baseUrl: "http://localhost", port: "8080" },
-    credentialSchema: { required: false, secret: true },
-    documentationUrl: "https://docs.searxng.org/admin/installation.html",
-    capabilities: { localLoopback: true, supportsPublicationDate: true },
-    testConnection: async () => ({ ok: true }),
-    search: async () => ({ query: "", results: [] }),
-  };
-
-  // Stands in for any of the 3 zero-field remote providers (brave/tavily/exa
-  // in the real registry): 0 fields, a required credential.
-  const BRAVE_DESCRIPTOR: SearchProviderDescriptor = {
-    id: "brave",
-    displayName: "Brave Search API",
-    kind: "remote",
-    fields: [],
-    defaults: {},
-    credentialSchema: { required: true, label: "Brave Search API key", secret: true },
-    documentationUrl: "https://api.search.brave.com/app/documentation",
-    capabilities: { localLoopback: false, supportsPublicationDate: false },
-    testConnection: async () => ({ ok: true }),
-    search: async () => ({ query: "", results: [] }),
-  };
-
-  type SearchControllerCall =
-    | { kind: "configure"; providerId: SearchProviderId; fields: Record<string, string>; credential: string | undefined }
-    | { kind: "test"; providerId: SearchProviderId }
-    | { kind: "select"; providerId: SearchProviderId };
-
-  /**
-   * Minimal fake `SearchProviderController` (flow 179 T3 dispatch note):
-   * records every configure/test/select call and lets each test script
-   * `test()`'s result deterministically, rather than driving the real class
-   * (which reads/writes the on-disk search-config file).
-   */
-  function fakeSearchProviderController(opts: {
-    providers: readonly SearchProviderDescriptor[];
-    testResult?: () => SearchConnectionResult;
-    selectResult?: SearchSelectionResult;
-  }): { controller: SearchProviderController; calls: SearchControllerCall[] } {
-    const calls: SearchControllerCall[] = [];
-    const fake = {
-      configurable: (): readonly SearchProviderDescriptor[] => opts.providers,
-      configure: (providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void => {
-        calls.push({ kind: "configure", providerId, fields, credential });
-      },
-      test: async (providerId: SearchProviderId): Promise<SearchConnectionResult> => {
-        calls.push({ kind: "test", providerId });
-        return (opts.testResult ?? (() => ({ ok: true })))();
-      },
-      select: async (providerId: SearchProviderId): Promise<SearchSelectionResult> => {
-        calls.push({ kind: "select", providerId });
-        return opts.selectResult ?? { ok: true };
-      },
-    };
-    // `SearchProviderController` is a concrete class with private fields, so
-    // TS only structurally accepts a real instance — the fake above has every
-    // PUBLIC member the wizard actually calls (configurable/configure/test/
-    // select), so the cast is the standard escape for a class-typed fake.
-    return { controller: fake as unknown as SearchProviderController, calls };
-  }
-
   otuiTest("AC1/AC4: step 1 lists exactly configurable() providers; Esc at step 1 cancels with no controller calls", async () => {
     const otui = requireOtui();
     const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
@@ -2660,4 +2667,250 @@ describe("flow 179 — /search-provider bare-arg wizard", () => {
       renderer.destroy();
     },
   );
+});
+
+// --- flow 180 — tui-shell.ts bare `/search-connect` interactive picker
+// (source-text audit) ----------------------------------------------------
+//
+// `launchTuiAgentShell` has no headless injection seam (same file-wide
+// constraint the SLATE-2a/SLATE-3a/SLATE-15/flow 163 AC8/flow 173
+// describe blocks above document and rely on) — its `/search-connect`
+// branch (tui-shell.ts, inside the giant command-dispatch closure) cannot
+// be driven through a real `otuiTest`/`mockInput`/`waitForFrame` pipeline
+// from this file, so this is a source-text audit, following the exact
+// precedent those blocks set.
+//
+// This does NOT mean the picker's interactive behavior (renders exactly
+// the given provider list, Esc resolves `undefined`, selecting resolves
+// the chosen descriptor) goes unproven: flow 180 T2 (commit 55a9997)
+// reused `pickSearchProviderStep` UNCHANGED from flow 179 — the exact same
+// function, only ever called here with a different `providers` argument
+// (`selectable()` instead of `configurable()`) — and flow 179's own
+// "AC1/AC4: step 1 lists exactly configurable() providers; Esc at step 1
+// cancels with no controller calls" test (above) already drives that
+// generic list/Esc/select behavior through the real SelectRenderable/
+// onKeypress pipeline. Re-driving the same generic behavior here would
+// duplicate that coverage without touching flow 179's own tests/code
+// (out of scope per this flow's dispatch). What this audit proves instead
+// is flow 180's actual NEW surface: the bare-arg WIRING around that
+// reused function (which list it is called with, what happens with the
+// Esc/selected result, the empty-list guard, and the args-given path
+// staying byte-identical).
+//
+// Historical note: at T3 time (commit 71c28de), `pickSearchProviderStep`
+// and `selectSearchProviderAndReport` were unexported, which forced this
+// block to fall back to a source-text audit for their generic list/Esc/
+// select behavior too. Flow 180 T5 (commit 2cba647) exported both — purely
+// additive, the same pattern already used for `searchProviderWizardInTui`,
+// `pickShellApproval`, `adaptiveSelectHeight`, `selectBoxHeight`, and
+// `filterConnectedDetectedProviders` — and added the "flow 180 T5 —
+// pickSearchProviderStep (real key-driven interaction)" and "flow 180 T5 —
+// selectSearchProviderAndReport (real function invocation)" describe
+// blocks below, which drive both functions through the real interactive
+// pipeline instead of an audit. This block itself is intentionally left
+// in place: it still proves flow 180's actual NEW surface — the bare-arg
+// WIRING around the reused function — which this file still has no
+// headless seam to drive interactively (same SLATE-2a/SLATE-3a/SLATE-15/
+// flow 163 AC8/flow 173 constraint).
+describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (source-text audit)", () => {
+  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const branchIdx = tuiSource.indexOf('if (command.name === "/search-connect") {');
+  const nextBranchIdx = tuiSource.indexOf('if (command.name === "/think")');
+  const branchBlock = tuiSource.slice(branchIdx, nextBranchIdx);
+
+  test("the /search-connect branch exists exactly once", () => {
+    expect(branchIdx).toBeGreaterThanOrEqual(0);
+    expect(tuiSource.indexOf('if (command.name === "/search-connect") {', branchIdx + 1)).toBe(-1);
+  });
+
+  test("AC1: bare-arg branch reads searchProviderController.selectable() (not configurable()) as the picker's candidate list", () => {
+    expect(branchBlock).toContain("const selectable = searchProviderController.selectable();");
+  });
+
+  test("AC1: 1+ connected providers opens the picker via chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))", () => {
+    expect(branchBlock).toContain("chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))");
+  });
+
+  test("AC3: an empty selectable() list shows the existing 'no connected providers' message and returns before the picker call", () => {
+    const emptyGuardIdx = branchBlock.indexOf("if (selectable.length === 0) {");
+    expect(emptyGuardIdx).toBeGreaterThanOrEqual(0);
+    const pickerCallIdx = branchBlock.indexOf("pickSearchProviderStep(otui, r, selectable)");
+    expect(pickerCallIdx).toBeGreaterThan(emptyGuardIdx); // the picker call textually follows the empty-guard block
+
+    const emptyGuardBlock = branchBlock.slice(emptyGuardIdx, pickerCallIdx);
+    expect(emptyGuardBlock).toContain("No connected search providers found. Run /search-provider first.");
+    expect(emptyGuardBlock).toContain("return;");
+    // Confirms the empty-guard's own body never reaches the picker call —
+    // the only occurrence inside this slice would be a genuine wiring bug.
+    expect(emptyGuardBlock).not.toContain("pickSearchProviderStep(otui, r, selectable)");
+  });
+
+  test("AC2: Esc (picked === undefined) returns before selectSearchProviderAndReport/select is ever called", () => {
+    const pickedIdx = branchBlock.indexOf("const picked = await chrome.withOverlay");
+    expect(pickedIdx).toBeGreaterThanOrEqual(0);
+    const escGuardIdx = branchBlock.indexOf("if (picked === undefined) {", pickedIdx);
+    expect(escGuardIdx).toBeGreaterThanOrEqual(0);
+    const reportCallIdx = branchBlock.indexOf("selectSearchProviderAndReport(searchProviderController, io.onSystem, picked.id)");
+    expect(reportCallIdx).toBeGreaterThan(escGuardIdx); // the report/select call textually follows the Esc guard
+
+    const escGuardBlock = branchBlock.slice(escGuardIdx, reportCallIdx);
+    expect(escGuardBlock).toContain("return;"); // Esc branch returns, skipping the call below entirely
+  });
+
+  test("AC2: selecting a provider in the picker routes through the shared selectSearchProviderAndReport(controller, onSystem, id) helper", () => {
+    expect(branchBlock).toContain("await selectSearchProviderAndReport(searchProviderController, io.onSystem, picked.id);");
+  });
+
+  test("AC4: /search-connect <id> (args given) still resolves the id via configurable() and routes through the SAME shared helper", () => {
+    const argsGivenIdx = branchBlock.indexOf("const normalizedProviderId = searchProviderController.configurable()");
+    expect(argsGivenIdx).toBeGreaterThanOrEqual(0);
+    const argsGivenBlock = branchBlock.slice(argsGivenIdx);
+    expect(argsGivenBlock).toContain("Unknown provider '${providerId}'.");
+    expect(argsGivenBlock).toContain("await selectSearchProviderAndReport(searchProviderController, io.onSystem, normalizedProviderId);");
+  });
+
+  test("AC5: /search-provider's own bare/args-given branches are untouched — this flow only wires /search-connect", () => {
+    const searchProviderBranchIdx = tuiSource.indexOf('if (command.name === "/search-provider") {');
+    expect(searchProviderBranchIdx).toBeGreaterThanOrEqual(0);
+    expect(searchProviderBranchIdx).toBeLessThan(branchIdx); // /search-provider's branch precedes /search-connect's, unmoved
+    const searchProviderBlock = tuiSource.slice(searchProviderBranchIdx, branchIdx);
+    expect(searchProviderBlock).toContain("searchProviderWizardInTui(otui, r, searchProviderController)");
+    // The wizard's own entry point is untouched by flow 180 — no picker/select wiring added here.
+    expect(searchProviderBlock).not.toContain("selectSearchProviderAndReport");
+  });
+});
+
+// --- flow 180 T5 — pickSearchProviderStep / selectSearchProviderAndReport,
+// driven for real ------------------------------------------------------
+//
+// T3 (commit 71c28de) left these as source-text audits because neither
+// function was exported. Flow 180 T5 exported both (purely additive — the
+// same precedent as `searchProviderWizardInTui`, `pickShellApproval`,
+// `adaptiveSelectHeight`, `selectBoxHeight`, and
+// `filterConnectedDetectedProviders`, all exported in this file only for
+// test access) so this block can drive them directly instead: the picker
+// through the real `SelectRenderable`/`onKeypress` pipeline (same seam as
+// flow 179's own describe block above, reusing its `fakeSearchProviderController`
+// fixture), and the helper by calling the real exported function and
+// inspecting the `onSystem` messages it actually emits.
+//
+// This does NOT touch the separate "flow 180 — tui-shell.ts /search-connect
+// bare-arg picker wiring (source-text audit)" describe block above: that one
+// covers the OUTER command-string dispatch inside `launchTuiAgentShell`'s
+// closure, which still has no test seam in this file (unchanged precedent).
+describe("flow 180 T5 — pickSearchProviderStep (real key-driven interaction)", () => {
+  otuiTest("renders exactly the given providers; Enter resolves the picked descriptor", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const providers = [SEARXNG_DESCRIPTOR, BRAVE_DESCRIPTOR];
+
+    const resultPromise = pickSearchProviderStep(otui.core, renderer, providers);
+    const frame = await waitForFrame(
+      (f) => f.includes("searxng (SearXNG)") && f.includes("brave (Brave Search API)"),
+    );
+    expect(frame).toContain("Select a search provider");
+
+    mockInput.pressEnter(); // "searxng (SearXNG)" is the first/default-selected option
+    await flush();
+    const picked = await resultPromise;
+
+    expect(picked).toEqual(SEARXNG_DESCRIPTOR);
+    renderer.destroy();
+  });
+
+  otuiTest("Enter after moving down the list resolves the descriptor actually highlighted, not just the first one", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const providers = [SEARXNG_DESCRIPTOR, BRAVE_DESCRIPTOR];
+
+    const resultPromise = pickSearchProviderStep(otui.core, renderer, providers);
+    await waitForFrame((f) => f.includes("brave (Brave Search API)"));
+    mockInput.pressArrow("down"); // move off searxng onto brave
+    mockInput.pressEnter();
+    await flush();
+    const picked = await resultPromise;
+
+    expect(picked).toEqual(BRAVE_DESCRIPTOR);
+    renderer.destroy();
+  });
+
+  otuiTest("Esc resolves undefined (AC2 cancel path) with no descriptor picked", async () => {
+    const otui = requireOtui();
+    const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const providers = [SEARXNG_DESCRIPTOR];
+
+    const resultPromise = pickSearchProviderStep(otui.core, renderer, providers);
+    await waitForFrame((f) => f.includes("searxng (SearXNG)"));
+    await pressEscapeAndSettle({ mockInput, flush });
+    const picked = await resultPromise;
+
+    expect(picked).toBeUndefined();
+    renderer.destroy();
+  });
+});
+
+describe("flow 180 T5 — selectSearchProviderAndReport (real function invocation)", () => {
+  test("calls controller.select(providerId) and emits the exact success message /search-connect <id> already used", async () => {
+    const { controller, calls } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR] });
+    const messages: string[] = [];
+
+    await selectSearchProviderAndReport(controller, (text) => messages.push(text), "searxng");
+
+    expect(calls).toEqual([{ kind: "select", providerId: "searxng" }]);
+    expect(messages).toEqual(["Search provider 'searxng' selected.\n"]);
+  });
+
+  test("failure/not-configured: emits the not-configured message and resolves without throwing", async () => {
+    const { controller } = fakeSearchProviderController({
+      providers: [SEARXNG_DESCRIPTOR],
+      selectResult: { ok: false, reason: "not-configured" },
+    });
+    const messages: string[] = [];
+
+    await expect(
+      selectSearchProviderAndReport(controller, (text) => messages.push(text), "searxng"),
+    ).resolves.toBeUndefined();
+
+    expect(messages).toEqual(["Cannot select 'searxng': provider is not configured.\n"]);
+  });
+
+  test("failure/not-connected: emits the not-connected message with the retry hint and resolves without throwing", async () => {
+    const { controller } = fakeSearchProviderController({
+      providers: [SEARXNG_DESCRIPTOR],
+      selectResult: { ok: false, reason: "not-connected" },
+    });
+    const messages: string[] = [];
+
+    await expect(
+      selectSearchProviderAndReport(controller, (text) => messages.push(text), "searxng"),
+    ).resolves.toBeUndefined();
+
+    expect(messages).toEqual([
+      "Cannot select 'searxng': provider is not connected (run /search-provider searxng <params> to test).\n",
+    ]);
+  });
+
+  test("failure/other reason: falls back to the generic reason message and resolves without throwing", async () => {
+    // `SearchSelectionResult`'s public type only allows "not-configured" |
+    // "not-connected", so the generic fallback branch is exercised the same
+    // way the fake controller itself is faked: cast past the narrow type to
+    // reach the defensive `else` branch in `selectSearchProviderAndReport`.
+    const { controller } = fakeSearchProviderController({
+      providers: [SEARXNG_DESCRIPTOR],
+      selectResult: { ok: false, reason: "quota-exceeded" } as unknown as SearchSelectionResult,
+    });
+    const messages: string[] = [];
+
+    await expect(
+      selectSearchProviderAndReport(controller, (text) => messages.push(text), "searxng"),
+    ).resolves.toBeUndefined();
+
+    expect(messages).toEqual(["Cannot select 'searxng': quota-exceeded.\n"]);
+  });
+
+  test("no onSystem callback provided: still resolves without throwing", async () => {
+    const { controller } = fakeSearchProviderController({ providers: [SEARXNG_DESCRIPTOR] });
+
+    await expect(selectSearchProviderAndReport(controller, undefined, "searxng")).resolves.toBeUndefined();
+  });
 });
