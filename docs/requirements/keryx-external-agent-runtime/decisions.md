@@ -1,5 +1,5 @@
 # Decisions: Keryx External Agent Runtime
-Version: 0.2.0
+Version: 0.3.0
 
 ## Status
 
@@ -98,6 +98,24 @@ recorded here rather than lost:
    `decide()` would resolve the audit-boundary objection to a mutating external
    worker. It rests on an experimental MCP capability with no corresponding
    documented flag, so it is a flagged future option, not a foundation.
+
+   **Amended by flow 182 (`keryx-mcp-client`), 2026-08-20.** This is no longer
+   only a flagged future option. It shipped as a second, MCP-shaped supervisor
+   for `codex-cli` — `gatedSuperviseCodexMcpRun`
+   (`src/harness/external/supervise-mcp.ts`) — additive alongside the existing
+   line-stream `superviseExternalRun` path (which `claude-cli` still uses
+   unchanged), and gated by the same `gdskills.external-agents` capability
+   this package already requires. It handles `codex mcp-server`'s
+   `elicitation/create` requests specifically, not a general-purpose
+   `decide()`-forwarding mechanism. **What this does not mean:** `sandbox:
+   "worktree-write"` is still refused at runtime exactly as D-04 below
+   describes it — `src/harness/external/dispatch.ts`'s
+   `IMPLEMENTED_SANDBOX_MODES` is untouched by this work, and this correction
+   does not lift D-04's release gate. See
+   [keryx-mcp-client/README.md](../keryx-mcp-client/README.md) and
+   [keryx-mcp-client/decisions.md](../keryx-mcp-client/decisions.md) (its own
+   D-03 and D-05, numbered independently of this package's D-01…D-08) for the
+   full record.
 2. An MCP server's `instructions` capability reaches the client's system prompt
    before any project file is read — a cleaner channel than a prompt preamble
    for standing behavioural rules, if keryx ever serves rather than spawns.
@@ -119,6 +137,27 @@ design the write path properly.
 Declaring the axis now costs one schema field and avoids a breaking change
 later. Omitting it would cost a contract revision and an ADR rewrite within a
 release or two.
+
+**Amended by flow 182 (`keryx-mcp-client`), 2026-08-20.** Two phrases in the
+reasoning above are now traced to source and were imprecise. "keryx's
+guarded-mutation path" named the wrong module: `src/harness/mutation/`'s
+`checkApproval` has exactly one production caller,
+`src/harness/extension/execute.ts` — the pluggable-extension execution
+system, unrelated to child or tool dispatch. The layer an elicitation-driven
+write would actually go through, traced by
+[keryx-mcp-client/specification.md](../keryx-mcp-client/specification.md) §9
+and its [decisions.md](../keryx-mcp-client/decisions.md) D-05, is
+`resolveApprovalDecision` (`src/commands/permission-mode.ts`) — the same
+function that already gates every `spawn_subagent` dispatch today
+(`src/commands/agent.ts`'s `executeCall`). Separately, "resting on an unstable
+interface" no longer describes the MCP elicitation mechanism named in D-03's
+kept idea 1 in the sense originally meant: it is now a real, shipped, tested
+capability (`gatedSuperviseCodexMcpRun`), not an experimental one. **Neither
+correction changes this decision's actual gate.** `worktree-write` remains
+refused at runtime (`src/harness/external/dispatch.ts`'s
+`IMPLEMENTED_SANDBOX_MODES` still lists only `"read-only"`), and this package
+still ships read-only only — nothing above is a claim that the write path is
+now open.
 
 ## D-05: An external agent's output is input, never evidence
 
