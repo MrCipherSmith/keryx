@@ -10,7 +10,8 @@
 // It NEVER throws out (C0-11): every parse error is caught and the file is
 // skipped, so an opt-in ceiling can never break the deterministic seam.
 
-import type { CapabilityAdapter, CapabilitySpec } from "../../capability/seam";
+import { isCapabilityEnabled, resolveCapability, type CapabilityAdapter, type CapabilitySpec } from "../../capability/seam";
+import { warnCapabilityDegraded } from "../../capability/warn-once";
 import type { CallEdge, SymbolLayer, SymbolNode } from "../types";
 import { extractSymbolLayer, resolveCrossFileCalls, type TsNode } from "./extract";
 import {
@@ -63,6 +64,89 @@ export function createTreesitterSpec(
     optionalDependency: "web-tree-sitter",
     load: (ctx) => new TreesitterAdapter(cwd, config, ctx.dep),
   };
+}
+
+// Compiled-binary fast path (T6, keryx-native-distribution).
+//
+// `bun build --compile` cannot statically trace `src/capability/seam.ts`'s
+// generic `await import(spec.optionalDependency)` (a runtime string variable —
+// oven-sh/bun#11732), so in a compiled binary gate 2 of `resolveCapability`
+// always throws for THIS capability even when `web-tree-sitter` is genuinely
+// bundled in. A LITERAL `await import("web-tree-sitter")` DOES bundle and work
+// in a compiled binary (verified empirically this flow).
+//
+// This function tries the literal import first. When it succeeds, it drives
+// the SAME gates the seam applies (1: manifest-enabled, 4: adapter build +
+// isAvailable, with the identical warn-once-on-degrade contract) — it only
+// replaces the ONE line that loads the dependency itself. When the literal
+// import throws (dependency genuinely not installed, e.g. a minimal npm
+// install without optional deps, or `bun run` dev mode where the package is
+// simply missing from node_modules), it falls through UNCHANGED to
+// `resolveCapability(cwd, spec)` — today's exact dev-mode behavior, including
+// the seam's own variable-based `await import(spec.optionalDependency)`
+// attempt and its warn-once messaging. `seam.ts` itself is never modified.
+async function loadTreesitterDepLiteral(): Promise<unknown | undefined> {
+  try {
+    return await import("web-tree-sitter");
+  } catch {
+    return undefined;
+  }
+}
+
+export async function resolveTreesitterCapability(
+  cwd: string,
+  config: TreesitterAdapterConfig,
+  resolve: (
+    cwd: string,
+    spec: CapabilitySpec<BuildInput, SymbolLayer>,
+  ) => Promise<CapabilityAdapter<BuildInput, SymbolLayer> | null> = resolveCapability,
+): Promise<CapabilityAdapter<BuildInput, SymbolLayer> | null> {
+  const spec = createTreesitterSpec(cwd, config);
+
+  try {
+    // Gate 1 FIRST — identical check the seam performs, no dep load, no
+    // warning when disabled (the normal default path per `seam.ts`'s own
+    // contract: "Disabled ⇒ null with NO dep load, NO asset touch, and NO
+    // warning"). This MUST run before the literal `import("web-tree-sitter")`
+    // below: with the check after, every `gdgraph build` call paid the
+    // literal-import cost even with the capability disabled — the bug this
+    // ordering fixes.
+    if (!(await isCapabilityEnabled(cwd, spec.id))) {
+      return null;
+    }
+
+    const literalDep = await loadTreesitterDepLiteral();
+    if (literalDep === undefined) {
+      // Literal import failed (dependency not actually installed) — defer to
+      // the seam's normal variable-based gate 2, unchanged. The seam
+      // re-checks gate 1, which is cheap and idempotent.
+      return await resolve(cwd, spec);
+    }
+
+    // Gate 2 replaced: the dependency is already loaded via the literal
+    // import above, so it is supplied directly instead of re-resolving
+    // `spec.optionalDependency` through the seam.
+    const adapter = spec.load({ dep: literalDep, asset: null });
+
+    // Gate 4: `isAvailable()` — same catch-and-degrade contract as the seam
+    // (AC0-8): a probe that throws degrades to the deterministic fallback.
+    let available: boolean;
+    try {
+      available = await adapter.isAvailable();
+    } catch {
+      warnCapabilityDegraded(spec.id, "adapter availability check threw");
+      return null;
+    }
+    if (!available) {
+      warnCapabilityDegraded(spec.id, "adapter reported unavailable");
+      return null;
+    }
+
+    return adapter;
+  } catch {
+    // Absolute backstop, mirrors the seam's own contract: never throw out.
+    return null;
+  }
 }
 
 class TreesitterAdapter implements CapabilityAdapter<BuildInput, SymbolLayer> {

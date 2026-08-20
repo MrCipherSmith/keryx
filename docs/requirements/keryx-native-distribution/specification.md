@@ -1,5 +1,5 @@
 # Keryx Native Distribution — Specification
-Version: 0.1.0
+Version: 0.2.1
 
 **Status: specification ready (future).** The go/no-go technical question
 (§2) is live-verified. Remaining items are scoping, not open unknowns.
@@ -50,6 +50,57 @@ stdin. `@opentui/core` was not exercised (no TTY in the test environment).
 launches correctly from a real terminal. Do not carry forward this
 specification's partial verification as if it covered all three
 dependencies equally.
+
+**Amended by flow 184 (`keryx-native-distribution`), 2026-08-20.** The
+`web-tree-sitter` claim above was wrong. Live re-verification found that the
+exact "1 nodes, 0 edges" output is the DETERMINISTIC FALLBACK's output, not
+a genuine tree-sitter parse — the compiled binary could not load
+`web-tree-sitter` at all (`Cannot find package 'web-tree-sitter'`), because
+`src/capability/seam.ts`'s generic capability-resolution seam loads every
+optional dependency via `await import(spec.optionalDependency)`, a
+**runtime string variable** Bun's `--compile` bundler cannot trace
+statically (confirmed against a real Bun upstream issue, oven-sh/bun#11732).
+The original evidence was very likely the fallback path mistaken for a real
+one; "genuinely bundled and functional, not merely present as dead weight"
+above should be read as **not proven** as originally stated.
+
+The other two dependencies come out of this the same flow's re-verification
+*stronger* than originally claimed, not weaker: `@modelcontextprotocol/sdk`
+was verified with a REAL connecting MCP client — a full JSON-RPC handshake
+plus `tools/list` returning 34 real tools, not just "process exited without
+error." `@opentui/core` was verified constructing a real
+`createCliRenderer()` with genuine terminal-control-sequence output from
+zero `node_modules`. Both already use literal `import`/`await import(...)`
+specifiers throughout, which is exactly why they bundle correctly where
+`web-tree-sitter`, reached only through the generic runtime-variable seam,
+does not.
+
+The real fix is an adapter-level literal `await import("web-tree-sitter")`
+fast path specific to the gdgraph/treesitter capability, tracked as this
+same flow's task T6, which does not touch `src/capability/seam.ts`'s generic
+mechanism (that seam is shared by other, unrelated capabilities — memory
+embedding, security NER models — and widening its contract is out of this
+package's scope). See
+[decisions.md](decisions.md) D-01's amendment and
+`.metaproject/flows/184-2026-08-20-keryx-native-distribution-standalone-bin/description.md`
+for the full record.
+
+**Amended (review-fix round, 2026-08-21) — disclosure, not a fix.** T6's
+literal-import fast path closes the bundling gap for `gdgraph.treesitter`
+only. A code review of that fix noted that `src/memory/embedding/adapter.ts`,
+`src/security/detect/pii/ner-adapter.ts`, and
+`src/security/detect/injection/adapter.ts` route their own optional
+dependencies through the exact same `resolveCapability`/
+`await import(spec.optionalDependency)` seam that had this bug — the
+identical runtime-string-variable bundling failure (oven-sh/bun#11732) is
+likely present for all three if anyone enables them inside a compiled
+binary. None of the three were re-verified against a compiled binary as
+part of this flow, and none received a literal-import fast path; fixing
+them is real, separate work, explicitly out of this flow's scope. A future
+flow enabling memory embedding or security PII/injection detection from a
+`bun build --compile` binary must check this class of bug before treating
+the standalone binary as fully supporting those features — do not assume
+T6's fix generalizes.
 
 ## 3. Artifact naming and attachment
 

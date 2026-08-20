@@ -124,6 +124,82 @@ jobs:
           ./.release/prefix/bin/keryx --help > /dev/null
           echo "the installed binary runs"
 
+      # Standalone binaries, cross-compiled on this SAME runner — no OS matrix.
+      # Bun's `--compile --target=<val>` cross-compiles macOS/Linux binaries from
+      # one machine (confirmed against `bun build --help` and current upstream
+      # docs, not assumed), so adding four runners here would work against this
+      # file's own stated minimal-CI-surface philosophy for no benefit.
+      #
+      # Only `bun-linux-x64` can actually execute on this `ubuntu-latest`/x64
+      # runner — the other three are cross-compiled for a different OS/arch and
+      # structurally cannot run here. For those, `--help` is not attempted; `file`
+      # reporting the expected platform/arch is the strongest check this runner
+      # can honestly make. Do not read more into a passing `file` check than that.
+      #
+      # `set -euo pipefail` matters here specifically: without it, one target's
+      # `bun build` failure inside the loop would not stop the loop, and a broken
+      # binary could still reach `gh release create` below.
+      #
+      # `bun install --os='*' --cpu='*'` first: a plain `bun install` (already run
+      # above) only fetches the CURRENT runner's platform variant of packages like
+      # `@opentui/core`'s per-platform native binaries (`@opentui/core-darwin-x64`,
+      # `@opentui/core-linux-arm64`, …) — `os`/`cpu` fields on an optionalDependency
+      # filter the file-system install to the matching platform regardless of what
+      # is pinned in the lockfile. Without this, cross-compiling for any target
+      # other than the runner's own (bun-linux-x64 on ubuntu-latest) fails with
+      # `Could not resolve: "@opentui/core-<other-platform>"` — confirmed by
+      # reproducing the failure locally before finding this fix, not assumed.
+      - name: Build and smoke-test the standalone binaries
+        run: |
+          set -euo pipefail
+          bun install --os='*' --cpu='*'
+          mkdir -p ./.release
+          for target in bun-darwin-arm64 bun-darwin-x64 bun-linux-x64 bun-linux-arm64; do
+            asset="./.release/keryx-$target"
+            echo "building $target"
+            bun build ./src/cli.ts --compile --target=$target --outfile "$asset"
+
+            if [ ! -s "$asset" ]; then
+              echo "::error::$asset was not produced or is empty"
+              exit 1
+            fi
+
+            echo "file: $(file "$asset")"
+
+            if [ "$target" = "bun-linux-x64" ]; then
+              # The one target that matches this runner's own OS/arch — actually
+              # executable here, so it gets the same rigor as the npm smoke test.
+              "$asset" --help > /dev/null
+              echo "$target: the binary runs"
+            else
+              # Cross-compiled for a different OS/arch than this runner. It
+              # cannot be executed here — running it would either fail to exec
+              # at all or silently invoke the wrong architecture under
+              # emulation. `file` reporting the expected target platform/arch is
+              # a real, if weaker, integrity check; it is not a substitute for
+              # "it ran" and is not reported as one.
+              # A default arm is required, not decorative: without one, a
+              # future target added to the for-loop above with no matching
+              # case arm here would silently leave `$expect` holding the
+              # PREVIOUS iteration's value instead of failing, and the
+              # `grep -q "$expect"` integrity check below could spuriously
+              # pass for a target it was never meant to check.
+              case "$target" in
+                bun-darwin-*) expect="Mach-O" ;;
+                bun-linux-*)  expect="ELF" ;;
+                *)
+                  echo "::error::no expected file(1) signature configured for target $target"
+                  exit 1
+                  ;;
+              esac
+              if ! file "$asset" | grep -q "$expect"; then
+                echo "::error::$asset does not look like a $expect binary for $target"
+                exit 1
+              fi
+              echo "$target: not executable on this runner (cross-compiled) — file(1) confirms $expect format"
+            fi
+          done
+
       # Extract this version's section from CHANGELOG.md for the release body.
       # An empty extraction fails the job: a release whose notes are blank is
       # worse than no release, because it looks intentional.
@@ -167,7 +243,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The 4 standalone binaries attach here as additional positional file
+          # arguments alongside the .tgz — one release, one call, not a second
+          # release step for the binaries.
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file ./.release/notes.md \
-            ./.release/*.tgz
+            ./.release/*.tgz \
+            ./.release/keryx-bun-*

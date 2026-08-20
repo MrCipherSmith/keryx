@@ -12,13 +12,17 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  resolveCapability,
   runCapabilityOrFallback,
   type CapabilityAdapter,
   type CapabilitySpec,
 } from "../capability/seam";
 import { loadGdgraphConfig } from "./config";
-import { createTreesitterSpec, type BuildInput, type FileRecord } from "./treesitter/adapter";
+import {
+  createTreesitterSpec,
+  resolveTreesitterCapability,
+  type BuildInput,
+  type FileRecord,
+} from "./treesitter/adapter";
 import type { SymbolLayer } from "./types";
 
 export interface EnrichResult {
@@ -37,18 +41,31 @@ export type CapabilityResolver = (
 export async function enrichBuildWithSymbols(
   cwd: string,
   files: FileRecord[],
-  resolve: CapabilityResolver = resolveCapability,
+  // `undefined` (the default) selects the T6 literal-import fast path via
+  // `resolveTreesitterCapability`; tests pass an explicit `CapabilityResolver`
+  // (e.g. a mock adapter, or the raw seam) to bypass it.
+  resolve?: CapabilityResolver,
 ): Promise<EnrichResult> {
   const config = await loadGdgraphConfig(cwd);
-  const spec = createTreesitterSpec(cwd, {
+  const treesitterConfig = {
     languages: config.treesitter.languages,
     grammarsPath: config.treesitter.grammarsPath,
-  });
+  };
 
   // Gate 1 (manifest-enabled) + dep + grammar + isAvailable. `null` ⇒ degrade
   // with NO symbol files written; the seam emits the single warn-once on an
-  // enabled-but-unavailable ceiling.
-  const adapter = await resolve(cwd, spec);
+  // enabled-but-unavailable ceiling. The default resolver additionally tries a
+  // literal `await import("web-tree-sitter")` fast path first (T6) so a
+  // `bun build --compile` binary can genuinely parse instead of always
+  // degrading — see `resolveTreesitterCapability`.
+  //
+  // `createTreesitterSpec` is only built here when an injected `resolve` is
+  // supplied (tests): `resolveTreesitterCapability` builds its own equivalent
+  // spec internally from `treesitterConfig`, so building one unconditionally
+  // on the default path would be dead work on every real `gdgraph build` call.
+  const adapter = resolve
+    ? await resolve(cwd, createTreesitterSpec(cwd, treesitterConfig))
+    : await resolveTreesitterCapability(cwd, treesitterConfig);
   if (!adapter) {
     return { enriched: false, symbols: 0, calls: 0 };
   }

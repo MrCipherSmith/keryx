@@ -1,5 +1,5 @@
 # Keryx Native Distribution — Decisions
-Version: 0.1.0
+Version: 0.3.1
 
 ## D-01: Standalone binary via `bun build --compile`, not thin wrappers
 
@@ -18,6 +18,50 @@ entrypoint produced a working 72.1MB binary with its highest-bundling-risk
 optional dependency (`web-tree-sitter`, WASM) confirmed functional by a real
 `gdgraph build` run, not just a launch check.
 
+**Amended by flow 184 (`keryx-native-distribution`), 2026-08-20.** The
+`web-tree-sitter` claim in the reasoning above was wrong: the "confirmed
+functional" `gdgraph build` run's "1 nodes, 0 edges" output is the
+DETERMINISTIC FALLBACK's output, not a genuine tree-sitter parse. The
+compiled binary could not actually load `web-tree-sitter`
+(`Cannot find package 'web-tree-sitter'`), because `src/capability/seam.ts`'s
+generic `await import(spec.optionalDependency)` resolves a **runtime string
+variable**, which Bun's `--compile` bundler cannot trace statically
+(confirmed against oven-sh/bun#11732). The decision to build a real
+standalone binary (this D-01's actual decision) is unaffected — it does not
+rest on tree-sitter specifically — but the supporting evidence line does not
+hold as written.
+
+Re-verification the same flow found the decision's foundation intact from a
+different angle: `@modelcontextprotocol/sdk` and `@opentui/core`, which
+already use literal import specifiers throughout, both independently
+bundle-and-work correctly in the compiled binary — MCP via a real client
+round-trip (`tools/list` returned 34 real tools, not just "process exited
+without error"), OpenTUI via a real `createCliRenderer()` construction with
+genuine terminal-control-sequence output, zero `node_modules` present.
+`web-tree-sitter` itself was also confirmed to bundle-and-work when reached
+through a **literal** `await import("web-tree-sitter")` rather than through
+the generic seam — proving the standalone-binary approach is sound, and
+narrowing the actual gap to one capability's import path, not the whole
+tree-sitter dependency or the decision itself. The fix (a
+gdgraph/treesitter-specific literal-import fast path, not a change to
+`seam.ts`'s generic contract) is tracked as this flow's T6. See
+[specification.md](specification.md) §2's amendment for the full record.
+
+**Amended (review-fix round, 2026-08-21) — disclosure, not a fix.** T6 fixed
+the bundling gap for `gdgraph.treesitter` specifically, by adapter-level
+literal import, not by changing the generic seam. `src/memory/embedding/
+adapter.ts`, `src/security/detect/pii/ner-adapter.ts`, and
+`src/security/detect/injection/adapter.ts` still route their optional
+dependencies through the same generic `resolveCapability`/
+`await import(spec.optionalDependency)` seam this decision's original
+reasoning found broken for `web-tree-sitter` (oven-sh/bun#11732) — the same
+class of bug is likely present for all three inside a compiled binary,
+un-fixed. This flow deliberately did not touch them (real, separate work,
+out of scope here). Treat the standalone binary's no-runtime-dependency
+claim as proven for tree-sitter parsing, MCP, and the TUI shell only — not
+yet for memory embedding or security PII/injection detection — until a
+future flow verifies and, if needed, fixes those three the same way.
+
 ## D-02: Single-runner cross-compile, no OS matrix
 
 **Decision.** `release.yml` gains a build loop on its existing
@@ -29,6 +73,20 @@ deliberate philosophy about minimal, legible CI surface (a tag is the only
 trigger, no `workflow_dispatch`, provenance traceable from the tag alone);
 adding four runners where one already does the job would work against that
 stated discipline, not extend it.
+
+**Amended by flow 184 (`keryx-native-distribution`), 2026-08-20.** The
+decision stands, but implementing it hit a real, reproducible blocker not
+named above: a plain `bun install` only writes the CURRENT runner's
+platform variant of an `optionalDependencies` package with `os`/`cpu`
+fields to disk (e.g. `@opentui/core-darwin-x64` is pinned in the lockfile
+but never installed on an ubuntu-x64 runner), regardless of what the
+lockfile resolves. Cross-compiling for any target other than the runner's
+own therefore failed with `Could not resolve: "@opentui/core-<other
+platform>"` — reproduced locally before the fix, not assumed. Fix:
+`bun install --os='*' --cpu='*'` before the build loop, forcing every
+platform variant onto disk regardless of the runner's own OS/arch. Single-
+runner cross-compilation is still correct and still avoids an OS matrix —
+this was a missing install flag, not a flaw in D-02's premise.
 
 ## D-03: Homebrew first, personal tap not core submission
 

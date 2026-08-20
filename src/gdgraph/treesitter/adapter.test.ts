@@ -2,11 +2,39 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test } from "bun:test";
-import { createTreesitterSpec, type BuildInput } from "./adapter";
+import { beforeEach, expect, mock, test } from "bun:test";
+import { createTreesitterSpec, resolveTreesitterCapability, type BuildInput } from "./adapter";
 import type { TsNode } from "./extract";
 import { enrichBuildWithSymbols } from "../enrich";
+import { hasWarned, resetWarnOnce } from "../../capability/warn-once";
+import { setTreesitterEnabled } from "../symbols-capability";
 import type { CallEdge, SymbolLayer, SymbolNode } from "../types";
+
+// Registered at MODULE TOP LEVEL, before any `test()` body runs: Bun loads
+// every test file's static imports/module body in a resolution pass before
+// running any test's body, so a `mock.module` call placed here reliably wins
+// the specifier UNTIL some test anywhere in the same `bun test` invocation
+// performs a real `await import("web-tree-sitter")` first (e.g.
+// `fallback.test.ts`'s AC4.3 test does exactly that with the capability
+// enabled) — once that happens, Bun's module cache is warmed with the real
+// module and this mock's factory is no longer invoked for later imports in
+// the same process. That makes `webTreeSitterImportAttempts` a reliable
+// "definitely zero attempts" signal (nothing increments it unless OUR mock's
+// factory ran) but NOT a reliable "definitely attempted" signal when run
+// alongside the rest of the suite — the enabled-path test below therefore
+// proves "gate 1 passed and we reached the real isAvailable() probe" via the
+// process-scoped warn-once tracker instead, which is correct regardless of
+// which physical module served the import.
+let webTreeSitterImportAttempts = 0;
+mock.module("web-tree-sitter", () => {
+  webTreeSitterImportAttempts += 1;
+  function MockParser(this: unknown): void {}
+  (MockParser as unknown as { init: () => Promise<void> }).init = async () => {};
+  (MockParser as unknown as { Language: { load: (p: string) => Promise<unknown> } }).Language = {
+    load: async () => ({}),
+  };
+  return { default: MockParser };
+});
 
 // --- tiny structural mock tree: one top-level function `boot` that calls `tick` ---
 function mk(o: {
@@ -243,6 +271,121 @@ test("Python grammar resolution — grammarForFile selects python for .py files"
     const spec = createTreesitterSpec(root, { languages: ["python"], grammarsPath: grammarsDir });
     const adapter = spec.load({ dep: mockParserModule(), asset: null });
     expect(await adapter.isAvailable()).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- Real default (no-injected-resolver) production path (T6 review fix) ---
+//
+// Every test above injects an explicit `CapabilityResolver`/`dep`, bypassing
+// `resolveTreesitterCapability` entirely. The REAL call site
+// (`build.ts` → `enrichBuildWithSymbols(projectRoot, fileRecords)`, no
+// resolver argument) goes through `resolveTreesitterCapability`'s literal
+// `await import("web-tree-sitter")` fast path with NO injected resolver at
+// all. These tests exercise that exact default path and, via the
+// module-top-level `mock.module` above, directly observe whether the literal
+// import was attempted — proving gate 1 (manifest-enabled) runs BEFORE the
+// import, not after (the bug this ordering fixes).
+
+beforeEach(() => {
+  webTreeSitterImportAttempts = 0;
+});
+
+async function makeDisabledOrAbsentWorkspace(enabled: "absent" | false): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ts-default-"));
+  if (enabled === false) {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    const manifest = setTreesitterEnabled({}, false);
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify(manifest),
+      "utf8",
+    );
+  }
+  // enabled === "absent" ⇒ no .metaproject/metaproject.json at all (missing
+  // manifest = off, per seam.ts's own contract).
+  return root;
+}
+
+test("default path, capability DISABLED (missing manifest) — resolveTreesitterCapability never attempts the web-tree-sitter import", async () => {
+  const root = await makeDisabledOrAbsentWorkspace("absent");
+  try {
+    const adapter = await resolveTreesitterCapability(root, {
+      languages: ["typescript"],
+      grammarsPath: null,
+    });
+    expect(adapter).toBeNull();
+    // The core assertion (Fix 1): a disabled/missing-manifest ceiling must
+    // resolve to null WITHOUT ever attempting the literal dep import.
+    expect(webTreeSitterImportAttempts).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("default path, capability DISABLED (enabled: false) — resolveTreesitterCapability never attempts the web-tree-sitter import", async () => {
+  const root = await makeDisabledOrAbsentWorkspace(false);
+  try {
+    const adapter = await resolveTreesitterCapability(root, {
+      languages: ["typescript"],
+      grammarsPath: null,
+    });
+    expect(adapter).toBeNull();
+    expect(webTreeSitterImportAttempts).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("default path, capability DISABLED — enrichBuildWithSymbols (no injected resolver) degrades cleanly with no writes and no dep-load attempt", async () => {
+  const root = await makeDisabledOrAbsentWorkspace("absent");
+  try {
+    // No third argument ⇒ the real production default path (build.ts calls
+    // enrichBuildWithSymbols with exactly two arguments).
+    const result = await enrichBuildWithSymbols(root, [{ path: "src/x.ts", content: "" }]);
+    expect(result).toEqual({ enriched: false, symbols: 0, calls: 0 });
+    expect(webTreeSitterImportAttempts).toBe(0);
+
+    const storage = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+    await expect(readFile(path.join(storage, "symbols.jsonl"), "utf8")).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("default path, capability ENABLED — resolveTreesitterCapability gets past gate 1 and reaches the real isAvailable() probe", async () => {
+  resetWarnOnce();
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ts-default-enabled-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    const manifest = setTreesitterEnabled({}, true);
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify(manifest),
+      "utf8",
+    );
+
+    // No grammarsPath and no lockfile entries ⇒ resolveGrammars deterministically
+    // resolves zero grammars ⇒ isAvailable() is false, so this proves the
+    // manifest gate short-circuits correctly on the enabled side too, without
+    // requiring a real compiled binary or a real WASM grammar asset.
+    const adapter = await resolveTreesitterCapability(root, {
+      languages: ["typescript"],
+      grammarsPath: null,
+    });
+
+    // No grammar resolves ⇒ isAvailable() is false ⇒ degrades to null, same
+    // AC0-8 catch-and-degrade contract as the seam.
+    expect(adapter).toBeNull();
+    // Gate 1 passed (unlike the disabled cases above) and execution reached
+    // the real `isAvailable()` probe, which reported unavailable and warned
+    // once — the process-scoped warn-once tracker is a reliable,
+    // ordering-independent witness of this (unlike counting the mock
+    // factory's own invocations, which only fires when THIS file's mock wins
+    // the module-cache race against any real `web-tree-sitter` import
+    // elsewhere in a full-suite run — see the top-of-file comment).
+    expect(hasWarned("gdgraph.treesitter")).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
