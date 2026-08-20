@@ -2,7 +2,7 @@
 //
 // A THIN `fetch` + SSE adapter over the OpenAI **Responses API** (`POST
 // /v1/responses`, `stream:true`) — NOT the older Chat Completions
-// `/v1/chat/completions` shape the extracted `OpenAiCompatProvider` engine
+// `/v1/chat/completions` shape the extracted `OpenAiCompatEngine` engine
 // speaks. Built to `AnthropicProvider`'s exact template: capability-grant
 // gated, NO vendor SDK, only the injected `fetch`, the neutral W5 port types,
 // the reused (genuinely generic, despite its name/location)

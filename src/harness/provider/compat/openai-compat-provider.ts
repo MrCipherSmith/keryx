@@ -82,7 +82,7 @@ export interface OpenAiCompatProviderDeps {
   readonly clock?: () => number;
 }
 
-/** One model advertised by {@link OpenAiCompatProvider.descriptorDocument}. */
+/** One model advertised by {@link OpenAiCompatEngine.descriptorDocument}. */
 export interface OpenAiCompatModelDescriptor {
   modelId: string;
   revision: string;
@@ -200,7 +200,7 @@ function classifyHttpError(status: number): NormalizedError {
  * OpenAI-Chat-Completions-compatible gateway (Ollama, OpenRouter, DeepSeek,
  * Z.AI, Cerebras, Groq, Moonshot, Grok, …) — only `identity` differs.
  */
-export class OpenAiCompatProvider implements ProviderPort {
+export class OpenAiCompatEngine implements ProviderPort {
   private readonly deps: OpenAiCompatProviderDeps;
   private readonly identity: OpenAiCompatIdentity;
 

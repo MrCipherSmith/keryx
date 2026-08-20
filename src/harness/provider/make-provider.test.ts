@@ -48,7 +48,7 @@
 // invoke fetch merely by CONSTRUCTING a provider.
 import { describe, expect, test } from "bun:test";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
-import { OpenAiCompatProvider } from "./compat/openai-compat-provider";
+import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
 import { OpenAiProvider } from "./openai/openai-provider";
@@ -231,9 +231,9 @@ test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for strea
   const provider = makeProvider("rapid-mlx", "qwen3.5-9b-4bit", makeOpts({ env: {}, fetch: fetchMock }));
   // flow 183 T5 (deliberate, not incidental — see make-provider.ts's header
   // comment): the compat-registry branch now constructs the extracted
-  // `OpenAiCompatProvider` engine directly instead of `OllamaProvider`. The
+  // `OpenAiCompatEngine` engine directly instead of `OllamaProvider`. The
   // observable streamed behavior below (events, model_end) is unchanged.
-  expect(provider).toBeInstanceOf(OpenAiCompatProvider);
+  expect(provider).toBeInstanceOf(OpenAiCompatEngine);
 
   const request = buildRequest();
   const opts: StreamOptions = { attemptId: "rapid-loopback-attempt" };

@@ -6,7 +6,7 @@
 // `../compat/openai-compat-provider.ts`. All wire logic (SSE parsing via
 // `AnthropicSSEParser`, the SSRF/egress guard, `linkToolCalls` request-side
 // tool-result linking, the tool-call accumulation-by-index/id state machine,
-// the whole `stream()` body) lives in {@link OpenAiCompatProvider} — this
+// the whole `stream()` body) lives in {@link OpenAiCompatEngine} — this
 // class now ONLY supplies identity + re-exports the public types every
 // existing caller (`select.ts`, `make-provider.ts`, `ollama-provider.test.ts`,
 // `guard.loopback.test.ts`, …) already imports from this module.
@@ -20,7 +20,7 @@
 // `deps.fetch`, nothing is ever persisted (storage-off).
 
 import {
-  OpenAiCompatProvider,
+  OpenAiCompatEngine,
   type OpenAiCompatCapabilityGrant,
   type OpenAiCompatModelDescriptor,
   type OpenAiCompatProviderDeps,
@@ -57,15 +57,15 @@ const DEFAULT_MODEL: OllamaModelDescriptor = {
 /**
  * Thin Ollama OpenAI-compatible {@link ProviderPort}. Constructed with an
  * injected `fetch` and an optional explicit capability `grant`; delegates all
- * streaming/normalization logic to the extracted {@link OpenAiCompatProvider}
+ * streaming/normalization logic to the extracted {@link OpenAiCompatEngine}
  * engine, pinned to Ollama's identity (loopback default base URL, `"ollama"`
  * provider id).
  */
 export class OllamaProvider implements ProviderPort {
-  private readonly engine: OpenAiCompatProvider;
+  private readonly engine: OpenAiCompatEngine;
 
   constructor(deps: OllamaProviderDeps) {
-    this.engine = new OpenAiCompatProvider(deps, {
+    this.engine = new OpenAiCompatEngine(deps, {
       defaultBaseUrl: DEFAULT_BASE_URL,
       providerRevision: PROVIDER_REVISION,
       providerId: "ollama",

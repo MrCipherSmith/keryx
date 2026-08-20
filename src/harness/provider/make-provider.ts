@@ -12,7 +12,7 @@
 // offline aside from the credential read from `opts.env ?? process.env`.
 //
 // Flow 183 T5: the compat-registry branch (OpenRouter/DeepSeek/Z.AI/Cerebras/
-// Groq/Moonshot/Grok/…) now constructs the extracted `OpenAiCompatProvider`
+// Groq/Moonshot/Grok/…) now constructs the extracted `OpenAiCompatEngine`
 // engine directly instead of the (now-thin-wrapper) `OllamaProvider`. Its
 // `describe()`/`descriptorDocument()` identity is pinned to `providerId:
 // "ollama"` / Ollama's `providerRevision` — UNCHANGED from before this
@@ -22,7 +22,7 @@
 // naming fix, not part of this pure-extraction task).
 import { providerByName, resolveProviderBaseUrl } from "../../commands/providers";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
-import { OpenAiCompatProvider } from "./compat/openai-compat-provider";
+import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { GeminiProvider } from "./gemini/gemini-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
@@ -72,7 +72,7 @@ export interface MakeProviderOpts {
  *   - `"ollama"` -> `OllamaProvider` (loopback grant, optional `baseUrl`).
  *   - a registered OpenAI-compatible provider (OpenRouter, DeepSeek, Z.AI,
  *     Cerebras, Groq, Moonshot, Grok, Rapid-MLX, …) -> the extracted
- *     `OpenAiCompatProvider` engine directly, constructed with Ollama's
+ *     `OpenAiCompatEngine` engine directly, constructed with Ollama's
  *     identity (`OLLAMA_COMPAT_IDENTITY`) — unchanged from when this branch
  *     constructed `OllamaProvider` with the same grant.
  *   - `"fake"` or any unrecognized name -> `FakeProvider`.
@@ -140,7 +140,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
     };
-    return new OpenAiCompatProvider({ fetch: opts.fetch, grant }, OLLAMA_COMPAT_IDENTITY);
+    return new OpenAiCompatEngine({ fetch: opts.fetch, grant }, OLLAMA_COMPAT_IDENTITY);
   }
   return new FakeProvider([]);
 }
