@@ -5,6 +5,83 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.49] — 2026-08-20
+
+### Added
+
+- **External agent runtime: delegate bounded, read-only work to `codex exec`
+  and `claude -p` as child agents.** keryx can now run the vendors' own
+  coding CLIs — Codex and Claude Code — as children of the existing harness,
+  so the operator's own subscription does the work while keryx keeps
+  isolation, budget, supervision, and completion. keryx never reads a
+  vendor credential store, not even to check whether the operator is
+  logged in — availability has three states (`installed`/`not installed`/
+  `login not verified`), and the CLI states the limit rather than hiding it
+  behind a tick. No vendor sanction is claimed; this is mitigated
+  structurally — off by default, opt-in, local-only, and hard disabled
+  under remote transports and CI. What ships: a registry of two agents with
+  one pure, offline-tested codec each; a `runtime` block on
+  `subagent-dispatch` with a fail-closed validator; read-only execution in
+  a disposable git worktree with a stripped environment and restricted
+  tool roster; an opt-in capability gate; `keryx agents external list|probe`;
+  `/delegate <agent> <task>` with a live transcript (Work/Meta/Command
+  tabs), a sidebar marker, and a per-addressee message queue where `force`
+  is kill-plus-resume; a structured-result validator so a schema-invalid
+  response is reported as a named error rather than silently accepted as
+  free text; five supervision triggers (`phase_changed`, `budget_threshold`,
+  `no_progress`, `agent_asked`, `scope_drift`) computed live from the event
+  stream, including a background timer for the two conditions that must
+  fire during total silence; and a pure bridge feeding external-agent
+  events through the existing internal-agent monitoring fold, unmodified.
+  Mutating external agents is explicitly not shipped — the permission axis
+  exists in the contract, but `worktree-write` is refused at runtime with a
+  reason distinct from "this agent cannot." See
+  `docs/requirements/keryx-external-agent-runtime/`.
+
+### Fixed
+
+- **Agent: the tool-call loop now survives into the provider request.** A
+  turn consisting purely of a tool call previously wrote nothing to
+  history, and every OpenAI-compatible provider (DeepSeek, OpenRouter,
+  Z.AI, Groq, Cerebras, Moonshot) degraded `role:"tool"` results into a
+  plain user message with no `tool_call_id` — the model was asked to
+  continue a transcript in which it had never called a tool. Both adapters
+  now send the real `assistant(tool_calls) → tool(result)` shape their
+  APIs document; calls survive session persistence and compaction, with a
+  pairing linker that degrades safely to the old framed-text behaviour for
+  any half-paired call a cut or an intercepted turn can produce, rather
+  than sending a request either API would reject outright.
+- **Security: dated flow-directory names are no longer masked as phone
+  numbers.** `NNN-YYYY-MM-DD-<slug>` flow package names satisfied every
+  `pii.phone` heuristic, so `ls .metaproject/flows` reached agents fully
+  redacted and no flow directory could be opened. A phone candidate
+  carrying a real calendar date is now recognized as a dated identifier
+  and left alone; a real phone number with no valid month/day pair is
+  still masked.
+- **Security: a credential's own JSON key name no longer blocks masking its
+  value.** `"ZAI_API_KEY": "…"`-shaped assignments were missed by the
+  secrets detector because the closing quote after the key name stopped
+  the match before the colon — this is exactly how keryx persists provider
+  keys in `auth.json`, so reading the credential store published every key
+  whose value carried no separately-recognized prefix. The key name may
+  now be quoted; only values are masked. Also hardened: a dotted composite
+  credential (`<hex>.<alnum>`) no longer masks only its first segment, and
+  a bare 24+ character hex blob next to a sensitive label is now judged on
+  its actual entropy rather than always passing.
+- **Agent: the toolless-reprompt budget raised from 1 to 2**, with a
+  strictly stronger second nudge and an early stop on a verbatim repeat —
+  a model that narrates a step once typically narrated it once more when
+  nudged under the old budget, ending the turn unexecuted.
+- **TUI: the main-queue marker now shows an item's own position**, not how
+  many items are still queued behind it — `q1 (1)`, `q2 (2)`, `q3 (3)` for
+  a 3-item queue, instead of the previous `q1 (2)`, `q2 (1)`, `q3 (0)`.
+- **TUI: `/mode` (permission-mode switching) now works while the main agent
+  turn is busy**, and a mid-turn switch — e.g. to `auto` — applies
+  immediately to the turn's next tool call, since the approval gate
+  already re-reads the mode fresh on every call. All three forms (explicit
+  mode, `clear`, the no-argument picker) are unblocked; the one-time
+  confirmation before switching to `auto` is unchanged.
+
 ## [0.2.48] — 2026-08-19
 
 ### Added
