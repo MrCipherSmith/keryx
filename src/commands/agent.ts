@@ -1858,8 +1858,16 @@ async function finishWithBudgetSummary(
  * historical contract); an object form must either omit the fingerprint or echo
  * the one it was given. A mismatch is a denial, never a pass — an approver that
  * answers about a different action has not approved this one.
+ *
+ * Exported so `src/harness/external/supervise-mcp.ts`'s elicitation-approval
+ * path reuses this SAME fingerprint check (flow 182 fix round) rather than a
+ * second, locally-duplicated version that skips the mismatch check entirely —
+ * `deps.requestApproval` there is plausibly the same shared approver instance
+ * every risk branch in `executeCall` below already validates through this
+ * function, so a stale/mismatched response for a different prompt must be
+ * rejected here exactly the same way.
  */
-function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean {
+export function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean {
   if (typeof response === "boolean") {
     return response;
   }

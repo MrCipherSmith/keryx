@@ -139,6 +139,31 @@ describe("superviseCodexMcpRun — connection and tool-call outcomes", () => {
     expect(failed?.kind === "child_failed" && failed.message).toBe("boom");
   });
 
+  test("BUG FIX #5: a rejecting connection.close() after a successful tool call does not discard the already-computed outcome", async () => {
+    let closeCalled = false;
+    const port: McpClientPort = {
+      async connect(): Promise<McpClientConnection> {
+        return {
+          async callTool(): Promise<McpToolCallOutcome> {
+            return { kind: "result", result: { content: "done", isError: false } };
+          },
+          onElicitation(): void {},
+          onCodexEvent(): void {},
+          async close(): Promise<void> {
+            closeCalled = true;
+            throw new Error("close failed (simulated child-process misbehavior)");
+          },
+        };
+      },
+    };
+
+    const outcome = await superviseCodexMcpRun(baseInput(), { client: port, requestApproval: undefined });
+
+    expect(closeCalled).toBe(true);
+    expect(outcome.toolCall).toEqual({ kind: "result", result: { content: "done", isError: false } });
+    expect(outcome.events.map((e) => e.kind)).toEqual(["child_started", "child_finished"]);
+  });
+
   test("passes an explicit timeout to callTool — the default when unset, an override when set", async () => {
     const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
     await superviseCodexMcpRun(baseInput(), { client: harness.port, requestApproval: undefined });
@@ -271,6 +296,123 @@ describe("superviseCodexMcpRun — elicitation handling (AC3, AC6)", () => {
     // must skip the prompt exactly like it does for a non-destructive shell call.
     expect(requestApprovalCalls).toBe(0);
     expect(response).toEqual({ action: "accept", decision: "approved" });
+  });
+
+  test("BUG FIX #2: sacReviewConfirmation is DERIVED from the command text (touchesSacConfirmReview), not hardcoded false — a command touching SAC's own confirm-review surface is never auto-approved, even under trust mode", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    let requestApprovalCalls = 0;
+    const run = superviseCodexMcpRun(baseInput({ mode: "trust" }), {
+      client: harness.port,
+      requestApproval: async () => {
+        requestApprovalCalls += 1;
+        return true;
+      },
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    const response = await harness.sendElicitation({
+      requestId: 1,
+      message: "allow codex to run this command?",
+      requestedSchema: { type: "object", properties: {} },
+      vendor: {
+        codex_call_id: "call-1",
+        codex_elicitation: "exec-approval",
+        // Not destructive, not credential-touching — but touches SAC's own
+        // review-confirmation surface, which must be a hard floor to "ask"
+        // regardless of destructive/credentials/mode.
+        codex_command: ["/bin/zsh", "-lc", "keryx workspace confirm-review --decision accepted"],
+      },
+    });
+    await run;
+
+    expect(requestApprovalCalls).toBe(1);
+    expect(response).toEqual({ action: "accept", decision: "approved" });
+  });
+
+  test("BUG FIX #4: onAutoApproved is called on the auto-approve path, mirroring executeCall's (agent.ts) own call shape", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const autoApproved: Array<{ tool: string; input: string; meta: unknown }> = [];
+    const run = superviseCodexMcpRun(baseInput({ mode: "auto" }), {
+      client: harness.port,
+      requestApproval: undefined,
+      onAutoApproved: (tool, input, meta) => autoApproved.push({ tool, input, meta }),
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    await run;
+
+    expect(autoApproved).toHaveLength(1);
+    expect(autoApproved[0]?.tool).toBe("mcp_elicitation:1");
+    expect(autoApproved[0]?.meta).toEqual({ destructive: false, credentials: false });
+  });
+
+  test("BUG FIX #4: onAutoApproved is never called on the ask path (only requestApproval is)", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const autoApproved: unknown[] = [];
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask" }), {
+      client: harness.port,
+      requestApproval: async () => true,
+      onAutoApproved: (tool, input, meta) => autoApproved.push({ tool, input, meta }),
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    await run;
+
+    expect(autoApproved).toHaveLength(0);
+  });
+
+  test("BUG FIX #3: a requestApproval response carrying a fingerprint for a DIFFERENT prompt is treated as a denial, not an approval (reuses agent.ts's isApprovalFor)", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask" }), {
+      client: harness.port,
+      // approved: true, but the fingerprint belongs to some OTHER prompt —
+      // plausible when `requestApproval` is a shared approver instance
+      // fielding shell/write/delegate/elicitation prompts in one session.
+      requestApproval: async () => ({ approved: true, fingerprint: "some-other-prompt-fingerprint" }),
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    const response = await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    await run;
+
+    expect(response).toEqual({ action: "decline", decision: "abort" });
+  });
+
+  test("BUG FIX #3: a requestApproval response echoing the correct fingerprint (or omitting it) is approved", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask" }), {
+      client: harness.port,
+      requestApproval: async (_tool, _input, meta) =>
+        meta?.fingerprint === undefined ? { approved: true } : { approved: true, fingerprint: meta.fingerprint },
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    const response = await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    await run;
+
+    expect(response).toEqual({ action: "accept", decision: "approved" });
+  });
+
+  test("BUG FIX #7: pendingCodexEvents is cleaned up after correlation — a later elicitation reusing the same call_id with no fresh codex/event correlates as uncorrelated, not stale-matched forever", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const run = superviseCodexMcpRun(baseInput({ mode: "auto" }), {
+      client: harness.port,
+      requestApproval: undefined,
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    const firstResponse = await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    expect(firstResponse).toEqual({ action: "accept", decision: "approved" });
+
+    // No fresh codex/event sent for call-1 this time — the stashed entry
+    // must have been deleted after the first elicitation consumed it, or
+    // this would stay stale-correlated for the entire run's lifetime.
+    const secondResponse = await harness.sendElicitation(elicitationRequest(2, "call-1"));
+    expect(secondResponse).toEqual({ action: "decline" });
+
+    await run;
   });
 
   test("records a diagnostic ElicitationHandledRecord per elicitation, never surfaced as an ExternalEvent", async () => {

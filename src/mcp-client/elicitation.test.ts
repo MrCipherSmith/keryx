@@ -6,9 +6,11 @@ import {
   classifyElicitationRisk,
   correlateElicitation,
   describeElicitationPrompt,
+  extractCommandTextForClassification,
   pickApproveDecision,
   pickDenyDecision,
   toPendingElicitation,
+  unwrapShellWrappedCommand,
 } from "./elicitation";
 import { parseElicitationCreateRequest } from "./wire";
 import type { RawCodexEventNotification, RawElicitationRequest } from "./types";
@@ -219,6 +221,95 @@ describe("classifyElicitationRisk (T9, AC9)", () => {
       vendor: { codex_call_id: "call-9", codex_command: ["ls", "-la"] },
     });
     expect(classifyElicitationRisk(pending)).toEqual({ destructive: false, credentials: false, reasons: [] });
+  });
+
+  // Bug fix (flow 182 fix round, CRITICAL #1): codex's REAL wire shape always
+  // wraps `codex_command` in a shell invocation — confirmed against
+  // `fixtures/mcp-client/codex/approve.jsonl`, whose actual
+  // `codex_command` is `["/bin/zsh","-lc","touch probe-write-test.txt"]`, not
+  // a bare argv. Before this fix, `classifyElicitationRisk` joined that array
+  // into `"/bin/zsh -lc touch probe-write-test.txt"` and classified it
+  // whole; `isDestructiveCommand` classifies by the HEAD word of each shell
+  // segment, so the head of that joined string is `/bin/zsh` — a binary none
+  // of `classifyCommand`'s rules match — meaning the ACTUAL command hidden
+  // inside the `-lc` argument was never inspected at all. A genuinely
+  // destructive command in that same wrapper shape (e.g. `rm -rf /`) would
+  // therefore auto-approve under `trust` mode with zero human involvement.
+  // This is THE most important test in this fix round.
+  test("BUG FIX: a destructive command wrapped in codex's real shell-invocation shape is correctly classified destructive, not silently missed via the naive full-join", () => {
+    // The exact shape from fixtures/mcp-client/codex/approve.jsonl, with the
+    // captured harmless `touch` swapped for a genuinely destructive command —
+    // proves the wrapper-unwrapping fix, not just that SOME command classifies.
+    const pending = toPendingElicitation({
+      requestId: "destructive-wrapped",
+      message: "Allow Codex to run `/bin/zsh -lc 'rm -rf /'`?",
+      requestedSchema: {},
+      vendor: {
+        codex_call_id: "call-destructive-wrapped",
+        codex_elicitation: "exec-approval",
+        codex_command: ["/bin/zsh", "-lc", "rm -rf /"],
+        codex_cwd: "/tmp/keryx-mcp-probe",
+      },
+    });
+
+    const result = classifyElicitationRisk(pending);
+
+    expect(result.destructive).toBe(true);
+    expect(result.reasons.some((r) => /destructive/.test(r) && /rm -rf \//.test(r))).toBe(true);
+    // The naive full-join classification this bug produced: the joined
+    // string's head word is `/bin/zsh`, which `isDestructiveCommand` does
+    // NOT flag — proving the fix is genuinely about UNWRAPPING, not a
+    // coincidental match on the raw joined text.
+    expect(result.reasons.some((r) => r.includes("/bin/zsh -lc rm -rf /"))).toBe(false);
+  });
+
+  test("BUG FIX: the exact fixtures/mcp-client/codex/approve.jsonl codex_command shape (harmless `touch`) still classifies as non-destructive — proves the unwrap does not over-escalate", () => {
+    const pending = toPendingElicitation({
+      requestId: 1,
+      message: "Allow Codex to run `/bin/zsh -lc 'touch probe-write-test.txt'`?",
+      requestedSchema: {},
+      vendor: {
+        codex_call_id: "call_tVcU5dnyLmvB3T757lTPjhMx",
+        codex_elicitation: "exec-approval",
+        codex_command: ["/bin/zsh", "-lc", "touch probe-write-test.txt"],
+        codex_cwd: "/var/folders/jf/64tx6_916wv1vk7_ffp27mdm0000gp/T/keryx-mcp-probe-U60IjN",
+      },
+    });
+    expect(classifyElicitationRisk(pending)).toEqual({ destructive: false, credentials: false, reasons: [] });
+  });
+
+  test("unwrapShellWrappedCommand: unwraps the exact fixture shape and common -c-family flag spellings", () => {
+    expect(unwrapShellWrappedCommand(["/bin/zsh", "-lc", "rm -rf /"])).toBe("rm -rf /");
+    expect(unwrapShellWrappedCommand(["zsh", "-c", "rm -rf /"])).toBe("rm -rf /");
+    expect(unwrapShellWrappedCommand(["bash", "-lc", "rm -rf /"])).toBe("rm -rf /");
+    expect(unwrapShellWrappedCommand(["/usr/bin/sh", "-c", "rm -rf /"])).toBe("rm -rf /");
+  });
+
+  test("unwrapShellWrappedCommand: falls back to undefined for shapes that are not the 3-element shell wrapper", () => {
+    expect(unwrapShellWrappedCommand(["rm", "-rf", "/"])).toBeUndefined(); // not a shell wrapper at all
+    expect(unwrapShellWrappedCommand(["rm", "-rf"])).toBeUndefined(); // wrong length
+    expect(unwrapShellWrappedCommand(["python3", "-c", "import os; os.system('rm -rf /')"])).toBeUndefined(); // not a recognised shell binary
+    expect(unwrapShellWrappedCommand(["/bin/zsh", "-x", "rm -rf /"])).toBeUndefined(); // not a -c-family flag
+  });
+
+  test("classifyElicitationRisk falls back to the naive full-join when codex_command is NOT the shell-wrapper shape, so a differently-shaped payload still gets classified", () => {
+    // A bare destructive argv (no shell wrapper at all) must still classify
+    // destructive via the existing full-join fallback path.
+    const pending = toPendingElicitation({
+      requestId: 10,
+      message: "rm -rf /",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-10", codex_command: ["rm", "-rf", "/"] },
+    });
+    expect(classifyElicitationRisk(pending).destructive).toBe(true);
+  });
+
+  test("extractCommandTextForClassification prefers the unwrapped command text, and is undefined when codex_command is absent", () => {
+    expect(
+      extractCommandTextForClassification({ codex_command: ["/bin/zsh", "-lc", "rm -rf /"] }),
+    ).toBe("rm -rf /");
+    expect(extractCommandTextForClassification({ codex_command: ["rm", "-rf", "/"] })).toBe("rm -rf /");
+    expect(extractCommandTextForClassification({})).toBeUndefined();
   });
 });
 

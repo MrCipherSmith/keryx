@@ -28,17 +28,19 @@ import {
   classifyElicitationRisk,
   correlateElicitation,
   buildElicitationResponse,
+  extractCommandTextForClassification,
   toPendingElicitation,
   MCP_ELICITATION_TOOL_PREFIX,
 } from "../../mcp-client/elicitation";
 import { isExecApprovalRequestEvent } from "../../mcp-client/wire";
+import { touchesSacConfirmReview } from "../../lib/command-risk";
 import { resolveApprovalDecision, type ApprovalGateDecision, type PermissionMode } from "../../commands/permission-mode";
 import {
   agentConfig,
   resolveExternalAgentsCapability,
   type ExternalAgentsGateInput,
 } from "../../capability/external-agents";
-import type { AgentIO, ApprovalResponse } from "../../commands/agent";
+import { isApprovalFor, type AgentIO } from "../../commands/agent";
 import type {
   ElicitationResponsePayload,
   McpClientPort,
@@ -157,6 +159,16 @@ export interface SuperviseCodexMcpDeps {
   readonly onEvent?: (event: ExternalEvent) => void;
   /** Called once per elicitation this supervisor answered. Diagnostic only, never folded into `events`. */
   readonly onElicitationHandled?: (record: ElicitationHandledRecord) => void;
+  /**
+   * Same shape as `AgentIO["onAutoApproved"]` — called on the `gateDecision
+   * === "auto"` path, mirroring `executeCall`'s (`agent.ts`) own call shape
+   * for every other gated risk (flow 182 fix round). Without this, a
+   * `trust`/`auto`-mode elicitation auto-approval was previously invisible
+   * everywhere — no shell/TUI transcript surfaced it at all. `tool` is the
+   * same `${MCP_ELICITATION_TOOL_PREFIX}${requestId}` synthetic name used for
+   * the `requestApproval` call on the `"ask"` path, for consistency.
+   */
+  readonly onAutoApproved?: AgentIO["onAutoApproved"];
 }
 
 /** What one supervised MCP run produced. */
@@ -164,11 +176,6 @@ export interface SuperviseCodexMcpOutcome {
   readonly toolCall: McpToolCallOutcome;
   readonly events: readonly ExternalEvent[];
   readonly elicitations: readonly ElicitationHandledRecord[];
-}
-
-function isApprovalGranted(response: ApprovalResponse): boolean {
-  if (typeof response === "boolean") return response;
-  return response.approved === true;
 }
 
 /**
@@ -235,6 +242,20 @@ export async function superviseCodexMcpRun(
     const correlation = correlateElicitation(pending.callId, pendingCodexEvents);
     const { destructive, credentials } = classifyElicitationRisk(pending);
 
+    // Derived the SAME way every other `resolveApprovalDecision` call site in
+    // this codebase does (`agent.ts`'s `executeCall`, `shell`/`destructive`
+    // branch): `touchesSacConfirmReview` against the actual command text —
+    // NOT hardcoded `false` (flow 182 fix round). `sacReviewConfirmation` is a
+    // hard floor on `resolveApprovalDecision`'s own contract (forces `"ask"`
+    // even under `trust`/`auto`), so hardcoding it false let a codex command
+    // touching keryx's own SAC review-confirmation surface auto-approve.
+    // Uses the same unwrapped-when-possible command text
+    // `classifyElicitationRisk` itself classifies against, via
+    // `extractCommandTextForClassification` — one extraction, not a second
+    // one that could drift.
+    const commandText = extractCommandTextForClassification(pending.vendor) ?? "";
+    const sacReviewConfirmation = touchesSacConfirmReview(commandText);
+
     // AC6: resolveApprovalDecision is called for EVERY received elicitation,
     // whether or not it could be correlated — an uncorrelated one still gets
     // gated, it just cannot be answered "accept" even if the gate says auto
@@ -244,13 +265,21 @@ export async function superviseCodexMcpRun(
       risk: "write",
       destructive,
       credentials,
-      sacReviewConfirmation: false,
+      sacReviewConfirmation,
     });
+
+    const toolName = `${MCP_ELICITATION_TOOL_PREFIX}${String(pending.requestId)}`;
+    const inputJson = JSON.stringify({ message: pending.message, vendor: pending.vendor });
+    const fingerprint = String(pending.requestId);
 
     let verdict: ElicitationVerdict;
     let timedOut = false;
     if (gateDecision === "auto") {
       verdict = "approve";
+      // Mirrors `executeCall`'s (`agent.ts`) own auto-approve call shape for
+      // every other gated risk — without this, an elicitation auto-approved
+      // under `trust`/`auto` mode was invisible everywhere (flow 182 fix round).
+      deps.onAutoApproved?.(toolName, inputJson, { destructive, credentials });
     } else if (deps.requestApproval === undefined) {
       // DEFAULT-DENY when no approver is wired — identical floor to every
       // other gated risk in `executeCall` (agent.ts). No wait, no timer.
@@ -267,15 +296,11 @@ export async function superviseCodexMcpRun(
       // `ElicitationRiskClassification.reasons` doc for why that mirrors
       // `classifyPatchRisk`'s own current (unwired) precedent at its one
       // call site (agent.ts's `write` branch).
-      const approvalPromise = deps.requestApproval(
-        `${MCP_ELICITATION_TOOL_PREFIX}${String(pending.requestId)}`,
-        JSON.stringify({ message: pending.message, vendor: pending.vendor }),
-        {
-          fingerprint: String(pending.requestId),
-          destructive,
-          ...(credentials ? { credentials } : {}),
-        },
-      );
+      const approvalPromise = deps.requestApproval(toolName, inputJson, {
+        fingerprint,
+        destructive,
+        ...(credentials ? { credentials } : {}),
+      });
 
       let timer: ReturnType<typeof setTimeout> | undefined;
       const expired = new Promise<"timeout">((resolve) => {
@@ -287,7 +312,14 @@ export async function superviseCodexMcpRun(
           timedOut = true;
           verdict = "deny";
         } else {
-          verdict = isApprovalGranted(settled) ? "approve" : "deny";
+          // Reuses `agent.ts`'s own `isApprovalFor` (flow 182 fix round) —
+          // NOT a locally-duplicated "approved === true" check. `deps.requestApproval`
+          // is plausibly the SAME approver instance shared across every
+          // shell/write/delegate/elicitation prompt in one session, so a
+          // stale or mismatched response for a DIFFERENT prompt must be
+          // rejected via the fingerprint check, exactly like every other
+          // risk branch already does.
+          verdict = isApprovalFor(settled, fingerprint) ? "approve" : "deny";
         }
       } finally {
         if (timer !== undefined) clearTimeout(timer);
@@ -306,6 +338,13 @@ export async function superviseCodexMcpRun(
     };
     elicitations.push(record);
     deps.onElicitationHandled?.(record);
+    // Cleanup, once the sibling `codex/event` this elicitation correlated
+    // against (if any) has actually been read above — a single codex turn
+    // that raises many elicitations otherwise accumulates one stale Map
+    // entry per approval for the run's entire lifetime (flow 182 fix round).
+    if (pending.callId !== undefined) {
+      pendingCodexEvents.delete(pending.callId);
+    }
     return response;
   });
 
@@ -321,7 +360,21 @@ export async function superviseCodexMcpRun(
     emit({ kind: "child_failed", message: toolCall.message });
   }
 
-  await connection.close();
+  try {
+    await connection.close();
+  } catch {
+    // Non-fatal, deliberately swallowed (flow 182 fix round): by this point
+    // `outcome` is ALREADY fully computed — the tool call succeeded (or
+    // failed and was already recorded via `child_failed`) and every event
+    // was already emitted. A rejecting `close()` (a real possibility if the
+    // underlying SDK's child-process handling misbehaves) must not propagate
+    // and discard an already-good outcome the caller worked for. Mirrors
+    // `supervise.ts`'s own "recorded, not thrown" cleanup philosophy for
+    // post-hoc failures (its `guard`/exit-signal handlers), except this
+    // module currently exposes no diagnostic channel (no stderr transcript,
+    // no `onWarning`-style callback) to record the failure into — swallowing
+    // here is the deliberate, documented choice, not an oversight.
+  }
 
   return { toolCall, events, elicitations };
 }

@@ -128,45 +128,50 @@ export function extractCodexCommand(vendor: Readonly<Record<string, unknown>>): 
   return raw.every((entry): entry is string => typeof entry === "string") ? raw : undefined;
 }
 
+/** Shell binaries codex is known to wrap a command in (`fixtures/mcp-client/codex/approve.jsonl`). */
+const SHELL_BASENAMES: ReadonlySet<string> = new Set(["zsh", "bash", "sh", "ksh", "dash", "fish"]);
+
+/** True when `shell` (an argv[0]) is a recognised shell binary, by path or bare basename. */
+function looksLikeShellBinary(shell: string): boolean {
+  const base = shell.split("/").pop() ?? shell;
+  return SHELL_BASENAMES.has(base.toLowerCase());
+}
+
 /**
- * T9's real implementation of the elicitation-payload analog of
- * `classifyPatchRisk` (`src/lib/patch-risk.ts`) — deriving
- * `destructive`/`credentials` from whatever detail codex's elicitation
- * payload carries about the intended action, feeding `resolveApprovalDecision`
- * exactly like `write`'s own escalation classifier does (ADR-0010).
- *
- * Replaces T6-T8's placeholder (which always returned the least-escalated
- * verdict) without touching `supervise-mcp.ts`'s call site — the seam was
- * already real and typed.
- *
- *   - `destructive`: reuses `isDestructiveCommand` (`src/lib/command-risk.ts`)
- *     against `vendor.codex_command`'s argv, joined into a single string —
- *     the same classifier `shell`/`destructive` risk already trusts, not
- *     reinvented here. ALSO escalates unconditionally when
- *     `vendor.codex_elicitation === "patch-approval"`: a patch-approval
- *     elicitation is codex asking to write a patch, the exact same action
- *     `apply_patch`/`write` risk already treats as needing the ADR-0010
- *     escalation posture, but unlike `classifyPatchRisk` this classifier has
- *     no parsed diff hunks to reason about per-target-file — there is no
- *     finer signal available in the vendor payload today — so the whole
- *     elicitation is treated as destructive rather than silently
- *     understating risk for a write this classifier cannot inspect further.
- *   - `credentials`: reuses `touchesAgentCredentials` against the same
- *     joined command string, and separately against `vendor.codex_cwd` when
- *     it is a string — `touchesAgentCredentials` matches on TEXT containing
- *     one of keryx's own credential/permission markers
- *     (`permissions.json`, `auth.json`, `.local/share/keryx`,
- *     `.config/keryx`), so a cwd inside keryx's own state directory is as
- *     strong a signal as the command text itself, and codex's cwd is a real,
- *     always-present field the shell-risk classifier does not have an
- *     analog of.
- *   - Never throws: `vendor.codex_command` missing or not a string array
- *     degrades to no destructive/credentials signal from the command (still
- *     escalated by the `patch-approval` check above, when it applies),
- *     exactly the "different elicitation shape, or a future codex version"
- *     case named in this task — same total-function contract as
- *     `classifyPatchRisk`.
+ * True when `flag` is a `-c`-family "run this string" flag: `-c`, `-lc`,
+ * `-ic`, `--login` combined with `-c`, etc. — deliberately permissive (any
+ * short flag built only from `i`/`l` characters ending in `c`) rather than a
+ * fixed enum, since the exact spelling is a real vendor detail (the captured
+ * fixture uses `-lc`) that could vary across codex/shell versions without
+ * this classifier's authors knowing every combination in advance.
  */
+function isShellCommandFlag(flag: string): boolean {
+  if (!flag.startsWith("-")) return false;
+  const stripped = flag.replace(/^-+/, "").toLowerCase();
+  return /^[il]*c$/.test(stripped);
+}
+
+/**
+ * Unwrap codex's real wire shape for `codex_command` — always
+ * `[<shell>, <-c-family flag>, <actual command text>]` in practice (confirmed
+ * against `fixtures/mcp-client/codex/approve.jsonl`:
+ * `["/bin/zsh","-lc","touch probe-write-test.txt"]`) — down to just the
+ * actual command text codex asked to run.
+ *
+ * Returns `undefined` when `command` does not match this exact 3-element
+ * shell-wrapper shape (different length, no recognisable shell binary, no
+ * recognisable `-c`-family flag) — the caller's cue to fall back to the
+ * naive full-join instead of silently skipping classification.
+ */
+export function unwrapShellWrappedCommand(command: readonly string[]): string | undefined {
+  if (command.length !== 3) return undefined;
+  const [shell, flag, actual] = command;
+  if (shell === undefined || flag === undefined || actual === undefined) return undefined;
+  if (!looksLikeShellBinary(shell)) return undefined;
+  if (!isShellCommandFlag(flag)) return undefined;
+  return actual;
+}
+
 /**
  * The synthetic tool-name prefix `supervise-mcp.ts` gives every elicitation
  * it forwards to `deps.requestApproval` (`${MCP_ELICITATION_TOOL_PREFIX}${requestId}`).
@@ -222,17 +227,87 @@ export function describeElicitationPrompt(tool: string, inputJson: string): Elic
   return { message, command };
 }
 
+/**
+ * `vendor.codex_command`, reduced to the single command-text string every
+ * text-based classifier here (`isDestructiveCommand`, `touchesAgentCredentials`,
+ * and — via `supervise-mcp.ts` — `touchesSacConfirmReview`) should classify
+ * against: the unwrapped actual-command text when codex's shell-wrapper shape
+ * is recognised ({@link unwrapShellWrappedCommand}), otherwise the naive full
+ * join. Exported so `supervise-mcp.ts`'s `sacReviewConfirmation` derivation
+ * (T9 fix round) uses the EXACT same text this module's own destructive/
+ * credentials classification does, rather than a second, possibly-drifting
+ * extraction. `undefined` when `vendor.codex_command` is absent or the wrong
+ * shape — same total-function contract as {@link extractCodexCommand}.
+ */
+export function extractCommandTextForClassification(vendor: Readonly<Record<string, unknown>>): string | undefined {
+  const command = extractCodexCommand(vendor);
+  if (command === undefined) return undefined;
+  // Never the wrapper text when an unwrap succeeds — that would re-introduce
+  // the `/bin/zsh -lc` head-word blind spot this fix exists to close.
+  return unwrapShellWrappedCommand(command) ?? command.join(" ");
+}
+
+/**
+ * T9's real implementation of the elicitation-payload analog of
+ * `classifyPatchRisk` (`src/lib/patch-risk.ts`) — deriving
+ * `destructive`/`credentials` from whatever detail codex's elicitation
+ * payload carries about the intended action, feeding `resolveApprovalDecision`
+ * exactly like `write`'s own escalation classifier does (ADR-0010).
+ *
+ * Replaces T6-T8's placeholder (which always returned the least-escalated
+ * verdict) without touching `supervise-mcp.ts`'s call site — the seam was
+ * already real and typed.
+ *
+ *   - `destructive`: reuses `isDestructiveCommand` (`src/lib/command-risk.ts`)
+ *     — the same classifier `shell`/`destructive` risk already trusts, not
+ *     reinvented here. Classified against {@link extractCommandTextForClassification}'s
+ *     UNWRAPPED command text when `vendor.codex_command` has codex's real
+ *     shell-wrapper shape (`[<shell>, <-c-family flag>, <actual command>]`,
+ *     e.g. `["/bin/zsh","-lc","rm -rf /"]` — confirmed by the T5 live probe
+ *     and `fixtures/mcp-client/codex/approve.jsonl`):
+ *     `isDestructiveCommand` classifies by the HEAD word of each shell
+ *     segment, so joining the wrapper argv naively
+ *     (`"/bin/zsh -lc rm -rf /"`) makes the head `/bin/zsh` — a binary no
+ *     rule matches — and the actual destructive command inside the `-c`
+ *     argument is never inspected. Falls back to the naive full join when
+ *     the array does not match that exact shape (different length,
+ *     unrecognised shell, unrecognised flag) so a future/different codex
+ *     payload shape still gets SOME classification rather than none. ALSO
+ *     escalates unconditionally when
+ *     `vendor.codex_elicitation === "patch-approval"`: a patch-approval
+ *     elicitation is codex asking to write a patch, the exact same action
+ *     `apply_patch`/`write` risk already treats as needing the ADR-0010
+ *     escalation posture, but unlike `classifyPatchRisk` this classifier has
+ *     no parsed diff hunks to reason about per-target-file — there is no
+ *     finer signal available in the vendor payload today — so the whole
+ *     elicitation is treated as destructive rather than silently
+ *     understating risk for a write this classifier cannot inspect further.
+ *   - `credentials`: reuses `touchesAgentCredentials` against the same
+ *     command text, and separately against `vendor.codex_cwd` when
+ *     it is a string — `touchesAgentCredentials` matches on TEXT containing
+ *     one of keryx's own credential/permission markers
+ *     (`permissions.json`, `auth.json`, `.local/share/keryx`,
+ *     `.config/keryx`), so a cwd inside keryx's own state directory is as
+ *     strong a signal as the command text itself, and codex's cwd is a real,
+ *     always-present field the shell-risk classifier does not have an
+ *     analog of.
+ *   - Never throws: `vendor.codex_command` missing or not a string array
+ *     degrades to no destructive/credentials signal from the command (still
+ *     escalated by the `patch-approval` check above, when it applies),
+ *     exactly the "different elicitation shape, or a future codex version"
+ *     case named in this task — same total-function contract as
+ *     `classifyPatchRisk`.
+ */
 export function classifyElicitationRisk(pending: PendingElicitation): ElicitationRiskClassification {
   const reasons: string[] = [];
   let destructive = false;
   let credentials = false;
 
-  const command = extractCodexCommand(pending.vendor);
-  const joinedCommand = command === undefined ? undefined : command.join(" ");
+  const commandForClassification = extractCommandTextForClassification(pending.vendor);
 
-  if (joinedCommand !== undefined && isDestructiveCommand(joinedCommand)) {
+  if (commandForClassification !== undefined && isDestructiveCommand(commandForClassification)) {
     destructive = true;
-    reasons.push(`underlying command looks destructive: ${joinedCommand}`);
+    reasons.push(`underlying command looks destructive: ${commandForClassification}`);
   }
 
   if (pending.vendor.codex_elicitation === "patch-approval") {
@@ -241,7 +316,7 @@ export function classifyElicitationRisk(pending: PendingElicitation): Elicitatio
   }
 
   const cwd = typeof pending.vendor.codex_cwd === "string" ? pending.vendor.codex_cwd : undefined;
-  const credentialSignal = [joinedCommand, cwd].filter((v): v is string => v !== undefined).join(" ");
+  const credentialSignal = [commandForClassification, cwd].filter((v): v is string => v !== undefined).join(" ");
   if (credentialSignal.length > 0 && touchesAgentCredentials(credentialSignal)) {
     credentials = true;
     reasons.push("touches the agent's own permission/credential files");

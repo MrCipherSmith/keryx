@@ -237,26 +237,41 @@ export async function connectCodexMcpClient(
 
   // Registered through the BASE Protocol method, not `client.setRequestHandler`
   // — see the module header for exactly why.
-  sdk.ProtocolPrototype.setRequestHandler.call(
-    client as unknown as SdkProtocolRequestHandlerRegistrar,
-    sdk.ElicitRequestSchema,
-    async (_parsedRequest: unknown, extra: SdkRequestHandlerExtra): Promise<ElicitationResponsePayload> => {
-      const raw = pendingRawElicitations.get(extra.requestId);
-      pendingRawElicitations.delete(extra.requestId);
-      const request: RawElicitationRequest = raw ?? {
-        requestId: extra.requestId,
-        message: undefined,
-        requestedSchema: undefined,
-        vendor: {},
-      };
-      if (elicitationHandler === undefined) {
-        // No consumer ever registered — deny safely, never hang the child
-        // waiting on a response nobody will produce.
-        return { action: "decline" };
-      }
-      return elicitationHandler(request);
-    },
-  );
+  //
+  // Wrapped in try/catch (flow 182 fix round): this is a deliberate reach
+  // into an SDK internal (`Protocol.prototype`, not the public `Client` API),
+  // and the SDK is pinned `"^1.0.0"` — permitting automatic minor/patch
+  // bumps. If a future release restructures `Protocol.prototype` this call
+  // would otherwise throw a raw, unguarded `TypeError` instead of the
+  // existing, actionable {@link McpClientSdkMissingError} this file already
+  // defines for the "SDK not installed" case. The operator-facing remediation
+  // ("install/update the SDK to a version this reach still works against") is
+  // the same class of problem either way, so this reuses that error type
+  // rather than inventing a second one.
+  try {
+    sdk.ProtocolPrototype.setRequestHandler.call(
+      client as unknown as SdkProtocolRequestHandlerRegistrar,
+      sdk.ElicitRequestSchema,
+      async (_parsedRequest: unknown, extra: SdkRequestHandlerExtra): Promise<ElicitationResponsePayload> => {
+        const raw = pendingRawElicitations.get(extra.requestId);
+        pendingRawElicitations.delete(extra.requestId);
+        const request: RawElicitationRequest = raw ?? {
+          requestId: extra.requestId,
+          message: undefined,
+          requestedSchema: undefined,
+          vendor: {},
+        };
+        if (elicitationHandler === undefined) {
+          // No consumer ever registered — deny safely, never hang the child
+          // waiting on a response nobody will produce.
+          return { action: "decline" };
+        }
+        return elicitationHandler(request);
+      },
+    );
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
 
   await client.connect(transport);
 
