@@ -55,6 +55,7 @@ import {
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
+import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -981,6 +982,34 @@ async function runAgentRepl(
         const patch = extractPatchText(input);
         out(`\n${GUTTER}${style.yellow("Approve apply_patch?")}\n`);
         out(`${indentBlock(renderDiff(patch), GUTTER)}\n`);
+        if (meta?.destructive === true) {
+          out(`${GUTTER}${style.yellow("deletes a file, touches .git/, or touches many files in one call")}\n`);
+        }
+        if (meta?.credentials === true) {
+          out(`${GUTTER}${style.yellow("touches the agent's own permission/credential files")}\n`);
+        }
+        out(`\n${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        if (!approved) {
+          return false;
+        }
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
+      if (tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) {
+        // T12 (specification.md §8): render the elicitation's own human-readable
+        // `message` (and vendor command, when present) — never the raw escaped
+        // JSON `input` string `supervise-mcp.ts` actually sends, which the
+        // generic `tool !== "shell_exec"` branch below would otherwise show.
+        const described = describeElicitationPrompt(tool, input) ?? { message: input, command: undefined };
+        out(`\n${GUTTER}${style.yellow("Approve codex elicitation?")}\n`);
+        out(`${indentBlock(described.message, GUTTER)}\n`);
+        if (described.command !== undefined) {
+          out(`${GUTTER}${style.dim(`command: ${described.command}`)}\n`);
+        }
         if (meta?.destructive === true) {
           out(`${GUTTER}${style.yellow("deletes a file, touches .git/, or touches many files in one call")}\n`);
         }

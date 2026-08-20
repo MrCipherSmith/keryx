@@ -24,9 +24,20 @@
 // side channel this supervisor owns, recorded in `elicitations`, not `events`.
 // `bridgeExternalEvent`/`reduceAgents` (`./agent-event-bridge.ts`) are neither
 // imported nor touched by this file.
-import { classifyElicitationRisk, correlateElicitation, buildElicitationResponse, toPendingElicitation } from "../../mcp-client/elicitation";
+import {
+  classifyElicitationRisk,
+  correlateElicitation,
+  buildElicitationResponse,
+  toPendingElicitation,
+  MCP_ELICITATION_TOOL_PREFIX,
+} from "../../mcp-client/elicitation";
 import { isExecApprovalRequestEvent } from "../../mcp-client/wire";
 import { resolveApprovalDecision, type ApprovalGateDecision, type PermissionMode } from "../../commands/permission-mode";
+import {
+  agentConfig,
+  resolveExternalAgentsCapability,
+  type ExternalAgentsGateInput,
+} from "../../capability/external-agents";
 import type { AgentIO, ApprovalResponse } from "../../commands/agent";
 import type {
   ElicitationResponsePayload,
@@ -257,7 +268,7 @@ export async function superviseCodexMcpRun(
       // `classifyPatchRisk`'s own current (unwired) precedent at its one
       // call site (agent.ts's `write` branch).
       const approvalPromise = deps.requestApproval(
-        `mcp_elicitation:${String(pending.requestId)}`,
+        `${MCP_ELICITATION_TOOL_PREFIX}${String(pending.requestId)}`,
         JSON.stringify({ message: pending.message, vendor: pending.vendor }),
         {
           fingerprint: String(pending.requestId),
@@ -313,4 +324,98 @@ export async function superviseCodexMcpRun(
   await connection.close();
 
   return { toolCall, events, elicitations };
+}
+
+// ---------------------------------------------------------------------------
+// Capability gate (T11, specification.md §7)
+// ---------------------------------------------------------------------------
+
+/**
+ * The registry id `superviseCodexMcpRun` always spawns for — the only vendor
+ * this package's MCP-shaped supervision path exists to serve (specification.md
+ * §2). Not exported from `registry.ts` as a shared constant; this module does
+ * not touch that file (out of scope, see this file's header), so the same
+ * literal every other `codex-cli` call site already uses (e.g.
+ * `run-external-factory.test.ts`'s `agent: "codex-cli"`) is named once, here.
+ */
+const CODEX_CLI_AGENT_ID = "codex-cli";
+
+/**
+ * Everything {@link gatedSuperviseCodexMcpRun} needs to resolve the capability
+ * gate — a strict subset of {@link ExternalAgentsGateInput}, `cwd` required
+ * like every other field there, the rest optional exactly as the gate itself
+ * allows.
+ */
+export type SuperviseCodexMcpGateInput = ExternalAgentsGateInput;
+
+/** Why {@link gatedSuperviseCodexMcpRun} refused to run, before any process existed. */
+export interface SuperviseCodexMcpRefusal {
+  readonly ok: false;
+  readonly reason: string;
+}
+
+/** {@link gatedSuperviseCodexMcpRun}'s result: the same refusal shape the capability gate already uses, or a real outcome. */
+export type GatedSuperviseCodexMcpResult = { readonly ok: true; readonly outcome: SuperviseCodexMcpOutcome } | SuperviseCodexMcpRefusal;
+
+/**
+ * The ONE entry point a future caller uses to run {@link superviseCodexMcpRun}
+ * for a real `codex mcp-server` child (T11, specification.md §7).
+ *
+ * Gated by the EXACT SAME capability that already governs every other
+ * external-agent dispatch — `gdskills.external-agents`
+ * (`src/capability/external-agents.ts`) — via
+ * {@link resolveExternalAgentsCapability} called directly, not a second,
+ * duplicated gate function. No new capability id, no new config flag, no new
+ * `keryx init --something-else` toggle: the only switches consulted are the
+ * existing `externalAgents.enabled` and (via {@link agentConfig}, the exact
+ * helper `run-external-factory.ts`'s `createRunExternal` calls for this same
+ * purpose) the existing per-agent `externalAgents.agents.codex-cli.enabled`.
+ *
+ * Two gates, in order, mirroring `createRunExternal`'s own sequence for the
+ * existing line-stream path:
+ *
+ *   1. {@link resolveExternalAgentsCapability} — hard disable (remote
+ *      transport / CI), the operator's user-global switch, then the project's
+ *      manifest opt-in. A refusal here carries that function's own named
+ *      reason, unmodified.
+ *   2. `codex-cli`'s per-agent config, via `agentConfig(gate.config,
+ *      "codex-cli")` — an operator who left the runtime enabled but disabled
+ *      `codex-cli` specifically gets the same refusal shape `spawn_subagent`
+ *      already gives them for the existing path.
+ *
+ * `deps.client.connect` (and therefore the child process) is reached ONLY
+ * once both gates pass — a disabled capability or a disabled `codex-cli`
+ * never touches {@link SuperviseCodexMcpDeps.client} at all, provable by an
+ * injected fake exactly like `run-external-factory.test.ts`'s "no spawn and
+ * no worktree are ever touched on the unavailable path" test proves the same
+ * property for the existing path.
+ *
+ * NOT wired into `dispatch.ts`, `registry.ts`, or `run-external-factory.ts`'s
+ * existing `codex exec` branch — this is a standalone, callable entry point
+ * for a future caller to wire in, exactly like {@link superviseCodexMcpRun}
+ * itself already is (see this file's header). Production callers pass
+ * `{client: codexMcpClientPort, ...}` (`../../mcp-client/client.ts`); this
+ * module never imports that port itself, keeping the same offline-testable
+ * shape `superviseCodexMcpRun` already has.
+ */
+export async function gatedSuperviseCodexMcpRun(
+  gateInput: SuperviseCodexMcpGateInput,
+  input: SuperviseCodexMcpInput,
+  deps: SuperviseCodexMcpDeps,
+): Promise<GatedSuperviseCodexMcpResult> {
+  const gate = await resolveExternalAgentsCapability(gateInput);
+  if (!gate.ok) {
+    return { ok: false, reason: gate.reason };
+  }
+
+  const perAgent = agentConfig(gate.config, CODEX_CLI_AGENT_ID);
+  if (!perAgent.enabled) {
+    return {
+      ok: false,
+      reason: `external agent "${CODEX_CLI_AGENT_ID}" is disabled; enable it under \`externalAgents.agents.${CODEX_CLI_AGENT_ID}\` in the keryx user config`,
+    };
+  }
+
+  const outcome = await superviseCodexMcpRun(input, deps);
+  return { ok: true, outcome };
 }

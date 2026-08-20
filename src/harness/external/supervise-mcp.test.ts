@@ -6,8 +6,14 @@
 // imported. The real SDK-backed port (`../../mcp-client/client.ts`) has its
 // own flag-gated live smoke test.
 import { describe, expect, test } from "bun:test";
-import { superviseCodexMcpRun, DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS, DEFAULT_ELICITATION_TIMEOUT_MS } from "./supervise-mcp";
+import {
+  superviseCodexMcpRun,
+  gatedSuperviseCodexMcpRun,
+  DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS,
+  DEFAULT_ELICITATION_TIMEOUT_MS,
+} from "./supervise-mcp";
 import type { ElicitationHandledRecord, SuperviseCodexMcpInput } from "./supervise-mcp";
+import { EXTERNAL_AGENTS_DEFAULTS, type ExternalAgentsConfig } from "../../capability/external-agents";
 import type {
   ElicitationResponsePayload,
   McpClientConnection,
@@ -352,5 +358,85 @@ describe("superviseCodexMcpRun — elicitation-answer timeout (T10, AC4)", () =>
     const outcome = await run;
 
     expect(outcome.elicitations[0]).toMatchObject({ verdict: "deny", timedOut: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gatedSuperviseCodexMcpRun — capability gate (T11, specification.md §7)
+// ---------------------------------------------------------------------------
+//
+// Same "no spawn on the unavailable path" property `run-external-factory.test.ts`
+// proves for the existing line-stream path, applied to the new MCP-shaped
+// entry point: a disabled capability or a disabled `codex-cli` must never
+// touch `deps.client.connect` — proved here via the same fake port used above,
+// asserting `connectCalls` stays empty rather than trusting a mock framework.
+describe("gatedSuperviseCodexMcpRun — capability gate (T11)", () => {
+  // `/nonexistent-project-root` carries no `.metaproject/metaproject.json`,
+  // so `resolveExternalAgentsCapability`'s manifest check resolves
+  // `no-manifest` (neutral) — mirrors `run-external-factory.test.ts`'s own
+  // `options()` cwd exactly, for the same reason: the gate outcome should
+  // turn on `config`/`env`, not on an accidental real manifest on this
+  // machine.
+  const GATE_BASE = { cwd: "/nonexistent-project-root", env: { PATH: "/usr/bin" } };
+  const ENABLED: ExternalAgentsConfig = { ...EXTERNAL_AGENTS_DEFAULTS, enabled: true };
+
+  test("capability disabled: refuses with a named reason and never calls client.connect", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const result = await gatedSuperviseCodexMcpRun(
+      { ...GATE_BASE, config: EXTERNAL_AGENTS_DEFAULTS },
+      baseInput({ mode: "auto" }),
+      { client: harness.port, requestApproval: undefined },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toContain("externalAgents.enabled");
+    expect(harness.connectCalls).toHaveLength(0);
+  });
+
+  test("a remote transport refuses even with an enabled config, and never calls client.connect", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const result = await gatedSuperviseCodexMcpRun(
+      { ...GATE_BASE, config: ENABLED, transport: "remote" },
+      baseInput({ mode: "auto" }),
+      { client: harness.port, requestApproval: undefined },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toContain("remote transport");
+    expect(harness.connectCalls).toHaveLength(0);
+  });
+
+  test("codex-cli disabled per-agent: refuses with a named reason and never calls client.connect, even with the runtime enabled", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const config: ExternalAgentsConfig = {
+      ...EXTERNAL_AGENTS_DEFAULTS,
+      enabled: true,
+      agents: { "codex-cli": { enabled: false, model: null } },
+    };
+    const result = await gatedSuperviseCodexMcpRun(
+      { ...GATE_BASE, config },
+      baseInput({ mode: "auto" }),
+      { client: harness.port, requestApproval: undefined },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toContain("codex-cli");
+    expect(harness.connectCalls).toHaveLength(0);
+  });
+
+  test("capability and codex-cli both enabled: flows through to superviseCodexMcpRun normally, connecting exactly once", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const result = await gatedSuperviseCodexMcpRun(
+      { ...GATE_BASE, config: ENABLED },
+      baseInput({ mode: "auto" }),
+      { client: harness.port, requestApproval: undefined },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.outcome.toolCall).toEqual({
+      kind: "result",
+      result: { content: "ok", isError: false },
+    });
+    expect(harness.connectCalls).toHaveLength(1);
   });
 });

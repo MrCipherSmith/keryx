@@ -5,6 +5,7 @@ import {
   buildElicitationResponse,
   classifyElicitationRisk,
   correlateElicitation,
+  describeElicitationPrompt,
   pickApproveDecision,
   pickDenyDecision,
   toPendingElicitation,
@@ -256,5 +257,60 @@ describe("codex_call_id version-skew degraded handling (T10, PRD Requirement 5)"
       const response = buildElicitationResponse("approve", correlation);
       expect(response).toEqual({ action: "decline" });
     }).not.toThrow();
+  });
+});
+
+describe("describeElicitationPrompt (T12, specification.md §8)", () => {
+  test("returns undefined for a tool that is not an mcp_elicitation:* request — the caller's cue to use its own generic rendering", () => {
+    expect(describeElicitationPrompt("shell_exec", JSON.stringify({ command: "ls" }))).toBeUndefined();
+    expect(describeElicitationPrompt("apply_patch", "{}")).toBeUndefined();
+  });
+
+  test("extracts the human-readable message and joined vendor command, not raw JSON", () => {
+    const inputJson = JSON.stringify({
+      message: "Allow codex to run `rm -rf build/`?",
+      vendor: { codex_call_id: "call-1", codex_elicitation: "exec-approval", codex_command: ["rm", "-rf", "build/"] },
+    });
+    const described = describeElicitationPrompt("mcp_elicitation:1", inputJson);
+    expect(described).toEqual({ message: "Allow codex to run `rm -rf build/`?", command: "rm -rf build/" });
+    // The one property this test exists to prove: the rendered text is the
+    // legible message, never the escaped JSON blob supervise-mcp.ts actually
+    // sent as `input`.
+    expect(described?.message).not.toContain("\\\"");
+  });
+
+  test("command is undefined when vendor carries no codex_command (e.g. a patch-approval elicitation)", () => {
+    const inputJson = JSON.stringify({
+      message: "Allow codex to write this patch?",
+      vendor: { codex_call_id: "call-2", codex_elicitation: "patch-approval" },
+    });
+    expect(describeElicitationPrompt("mcp_elicitation:2", inputJson)).toEqual({
+      message: "Allow codex to write this patch?",
+      command: undefined,
+    });
+  });
+
+  test("a blank or missing message falls back to a safe, non-empty description rather than an empty prompt", () => {
+    expect(describeElicitationPrompt("mcp_elicitation:3", JSON.stringify({ vendor: {} }))).toEqual({
+      message: "codex is requesting approval for an action",
+      command: undefined,
+    });
+    expect(describeElicitationPrompt("mcp_elicitation:4", JSON.stringify({ message: "   ", vendor: {} }))).toEqual({
+      message: "codex is requesting approval for an action",
+      command: undefined,
+    });
+  });
+
+  test("malformed JSON degrades to showing the raw string rather than throwing", () => {
+    expect(() => describeElicitationPrompt("mcp_elicitation:5", "not json")).not.toThrow();
+    expect(describeElicitationPrompt("mcp_elicitation:5", "not json")).toEqual({
+      message: "not json",
+      command: undefined,
+    });
+  });
+
+  test("a JSON array or primitive (not an object) also degrades to the raw string, not a crash", () => {
+    expect(describeElicitationPrompt("mcp_elicitation:6", "[1,2,3]")).toEqual({ message: "[1,2,3]", command: undefined });
+    expect(describeElicitationPrompt("mcp_elicitation:7", "42")).toEqual({ message: "42", command: undefined });
   });
 });

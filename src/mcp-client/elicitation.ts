@@ -117,8 +117,12 @@ export function toPendingElicitation(request: RawElicitationRequest): PendingEli
  * containing a non-string entry — a different elicitation variant or a
  * future codex version this classifier does not understand yet. Never
  * throws.
+ *
+ * Exported (not just used by {@link classifyElicitationRisk}) because
+ * {@link describeElicitationPrompt} (T12) needs the exact same extraction to
+ * render a legible approval prompt — one parser, not two that could drift.
  */
-function extractCodexCommand(vendor: Readonly<Record<string, unknown>>): string[] | undefined {
+export function extractCodexCommand(vendor: Readonly<Record<string, unknown>>): string[] | undefined {
   const raw = vendor.codex_command;
   if (!Array.isArray(raw)) return undefined;
   return raw.every((entry): entry is string => typeof entry === "string") ? raw : undefined;
@@ -163,6 +167,61 @@ function extractCodexCommand(vendor: Readonly<Record<string, unknown>>): string[
  *     case named in this task — same total-function contract as
  *     `classifyPatchRisk`.
  */
+/**
+ * The synthetic tool-name prefix `supervise-mcp.ts` gives every elicitation
+ * it forwards to `deps.requestApproval` (`${MCP_ELICITATION_TOOL_PREFIX}${requestId}`).
+ * Exported so both `supervise-mcp.ts` (the producer) and the two real
+ * `requestApproval` renderers — `src/commands/shell.ts` and
+ * `src/tui/tui-shell.ts` (T12, specification.md §8) — share one literal
+ * rather than two that could drift.
+ */
+export const MCP_ELICITATION_TOOL_PREFIX = "mcp_elicitation:";
+
+/** What {@link describeElicitationPrompt} extracts for a human-legible approval prompt. */
+export interface ElicitationPromptText {
+  /** The elicitation's own `message` field, or a safe fallback when absent/blank. */
+  readonly message: string;
+  /** `vendor.codex_command`, joined into one string, when present. */
+  readonly command: string | undefined;
+}
+
+/**
+ * T12 (specification.md §8): turn one `requestApproval(tool, inputJson, meta)`
+ * call for a `mcp_elicitation:*`-named request back into the human-readable
+ * `{message, vendor}` it was built from (`supervise-mcp.ts`'s call site),
+ * rather than the operator seeing raw escaped JSON.
+ *
+ * Returns `undefined` when `tool` is not an elicitation request at all — the
+ * caller's cue to fall through to its existing generic/shell rendering
+ * unchanged. Never throws: `inputJson` that fails to parse, or that parses to
+ * something other than `{message, vendor}`, degrades to showing the raw
+ * string as the "message" rather than crashing the approval prompt — the
+ * same total-function contract every other pure parser in this module keeps
+ * (`extractCodexCommand`, `correlateElicitation`).
+ */
+export function describeElicitationPrompt(tool: string, inputJson: string): ElicitationPromptText | undefined {
+  if (!tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(inputJson);
+  } catch {
+    return { message: inputJson, command: undefined };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { message: inputJson, command: undefined };
+  }
+
+  const obj = parsed as { message?: unknown; vendor?: unknown };
+  const message =
+    typeof obj.message === "string" && obj.message.trim().length > 0
+      ? obj.message
+      : "codex is requesting approval for an action";
+  const vendor = typeof obj.vendor === "object" && obj.vendor !== null ? (obj.vendor as Record<string, unknown>) : {};
+  const command = extractCodexCommand(vendor)?.join(" ");
+  return { message, command };
+}
+
 export function classifyElicitationRisk(pending: PendingElicitation): ElicitationRiskClassification {
   const reasons: string[] = [];
   let destructive = false;

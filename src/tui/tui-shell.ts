@@ -119,6 +119,7 @@ import {
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -2487,6 +2488,73 @@ export async function launchTuiAgentShell(opts: {
             id: `ap${uid++}`,
             content:
               id === "allow" ? otui.t`${otui.green("◇ apply_patch approved")}` : otui.t`${otui.red("◇ apply_patch denied")}`,
+          }),
+        );
+        return id === "allow";
+      }
+
+      if (tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) {
+        // T12 (specification.md §8): render the elicitation's own human-readable
+        // `message` (and vendor command, when present) rather than falling
+        // through to `evaluateShellApproval`, which would treat the raw
+        // `{message, vendor}` JSON as a shell command and show it verbatim —
+        // exactly the raw-escaped-JSON prompt this task exists to avoid.
+        const described = describeElicitationPrompt(tool, inputJson) ?? { message: inputJson, command: undefined };
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${otui.yellow("⚙ codex is requesting approval")}`,
+          }),
+        );
+        transcript.add(
+          new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${otui.dim(described.message)}` }),
+        );
+        if (described.command !== undefined) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.dim(`command: ${described.command}`)}`,
+            }),
+          );
+        }
+        if (meta?.destructive === true) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.yellow("deletes a file, touches .git/, or touches many files in one call")}`,
+            }),
+          );
+        }
+        if (meta?.credentials === true) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.yellow("touches the agent's own permission/credential files")}`,
+            }),
+          );
+        }
+        chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+        setMainAgent("blocked", "approval");
+        const elicitationSubtitle =
+          described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
+        const id = await showComposerChoice(otui, r, chrome.dock, {
+          title: "Approve codex elicitation?",
+          subtitle: elicitationSubtitle,
+          cancelId: "deny",
+          options: [
+            { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
+            { id: "deny", label: "Deny", description: "codex's action is refused" },
+          ],
+        });
+        input.focus();
+        setMainAgent("running", id === "allow" ? "write" : "denied");
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content:
+              id === "allow"
+                ? otui.t`${otui.green("◇ codex elicitation approved")}`
+                : otui.t`${otui.red("◇ codex elicitation denied")}`,
           }),
         );
         return id === "allow";
