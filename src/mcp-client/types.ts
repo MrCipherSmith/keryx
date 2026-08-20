@@ -98,13 +98,27 @@ export interface PendingElicitation {
 
 /**
  * T9's seam: the elicitation-payload analog of `classifyPatchRisk`
- * (`src/lib/patch-risk.ts`). `T6-T8` supply only a placeholder implementation
- * (see `elicitation.ts`'s `classifyElicitationRisk`) — this type is what lets
- * T9 drop a real classifier in without touching any call site's shape.
+ * (`src/lib/patch-risk.ts`). `T6-T8` supplied only a placeholder
+ * implementation; `elicitation.ts`'s `classifyElicitationRisk` (T9) is the
+ * real one, dropped in without touching any call site's shape.
  */
 export interface ElicitationRiskClassification {
   readonly destructive: boolean;
   readonly credentials: boolean;
+  /**
+   * Human-readable reasons for the classification, mirroring
+   * `PatchRiskClassification.reasons`'s same field. NOTE (T9): as of this
+   * writing `PatchRiskClassification.reasons` itself is NOT threaded through
+   * to the approval prompt — `agent.ts`'s `write` branch destructures only
+   * `{ destructive, credentials }` from `classifyPatchRisk`'s result and
+   * discards `reasons` (verified by reading that call site). This field
+   * follows the same precedent: populated with real, non-empty content by
+   * `classifyElicitationRisk` whenever it escalates, and available for a
+   * future call site to surface, but `supervise-mcp.ts`'s `requestApproval`
+   * call does not thread it through today either — see that file's own
+   * comment at the call site for the same reasoning applied there.
+   */
+  readonly reasons: readonly string[];
 }
 
 /**

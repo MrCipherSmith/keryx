@@ -55,6 +55,28 @@ export { buildCodexMcpServerArgv } from "../../mcp-client/client";
  */
 export const DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS = 600_000;
 
+/**
+ * Default ceiling for answering ONE elicitation via `deps.requestApproval`
+ * (T10, AC4) — independent of, and much shorter than,
+ * {@link DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS}'s outer round-trip bound.
+ *
+ * Per the T5 live probe (context.md "T5 live probe findings"), codex itself
+ * self-aborts an unanswered elicitation after ~55-60s (`codex/event`
+ * `turn_aborted`, `reason: "interrupted"`). Keryx does not need to race
+ * codex to be safe — a hang either way is bounded by codex's own ceiling —
+ * but if it wants to OWN the shape of the refusal (a named, distinguishable
+ * timeout-driven decline recorded in `ElicitationHandledRecord.timedOut`)
+ * rather than reactively absorbing codex's unprompted abort long after an
+ * operator has plainly walked away, its own ceiling must fire first, with
+ * real margin. 45s leaves ~10-15s of margin under the observed 55-60s
+ * window while still being generous for a human to actually read a prompt
+ * and answer it — deliberately looser than
+ * `external-agent-probe.ts`'s `PROBE_TIMEOUT_MS` (a machine-speed version
+ * check with no one to wait on), because this timer is racing a human, not
+ * a subprocess.
+ */
+export const DEFAULT_ELICITATION_TIMEOUT_MS = 45_000;
+
 /** One elicitation this supervisor answered, kept as a DIAGNOSTIC record — never an `ExternalEvent` (AC8). */
 export interface ElicitationHandledRecord {
   readonly requestId: string | number;
@@ -65,6 +87,17 @@ export interface ElicitationHandledRecord {
   readonly gateDecision: ApprovalGateDecision;
   readonly verdict: ElicitationVerdict;
   readonly response: ElicitationResponsePayload;
+  /**
+   * True when this record's `verdict: "deny"` came from
+   * {@link DEFAULT_ELICITATION_TIMEOUT_MS}/`elicitationTimeoutMs` firing
+   * before `deps.requestApproval` resolved (T10, AC4) — distinguishes a
+   * timeout-driven refusal from an operator genuinely answering "no" (always
+   * `timedOut: false`) or an unwired approver's default-deny (also
+   * `timedOut: false` — that path never starts the timer at all, it denies
+   * immediately). Always `false` for a `gateDecision: "auto"` record, since
+   * no approval wait ever happens on that path.
+   */
+  readonly timedOut: boolean;
 }
 
 export interface SuperviseCodexMcpInput {
@@ -86,6 +119,14 @@ export interface SuperviseCodexMcpInput {
   readonly toolArguments: Record<string, unknown>;
   /** Ceiling for the `tools/call` round-trip. Defaults to {@link DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS}. */
   readonly toolCallTimeoutMs?: number;
+  /**
+   * Ceiling for answering ONE elicitation via `deps.requestApproval` (T10,
+   * AC4). Defaults to {@link DEFAULT_ELICITATION_TIMEOUT_MS}. Never applies
+   * when `gateDecision === "auto"` (no wait happens) or when
+   * `deps.requestApproval` is undefined (denies immediately, no timer
+   * needed).
+   */
+  readonly elicitationTimeoutMs?: number;
   /** The session's permission mode — read once per run, mirrors `executeCall`'s `permissionMode?.()` read. */
   readonly mode: PermissionMode;
 }
@@ -133,15 +174,19 @@ function isApprovalGranted(response: ApprovalResponse): boolean {
  *      `call_id`, via {@link correlateElicitation}. Uncorrelated means no
  *      decision vocabulary is known for this request (AC5's live
  *      manifestation — see `elicitation.ts`).
- *   2. Classify its risk via {@link classifyElicitationRisk} — a T9
- *      placeholder today (always `{destructive: false, credentials: false}`),
- *      a real seam already wired for T9 to fill in.
+ *   2. Classify its risk via {@link classifyElicitationRisk} (T9) — derives
+ *      `destructive`/`credentials` from `vendor.codex_command` (reusing
+ *      `isDestructiveCommand`/`touchesAgentCredentials`) and
+ *      `vendor.codex_elicitation === "patch-approval"`.
  *   3. Call `resolveApprovalDecision` UNCONDITIONALLY (AC6) with `risk: "write"`
  *      — an elicitation-driven write is the closest existing `GatedToolRisk`
  *      shape, per specification.md §9's `apply_patch`/ADR-0010 analogy.
  *   4. On `"auto"`, approve without a prompt. On `"ask"`, call
  *      `deps.requestApproval` — DEFAULT-DENY when absent, never a prompt no
- *      one can answer.
+ *      one can answer; when present, raced against
+ *      {@link DEFAULT_ELICITATION_TIMEOUT_MS}/`elicitationTimeoutMs` (T10,
+ *      AC4) so an operator who never answers still resolves to a named,
+ *      distinguishable timeout-driven decline rather than a hang.
  *   5. Build the exact `{action, decision}` payload via
  *      {@link buildElicitationResponse} and return it.
  *
@@ -192,24 +237,50 @@ export async function superviseCodexMcpRun(
     });
 
     let verdict: ElicitationVerdict;
+    let timedOut = false;
     if (gateDecision === "auto") {
       verdict = "approve";
-    } else {
+    } else if (deps.requestApproval === undefined) {
       // DEFAULT-DENY when no approver is wired — identical floor to every
-      // other gated risk in `executeCall` (agent.ts).
-      const response =
-        deps.requestApproval === undefined
-          ? false
-          : await deps.requestApproval(
-              `mcp_elicitation:${String(pending.requestId)}`,
-              JSON.stringify({ message: pending.message, vendor: pending.vendor }),
-              {
-                fingerprint: String(pending.requestId),
-                destructive,
-                ...(credentials ? { credentials } : {}),
-              },
-            );
-      verdict = isApprovalGranted(response) ? "approve" : "deny";
+      // other gated risk in `executeCall` (agent.ts). No wait, no timer.
+      verdict = "deny";
+    } else {
+      // T10, AC4: the approval-await gets its OWN, shorter timeout,
+      // independent of the outer `client.callTool` bound above — an
+      // operator who has walked away leaves this promise pending forever
+      // otherwise; `client.callTool`'s timeout only bounds the JSON-RPC
+      // round trip, not this nested await inside our own handler. Same
+      // race-a-timer idiom as `external-agent-probe.ts`'s `createVersionProbe`.
+      // `reasons` (classifyElicitationRisk's third field) is deliberately
+      // NOT threaded into this metadata object — see `types.ts`'s
+      // `ElicitationRiskClassification.reasons` doc for why that mirrors
+      // `classifyPatchRisk`'s own current (unwired) precedent at its one
+      // call site (agent.ts's `write` branch).
+      const approvalPromise = deps.requestApproval(
+        `mcp_elicitation:${String(pending.requestId)}`,
+        JSON.stringify({ message: pending.message, vendor: pending.vendor }),
+        {
+          fingerprint: String(pending.requestId),
+          destructive,
+          ...(credentials ? { credentials } : {}),
+        },
+      );
+
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), input.elicitationTimeoutMs ?? DEFAULT_ELICITATION_TIMEOUT_MS);
+      });
+      try {
+        const settled = await Promise.race([approvalPromise, expired]);
+        if (settled === "timeout") {
+          timedOut = true;
+          verdict = "deny";
+        } else {
+          verdict = isApprovalGranted(settled) ? "approve" : "deny";
+        }
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
     }
 
     const response = buildElicitationResponse(verdict, correlation);
@@ -220,6 +291,7 @@ export async function superviseCodexMcpRun(
       gateDecision,
       verdict,
       response,
+      timedOut,
     };
     elicitations.push(record);
     deps.onElicitationHandled?.(record);

@@ -6,7 +6,7 @@
 // imported. The real SDK-backed port (`../../mcp-client/client.ts`) has its
 // own flag-gated live smoke test.
 import { describe, expect, test } from "bun:test";
-import { superviseCodexMcpRun, DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS } from "./supervise-mcp";
+import { superviseCodexMcpRun, DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS, DEFAULT_ELICITATION_TIMEOUT_MS } from "./supervise-mcp";
 import type { ElicitationHandledRecord, SuperviseCodexMcpInput } from "./supervise-mcp";
 import type {
   ElicitationResponsePayload,
@@ -288,6 +288,69 @@ describe("superviseCodexMcpRun — elicitation handling (AC3, AC6)", () => {
       correlation: "correlated",
       gateDecision: "auto",
       verdict: "approve",
+      timedOut: false,
     });
+  });
+});
+
+describe("superviseCodexMcpRun — elicitation-answer timeout (T10, AC4)", () => {
+  test("a requestApproval that never resolves still lets the run complete, recorded as a timeout-driven decline, not silently as an ordinary deny", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const handled: ElicitationHandledRecord[] = [];
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask", elicitationTimeoutMs: 20 }), {
+      client: harness.port,
+      // Never resolves — simulates an operator who has walked away
+      // (openai/codex#11816's condition).
+      requestApproval: () => new Promise<boolean>(() => {}),
+      onElicitationHandled: (record) => handled.push(record),
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    const response = await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    const outcome = await run;
+
+    // Still a clean deny to codex — never a hang, never an implicit accept.
+    expect(response).toEqual({ action: "decline", decision: "abort" });
+    expect(outcome.elicitations).toHaveLength(1);
+    expect(outcome.elicitations[0]).toMatchObject({
+      verdict: "deny",
+      gateDecision: "ask",
+      timedOut: true,
+    });
+    expect(handled).toHaveLength(1);
+    expect(handled[0]?.timedOut).toBe(true);
+  });
+
+  test("uses DEFAULT_ELICITATION_TIMEOUT_MS when elicitationTimeoutMs is not set (exercised with an approver that resolves well within the default, so this only asserts the field exists and is sane)", () => {
+    expect(DEFAULT_ELICITATION_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(DEFAULT_ELICITATION_TIMEOUT_MS).toBeLessThan(DEFAULT_MCP_TOOL_CALL_TIMEOUT_MS);
+  });
+
+  test("an operator genuinely answering (not a timeout) is recorded with timedOut: false", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask", elicitationTimeoutMs: 5_000 }), {
+      client: harness.port,
+      requestApproval: async () => false,
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    const outcome = await run;
+
+    expect(outcome.elicitations[0]).toMatchObject({ verdict: "deny", timedOut: false });
+  });
+
+  test("no approver wired at all denies immediately, recorded with timedOut: false (no timer ever starts)", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    const run = superviseCodexMcpRun(baseInput({ mode: "ask" }), {
+      client: harness.port,
+      requestApproval: undefined,
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    await harness.sendElicitation(elicitationRequest(1, "call-1"));
+    const outcome = await run;
+
+    expect(outcome.elicitations[0]).toMatchObject({ verdict: "deny", timedOut: false });
   });
 });

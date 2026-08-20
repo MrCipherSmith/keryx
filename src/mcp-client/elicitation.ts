@@ -5,6 +5,7 @@
 // Pure and total, like `wire.ts` — no SDK, no process, no clock. Everything
 // here operates on data already extracted from the wire.
 import { extractCodexCallId, isExecApprovalRequestEvent } from "./wire";
+import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
 import type {
   ElicitationRiskClassification,
   ElicitationResponsePayload,
@@ -110,17 +111,82 @@ export function toPendingElicitation(request: RawElicitationRequest): PendingEli
 }
 
 /**
- * T9's seam: the elicitation-payload analog of `classifyPatchRisk`
- * (`src/lib/patch-risk.ts`) — deriving `destructive`/`credentials` from
- * whatever detail codex's elicitation payload carries about the intended
- * action, feeding `resolveApprovalDecision` exactly like `write`'s own
- * escalation classifier does (ADR-0010).
- *
- * DELIBERATE PLACEHOLDER (T6-T8 scope; the real classifier is T9's job,
- * per AC9). Always returns the least-escalated verdict. The seam itself is
- * real and typed so T9 can replace this function's body without touching
- * `supervise-mcp.ts`'s call site.
+ * `vendor.codex_command`, when present and an array of strings — the actual
+ * shell argv codex wants to run for an `exec-approval` elicitation (T5 live
+ * probe finding). `undefined` for any other shape: absent, not an array, or
+ * containing a non-string entry — a different elicitation variant or a
+ * future codex version this classifier does not understand yet. Never
+ * throws.
  */
-export function classifyElicitationRisk(_pending: PendingElicitation): ElicitationRiskClassification {
-  return { destructive: false, credentials: false };
+function extractCodexCommand(vendor: Readonly<Record<string, unknown>>): string[] | undefined {
+  const raw = vendor.codex_command;
+  if (!Array.isArray(raw)) return undefined;
+  return raw.every((entry): entry is string => typeof entry === "string") ? raw : undefined;
+}
+
+/**
+ * T9's real implementation of the elicitation-payload analog of
+ * `classifyPatchRisk` (`src/lib/patch-risk.ts`) — deriving
+ * `destructive`/`credentials` from whatever detail codex's elicitation
+ * payload carries about the intended action, feeding `resolveApprovalDecision`
+ * exactly like `write`'s own escalation classifier does (ADR-0010).
+ *
+ * Replaces T6-T8's placeholder (which always returned the least-escalated
+ * verdict) without touching `supervise-mcp.ts`'s call site — the seam was
+ * already real and typed.
+ *
+ *   - `destructive`: reuses `isDestructiveCommand` (`src/lib/command-risk.ts`)
+ *     against `vendor.codex_command`'s argv, joined into a single string —
+ *     the same classifier `shell`/`destructive` risk already trusts, not
+ *     reinvented here. ALSO escalates unconditionally when
+ *     `vendor.codex_elicitation === "patch-approval"`: a patch-approval
+ *     elicitation is codex asking to write a patch, the exact same action
+ *     `apply_patch`/`write` risk already treats as needing the ADR-0010
+ *     escalation posture, but unlike `classifyPatchRisk` this classifier has
+ *     no parsed diff hunks to reason about per-target-file — there is no
+ *     finer signal available in the vendor payload today — so the whole
+ *     elicitation is treated as destructive rather than silently
+ *     understating risk for a write this classifier cannot inspect further.
+ *   - `credentials`: reuses `touchesAgentCredentials` against the same
+ *     joined command string, and separately against `vendor.codex_cwd` when
+ *     it is a string — `touchesAgentCredentials` matches on TEXT containing
+ *     one of keryx's own credential/permission markers
+ *     (`permissions.json`, `auth.json`, `.local/share/keryx`,
+ *     `.config/keryx`), so a cwd inside keryx's own state directory is as
+ *     strong a signal as the command text itself, and codex's cwd is a real,
+ *     always-present field the shell-risk classifier does not have an
+ *     analog of.
+ *   - Never throws: `vendor.codex_command` missing or not a string array
+ *     degrades to no destructive/credentials signal from the command (still
+ *     escalated by the `patch-approval` check above, when it applies),
+ *     exactly the "different elicitation shape, or a future codex version"
+ *     case named in this task — same total-function contract as
+ *     `classifyPatchRisk`.
+ */
+export function classifyElicitationRisk(pending: PendingElicitation): ElicitationRiskClassification {
+  const reasons: string[] = [];
+  let destructive = false;
+  let credentials = false;
+
+  const command = extractCodexCommand(pending.vendor);
+  const joinedCommand = command === undefined ? undefined : command.join(" ");
+
+  if (joinedCommand !== undefined && isDestructiveCommand(joinedCommand)) {
+    destructive = true;
+    reasons.push(`underlying command looks destructive: ${joinedCommand}`);
+  }
+
+  if (pending.vendor.codex_elicitation === "patch-approval") {
+    destructive = true;
+    reasons.push("patch-approval elicitation: treated as destructive like apply_patch/write risk (ADR-0010)");
+  }
+
+  const cwd = typeof pending.vendor.codex_cwd === "string" ? pending.vendor.codex_cwd : undefined;
+  const credentialSignal = [joinedCommand, cwd].filter((v): v is string => v !== undefined).join(" ");
+  if (credentialSignal.length > 0 && touchesAgentCredentials(credentialSignal)) {
+    credentials = true;
+    reasons.push("touches the agent's own permission/credential files");
+  }
+
+  return { destructive, credentials, reasons };
 }

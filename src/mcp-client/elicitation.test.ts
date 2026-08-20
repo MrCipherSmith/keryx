@@ -9,6 +9,7 @@ import {
   pickDenyDecision,
   toPendingElicitation,
 } from "./elicitation";
+import { parseElicitationCreateRequest } from "./wire";
 import type { RawCodexEventNotification, RawElicitationRequest } from "./types";
 
 function execApprovalEvent(callId: string, availableDecisions: readonly string[]): RawCodexEventNotification {
@@ -108,14 +109,152 @@ describe("toPendingElicitation / classifyElicitationRisk (T9 seam)", () => {
       vendor: { codex_call_id: "call-1", codex_command: ["rm", "-rf", "/"] },
     });
   });
+});
 
-  test("the placeholder classifier always returns the least-escalated verdict (T9's real classifier lands later)", () => {
+describe("classifyElicitationRisk (T9, AC9)", () => {
+  test("destructive: true for a codex_command the shell classifier already recognises as destructive", () => {
     const pending = toPendingElicitation({
       requestId: 1,
       message: "rm -rf /",
       requestedSchema: {},
-      vendor: { codex_command: ["rm", "-rf", "/"] },
+      vendor: { codex_call_id: "call-1", codex_command: ["rm", "-rf", "/"] },
     });
-    expect(classifyElicitationRisk(pending)).toEqual({ destructive: false, credentials: false });
+    const result = classifyElicitationRisk(pending);
+    expect(result.destructive).toBe(true);
+    expect(result.credentials).toBe(false);
+    expect(result.reasons.length).toBeGreaterThan(0);
+  });
+
+  test("credentials: true when the command touches the agent's own permission/credential files", () => {
+    const pending = toPendingElicitation({
+      requestId: 2,
+      message: "cat keryx's own permission state",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-2", codex_command: ["cat", "/Users/agent/.local/share/keryx/permissions.json"] },
+    });
+    const result = classifyElicitationRisk(pending);
+    expect(result.credentials).toBe(true);
+    expect(result.destructive).toBe(false);
+    expect(result.reasons.length).toBeGreaterThan(0);
+  });
+
+  test("credentials: true from codex_cwd alone, even with a non-destructive command (booleans are independent)", () => {
+    const pending = toPendingElicitation({
+      requestId: 3,
+      message: "ls",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-3", codex_command: ["ls"], codex_cwd: "/Users/agent/.config/keryx" },
+    });
+    const result = classifyElicitationRisk(pending);
+    expect(result.destructive).toBe(false);
+    expect(result.credentials).toBe(true);
+  });
+
+  test("both destructive AND credentials can independently come back true for the same elicitation (AC9's literal requirement)", () => {
+    // `sudo` triggers isDestructiveCommand's privilege-escalation rule
+    // (destructive); the path also carries one of touchesAgentCredentials'
+    // own markers (credentials) — the two signals fire independently off
+    // the same joined command string, proving both booleans are reachable
+    // together, not mutually exclusive.
+    const pending = toPendingElicitation({
+      requestId: 4,
+      message: "read the agent's own auth state as root",
+      requestedSchema: {},
+      vendor: {
+        codex_call_id: "call-4",
+        codex_command: ["sudo", "cat", "/Users/agent/.local/share/keryx/auth.json"],
+      },
+    });
+    const result = classifyElicitationRisk(pending);
+    expect(result.destructive).toBe(true);
+    expect(result.credentials).toBe(true);
+  });
+
+  test("a patch-approval elicitation is treated as destructive even with no codex_command at all (no diff hunks to inspect)", () => {
+    const pending = toPendingElicitation({
+      requestId: 5,
+      message: "apply this patch?",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-5", codex_elicitation: "patch-approval" },
+    });
+    const result = classifyElicitationRisk(pending);
+    expect(result.destructive).toBe(true);
+    expect(result.reasons.some((r) => /patch-approval/.test(r))).toBe(true);
+  });
+
+  test("degrades to {destructive: false, credentials: false} rather than throwing when codex_command is missing or the wrong shape", () => {
+    const missing = toPendingElicitation({
+      requestId: 6,
+      message: "allow?",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-6" },
+    });
+    expect(classifyElicitationRisk(missing)).toEqual({ destructive: false, credentials: false, reasons: [] });
+
+    const wrongShape = toPendingElicitation({
+      requestId: 7,
+      message: "allow?",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-7", codex_command: "rm -rf /" },
+    });
+    expect(() => classifyElicitationRisk(wrongShape)).not.toThrow();
+    expect(classifyElicitationRisk(wrongShape)).toEqual({ destructive: false, credentials: false, reasons: [] });
+
+    const nonStringEntries = toPendingElicitation({
+      requestId: 8,
+      message: "allow?",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-8", codex_command: ["rm", 7, null] },
+    });
+    expect(() => classifyElicitationRisk(nonStringEntries)).not.toThrow();
+    expect(classifyElicitationRisk(nonStringEntries)).toEqual({ destructive: false, credentials: false, reasons: [] });
+  });
+
+  test("a non-destructive, non-credential command classifies as fully clean", () => {
+    const pending = toPendingElicitation({
+      requestId: 9,
+      message: "list files",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-9", codex_command: ["ls", "-la"] },
+    });
+    expect(classifyElicitationRisk(pending)).toEqual({ destructive: false, credentials: false, reasons: [] });
+  });
+});
+
+describe("codex_call_id version-skew degraded handling (T10, PRD Requirement 5)", () => {
+  test("a synthetic elicitation/create payload with NO codex_call_id (simulating pre-fix codex, e.g. v0.105.0) degrades to a safe, non-throwing uncorrelated deny end to end", () => {
+    // No codex_call_id anywhere in params — the buggy-version shape this
+    // regression guards against, in case a future keryx build is ever
+    // pointed at an out-of-range codex older than the pinned min version.
+    const message = {
+      jsonrpc: "2.0",
+      id: 99,
+      method: "elicitation/create",
+      params: {
+        message: "Allow codex to run `rm -rf build/`?",
+        requestedSchema: { type: "object", properties: {} },
+        codex_elicitation: "exec-approval",
+        codex_command: ["rm", "-rf", "build/"],
+      },
+    };
+
+    const raw = parseElicitationCreateRequest(message);
+    expect(raw).toBeDefined();
+
+    expect(() => {
+      const pending = toPendingElicitation(raw!);
+      expect(pending.callId).toBeUndefined();
+
+      // Even with a codex/event notification present for some OTHER call_id,
+      // an elicitation with no callId at all can never correlate.
+      const recentEvents = new Map<string, RawCodexEventNotification>([
+        ["some-other-call", { msgType: "exec_approval_request", callId: "some-other-call", availableDecisions: ["approved"], raw: {} }],
+      ]);
+      const correlation = correlateElicitation(pending.callId, recentEvents);
+      expect(correlation).toEqual({ kind: "uncorrelated" });
+
+      const response = buildElicitationResponse("approve", correlation);
+      expect(response).toEqual({ action: "decline" });
+    }).not.toThrow();
   });
 });
