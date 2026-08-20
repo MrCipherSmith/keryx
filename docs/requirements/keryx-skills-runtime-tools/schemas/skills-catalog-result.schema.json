@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "keryx-skills-runtime-tools/skills-catalog-result.schema.json",
+  "title": "SkillsCatalogResult",
+  "description": "Output contract for the skills_catalog MetaprojectOperation. Draft — see docs/requirements/keryx-skills-runtime-tools/specification.md section 3.1.",
+  "type": "object",
+  "required": ["skills", "generatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "skills": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/SkillsCatalogEntry" }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp of the live filesystem read. Never a cache-write timestamp — see decisions.md D-02."
+    }
+  },
+  "definitions": {
+    "SkillsCatalogEntry": {
+      "type": "object",
+      "required": ["name", "path", "category", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Skill name, e.g. \"flow-orchestrator\"."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project-relative path to the skill's SKILL.md, e.g. \".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md\"."
+        },
+        "category": {
+          "type": "string",
+          "description": "Derived from the containing directory; mirrors BundledSkill.category in src/gdskills/catalog.ts (core, orchestration, review, quality, planning, platform)."
+        },
+        "description": {
+          "type": "string",
+          "description": "From SKILL.md frontmatter `description`, falling back to catalog.md's one-line summary."
+        },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "From SKILL.md frontmatter `triggers`, when present."
+        }
+      }
+    }
+  }
+}
