@@ -5,6 +5,24 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.55] — 2026-08-21
+
+### Fixed
+
+- **`keryx shell`: a parallel-tool-call turn could stall the session with a
+  provider 400 and no further reply.** `runAgentTurnCore`'s per-tool-call
+  loop pushed the SLATE-2a Anchors-block (and the repeated-failure hint)
+  into history mid-loop, splicing a `role:"user"` message between two
+  `tool` results that answer the SAME assistant `tool_calls` batch. Several
+  OpenAI-compatible providers (observed: DeepSeek) reject that shape
+  outright with `"An assistant message with 'tool_calls' must be followed
+  by tool messages responding to each 'tool_call_id'"` — the batch's own
+  `tool_calls` never got a next reply, and every following turn replayed
+  the same broken history. Both injections are now deferred and pushed
+  once, only after every call in the batch has its `tool` result recorded.
+  Root-caused from a real local session transcript that reproduced the
+  exact interleaving and the exact provider error.
+
 ## [0.2.54] — 2026-08-21
 
 ### Fixed
