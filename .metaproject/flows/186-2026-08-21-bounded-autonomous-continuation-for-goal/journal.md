@@ -52,3 +52,6 @@
 - 2026-08-21T16:33:20.043Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-21T16:33:55.356Z - task-done: T5: Confirm SLATE numbering, flow-plan granularity, and existing token/turn budget accounting to reuse
 - 2026-08-21T16:45:00Z - correction: T5's 15:10:05Z entry above assigned SLATE-22 against a stale local working tree — `git fetch` had updated the `origin/main` ref but the checked-out branch's own files were not pulled, so the repo-wide grep still saw the pre-PR#377 state. PR #377 ("Slate v3: private MCP slate lifecycle for external hands") had already merged SLATE-22..26 to `origin/main` at 14:50:53Z, before this check ran. Re-verified directly against `git show origin/main:docs/requirements/slate/specification.md`: SLATE-26 (PR #377) is the highest claimed number. This proposal is renumbered SLATE-27 throughout (code, tests, flow docs, `docs/requirements/goal-continuation/`) before PR #378 was opened. Full account in `description.md`.
+- 2026-08-21T16:53:50.332Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/378 (warning: PR is not a draft)
+- 2026-08-21T16:53:57.056Z - completing
+- 2026-08-21T16:54:00.150Z - done: all gates passed
