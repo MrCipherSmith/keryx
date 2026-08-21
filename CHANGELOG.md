@@ -5,6 +5,72 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.50] — 2026-08-21
+
+### Added
+
+- **VS Code extension** (`vscode-extension/`). A visual layer over keryx
+  inside the editor: activation checks `keryx status` and, if the workspace
+  isn't initialized (or is incomplete), prompts before running
+  `keryx init --yes` — never silently. A status bar item polls
+  `keryx status`/`health status`/`security status` and names the specific
+  failing check on click, not just a color change. A sidebar (Keryx icon in
+  the activity bar) shows four views: Status, Projects, Recent Turns, and
+  Needs Your Attention (in-progress flows merged with pending SAC
+  proposals). An output channel streams live turn events over SSE
+  (resumable) and logs one line per mutating action. A hover provider shows
+  `keryx wiki ask` snippets for symbols under the cursor, cached and
+  debounced. Reachable via `keryx mcp install --runtime vscode`, which
+  writes `.vscode/mcp.json` in the new VS Code-native shape (`servers` key,
+  `"type": "stdio"` per entry) so VS Code's own MCP client / Copilot Chat
+  agent mode can also call keryx's tools directly. See
+  `vscode-extension/README.md`.
+- **Standalone binaries + Homebrew tap.** `keryx` now ships as 4
+  self-contained compiled binaries (darwin-arm64/x64, linux-x64/arm64),
+  attached to every GitHub Release — no bun/git/node required to install
+  or run. `scripts/install-binary.sh` fetches and installs the binary for
+  the current platform in one line; a Homebrew tap
+  (`MrCipherSmith/homebrew-keryx`) is also available. Fixed two real bugs
+  found while verifying this: `web-tree-sitter` was silently falling back
+  to the deterministic parser in every compiled binary (now a real parse,
+  scoped fix to `gdgraph.treesitter`), and cross-platform compiles were
+  failing because `@opentui/core`'s native package only installs for the
+  build machine's own OS/arch by default.
+- **Native OpenAI and Gemini provider adapters.** `--provider openai`
+  (needs `OPENAI_API_KEY`) now targets OpenAI's Responses API directly,
+  and `--provider gemini` (needs `GEMINI_API_KEY`, falling back to
+  `GOOGLE_API_KEY`) targets Gemini's `generateContent`/
+  `streamGenerateContent` API — both alongside the existing Anthropic
+  adapter and the 9 already-shipped OpenAI-Chat-Completions-compatible
+  providers (OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok,
+  ...), whose shared engine was extracted out of `OllamaProvider` into its
+  own module with no behavior change. Both new adapters fail closed to the
+  offline fake provider when their key is absent, exactly like the
+  existing Anthropic adapter — never constructed without a real
+  credential.
+- **MCP client: `codex-cli` elicitation handling.** A new stdio MCP client
+  (`src/mcp-client/`) lets keryx correctly answer `codex mcp-server`'s
+  approval prompts (`elicitation/create`) when running Codex as an
+  external agent, instead of the request going unanswered. This is a
+  prerequisite for the external-agent-runtime's deferred-write path; the
+  existing default `codex exec` production path is unchanged, and
+  `claude-cli` is unaffected.
+- **`skills_catalog`/`skill_load` metaproject operations.** Two new
+  operations (reachable as agent tool calls, through the Tool Registry,
+  and as MCP tools) let an agent discover and read `.metaproject/skills/`
+  content programmatically: `skills_catalog` walks the skill tree and
+  returns a structured listing (with a one-line summary derived from each
+  skill's frontmatter, or its body when frontmatter has none);
+  `skill_load` reads one specific skill by the catalog-discovered path
+  only.
+- **TUI: `/search-provider` and `/search-connect` now open interactive
+  pickers when given no arguments**, instead of printing a static text
+  list. `/search-provider` opens a 3-step wizard (select provider → enter
+  fields/credential/active-toggle → test connection); `/search-connect`
+  opens a single-step picker over already-configured providers. Both
+  forms with an explicit id (`/search-provider <id> field=value...`,
+  `/search-connect <id>`) are unchanged.
+
 ## [0.2.49] — 2026-08-20
 
 ### Added

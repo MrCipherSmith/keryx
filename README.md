@@ -41,6 +41,19 @@ keryx init --yes
 keryx gdgraph build
 ```
 
+No bun, git, or node? Install the standalone binary instead — same CLI, no
+runtime dependency:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install-binary.sh | bash
+```
+
+or via Homebrew:
+
+```bash
+brew install MrCipherSmith/keryx/keryx
+```
+
 Local-first · deterministic core · offline by default · MIT
 
 ## Why keryx

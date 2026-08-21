@@ -172,10 +172,13 @@ holds and what forking copies.
   `/theme <name>` still applies immediately without opening the picker.
   Readline / `--no-tui` supports only the immediate-apply form.
 - `/search-provider` configures and tests web search providers for `web_search`:
-  run without args to list providers, pass `provider id` plus `key=<value>` (for
-  keyed providers) to configure and validate one.
-- `/search-connect` selects which configured and tested web search provider is active:
-  run without args to list connected providers, or pass an ID to switch.
+  run with no arguments to open a 3-step interactive wizard (select provider →
+  enter fields/credential/active-toggle → test connection); pass `provider id`
+  plus `key=<value>` (for keyed providers) to configure and validate one
+  directly, unchanged.
+- `/search-connect` selects which configured and tested web search provider is
+  active: run with no arguments to open a picker over already-connected
+  providers, or pass an ID to switch directly, unchanged.
 - `/delegate <agent> <task>` hands a bounded read-only task to a vendor coding
   CLI hosted as a child agent (`keryx agents external list` for the ids). It is
   refused with a named reason when the capability is off — which is the default.
@@ -1186,15 +1189,15 @@ not just interactively.
 keryx mcp serve [--cwd <project-root>]          # stdio JSON-RPC MCP server (default transport)
 keryx mcp serve --http [--cwd <project-root>]   # isolated HTTP/SSE opt-in (localhost only)
 keryx mcp                  # alias for `mcp serve`
-keryx mcp install --runtime <cursor|claude|opencode|generic|all> [--dry-run]
-keryx mcp uninstall --runtime <cursor|claude|opencode|generic|all>
+keryx mcp install --runtime <cursor|claude|opencode|vscode|generic|all> [--dry-run]
+keryx mcp uninstall --runtime <cursor|claude|opencode|vscode|generic|all>
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `serve` (default) | `--http`, `--cwd <project-root>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `mcp serve`. |
-| `install` | `--runtime <cursor\|claude\|opencode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }` — each marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
-| `uninstall` | `--runtime <cursor\|claude\|opencode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
+| `install` | `--runtime <cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
+| `uninstall` | `--runtime <cursor\|claude\|opencode\|vscode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
 
 **codex CLI** is not a `--runtime` here — its client config is a single GLOBAL
 `~/.codex/config.toml`, not a project-local file, and it already ships its own safe,
