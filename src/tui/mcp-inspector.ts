@@ -65,6 +65,22 @@ export type ModalHandle = {
 
 export type OpenModalFn = (otui: unknown, chrome: unknown, input: OpenModalInput) => ModalHandle | undefined;
 
+/**
+ * Static, non-interactive caption mounted above each tab's rows — review
+ * finding: the Tools tab (this agent's own callable tools) and the MCP tab
+ * (client configs keryx's own server can be installed into) look similar
+ * enough to a first-time viewer that neither read as self-explanatory
+ * without one. The MCP tab in particular is easy to misread as "the MCP
+ * servers this agent is connected to" (context7, playwright, …) — it is
+ * the opposite: it is where KERYX ITSELF gets installed as one more MCP
+ * server into an editor's config, alongside whatever else that editor
+ * already has configured (surfaced per row via `otherServers`).
+ */
+const TOOLS_TAB_HEADER =
+  "Built into keryx — not from an external MCP server (keryx doesn't consume MCP servers as a client yet).";
+const MCP_TAB_HEADER_1 = "Connects/disconnects ONLY keryx's own MCP server, one editor config at a time.";
+const MCP_TAB_HEADER_2 = "Other MCP servers already configured there (context7, playwright, …) show per row, read-only.";
+
 /** Display label for a runtime id; falls back to the id itself for one this module does not know about. */
 export const RUNTIME_LABELS: Record<string, string> = {
   cursor: "Cursor",
@@ -103,10 +119,24 @@ function isActionable(id: string): boolean {
   return id !== "generic";
 }
 
+/** Rows only ever show a handful of names inline — a client with a long `mcpServers` list gets a "+N more" tail instead of an unbounded line. */
+const MAX_OTHER_SERVERS_SHOWN = 4;
+
+/** The OTHER MCP servers (context7, playwright, …) this client already has configured — read-only context, never this modal's own connect/disconnect target. Empty for `generic` (no file) or a client with no other servers. */
+function formatOtherServers(otherServers: readonly string[]): string {
+  if (otherServers.length === 0) {
+    return "";
+  }
+  const shown = otherServers.slice(0, MAX_OTHER_SERVERS_SHOWN);
+  const rest = otherServers.length - shown.length;
+  const list = rest > 0 ? `${shown.join(", ")}, +${rest} more` : shown.join(", ");
+  return `  · also has: ${list}`;
+}
+
 function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status: McpActionStatus): string {
   const mark = isSelected ? ">" : " ";
   const label = runtimeLabel(runtime.id).padEnd(20);
-  const statusText = runtime.connected ? "● connected" : "○ not connected";
+  const statusText = runtime.connected ? "● keryx connected" : "○ keryx not connected";
   let action = "";
   if (!isActionable(runtime.id)) {
     action = "  (copy snippet manually)";
@@ -119,7 +149,7 @@ function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status
   } else {
     action = runtime.connected ? "  [d] disconnect" : "  [c] connect";
   }
-  return `${mark} ${label} ${statusText}${action}`;
+  return `${mark} ${label} ${statusText}${action}${formatOtherServers(runtime.otherServers)}`;
 }
 
 export function formatMcpListLines(
@@ -203,6 +233,7 @@ export function presentMcpTools(
       return;
     }
     clearTranscriptChildren(toolsBody);
+    toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-header", content: TOOLS_TAB_HEADER }));
     if (options.tools.length === 0) {
       toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-empty", content: "No tools available." }));
       return;
@@ -218,6 +249,8 @@ export function presentMcpTools(
       return;
     }
     clearTranscriptChildren(mcpBody);
+    mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-header-1", content: MCP_TAB_HEADER_1 }));
+    mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-header-2", content: MCP_TAB_HEADER_2 }));
     if (runtimes.length === 0) {
       mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-empty", content: "No MCP client runtimes registered." }));
       return;
@@ -313,7 +346,7 @@ export function presentMcpTools(
     title: "Tools & MCP",
     tabs: [
       { id: "tools", label: "Tools" },
-      { id: "mcp", label: "MCP" },
+      { id: "mcp", label: "MCP Clients" },
     ],
     initialTab: "tools",
     footer: MCP_INSPECTOR_FOOTER,

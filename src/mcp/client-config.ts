@@ -128,6 +128,14 @@ export interface McpClientRuntime {
   // top-level field (mcpServers vs mcp). Used by uninstallMcpClient to report
   // an accurate `removed` outcome; never hardcode a single shape here.
   hasManaged(settings: Settings): boolean;
+  // Every MCP server name configured in this client's config file, `keryx`
+  // included when present — e.g. a real `.cursor/mcp.json` naming `context7`/
+  // `playwright` alongside `keryx`. This installer only ever writes/removes
+  // the single `keryx` entry (see the file header's "never clobber user
+  // config" rule); this is read-only visibility into what's already there,
+  // for `mcp-inspector.ts` to show the *actual* MCP servers a client has
+  // configured, not just this installer's own managed entry.
+  listServers(settings: Settings): string[];
 }
 
 function mcpHasManaged(settings: Settings): boolean {
@@ -142,6 +150,7 @@ function fileRuntime(id: string, relativePath: string): McpClientRuntime {
     strip: mcpStrip,
     validate: mcpValidate(id),
     hasManaged: mcpHasManaged,
+    listServers: (settings) => Object.keys(readServers(settings)),
   };
 }
 
@@ -225,6 +234,7 @@ export const OPENCODE_RUNTIME: McpClientRuntime = {
   strip: opencodeStrip,
   validate: opencodeValidate,
   hasManaged: opencodeHasManaged,
+  listServers: (settings) => Object.keys(readOpencodeMcp(settings)),
 };
 
 export const GENERIC_RUNTIME: McpClientRuntime = {
@@ -234,6 +244,7 @@ export const GENERIC_RUNTIME: McpClientRuntime = {
   strip: mcpStrip,
   validate: mcpValidate("generic"),
   hasManaged: mcpHasManaged,
+  listServers: (settings) => Object.keys(readServers(settings)),
 };
 
 // VS Code's client config is project-local `.vscode/mcp.json`, but its shape
@@ -319,6 +330,7 @@ export const VSCODE_RUNTIME: McpClientRuntime = {
   strip: vscodeStrip,
   validate: vscodeValidate,
   hasManaged: vscodeHasManaged,
+  listServers: (settings) => Object.keys(readVscodeServers(settings)),
 };
 
 export const MCP_CLIENT_RUNTIMES: McpClientRuntime[] = [
@@ -378,6 +390,13 @@ export interface McpRuntimeStatus {
   // Absolute client-config path, or null for the fileless `generic` runtime.
   filePath: string | null;
   connected: boolean;
+  // Every OTHER MCP server name this client's config already has (e.g.
+  // `context7`, `playwright`) — `keryx`'s own entry is excluded, since
+  // `connected` already reports that one. Real visibility into what "MCP" on
+  // this client actually means, distinct from this modal's own connect/
+  // disconnect action; always `[]` for `generic` (no file to read) or when
+  // the config has no `mcpServers`/`mcp`/`servers` section at all.
+  otherServers: string[];
 }
 
 // Live connect/disconnect status for MCP client runtimes, read fresh from disk
@@ -395,11 +414,12 @@ export async function mcpClientStatus(
   for (const runtime of runtimes) {
     const file = runtime.settingsPath(absoluteProjectRoot);
     if (file === null) {
-      statuses.push({ id: runtime.id, filePath: null, connected: false });
+      statuses.push({ id: runtime.id, filePath: null, connected: false, otherServers: [] });
       continue;
     }
     const settings = await readSettings(file);
-    statuses.push({ id: runtime.id, filePath: file, connected: runtime.hasManaged(settings) });
+    const otherServers = runtime.listServers(settings).filter((name) => name !== MCP_SERVER_NAME).sort();
+    statuses.push({ id: runtime.id, filePath: file, connected: runtime.hasManaged(settings), otherServers });
   }
   return statuses;
 }

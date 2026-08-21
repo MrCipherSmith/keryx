@@ -9,9 +9,9 @@ const TOOLS: readonly NormalizedToolDefinition[] = [
 ];
 
 const RUNTIMES: readonly McpRuntimeStatus[] = [
-  { id: "cursor", filePath: "/proj/.cursor/mcp.json", connected: true },
-  { id: "claude", filePath: "/proj/.mcp.json", connected: false },
-  { id: "generic", filePath: null, connected: false },
+  { id: "cursor", filePath: "/proj/.cursor/mcp.json", connected: true, otherServers: ["context7", "playwright"] },
+  { id: "claude", filePath: "/proj/.mcp.json", connected: false, otherServers: [] },
+  { id: "generic", filePath: null, connected: false, otherServers: [] },
 ];
 
 test("formatToolsListLines renders name, risk, and description; empty says so", () => {
@@ -28,12 +28,24 @@ test("formatMcpListLines marks the selected row, shows status, and offers the op
   const lines = formatMcpListLines(RUNTIMES, 0, { kind: "idle" });
   expect(lines[0]?.startsWith(">")).toBe(true);
   expect(lines[0]).toContain("Cursor");
-  expect(lines[0]).toContain("● connected");
+  expect(lines[0]).toContain("● keryx connected");
   expect(lines[0]).toContain("[d] disconnect");
   expect(lines[1]?.startsWith(" ")).toBe(true);
   expect(lines[1]).toContain("Claude Code");
-  expect(lines[1]).toContain("○ not connected");
+  expect(lines[1]).toContain("○ keryx not connected");
   expect(lines[1]).toContain("[c] connect");
+});
+
+test("formatMcpListLines surfaces the OTHER MCP servers a client already has configured, capped and never for keryx itself", () => {
+  const lines = formatMcpListLines(RUNTIMES, 0, { kind: "idle" });
+  expect(lines[0]).toContain("also has: context7, playwright");
+  expect(lines[1]).not.toContain("also has:"); // claude has none configured
+  const manyServers = formatMcpListLines(
+    [{ id: "cursor", filePath: "/p/.cursor/mcp.json", connected: false, otherServers: ["a", "b", "c", "d", "e", "f"] }],
+    0,
+    { kind: "idle" },
+  );
+  expect(manyServers[0]).toContain("also has: a, b, c, d, +2 more");
 });
 
 test("formatMcpListLines never offers a connect/disconnect action for generic", () => {
@@ -112,7 +124,7 @@ function findRow(rows: FakeRow[], id: string): FakeRow | undefined {
   return rows.find((r) => r.id === id);
 }
 
-test("Tools tab renders one clickable-free row per tool, in order", () => {
+test("Tools tab opens with an explanatory caption, then one clickable-free row per tool, in order", () => {
   let active = "tools";
   const body = fakeBody();
   presentMcpTools(
@@ -125,13 +137,14 @@ test("Tools tab renders one clickable-free row per tool, in order", () => {
     { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
   );
   const rows = body.rows();
-  expect(rows).toHaveLength(2);
-  expect(rows[0]?.content).toContain("gdgraph_affected");
-  expect(rows[0]?.onMouseDown).toBeUndefined();
-  expect(rows[1]?.content).toContain("shell_exec");
+  expect(rows).toHaveLength(3); // caption + 2 tools
+  expect(findRow(rows, "mcp-tools-header")?.content).toContain("Built into keryx");
+  expect(rows[1]?.content).toContain("gdgraph_affected");
+  expect(rows[1]?.onMouseDown).toBeUndefined();
+  expect(rows[2]?.content).toContain("shell_exec");
 });
 
-test("MCP tab renders one clickable row per runtime, marking the selection", () => {
+test("MCP tab opens with a two-line caption, then one clickable row per runtime, marking the selection", () => {
   let active = "mcp";
   const body = fakeBody();
   presentMcpTools(
@@ -144,9 +157,12 @@ test("MCP tab renders one clickable row per runtime, marking the selection", () 
     { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
   );
   const rows = body.rows();
-  expect(rows).toHaveLength(3);
+  expect(rows).toHaveLength(5); // 2 caption lines + 3 runtimes
+  expect(findRow(rows, "mcp-mcp-header-1")?.content).toContain("ONLY keryx's own MCP server");
+  expect(findRow(rows, "mcp-mcp-header-2")?.content).toContain("read-only");
   expect(findRow(rows, "mcp-row-cursor")?.content).toContain(">");
   expect(findRow(rows, "mcp-row-cursor")?.content).toContain("[d] disconnect");
+  expect(findRow(rows, "mcp-row-cursor")?.content).toContain("also has: context7, playwright");
   expect(findRow(rows, "mcp-row-cursor")?.onMouseDown).toBeTypeOf("function");
   expect(findRow(rows, "mcp-row-claude")?.content).toContain("[c] connect");
   expect(findRow(rows, "mcp-row-generic")?.content).toContain("copy snippet manually");
