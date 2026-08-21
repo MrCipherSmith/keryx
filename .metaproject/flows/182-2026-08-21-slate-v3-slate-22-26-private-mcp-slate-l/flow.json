@@ -3,17 +3,46 @@
   "id": "182",
   "slug": "slate-v3-slate-22-26-private-mcp-slate-l",
   "title": "Slate v3 (SLATE-22..26): private MCP slate lifecycle for external hands",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-21T10:11:00.087Z",
-  "updatedAt": "2026-08-21T12:23:49.948Z",
+  "updatedAt": "2026-08-21T14:53:24.200Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5751b5481873cf73b4b6979c1941cfde3d39223870ab738d9078daed4f68cb22",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-21T14:52:20.735Z",
+      "note": "Filesystem-level test in slate-tools.test.ts (AC1 describe block) proves cross-hand isolation; F-001's kind-validation fix closes the second traversal vector the initial AC1 test missed. PR #377."
+    },
+    "AC2": {
+      "at": "2026-08-21T14:52:20.909Z",
+      "note": "slate.open idempotency test passes; unaffected by later fix rounds. PR #377."
+    },
+    "AC3": {
+      "at": "2026-08-21T14:52:21.068Z",
+      "note": "Anchors-verbatim test passes; confirmed in code (handleSlateOpen never enriches). PR #377."
+    },
+    "AC4": {
+      "at": "2026-08-21T14:52:21.245Z",
+      "note": "origin/trust unspoofable test passes; independently re-traced in code (server-set object literal, no params spread). PR #377."
+    },
+    "AC5": {
+      "at": "2026-08-21T14:52:21.420Z",
+      "note": "No propose without workspaceId; fixed in T5 (SLATE-16 wiring) with positive+negative path tests. PR #377."
+    },
+    "AC6": {
+      "at": "2026-08-21T14:52:21.590Z",
+      "note": "Idle-TTL reclaim, no daemon; F-007 fix adds per-id error isolation to the same reclaim loop. PR #377."
+    },
+    "AC7": {
+      "at": "2026-08-21T14:52:21.770Z",
+      "note": "Non-goal preservation structurally verified via AC1's isolation guarantee, now covering both the externalSessionId (T6) and kind (T7/F-001) traversal vectors. PR #377."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/377"
   },
   "tasks": [
     {
@@ -190,6 +219,69 @@
       "at": "2026-08-21T12:23:49.948Z",
       "event": "task-done",
       "detail": "T7: Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)"
+    },
+    {
+      "at": "2026-08-21T14:52:06.846Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/377 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-21T14:52:20.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Filesystem-level test in slate-tools.test.ts (AC1 describe block) proves cross-hand isolation; F-001's kind-validation fix closes the second traversal vector the initial AC1 test missed. PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:20.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: slate.open idempotency test passes; unaffected by later fix rounds. PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:21.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Anchors-verbatim test passes; confirmed in code (handleSlateOpen never enriches). PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:21.245Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: origin/trust unspoofable test passes; independently re-traced in code (server-set object literal, no params spread). PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:21.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: No propose without workspaceId; fixed in T5 (SLATE-16 wiring) with positive+negative path tests. PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:21.590Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Idle-TTL reclaim, no daemon; F-007 fix adds per-id error isolation to the same reclaim loop. PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:21.770Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Non-goal preservation structurally verified via AC1's isolation guarantee, now covering both the externalSessionId (T6) and kind (T7/F-001) traversal vectors. PR #377."
+    },
+    {
+      "at": "2026-08-21T14:52:30.444Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-21T14:52:33.256Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-21T14:53:14.143Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/377 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-21T14:53:21.731Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-21T14:53:24.200Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

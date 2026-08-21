@@ -137,6 +137,34 @@
   All six findings confirmed genuinely fixed, not just reported fixed.
   Phase 3 (verification + review) complete. Ready for Phase 4 (completion
   choice).
+- 2026-08-21T12:40:00.000Z - user selected completion outcome A (create PR,
+  review, merge into recorded base branch). Committed all 17 files
+  (implementation + flow package) to slate-v3-external-hand-mcp
+  (commit 59562e6). PR opened: https://github.com/MrCipherSmith/keryx/pull/377,
+  base=main (the recorded base branch for this flow).
 - 2026-08-21T11:55:32.214Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-21T11:57:41.901Z - task-added: T7: Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)
 - 2026-08-21T12:23:49.948Z - task-done: T7: Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)
+- 2026-08-21T14:50:00.000Z - CI green (13/13 checks: typecheck-and-tests,
+  standard-baseline, standard-pr, metrics-contract, macOS/linux real-host
+  legs, opentui native x4 platforms, mkdocs, vscode-extension). PR
+  mergeable=MERGEABLE. Review/fix loop attempt count: the two adversarial
+  review rounds already completed pre-PR (code-verifier + review-security-code
+  + review-logic, both applying real fixes) stand as this PR's review
+  evidence — no new findings surfaced by CI, nothing changed since the last
+  review round to warrant re-running review-orchestrator from scratch.
+- 2026-08-21T14:50:53Z - merged PR #377 into main (merge commit 3d0d4b9d).
+  Verified via gh pr view: state=MERGED, mergedAt confirmed.
+- 2026-08-21T14:52:06.846Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/377 (warning: PR is not a draft)
+- 2026-08-21T14:52:20.735Z - ac-confirmed: AC1: Filesystem-level test in slate-tools.test.ts (AC1 describe block) proves cross-hand isolation; F-001's kind-validation fix closes the second traversal vector the initial AC1 test missed. PR #377.
+- 2026-08-21T14:52:20.909Z - ac-confirmed: AC2: slate.open idempotency test passes; unaffected by later fix rounds. PR #377.
+- 2026-08-21T14:52:21.068Z - ac-confirmed: AC3: Anchors-verbatim test passes; confirmed in code (handleSlateOpen never enriches). PR #377.
+- 2026-08-21T14:52:21.245Z - ac-confirmed: AC4: origin/trust unspoofable test passes; independently re-traced in code (server-set object literal, no params spread). PR #377.
+- 2026-08-21T14:52:21.420Z - ac-confirmed: AC5: No propose without workspaceId; fixed in T5 (SLATE-16 wiring) with positive+negative path tests. PR #377.
+- 2026-08-21T14:52:21.590Z - ac-confirmed: AC6: Idle-TTL reclaim, no daemon; F-007 fix adds per-id error isolation to the same reclaim loop. PR #377.
+- 2026-08-21T14:52:21.770Z - ac-confirmed: AC7: Non-goal preservation structurally verified via AC1's isolation guarantee, now covering both the externalSessionId (T6) and kind (T7/F-001) traversal vectors. PR #377.
+- 2026-08-21T14:52:30.444Z - completing
+- 2026-08-21T14:52:33.256Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-08-21T14:53:14.143Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/377 (warning: PR is not a draft)
+- 2026-08-21T14:53:21.731Z - completing
+- 2026-08-21T14:53:24.200Z - done: all gates passed
