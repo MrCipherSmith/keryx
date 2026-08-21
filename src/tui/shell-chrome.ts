@@ -167,10 +167,12 @@ export function wrappedLineCount(text: string, width: number): number {
  * (`commands/agent-commands.ts`) but over the chrome's OWN list, because the
  * chrome may be mounted with a mode's subset. The real shells override it via
  * {@link ShellChromeOptions.filterCommands} with the mode-aware registry (S4);
- * this fallback keeps the chrome mountable on its own in tests. Pure.
+ * this fallback keeps the chrome mountable on its own in tests. Not trimmed —
+ * see `filterCommands`'s own note on why a trailing space must never match.
+ * Pure.
  */
 function prefixFilter(commands: readonly SlashCommandOption[], query: string): SlashCommandOption[] {
-  const q = query.trim().toLowerCase();
+  const q = query.toLowerCase();
   if (!q.startsWith("/")) {
     return [];
   }
@@ -894,6 +896,23 @@ export async function createShellChrome(
     }
     if (key.name === "escape") {
       closeMenu();
+      key.preventDefault();
+      key.stopPropagation();
+      return;
+    }
+    // Tab ACCEPTS the highlighted command into the composer instead of running
+    // it — unlike Enter (`ITEM_SELECTED` below), which submits immediately.
+    // Commands that take a required text argument (`/goal <text>`, `/delegate
+    // <agent> <task>`, …) have no way to receive one from Enter-select alone;
+    // Tab hands the keyboard back to the composer, pre-filled with `<name> `,
+    // so the user can keep typing right where the dropdown left off.
+    if (key.name === "tab") {
+      const opt = menu.getSelectedOption();
+      if (opt !== null) {
+        input.value = `${opt.name} `;
+      }
+      hideMenu();
+      input.focus();
       key.preventDefault();
       key.stopPropagation();
       return;

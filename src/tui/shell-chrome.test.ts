@@ -427,6 +427,35 @@ otuiTest("AC3: `/` opens the menu, printable keys filter it, Esc closes it and r
   h.destroy();
 });
 
+otuiTest("Tab ACCEPTS the highlighted command into the composer instead of running it", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+
+  // Filter down to `/goal` — a command with a required text argument that
+  // Enter-select (`ITEM_SELECTED`) alone has no way to supply.
+  await h.mockInput.pressKeys(["/", "g", "o", "a", "l"]);
+  await h.flush();
+  expect(h.chrome.input.value).toBe("/goal");
+  expect(h.chrome.menu.visible).toBe(true);
+  expect(h.chrome.menuActive()).toBe(true);
+
+  h.mockInput.pressTab();
+  await h.flush();
+
+  // The dropdown closes and hands the keyboard back — WITHOUT submitting —
+  // pre-filled so the user can keep typing the goal text right away.
+  expect(h.chrome.menu.visible).toBe(false);
+  expect(h.chrome.menuActive()).toBe(false);
+  expect(h.chrome.textarea.focused).toBe(true);
+  expect(h.chrome.input.value).toBe("/goal ");
+
+  // Genuinely continuable: further typing lands after the accepted command.
+  await h.mockInput.pressKeys(["h", "i"]);
+  await h.flush();
+  expect(h.chrome.input.value).toBe("/goal hi");
+  h.destroy();
+});
+
 otuiTest("hideMenu: dropping the dropdown for an overlay keeps the draft and re-arms a FOCUSED reopen", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });

@@ -116,7 +116,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/new", description: "Start a new session (old kept on disk)", modes: BOTH },
   {
     name: "/goal",
-    description: "Deterministically start a goal — /goal <text> [--workspace <id>]",
+    description: "Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]",
     // SLATE-15 (flow 161): deterministic slate-open entry, a TUI/readline
     // agent-mode concept (mirrors /expand, /think, /copy) — chat mode has no
     // slate/tools at all, so /goal has no chat-mode meaning.
@@ -269,10 +269,14 @@ export function commandsForMode(mode: ShellMode): SlashCommandOption[] {
 /**
  * Filter `mode`'s commands by a composer `query`. Returns `[]` when `query` is
  * not a slash query; `/` alone returns ALL of the mode's commands; otherwise a
- * case-insensitive prefix match on the name (without the leading `/`). Pure.
+ * case-insensitive prefix match on the name (without the leading `/`). Not
+ * trimmed: a query ending in a real trailing space (the user has finished
+ * typing the command token and moved on to arguments) never matches — a
+ * trimmed query would still equal the bare command name and keep the dropdown
+ * open. Pure.
  */
 export function filterCommands(query: string, mode: ShellMode): SlashCommandOption[] {
-  const q = query.trim().toLowerCase();
+  const q = query.toLowerCase();
   if (!q.startsWith("/")) {
     return [];
   }
