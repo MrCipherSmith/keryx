@@ -4,6 +4,7 @@ coverage/
 .site/
 .DS_Store
 .tmp-*/
+*.vsix
 
 # Agent-harness scratch space. `.claude/worktrees/` holds git worktrees — full
 # checkouts of this repository — which must never be committed or source-indexed
