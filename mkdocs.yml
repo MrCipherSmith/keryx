@@ -82,6 +82,7 @@ nav:
       - Drive keryx from a bot: guides/drive-keryx-remotely.md
       - Review with a durable record: guides/review-with-a-record.md
       - Shared Agent Context (experimental): guides/shared-agent-context.md
+      - Slate for external agents: guides/slate.md
       - Run keryx in CI: guides/run-in-ci.md
   - Architecture: architecture.md
   - The agent harness: harness.md
