@@ -151,6 +151,8 @@ export function parseInProgressFlows(stdout: string): FlowListEntry[] {
 
 export interface SacProposalEntry {
   readonly type: string;
+  readonly workspaceId: string;
+  readonly proposalId: string;
   readonly [key: string]: unknown;
 }
 
@@ -170,7 +172,13 @@ export function parsePendingProposals(stdout: string): SacProposalEntry[] {
 
 export type NeedsAttentionItem =
   | { readonly kind: "flow"; readonly label: string; readonly description: string; readonly flowId: string }
-  | { readonly kind: "sac-proposal"; readonly label: string; readonly description: string }
+  | {
+      readonly kind: "sac-proposal";
+      readonly label: string;
+      readonly description: string;
+      readonly workspaceId: string;
+      readonly proposalId: string;
+    }
   | { readonly kind: "empty"; readonly label: string; readonly description: string };
 
 /**
@@ -202,6 +210,8 @@ export function needsAttentionItems(
       kind: "sac-proposal",
       label: "Pending SAC proposal",
       description: proposal.type,
+      workspaceId: proposal.workspaceId,
+      proposalId: proposal.proposalId,
     });
   }
 
@@ -221,4 +231,26 @@ export function needsAttentionItems(
 /** True when neither flow nor sac has anything actionable — the AC5 empty state. */
 export function isNeedsAttentionEmpty(items: readonly NeedsAttentionItem[]): boolean {
   return items.length === 1 && items[0]?.kind === "empty";
+}
+
+/** A command line to type into an integrated terminal for one item's click. */
+export interface TerminalAction {
+  readonly text: string;
+  /** false leaves the line typed but un-submitted — for a proposal, `--decision`
+   * still needs a real value (accepted/rejected/dismissed) the human picks;
+   * auto-running the bare command would just fail. */
+  readonly execute: boolean;
+}
+
+/** The click action for one Needs Your Attention item, or undefined for the
+ * empty state (nothing to act on). */
+export function needsAttentionAction(item: NeedsAttentionItem): TerminalAction | undefined {
+  switch (item.kind) {
+    case "flow":
+      return { text: `keryx flow status ${item.flowId}`, execute: true };
+    case "sac-proposal":
+      return { text: `keryx workspace review ${item.workspaceId} ${item.proposalId} --decision `, execute: false };
+    case "empty":
+      return undefined;
+  }
 }

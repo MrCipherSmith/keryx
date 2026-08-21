@@ -20,7 +20,8 @@ import {
   shouldPromptInit,
   shouldRevealAfterInit,
 } from "./status-logic";
-import { refreshAll, registerKeryxTreeViews, type KeryxTreeProviders } from "./tree-view";
+import { refreshAll, registerKeryxTreeViews, RUN_IN_TERMINAL_COMMAND, type KeryxTreeProviders } from "./tree-view";
+import type { TerminalAction } from "./tree-view-logic";
 import { checkKeryxVersion, versionWarningMessage } from "./version-logic";
 
 // The extension's declared minimum keryx version (spec.md §3). Advisory
@@ -138,7 +139,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   });
 
-  context.subscriptions.push(initCommand, refreshCommand);
+  // Backs every clickable tree item (Recent Turns resume, Needs Your
+  // Attention flow status / proposal review) — a real terminal, not a
+  // second, weaker copy of what the CLI already does. A fresh terminal per
+  // click, deliberately: reusing one risks interleaving a `--decision `
+  // prefix (execute: false, left for the human to finish typing) with
+  // whatever else that terminal was mid-command on.
+  const runInTerminal = vscode.commands.registerCommand(RUN_IN_TERMINAL_COMMAND, (action: TerminalAction) => {
+    const terminal = vscode.window.createTerminal({ name: "Keryx", cwd: workspaceRoot() });
+    terminal.show();
+    terminal.sendText(action.text, action.execute);
+  });
+
+  context.subscriptions.push(initCommand, refreshCommand, runInTerminal);
 
   const cwd = workspaceRoot();
   if (!cwd) {

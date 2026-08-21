@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import { runKeryx } from "./keryx-cli";
 import { interpretStatus } from "./status-logic";
 import {
+  needsAttentionAction,
   needsAttentionItems,
   parseInProgressFlows,
   parsePendingProposals,
@@ -22,7 +23,18 @@ import {
   type NeedsAttentionItem,
   type ProjectNodeItem,
   type RecentTurnNodeItem,
+  type TerminalAction,
 } from "./tree-view-logic";
+
+/** Shared command id `extension.ts` registers — opens (or reuses) an
+ * integrated terminal and types (optionally runs) a command line. Exported
+ * so `extension.ts` can wire the handler without either module owning both
+ * the id string and the registration. */
+export const RUN_IN_TERMINAL_COMMAND = "keryx.runInTerminal";
+
+function runInTerminalCommand(title: string, action: TerminalAction): vscode.Command {
+  return { command: RUN_IN_TERMINAL_COMMAND, title, arguments: [action] };
+}
 
 async function safeRunKeryx(args: readonly string[], cwd: string): Promise<string> {
   try {
@@ -84,6 +96,13 @@ export class KeryxProjectsTreeProvider implements vscode.TreeDataProvider<vscode
       const treeItem = new vscode.TreeItem(item.label, vscode.TreeItemCollapsibleState.None);
       treeItem.description = item.description;
       treeItem.resourceUri = vscode.Uri.file(item.path);
+      // A new window, not the current one — clicking a project in this list
+      // is "go look at that project", not "replace what I'm looking at now".
+      treeItem.command = {
+        command: "vscode.openFolder",
+        title: "Open Project",
+        arguments: [vscode.Uri.file(item.path), { forceNewWindow: true }],
+      };
       return treeItem;
     });
   }
@@ -115,6 +134,7 @@ export class KeryxRecentTurnsTreeProvider implements vscode.TreeDataProvider<vsc
       const treeItem = new vscode.TreeItem(item.label, vscode.TreeItemCollapsibleState.None);
       treeItem.description = item.description;
       treeItem.id = item.sessionId;
+      treeItem.command = runInTerminalCommand("Resume", { text: `keryx shell -r ${item.sessionId}`, execute: true });
       return treeItem;
     });
   }
@@ -156,6 +176,10 @@ export class KeryxNeedsAttentionTreeProvider implements vscode.TreeDataProvider<
       treeItem.description = item.description;
       if (item.kind === "empty") {
         treeItem.iconPath = new vscode.ThemeIcon("info");
+      }
+      const action = needsAttentionAction(item);
+      if (action) {
+        treeItem.command = runInTerminalCommand(item.kind === "flow" ? "Flow status" : "Review proposal", action);
       }
       return treeItem;
     });
