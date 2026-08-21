@@ -15,8 +15,9 @@ review pipeline a keryx-native session already uses.
     This covers the external-hand surface only — `slate.open` /
     `slate.writeSeed` / `slate.close` (module `slate`, `src/mcp/tools.ts`,
     storage in `src/session/external-slate.ts`). keryx's own internal Slate
-    lifecycle (Anchors/Course/Seeds inside a `keryx shell` turn, `/goal`,
-    `workspace catch-up`) predates this and isn't its own guide yet — see
+    lifecycle (Anchors/Course/Seeds inside a `keryx shell` turn) predates
+    this — see [`/goal`](goal.md) for the deterministic-start / autonomous-
+    continuation entry point, or
     [`docs/requirements/slate/`](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/slate)
     for the full spec (SLATE-1…21 shipped, this page covers SLATE-22…26).
 

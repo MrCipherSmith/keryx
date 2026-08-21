@@ -247,15 +247,15 @@ runtime re-ingestion of raw receipts/outcomes is still planned — see
 ## Autonomous binding on an action-intent turn (Slate v2)
 
 An action-intent turn in `keryx shell`/TUI/`harness run` — or an explicit
-`/goal <text> [--workspace <id>]` (`harness run --goal ... [--workspace
-<id>]` non-interactively) — now resolves-or-creates its workspace binding
-automatically, by the same tool-calling judgment `ask_user`/`spawn_subagent`
-already use (no new similarity/embedding engine), and re-evaluates that
-binding mid-session if the topic shifts. On completion it dispatches its own
-wrap-up proposal without a manual `propose` call. This is still `source:
-"session"` under the hood, not a new propose source — see the Flow-wrap-up
-note above. Review/accept is unaffected: still strictly human, still gated
-by `confirm-review`.
+[`/goal <text> [--workspace <id>] [--auto [N]]`](./goal.md) (`harness run
+--goal ... [--workspace <id>]` non-interactively) — now resolves-or-creates
+its workspace binding automatically, by the same tool-calling judgment
+`ask_user`/`spawn_subagent` already use (no new similarity/embedding
+engine), and re-evaluates that binding mid-session if the topic shifts. On
+completion it dispatches its own wrap-up proposal without a manual
+`propose` call. This is still `source: "session"` under the hood, not a new
+propose source — see the Flow-wrap-up note above. Review/accept is
+unaffected: still strictly human, still gated by `confirm-review`.
 
 ## Not shipped (do not treat as current)
 
