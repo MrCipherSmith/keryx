@@ -69,7 +69,7 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
-import { openMcpTools } from "./mcp-inspector";
+import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
@@ -3798,6 +3798,7 @@ export async function launchTuiAgentShell(opts: {
           isFlows: isFlowsCommand(line),
           isWorkspace: isWorkspaceCommand(line),
           isReview: isReviewCommand(line),
+          isMcp: isMcpToolsCommand(line),
         });
         switch (decision) {
           case "exit": {
@@ -3903,6 +3904,10 @@ export async function launchTuiAgentShell(opts: {
           }
           case "review": {
             showReview();
+            return;
+          }
+          case "mcp": {
+            showTools();
             return;
           }
           case "deferred": {
@@ -4172,6 +4177,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewCommand(command.name)) {
           showReview();
+          return;
+        }
+        if (isMcpToolsCommand(command.name)) {
+          showTools();
           return;
         }
         if (command.name === "/copy") {

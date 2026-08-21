@@ -6,6 +6,7 @@ const base = {
   isFlows: false,
   isWorkspace: false,
   isReview: false,
+  isMcp: false,
 };
 
 test("classifyBusyDispatch: /exit routes to exit", () => {
@@ -104,6 +105,17 @@ test("classifyBusyDispatch: isReview line routes to review", () => {
       isReview: true,
     }),
   ).toBe("review");
+});
+
+test("classifyBusyDispatch: isMcp line routes to mcp", () => {
+  expect(
+    classifyBusyDispatch({
+      line: "/mcp",
+      commandName: undefined,
+      ...base,
+      isMcp: true,
+    }),
+  ).toBe("mcp");
 });
 
 test("classifyBusyDispatch: unrecognized slash command routes to deferred", () => {

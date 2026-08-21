@@ -147,6 +147,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    name: "/mcp",
+    description: "Show available tools and MCP client connect status",
+    // TUI-only, same reasoning as /review: the sidebar click and the
+    // Tools/MCP modal (with its [c]/[d]/[y] connect/disconnect) both need
+    // the OpenTUI surface.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,

@@ -26,6 +26,7 @@ export type BusyDispatchTarget =
   | "flows"
   | "workspace"
   | "review"
+  | "mcp"
   | "think"
   | "expand"
   | "copy"
@@ -45,8 +46,9 @@ export function classifyBusyDispatch(params: {
   isFlows: boolean;
   isWorkspace: boolean;
   isReview: boolean;
+  isMcp: boolean;
 }): BusyDispatchTarget {
-  const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview } = params;
+  const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp } = params;
   if (commandName === "/exit") return "exit";
   if (commandName === "/help") return "help";
   if (commandName === "/interrupt") return "interrupt";
@@ -56,11 +58,12 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/expand") return "expand";
   if (commandName === "/copy") return "copy";
   if (commandName === "/mode") return "mode";
-  const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview;
+  const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";
   if (isBusyReadonlyCommand && isWorkspace) return "workspace";
   if (isBusyReadonlyCommand && isReview) return "review";
+  if (isBusyReadonlyCommand && isMcp) return "mcp";
   if (commandName !== undefined || line.startsWith("/")) return "deferred";
   return "not-a-command";
 }

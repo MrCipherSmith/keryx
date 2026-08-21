@@ -23,6 +23,13 @@ export const MCP_INSPECTOR_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
+export const MCP_TOOLS_COMMAND = "/mcp";
+
+export function isMcpToolsCommand(line: string): boolean {
+  const token = line.trim().split(/\s+/)[0] ?? "";
+  return token === MCP_TOOLS_COMMAND;
+}
+
 export type ModalTab = { id: string; label: string };
 
 export type OpenModalInput = {

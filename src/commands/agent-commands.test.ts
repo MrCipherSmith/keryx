@@ -39,6 +39,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/mcp",
     "/compact",
     "/theme",
     "/mode",
@@ -111,6 +112,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/mcp",
     "/compact",
     "/theme",
     "/mode",
@@ -214,6 +216,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/mcp",
     "/compact",
     "/theme",
     "/mode",
@@ -253,7 +256,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/copy",
     "/compact",
   ]);
-  expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mode"]);
+  expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review"]);
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual([
