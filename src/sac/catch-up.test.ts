@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { buildCatchUp } from "./catch-up";
+import { proposalNotePath } from "./proposal-evidence";
 import { ProposalLifecycleService } from "./proposal-lifecycle";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import { createTrustedWrapUpAuthority } from "./trusted-wrap-up";
@@ -248,6 +249,36 @@ test("AC2: one item per category lands in its own section with the right discrim
 
   const acrossSections = [...sessionIds(report.blocked), ...sessionIds(report.unboundCandidates), ...sessionIds(report.unknown)];
   expect(new Set(acrossSections).size).toBe(acrossSections.length);
+});
+
+test("a proposal item carries what was actually proposed — kind, author, and createdAt from the real proposal record", async () => {
+  const cwd = await tempCwd("keryx-catchup-content-");
+  await proposeInWorkspace(cwd, "workspace-content", "proposal-content-1");
+
+  const report = await buildCatchUp({ cwd });
+  const item = report.proposals.find((entry) => entry.proposalId === "proposal-content-1");
+
+  expect(item).toBeDefined();
+  expect(item?.kind).toBe("follow-up");
+  expect(typeof item?.author).toBe("string");
+  expect(item?.author.length).toBeGreaterThan(0);
+  expect(item?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  // No `keryx workspace propose --note` was given — nothing to fabricate.
+  expect(item?.note).toBeUndefined();
+});
+
+test("a proposal item's note is the real propose-time sidecar note, when one was given", async () => {
+  const cwd = await tempCwd("keryx-catchup-note-");
+  await proposeInWorkspace(cwd, "workspace-note", "proposal-note-1");
+  await writeFile(
+    proposalNotePath(cwd, "workspace-note", "proposal-note-1"),
+    "Switching the retry backoff to exponential.",
+  );
+
+  const report = await buildCatchUp({ cwd });
+  const item = report.proposals.find((entry) => entry.proposalId === "proposal-note-1");
+
+  expect(item?.note).toBe("Switching the retry backoff to exponential.");
 });
 
 test("an ordinary interactive session that never opened a slate is silently excluded from every category, never surfaced as 'unknown'", async () => {

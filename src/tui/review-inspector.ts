@@ -58,7 +58,7 @@ const TYPE_LABEL: Record<CatchUpItem["type"], string> = {
 function summarizeReviewItem(item: CatchUpItem): string {
   switch (item.type) {
     case "proposal":
-      return `${item.proposalId} in ${item.workspaceId}${item.fresh ? "" : " (stale)"}`;
+      return `${item.kind} ${item.proposalId} in ${item.workspaceId}${item.fresh ? "" : " (stale)"}`;
     case "blocked":
       return `${item.sessionId} — ${item.terminalState.reason}`;
     case "unbound-candidate":
@@ -84,7 +84,11 @@ function describeReviewItem(item: CatchUpItem): string[] {
       return [
         `Proposal   ${item.proposalId}`,
         `Workspace  ${item.workspaceId}`,
+        `Kind       ${item.kind}`,
+        `Author     ${item.author}`,
+        `Created    ${item.createdAt}`,
         `Evidence   ${item.fresh ? "fresh" : "stale — evidence has drifted since this proposal was created; re-run wrap-up before deciding"}`,
+        ...(item.note !== undefined ? ["", `Note       ${item.note}`] : []),
         "",
         `Reject/dismiss from a terminal: keryx workspace review ${item.workspaceId} ${item.proposalId} --decision <rejected|dismissed>`,
       ];

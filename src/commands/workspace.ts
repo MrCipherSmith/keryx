@@ -274,7 +274,8 @@ function printHelp(): void {
 function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): string {
   const sections: string[] = [];
   sections.push(renderSection("Pending proposals", report.proposals, (item) =>
-    `- Accept, reject, or dismiss proposal ${item.proposalId} in workspace ${item.workspaceId}? ` +
+    `- Accept, reject, or dismiss ${item.kind} proposal ${item.proposalId} in workspace ${item.workspaceId}` +
+    `${item.note !== undefined ? `: "${item.note}"` : ""}? ` +
     `Recommendation: ${item.fresh ? "evidence is fresh — review now (`keryx workspace review " + item.workspaceId + " " + item.proposalId + " --decision <accepted|rejected|dismissed>`)" : "evidence has drifted since this proposal was created — treat as stale, re-run wrap-up before deciding"}.`));
   sections.push(renderSection("Blocked sessions (stopped unattended)", report.blocked, (item) =>
     `- Session ${item.sessionId} stopped unattended (${item.terminalState.reason}) at ${item.terminalState.occurredAt}. Resume it, or archive and move on? ` +

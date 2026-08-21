@@ -72,7 +72,10 @@ describe("createRealMemoryOwnerWriter.persist", () => {
 
     const written = await readFile(path.join(cwd, ".metaproject", "memory", "task-notes", "sac-proposal-a.md"), "utf8");
     expect(written).toContain("Type: task-note");
-    expect(written).toContain("Status: draft");
+    // Written only after an owner/editor has already accepted the proposal —
+    // the entry must not claim "draft" while its own body says "accepted by
+    // a reviewer".
+    expect(written).toContain("Status: accepted");
     expect(written).toContain("WorktreePort is the real create/remove/merge seam.");
     expect(written).toContain("./.metaproject/workspaces/workspace-a/session-evidence/session-a.md");
   });
