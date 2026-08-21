@@ -5,6 +5,56 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.53] — 2026-08-21
+
+### Added
+
+- **`/goal --auto [N]`: bounded autonomous continuation (SLATE-27).**
+  `/goal` was strictly one-shot: it opened the Slate, bound a SAC workspace,
+  ran exactly one turn, and stopped — whether the goal was actually achieved
+  was left entirely to the model's own narrative. `--auto` (default 8
+  rounds, or an explicit cap) now re-drives the turn in a bounded loop,
+  auto-provisioning a Task Manager flow as the durable "is this done" record
+  when none is bound, and — before the final stop — dispatches one
+  independent `spawn_subagent` verifier call that checks the claimed outcome
+  against the repository instead of trusting the model's own "I'm done."
+  On a rejected verdict with rounds remaining, it reopens for exactly one
+  more round. The armed round budget lives only on the in-memory session
+  object, never in `slate.json`, so a forked or resumed session never
+  silently inherits an unattended loop. Guide: `docs/docs/guides/goal.md`.
+  Drawn from a 13-competitor survey of comparable mechanisms in other
+  coding-agent CLIs — `docs/requirements/goal-continuation/`.
+- **Slate v3: private MCP slate lifecycle for external hands (SLATE-22..26).**
+  Three new MCP tools — `slate.open`/`slate.writeSeed`/`slate.close` — let
+  any MCP-connected external harness (Claude Code, Codex, or anything else
+  that speaks MCP) keep its own task-local working memory the way keryx's
+  own runtime already does for itself, and dispatch it into the same SAC
+  propose/review pipeline on completion. Each hand's slate is scoped to
+  `(cwd, externalSessionId)` and structurally never reachable through a
+  different id; every Seed it writes carries a server-set
+  `origin`/`trust: "external-unverified"` a reviewer can see. Local
+  stdio/in-process only — refused over HTTP. Guide: `docs/docs/guides/slate.md`.
+
+### Fixed
+
+- **TUI: the Tools/MCP modal's MCP tab was showing chat providers, not MCP
+  servers.** It listed the connect status of keryx's own outbound MCP
+  client registrations (Cursor/Claude/opencode/VS Code) but never the
+  actual MCP servers each of those clients has configured — context7,
+  Playwright, keryx-mcp itself. The tab now also surfaces each connected
+  client's other configured servers, with a caption clarifying what's shown.
+- **TUI: the `/`-command dropdown had no way to receive a required
+  argument.** Enter was the only way to act on a highlighted command, and
+  it submits immediately — commands like `/goal <text>` or `/delegate
+  <agent> <task>` had no way to get their argument from the dropdown at
+  all. **Tab** now accepts the highlighted command into the composer
+  (`<name> `) and hands the keyboard back instead of running it, so typing
+  the rest of the line just continues; Enter still runs a no-arg command
+  immediately as before. Along the way, fixed a related bug where the
+  dropdown's own filter `.trim()`'d the composer query, so a value ending
+  in a genuine trailing space still equalled the bare command name and kept
+  reopening the dropdown.
+
 ## [0.2.52] — 2026-08-21
 
 ### Added

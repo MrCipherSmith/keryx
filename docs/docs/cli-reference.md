@@ -1268,7 +1268,8 @@ Unknown options are rejected. Propose/review use
 `createHarnessProposalLifecycleService` (real owner writers). There is no
 session↔workspace auto-bind — except in `keryx shell`/TUI/`harness run`,
 where an action-intent turn resolves-or-creates one automatically by agent
-judgment (`/goal <text> [--workspace <id>]`, or `harness run --goal ...
-[--workspace <id>]`); a completed attempt dispatches its own wrap-up proposal
-without a manual `propose` call. Operator guide:
-[Shared Agent Context](./guides/shared-agent-context.md).
+judgment (`/goal <text> [--workspace <id>] [--auto [N]]`, or `harness run
+--goal ... [--workspace <id>]`); a completed attempt dispatches its own
+wrap-up proposal without a manual `propose` call. Operator guides:
+[Shared Agent Context](./guides/shared-agent-context.md),
+[`/goal`](./guides/goal.md).
