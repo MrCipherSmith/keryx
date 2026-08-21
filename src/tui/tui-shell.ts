@@ -69,6 +69,8 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
+import { openMcpTools } from "./mcp-inspector";
+import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
 import {
@@ -2063,7 +2065,13 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(sbContext);
     sidebar.add(new otui.TextRenderable(r, { id: "sb-tools-k", content: otui.t`${otui.dim("Tools")}`, marginTop: 1 }));
     sidebar.add(
-      new otui.TextRenderable(r, { id: "sb-tools-v", content: otui.t`${otui.dim(`${deps.tools.length} available`)}` }),
+      new otui.TextRenderable(r, {
+        id: "sb-tools-v",
+        content: otui.t`${otui.dim(`${deps.tools.length} available`)}`,
+        onMouseDown: () => {
+          showTools();
+        },
+      }),
     );
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
@@ -3116,6 +3124,38 @@ export async function launchTuiAgentShell(opts: {
           declineProposal: (item) => declineProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
           onResolved: () => {
             void refreshReviewSidebar();
+          },
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
+    };
+    const showTools = (): void => {
+      void (async () => {
+        const cwd = inspectorCwd();
+        const runtimes = await mcpClientStatus(cwd, mcpRuntimeIds());
+        openMcpTools(otui, chrome, {
+          tools: deps.tools.map((t) => t.definition),
+          runtimes,
+          connect: async (id) => {
+            try {
+              const report = await installMcpClient(cwd, [id]);
+              const outcome = report.outcomes[0];
+              if (outcome !== undefined && outcome.errors.length > 0) {
+                return { ok: false, message: outcome.errors.join("; ") };
+              }
+              return { ok: true };
+            } catch (error) {
+              return { ok: false, message: error instanceof Error ? error.message : String(error) };
+            }
+          },
+          disconnect: async (id) => {
+            try {
+              await uninstallMcpClient(cwd, [id]);
+              return { ok: true };
+            } catch (error) {
+              return { ok: false, message: error instanceof Error ? error.message : String(error) };
+            }
           },
           renderer: r,
           ...inspectorKeys,

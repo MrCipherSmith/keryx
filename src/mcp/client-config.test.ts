@@ -14,6 +14,7 @@ import {
   MCP_SERVER_NAME,
   enableMcpModule,
   installMcpClient,
+  mcpClientStatus,
   probeMcpSdk,
   renderMcpClientSnippet,
   resolveMcpRuntimes,
@@ -503,4 +504,33 @@ test("AC5/no-network: install opens no socket and makes no network call", async 
   }
 
   expect(networkAttempts).toBe(0);
+});
+
+test("mcpClientStatus reports disconnected for every runtime before install, connected after, disconnected again after uninstall", async () => {
+  const before = await mcpClientStatus(root, ["cursor", "claude", "generic"]);
+  expect(before).toEqual([
+    { id: "cursor", filePath: CURSOR_RUNTIME.settingsPath(root), connected: false },
+    { id: "claude", filePath: CLAUDE_RUNTIME.settingsPath(root), connected: false },
+    { id: "generic", filePath: null, connected: false },
+  ]);
+
+  await installMcpClient(root, ["cursor"]);
+  const afterInstall = await mcpClientStatus(root, ["cursor", "claude"]);
+  expect(afterInstall.find((r) => r.id === "cursor")?.connected).toBe(true);
+  expect(afterInstall.find((r) => r.id === "claude")?.connected).toBe(false);
+
+  await uninstallMcpClient(root, ["cursor"]);
+  const afterUninstall = await mcpClientStatus(root, ["cursor"]);
+  expect(afterUninstall[0]?.connected).toBe(false);
+});
+
+test("mcpClientStatus never flags a user's own unrelated server as connected", async () => {
+  await mkdir(path.join(root, ".cursor"), { recursive: true });
+  await writeFile(
+    path.join(root, ".cursor", "mcp.json"),
+    `${JSON.stringify({ mcpServers: { "some-other-server": { command: "other" } } }, null, 2)}\n`,
+    "utf8",
+  );
+  const status = await mcpClientStatus(root, ["cursor"]);
+  expect(status[0]?.connected).toBe(false);
 });

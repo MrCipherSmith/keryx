@@ -373,6 +373,37 @@ export function renderMcpClientSnippet(projectRoot?: string): string {
   return `${JSON.stringify({ mcpServers: { [MCP_SERVER_NAME]: mcpServerEntry(projectRoot) } }, null, 2)}\n`;
 }
 
+export interface McpRuntimeStatus {
+  id: string;
+  // Absolute client-config path, or null for the fileless `generic` runtime.
+  filePath: string | null;
+  connected: boolean;
+}
+
+// Live connect/disconnect status for MCP client runtimes, read fresh from disk
+// on every call — no cache, same rationale as `skills_catalog` (D-02 sibling):
+// a handful of small JSON files, cheap to read, and a stale cached status is
+// worse than the read cost it would save. `generic` never writes a file, so it
+// is always reported disconnected — there is nothing on disk to check.
+export async function mcpClientStatus(
+  projectRoot: string,
+  ids: string[] = mcpRuntimeIds(),
+): Promise<McpRuntimeStatus[]> {
+  const absoluteProjectRoot = path.resolve(projectRoot);
+  const { runtimes } = resolveMcpRuntimes(ids);
+  const statuses: McpRuntimeStatus[] = [];
+  for (const runtime of runtimes) {
+    const file = runtime.settingsPath(absoluteProjectRoot);
+    if (file === null) {
+      statuses.push({ id: runtime.id, filePath: null, connected: false });
+      continue;
+    }
+    const settings = await readSettings(file);
+    statuses.push({ id: runtime.id, filePath: file, connected: runtime.hasManaged(settings) });
+  }
+  return statuses;
+}
+
 // ---------------------------------------------------------------------------
 // Settings read/write (JSON-or-empty → merge/strip → write), mirroring E5.
 // ---------------------------------------------------------------------------
