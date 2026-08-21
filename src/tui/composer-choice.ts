@@ -29,6 +29,14 @@ export interface ComposerChoiceRequest {
   options: ChoiceOption[];
   /** Returned when the user presses Esc. */
   cancelId: string;
+  /**
+   * Called synchronously — instead of ever mounting — when `dock` already
+   * has a choice open. The promise still resolves to `cancelId`, so every
+   * existing caller's cancel path (already a safe no-op or an Esc-equivalent
+   * default) runs unchanged; this hook exists only so the caller can explain
+   * to the user why nothing happened instead of leaving them to wonder.
+   */
+  onBusy?: () => void;
 }
 
 import { getTheme } from "./theme";
@@ -101,6 +109,19 @@ export function showComposerChoice(
   dock: Box,
   request: ComposerChoiceRequest,
 ): Promise<string> {
+  // Reentrancy guard: every choice menu in this shell shares one `dock`, and
+  // each call below mounts its own rows AND wires its own global keypress
+  // listener directly onto the renderer. Nothing stops a second call from
+  // starting while the first is still pending — without this check, two
+  // menus stack in the same dock and two listeners both react to the same
+  // keystroke, so an Enter meant for the second dialog can also resolve the
+  // first with whatever it happened to have selected, silently answering an
+  // approval the user never actually looked at. One choice open at a time,
+  // full stop.
+  if (dock.visible === true) {
+    request.onBusy?.();
+    return Promise.resolve(request.cancelId);
+  }
   return new Promise((resolve) => {
     const options = request.options.map((o) => ({
       ...o,
