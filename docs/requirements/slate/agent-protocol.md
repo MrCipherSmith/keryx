@@ -1,5 +1,5 @@
 # Keryx Slate — Agent Protocol
-Version: 1.0.0
+Version: 2.0.0
 
 ## Status
 
@@ -103,6 +103,51 @@ with the child's entry remaining separately visible as the underlying
 evidence. This is a structural requirement (the storage schema itself keeps
 the two separate), not only a prompt instruction.
 
+## External-hand protocol (v3, SLATE-22…26)
+
+This section governs any agent that is NOT keryx's own internal harness —
+Claude Code, Codex, or any other MCP-connected client using `slate.open`/
+`slate.writeSeed`/`slate.close` instead of the in-process slate keryx's own
+runtime uses for itself.
+
+1. An external hand's slate is exclusively its own. It must never attempt to
+   discover, read, or reference another hand's `externalSessionId` or its
+   slate content — no tool exists for this, and none should be assumed to
+   exist. Nothing about this protocol makes Slate a shared object; only the
+   dispatched proposal, after close, is shared, via the pre-existing SAC
+   workspace `propose`/`review` path.
+2. An external hand must call `slate.open` once per task, reusing the same
+   `externalSessionId` for the life of that task if it needs to resume after
+   losing its handle (`slate.open` is idempotent per id — it is safe to call
+   again, it will not create a second competing slate).
+3. Anchors an external hand reports via `slate.open`/`slate.writeSeed` must
+   describe only what it directly observes about its own situation (its own
+   working directory, the files it has actually touched). It must not
+   fabricate keryx-native-shaped fields (`tree`, `runtime`) it has no way of
+   knowing — omit them rather than guess.
+4. Seeds written via `slate.writeSeed` are draft hypotheses exactly as
+   defined in the Read protocol above — an external hand must never present
+   one as accepted knowledge, and it cannot control or spoof its own `origin`/
+   `trust` tagging (the harness sets both server-side); it must not attempt
+   to work around this by, for example, writing a Seed's text claiming a
+   different origin.
+5. `slate.close` behaves like SLATE-7/18's wrap-up trigger for that hand's
+   own task only. Binding a `workspaceId` (explicitly at `slate.open`, or via
+   SLATE-16 resolve-or-create when omitted) works exactly as it does for a
+   keryx-native slate — an external hand must not invent its own workspace
+   resolution logic in place of calling `slate.open`/relying on SLATE-16.
+6. An external hand must not treat a `slate.*` call's absence of an error as
+   proof of dispatch: `slate.close` without a bound `workspaceId` succeeds
+   but produces an `unbound-candidate` artifact, not a proposal — the hand
+   should surface this distinction to the human it's working with, the same
+   way keryx's own catch-up flow (SLATE-10) does.
+7. An external hand has no obligation to call `slate.close` before its own
+   process/conversation ends for unrecoverable reasons (crash, disconnect) —
+   SLATE-26's idle-TTL auto-close exists precisely so a forgotten or
+   impossible close does not leave state open indefinitely. A hand that
+   *can* close cleanly still should, since it makes wrap-up happen sooner
+   than the TTL would.
+
 ## Catch-up protocol (SLATE-10)
 
 On invocation, `keryx workspace catch-up` presents accumulated unattended
@@ -152,6 +197,11 @@ existing, unmodified `workspace review` command.
   [RP-06](../shared-agent-context-identity-capabilities/README.md), or
   [RP-08](../shared-agent-context-collaboration-worktrees/README.md) already
   own that scope.
+- (v3) An external hand attempting to read, enumerate, or reference another
+  `externalSessionId`'s slate content, or to claim a different `origin.harness`
+  value than the one the MCP tool call itself attributes to it.
+- (v3) An external hand fabricating keryx-native Anchors fields (`tree`,
+  `runtime`) it has no actual way of observing, rather than omitting them.
 
 ## Required protocol tests
 
@@ -182,3 +232,13 @@ existing, unmodified `workspace review` command.
 - Catch-up staleness: a proposal whose evidence has drifted since creation is
   marked stale before display, not only discovered as `stale` after an
   attempted accept.
+- (v3) Cross-hand isolation: a `slate.*` call for `externalSessionId` A can
+  never read or affect a file belonging to `externalSessionId` B, verified
+  directly against the filesystem, not only against the tool's own responses.
+- (v3) Idle reclaim: an external slate untouched past the stale-lock
+  threshold is auto-closed (dispatched or `unbound-candidate`) on the next
+  `slate.*` call for that `cwd`, and never auto-closed by any process that
+  isn't itself handling a live `slate.*` call.
+- (v3) Provenance integrity: a Seed written via `slate.writeSeed` always
+  carries `origin.harness`/`trust: "external-unverified"` in the resulting
+  proposal's evidence, regardless of what text the Seed itself contains.

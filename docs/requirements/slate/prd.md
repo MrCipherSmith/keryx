@@ -1,5 +1,5 @@
 # Keryx Slate — PRD
-Version: 2.0.0
+Version: 3.0.0
 
 ## Problem
 
@@ -55,6 +55,37 @@ auto-create workspace на open slate», зафиксированный в v1 к
 SLATE-15's явный non-goal) — новое явное решение (текущая сессия): биндинг
 должен быть автоматическим, управляемым суждением агента, а не требовать
 `/goal --workspace` каждый раз.
+
+**v3 addendum (после реализации v1/v2).** keryx + Metaproject задуманы как
+общее «ядро», а keryx TUI, keryx CLI, Claude Code, Codex и другие агентские
+харнессы — «руки», которые должны получать одинаковый функционал ядра
+независимо от того, через какой интерфейс идёт обращение. Сегодня это уже
+верно для SAC workspace (`sac.workspaceList/Show/Create`, `sac.propose`,
+`sac.review` — все stateless MCP-вызовы, `cwd`/`workspaceId`-scoped, не
+требуют keryx-сессии) — но не для Slate: `slate.json` живёт и открывается
+только `commands/agent.ts`/`tui-shell.ts`/`spawn-subagent-tool.ts`,
+in-process, никакого MCP-пути нет.
+
+Важное уточнение, зафиксированное в этой сессии, **исправляющее более раннее
+черновое направление обсуждения** (которое предлагало сделать Seeds общим
+cross-hand append-логом, ключованным по `(repo, workspace, taskRef)`): смысл
+Slate — быть **временным и session/task-local**, не расшариваемым объектом.
+Не нужно шарить сам slate между руками — расшаривается workspace. У каждой
+руки (keryx shell, Claude Code, Codex) на конкретной задаче есть **свой**
+slate (или несколько slate'ов на несколько задач), который помогает именно
+этой руке помнить, что она уже сделала, что делает сейчас, что будет делать
+дальше — и не терять нить/не повторяться в рамках одной задачи. По закрытию
+slate его Seeds диспатчатся в **уже расшаренный** SAC workspace через
+существующий `propose`/`review` pipeline — ровно как это делает
+keryx-сессия сегодня (SLATE-7/SLATE-18), просто теперь тот же путь должен
+быть доступен и внешней руке, а не только внутреннему рантайму keryx.
+
+Записанный non-goal («шаринг открытого slate между клиентами — только
+workspace шарится», см. README.md) **не отменяется и не сужается** — он
+остаётся буквально верным: ни один код-путь v3 не даёт одной руке видеть
+или писать в slate, открытый другой рукой. Единственное новое: **кто может
+открыть свой собственный, приватный slate** — раньше только внутренний код
+keryx, теперь любой MCP-подключённый клиент.
 
 ## Goal
 
@@ -321,6 +352,70 @@ SLATE-15's явный non-goal) — новое явное решение (тек
   пользовательское решение этой сессии), доступная ревьюеру по клику, а не
   единственный источник.
 
+### v3 (Design) — Приватный slate для внешних рук (core/hands parity)
+
+- **SLATE-22 — MCP-экспонированный приватный slate lifecycle.** Новые MCP
+  tools `slate.open`/`slate.writeSeed`/`slate.close` (module `slate`),
+  зеркалящие внутренний lifecycle `commands/agent.ts`/`tui-shell.ts` тем же
+  паттерном, что и `sac.workspaceCreate` (SLATE-19b) зеркалит внутренний
+  workspace-lifecycle. Каждый вызов scoped по `(cwd, externalSessionId)`, где
+  `externalSessionId` — непрозрачная строка, которую поставляет сам
+  вызывающий клиент (например, собственный id разговора/задачи Claude Code)
+  — это НЕ keryx session id, у внешней руки нет keryx-сессии на диске.
+  `slate.open` идемпотентен для уже открытого `externalSessionId` — повторный
+  вызов с тем же id возвращает текущее состояние существующего slate, а не
+  ошибку и не второй конкурирующий файл (восстановление после потери
+  handle). Никакого list/read-эндпоинта, охватывающего несколько
+  `externalSessionId`, не добавляется — это прямое условие сохранения
+  non-goal (см. PRD v3 addendum, AC-40).
+- **SLATE-23 — Self-reported Anchors для внешних рук.** `slate.open`/
+  `slate.writeSeed` принимают опциональный `anchors`-payload (`root`,
+  `touched?`, свободный `note?`), который поставляет **сама вызывающая
+  рука** — то, что она реально знает о себе. keryx сохраняет как есть,
+  нормализует форму, никогда не вычисляет/не обогащает (никакого tree-walk,
+  никакого runtime-probing чужого процесса) — в отличие от SLATE-2, где
+  Anchors для keryx-native сессий вычисляет сам харнесс. Это осознанно
+  отдельный код-путь, не обобщение SLATE-2 — SLATE-2 для keryx-native
+  сессий не меняется.
+- **SLATE-24 — Происхождение и доверие Seed.** `SlateSeed` получает два новых
+  поля: `origin: { harness: string; sessionRef?: string }` (обязательно на
+  каждом Seed, записанном через SLATE-22 MCP-путь; автозаполняется
+  `{ harness: "keryx" }` для Seeds, записанных через существующий
+  keryx-native `slate_write_seed` tool — без изменения поведения там) и
+  `trust: "external-unverified"` (фиксированное значение — v3 не строит
+  модель скоринга доверия, только делает факт внешнего происхождения видимым
+  и машинно-читаемым для reviewer'а). Экраны review (CLI `workspace review`,
+  TUI review modal) показывают `origin.harness` рядом с каждым Seed в
+  evidence предложенного proposal.
+- **SLATE-25 — Wrap-up принимает evidence внешнего slate.** `WrapUpSource`
+  получает третий вариант, `"external-slate"` (наряду с существующими
+  `"session"`/`"flow"`), потребляемый уже существующим и работающим
+  `resolveMachineWrapUp` (`src/sac/machine-wrap-up.ts`, композитор
+  SLATE-7/21) — SLATE-25 добавляет к нему новый branch, не дублирует и не
+  ждёт его. `slate.close` внешнего slate с уже
+  привязанным `workspaceId` вызывает `propose` ровно так, как SLATE-18 уже
+  делает для keryx-native автономного диспатча — тот же единственный гейт
+  (человеческий `review`/`accept`), никакой новой review-authority, никакого
+  нового self-accept пути. Если `workspaceId` не привязан — `slate.close`
+  ведёт себя как v1's `unbound-candidate`-путь (SLATE-1): накопленные
+  Anchors+Seeds сохраняются локальным артефактом, видны в следующем
+  `workspace catch-up`, никогда не теряются молча. `slate.open` без явного
+  `workspaceId` запускает ту же процедуру SLATE-16 resolve-or-create, что и
+  keryx-native slate-open — не новую процедуру, тот же путь, применённый и к
+  внешней руке (это и есть определение «одинаково для всех рук»).
+- **SLATE-26 — Idle-TTL авто-закрытие внешнего slate.** У внешней руки нет
+  OS-процесса, которым управляет keryx, поэтому заброшенный открытый slate
+  (краш клиента, забытый `slate.close`) нуждается в реклейм-механизме,
+  которого нет у keryx-native in-process lifecycle. `slate.json` под внешним
+  namespace хранит `lastWriteAt`; slate, чей `lastWriteAt` превышает уже
+  существующий stale-lock threshold (`withFileLock`, `src/lib/fs.ts` — тот
+  же порог, что уже используют критерии `unknown`-классификации SLATE-10, не
+  новый) — авто-закрывается при следующем любом `slate.*`-вызове,
+  затрагивающем тот же `cwd` (не фоновым таймером/демоном — у keryx нет
+  scheduler-инфраструктуры, тот же pull-based принцип, что и у SLATE-10).
+  Авто-закрытие идёт тем же путём диспатча/`unbound-candidate`, что и явный
+  `slate.close`.
+
 - Anchors.root/tree актуальны на момент первого tool call сессии — баг
   «читал не тот checkout» не повторяется.
 - 0 новых proposal с raw-transcript evidence.
@@ -339,6 +434,16 @@ SLATE-15's явный non-goal) — новое явное решение (тек
   review-accept остаётся единственным исключением на всех трёх.
 - **v2:** Сабагент никогда не резолвит/не создаёт workspace и не вызывает
   `workspace_propose` сам — только родитель (без изменений от SLATE-9/AC-3).
+- **v3:** Ни один код-путь не даёт одному `externalSessionId` прочитать или
+  записать slate другого `externalSessionId` — non-goal остаётся буквально
+  верным после v3 (см. AC-40).
+- **v3:** Anchors внешнего slate — ровно то, что прислала вызывающая рука;
+  keryx ничего не довычисляет за неё.
+- **v3:** Каждый Seed, продиспатченный из внешнего slate, несёт
+  `origin.harness` и `trust: "external-unverified"` в evidence proposal'а,
+  видимые ревьюеру.
+- **v3:** Заброшенный внешний slate не остаётся открытым бессрочно — авто-
+  закрывается тем же путём, что и явный close, без фонового демона.
 
 ## Risks
 
@@ -372,6 +477,26 @@ SLATE-15's явный non-goal) — новое явное решение (тек
   терминала или заранее одобренного (`allow always`) `shell_exec`-паттерна на
   саму команду `confirm-review` — только поднимает планку, не заменяет
   полноценную identity-модель (RP-06).
+- **v3 — Prompt injection в Seeds от недоверенной руки.** `trust:
+  "external-unverified"` делает происхождение видимым, но не проверяет его —
+  внешняя рука, скомпрометированная prompt injection'ом, всё ещё может
+  записать вводящий в заблуждение Seed. Смягчается тем же гейтом, что и
+  сегодня: Seed никогда не становится Know-how без `workspace review`
+  (SLATE-9, без изменений) — человек видит `origin.harness` и трактует
+  внешний evidence с поправкой на источник. Полноценная identity/доверие —
+  скоуп RP-06, v3 сознательно не строит эту модель сам.
+- **v3 — Семантические (не exact-text) дубликаты Seeds от разных рук на
+  одной теме.** Каждая рука пишет в свой приватный slate, поэтому дедуп
+  внутри одного slate (SLATE-4/AC-23, exact-text) не меняется — но если
+  несколько рук независимо продиспатчат Seeds об одном и том же факте
+  разными proposal'ами, ревьюер увидит несколько формулировок одной идеи.
+  Не решается в v3 (явный follow-up, не блокер) — сегодняшний `workspace
+  review` уже требует ревьюера читать evidence целиком, это не новый класс
+  нагрузки, только более частый в мире с несколькими руками.
+- ~~**v3 — Расширение `sac.propose`/`WrapUpSource` может опередить
+  SLATE-7/21.**~~ **Снято** — проверено в этой же сессии, одной ревизией
+  позже: SLATE-21/`resolveMachineWrapUp` уже реализован и слит (PR #314), не
+  требует отдельного приземления перед SLATE-25.
 
 ## Recommendation
 
@@ -381,8 +506,23 @@ SLATE-15's явный non-goal) — новое явное решение (тек
 харнеса, detectSecrets/detectPii), с явной пометкой «заменить при
 приземлении RP-*».
 
-**v2 (Design):** Реализовать SLATE-20 (review confirm-token) первым и
-независимо — чистый security-фикс, не зависящий от остального v2. SLATE-16/
-17/18/19 — единый связанный блок (auto-bind без propose-dispatch
-бесполезен; cross-runtime tools нужны SLATE-16/18, чтобы агент мог их
-вызвать без `shell_exec`) — реализовать вместе, не по отдельности.
+**v2 (реализовано, README до этой ревизии ошибочно помечал как Design):**
+SLATE-16…20 реализованы и на main (см. README.md changelog). **Исправление
+в этой же сессии, одной ревизией позже:** SLATE-21 (machine evidence вместо
+raw-transcript) тоже реализован — `src/sac/machine-wrap-up.ts` (588 строк,
+`resolveMachineWrapUp`/`runWrapUp`) и `src/sac/session-wrap-up.ts` (переиспользует
+его `courseStatusLine`/`dedupedAttributedSeeds`/`diffStatLine`/`gitDiff` как
+primary evidence, transcript — evidence[2], reference-only). Подтверждено
+`gh pr view 314` (`MERGED`, 2026-08-17) и journal'ом flow 166. Более ранняя
+версия этого документа (в этой же сессии) ошибочно утверждала обратное —
+на основе неудавшегося `find`, не перепроверенного прямым чтением файла.
+
+**v3 (Design):** Никакой внешней зависимости у SLATE-25 больше нет —
+`resolveMachineWrapUp` уже существует и работает для `"flow"`-источника;
+SLATE-25 добавляет к нему branch `"external-slate"`, не ждёт его появления.
+SLATE-22/23/24/25/26 — единый связанный блок v3, реализовать одним раундом
+(lifecycle + self-reported anchors + provenance tag + wrap-up dispatch не
+имеют смысла по отдельности: приватный slate без Anchors бесполезен агенту,
+Seeds без provenance не должны диспатчиться внешней рукой, а dispatch без
+lifecycle нечего диспатчить). SLATE-26 (idle-TTL) технически независим и
+может быть отдельной, самой маленькой задачей внутри того же Flow.

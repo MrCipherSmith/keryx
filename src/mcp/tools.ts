@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -28,6 +28,21 @@ function stringParam(params: Record<string, unknown>, key: string): string | und
   const value = params[key];
   return typeof value === "string" ? value : undefined;
 }
+
+/**
+ * F-003 fix (flow 182 T7, review finding — count half; the length half is
+ * `SEED_TEXT_MAX_LENGTH`, `../session/slate.ts`): a cap on how many Seeds one
+ * external hand can accumulate on a single `ExternalSlate` before
+ * `slate.writeSeed` starts rejecting further writes. Generous but bounded —
+ * matching `SEED_TEXT_MAX_LENGTH`'s own "generous but bounded" spirit — a
+ * normal task-local slate's Seed count is expected to be a handful to a few
+ * dozen; 200 is comfortably above any realistic single-task usage while still
+ * bounding how large one `ExternalSlate` JSON file (and, downstream, one
+ * `runWrapUp` evidence dump) can grow from a single misbehaving/looping
+ * caller. Rejected (thrown), never silently dropped — mirrors this file's own
+ * `kind`/`text` rejection style just below.
+ */
+const MAX_EXTERNAL_SLATE_SEEDS = 200;
 
 // Load the code graph, degrading to an empty graph when storage is absent (the
 // graph tools then return empty results rather than throwing).
@@ -57,6 +72,107 @@ function readOnlyFlowService(): ReturnType<typeof createFlowService> {
     healthGate: async () => ({ status: "skipped", reasons: [] }),
     now: () => new Date(),
   });
+}
+
+/**
+ * Underlying `slate.open` implementation, extracted from the MCP tool entry
+ * below (flow 182 T5, fixing a T3 gap) so it can be called two ways:
+ *  - the registered `slate.open` MCP tool calls it with `resolveWorkspace`
+ *    left unset, getting the REAL `resolveOrCreateWorkspace` (real
+ *    `workspace_list`/`workspace_create` tool calls, a real bounded model
+ *    turn) — production behavior is unchanged by this seam existing.
+ *  - `slate-tools.test.ts` imports and calls this function DIRECTLY to
+ *    inject a deterministic fake resolver. There is no way to pass a
+ *    function through the MCP `invoke(cwd, params, context)` boundary
+ *    (params are JSON-RPC-shaped data, never callables) the way
+ *    `sac.*`/other tools are exercised in `sac-tools.test.ts` — unlike
+ *    `runGoalCommand` (`src/commands/goal-command.ts`), which every test in
+ *    `goal-command.test.ts` already calls directly and can pass a
+ *    `resolveWorkspace` argument to. This mirrors that exact seam shape
+ *    (`RunGoalCommandParams.resolveWorkspace`) rather than reinventing one:
+ *    an optional resolver, defaulting to the real SLATE-16 procedure.
+ *
+ * specification.md's v3 MCP surface section: "`slate.open`'s no-`workspaceId`
+ * path calls SLATE-16's existing resolve-or-create procedure, not a new
+ * one." AC5 (this flow's frozen acceptance-criteria.md) names that exact
+ * path as a legitimate binding source alongside an explicit `slate.open`
+ * `workspaceId` param. On `resolved.ok === false` (any reason —
+ * `no_credential`/`ambiguous`/`error`), `workspaceId` stays unset exactly as
+ * the pre-fix fallback already did — this never throws and never blocks
+ * `slate.open` itself, mirroring `runGoalCommand`'s identical "a resolver
+ * that fails/is ambiguous never blocks /goal" behavior for the same
+ * SLATE-16 call.
+ */
+export interface HandleSlateOpenParams {
+  cwd: string;
+  externalSessionId: string;
+  workspaceId?: string;
+  anchors?: unknown;
+  resolveWorkspace?: (input: { cwd: string; topicHint: string }) => Promise<ResolveOrCreateResult>;
+}
+
+export async function handleSlateOpen(params: HandleSlateOpenParams): Promise<ExternalSlate> {
+  const { cwd, externalSessionId, resolveWorkspace } = params;
+  if (externalSessionId.length === 0) throw new Error("slate.open requires a non-empty 'externalSessionId'");
+  await reclaimStaleExternalSlates(cwd);
+  // AC-35: idempotent per id — a second `slate.open` for an id that already
+  // has a live external slate returns it completely unmodified, never a
+  // second file, never an error, and never re-resolves a workspace.
+  const existing = await readExternalSlate(cwd, externalSessionId);
+  if (existing) return existing;
+  const rawAnchors = (params.anchors && typeof params.anchors === "object" ? params.anchors : {}) as {
+    root?: unknown;
+    touched?: unknown;
+    note?: unknown;
+  };
+  // AC-36: exactly what the caller supplied — no tree/runtime/fence, no
+  // tree-walk/worktree-resolve/runtime-probing of a process this harness
+  // does not control.
+  const anchors = {
+    root: typeof rawAnchors.root === "string" ? rawAnchors.root : "",
+    ...(Array.isArray(rawAnchors.touched) ? { touched: rawAnchors.touched.filter((t): t is string => typeof t === "string") } : {}),
+    ...(typeof rawAnchors.note === "string" ? { note: rawAnchors.note } : {}),
+  };
+  let workspaceId = params.workspaceId;
+  if (workspaceId === undefined) {
+    // SLATE-16: an explicit `workspaceId` param always wins (checked above,
+    // unchanged); when omitted, resolve-or-create now actually runs instead
+    // of leaving it unset unconditionally (the T3 gap this fixes) — mirrors
+    // `goal-command.ts`'s own `/goal` wiring for the identical procedure.
+    //
+    // Finding 2 fix (flow 182 T7, logic review): this call used to have no
+    // try/catch at all — if `resolver` genuinely THREW (not just returned
+    // `{ok:false,...}`; e.g. a real network error inside a real model-turn
+    // call), the exception propagated straight out of `handleSlateOpen`,
+    // never writing an `ExternalSlate` at all and silently losing the
+    // caller's `anchors` even though `slate.open` was called with valid
+    // params — contradicting this function's own doc comment's claim to
+    // mirror `runGoalCommand`'s (`src/commands/goal-command.ts`) identical
+    // "a resolver that fails/is ambiguous never blocks /goal" behavior for
+    // this same SLATE-16 call, which `goal-command.ts` actually implements
+    // via a try/catch around this exact call (see that file's own review
+    // finding 3 comment). Degrading to "leave `workspaceId` unset" on a
+    // thrown error — the same outcome an `ok: false` result already
+    // produces — actually replicates that cited precedent instead of just
+    // citing it.
+    const resolver = resolveWorkspace ?? resolveOrCreateWorkspace;
+    const topicHint = anchors.note ?? (anchors.root.length > 0 ? anchors.root : externalSessionId);
+    try {
+      const resolved = await resolver({ cwd, topicHint });
+      if (resolved.ok) workspaceId = resolved.workspaceId;
+    } catch {
+      // Fail-open for `slate.open` itself, fail-closed for the bind: never
+      // block opening this hand's own slate over a resolver failure —
+      // `workspaceId` simply stays unset, identical to an `ok: false` result.
+    }
+  }
+  return writeExternalSlate(cwd, externalSessionId, () => ({
+    externalSessionId,
+    ...(workspaceId ? { workspaceId } : {}),
+    anchors,
+    seeds: [],
+    lastWriteAt: new Date().toISOString(),
+  }));
 }
 
 export function buildToolRegistry(): ToolEntry[] {
@@ -191,6 +307,165 @@ export function buildToolRegistry(): ToolEntry[] {
         const component = stringParam(params, "component");
         const workspace = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
         return workspace;
+      },
+    },
+    // SLATE-22..26 (v3, flow 182 T3): a private, MCP-opened Slate for any
+    // external-hand (non-keryx-process) MCP client — Claude Code, Codex, any
+    // other harness — scoped to `(cwd, externalSessionId)` and never shared
+    // with a different `externalSessionId` (AC-34/AC-40). Same stateless-
+    // tool-with-a-storage-side-effect shape `sac.workspaceCreate` already
+    // uses; local-stdio only, matching every `sac.*` tool above (v1 SAC has
+    // no verified HTTP principal policy).
+    {
+      name: "slate.open",
+      module: "slate",
+      description:
+        "Open (or idempotently re-open) this external hand's own private, task-local Slate — never readable/writable by a different externalSessionId. `anchors` is stored verbatim (root/touched/note), never harness-enriched.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          externalSessionId: { type: "string" },
+          workspaceId: { type: "string", description: "Bind this slate to an already-known SAC workspace up front; omit to stay unbound (slate.close then preserves Seeds as a local unbound-candidate artifact)." },
+          anchors: {
+            type: "object",
+            description: "{ root: string, touched?: string[], note?: string } — this hand's own self-report, stored exactly as given.",
+            properties: { root: { type: "string" }, touched: { type: "array", items: { type: "string" } }, note: { type: "string" } },
+          },
+        },
+        ["externalSessionId"],
+      ),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "slate_transport_denied" as const };
+        const externalSessionId = stringParam(params, "externalSessionId") ?? "";
+        const workspaceId = stringParam(params, "workspaceId");
+        // Real call path: `resolveWorkspace` is left unset — `handleSlateOpen`
+        // defaults to the REAL `resolveOrCreateWorkspace` (SLATE-16). See
+        // `handleSlateOpen`'s own doc comment for why the injectable seam
+        // lives there rather than here.
+        return handleSlateOpen({
+          cwd,
+          externalSessionId,
+          ...(workspaceId !== undefined ? { workspaceId } : {}),
+          anchors: params.anchors,
+        });
+      },
+    },
+    {
+      name: "slate.writeSeed",
+      module: "slate",
+      description:
+        "Append a draft Seed (task-local hypothesis, not yet reviewed knowledge) to this external hand's own Slate. `origin`/`trust` are always server-set — a caller-supplied value for either is never used.",
+      inputSchema: OBJECT_SCHEMA(
+        { externalSessionId: { type: "string" }, text: { type: "string" }, kind: { type: "string", description: "decision | wiki-update | memory-entry | follow-up | contract-change | risk" } },
+        ["externalSessionId", "text"],
+      ),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "slate_transport_denied" as const };
+        const externalSessionId = stringParam(params, "externalSessionId") ?? "";
+        const rawText = stringParam(params, "text") ?? "";
+        if (externalSessionId.length === 0) throw new Error("slate.writeSeed requires a non-empty 'externalSessionId'");
+        if (rawText.length === 0) throw new Error("slate.writeSeed requires a non-empty 'text'");
+        // F-001/F-003 fix (flow 182 T7, BLOCKER security review finding): a
+        // bare `text.length` check used to be the only guard here — no cap at
+        // all, unlike the sibling keryx-native `slate_write_seed` tool
+        // (`slate-tool.ts`), which enforces `SEED_TEXT_MAX_LENGTH` via its
+        // input schema's `maxLength` (enforced by `executeCall`'s pre-invoke
+        // schema validation, `commands/agent.ts`). That protection does NOT
+        // exist for MCP tool calls at all — `src/mcp/dispatch.ts`'s
+        // `dispatchCallTool` never enforces any tool's `inputSchema`
+        // server-side (schemas there are advisory/client-discovery-only) — so
+        // this handler must validate at runtime itself, exactly like
+        // `slate-tool.ts`'s `invoke` already does for the keryx-native path.
+        // Rejected (thrown), never silently truncated.
+        if (rawText.length > SEED_TEXT_MAX_LENGTH) {
+          throw new Error(`slate.writeSeed: 'text' exceeds the ${SEED_TEXT_MAX_LENGTH}-character limit (got ${rawText.length})`);
+        }
+        await reclaimStaleExternalSlates(cwd);
+        const rawKind = stringParam(params, "kind");
+        // F-001 fix (flow 182 T7, BLOCKER security review finding): `kind`
+        // used to be a bare `as SlateSeedKind` cast with ZERO runtime
+        // validation. It flows through `closeExternalSlate` ->
+        // `runWrapUp` -> `resolveMachineWrapUp` (`src/sac/machine-wrap-up.ts`),
+        // which builds evidence filenames as `${input.kind}.${shortHash}.
+        // diff.txt` etc. and writes them via `writeFileAtomic` with no path-
+        // containment check of its own — a caller sending
+        // `kind: "../../../../../../tmp/pwned"` got an arbitrary-path file
+        // write with attacker-controlled content, a second, distinct
+        // path-traversal/arbitrary-file-write vuln in this same diff (T6 only
+        // fixed the `externalSessionId` one). `isSlateSeedKind` (promoted to
+        // `../session/slate.ts` by this same fix, shared with
+        // `slate-tool.ts`'s already-correct runtime guard) rejects the WHOLE
+        // call — never silently drops or coerces an invalid `kind` — mirroring
+        // `slate-tool.ts`'s own rejection shape/spirit.
+        let kind: SlateSeedKind | undefined;
+        if (rawKind !== undefined) {
+          if (!isSlateSeedKind(rawKind)) {
+            throw new Error(`slate.writeSeed: unrecognized 'kind' "${rawKind}"`);
+          }
+          kind = rawKind;
+        }
+        // F-002 fix (flow 182 T7, MAJOR security review finding): `text` used
+        // to be stored verbatim — a regression vs. the sibling keryx-native
+        // `slate_write_seed` tool (`slate-tool.ts`), which already redacts
+        // Seed text via `redactSensitiveText` before it ever touches disk.
+        // Redacting here, before the `SlateSeed` is even constructed, closes
+        // the same gap for the external-hand path: a leaked secret an
+        // external hand's Seed text happens to echo never lands in
+        // `.keryx/external-slates/*.json` at all.
+        const text = redactSensitiveText(rawText);
+        const ts = new Date().toISOString();
+        // AC-37: `origin`/`trust` are minted here, unconditionally — `params`
+        // may carry caller-supplied `origin`/`trust` fields (a spoof
+        // attempt, or an honest no-op), neither is ever read. `origin.harness`
+        // identifies this MCP tool surface itself (every caller reaches
+        // Slate v3 through the identical `slate.writeSeed` handler — there is
+        // no lower-level signal here to distinguish which literal external
+        // process is calling), a deliberate, documented judgment call: the
+        // frozen test suite (`slate-tools.test.ts`, AC4) only requires a
+        // non-empty, server-derived, non-spoofable, call-to-call-stable
+        // string, not a specific literal.
+        const seed: SlateSeed = {
+          id: `seed-${randomUUID()}`,
+          text,
+          ts,
+          ...(kind ? { kind } : {}),
+          origin: { harness: "mcp-external" },
+          trust: "external-unverified",
+        };
+        return writeExternalSlate(cwd, externalSessionId, (prev) => {
+          if (!prev) throw new Error(`slate.writeSeed: no open external slate for "${externalSessionId}" — call slate.open first`);
+          if (prev.closedAt !== undefined) throw new Error(`slate.writeSeed: external slate "${externalSessionId}" is already closed`);
+          // F-003 fix (flow 182 T7, MAJOR security review finding — count
+          // half): no cap on `seeds.length` existed at all. Rejected
+          // (thrown), never silently dropped — mirrors `text`/`kind`'s own
+          // rejection style just above. Checked inside this same
+          // read-modify-write lock hold (`writeExternalSlate`'s own
+          // `withFileLock`), so two concurrent writers racing right at the
+          // cap can never both squeeze one extra Seed past it.
+          if (prev.seeds.length >= MAX_EXTERNAL_SLATE_SEEDS) {
+            throw new Error(`slate.writeSeed: external slate "${externalSessionId}" already has ${MAX_EXTERNAL_SLATE_SEEDS} seeds (the maximum) — close it and open a fresh one`);
+          }
+          return { ...prev, seeds: [...prev.seeds, seed], lastWriteAt: ts };
+        });
+      },
+    },
+    {
+      name: "slate.close",
+      module: "slate",
+      description:
+        "Close this external hand's Slate: dispatches into the existing SAC propose/review pipeline (mirrors SLATE-18's autonomous workspace_propose) when a workspaceId is bound, else preserves its Seeds as a local unbound-candidate artifact — never a proposal against a guessed workspaceId.",
+      inputSchema: OBJECT_SCHEMA({ externalSessionId: { type: "string" } }, ["externalSessionId"]),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "slate_transport_denied" as const };
+        const externalSessionId = stringParam(params, "externalSessionId") ?? "";
+        if (externalSessionId.length === 0) throw new Error("slate.close requires a non-empty 'externalSessionId'");
+        await reclaimStaleExternalSlates(cwd);
+        const existing = await readExternalSlate(cwd, externalSessionId);
+        if (!existing) return { externalSessionId, closed: true, alreadyClosed: true };
+        await closeExternalSlate(cwd, externalSessionId, "external-slate-close");
+        return { externalSessionId, closed: true };
       },
     },
     {
