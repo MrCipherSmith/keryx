@@ -1,13 +1,32 @@
 # Keryx Slate — Implementation Plan
-Version: 1.0.0
+Version: 2.0.0
 
 ## Delivery status
 
-Design-only as of 2026-08-16. No phase below has landed. This plan is
-derived from the dependency graph in `docs/requirements/slate/specification.md`
-(every SLATE-N cross-reference already states its own dependency in text —
-this plan does not invent new ordering, it sequences what the spec already
-requires).
+**Corrected 2026-08-21** — this section previously read "Design-only as of
+2026-08-16. No phase below has landed," which this session found to be
+stale against the real repository state, not a current, verified claim.
+
+Verified against code on `main` (`c47e8f0`): Phases 1–5 (SLATE-1…15) and
+SLATE-16/17/18/19/19b/20 are implemented, with tests
+(`src/sac/workspace-resolve.ts`, `src/sac/review-confirm-token.ts`,
+`src/harness/tool/builtin/workspace-lifecycle-tool.ts`, `src/sac/catch-up.ts`,
+`keryx workspace catch-up`/`list-proposals` subcommands in
+`src/commands/workspace.ts`, `src/mcp/sac-tools.test.ts`,
+`src/commands/agent.test.ts`, `src/commands/goal-command.test.ts`). SLATE-21
+alone (machine-evidence wrap-up, `resolveMachineWrapUp`) was **not** found
+implemented — `src/sac/session-wrap-up.ts` still calls the transcript-export
+`resolveSessionWrapUp` path, and no `machine-wrap-up.ts`/equivalent file
+exists in the repository. This is the one remaining gap between this
+document and the real `sac-workspace-lifecycle` companion package's own
+status, both now otherwise landed. Do not re-assert "design-only" for the
+phases listed as implemented above without re-checking code; do not assert
+SLATE-21 is implemented without the same check.
+
+This plan is derived from the dependency graph in
+`docs/requirements/slate/specification.md` (every SLATE-N cross-reference
+already states its own dependency in text — this plan does not invent new
+ordering, it sequences what the spec already requires).
 
 ## Delivery rules
 
@@ -112,9 +131,11 @@ call; Course/Seeds are reachable only via the explicit tool.
 phase is where most of the package's acceptance criteria converge, since
 SLATE-7 consumes nearly everything built in Phases 1–3.
 
-## Phase 5 — Catch-up review & general-purpose listing
+## Phase 5 — Catch-up review & general-purpose listing (implemented)
 
-**Blocked on Phase W (`sac-workspace-lifecycle` WSL-1/WSL-2) merging first.**
+**Was blocked on Phase W (`sac-workspace-lifecycle` WSL-1/WSL-2) merging
+first; both have since merged** — `keryx workspace catch-up`/`list-proposals`
+exist in `src/commands/workspace.ts`, backed by `src/sac/catch-up.ts`.
 
 - `listProposedProposals(workspaceId)` + ACL-wrapped
   `listVisibleProposedProposals(actor)` (built on WSL-2's archived-bypass
@@ -130,9 +151,68 @@ before display); AC-13 (corrected reading — SLATE-10 doesn't build archive
 itself but must see through it); AC-14 (cwd-scoped v1, cross-project
 explicitly deferred).
 
+## Phase 5b — Finish SLATE-7's machine evidence (SLATE-21, gap)
+
+Independent of Phase 6 below — no v3 SLATE-N depends on this landing first
+except SLATE-25 specifically (see Phase 6). Not currently scheduled ahead of
+Phase 6 by this plan; either order is valid, but SLATE-25 cannot complete
+without this phase's exit criteria met first.
+
+- Replace/wrap `resolveSessionWrapUp` (`src/sac/session-wrap-up.ts`) with a
+  `resolveMachineWrapUp` implementation reading `anchors.touched` + git diff
+  + `course.flowRef`/flow status + `seeds[]` as primary evidence;
+  `exportSessionMarkdown`'s full transcript retained as a linked reference
+  attachment only (SLATE-21).
+
+**Exit:** AC-33 (zero full-archive content embedded in primary evidence,
+transcript still reachable as a separate reference).
+
+## Phase 6 — External-hand slate MCP exposure (v3, SLATE-22…26)
+
+**Depends on:** nothing from Phase 5b for SLATE-22/23/24/26; SLATE-25
+specifically depends on Phase 5b's `resolveMachineWrapUp` existing (it adds
+a branch to that function, not a parallel implementation of it) — sequence
+Phase 5b before attempting SLATE-25 specifically, per PRD v3 Recommendation.
+
+- `src/session/external-slate.ts`: `ExternalSlate` storage under
+  `.keryx/external-slates/<externalSessionId>.json`, `withFileLock`-guarded,
+  same lock/archive discipline as `src/session/slate.ts` (SLATE-22).
+- `src/mcp/tools.ts`: `slate.open`/`slate.writeSeed`/`slate.close`, module
+  `slate`, local-stdio only, mirroring `sac.workspaceCreate`'s registration
+  shape exactly (SLATE-22). `slate.open`'s no-`workspaceId` path calls
+  SLATE-16's existing resolve-or-create procedure, not a new one.
+  `slate.writeSeed` server-sets `origin`/`trust`, never caller-suppliable
+  (SLATE-24).
+- `anchors` param on `slate.open`/`slate.writeSeed`: stored verbatim by
+  `external-slate.ts`, no harness-side computation (SLATE-23).
+- `SlateSeed` type gains `origin`/`trust` fields (`src/session/slate.ts`);
+  `slate_write_seed` (SLATE-3a, keryx-native) auto-fills
+  `origin: { harness: "keryx" }`, no `trust` field (SLATE-24). CLI
+  `workspace review` / TUI review modal render `origin.harness` per Seed.
+- Idle-TTL check (reusing `withFileLock`'s existing stale threshold,
+  `src/lib/fs.ts`) invoked at the top of all three `slate.*` handlers before
+  the requested operation proceeds (SLATE-26).
+- `WrapUpSource` (`src/sac/trusted-wrap-up.ts`) gains `"external-slate"`;
+  `resolveMachineWrapUp` (Phase 5b) gains a branch reading
+  `ExternalSlate.anchors`/`.seeds` instead of a keryx `sessionDir()`;
+  `slate.close` invokes it exactly like SLATE-18's autonomous
+  `workspace_propose` when `workspaceId` is bound, else writes an
+  `unbound-candidate` artifact via the same SLATE-1/SLATE-10 path (SLATE-25).
+
+**Exit:** AC-34 through AC-40 — cross-hand isolation verified directly
+against the filesystem (not only tool responses), idempotent `slate.open`,
+caller-supplied Anchors never enriched, every dispatched external Seed
+carries `origin`/`trust`, no `propose` without a bound `workspaceId`, idle
+external slates reclaimed without a daemon, and the pre-v3 non-goal
+verified still holding (AC-40 — a dedicated cross-hand-isolation test, not
+an inference from the other AC's passing).
+
 ## Definition of done
 
-The package is done only when AC-1 through AC-23 all pass, `sac-workspace-lifecycle`
-is merged, and no phase's exit criteria were claimed before its tests and
-the target modules' own test suites (`src/sac/*.test.ts`, `src/session/*.test.ts`,
-`src/harness/**/*.test.ts`) pass green.
+The package is done only when AC-1 through AC-33 all pass (v1/v2 scope,
+already the case per this document's Delivery status), and, for v3
+specifically, AC-34 through AC-40 all pass; `sac-workspace-lifecycle` is
+merged (already the case); and no phase's exit criteria were claimed before
+its tests and the target modules' own test suites (`src/sac/*.test.ts`,
+`src/session/*.test.ts`, `src/harness/**/*.test.ts`, new
+`src/mcp/sac-tools.test.ts`/equivalent coverage for `slate.*`) pass green.

@@ -1,5 +1,5 @@
 # Keryx Slate — Task-Local Harness Layer
-Version: 2.0.0
+Version: 3.0.0
 
 ## Назначение
 
@@ -23,11 +23,27 @@ Seeds пишутся и читаются в реальных сессиях, `/g
 после реализации; оставлять неверным было бы хуже, чем поправить задним
 числом, поэтому статус обновлён вместе с этой ревизией, а не отдельным PR.
 
-**v2 (SLATE-16…) — Design.** Этот раунд (auto-resolve/create workspace,
-автономный wrap-up dispatch, review confirm-token) — новые требования поверх
-уже работающего v1, ещё не реализованные. Каждое утверждение по-прежнему
-сверено с реальным кодом (`src/sac/`, `src/session/`, `src/harness/`,
-`src/mcp/tools.ts`, `src/commands/workspace.ts`) с привязкой file:line.
+**Implemented (v2, SLATE-16…20).** **Исправлено этой ревизией** — раздел
+ранее (v2.0.0) утверждал «Design», что на момент написания v2.0.0, видимо,
+было верно, но устарело после реализации и не было обновлено вместе с ней
+(та же ошибка, что v1.0.0 уже совершал и уже был предупреждён о ней выше).
+Проверено против реального кода на `main` (`c47e8f0`): `src/sac/
+workspace-resolve.ts` (SLATE-16), `src/sac/review-confirm-token.ts`
+(SLATE-20), `src/harness/tool/builtin/workspace-lifecycle-tool.ts`
+(SLATE-19/19b), интеграция в `commands/agent.ts`/`commands/goal-command.ts`
+(SLATE-16/17/18) и `src/mcp/tools.ts` (SLATE-19b's `sac.workspaceList/Show/
+Create`) — все с покрывающими тестами (`goal-command.test.ts`,
+`agent.test.ts`, `mcp/sac-tools.test.ts`). **SLATE-21** (machine evidence
+вместо raw-transcript, доводящий до конца ещё v1's SLATE-7) остаётся
+нереализованным — единственный найденный разрыв, не новая находка этой
+сессии сверх уже описанного в PRD.
+
+**v3 (SLATE-22…26) — Design.** Приватный, MCP-экспонированный slate для
+внешних рук (Claude Code, Codex и т.д.) — каждая рука открывает свой
+собственный, session/task-local slate (никогда не шарится с другой рукой),
+который на закрытии диспатчит Seeds в уже расшаренный SAC workspace через
+существующий `propose`/`review`. См. [PRD](prd.md) v3 addendum и
+[Specification](specification.md) v3 acceptance criteria. Не реализовано.
 
 ## Модель Anchors · Course · Seeds
 
@@ -45,6 +61,16 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
 - **Seeds** (≠ workspace Know-how) — append-only, model-writable гипотезы;
   никогда не auto-promote; попадают в Know-how только через уже существующий
   `workspace review`.
+
+**v3 уточнение.** Slate — это ядро/руки-нейтральная концепция, а не
+keryx-эксклюзивная: любая рука (keryx shell, Claude Code, Codex, будущие
+харнессы) может открыть *свой собственный*, приватный slate через MCP
+(`slate.open`/`slate.writeSeed`/`slate.close`) — но не общий с другими
+руками. Расшаривается не slate, а его результат: продиспатченные Seeds
+уходят в уже общий SAC workspace, ровно как это делает keryx-сессия сегодня.
+Non-goal ниже («шаринг открытого slate между клиентами») остаётся буквально
+верным после v3 — v3 расширяет только то, кто может открыть свой slate, не
+то, шарится ли открытый slate между кем-либо.
 
 ## Документы
 
@@ -84,6 +110,12 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
   заблуждение комментарий про self-accept в
   `createLocalProposalLifecycleService`. Включены в этот пакет для
   реализации в одном раунде со slate, не потому что slate их создал.
+- **Приватный slate для внешних рук** (`SLATE-22`…`SLATE-26`, v3) — MCP
+  tools, позволяющие любому MCP-подключённому харнессу (не только keryx)
+  открыть собственный, приватный, task-local slate и продиспатчить его
+  Seeds в уже расшаренный SAC workspace на закрытии. Не новый sharing-
+  механизм — расширение того, кто может воспользоваться уже существующей
+  Anchors/Course/Seeds моделью.
 
 ## Non-goals
 
@@ -92,7 +124,11 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
 - Копирование имён/действий EvoHarness-RL 1:1 (track/commit/recall/note, RL).
 - Slate в git/`.metaproject/` как wiki — это temp-артефакт.
 - Шаринг открытого slate между клиентами (Claude, keryx TUI, Grok) — только
-  workspace шарится.
+  workspace шарится. **Подтверждено v3 (SLATE-22…26, AC-40):** это условие
+  не отменяется и не сужается расширением MCP-доступа — v3 даёт любой руке
+  открыть *свой* приватный slate, но ни одна рука не получает доступ к
+  slate, открытому другой рукой. Non-goal остаётся структурно верным, не
+  просто задекларированным — см. Specification.md AC-34/AC-40.
 - ~~**Session↔workspace↔Flow автоматический binding** — владеет RP-03;
   slate v1 продолжает требовать явный `workspaceId`~~ — **отменено в v2**
   (SLATE-16…19, см. PRD). Slate теперь сам резолвит/создаёт workspace через
@@ -141,6 +177,15 @@ Belief/Progress/Experience) — но не скопировано 1:1: свои �
 
 ## Changelog
 
+- 3.0.0 — Статус v2 (SLATE-16…20) исправлен на Implemented (было ошибочно
+  оставлено как Design после реализации — см. Status). Добавлены
+  SLATE-22…26 (v3, Design): приватный, MCP-экспонированный slate lifecycle
+  для внешних рук (`slate.open`/`writeSeed`/`close`), self-reported Anchors,
+  происхождение/доверие Seed (`origin`/`trust`), расширение wrap-up на
+  `"external-slate"`-evidence, idle-TTL авто-закрытие. Non-goal «шаринг
+  открытого slate между клиентами» не отменяется и не сужается — v3
+  расширяет только то, кто может открыть свой собственный slate (см.
+  Модель Anchors · Course · Seeds выше, AC-40 в Specification.md).
 - 2.0.0 — Статус обновлён на Implemented для SLATE-1…15. Добавлены
   SLATE-16…20 (v2, Design): auto-resolve/create workspace через суждение
   модели, автономный wrap-up dispatch, review confirm-token, cross-runtime
