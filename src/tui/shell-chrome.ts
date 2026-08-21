@@ -909,6 +909,15 @@ export async function createShellChrome(
     if (key.name === "tab") {
       const opt = menu.getSelectedOption();
       if (opt !== null) {
+        // `hideMenu()` below does NOT by itself protect this against a
+        // re-fired `refilter()`: `textarea.setText`'s `onContentChange` is
+        // DEFERRED, not synchronous, so it can still run after `hideMenu()`
+        // has already reset `menuNav`. The only thing stopping that deferred
+        // refilter from re-matching `"<name> "` and reopening/refocusing the
+        // menu right out from under the user is `filterCommands`/
+        // `prefixFilter` never matching a trailing space (see their own
+        // docstrings) — do not reintroduce `.trim()` there without
+        // re-verifying this Tab path stays closed.
         input.value = `${opt.name} `;
       }
       hideMenu();
