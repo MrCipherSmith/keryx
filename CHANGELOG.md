@@ -5,6 +5,31 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.52] — 2026-08-21
+
+### Added
+
+- **VS Code/Cursor extension: one-command local install.** `bun run
+  install:vscode` / `bun run install:cursor` package (`vsce package`) and
+  install the extension in a single command, replacing the manual
+  `npx`-per-iteration sequence every prior verification round required. Adds
+  `@vscode/vsce` as a devDependency. README documents both, plus the
+  GUI-launched-editor PATH gotcha (an nvm-managed `keryx` resolves from a
+  terminal but not from a Dock/Spotlight-launched editor, since GUI
+  processes don't source shell profiles) and its fix.
+
+### Fixed
+
+- **TUI: the Tools/MCP inspector modal is now actually usable.** It shipped
+  in 0.2.51 rendering as a small, mouse-dead box: the shared modal host
+  capped every modal at a fixed 96x28 regardless of terminal size, and the
+  Tools/MCP rows were one joined-text block, so a click could never land on
+  a specific row's connect/disconnect action. The modal now sizes to 95% of
+  the terminal, and every row is a real, independently clickable element —
+  click a row to arm connect/disconnect, click it again to confirm, mirroring
+  the existing `[c]`/`[d]`-then-`[y]` keyboard gate exactly. Keyboard nav is
+  unchanged.
+
 ## [0.2.51] — 2026-08-21
 
 ### Added
