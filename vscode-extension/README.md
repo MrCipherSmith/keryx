@@ -49,6 +49,19 @@ keryx's own logic — it renders what the CLI already knows.
 | **Keryx: Initialize Project** | Runs `keryx init --yes` for the open workspace. |
 | **Keryx: Refresh** | Re-runs every status/list check and repaints the sidebar. |
 
+## Install it locally (for development, or to try it before it's on a marketplace)
+
+```bash
+cd vscode-extension
+bun install
+bun run install:vscode   # packages with vsce, then `code --install-extension`
+bun run install:cursor   # same, for Cursor
+```
+
+Reload the window afterward (Command Palette → "Developer: Reload Window")
+to pick up a rebuilt install — installing a new `.vsix` over a running
+extension host does not hot-swap it.
+
 ## Requirements
 
 - `keryx` on `PATH` — install via `npm install -g @mrciphersmith/keryx`, the
@@ -56,6 +69,15 @@ keryx's own logic — it renders what the CLI already knows.
   Homebrew (`MrCipherSmith/homebrew-keryx`).
 - A project you want visibility into. The extension works on any workspace
   folder; it prompts to initialize one that isn't a keryx project yet.
+- **A GUI-launched editor (Dock/Spotlight/Finder) does not inherit your
+  shell's PATH.** If `keryx` is managed by nvm/asdf/similar (only added to
+  PATH by your shell's profile), the extension will fail its first check
+  with "The `keryx` CLI was not found on PATH" even though it works fine
+  from a terminal. Fix once, permanently, for every GUI app:
+  `sudo ln -s "$(which keryx)" /usr/local/bin/keryx` (macOS/Linux;
+  `/usr/local/bin` is on the default system PATH every GUI process gets).
+  Or launch the editor from a terminal where `keryx` already resolves
+  (`code .` / `cursor .`) instead.
 
 ## Also: VS Code's own MCP client
 
