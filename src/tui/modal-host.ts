@@ -85,11 +85,11 @@ function backdropFillColor(otui: OpenTui): InstanceType<OpenTui["RGBA"]> {
 export const MODAL_PANEL_MARGIN = 1;
 /** Border (2) + horizontal padding (2). Subtract from the panel to wrap text. */
 export const MODAL_PANEL_CHROME_X = 4;
-/** Floor so a 24-row test TTY still fits; live shells grow toward the target. */
+/** Floor so a 24-row test TTY still fits; live shells occupy the ratio below. */
 export const MODAL_PANEL_MIN_WIDTH = 72;
 export const MODAL_PANEL_MIN_HEIGHT = 18;
-export const MODAL_PANEL_TARGET_WIDTH = 96;
-export const MODAL_PANEL_TARGET_HEIGHT = 28;
+/** The panel occupies this fraction of the terminal — not a fixed target size — so it stays a small box in the middle of a large terminal instead of one that fills it. */
+export const MODAL_PANEL_SIZE_RATIO = 0.95;
 /** Header + tab strip + footer + rounded border. */
 export const MODAL_CHROME_ROWS = 5;
 /** @deprecated Use resolveModalPanelSize; kept as the floor for footer-fit tests. */
@@ -100,8 +100,8 @@ export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_MIN_WIDTH - MODAL_PANEL_CHROM
 
 export function resolveModalPanelSize(cols: number, rows: number): { width: number; height: number } {
   return {
-    width: Math.min(MODAL_PANEL_TARGET_WIDTH, Math.max(MODAL_PANEL_MIN_WIDTH, cols - 4)),
-    height: Math.min(MODAL_PANEL_TARGET_HEIGHT, Math.max(MODAL_PANEL_MIN_HEIGHT, rows - 4)),
+    width: Math.max(MODAL_PANEL_MIN_WIDTH, Math.round(cols * MODAL_PANEL_SIZE_RATIO)),
+    height: Math.max(MODAL_PANEL_MIN_HEIGHT, Math.round(rows * MODAL_PANEL_SIZE_RATIO)),
   };
 }
 
@@ -303,10 +303,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   });
   // Fixed (not flex-filling) size: `openModal` imperatively sets width/height
   // to `resolveModalPanelSize`'s result every time it opens, so the panel
-  // grows toward the 96x28 target and floors at 72x18 instead of stretching
-  // to fill the backdrop — `flexGrow`/`"100%"` here would fight that and win
-  // on the next layout pass (the panel would just fill available space,
-  // regardless of what was assigned).
+  // occupies 95% of the terminal and floors at 72x18 for a tiny terminal,
+  // rather than a plain `flexGrow`/`"100%"` here, which would fill the
+  // backdrop and win on the next layout pass regardless of what was assigned
+  // (and would butt the panel right up against the screen edge with no
+  // visible backdrop margin).
   const panel = new otui.BoxRenderable(r, {
     id: PANEL_ID,
     width: MODAL_PANEL_WIDTH,

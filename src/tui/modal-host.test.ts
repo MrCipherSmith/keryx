@@ -126,9 +126,9 @@ test("formatModalFooter is a single hint line that fits the wrap budget", () => 
   expect(resolveModalInnerWidth(10)).toBe(20);
 });
 
-test("resolveModalPanelSize grows toward the target and never shrinks below the floor", () => {
-  expect(resolveModalPanelSize(80, 24)).toEqual({ width: 76, height: 20 });
-  expect(resolveModalPanelSize(120, 40)).toEqual({ width: 96, height: 28 });
+test("resolveModalPanelSize occupies 95% of the terminal and never shrinks below the floor", () => {
+  expect(resolveModalPanelSize(80, 24)).toEqual({ width: 76, height: 23 });
+  expect(resolveModalPanelSize(120, 40)).toEqual({ width: 114, height: 38 });
   expect(resolveModalPanelSize(40, 10)).toEqual({ width: MODAL_PANEL_MIN_WIDTH, height: MODAL_PANEL_MIN_HEIGHT });
 });
 
@@ -142,7 +142,12 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
 
 otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent backdrop; slash menu stays closed on /", async () => {
   const otui = requireOtui();
-  const h = await mountChrome(otui);
+  // A 95%-of-terminal panel leaves only a thin backdrop margin on a normal
+  // terminal — by design, this is what "near-fullscreen" means. A very wide
+  // terminal is used here so that sliver of margin is still wide enough to
+  // show the full "transcript stays mounted" marker, rather than truncating
+  // it mid-word the way a normal-sized terminal's ~3-column margin would.
+  const h = await mountChrome(otui, { width: 1200, height: 100 });
   h.chrome.transcript.add(
     new otui.core.TextRenderable(h.renderer, { id: "keep-me", content: "transcript stays mounted" }),
   );
