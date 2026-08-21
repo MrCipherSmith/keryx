@@ -1480,6 +1480,28 @@ async function runAgentTurnCore(
         ? await runConcurrentSpawnBatch(spawnConcurrencyCandidates, toolByName, io, deps)
         : undefined;
 
+    // SLATE-2a per-tool-call Anchors auto-inject: deferred until AFTER this
+    // whole `calls` batch is fully processed (see the push below, past the
+    // loop). A parallel assistant turn can carry several `tool_calls`; every
+    // OpenAI-compatible provider requires ALL of them to be answered by
+    // CONTIGUOUS `role:"tool"` messages immediately following the assistant
+    // turn, with nothing else interleaved. Pushing the Anchors block here,
+    // mid-loop, used to splice a `role:"user"` message between two `tool`
+    // results that answer the SAME batch — which some providers (observed:
+    // DeepSeek's OpenAI-compatible endpoint) reject outright with "An
+    // assistant message with 'tool_calls' must be followed by tool messages
+    // responding to each 'tool_call_id'". `recordSlateTouch` itself still
+    // runs per call below (it accumulates on-disk `anchors.touched`
+    // regardless), only the resulting history message is deferred; since
+    // `touch.slate.anchors` already reflects every earlier touch in this same
+    // batch (append-only), the LAST `changed` result is sufficient to render.
+    let anchorsToAnnounce: SlateAnchors | undefined;
+    // Same contiguity hazard as `anchorsToAnnounce` above, for the "this tool
+    // keeps failing identically" hint below: deferred so it can never land
+    // between two `tool` results that answer the same parallel `tool_calls`
+    // batch either. Last hint wins if more than one call trips it this batch.
+    let repeatedFailureHint: string | undefined;
+
     for (const call of calls) {
       if (isAborted()) {
         system("\n[stopped] Model turn interrupted by user.\n");
@@ -1562,7 +1584,7 @@ async function runAgentTurnCore(
         untrustedContentSeen = true;
       }
       if (options.slateSession !== undefined && options.slateSession.opened === true) {
-        // SLATE-2a per-tool-call Anchors auto-inject (AC4): "tool call
+        // SLATE-2a per-tool-call Anchors tracking (AC4): "tool call
         // completed" trigger. `spawn_subagent` is itself a tool call in this
         // same loop, so it is covered here too — `extractTouchedFromToolInput`
         // adds its own `subagent:<label>` marker for that one tool name.
@@ -1572,15 +1594,15 @@ async function runAgentTurnCore(
         // or abort the user's actual turn — degrade silently (the tool call
         // itself already succeeded and its real result is already in
         // `history`) rather than let a bookkeeping failure replace this
-        // turn's real outcome.
+        // turn's real outcome. The Anchors block itself is NOT pushed here —
+        // see `anchorsToAnnounce` above the loop — only recorded on disk.
         try {
           const touchedPaths = extractTouchedFromToolInput(call.name, parseToolInput(call.input));
           const touch = await recordSlateTouch(options.slateSession.dir, touchedPaths, {
             runtime: { provider: deps.providerId, model: deps.modelId },
           });
           if (touch.changed) {
-            history.push({ role: "user", content: renderAnchorsBlock(touch.slate.anchors), provenance: "project" });
-            io.onHistoryChange?.("tool");
+            anchorsToAnnounce = touch.slate.anchors;
           }
         } catch (err) {
           io.onSystem?.(`slate touch update failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
@@ -1610,14 +1632,24 @@ async function runAgentTurnCore(
           warnedFailingHashes.add(reservation.hash);
           const hint = buildRepeatedFailureHint(call.name, result.output);
           system(`\n${hint}\n`);
-          history.push({ role: "user", content: hint, provenance: "project" });
-          io.onHistoryChange?.("tool");
+          repeatedFailureHint = hint;
         }
       } else {
         // A success resets the streak so a later, unrelated failure starts fresh.
         lastErrorByHash.delete(reservation.hash);
         errorStreakByHash.delete(reservation.hash);
       }
+    }
+
+    // Both pushed here, AFTER every call in this batch has its `tool` result
+    // in `history` — never mid-loop (see the two comments above the loop).
+    if (anchorsToAnnounce !== undefined) {
+      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project" });
+      io.onHistoryChange?.("tool");
+    }
+    if (repeatedFailureHint !== undefined) {
+      history.push({ role: "user", content: repeatedFailureHint, provenance: "project" });
+      io.onHistoryChange?.("tool");
     }
 
     // Reaching a limit exactly is not itself a stop: give the model one normal
