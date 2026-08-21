@@ -29,6 +29,48 @@ import { redactSensitiveText } from "../security/redact";
  */
 export type SlateSeedKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
 
+/**
+ * Canonical, exported literal list of {@link SlateSeedKind}'s own values —
+ * promoted here (flow 182 T7, F-001 fix) from what used to be TWO separate,
+ * un-exported, hand-maintained copies: `src/harness/tool/builtin/slate-tool.ts`
+ * (the keryx-native `slate_write_seed` tool) and, until this fix, NOTHING at
+ * all guarding `src/mcp/tools.ts`'s external-hand `slate.writeSeed` MCP tool
+ * (a bare `as SlateSeedKind` cast, zero runtime validation — a caller-supplied
+ * `kind` flowed straight into `resolveMachineWrapUp`'s evidence filename
+ * construction, `src/sac/machine-wrap-up.ts`, an arbitrary-file-write vector
+ * identical in shape to the `externalSessionId` path-traversal T6 already
+ * fixed). This module — the canonical owner of `SlateSeedKind` itself — is
+ * the single source of truth both call sites now import from, rather than
+ * duplicating (or, worse, omitting) the same literal list.
+ */
+export const SLATE_SEED_KINDS: readonly SlateSeedKind[] = [
+  "decision",
+  "wiki-update",
+  "memory-entry",
+  "follow-up",
+  "contract-change",
+  "risk",
+];
+
+/** Runtime type guard for {@link SlateSeedKind} — see {@link SLATE_SEED_KINDS}'s own doc comment for why this is exported from here now. */
+export function isSlateSeedKind(value: unknown): value is SlateSeedKind {
+  return typeof value === "string" && (SLATE_SEED_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * Upper bound on a Seed's `text`, promoted here for the same reason as
+ * {@link SLATE_SEED_KINDS} (flow 182 T7, F-001/F-003 fix): `slate-tool.ts`'s
+ * keryx-native `slate_write_seed` already enforced this via its own local
+ * copy (relying on `executeCall`'s pre-invoke JSON-schema `maxLength` check,
+ * which never runs for an MCP tool call — `src/mcp/dispatch.ts` does not
+ * enforce any tool's `inputSchema` server-side); the external-hand
+ * `slate.writeSeed` MCP tool had no cap at all before this fix. 4000 chars is
+ * a generous bound for a single draft-hypothesis note while still capping how
+ * much an unbounded caller could balloon `slate.json`/an `ExternalSlate` by
+ * per Seed.
+ */
+export const SEED_TEXT_MAX_LENGTH = 4000;
+
 export type SlateAnchors = {
   root: string;
   tree?: string;
@@ -46,6 +88,27 @@ export type SlateSeed = {
   text: string;
   ts: string;
   kind?: SlateSeedKind;
+  /**
+   * SLATE-24 (v3): who actually wrote this Seed. `slate.writeSeed`
+   * (`src/mcp/tools.ts`, external-hand MCP path) always sets this
+   * server-side — a caller-supplied `origin` in that tool's params is never
+   * read. Absent for keryx-native Seeds written via `slate_write_seed`
+   * (SLATE-3a, `src/harness/tool/builtin/slate-tool.ts`) — that path's
+   * on-disk Seed shape is pinned exactly by `slate-tool.test.ts` and stays
+   * unchanged by this flow (flow 182 T3): specification.md's SLATE-24 row
+   * describes auto-filling `origin: { harness: "keryx" }` there too, but the
+   * frozen AC-37 requirement only governs the external `slate.writeSeed`
+   * path, so `slate_write_seed`'s own construction is deliberately left as
+   * SLATE-3a shipped it.
+   */
+  origin?: { harness: string; sessionRef?: string };
+  /**
+   * SLATE-24 (v3): present (always `"external-unverified"`) only for a Seed
+   * written via the external-hand `slate.writeSeed` MCP tool — never for a
+   * keryx-native Seed, and never a caller-chosen value (server-set,
+   * unconditionally overriding anything the caller supplied).
+   */
+  trust?: "external-unverified";
 };
 
 export type SlateChildDispatch = {

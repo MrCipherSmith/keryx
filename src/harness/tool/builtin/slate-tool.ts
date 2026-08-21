@@ -14,35 +14,28 @@
 // slate_read/slate_write_seed, never silently injected every round") hold by
 // construction, not by convention.
 
-import { appendSeed, readSlate, type SlateSeed, type SlateSeedKind } from "../../../session/slate";
+import {
+  appendSeed,
+  isSlateSeedKind,
+  readSlate,
+  SEED_TEXT_MAX_LENGTH,
+  SLATE_SEED_KINDS,
+  type SlateSeed,
+  type SlateSeedKind,
+} from "../../../session/slate";
 import { courseFromSlate } from "../../../session/slate-course";
 import { redactSensitiveText } from "../../../security/redact";
 import type { InteractiveTool } from "./interactive-tools";
 
-/**
- * Upper bound on a Seed's `text` (F-002, review remediation): rejected at the
- * schema-validation layer BEFORE `invoke()` ever runs — `executeCall`
- * (`commands/agent.ts`) calls `validateAgainstSchemaObject(tool.definition.
- * inputSchema, input)` ahead of `tool.invoke(input)`, and the validator
- * (`contracts/validator.ts`) enforces `maxLength` on string properties, so an
- * oversized `text` never reaches this module at all. 4000 chars is a generous
- * bound for a single draft-hypothesis note while still capping how much an
- * unbounded model output could balloon `slate.json` by per Seed.
- */
-const SEED_TEXT_MAX_LENGTH = 4000;
-
-const SLATE_SEED_KINDS: readonly SlateSeedKind[] = [
-  "decision",
-  "wiki-update",
-  "memory-entry",
-  "follow-up",
-  "contract-change",
-  "risk",
-];
-
-function isSlateSeedKind(value: unknown): value is SlateSeedKind {
-  return typeof value === "string" && (SLATE_SEED_KINDS as readonly string[]).includes(value);
-}
+// `SEED_TEXT_MAX_LENGTH`/`SLATE_SEED_KINDS`/`isSlateSeedKind` used to be local,
+// unexported copies defined in this file (F-002, review remediation, prior
+// round). Flow 182 T7 (F-001 fix) promoted them to `../../../session/slate` —
+// the canonical `SlateSeedKind` owner — as the single source of truth both
+// this keryx-native tool AND the new external-hand `slate.writeSeed` MCP tool
+// (`src/mcp/tools.ts`) now import from, rather than duplicating (or, as
+// `slate.writeSeed` did before this fix, omitting) the same literal list.
+// This file's own behavior (schema `maxLength`, `enum`, and the try/catch
+// error-shape below) is otherwise unchanged.
 
 /**
  * Read-only Course/Seeds lookup. `cwd` identifies the project (needed by

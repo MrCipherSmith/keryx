@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "id": "182",
+  "slug": "slate-v3-slate-22-26-private-mcp-slate-l",
+  "title": "Slate v3 (SLATE-22..26): private MCP slate lifecycle for external hands",
+  "status": "in-progress",
+  "createdAt": "2026-08-21T10:11:00.087Z",
+  "updatedAt": "2026-08-21T12:23:49.948Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5751b5481873cf73b4b6979c1941cfde3d39223870ab738d9078daed4f68cb22",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Fix: slate.open must actually call SLATE-16 resolve-or-create; correct AC5/AC6 tests to cover both the genuinely-unbound path and the auto-bound-then-propose path",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "SECURITY FIX: validate externalSessionId against a strict allow-list before any path construction (path traversal in external-slate.ts allows arbitrary filesystem read/write)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-21T10:11:00.087Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-21T10:13:15.238Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-21T10:13:24.338Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-21T10:13:31.477Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-21T10:26:31.687Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-21T11:08:31.523Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-21T11:08:40.019Z",
+      "event": "task-added",
+      "detail": "T5: Fix: slate.open must actually call SLATE-16 resolve-or-create; correct AC5/AC6 tests to cover both the genuinely-unbound path and the auto-bound-then-propose path"
+    },
+    {
+      "at": "2026-08-21T11:28:08.719Z",
+      "event": "task-done",
+      "detail": "T5: Fix: slate.open must actually call SLATE-16 resolve-or-create; correct AC5/AC6 tests to cover both the genuinely-unbound path and the auto-bound-then-propose path"
+    },
+    {
+      "at": "2026-08-21T11:44:07.468Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-21T11:44:12.397Z",
+      "event": "task-added",
+      "detail": "T6: SECURITY FIX: validate externalSessionId against a strict allow-list before any path construction (path traversal in external-slate.ts allows arbitrary filesystem read/write)"
+    },
+    {
+      "at": "2026-08-21T11:47:17.043Z",
+      "event": "task-done",
+      "detail": "T6: SECURITY FIX: validate externalSessionId against a strict allow-list before any path construction (path traversal in external-slate.ts allows arbitrary filesystem read/write)"
+    },
+    {
+      "at": "2026-08-21T11:55:32.214Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-21T11:57:41.901Z",
+      "event": "task-added",
+      "detail": "T7: Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)"
+    },
+    {
+      "at": "2026-08-21T12:23:49.948Z",
+      "event": "task-done",
+      "detail": "T7: Fix 6 review findings: kind validation (F-001 blocker), Seed text redaction (F-002), length/count caps (F-003), reclaim-loop error isolation (F-007), closeExternalSlate lock scope (Finding 1 race), handleSlateOpen resolver try/catch (Finding 2)"
+    }
+  ]
+}

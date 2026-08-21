@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { TrustedActorContext } from "./index";
 
 export type WrapUpEvidence = Readonly<{ kind: string; uri: string; revision: string; observedAt: string }>;
-export type WrapUpSource = "session" | "flow";
+export type WrapUpSource = "session" | "flow" | "external-slate";
 export type TrustedWrapUpResolution = Readonly<{ workspaceId: string; sourceRevision: string; summary: string; evidence: readonly WrapUpEvidence[]; expiresAt: string }>;
 export type TrustedWrapUpProvenance = Readonly<{
   id: string;
