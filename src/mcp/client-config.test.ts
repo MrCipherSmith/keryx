@@ -509,9 +509,9 @@ test("AC5/no-network: install opens no socket and makes no network call", async 
 test("mcpClientStatus reports disconnected for every runtime before install, connected after, disconnected again after uninstall", async () => {
   const before = await mcpClientStatus(root, ["cursor", "claude", "generic"]);
   expect(before).toEqual([
-    { id: "cursor", filePath: CURSOR_RUNTIME.settingsPath(root), connected: false },
-    { id: "claude", filePath: CLAUDE_RUNTIME.settingsPath(root), connected: false },
-    { id: "generic", filePath: null, connected: false },
+    { id: "cursor", filePath: CURSOR_RUNTIME.settingsPath(root), connected: false, otherServers: [] },
+    { id: "claude", filePath: CLAUDE_RUNTIME.settingsPath(root), connected: false, otherServers: [] },
+    { id: "generic", filePath: null, connected: false, otherServers: [] },
   ]);
 
   await installMcpClient(root, ["cursor"]);
@@ -524,13 +524,28 @@ test("mcpClientStatus reports disconnected for every runtime before install, con
   expect(afterUninstall[0]?.connected).toBe(false);
 });
 
-test("mcpClientStatus never flags a user's own unrelated server as connected", async () => {
+test("mcpClientStatus never flags a user's own unrelated server as connected, and reports it under otherServers", async () => {
   await mkdir(path.join(root, ".cursor"), { recursive: true });
   await writeFile(
     path.join(root, ".cursor", "mcp.json"),
-    `${JSON.stringify({ mcpServers: { "some-other-server": { command: "other" } } }, null, 2)}\n`,
+    `${JSON.stringify({ mcpServers: { "some-other-server": { command: "other" }, context7: { command: "context7" } } }, null, 2)}\n`,
     "utf8",
   );
   const status = await mcpClientStatus(root, ["cursor"]);
   expect(status[0]?.connected).toBe(false);
+  expect(status[0]?.otherServers).toEqual(["context7", "some-other-server"]);
+});
+
+test("mcpClientStatus excludes keryx's own entry from otherServers once connected", async () => {
+  await installMcpClient(root, ["cursor"]);
+  const settingsPath = CURSOR_RUNTIME.settingsPath(root);
+  if (settingsPath === null) throw new Error("unreachable: cursor always has a settings path");
+  const settings = JSON.parse(await readFile(settingsPath, "utf8"));
+  settings.mcpServers.playwright = { command: "playwright" };
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+
+  const status = await mcpClientStatus(root, ["cursor"]);
+  expect(status[0]?.connected).toBe(true);
+  expect(status[0]?.otherServers).toEqual(["playwright"]);
+  await uninstallMcpClient(root, ["cursor"]);
 });
