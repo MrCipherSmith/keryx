@@ -6,6 +6,11 @@
   "publisher": "mrciphersmith",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrCipherSmith/keryx.git",
+    "directory": "vscode-extension"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },

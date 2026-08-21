@@ -1,0 +1,8 @@
+.vscode/**
+.metaproject/**
+src/**
+**/*.test.js
+**/*.test.js.map
+tsconfig.json
+bun.lock
+.gitignore

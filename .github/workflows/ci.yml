@@ -349,3 +349,34 @@ jobs:
       # green-with-skips run would be vacuous evidence of the platform claim.
       - name: Run OpenTUI-dependent tests with zero skips (fail on skip)
         run: bun ./scripts/opentui-tests-no-skips.ts src/tui
+
+  vscode-extension:
+    # vscode-extension/ had NO CI coverage at all until this job — a change
+    # there could regress silently until someone remembered to run
+    # `bun test src` by hand. Its own README states the actual boundary: every
+    # piece of decision logic lives in a `*-logic.ts` module with zero `vscode`
+    # import and is unit-tested outside any VS Code host, while the thin
+    # `vscode`-importing adapters are not — this job proves the former stays
+    # green on every push/PR; it does not (and, without a real VS Code/Cursor
+    # GUI on a runner, cannot) prove activation inside a real editor host.
+    name: vscode-extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: bun install
+
+      - name: Typecheck
+        working-directory: vscode-extension
+        run: bun run typecheck
+
+      - name: Unit tests (logic layer, no VS Code host required)
+        working-directory: vscode-extension
+        run: bun run test
