@@ -5,6 +5,56 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.51] — 2026-08-21
+
+### Added
+
+- **TUI: `Tools` in the sidebar is now clickable** (and reachable via `/mcp`),
+  opening a two-tab inspector modal. The **Tools** tab lists every tool the
+  agent currently has access to (name, risk, description). The **MCP** tab
+  lists every registered MCP client runtime (Cursor, Claude Code, opencode,
+  VS Code, generic) with its live connect status and a `[c]`/`[d]`-then-`[y]`
+  connect/disconnect action, wired to the existing `keryx mcp install`/
+  `uninstall` — no new install mechanism. Kept deliberately separate from the
+  LLM chat-provider picker (`/search-provider`): those are OpenAI-compatible
+  API endpoints, unrelated to the Model Context Protocol, and were being
+  conflated in an earlier design discussion this closes out correctly.
+- **TUI: `/review` gains a decline action.** Previously only accept was
+  reachable from the modal (reject/dismiss required a terminal command).
+  `[d]`-then-`[y]` now declines a proposal in-modal, symmetric to accept.
+  `[a]`/`[d]` on a non-proposal item (blocked/unbound-candidate/unknown) now
+  say the action doesn't apply here instead of silently doing nothing.
+
+### Fixed
+
+- **MCP: `skills_catalog`/`skill_load` are now actually reachable over MCP.**
+  Both operations were registered and unit-tested since 0.2.50, but a stale
+  `expose.modules` allowlist (in the default `keryx init`/`mcp install`
+  template, and in this project's own manifest) filtered them out of every
+  real `tools/list` response. Verified live: 34 tools before the fix, 36
+  after, with `skills_catalog` returning real catalog data end-to-end.
+- **`keryx harness run --provider`** now recognizes `openai`/`gemini`,
+  matching `keryx shell --provider`/`/search-provider`, which already
+  supported both. Fails closed with a clear message when the matching API
+  key is unset, mirroring the existing `anthropic` behavior.
+- **SAC: accepted proposals now render as `accepted`, not `draft`.**
+  `wiki`/`memory`-owner-writers only ever persist a page after a reviewer
+  accepts it, but both hardcoded `Status: draft` on the rendered page —
+  producing a self-contradicting record that `wiki enrich`'s default batch
+  then kept silently regenerating forever. The Reviews modal's Detail tab
+  was also structurally unable to show what was proposed (kind/author/date/
+  note); it now surfaces all of them, sourced from the real proposal record
+  and its propose-time note.
+- **VS Code extension: activates eagerly and its tree views are now
+  clickable.** Previously the extension only activated once a user manually
+  opened the Keryx sidebar, so the status bar never appeared on a fresh
+  window; `Projects`/`Recent Turns`/`Needs Your Attention` were inert text
+  lists. Also closed real packaging gaps found by actually building and
+  installing the `.vsix` (missing activity-bar icon, no `.vscodeignore` —
+  packaging was shipping this subproject's own local-only `.metaproject/`
+  including a gitignored-but-unexcluded security key, no `repository`/
+  `LICENSE`, no CI coverage).
+
 ## [0.2.50] — 2026-08-21
 
 ### Added
