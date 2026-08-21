@@ -83,6 +83,8 @@ import { resolveWorkspaceForActor } from "../sac/workspace-service";
 const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
   "fake",
   "anthropic",
+  "openai",
+  "gemini",
   "ollama",
   ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
 ];
@@ -481,6 +483,25 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     if (apiKey === undefined || apiKey.length === 0) {
       console.log(
         "ANTHROPIC_API_KEY is not set: the anthropic provider is required to have a credential and fails closed (no network was contacted).",
+      );
+      return;
+    }
+  }
+  if (provider === "openai") {
+    const apiKey = env.OPENAI_API_KEY;
+    if (apiKey === undefined || apiKey.length === 0) {
+      console.log(
+        "OPENAI_API_KEY is not set: the openai provider is required to have a credential and fails closed (no network was contacted).",
+      );
+      return;
+    }
+  }
+  if (provider === "gemini") {
+    const apiKey =
+      env.GEMINI_API_KEY !== undefined && env.GEMINI_API_KEY.length > 0 ? env.GEMINI_API_KEY : env.GOOGLE_API_KEY;
+    if (apiKey === undefined || apiKey.length === 0) {
+      console.log(
+        "GEMINI_API_KEY (or GOOGLE_API_KEY) is not set: the gemini provider is required to have a credential and fails closed (no network was contacted).",
       );
       return;
     }

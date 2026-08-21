@@ -158,6 +158,48 @@ describe("AC4 — keryx harness run --provider anthropic with no ANTHROPIC_API_K
   });
 });
 
+describe("AC4 — keryx harness run --provider openai with no OPENAI_API_KEY fails closed with NO network", () => {
+  test("prints a clear fail-closed message mentioning OPENAI_API_KEY; fetch is NEVER invoked", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "openai", "--model", "gpt-4o-mini", "hello"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n").toLowerCase();
+    expect(combined.includes("openai_api_key")).toBe(true);
+    expect(/fail|refus|denied|missing|require|not set/.test(combined)).toBe(true);
+  });
+});
+
+describe("AC4 — keryx harness run --provider gemini with no GEMINI_API_KEY/GOOGLE_API_KEY fails closed with NO network", () => {
+  test("prints a clear fail-closed message mentioning GEMINI_API_KEY; fetch is NEVER invoked", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "gemini", "--model", "gemini-2.0-flash-001", "hello"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n").toLowerCase();
+    expect(combined.includes("gemini_api_key")).toBe(true);
+    expect(/fail|refus|denied|missing|require|not set/.test(combined)).toBe(true);
+  });
+});
+
 describe("AC4 (flow 021, T5) — `keryx harness run` UX fix: empty/missing --provider or prompt prints usage, no run", () => {
   test('"run" with no other args (no --provider, no prompt) prints usage and never runs runOffline', async () => {
     const { fetch: fetchMock, callCount } = makeThrowingFetch();
