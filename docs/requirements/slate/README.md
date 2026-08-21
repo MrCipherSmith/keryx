@@ -34,9 +34,15 @@ workspace-resolve.ts` (SLATE-16), `src/sac/review-confirm-token.ts`
 (SLATE-16/17/18) и `src/mcp/tools.ts` (SLATE-19b's `sac.workspaceList/Show/
 Create`) — все с покрывающими тестами (`goal-command.test.ts`,
 `agent.test.ts`, `mcp/sac-tools.test.ts`). **SLATE-21** (machine evidence
-вместо raw-transcript, доводящий до конца ещё v1's SLATE-7) остаётся
-нереализованным — единственный найденный разрыв, не новая находка этой
-сессии сверх уже описанного в PRD.
+вместо raw-transcript, доводящий до конца ещё v1's SLATE-7) **тоже
+реализован** — исправлено в этой же сессии, одной ревизией позже: более
+раннее утверждение «остаётся нереализованным» было ошибкой, основанной на
+неудавшемся `find`, не перепроверенной прямым чтением файла. Реально:
+`src/sac/machine-wrap-up.ts` (`resolveMachineWrapUp`/`runWrapUp`) и
+`src/sac/session-wrap-up.ts` (переиспользует его как primary evidence) оба
+существуют и работают; подтверждено `gh pr view 314` (`MERGED`,
+2026-08-17) и journal'ом flow 166. **v1+v2 (SLATE-1…21) полностью
+реализованы, разрывов не найдено.**
 
 **v3 (SLATE-22…26) — Design.** Приватный, MCP-экспонированный slate для
 внешних рук (Claude Code, Codex и т.д.) — каждая рука открывает свой

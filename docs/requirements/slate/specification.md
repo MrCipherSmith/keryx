@@ -92,7 +92,7 @@ AC-1 already states for Anchors. No code path may special-case fork to carry
 | SLATE-22 | MCP-exposed private slate lifecycle (v3) | New `src/mcp/tools.ts` entries `slate.open`/`slate.writeSeed`/`slate.close` (module `slate`), following the exact stateless-tool-with-a-storage-side-effect shape `sac.workspaceCreate` already uses; storage via a new `src/session/external-slate.ts` (mirrors `src/session/slate.ts`'s `readSlate`/`writeSlate` under `withFileLock`, different path root) |
 | SLATE-23 | Self-reported Anchors for external hands (v3) | `slate.open`/`slate.writeSeed`'s `anchors` param is stored verbatim by `external-slate.ts` — no call into the harness's own `resolveProjectRoot()`/worktree-resolve/tree-walk code (SLATE-2's implementation) from this path at all |
 | SLATE-24 | Seed provenance & trust (v3) | `SlateSeed` type gains `origin: { harness: string; sessionRef?: string }` and `trust: "external-unverified"`; `slate_write_seed` (keryx-native, SLATE-3a) auto-fills `origin: { harness: "keryx" }` and omits `trust` (keryx-native Seeds are not "external-unverified" — the field is absent, not a different value, for that path); CLI `workspace review`/TUI review modal render `origin.harness` per Seed in evidence |
-| SLATE-25 | Wrap-up accepts external-slate evidence (v3) | `WrapUpSource` (`src/sac/trusted-wrap-up.ts`) gains `"external-slate"`; `resolveMachineWrapUp` (SLATE-7/21, prerequisite) gains a branch reading `external-slate.ts`'s Anchors+Seeds instead of a keryx `sessionDir()`; `slate.close` invokes this path exactly like SLATE-18's autonomous `workspace_propose` call when `workspaceId` is bound, else writes an `unbound-candidate` artifact (same SLATE-1/SLATE-10 path) |
+| SLATE-25 | Wrap-up accepts external-slate evidence (v3) | `WrapUpSource` (`src/sac/trusted-wrap-up.ts`) gains `"external-slate"`; the existing, already-implemented `resolveMachineWrapUp` (`src/sac/machine-wrap-up.ts`, SLATE-7/21) gains a branch reading `external-slate.ts`'s Anchors+Seeds instead of a keryx `sessionDir()`; `slate.close` invokes this path exactly like SLATE-18's autonomous `workspace_propose` call when `workspaceId` is bound, else writes an `unbound-candidate` artifact (same SLATE-1/SLATE-10 path) |
 | SLATE-26 | Idle-TTL auto-close (v3) | `slate.open`/`slate.writeSeed`/`slate.close` each check `lastWriteAt` on every external slate under the same `cwd` against the existing `withFileLock` stale-lock threshold (`src/lib/fs.ts`); a stale one is closed via the same code path as SLATE-25's explicit close before the current call proceeds — no background timer, no daemon |
 
 ## Anchors / Course / Seeds semantics
@@ -477,8 +477,9 @@ risk that a shared Seeds store would have introduced does not apply here.
   itself; `src/mcp/tools.ts`: **v3** — new `slate.open/writeSeed/close`
   module registration, same file SLATE-19b already extends; `src/sac/
   trusted-wrap-up.ts`: **v3** — `WrapUpSource` gains `"external-slate"`;
-  depends on SLATE-7/21's `resolveMachineWrapUp` existing first (not yet
-  implemented — see Delivery status in implementation-plan.md).
+  `src/sac/machine-wrap-up.ts`'s `resolveMachineWrapUp` (SLATE-7/21) already
+  exists and works for `"flow"` — SLATE-25 adds a branch to it, no external
+  dependency to wait on.
 - **Explicitly not integrated with (see Non-goals in README.md):**
   [SAC RP-03](../shared-agent-context-lifecycle-binding/README.md) — **v1
   scope only** (session↔workspace↔Flow binding is now SLATE-16…19, not

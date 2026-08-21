@@ -3,25 +3,34 @@ Version: 2.0.0
 
 ## Delivery status
 
-**Corrected 2026-08-21** — this section previously read "Design-only as of
-2026-08-16. No phase below has landed," which this session found to be
-stale against the real repository state, not a current, verified claim.
+**Corrected 2026-08-21, twice in the same session.** This section originally
+read "Design-only as of 2026-08-16. No phase below has landed" — stale. A
+first correction pass then asserted SLATE-21 specifically was **not**
+implemented, based on a `find`/`grep` pass that failed to locate
+`src/sac/machine-wrap-up.ts` (the command returned no match; this was not
+re-verified by reading the file directly before the claim was written) —
+that correction was itself wrong and is retracted here, one revision later.
 
-Verified against code on `main` (`c47e8f0`): Phases 1–5 (SLATE-1…15) and
-SLATE-16/17/18/19/19b/20 are implemented, with tests
-(`src/sac/workspace-resolve.ts`, `src/sac/review-confirm-token.ts`,
-`src/harness/tool/builtin/workspace-lifecycle-tool.ts`, `src/sac/catch-up.ts`,
-`keryx workspace catch-up`/`list-proposals` subcommands in
-`src/commands/workspace.ts`, `src/mcp/sac-tools.test.ts`,
-`src/commands/agent.test.ts`, `src/commands/goal-command.test.ts`). SLATE-21
-alone (machine-evidence wrap-up, `resolveMachineWrapUp`) was **not** found
-implemented — `src/sac/session-wrap-up.ts` still calls the transcript-export
-`resolveSessionWrapUp` path, and no `machine-wrap-up.ts`/equivalent file
-exists in the repository. This is the one remaining gap between this
-document and the real `sac-workspace-lifecycle` companion package's own
-status, both now otherwise landed. Do not re-assert "design-only" for the
-phases listed as implemented above without re-checking code; do not assert
-SLATE-21 is implemented without the same check.
+Verified against code on `main` (`c47e8f0`) by directly reading the source,
+not by filename search: **all of Phases 1–5 (SLATE-1…15) and SLATE-16
+through SLATE-21 are implemented.** `src/sac/machine-wrap-up.ts` (588 lines)
+implements `resolveMachineWrapUp`/`runWrapUp` for `WrapUpSource === "flow"`
+(SLATE-7); `src/sac/session-wrap-up.ts` imports `courseStatusLine`/
+`dedupedAttributedSeeds`/`diffStatLine`/`gitDiff` from it and uses them as
+`resolveSessionWrapUp`'s **primary** evidence (`evidence[0]`/`evidence[1]`),
+with the full transcript export demoted to `evidence[2]`, a reference —
+exactly SLATE-21's spec. This was confirmed merged via `gh pr view 314`
+(state `MERGED`, `mergedAt: 2026-08-17T12:16:20Z`, title "feat(sac):
+SLATE-20 review confirm-token + SLATE-21 machine wrap-up evidence") and
+corroborated by flow 166's own journal
+(`.metaproject/flows/166-2026-08-17-slate-v2-slate-16-21-auto-workspace-bind/journal.md`),
+which recorded `AC2: SLATE-21 ... landed in PR #314` at the time. **v1/v2 of
+this package (SLATE-1…21) are fully implemented; nothing here is a gap.**
+Do not re-assert non-implementation for any of SLATE-1…21 without reading
+the actual source file content first — a failed/empty search result is not
+evidence of absence, only of a search that didn't find something (this
+session's own error, twice: first "design-only" from a stale doc read,
+then "SLATE-21 missing" from an unverified failed `find`).
 
 This plan is derived from the dependency graph in
 `docs/requirements/slate/specification.md` (every SLATE-N cross-reference
@@ -151,28 +160,20 @@ before display); AC-13 (corrected reading — SLATE-10 doesn't build archive
 itself but must see through it); AC-14 (cwd-scoped v1, cross-project
 explicitly deferred).
 
-## Phase 5b — Finish SLATE-7's machine evidence (SLATE-21, gap)
+## Phase 5b — Finish SLATE-7's machine evidence (SLATE-21) — already done
 
-Independent of Phase 6 below — no v3 SLATE-N depends on this landing first
-except SLATE-25 specifically (see Phase 6). Not currently scheduled ahead of
-Phase 6 by this plan; either order is valid, but SLATE-25 cannot complete
-without this phase's exit criteria met first.
-
-- Replace/wrap `resolveSessionWrapUp` (`src/sac/session-wrap-up.ts`) with a
-  `resolveMachineWrapUp` implementation reading `anchors.touched` + git diff
-  + `course.flowRef`/flow status + `seeds[]` as primary evidence;
-  `exportSessionMarkdown`'s full transcript retained as a linked reference
-  attachment only (SLATE-21).
-
-**Exit:** AC-33 (zero full-archive content embedded in primary evidence,
-transcript still reachable as a separate reference).
+**Retracted as a phase.** SLATE-21 is implemented (`src/sac/
+machine-wrap-up.ts`, `src/sac/session-wrap-up.ts` — see Delivery status
+above). No work remains here; this heading is kept only so a reader
+following this plan's history understands why Phase 6 no longer lists a
+dependency on it.
 
 ## Phase 6 — External-hand slate MCP exposure (v3, SLATE-22…26)
 
-**Depends on:** nothing from Phase 5b for SLATE-22/23/24/26; SLATE-25
-specifically depends on Phase 5b's `resolveMachineWrapUp` existing (it adds
-a branch to that function, not a parallel implementation of it) — sequence
-Phase 5b before attempting SLATE-25 specifically, per PRD v3 Recommendation.
+**Depends on:** nothing external — `resolveMachineWrapUp`
+(`src/sac/machine-wrap-up.ts`, SLATE-7/21) already exists and is already the
+target SLATE-25 adds an `"external-slate"` branch to. All of SLATE-22…26 can
+be built as one Flow with no landed-elsewhere prerequisite.
 
 - `src/session/external-slate.ts`: `ExternalSlate` storage under
   `.keryx/external-slates/<externalSessionId>.json`, `withFileLock`-guarded,
@@ -209,10 +210,10 @@ an inference from the other AC's passing).
 
 ## Definition of done
 
-The package is done only when AC-1 through AC-33 all pass (v1/v2 scope,
-already the case per this document's Delivery status), and, for v3
-specifically, AC-34 through AC-40 all pass; `sac-workspace-lifecycle` is
-merged (already the case); and no phase's exit criteria were claimed before
-its tests and the target modules' own test suites (`src/sac/*.test.ts`,
-`src/session/*.test.ts`, `src/harness/**/*.test.ts`, new
-`src/mcp/sac-tools.test.ts`/equivalent coverage for `slate.*`) pass green.
+AC-1 through AC-33 (v1/v2 scope) already pass per this document's verified
+Delivery status. For v3, the package is done only when AC-34 through AC-40
+all pass; `sac-workspace-lifecycle` is merged (already the case); and no
+phase's exit criteria were claimed before its tests and the target modules'
+own test suites (`src/sac/*.test.ts`, `src/session/*.test.ts`,
+`src/harness/**/*.test.ts`, new `src/mcp/sac-tools.test.ts`/equivalent
+coverage for `slate.*`) pass green.

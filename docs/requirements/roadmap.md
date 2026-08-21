@@ -7,14 +7,18 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
-> - **0.24.0** — `slate` entry corrected and extended. Prior entry read "v2
->   (SLATE-16..21) specification-ready, not implemented" — verified against
->   real code on `main` (`c47e8f0`) this was stale: SLATE-16/17/18/19/19b/20
->   are implemented with tests (`src/sac/workspace-resolve.ts`,
->   `src/sac/review-confirm-token.ts`,
+> - **0.24.0** — `slate` entry corrected and extended, in two passes within
+>   the same session. Prior entry read "v2 (SLATE-16..21) specification-ready,
+>   not implemented" — verified against real code on `main` (`c47e8f0`) this
+>   was stale: SLATE-16/17/18/19/19b/20/21 are **all** implemented with tests
+>   (`src/sac/workspace-resolve.ts`, `src/sac/review-confirm-token.ts`,
 >   `src/harness/tool/builtin/workspace-lifecycle-tool.ts`,
->   `src/mcp/sac-tools.test.ts`); only SLATE-21 (machine-evidence wrap-up,
->   `resolveMachineWrapUp`) remains unimplemented. Added SLATE-22..26 (v3,
+>   `src/sac/machine-wrap-up.ts`, `src/mcp/sac-tools.test.ts`). A first
+>   correction pass here initially still asserted SLATE-21 alone was missing,
+>   based on a failed filename search that was never re-verified by reading
+>   the file directly; confirmed wrong one revision later (`gh pr view 314`:
+>   `MERGED`, title "SLATE-20 review confirm-token + SLATE-21 machine wrap-up
+>   evidence") and corrected here. Added SLATE-22..26 (v3,
 >   design-only): a private, MCP-exposed slate lifecycle
 >   (`slate.open`/`writeSeed`/`close`) letting any MCP-connected harness
 >   (Claude Code, Codex, etc.), not only keryx's own runtime, open its own
@@ -431,7 +435,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
 | [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | implemented and verified (PR #296) | Archive/resource-removal/rename shipped for `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete remain explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |
-| [Keryx Slate](slate/README.md) | v1 (SLATE-1..15) implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308); v2 (SLATE-16..20) implemented and verified against real code (corrected 0.24.0 — was stale-marked "specification-ready, not implemented"); SLATE-21 (machine-evidence wrap-up) alone still unimplemented; v3 (SLATE-22..26) specification-ready, not implemented | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. v2 adds automatic workspace resolve-or-create, autonomous `propose` dispatch, and a review confirm-token closing `sac.review`'s known self-accept gap — narrows RP-03's remaining scope. v3 adds a private, MCP-exposed slate lifecycle so any MCP-connected harness (Claude Code, Codex, etc.) — not only keryx's own runtime — can open its own task-local slate and dispatch Seeds into the shared SAC workspace on close; explicitly does not reverse or narrow the package's "no shared open slate between clients" non-goal, only who may open a private one; see the package's own v3.0.0 changelog. |
+| [Keryx Slate](slate/README.md) | v1 (SLATE-1..15) implemented and verified, all 5 phases (PRs #297, #301, #304, #306, #308); v2 (SLATE-16..21) implemented and verified against real code, incl. SLATE-21 machine-evidence wrap-up (`src/sac/machine-wrap-up.ts`, PR #314) (corrected 0.24.0, in two passes — was stale-marked "specification-ready, not implemented", then briefly under-corrected to "SLATE-21 alone still unimplemented" before a same-session fix); v3 (SLATE-22..26) specification-ready, not implemented | Task-local harness layer (Anchors/Course/Seeds) sitting in front of the SAC workspace: crash-safe execution context, live Flow-projection Course, model-writable Seeds, ephemeral two-channel subagent slate handoff, a machine-evidence wrap-up composer replacing raw-transcript proposals, unattended-mode `accept` gating by session profile (not actor), and a four-category catch-up review flow. Shipped through v0.2.39; explicitly non-duplicative of SAC RP-03/05/06/08. v2 adds automatic workspace resolve-or-create, autonomous `propose` dispatch, and a review confirm-token closing `sac.review`'s known self-accept gap — narrows RP-03's remaining scope. v3 adds a private, MCP-exposed slate lifecycle so any MCP-connected harness (Claude Code, Codex, etc.) — not only keryx's own runtime — can open its own task-local slate and dispatch Seeds into the shared SAC workspace on close; explicitly does not reverse or narrow the package's "no shared open slate between clients" non-goal, only who may open a private one; see the package's own v3.0.0 changelog. |
 | [SAC RP-01 Runtime Truth](shared-agent-context-runtime-truth/README.md) | future / spec-ready | Make the deterministic retrieval plan independent and output-effective, with stable identities and honest freshness, detail, omissions, and cost. |
 | [SAC RP-02 Source-owned Projections](shared-agent-context-source-projections/README.md) | future / spec-ready | Replace raw/heuristic source interpretation with typed Flow, Evidence, Wiki, Memory, and Skills owner ports and canonical guarded writes. |
 | [SAC RP-03 Lifecycle Binding](shared-agent-context-lifecycle-binding/README.md) | future / spec-ready | Add explicit Session–workspace–Flow binding, discovery, derivation preview, and receipt-bound owner-accepted-to-accepted link-back. |

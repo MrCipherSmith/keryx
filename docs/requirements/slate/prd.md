@@ -389,9 +389,10 @@ keryx, теперь любой MCP-подключённый клиент.
   evidence предложенного proposal.
 - **SLATE-25 — Wrap-up принимает evidence внешнего slate.** `WrapUpSource`
   получает третий вариант, `"external-slate"` (наряду с существующими
-  `"session"`/`"flow"`), потребляемый `resolveMachineWrapUp` (композитор
-  SLATE-7/21, который сам ещё не реализован — SLATE-25 зависит от его
-  приземления, не дублирует его). `slate.close` внешнего slate с уже
+  `"session"`/`"flow"`), потребляемый уже существующим и работающим
+  `resolveMachineWrapUp` (`src/sac/machine-wrap-up.ts`, композитор
+  SLATE-7/21) — SLATE-25 добавляет к нему новый branch, не дублирует и не
+  ждёт его. `slate.close` внешнего slate с уже
   привязанным `workspaceId` вызывает `propose` ровно так, как SLATE-18 уже
   делает для keryx-native автономного диспатча — тот же единственный гейт
   (человеческий `review`/`accept`), никакой новой review-authority, никакого
@@ -492,11 +493,10 @@ keryx, теперь любой MCP-подключённый клиент.
   Не решается в v3 (явный follow-up, не блокер) — сегодняшний `workspace
   review` уже требует ревьюера читать evidence целиком, это не новый класс
   нагрузки, только более частый в мире с несколькими руками.
-- **v3 — Расширение `sac.propose`/`WrapUpSource` может опередить SLATE-7/21.**
-  SLATE-25 добавляет `"external-slate"`-вариант поверх ещё не реализованного
-  `resolveMachineWrapUp`. Если SLATE-25 попытается landing раньше SLATE-7/21,
-  он либо дублирует незаконченную работу, либо блокируется — implementation
-  plan фиксирует эту зависимость явно, не оставляет её неявной.
+- ~~**v3 — Расширение `sac.propose`/`WrapUpSource` может опередить
+  SLATE-7/21.**~~ **Снято** — проверено в этой же сессии, одной ревизией
+  позже: SLATE-21/`resolveMachineWrapUp` уже реализован и слит (PR #314), не
+  требует отдельного приземления перед SLATE-25.
 
 ## Recommendation
 
@@ -507,16 +507,22 @@ keryx, теперь любой MCP-подключённый клиент.
 приземлении RP-*».
 
 **v2 (реализовано, README до этой ревизии ошибочно помечал как Design):**
-SLATE-16…20 реализованы и на main (см. README.md changelog). SLATE-21
-(machine evidence вместо raw-transcript) остаётся неприземлённым разрывом
-между спекой и реализацией — не заблокирован ничем внешним, независимая
-единица работы.
+SLATE-16…20 реализованы и на main (см. README.md changelog). **Исправление
+в этой же сессии, одной ревизией позже:** SLATE-21 (machine evidence вместо
+raw-transcript) тоже реализован — `src/sac/machine-wrap-up.ts` (588 строк,
+`resolveMachineWrapUp`/`runWrapUp`) и `src/sac/session-wrap-up.ts` (переиспользует
+его `courseStatusLine`/`dedupedAttributedSeeds`/`diffStatLine`/`gitDiff` как
+primary evidence, transcript — evidence[2], reference-only). Подтверждено
+`gh pr view 314` (`MERGED`, 2026-08-17) и journal'ом flow 166. Более ранняя
+версия этого документа (в этой же сессии) ошибочно утверждала обратное —
+на основе неудавшегося `find`, не перепроверенного прямым чтением файла.
 
-**v3 (Design):** Приземлить SLATE-21 первым — SLATE-25 напрямую зависит от
-`resolveMachineWrapUp` существующего и работающего для `"flow"`-источника
-прежде чем добавлять `"external-slate"` рядом. SLATE-22/23/24 — независимый
-от SLATE-21 связанный блок (lifecycle + self-reported anchors + provenance
-tag не имеют смысла по отдельности: приватный slate без Anchors бесполезен
-агенту, Seeds без provenance не должны диспатчиться внешней рукой) —
-реализовать вместе. SLATE-26 (idle-TTL) — независимая, самая маленькая
-единица, можно параллельно с SLATE-22/23/24 или сразу после.
+**v3 (Design):** Никакой внешней зависимости у SLATE-25 больше нет —
+`resolveMachineWrapUp` уже существует и работает для `"flow"`-источника;
+SLATE-25 добавляет к нему branch `"external-slate"`, не ждёт его появления.
+SLATE-22/23/24/25/26 — единый связанный блок v3, реализовать одним раундом
+(lifecycle + self-reported anchors + provenance tag + wrap-up dispatch не
+имеют смысла по отдельности: приватный slate без Anchors бесполезен агенту,
+Seeds без provenance не должны диспатчиться внешней рукой, а dispatch без
+lifecycle нечего диспатчить). SLATE-26 (idle-TTL) технически независим и
+может быть отдельной, самой маленькой задачей внутри того же Flow.
