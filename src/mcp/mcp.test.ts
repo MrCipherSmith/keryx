@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -105,6 +106,44 @@ test("discovery hides tools of a disabled module (M-11)", () => {
   });
   expect(discovery.isModuleExposed("gdgraph")).toBe(false);
   expect(discovery.isModuleExposed("standard")).toBe(true); // cross-cutting
+});
+
+test("discovery exposes slate.* by default, same as sac (both cross-cutting, no keryx-modules toggle of their own)", () => {
+  // Real bug this guards: slate.open/writeSeed/close shipped (0.2.53,
+  // SLATE-22..26) tagged `module: "slate"`, but MODULE_MANIFEST_KEY had no
+  // entry for it — an unrecognized module label is treated as gated by a
+  // manifest key of its own NAME, and no project's manifest.modules ever has
+  // a "slate" entry (there is no `keryx modules enable slate`), so
+  // isModuleExposed("slate") silently returned false everywhere, on every
+  // project, including keryx's own. No CLI toggle exists to work around it.
+  const discovery = buildDiscovery({
+    modules: { mcp: { enabled: true } as never },
+  });
+  expect(discovery.isModuleExposed("slate")).toBe(true);
+});
+
+test("every registered tool's module resolves to exposed under this project's OWN shipped manifest (catches a new cross-cutting module shipped with no MODULE_MANIFEST_KEY entry)", () => {
+  // The slate gap wasn't a one-off typo — this exact class of bug (a new
+  // tool's `module` label with no corresponding manifest-key mapping,
+  // silently gated off on every project including keryx's own) was already
+  // found and fixed once before this feature shipped it a second time.
+  // Ordinary toggleable modules (gdctx, testing, …) need no explicit
+  // MODULE_MANIFEST_KEY entry — the fallback resolves a label to a manifest
+  // key of the same name, and a real `keryx init` always writes one. Only a
+  // CROSS-CUTTING module (no `keryx modules enable <x>` of its own — sac,
+  // standard, mcp, slate) needs the explicit `null` mapping, because no
+  // manifest ever has a matching key and the self-fallback then gates it
+  // shut permanently. This test drives discovery against keryx's own real,
+  // committed `.metaproject/metaproject.json` (the exact file a live MCP
+  // client reads) — a tool whose module has no working mapping fails here,
+  // not silently in a connected client's `tools/list`.
+  const manifest = JSON.parse(readFileSync(path.join(process.cwd(), ".metaproject", "metaproject.json"), "utf8"));
+  const discovery = buildDiscovery(manifest);
+  const unexposed = buildToolRegistry()
+    .map((t) => t.module)
+    .filter((m, i, arr) => arr.indexOf(m) === i)
+    .filter((m) => !discovery.isModuleExposed(m));
+  expect(unexposed).toEqual([]);
 });
 
 test("discovery respects expose.modules allowlist", () => {
