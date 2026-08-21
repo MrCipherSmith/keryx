@@ -154,6 +154,20 @@ export interface SlateSessionRef {
   dir: string;
   cwd: string;
   opened: boolean;
+  /**
+   * SLATE-27 (flow 186, T8): the remaining round budget for a `/goal --auto`
+   * continuation loop, armed by `goal-command.ts` on this SAME `ref` object —
+   * deliberately a field on this already-process-local, already-not-
+   * cross-session-durable struct (see this interface's own doc comment on
+   * why `opened` lives here rather than in `slate.json`), NEVER written to
+   * `slate.json` itself. `undefined` means no `--auto` loop is armed for
+   * this attempt. A resumed or forked session constructs a brand-new
+   * `SlateSessionRef` (this field absent by construction, same as `opened`
+   * starting `false`) — re-arming a continuation always requires a fresh
+   * `--auto` flag on a new `/goal` call (AC7); nothing here can silently
+   * carry an armed loop across a process boundary.
+   */
+  autoGoalRounds?: number;
 }
 
 /**

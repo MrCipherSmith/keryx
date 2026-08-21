@@ -10,6 +10,7 @@
 // and the per-surface wiring only needs to prove it is actually called (see
 // `shell.test.ts` / `tui-shell.test.ts`'s source-text audits).
 
+import path from "node:path";
 import type { AgentDeps, AgentIO } from "./agent";
 import { runAgentTurn } from "./agent";
 import type { NormalizedMessage } from "../harness/provider/types";
@@ -17,11 +18,22 @@ import { ensureSlateOpened, type SlateSessionRef } from "../session/slate-lifecy
 import { readSlate, renderAnchorsBlock, writeSlate, type Slate } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
+import { createFlowService } from "../flow/service";
+import type { FlowService } from "../flow/types";
+import { writeFileAtomic } from "../lib/fs";
 
-/** `/goal <text> [--workspace <id>]`, successfully parsed. */
+/** `/goal <text> [--workspace <id>] [--auto [N]]`, successfully parsed. */
 export interface ParsedGoalArgs {
   text: string;
   workspaceId?: string;
+  /**
+   * Present when `--auto` was given (SLATE-27, flow 186). `rounds` is the
+   * explicit `--auto <N>` round-cap override; `undefined` means "use the
+   * default cap". T6 (this parse) does not itself change any runtime
+   * behavior — the continuation loop this flag will drive is later work
+   * in the same flow (T7-T12).
+   */
+  auto?: { rounds?: number };
 }
 
 /** `/goal` args failed to parse (empty text, or a value-less `--workspace`). */
@@ -29,19 +41,29 @@ export interface GoalArgsError {
   error: string;
 }
 
+const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
+
 /**
- * Pure parse of the text after the `/goal` token. `--workspace <id>` is only
- * recognized when it TRAILS the input — the last two whitespace-separated
- * tokens of `rest` are `--workspace <id>` — and is stripped from the
- * returned `text`, which otherwise preserves word order. Both an
- * empty/whitespace-only `rest` and a trailing `--workspace` with no
- * following value are errors — a goal always needs real text, and a
- * dangling flag is a caller mistake worth surfacing explicitly rather than
- * silently ignoring.
+ * SLATE-27 (flow 186, T8/AC5): the continuation round budget when `--auto`
+ * is given with no explicit `--auto <N>` override. Counts ADDITIONAL rounds
+ * beyond the always-runs first turn — bare `--auto` on a goal that never
+ * reaches `isCourseDone` runs this many extra turns, then stops.
+ */
+export const DEFAULT_AUTO_GOAL_ROUNDS = 8;
+
+/**
+ * Pure parse of the text after the `/goal` token. `--workspace <id>` and
+ * `--auto [N]` (SLATE-27, flow 186) are both recognized only when they
+ * TRAIL the input, in either order, and are stripped from the returned
+ * `text`, which otherwise preserves word order. An empty/whitespace-only
+ * `rest`, a trailing `--workspace` with no following value, or a `rest`
+ * that is nothing but flags (no real goal text left after stripping them)
+ * are all errors.
  *
- * Review finding 5: this used to locate `--workspace` via `tokens.indexOf`
- * — an exact-token (not substring) match, but at ANY position in `rest` —
- * so an ordinary goal that merely happened to contain the literal token
+ * Review finding 5 (originally `--workspace`-only, generalized here to both
+ * flags): this used to locate `--workspace` via `tokens.indexOf` — an
+ * exact-token (not substring) match, but at ANY position in `rest` — so an
+ * ordinary goal that merely happened to contain the literal token
  * `--workspace` mid-sentence (e.g. "/goal document how --workspace flag
  * works") silently had the FOLLOWING WORD ("flag") swallowed as a
  * `workspaceId` and stripped from the text actually sent to the model —
@@ -51,39 +73,98 @@ export interface GoalArgsError {
  * escape/quoting convention this CLI does not have — the position of
  * `--workspace w-42`/`--workspace flag` relative to the rest of the
  * sentence is structurally IDENTICAL in both cases. The safe, CLI-
- * conventional resolution adopted here: `--workspace <id>` is recognized
- * ONLY when it trails the input, matching how a trailing flag+value pair
- * works in ordinary CLI usage — never leading or embedded mid-sentence.
- * This is a deliberate, documented narrowing of the previous "anywhere in
- * `rest`" contract (see `goal-command.test.ts`'s own updated tests for the
- * before/after behavior this replaces).
+ * conventional resolution adopted here: a flag is recognized ONLY when it
+ * trails the input, matching how a trailing flag+value pair works in
+ * ordinary CLI usage — never leading or embedded mid-sentence.
+ *
+ * `--auto`'s own value is OPTIONAL (`--auto` alone is valid — "use the
+ * default round cap"), which makes it structurally different from
+ * `--workspace`: there is no unambiguous "dangling `--auto`" shape the way
+ * a value-less trailing `--workspace` is unambiguous (nothing can follow
+ * it, so a lone trailing `--workspace` can ONLY be a caller mistake).
+ * Consequently `--auto <token>` is recognized as an explicit round-cap
+ * override ONLY when `<token>` is both the very last token AND parses as a
+ * positive integer; when it does not, this is deliberately NOT a parse
+ * error — flow 186's acceptance criteria were revised during this
+ * implementation specifically to avoid reintroducing Review finding 5's
+ * corruption class for `--auto`: "/goal explain how --auto mode differs"
+ * must keep "mode differs" as ordinary goal text, not fail because "mode"
+ * isn't a number. In that case `--auto` is simply not recognized as a flag
+ * at this position at all; the whole tail, `--auto` included, stays part
+ * of `text`.
+ *
+ * The two flags compose in either trailing order (`--workspace <id> --auto
+ * [N]` or `--auto [N] --workspace <id>`) via a small bounded peel: each
+ * flag is consumed AT MOST ONCE, working from the very end of the token
+ * list inward, one flag per loop iteration (bounded by the fixed number of
+ * recognized flags, not an open-ended "peel until nothing matches" loop). A
+ * flag encountered a second time (either flag, already consumed once) is
+ * left embedded in `text` rather than silently overwriting the first —
+ * matches how a duplicate `--workspace` already behaved before `--auto`
+ * existed (never explicitly handled; a second occurrence stayed in the
+ * text because the original parser only ever inspected the tail once).
  */
 export function parseGoalArgs(rest: string): ParsedGoalArgs | GoalArgsError {
   const trimmed = rest.trim();
   if (trimmed.length === 0) {
-    return { error: "a goal <text> is required, e.g. /goal implement the login flow [--workspace <id>]" };
+    return {
+      error: "a goal <text> is required, e.g. /goal implement the login flow [--workspace <id>] [--auto [N]]",
+    };
   }
-  const tokens = trimmed.split(/\s+/);
-  const lastToken = tokens[tokens.length - 1];
-  const secondLastToken = tokens[tokens.length - 2];
+  let tokens = trimmed.split(/\s+/);
 
   let workspaceId: string | undefined;
-  let textTokens = tokens;
-  if (lastToken === "--workspace") {
-    // A dangling trailing flag with nothing after it — an explicit error,
-    // never silently treated as "no --workspace given".
-    return { error: "--workspace requires a value, e.g. /goal <text> --workspace <id>" };
-  }
-  if (secondLastToken === "--workspace") {
-    workspaceId = lastToken;
-    textTokens = tokens.slice(0, tokens.length - 2);
+  let auto: { rounds?: number } | undefined;
+  let sawWorkspace = false;
+  let sawAuto = false;
+
+  // Exactly two recognized flags today, each consumable at most once — the
+  // loop is bounded by that fact, not by "keep going until nothing left".
+  for (let i = 0; i < 2; i++) {
+    const last = tokens[tokens.length - 1];
+    const secondLast = tokens[tokens.length - 2];
+
+    if (!sawAuto && secondLast === "--auto" && last !== undefined && POSITIVE_INTEGER.test(last)) {
+      auto = { rounds: Number(last) };
+      sawAuto = true;
+      tokens = tokens.slice(0, tokens.length - 2);
+      continue;
+    }
+    if (!sawAuto && last === "--auto") {
+      auto = {};
+      sawAuto = true;
+      tokens = tokens.slice(0, tokens.length - 1);
+      continue;
+    }
+    if (!sawWorkspace && last === "--workspace") {
+      // A dangling trailing flag with nothing after it — an explicit error,
+      // never silently treated as "no --workspace given". `--auto` has no
+      // equivalent case (see this function's own docstring for why).
+      return { error: "--workspace requires a value, e.g. /goal <text> --workspace <id>" };
+    }
+    if (!sawWorkspace && secondLast === "--workspace") {
+      workspaceId = last;
+      sawWorkspace = true;
+      tokens = tokens.slice(0, tokens.length - 2);
+      continue;
+    }
+    break;
   }
 
-  const text = textTokens.join(" ").trim();
+  const text = tokens.join(" ").trim();
   if (text.length === 0) {
-    return { error: "a goal <text> is required, e.g. /goal implement the login flow [--workspace <id>]" };
+    return {
+      error: "a goal <text> is required, e.g. /goal implement the login flow [--workspace <id>] [--auto [N]]",
+    };
   }
-  return workspaceId !== undefined ? { text, workspaceId } : { text };
+  const parsed: ParsedGoalArgs = { text };
+  if (workspaceId !== undefined) {
+    parsed.workspaceId = workspaceId;
+  }
+  if (auto !== undefined) {
+    parsed.auto = auto;
+  }
+  return parsed;
 }
 
 export interface RunGoalCommandParams {
@@ -113,6 +194,216 @@ function systemLine(io: AgentIO, text: string): void {
   }
 }
 
+let flowService: FlowService | undefined;
+
+/**
+ * A private instance, separate from `src/commands/flow.ts`'s own module-level
+ * singleton (not exported there). Safe: `createFlowService` closes only over
+ * its `deps`, and real mutation safety comes from `withFileLock`
+ * (`src/flow/service.ts`) on the filesystem, not from any in-memory state —
+ * two independent instances operating on the same `cwd` do not conflict.
+ * `tracker: null` and a `healthGate` stub that is never called: `init`,
+ * `freeze`, and `start` (the only methods `autoProvisionFlow` uses) read
+ * neither.
+ */
+function getFlowService(): FlowService {
+  flowService ??= createFlowService({
+    tracker: null,
+    healthGate: async () => ({ status: "skipped", reasons: [] }),
+    now: () => new Date(),
+  });
+  return flowService;
+}
+
+/**
+ * SLATE-27 (flow 186, T7): auto-provision a Task Manager flow for a `/goal
+ * --auto` run whose slate has none bound yet (AC2).
+ *
+ * Deliberately minimal — no model call. Plan step 2 originally called for
+ * reusing `keryx flow plan <id>`'s "model-suggested task breakdown"; on
+ * inspection during implementation, `runPlan` (`src/commands/flow.ts`) turned
+ * out to be PURELY ADVISORY console output — it calls `narrate()` and writes
+ * nothing to flow state at all (its own system prompt: "This is a suggestion
+ * only — it does not modify flow state"). There is no structured task list
+ * to reuse programmatically, so v1 does not call it. This was an anticipated
+ * risk (plan.md's own "Risks" section flagged exactly this before
+ * implementation), now confirmed rather than hypothetical.
+ *
+ * Uses `flow init`'s default four-task scaffold (context/implement/test/
+ * review) as-is, and writes exactly ONE acceptance criterion tied directly
+ * to the goal text — `flow freeze` refuses an unmodified placeholder AC file
+ * (`isPlaceholderAc`, `src/flow/service.ts`), so *some* real criterion is
+ * required regardless of the missing task breakdown. That criterion is
+ * deliberately the SAME thing T10's verifier subagent will check before the
+ * continuation loop stops — one completion definition, not two independent
+ * ones that could disagree.
+ *
+ * Throws on any failure (flow-service error, a write failure) rather than
+ * swallowing it here — `runGoalCommand`'s existing outer try/catch around
+ * all slate bookkeeping already degrades this exactly the same way it
+ * degrades a workspaceId-resolution failure: log via `systemLine`, skip
+ * this attempt's `--auto` arming, let the turn still run.
+ *
+ * Known gap (review finding BOSS-004, not yet fixed): if `init()` succeeds
+ * but `freeze()`/`start()` then throws, the just-created flow directory is
+ * left on disk, orphaned and unbound (`slate.course.flowRef` is only
+ * written by the caller after this function returns successfully) — Task
+ * Manager has no `flow delete`, so there is nothing safe to clean up here.
+ * A retried `--auto` on the same slate calls this function again, since
+ * `course.flowRef` is still unset, leaving a second orphan, and so on per
+ * retry. Not user-visible breakage — just accumulating garbage in
+ * `.metaproject/flows/` — but a real gap, not a hypothetical one.
+ */
+async function autoProvisionFlow(cwd: string, goalText: string): Promise<string> {
+  const service = getFlowService();
+  const result = await service.init({ cwd, title: goalText });
+  const acFile = path.join(cwd, result.dir, "acceptance-criteria.md");
+  await writeFileAtomic(
+    acFile,
+    [
+      "# Acceptance Criteria",
+      "",
+      "Rules:",
+      "",
+      "- Criteria lines use the exact format `- ACn: <criterion>`.",
+      "- After `flow freeze` this file is checksum-protected: any edit outside",
+      "  `keryx flow ac update` fails every gate and status transition.",
+      "- Completion requires every ACn to be confirmed via",
+      "  `keryx flow ac confirm <id> <ACn>`.",
+      "",
+      "Source: auto-provisioned by `/goal --auto` (SLATE-27, flow 186) — the",
+      "goal text itself is the spec; no separate description/plan pair exists.",
+      "",
+      "## Criteria",
+      "",
+      `- AC1: The stated goal — "${goalText}" — is achieved, judged by the`,
+      "  verifier subagent this session's continuation loop runs before",
+      "  stopping (flow 186 T10).",
+      "",
+    ].join("\n"),
+  );
+  await service.freeze({ cwd, id: result.flow.id });
+  await service.start({ cwd, id: result.flow.id });
+  return result.flow.id;
+}
+
+/**
+ * SLATE-27 (flow 186, T9): the user-turn text for one continuation round —
+ * plan step 4's "round N of the flow's current task list". Reads the bound
+ * flow's live task list through the SAME `FlowService` instance
+ * `autoProvisionFlow` uses (`.get()`, not a CLI subprocess or a re-parsed
+ * `flow status --json`), so it is always the current on-disk state, not a
+ * stale snapshot from provisioning time. Falls back to a generic
+ * continuation line — never throws — when no flow is bound (an `--auto`
+ * whose provisioning attempt itself failed, degrading per AC2) or the flow
+ * read fails for any reason; a missing task list is not a reason to stop
+ * the loop, only to say less about what remains.
+ */
+async function buildContinuationMessage(
+  cwd: string,
+  slateSession: SlateSessionRef,
+  round: number,
+  roundsCap: number,
+): Promise<string> {
+  const totalRounds = roundsCap + 1;
+  const generic = `Continue working toward the stated goal (round ${round} of ${totalRounds}).`;
+  const slate = await readSlate(slateSession.dir).catch(() => undefined);
+  const flowId = slate?.course.flowRef;
+  if (flowId === undefined) {
+    return generic;
+  }
+  try {
+    const flow = await getFlowService().get({ cwd, id: flowId });
+    const remaining = flow.tasks.filter((task) => task.status !== "done");
+    const remainingList =
+      remaining.length > 0 ? remaining.map((task) => `${task.id}: ${task.title}`).join("; ") : "(no open tasks recorded)";
+    return `${generic} Flow ${flowId} tasks remaining: ${remainingList}.`;
+  } catch {
+    return generic;
+  }
+}
+
+/** One independent verifier's verdict on whether the goal was actually achieved (SLATE-27, flow 186, T10, AC4). */
+export interface GoalVerifierVerdict {
+  achieved: boolean;
+  gaps: string[];
+}
+
+/**
+ * Extract a `{"achieved": boolean, "gaps": [...]}` object from the
+ * verifier subagent's free-text summary. The subagent is prompted to reply
+ * with nothing but that JSON object, but a model reliably wrapping it in
+ * extra prose is exactly the kind of thing not to trust — so this scans for
+ * the first `{...}` span rather than requiring the WHOLE output to parse.
+ * Returns `undefined` on anything unparseable, never throws — an
+ * unreadable verdict must degrade the same way an unreachable verifier
+ * does (see `runGoalVerifier`), not crash `/goal`.
+ */
+export function parseVerifierVerdict(output: string): GoalVerifierVerdict | undefined {
+  const match = output.match(/\{[\s\S]*\}/);
+  if (match === null) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(match[0]);
+    if (typeof parsed !== "object" || parsed === null || !("achieved" in parsed)) {
+      return undefined;
+    }
+    const achieved = (parsed as { achieved: unknown }).achieved;
+    if (typeof achieved !== "boolean") {
+      return undefined;
+    }
+    const gapsRaw = (parsed as { gaps?: unknown }).gaps;
+    const gaps = Array.isArray(gapsRaw) ? gapsRaw.filter((g): g is string => typeof g === "string") : [];
+    return { achieved, gaps };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * SLATE-27 (flow 186, T10, AC4): one independent check on whether the goal
+ * text was actually achieved, dispatched through the SAME `spawn_subagent`
+ * tool instance already wired into this session (`deps.tools`) — not a
+ * second, parallel subagent-dispatch mechanism this module invents. `mode:
+ * "read_only"` (no shell, no writes): a verifier that could itself mutate
+ * the repo while "checking" it is not an independent check.
+ *
+ * Returns `undefined` — never throws — when: the session has no
+ * `spawn_subagent` tool wired in, the dispatch itself errors, or the
+ * child's summary does not parse as a verdict. Every one of those means
+ * "the loop's existing stop decision stands, unverified" — an unavailable
+ * or unparseable verifier must never be the reason `/goal --auto` loops
+ * forever chasing a second opinion it can't get.
+ */
+async function runGoalVerifier(deps: AgentDeps, goalText: string): Promise<GoalVerifierVerdict | undefined> {
+  const tool = deps.tools.find((candidate) => candidate.definition.name === "spawn_subagent");
+  if (tool === undefined) {
+    return undefined;
+  }
+  const task = [
+    "Independently verify whether the following goal has ACTUALLY been achieved, based on the",
+    "current, real state of the repository (read the real files/tests — never trust a prior",
+    "claim in conversation history without checking it yourself).",
+    "",
+    `Goal: "${goalText}"`,
+    "",
+    "Reply with EXACTLY one JSON object and nothing else, no prose before or after it:",
+    '{"achieved": true or false, "gaps": ["specific reason it is not fully achieved", ...]}',
+    '"gaps" must be empty when "achieved" is true.',
+  ].join("\n");
+  let result: { output: string; isError: boolean };
+  try {
+    result = await tool.invoke({ task, mode: "read_only", label: "goal-verifier" });
+  } catch {
+    return undefined;
+  }
+  if (result.isError) {
+    return undefined;
+  }
+  return parseVerifierVerdict(result.output);
+}
+
 /**
  * Run `/goal`'s full sequence: parse → (if `--workspace` was given) validate
  * it FIRST via `resolveWorkspaceForActor` — fail-closed, no slate opened, no
@@ -122,8 +413,15 @@ function systemLine(io: AgentIO, text: string): void {
  * (AC2, v1 behavior, unchanged); when `--workspace` was omitted, SLATE-16's
  * resolve-or-create now runs instead (supersedes v1's "leave unset") and
  * only when this slate has no workspaceId bound yet — a `/goal` reusing an
- * already-bound slate mid-session is never re-resolved (AC-25) → run the
- * turn with the parsed text.
+ * already-bound slate mid-session is never re-resolved (AC-25) → (if
+ * `--auto` was given) auto-provision/reuse a bound Task Manager flow and arm
+ * a per-attempt continuation budget → run the turn with the parsed text →
+ * (SLATE-27, flow 186) when armed, re-drive the turn in a round-capped loop
+ * until the bound flow's course is done (observed via `slateSession.opened`,
+ * the same signal `closeSlateOnFlowDone` already computes — no second
+ * `isCourseDone` call) or the round budget is exhausted, then run one
+ * independent `spawn_subagent` verifier pass before the final stop, with at
+ * most one extra "second chance" round if it disagrees.
  */
 export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
   const { raw, cwd, io, deps, history, slateSession, mintAttemptId, resolveWorkspace } = params;
@@ -132,6 +430,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     systemLine(io, `/goal: ${parsed.error}\n`);
     return;
   }
+  // T10: snapshot of what --auto bound this slate to, captured at arm time
+  // (below) while it is still guaranteed fresh — used only if the verifier
+  // pass needs to reopen an already-closed slate for one more round.
+  let boundFlowRef: string | undefined;
+  let boundWorkspaceId: string | undefined;
 
   if (parsed.workspaceId !== undefined) {
     const resolved = await resolveWorkspaceForActor(cwd, parsed.workspaceId);
@@ -213,6 +516,48 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           }
         }
       }
+      // SLATE-27 (flow 186, T7, AC2): --auto provisions a Task Manager flow
+      // when this slate's course has none bound yet — never re-provisioned
+      // for an already-bound course, mirroring SLATE-16's own "only when
+      // unset" rule directly above. Shares this try block deliberately: a
+      // provisioning failure degrades the same way a workspace-resolution
+      // failure already does (log, skip, let the turn run) rather than
+      // needing a second, parallel degrade-safe wrapper.
+      if (parsed.auto !== undefined) {
+        const forCourse = await readSlate(slateSession.dir);
+        // T10 (review finding BOSS-003): derive the binding to snapshot from
+        // values ALREADY in scope — `forCourse`'s own read above, and
+        // `flowId` when a new flow is provisioned below — rather than a
+        // second `readSlate` after arming. A second read there raced the
+        // outer catch's own contract ("on any failure here, `--auto` simply
+        // does not arm for this attempt"): arming happened before that read,
+        // so a failure IN the read alone would still leave the loop armed,
+        // just with no binding to reopen/rebind against later (T10).
+        let flowRefForBinding = forCourse?.course.flowRef;
+        if (forCourse !== undefined && forCourse.course.flowRef === undefined) {
+          const flowId = await autoProvisionFlow(cwd, parsed.text);
+          await writeSlate(slateSession.dir, (prev) => {
+            if (!prev) throw new Error(`SLATE-27 bind: no open slate in ${slateSession.dir}`);
+            return { ...prev, course: { ...prev.course, flowRef: flowId } };
+          });
+          flowRefForBinding = flowId;
+        }
+        // T8 (AC7): arm the in-memory continuation budget for THIS attempt
+        // only, whether the flow was just provisioned above or was already
+        // bound (reused, per AC2's "no new flow... existing one is reused").
+        // Lives on `slateSession` itself — never `slate.json` — so a resumed
+        // or forked session (a brand-new `SlateSessionRef`) never inherits
+        // it. Consumed (and cleared) exactly once, at the top of the
+        // continuation-loop block below (review finding BOSS-001) — arming
+        // here alone is NOT enough to guarantee "this attempt only": without
+        // that clear, `slateSession` is a per-SESSION object reused across
+        // every later `/goal` call (`shell.ts`/`tui-shell.ts` construct it
+        // once, not per-call), so a stale armed budget would silently hijack
+        // the NEXT `/goal` too, even one with no `--auto` in its own text.
+        slateSession.autoGoalRounds = parsed.auto.rounds ?? DEFAULT_AUTO_GOAL_ROUNDS;
+        boundFlowRef = flowRefForBinding;
+        boundWorkspaceId = forCourse?.workspaceId;
+      }
     } catch (err) {
       systemLine(io, `/goal: slate bookkeeping failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
     }
@@ -223,5 +568,113 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
   // check must not re-examine the same `parsed.text` and immediately undo
   // that open/bind whenever the goal text happens to contain a close-phrase
   // substring (e.g. "wrap up documentation").
-  await runAgentTurn(io, deps, history, parsed.text, slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {});
+  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {};
+  await runAgentTurn(io, deps, history, parsed.text, turnOptions);
+
+  // SLATE-27 (flow 186, T9): bounded continuation loop, armed only when T8
+  // set `slateSession.autoGoalRounds` above (AC7 — in-memory, this attempt
+  // only). AC3's stop condition: `runAgentTurn`'s own `finally` block
+  // (`closeSlateOnFlowDone`, agent.ts) ALREADY ran `isCourseDone`/
+  // `courseFromSlate` for the turn just above, and — if the course was
+  // done — already archived the slate and flipped `slateSession.opened` to
+  // `false` (`closeSlateSession`, slate-lifecycle.ts) before this line
+  // runs. Reading `slateSession.opened` here observes that SAME check's
+  // result rather than invoking a second implementation of it: calling
+  // `isCourseDone` again here would either recompute the identical answer
+  // from the same live state (redundant) or, once the course is genuinely
+  // done, read a slate that closeSlateOnFlowDone already archived out from
+  // under it. `slateSession.opened` is the correct, already-computed signal
+  // either way.
+  if (slateSession !== undefined && slateSession.autoGoalRounds !== undefined) {
+    const roundsCap = slateSession.autoGoalRounds;
+    // Review finding BOSS-001: clear the arm the moment it's consumed, not
+    // just set it once at arm time. `slateSession` is a per-SESSION object
+    // (`shell.ts`/`tui-shell.ts` construct it once, reused across every
+    // `/goal` call in the session, reassigned only on `/new`/`/clear`) — an
+    // arm that outlived this call would silently hijack the NEXT `/goal`
+    // too, including one with no `--auto` in its own text. This is what
+    // makes "armed only for the current attempt" (AC7, this file's own
+    // header comment on `autoGoalRounds`) actually true, not just documented.
+    delete slateSession.autoGoalRounds;
+    let roundsLeft = roundsCap;
+    let round = 1;
+    while (roundsLeft > 0 && slateSession.opened) {
+      roundsLeft -= 1;
+      round += 1;
+      const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
+      systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — continuing toward the goal.\n`);
+      await runAgentTurn(io, deps, history, continuationText, turnOptions);
+    }
+
+    // T10 (AC4): one verifier pass before the loop finally stops. This
+    // never gates or reverses whatever `closeSlateOnFlowDone` already did
+    // above (AC8 — the same close/wrap-up path, untouched) — it is a
+    // post-hoc check on the OUTCOME, with at most one extra "second
+    // chance" round (plan step 5's own wording: "run one more round", not
+    // "keep looping until the verifier is satisfied" — an unresolvable
+    // disagreement between the verifier and the course tracker must still
+    // terminate, not spin).
+    const wasOpenBeforeVerifier = slateSession.opened;
+    const verdict = await runGoalVerifier(deps, parsed.text);
+    if (verdict !== undefined && !verdict.achieved) {
+      systemLine(
+        io,
+        `/goal --auto: verifier found the goal not fully achieved${
+          verdict.gaps.length > 0 ? ` — ${verdict.gaps.join("; ")}` : " (no specific gaps reported)"
+        }\n`,
+      );
+      if (roundsLeft > 0) {
+        let reopenOk = true;
+        if (!wasOpenBeforeVerifier) {
+          // The course was done and closeSlateOnFlowDone already archived
+          // the slate + dispatched wrap-up (AC8, unchanged). Reopen for one
+          // more round, mirroring the initial-open Anchors-inject pattern
+          // above exactly, and rebind the SAME flow/workspace this attempt
+          // was already bound to (`boundFlowRef`/`boundWorkspaceId`,
+          // snapshotted at arm time) — never re-provisioning a new flow.
+          //
+          // Review finding BOSS-002: guarded, matching this file's own
+          // "Review finding 3" rationale on the initial open a few dozen
+          // lines above — a bare `void (async () => { await
+          // runGoalCommand(...) })()` in `tui-shell.ts` has no `.catch`, so
+          // an unhandled rejection here (a corrupted `slate.json`, `EACCES`,
+          // or a second process archiving this session's slate between
+          // `ensureSlateOpened` and the `writeSlate` rebind — all real,
+          // already-documented possibilities elsewhere in this file) would
+          // crash/hang the TUI. Degrade the same way: skip the extra round
+          // rather than risk propagating an uncaught rejection.
+          try {
+            await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
+            const reopened = await readSlate(slateSession.dir);
+            if (reopened !== undefined) {
+              history.push({ role: "user", content: renderAnchorsBlock(reopened.anchors), provenance: "project" });
+              io.onHistoryChange?.("tool");
+            }
+            await writeSlate(slateSession.dir, (prev) => {
+              if (!prev) throw new Error(`SLATE-27 verifier-reopen: no open slate in ${slateSession.dir}`);
+              return {
+                ...prev,
+                course: { ...prev.course, ...(boundFlowRef !== undefined ? { flowRef: boundFlowRef } : {}) },
+                ...(boundWorkspaceId !== undefined ? { workspaceId: boundWorkspaceId } : {}),
+              };
+            });
+          } catch (err) {
+            reopenOk = false;
+            systemLine(
+              io,
+              `/goal --auto: could not reopen the slate for one more round (ignored): ${err instanceof Error ? err.message : String(err)}\n`,
+            );
+          }
+        }
+        if (!reopenOk) {
+          return;
+        }
+        roundsLeft -= 1;
+        round += 1;
+        const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
+        systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — one more round after the verifier found gaps.\n`);
+        await runAgentTurn(io, deps, history, continuationText, turnOptions);
+      }
+    }
+  }
 }
