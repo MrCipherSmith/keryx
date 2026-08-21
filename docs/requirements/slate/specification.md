@@ -1,5 +1,5 @@
 # Keryx Slate — Specification
-Version: 2.0.0
+Version: 3.0.0
 
 ## Identity and ownership
 
@@ -10,6 +10,7 @@ Version: 2.0.0
 | Work status and acceptance criteria | Flow | Slate never writes; Course only re-projects |
 | Knowledge acceptance | Existing SAC `propose`/`review` + guarded owner-writers | Unchanged; slate supplies only the wrap-up candidate's raw material |
 | Session↔workspace↔Flow automatic binding | Slate v2 (SLATE-16…19) — see below | Slate v2 resolves/creates via model judgment (`workspace_list` + own assessment), no new ACL/binding-record service; RP-03 retains what v2 does not touch: `keryx shell --workspace <id>` explicit selection, `--session current` resolution, Flow/worktree derivation preview, accepted-target link-back — see [RP-03](../shared-agent-context-lifecycle-binding/README.md) |
+| External-hand (non-keryx-process) task-local state | Slate v3 (SLATE-22…26) — see below | A private, MCP-opened slate scoped to `(cwd, externalSessionId)`, never shared with another `externalSessionId`; same wrap-up→`propose`/`review` destination as a keryx-native slate, never a parallel workspace concept |
 | Evidence sealing/scanning/minimisation | [SAC RP-05](../shared-agent-context-secure-evidence/README.md) (future) | Slate v1 calls existing `detectSecrets`/`detectPii` as an interim gate |
 | Execution identity / continuous authorization | [SAC RP-06](../shared-agent-context-identity-capabilities/README.md) (future) | Slate v1 reuses the existing `unattended-untrusted` harness profile as an interim gate |
 | TTL reservations / "in review by" signal | [SAC RP-08](../shared-agent-context-collaboration-worktrees/README.md) (future) | Slate v1 catch-up (SLATE-10) does not build its own reservation mechanism |
@@ -27,6 +28,25 @@ Version: 2.0.0
                             #       childDispatches { [dispatchId]: { anchors, course, seeds, status: completed|incomplete } }
   slate-archive/<attemptId>.json   # written on close, before a new slate opens in the same session dir
 ```
+
+**v3 — external-hand slate storage.** An external MCP caller has no
+`sessionDir()` (no keryx session exists for it), so its slate cannot live as
+a sibling of `summary.json`/`context.jsonl` the way a keryx-native slate
+does. It lives in a project-scoped, non-`.metaproject/`, non-git-tracked
+namespace instead:
+
+```text
+<project>/.keryx/external-slates/<externalSessionId>.json
+  # same Slate shape as slate.json, plus:
+  #   lastWriteAt: string (ISO timestamp, SLATE-26 idle-TTL input)
+  #   anchors carries only what the caller supplied (SLATE-23) — never
+  #   harness-computed root/tree/runtime the way keryx-native Anchors is
+```
+
+Written under the same `withFileLock` primitive as `slate.json` — no new
+lock mechanism. One file per `externalSessionId`; no index or list file spans
+multiple ids (AC-40 — this is the structural enforcement of "never shared
+between clients", not a policy check layered on top of a shared store).
 
 No new lock mechanism beyond reuse: `slate.json` is written under `withFileLock`
 (`src/lib/fs.ts`), not bare `writeFileAtomic` — two writers exist per turn
@@ -69,7 +89,12 @@ AC-1 already states for Anchors. No code path may special-case fork to carry
 | SLATE-19 | Cross-runtime agent-tool parity (v2) | Four new keryx-shell interactive tools in `src/commands/interactive-agent-tools.ts`, mirroring the existing MCP `sac.*` set, `risk: "read"` (same tier as `slate_write_seed` — draft/discovery, self-accept structurally impossible): `workspace_create` `{title, component?}`, `workspace_list` `{includeArchived?}`, `workspace_show` `{workspaceId}`, `workspace_propose` `{workspaceId, kind, sessionId?, note?}` (`sessionId` defaults to the current session). `workspace_review` is added to none of CLI/MCP/keryx-shell as an agent tool |
 | SLATE-20 | Review confirm-token (v2) | New `keryx workspace confirm-review <workspace-id> <proposal-id>` prints a short-lived (2 min), single-use token — requires a real terminal or an approval-gated `shell_exec`. `decision: "accepted"` on both the CLI `workspace review` handler (`src/commands/workspace.ts`) and the MCP `sac.review` handler (`src/mcp/tools.ts`) requires this token as an additional parameter; `"rejected"`/`"dismissed"` do not (they promote nothing) |
 | SLATE-21 | Finish SLATE-7's machine evidence (gap, not new design) | `resolveSessionWrapUp` (`src/sac/session-wrap-up.ts`) is replaced/wrapped so the evidence candidate is built from `anchors.touched` + git diff on those paths + `course.flowRef`/flow status + `seeds[]` as the primary text; `exportSessionMarkdown`'s full transcript is retained as a linked reference attachment, not the sole or embedded evidence |
-| SLATE-22 | Bounded autonomous continuation for `/goal` (flow 186) | `/goal <text> [--workspace <id>] --auto [N]` (`src/commands/goal-command.ts`). Auto-provisions a Task Manager flow (`flow init`/`freeze`/`start` via `createFlowService`, `src/flow/service.ts`) when the slate's course has none bound, with one acceptance criterion tied to the goal text (`keryx flow plan`'s model-suggested breakdown turned out to be advisory-only — writes no flow state — so v1 uses `flow init`'s default 4-task scaffold instead). Re-drives `runAgentTurn` in a round-capped loop; the stop condition is the SAME `isCourseDone`/`courseFromSlate` check `closeSlateOnFlowDone` already runs (observed via `slateSession.opened`, not a second call). Before the loop's final stop, one `spawn_subagent` (`mode: "read_only"`) verifier call independently checks the stated goal against live repo state; on a rejected verdict with round budget remaining, reopens the slate (rebinding the same flow/workspace) for exactly one more round. The armed round budget (`SlateSessionRef.autoGoalRounds`) is process-local/in-memory only — never written to `slate.json` — so a resumed or forked session never silently inherits it |
+| SLATE-22 | MCP-exposed private slate lifecycle (v3) | New `src/mcp/tools.ts` entries `slate.open`/`slate.writeSeed`/`slate.close` (module `slate`), following the exact stateless-tool-with-a-storage-side-effect shape `sac.workspaceCreate` already uses; storage via a new `src/session/external-slate.ts` (mirrors `src/session/slate.ts`'s `readSlate`/`writeSlate` under `withFileLock`, different path root) |
+| SLATE-23 | Self-reported Anchors for external hands (v3) | `slate.open`/`slate.writeSeed`'s `anchors` param is stored verbatim by `external-slate.ts` — no call into the harness's own `resolveProjectRoot()`/worktree-resolve/tree-walk code (SLATE-2's implementation) from this path at all |
+| SLATE-24 | Seed provenance & trust (v3) | `SlateSeed` type gains `origin: { harness: string; sessionRef?: string }` and `trust: "external-unverified"`; `slate_write_seed` (keryx-native, SLATE-3a) auto-fills `origin: { harness: "keryx" }` and omits `trust` (keryx-native Seeds are not "external-unverified" — the field is absent, not a different value, for that path); CLI `workspace review`/TUI review modal render `origin.harness` per Seed in evidence |
+| SLATE-25 | Wrap-up accepts external-slate evidence (v3) | `WrapUpSource` (`src/sac/trusted-wrap-up.ts`) gains `"external-slate"`; the existing, already-implemented `resolveMachineWrapUp` (`src/sac/machine-wrap-up.ts`, SLATE-7/21) gains a branch reading `external-slate.ts`'s Anchors+Seeds instead of a keryx `sessionDir()`; `slate.close` invokes this path exactly like SLATE-18's autonomous `workspace_propose` call when `workspaceId` is bound, else writes an `unbound-candidate` artifact (same SLATE-1/SLATE-10 path) |
+| SLATE-26 | Idle-TTL auto-close (v3) | `slate.open`/`slate.writeSeed`/`slate.close` each check `lastWriteAt` on every external slate under the same `cwd` against the existing `withFileLock` stale-lock threshold (`src/lib/fs.ts`); a stale one is closed via the same code path as SLATE-25's explicit close before the current call proceeds — no background timer, no daemon |
+| SLATE-27 | Bounded autonomous continuation for `/goal` (flow 186) | `/goal <text> [--workspace <id>] --auto [N]` (`src/commands/goal-command.ts`). Auto-provisions a Task Manager flow (`flow init`/`freeze`/`start` via `createFlowService`, `src/flow/service.ts`) when the slate's course has none bound, with one acceptance criterion tied to the goal text (`keryx flow plan`'s model-suggested breakdown turned out to be advisory-only — writes no flow state — so v1 uses `flow init`'s default 4-task scaffold instead). Re-drives `runAgentTurn` in a round-capped loop; the stop condition is the SAME `isCourseDone`/`courseFromSlate` check `closeSlateOnFlowDone` already runs (observed via `slateSession.opened`, not a second call). Before the loop's final stop, one `spawn_subagent` (`mode: "read_only"`) verifier call independently checks the stated goal against live repo state; on a rejected verdict with round budget remaining, reopens the slate (rebinding the same flow/workspace) for exactly one more round. The armed round budget (`SlateSessionRef.autoGoalRounds`) is process-local/in-memory only — never written to `slate.json` — so a resumed or forked session never silently inherits it |
 
 ## Anchors / Course / Seeds semantics
 
@@ -78,6 +103,17 @@ restored) on crash/resume from live repo state. Harness-write-only; model
 output is never a source. `touched` is append-only within the session. Never
 an authorization input — access is never inferred from checkout/worktree
 proximity (consistent with RP-08's explicit non-goal on the same point).
+
+**v3 — Anchors on an external-hand slate are the one exception to
+"harness-write-only, never model output".** They are still never *model
+output* in the sense of prose generated mid-turn to describe the situation —
+they are the calling harness's own structured report of what it directly
+observes about itself (its own `root`/`touched`/`note`), passed as a tool
+parameter the same way any other MCP tool argument is. `external-slate.ts`
+never computes, infers, or enriches this data — no tree-walk, no
+worktree-resolve, no runtime-probing of a process keryx does not control.
+This is a distinct code path from SLATE-2, not a relaxed version of it —
+SLATE-2's keryx-native Anchors computation is unchanged.
 
 **Course.** A pure projection, never a second tracker. Absent `flowRef`,
 Course is a plain local checklist with no Flow semantics. No slate/agent code
@@ -106,13 +142,38 @@ type Slate = {
   workspaceId?: string;   // see below — not nested under anchors/course, its own axis
   anchors: { root: string; tree?: string; runtime?: { provider: string; model: string }; touched: string[]; fence?: string[] };
   course: { flowRef?: string };
-  seeds: Array<{ id: string; text: string; ts: string; kind?: ProposalKind }>;
+  seeds: Array<SlateSeed>;
   childDispatches?: Record<string, {
     anchors: Slate["anchors"];
     course: Slate["course"];
     seeds: Slate["seeds"];
     status: "completed" | "incomplete";
   }>;
+};
+
+// v3 — SlateSeed gains provenance. Both new fields are optional on the type
+// (backward-compatible with existing slate.json files with no origin/trust
+// at all) but `origin` is REQUIRED at write time for any Seed accepted
+// through the SLATE-22 MCP path — enforced by `slate.writeSeed`'s handler,
+// not by the type alone.
+type SlateSeed = {
+  id: string;
+  text: string;
+  ts: string;
+  kind?: ProposalKind;
+  origin?: { harness: string; sessionRef?: string };  // "keryx" auto-filled for slate_write_seed (SLATE-3a)
+  trust?: "external-unverified";                       // present only for SLATE-22-written Seeds; absent for keryx-native ones
+};
+
+// v3 — external-hand slate, stored separately from any sessionDir()-rooted
+// Slate (see Future storage structure above). Same shelves, different
+// container and no workspace/flow auto-binding source beyond SLATE-16 reuse.
+type ExternalSlate = {
+  externalSessionId: string;
+  workspaceId?: string;
+  anchors: { root: string; touched?: string[]; note?: string };  // caller-reported only, SLATE-23 — no tree/runtime/fence enrichment
+  seeds: SlateSeed[];
+  lastWriteAt: string;  // ISO timestamp — SLATE-26 idle-TTL input
 };
 ```
 
@@ -268,6 +329,27 @@ workspace_propose { workspaceId: string, kind: ProposalKind, sessionId?: string,
 when omitted — SLATE-18 needs the composer to propose without re-supplying
 an id it already knows. No `workspace_review` tool is added anywhere.
 
+**v3 (SLATE-22) — new MCP tools**, `module: "slate"`, mirroring the
+`sac.workspaceCreate`/`sac.propose` stateless-tool-with-storage-side-effect
+shape (`src/mcp/tools.ts`):
+```text
+slate.open       { externalSessionId: string, workspaceId?: string, anchors?: { root?: string, touched?: string[], note?: string } }
+slate.writeSeed  { externalSessionId: string, text: string, kind?: ProposalKind }
+slate.close      { externalSessionId: string }
+```
+`slate.open` is idempotent per `externalSessionId` (returns existing state,
+never a second file); omitted `workspaceId` triggers SLATE-16 resolve-or-
+create, the same procedure a keryx-native slate-open already uses, not a new
+one. `slate.writeSeed` sets `origin: { harness: <declared by the MCP client
+at connection time, or "unknown" if unavailable>, sessionRef: externalSessionId
+}` and `trust: "external-unverified"` on every Seed it appends — the caller
+cannot override either field. `slate.close` dispatches via SLATE-25 when
+`workspaceId` is bound, else writes an `unbound-candidate` artifact. All
+three are `local-stdio only`, same transport restriction as `sac.*`
+(`context?.transport === "http"` denied) — no new transport posture is
+introduced. No `slate.list`/`slate.read` spanning multiple
+`externalSessionId`s is added at any point (AC-40).
+
 ## Permission model and security invariants
 
 Slate introduces no new `ActorContext`, no new role, no new write authority.
@@ -337,6 +419,21 @@ remains the eventual proper replacement for OS-UID-only identity; SLATE-20
 is a smaller, concrete interim measure that does not block on RP-06 landing
 and does not claim to solve execution identity in general.
 
+**v3 (SLATE-22…26) introduces no new write authority and no relaxed review
+gate.** A Seed written through `slate.writeSeed` reaches Know-how through
+the exact same `workspace review`/`sac.review` + SLATE-20 confirm-token path
+as a keryx-native Seed — v3 adds a visible `origin`/`trust` marker to that
+existing evidence, it does not add a second, lighter-weight acceptance
+route. `trust: "external-unverified"` is informational for the reviewer, not
+enforced as a blocking gate anywhere in the pipeline — v3 explicitly does
+not build a trust-scoring or auto-rejection model (that would be
+[RP-06](../shared-agent-context-identity-capabilities/README.md)'s scope, if
+it is ever built at all). The one new structural guarantee v3 does add:
+`.keryx/external-slates/<externalSessionId>.json` is never readable or
+writable by a call carrying a different `externalSessionId` — no shared
+mutable state crosses hands, so the concurrency/cross-contamination class of
+risk that a shared Seeds store would have introduced does not apply here.
+
 ## Integrations and dependencies
 
 - `src/session/*`: sessionDir, atomic write patterns — slate's storage
@@ -376,6 +473,14 @@ and does not claim to solve execution identity in general.
 - `src/flow/*`: **v2** — SLATE-16 adds an optional `workspaceId` field to the
   flow record; native Flow commands remain the sole work-state channel
   otherwise, unchanged.
+- `src/session/slate.ts`: **v3** — the pattern `external-slate.ts` mirrors
+  (`readSlate`/`writeSlate` under `withFileLock`), not extended/modified
+  itself; `src/mcp/tools.ts`: **v3** — new `slate.open/writeSeed/close`
+  module registration, same file SLATE-19b already extends; `src/sac/
+  trusted-wrap-up.ts`: **v3** — `WrapUpSource` gains `"external-slate"`;
+  `src/sac/machine-wrap-up.ts`'s `resolveMachineWrapUp` (SLATE-7/21) already
+  exists and works for `"flow"` — SLATE-25 adds a branch to it, no external
+  dependency to wait on.
 - **Explicitly not integrated with (see Non-goals in README.md):**
   [SAC RP-03](../shared-agent-context-lifecycle-binding/README.md) — **v1
   scope only** (session↔workspace↔Flow binding is now SLATE-16…19, not
@@ -561,3 +666,36 @@ and does not claim to solve execution identity in general.
   evidence text — evidence is git-diff/flow-snapshot/seed-derived, matching
   AC-5's original intent — with the full transcript export still reachable
   as a separate linked reference, not deleted and not the primary candidate.
+
+### v3 acceptance criteria (SLATE-22…26)
+
+- **AC-34:** No code path allows a `slate.*` MCP call carrying one
+  `externalSessionId` to read, list, or write another `externalSessionId`'s
+  `.keryx/external-slates/*.json` — no list/read endpoint spans multiple ids.
+- **AC-35:** `slate.open` called twice with the same `externalSessionId`
+  never creates a second file or errors on the second call — it returns the
+  existing external slate's current state, unmodified.
+- **AC-36:** An external slate's `anchors` field always equals exactly what
+  the calling hand most recently supplied via `slate.open`/`slate.writeSeed`
+  — no harness-side tree-walk, worktree-resolve, or runtime-probing code path
+  ever writes into an `ExternalSlate.anchors` field.
+- **AC-37:** Every `SlateSeed` appended via `slate.writeSeed` carries
+  `origin.harness` and `trust: "external-unverified"` before it is persisted;
+  no proposal evidence produced from an external slate contains a Seed
+  missing either field.
+- **AC-38:** `slate.close` never calls `propose` without a `workspaceId`
+  bound earlier in that external slate's life (explicit `slate.open`
+  parameter or SLATE-16 resolve-or-create) — mirrors AC-15 for the
+  external-hand path; absent binding, evidence is preserved as a local
+  `unbound-candidate` artifact, visible at the next `workspace catch-up`,
+  never discarded and never proposed against a guessed id.
+- **AC-39:** An external slate whose `lastWriteAt` exceeds the shared
+  `withFileLock` stale-lock threshold is auto-closed on the next `slate.*`
+  call touching that project's `cwd`, via the identical dispatch/
+  `unbound-candidate` path an explicit `slate.close` would take — never left
+  open indefinitely, and never closed by a background timer or daemon
+  process (no such infrastructure exists in keryx).
+- **AC-40:** The pre-v3 non-goal ("no shared open slate between clients",
+  README.md) holds after v3 ships exactly as stated, unreversed and
+  unnarrowed: it is satisfied structurally by AC-34, not by a policy check
+  layered on top of a shared store.

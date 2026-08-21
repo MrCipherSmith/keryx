@@ -53,7 +53,7 @@ import { promisify } from "node:util";
 import { writeFileAtomic } from "../lib/fs";
 import { dedupeSeeds, type Slate, type SlateChildDispatch, type SlateSeed, type SlateSeedKind } from "../session/slate";
 import { readCourse, type CourseProjection } from "../session/slate-course";
-import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence } from "./trusted-wrap-up";
+import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import type { ProviderFactory, ModelTurnResult } from "../harness/provider/single-turn";
 import { runModelTurn } from "../harness/provider/single-turn";
@@ -310,7 +310,15 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   };
 }
 
-export type WrapUpTrigger = "flow-complete" | "explicit" | "process-termination";
+export type WrapUpTrigger =
+  | "flow-complete"
+  | "explicit"
+  | "process-termination"
+  // SLATE-25/26 (v3, flow 182 T3): an external-hand slate's own two close
+  // triggers — `slate.close` (explicit) and the SLATE-26 idle-TTL reclaim
+  // (no daemon; a lazy check other `slate.*` calls perform on themselves).
+  | "external-slate-close"
+  | "external-slate-idle-reclaim";
 
 export type WrapUpGroupOutcome =
   | { kind: SlateSeedKind; outcome: "proposed"; proposalId: string }
@@ -341,6 +349,17 @@ export type RunWrapUpInput = {
   dir: string;
   slate: Slate;
   trigger: WrapUpTrigger;
+  /**
+   * SLATE-25 (v3): the `TrustedWrapUpProvenance.source` a bound-workspaceId
+   * dispatch issues — defaults to `"flow"` (this function's original, only
+   * caller before flow 182: keryx-native `commands/agent.ts`). An
+   * external-hand `slate.close`/idle-TTL reclaim (`src/session/
+   * external-slate.ts`) passes `"external-slate"` explicitly so a
+   * proposal's evidence records which wrap-up path actually produced it —
+   * reuses this SAME propose/evidence machinery end to end, never a second
+   * one.
+   */
+  wrapUpSource?: WrapUpSource;
   now?: () => Date;
   env?: Record<string, string | undefined>;
   providerFactory?: ProviderFactory;
@@ -434,10 +453,12 @@ async function proposeOneGroup(params: {
   slate: Slate;
   kind: SlateSeedKind;
   now: () => Date;
+  wrapUpSource?: WrapUpSource;
   env?: Record<string, string | undefined>;
   providerFactory?: ProviderFactory;
   modelTurnTimeoutMs?: number;
 }): Promise<WrapUpGroupOutcome> {
+  const wrapUpSource: WrapUpSource = params.wrapUpSource ?? "flow";
   // F-002 fix (flow 163 fix round, logic reviewer MAJOR finding): this
   // function used to let a non-conflict failure — any other
   // `ProposalLifecycleError` code, the `actor` guard's plain `Error` a few
@@ -482,8 +503,8 @@ async function proposeOneGroup(params: {
     const wrapUpAuthority = createTrustedWrapUpAuthority({
       now: params.now,
       resolveExplicitWrapUp: async (request) => {
-        if (request.source !== "flow") {
-          throw new Error(`machine-wrap-up only resolves "flow" wrap-ups, got "${request.source}"`);
+        if (request.source !== wrapUpSource) {
+          throw new Error(`machine-wrap-up only resolves "${wrapUpSource}" wrap-ups, got "${request.source}"`);
         }
         return resolved.resolution;
       },
@@ -498,7 +519,7 @@ async function proposeOneGroup(params: {
     // caught by the outer catch below and turned into an `"error"` outcome
     // rather than rejecting `proposeOneGroup`'s own promise (F-002 fix).
     if (!actor) throw new Error("trusted ActorContext is required for a machine wrap-up propose");
-    const provenance = await wrapUpAuthority.issue({ actor, source: "flow", sourceRef });
+    const provenance = await wrapUpAuthority.issue({ actor, source: wrapUpSource, sourceRef });
 
     try {
       const proposal = await service.create({
@@ -577,6 +598,7 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
         slate: input.slate,
         kind,
         now,
+        ...(input.wrapUpSource !== undefined ? { wrapUpSource: input.wrapUpSource } : {}),
         ...(input.env !== undefined ? { env: input.env } : {}),
         ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
         ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
