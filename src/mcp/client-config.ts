@@ -448,7 +448,7 @@ export function buildMcpModuleEntry(): Record<string, unknown> {
     expose: {
       tools: true,
       resources: true,
-      modules: ["gdgraph", "gdctx", "security", "flow", "memory", "health", "testing", "wiki", "standard", "sac"],
+      modules: ["gdgraph", "gdctx", "security", "flow", "memory", "health", "testing", "wiki", "standard", "sac", "gdskills"],
     },
   };
 }

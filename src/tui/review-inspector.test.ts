@@ -143,12 +143,25 @@ test("flow 173/AC8: 'unknown' list-row text is unchanged regardless of wrapUpOut
 });
 
 test("detail reflects armed / running / done accept status", () => {
-  expect(formatReviewDetailLines(PROPOSAL, { kind: "armed" }).join("\n")).toContain("CONFIRM accept");
-  expect(formatReviewDetailLines(PROPOSAL, { kind: "running" }).join("\n")).toContain("Accepting…");
-  expect(formatReviewDetailLines(PROPOSAL, { kind: "done", outcome: { ok: true } }).join("\n")).toContain("✓ Accepted.");
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "armed", decision: "accept" }).join("\n")).toContain("CONFIRM accept");
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "running", decision: "accept" }).join("\n")).toContain("Accepting…");
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "done", decision: "accept", outcome: { ok: true } }).join("\n")).toContain("✓ Accepted.");
   expect(
-    formatReviewDetailLines(PROPOSAL, { kind: "done", outcome: { ok: false, message: "boom" } }).join("\n"),
+    formatReviewDetailLines(PROPOSAL, { kind: "done", decision: "accept", outcome: { ok: false, message: "boom" } }).join("\n"),
   ).toContain("✗ Accept failed: boom");
+});
+
+test("detail reflects armed / running / done decline status, and unavailable on a non-proposal item", () => {
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "armed", decision: "decline" }).join("\n")).toContain("CONFIRM decline");
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "running", decision: "decline" }).join("\n")).toContain("Declining…");
+  expect(formatReviewDetailLines(PROPOSAL, { kind: "done", decision: "decline", outcome: { ok: true } }).join("\n")).toContain("✓ Declined.");
+  expect(
+    formatReviewDetailLines(PROPOSAL, { kind: "done", decision: "decline", outcome: { ok: false, message: "boom" } }).join("\n"),
+  ).toContain("✗ Decline failed: boom");
+
+  const unavailable = formatReviewDetailLines(BLOCKED, { kind: "unavailable", decision: "accept" }).join("\n");
+  expect(unavailable).toContain("does nothing here");
+  expect(unavailable).toContain("only apply to a pending proposal");
 });
 
 test("windowLines and clampScroll keep a viewport over long bodies", () => {
@@ -238,7 +251,7 @@ test("[a] arms accept only on the Detail tab for a proposal; any non-y key cance
   );
 });
 
-test("[a] then [y] runs acceptProposal, removes the item locally, and fires onAccepted", async () => {
+test("[a] then [y] runs acceptProposal, removes the item locally, and fires onResolved", async () => {
   let active = "detail";
   let node: { content: string } | undefined;
   let accepted: CatchUpProposalItem | undefined;
@@ -268,7 +281,7 @@ test("[a] then [y] runs acceptProposal, removes the item locally, and fires onAc
           resolveAccept = () => resolve({ ok: true });
           expect(item.proposalId).toBe(PROPOSAL.proposalId);
         }),
-      onAccepted: (item) => {
+      onResolved: (item) => {
         accepted = item;
       },
       onKeypress: (handler) => {
@@ -287,7 +300,64 @@ test("[a] then [y] runs acceptProposal, removes the item locally, and fires onAc
   expect(accepted?.proposalId).toBe(PROPOSAL.proposalId);
 });
 
-test("a non-proposal selection never arms accept, even with acceptProposal present", () => {
+test("[d] then [y] runs declineProposal (--decision rejected), separately from acceptProposal", async () => {
+  let active = "detail";
+  let node: { content: string } | undefined;
+  let declined: CatchUpProposalItem | undefined;
+  let acceptCalls = 0;
+  let resolveDecline: (() => void) | undefined;
+  presentReview(
+    (_otui, _chrome, input) => {
+      input.renderTab("detail", {
+        add: (child: { content?: string }) => {
+          node = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      items: [PROPOSAL],
+      visibleRows: 20,
+      acceptProposal: async () => {
+        acceptCalls += 1;
+        return { ok: true };
+      },
+      declineProposal: (item) =>
+        new Promise((resolve) => {
+          resolveDecline = () => resolve({ ok: true });
+          expect(item.proposalId).toBe(PROPOSAL.proposalId);
+        }),
+      onResolved: (item) => {
+        declined = item;
+      },
+      onKeypress: (handler) => {
+        handler({ name: "d", sequence: "d" });
+        expect(node?.content).toContain("CONFIRM decline");
+        handler({ name: "y", sequence: "y" });
+        expect(node?.content).toContain("Declining…");
+        return () => {};
+      },
+    },
+  );
+  expect(resolveDecline).toBeDefined();
+  resolveDecline?.();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(node?.content).toContain("✓ Declined.");
+  expect(declined?.proposalId).toBe(PROPOSAL.proposalId);
+  // The other decision's handler was never touched.
+  expect(acceptCalls).toBe(0);
+});
+
+test("a non-proposal selection never arms accept/decline, even with both handlers present — and says why instead of doing nothing", () => {
   let active = "detail";
   let node: { content: string } | undefined;
   presentReview(
@@ -311,9 +381,47 @@ test("a non-proposal selection never arms accept, even with acceptProposal prese
       items: [BLOCKED],
       visibleRows: 20,
       acceptProposal: async () => ({ ok: true }),
+      declineProposal: async () => ({ ok: true }),
       onKeypress: (handler) => {
         handler({ name: "a", sequence: "a" });
         expect(node?.content).not.toContain("CONFIRM accept");
+        expect(node?.content).toContain("does nothing here");
+        handler({ name: "d", sequence: "d" });
+        expect(node?.content).not.toContain("CONFIRM decline");
+        expect(node?.content).toContain("does nothing here");
+        return () => {};
+      },
+    },
+  );
+});
+
+test("[a] with no acceptProposal wired reports 'unavailable' instead of silently doing nothing", () => {
+  let active = "detail";
+  let node: { content: string } | undefined;
+  presentReview(
+    (_otui, _chrome, input) => {
+      input.renderTab("detail", {
+        add: (child: { content?: string }) => {
+          node = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      items: [PROPOSAL],
+      visibleRows: 20,
+      onKeypress: (handler) => {
+        handler({ name: "a", sequence: "a" });
+        expect(node?.content).not.toContain("CONFIRM accept");
+        expect(node?.content).toContain("no accept handler is configured");
         return () => {};
       },
     },

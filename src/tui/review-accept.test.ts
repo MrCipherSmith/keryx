@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
-import { acceptProposalViaShell } from "./review-accept";
+import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 
 function fakeRunner(byPrefix: Record<string, { output: string; isError: boolean }>): {
   run: CommandRunner;
@@ -71,4 +71,30 @@ test("a review failure after a successful mint is reported", async () => {
   });
   const outcome = await acceptProposalViaShell(run, "ws-1", "proposal-abc");
   expect(outcome).toEqual({ ok: false, message: "confirm token expired" });
+});
+
+test("decline runs exactly one command — no confirm-token mint step, unlike accept", async () => {
+  const { run, calls } = fakeRunner({
+    "keryx workspace review": { output: JSON.stringify({ event: { toStatus: "rejected" } }), isError: false },
+  });
+  const outcome = await declineProposalViaShell(run, "ws-1", "proposal-abc");
+  expect(outcome).toEqual({ ok: true });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toBe("keryx workspace review 'ws-1' 'proposal-abc' --decision rejected");
+});
+
+test("decline single-quotes every interpolated value", async () => {
+  const { run, calls } = fakeRunner({
+    "keryx workspace review": { output: "{}", isError: false },
+  });
+  await declineProposalViaShell(run, "ws it's-1", "proposal-abc");
+  expect(calls[0]).toBe("keryx workspace review 'ws it'\\''s-1' 'proposal-abc' --decision rejected");
+});
+
+test("a decline command failure is reported, never thrown", async () => {
+  const { run } = fakeRunner({
+    "keryx workspace review": { output: "proposal already has a terminal transition", isError: true },
+  });
+  const outcome = await declineProposalViaShell(run, "ws-1", "proposal-abc");
+  expect(outcome).toEqual({ ok: false, message: "proposal already has a terminal transition" });
 });
