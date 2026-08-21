@@ -25,6 +25,9 @@ export const MODULE_MANIFEST_KEY: Record<string, string | null> = {
   // SAC's local read facade is independently guarded and has no manifest
   // module of its own; the MCP transport gate remains the mcp module.
   sac: null,
+  // Slate (SLATE-22..26, external-hand MCP surface) has no `keryx modules`
+  // toggle of its own either — same cross-cutting shape as `sac` above.
+  slate: null,
 };
 
 type ManifestModule = { enabled?: boolean };
