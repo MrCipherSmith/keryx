@@ -3133,6 +3133,7 @@ export async function launchTuiAgentShell(opts: {
           // ask — a hard floor no mode lifts). One-time explicit
           // confirmation before it takes effect, never a silent flip.
           chrome.hideMenu();
+          let blockedByOpenDialog = false;
           const confirmId = await chrome.withOverlay(() =>
             showComposerChoice(otui, r, chrome.dock, {
               title: "Switch to auto mode?",
@@ -3144,9 +3145,16 @@ export async function launchTuiAgentShell(opts: {
                 { id: "confirm", label: "Confirm", description: "I understand the risk" },
                 { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
               ],
+              onBusy: () => {
+                blockedByOpenDialog = true;
+                chrome.showToast("Answer the open approval first, then retry /mode.");
+              },
             }),
           );
           input.focus();
+          if (blockedByOpenDialog) {
+            return;
+          }
           if (confirmId !== "confirm") {
             chrome.showToast("Cancelled — mode unchanged.");
             return;
@@ -3177,6 +3185,7 @@ export async function launchTuiAgentShell(opts: {
       const stored = getProjectPermissionMode(sessionCwd);
       chrome.hideMenu();
       void (async () => {
+        let blockedByOpenDialog = false;
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: `Permission mode (current: ${permissionMode})`,
@@ -3188,9 +3197,16 @@ export async function launchTuiAgentShell(opts: {
               description: MODE_PICKER_DESCRIPTIONS[m],
               recommended: m === permissionMode,
             })),
+            onBusy: () => {
+              blockedByOpenDialog = true;
+              chrome.showToast("Answer the open approval first, then retry /mode.");
+            },
           }),
         );
         input.focus();
+        if (blockedByOpenDialog) {
+          return;
+        }
         if (isPermissionMode(id) && id !== permissionMode) {
           await applyMode(id);
         }
@@ -3883,6 +3899,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         void (async () => {
+          let blockedByOpenDialog = false;
           const chosen = await showComposerChoice(otui, r, chrome.dock, {
             title: "Main agent is busy",
             subtitle: line,
@@ -3891,7 +3908,18 @@ export async function launchTuiAgentShell(opts: {
               { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
             ],
             cancelId: "side",
+            onBusy: () => {
+              blockedByOpenDialog = true;
+              chrome.showToast("Answer the open approval first, then resend.");
+            },
           });
+          if (blockedByOpenDialog) {
+            // Don't silently pick "side" for a message the user never routed —
+            // hand it back to the composer so nothing is lost.
+            input.value = line;
+            input.focus();
+            return;
+          }
           if (chosen === "main") {
             const id = `mq${mainQueueSeq++}`;
             mainQueue.push({ id, question: line, displayQuestion: displayLine });
