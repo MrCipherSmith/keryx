@@ -39,7 +39,7 @@ function renderWrapUpMemoryEntry(input: {
 
 Version: 0.1.0
 Type: task-note
-Status: draft
+Status: accepted
 Confidence: medium
 
 ## Summary

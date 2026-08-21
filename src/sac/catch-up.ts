@@ -47,6 +47,7 @@ import type { WrapUpGroupOutcome, WrapUpTrigger } from "./machine-wrap-up";
 import { createLocalProposalLifecycleService, type ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
 import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
+import { readSidecarNote } from "./proposal-evidence";
 
 // `Proposal` is not exported from `proposal-lifecycle.ts` (it is that
 // module's own private record shape) — derived structurally from the public
@@ -55,7 +56,26 @@ import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
 type VisibleProposalGroup = Awaited<ReturnType<ProposalLifecycleService["listVisibleProposedProposals"]>>[number];
 type Proposal = VisibleProposalGroup["proposals"][number];
 
-export type CatchUpProposalItem = { type: "proposal"; workspaceId: string; proposalId: string; fresh: boolean };
+export type CatchUpProposalItem = {
+  type: "proposal";
+  workspaceId: string;
+  proposalId: string;
+  fresh: boolean;
+  kind: Proposal["kind"];
+  author: string;
+  createdAt: string;
+  /**
+   * The caller's own free-text gist from `keryx workspace propose --note`
+   * (proposal-evidence.ts's sidecar file), when one was given. NOT
+   * `Proposal.summary` — that field is a fixed placeholder
+   * ("trusted wrap-up reference"): the trusted wrap-up capability only
+   * carries a digest of the real summary, never the text itself (by design,
+   * so a caller can't forge it), so there is nothing meaningful to show from
+   * it. `note` is the only real, human-authored description of what was
+   * proposed that exists on disk before acceptance.
+   */
+  note: string | undefined;
+};
 export type CatchUpBlockedItem = { type: "blocked"; sessionId: string; workspaceId?: string; terminalState: TerminalState };
 export type CatchUpUnboundCandidateItem = { type: "unbound-candidate"; sessionId: string; evidencePath: string; summary: string };
 export type CatchUpUnknownItem = {
@@ -138,8 +158,20 @@ async function collectProposals(cwd: string, workspaceId: string | undefined): P
     flattened.map(async ({ group, proposal }) => {
       // Re-checked HERE, per item, right before display (AC3) — never a
       // cached/creation-time value.
-      const fresh = await proposalService.isEvidenceFresh(proposal, actor);
-      return { type: "proposal" as const, workspaceId: group.workspace.id, proposalId: proposal.id, fresh };
+      const [fresh, note] = await Promise.all([
+        proposalService.isEvidenceFresh(proposal, actor),
+        readSidecarNote(cwd, group.workspace.id, proposal.id),
+      ]);
+      return {
+        type: "proposal" as const,
+        workspaceId: group.workspace.id,
+        proposalId: proposal.id,
+        fresh,
+        kind: proposal.kind,
+        author: proposal.author,
+        createdAt: proposal.createdAt,
+        note,
+      };
     }),
   );
 }

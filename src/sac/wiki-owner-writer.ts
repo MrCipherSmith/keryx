@@ -39,7 +39,7 @@ function renderWrapUpDecisionPage(input: {
 
 Version: 0.1.0
 Type: decision
-Status: draft
+Status: accepted
 
 ## Summary
 

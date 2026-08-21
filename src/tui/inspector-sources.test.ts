@@ -145,7 +145,16 @@ test("loadInspectorWorkspace / loadInspectorSlates: real fixtures, real cross-se
   }
 });
 
-const PROPOSAL: CatchUpProposalItem = { type: "proposal", workspaceId: "ws-1", proposalId: "p-1", fresh: true };
+const PROPOSAL: CatchUpProposalItem = {
+  type: "proposal",
+  workspaceId: "ws-1",
+  proposalId: "p-1",
+  fresh: true,
+  kind: "follow-up",
+  author: "user:local-1",
+  createdAt: "2026-08-16T00:00:00.000Z",
+  note: undefined,
+};
 const BLOCKED: CatchUpBlockedItem = {
   type: "blocked",
   sessionId: "sess-1",

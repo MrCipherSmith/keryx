@@ -73,7 +73,10 @@ describe("createRealWikiOwnerWriter.persist", () => {
 
     const written = await readFile(path.join(cwd, ".metaproject", "wiki", "decisions", "sac-proposal-a.md"), "utf8");
     expect(written).toContain("Type: decision");
-    expect(written).toContain("Status: draft");
+    // Written only after an owner/editor has already accepted the proposal
+    // (authorize() above) — the page must not claim "draft" while its own
+    // body says "accepted by a reviewer".
+    expect(written).toContain("Status: accepted");
     expect(written).toContain("WorktreePort is the real create/remove/merge seam.");
     expect(written).toContain("./.metaproject/workspaces/workspace-a/session-evidence/session-a.md");
   });

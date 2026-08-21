@@ -1,9 +1,10 @@
 # Specification: Keryx Skills Runtime Tools
 Version: 0.1.0
 
-Status: draft — describes a proposed design, not shipped code. Every path and
+Status: implemented — shipped in the 0.2.50 release (PR #359). Every path and
 signature below is either (a) an existing file/interface, cited as such, or
-(b) a new element this package proposes adding to it, marked **NEW**.
+(b) an element this package added to it, marked **NEW** at the time of
+writing.
 
 ## 1. Identity
 

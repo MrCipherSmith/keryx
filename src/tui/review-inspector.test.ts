@@ -14,7 +14,13 @@ const PROPOSAL: CatchUpProposalItem = {
   workspaceId: "ws-1",
   proposalId: "proposal-abc123",
   fresh: true,
+  kind: "decision",
+  author: "user:local-1",
+  createdAt: "2026-08-14T00:00:00.000Z",
+  note: "WorktreePort is the real create/remove/merge seam.",
 };
+
+const PROPOSAL_NO_NOTE: CatchUpProposalItem = { ...PROPOSAL, proposalId: "proposal-no-note", note: undefined };
 
 const BLOCKED: CatchUpBlockedItem = {
   type: "blocked",
@@ -61,6 +67,8 @@ test("list highlights the selected row and labels each item by type", () => {
   expect(lines[0]?.startsWith(">")).toBe(true);
   expect(lines[0]).toContain("PROPOSAL");
   expect(lines[0]).toContain("proposal-abc123");
+  // Its kind is visible at a glance, before ever opening the Detail tab.
+  expect(lines[0]).toContain("decision");
   expect(lines[1]?.startsWith(" ")).toBe(true);
   expect(lines[1]).toContain("BLOCKED");
 });
@@ -80,6 +88,19 @@ test("detail includes the recommended command and, for a proposal, the accept hi
   expect(blocked).toContain("keryx shell -r sess-1");
   // Non-proposal items never offer an accept action.
   expect(blocked).not.toContain("[a] Accept");
+});
+
+test("a proposal's detail shows what was actually proposed — kind, author, created, and the propose-time note", () => {
+  const lines = formatReviewDetailLines(PROPOSAL, { kind: "idle" });
+  expect(lines).toContain("Kind       decision");
+  expect(lines).toContain("Author     user:local-1");
+  expect(lines).toContain("Created    2026-08-14T00:00:00.000Z");
+  expect(lines).toContain("Note       WorktreePort is the real create/remove/merge seam.");
+});
+
+test("a proposal with no propose-time note omits the Note line instead of showing a placeholder", () => {
+  const lines = formatReviewDetailLines(PROPOSAL_NO_NOTE, { kind: "idle" });
+  expect(lines.some((line) => line.startsWith("Note"))).toBe(false);
 });
 
 test("flow 173: 'unknown' detail without wrapUpOutcome shows exactly today's unchanged generic message", () => {
