@@ -155,7 +155,7 @@ export interface SlateSessionRef {
   cwd: string;
   opened: boolean;
   /**
-   * SLATE-22 (flow 186, T8): the remaining round budget for a `/goal --auto`
+   * SLATE-27 (flow 186, T8): the remaining round budget for a `/goal --auto`
    * continuation loop, armed by `goal-command.ts` on this SAME `ref` object —
    * deliberately a field on this already-process-local, already-not-
    * cross-session-durable struct (see this interface's own doc comment on

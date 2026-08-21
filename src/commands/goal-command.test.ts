@@ -22,7 +22,7 @@
 //   export interface GoalArgsError { error: string }
 //   export function parseGoalArgs(rest: string): ParsedGoalArgs | GoalArgsError;
 //
-// SLATE-22 (flow 186, T6) extends ParsedGoalArgs with an optional
+// SLATE-27 (flow 186, T6) extends ParsedGoalArgs with an optional
 // `auto?: { rounds?: number }`, parsed from a trailing `--auto [N]`,
 // composable with `--workspace` in either tail order. Parsing only — the
 // continuation loop it will drive is later work in the same flow. See
@@ -159,7 +159,7 @@ test("parseGoalArgs: --workspace given but no goal text is an error (text requir
   expect(isError(parsed)).toBe(true);
 });
 
-// --- parseGoalArgs: --auto (SLATE-22, flow 186, T6) -------------------------
+// --- parseGoalArgs: --auto (SLATE-27, flow 186, T6) -------------------------
 
 test("parseGoalArgs: bare trailing --auto enables continuation with no explicit round-cap override", () => {
   const parsed = parseGoalArgs("do the thing --auto");
@@ -260,7 +260,7 @@ test("parseGoalArgs: --auto alone with no goal text is an error (text required),
   expect(isError(parseGoalArgs("--auto 5"))).toBe(true);
 });
 
-test("parseGoalArgs: no --auto given leaves parsed.auto undefined (backward compatible with pre-SLATE-22 callers)", () => {
+test("parseGoalArgs: no --auto given leaves parsed.auto undefined (backward compatible with pre-SLATE-27 callers)", () => {
   const parsed = parseGoalArgs("do the thing --workspace w1");
   expect(isError(parsed)).toBe(false);
   if (!isError(parsed)) {
@@ -733,7 +733,7 @@ test("review finding 3: runGoalCommand resolves (not rejects) when slate.json at
   expect(history.some((m) => m.role === "user" && m.content === "implement the thing")).toBe(true);
 });
 
-// --- AC2: --auto auto-provisions a Task Manager flow (SLATE-22, flow 186, T7) ---
+// --- AC2: --auto auto-provisions a Task Manager flow (SLATE-27, flow 186, T7) ---
 
 async function listFlowDirs(cwd: string): Promise<string[]> {
   try {
@@ -874,7 +874,7 @@ test("AC2: /goal without --auto never touches the Task Manager — no .metaproje
   expect(await listFlowDirs(cwd)).toHaveLength(0);
 });
 
-// --- T9: the continuation loop (SLATE-22, flow 186) -------------------------
+// --- T9: the continuation loop (SLATE-27, flow 186) -------------------------
 
 async function writeFlowStatus(cwd: string, dir: string, status: string): Promise<void> {
   const file = path.join(cwd, ".metaproject", "flows", dir, "flow.json");
@@ -1266,7 +1266,7 @@ test("T9: a continuation round's message names the bound flow's remaining tasks"
   expect(text).toContain("T1: Collect remaining context");
 });
 
-// --- T10: verifier pass before the final stop (SLATE-22, flow 186, AC4) ----
+// --- T10: verifier pass before the final stop (SLATE-27, flow 186, AC4) ----
 
 function fakeSpawnSubagentTool(
   invoke: (input: Record<string, unknown>) => Promise<{ output: string; isError: boolean }>,

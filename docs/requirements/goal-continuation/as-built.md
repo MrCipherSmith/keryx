@@ -1,4 +1,4 @@
-# SLATE-22 — bounded autonomous continuation for `/goal` (as-built)
+# SLATE-27 — bounded autonomous continuation for `/goal` (as-built)
 
 Implemented in `.metaproject/flows/186-2026-08-21-bounded-autonomous-continuation-for-goal/`
 (source of truth for the full design history, including the mid-implementation

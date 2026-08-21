@@ -1,14 +1,16 @@
 # Implementation Plan
 
-Status: proposed. Not yet formalized against a docs/requirements/ PRD +
-specification pair the way SLATE's own phases were — `description.md` +
-this plan stand as the spec for now.
+Status: implemented (PR #378). Not formalized against a docs/requirements/
+PRD + specification pair the way SLATE's own phases were —
+`description.md` + this plan stand as the spec.
 
-**SLATE numbering confirmed 2026-08-21**: flow 166 ("Slate v2 (SLATE-16..21)")
-is `done` (PR #318, merged) and covers SLATE-16 through SLATE-21 in full — no
-SLATE-22 or higher exists anywhere in the repo (`rg "SLATE-2[2-9]|SLATE-3[0-9]"`
-over the whole tree returns zero hits). This proposal is therefore
-**SLATE-22**.
+**SLATE numbering: SLATE-27, corrected before the PR was opened.** The
+2026-08-21 same-day check that first assigned SLATE-22 ran against a stale
+local working tree (fetched but not pulled) and missed PR #377's
+concurrent SLATE-22..26 merge to `origin/main` minutes earlier — see
+`description.md`'s note on this. Re-verified against `origin/main` directly
+this time: SLATE-26 (PR #377) is the highest claimed number as of this
+writing; this proposal is SLATE-27.
 
 ## Approach
 

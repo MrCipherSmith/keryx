@@ -1,13 +1,24 @@
-# Bounded autonomous continuation for `/goal` (SLATE-22)
+# Bounded autonomous continuation for `/goal` (SLATE-27)
 
-Status: proposed spec/plan. Written from a comparative survey of
+Status: implemented (PR #378). Written from a comparative survey of
 `/goal`-equivalent mechanisms in 13 competitor coding-agent CLIs
 (`~/sandbox/forks`), not from an issue or user bug report.
 
-**SLATE-22**: flow 166 ("Slate v2 (SLATE-16..21)") is `done` (PR #318) and
-covers SLATE-16 through SLATE-21 in full; no SLATE-22+ exists anywhere in
-the repo as of 2026-08-21 — confirmed by a repo-wide search, not assumed.
-This proposal is the next number in that series.
+**SLATE-27, not SLATE-22 (renumbered 2026-08-21, before opening the PR)**:
+this flow originally self-assigned SLATE-22, verified against a repo-wide
+search of the LOCAL working tree at the time (last confirmed used: SLATE-21,
+flow 166 done). That check was stale: a concurrent PR (#377, "Slate v3:
+private MCP slate lifecycle for external hands") had already merged
+SLATE-22..26 to `origin/main` minutes earlier, and the local check ran
+against a `git fetch`-updated remote ref without a corresponding `git pull`
+of the checked-out branch's own working tree — the files actually grepped
+were still the pre-#377 versions. The collision surfaced as a genuine merge
+conflict in `docs/requirements/slate/specification.md` when this branch was
+finally pushed. Lesson for next time: verify a shared sequential id against
+`git show origin/main:<file>` (or an actual `git pull`/`reset --hard
+origin/main`) directly, never a merely-fetched-but-not-merged local
+checkout, when there is any chance of a concurrent session claiming the
+same number.
 
 ## Problem
 

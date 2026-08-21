@@ -27,7 +27,7 @@ export interface ParsedGoalArgs {
   text: string;
   workspaceId?: string;
   /**
-   * Present when `--auto` was given (SLATE-22, flow 186). `rounds` is the
+   * Present when `--auto` was given (SLATE-27, flow 186). `rounds` is the
    * explicit `--auto <N>` round-cap override; `undefined` means "use the
    * default cap". T6 (this parse) does not itself change any runtime
    * behavior — the continuation loop this flag will drive is later work
@@ -44,7 +44,7 @@ export interface GoalArgsError {
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 
 /**
- * SLATE-22 (flow 186, T8/AC5): the continuation round budget when `--auto`
+ * SLATE-27 (flow 186, T8/AC5): the continuation round budget when `--auto`
  * is given with no explicit `--auto <N>` override. Counts ADDITIONAL rounds
  * beyond the always-runs first turn — bare `--auto` on a goal that never
  * reaches `isCourseDone` runs this many extra turns, then stops.
@@ -53,7 +53,7 @@ export const DEFAULT_AUTO_GOAL_ROUNDS = 8;
 
 /**
  * Pure parse of the text after the `/goal` token. `--workspace <id>` and
- * `--auto [N]` (SLATE-22, flow 186) are both recognized only when they
+ * `--auto [N]` (SLATE-27, flow 186) are both recognized only when they
  * TRAIL the input, in either order, and are stripped from the returned
  * `text`, which otherwise preserves word order. An empty/whitespace-only
  * `rest`, a trailing `--workspace` with no following value, or a `rest`
@@ -216,7 +216,7 @@ function getFlowService(): FlowService {
 }
 
 /**
- * SLATE-22 (flow 186, T7): auto-provision a Task Manager flow for a `/goal
+ * SLATE-27 (flow 186, T7): auto-provision a Task Manager flow for a `/goal
  * --auto` run whose slate has none bound yet (AC2).
  *
  * Deliberately minimal — no model call. Plan step 2 originally called for
@@ -271,7 +271,7 @@ async function autoProvisionFlow(cwd: string, goalText: string): Promise<string>
       "- Completion requires every ACn to be confirmed via",
       "  `keryx flow ac confirm <id> <ACn>`.",
       "",
-      "Source: auto-provisioned by `/goal --auto` (SLATE-22, flow 186) — the",
+      "Source: auto-provisioned by `/goal --auto` (SLATE-27, flow 186) — the",
       "goal text itself is the spec; no separate description/plan pair exists.",
       "",
       "## Criteria",
@@ -288,7 +288,7 @@ async function autoProvisionFlow(cwd: string, goalText: string): Promise<string>
 }
 
 /**
- * SLATE-22 (flow 186, T9): the user-turn text for one continuation round —
+ * SLATE-27 (flow 186, T9): the user-turn text for one continuation round —
  * plan step 4's "round N of the flow's current task list". Reads the bound
  * flow's live task list through the SAME `FlowService` instance
  * `autoProvisionFlow` uses (`.get()`, not a CLI subprocess or a re-parsed
@@ -323,7 +323,7 @@ async function buildContinuationMessage(
   }
 }
 
-/** One independent verifier's verdict on whether the goal was actually achieved (SLATE-22, flow 186, T10, AC4). */
+/** One independent verifier's verdict on whether the goal was actually achieved (SLATE-27, flow 186, T10, AC4). */
 export interface GoalVerifierVerdict {
   achieved: boolean;
   gaps: string[];
@@ -362,7 +362,7 @@ export function parseVerifierVerdict(output: string): GoalVerifierVerdict | unde
 }
 
 /**
- * SLATE-22 (flow 186, T10, AC4): one independent check on whether the goal
+ * SLATE-27 (flow 186, T10, AC4): one independent check on whether the goal
  * text was actually achieved, dispatched through the SAME `spawn_subagent`
  * tool instance already wired into this session (`deps.tools`) — not a
  * second, parallel subagent-dispatch mechanism this module invents. `mode:
@@ -416,7 +416,7 @@ async function runGoalVerifier(deps: AgentDeps, goalText: string): Promise<GoalV
  * already-bound slate mid-session is never re-resolved (AC-25) → (if
  * `--auto` was given) auto-provision/reuse a bound Task Manager flow and arm
  * a per-attempt continuation budget → run the turn with the parsed text →
- * (SLATE-22, flow 186) when armed, re-drive the turn in a round-capped loop
+ * (SLATE-27, flow 186) when armed, re-drive the turn in a round-capped loop
  * until the bound flow's course is done (observed via `slateSession.opened`,
  * the same signal `closeSlateOnFlowDone` already computes — no second
  * `isCourseDone` call) or the round budget is exhausted, then run one
@@ -516,7 +516,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           }
         }
       }
-      // SLATE-22 (flow 186, T7, AC2): --auto provisions a Task Manager flow
+      // SLATE-27 (flow 186, T7, AC2): --auto provisions a Task Manager flow
       // when this slate's course has none bound yet — never re-provisioned
       // for an already-bound course, mirroring SLATE-16's own "only when
       // unset" rule directly above. Shares this try block deliberately: a
@@ -537,7 +537,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         if (forCourse !== undefined && forCourse.course.flowRef === undefined) {
           const flowId = await autoProvisionFlow(cwd, parsed.text);
           await writeSlate(slateSession.dir, (prev) => {
-            if (!prev) throw new Error(`SLATE-22 bind: no open slate in ${slateSession.dir}`);
+            if (!prev) throw new Error(`SLATE-27 bind: no open slate in ${slateSession.dir}`);
             return { ...prev, course: { ...prev.course, flowRef: flowId } };
           });
           flowRefForBinding = flowId;
@@ -571,7 +571,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
   const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {};
   await runAgentTurn(io, deps, history, parsed.text, turnOptions);
 
-  // SLATE-22 (flow 186, T9): bounded continuation loop, armed only when T8
+  // SLATE-27 (flow 186, T9): bounded continuation loop, armed only when T8
   // set `slateSession.autoGoalRounds` above (AC7 — in-memory, this attempt
   // only). AC3's stop condition: `runAgentTurn`'s own `finally` block
   // (`closeSlateOnFlowDone`, agent.ts) ALREADY ran `isCourseDone`/
@@ -651,7 +651,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
               io.onHistoryChange?.("tool");
             }
             await writeSlate(slateSession.dir, (prev) => {
-              if (!prev) throw new Error(`SLATE-22 verifier-reopen: no open slate in ${slateSession.dir}`);
+              if (!prev) throw new Error(`SLATE-27 verifier-reopen: no open slate in ${slateSession.dir}`);
               return {
                 ...prev,
                 course: { ...prev.course, ...(boundFlowRef !== undefined ? { flowRef: boundFlowRef } : {}) },
