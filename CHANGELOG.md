@@ -5,6 +5,25 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.54] — 2026-08-21
+
+### Fixed
+
+- **`slate.*` MCP tools (SLATE-22..26, shipped in 0.2.53) were unreachable
+  over MCP on every project, including keryx's own.** They were registered
+  tagged `module: "slate"`, but neither `MODULE_MANIFEST_KEY` nor the
+  default `expose.modules` allowlist had an entry for it, so
+  `isModuleExposed("slate")` silently returned `false` everywhere — with no
+  `keryx modules enable` toggle to work around it. Fixed at the source
+  (`src/mcp/discovery.ts`, `src/mcp/client-config.ts`) so every future
+  `keryx init`/`mcp install` writes a working manifest; this repo's own
+  already-generated manifest is patched the same way. Live-verified against
+  the real MCP SDK: `tools/list` now returns all three tools. A standing
+  regression test drives discovery against keryx's own committed manifest
+  and fails if any registered tool ever resolves to unexposed again — this
+  exact bug class was already found and fixed once before this feature
+  shipped it a second time.
+
 ## [0.2.53] — 2026-08-21
 
 ### Added
