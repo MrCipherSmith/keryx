@@ -72,11 +72,15 @@
   "scripts": {
     "compile": "tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
-    "test": "bun test src"
+    "test": "bun test src",
+    "package": "vsce package",
+    "install:vscode": "bun run package && code --install-extension keryx-vscode-0.1.0.vsix --force",
+    "install:cursor": "bun run package && cursor --install-extension keryx-vscode-0.1.0.vsix --force"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
     "bun-types": "^1.4.0",
     "typescript": "^5"
   }
