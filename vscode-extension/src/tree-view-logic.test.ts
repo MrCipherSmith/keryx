@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   isNeedsAttentionEmpty,
+  needsAttentionAction,
   needsAttentionItems,
   parseInProgressFlows,
   parsePendingProposals,
@@ -103,7 +104,11 @@ test("parseInProgressFlows returns an empty array for garbled/missing output, ne
 });
 
 test("parsePendingProposals reads the 'proposals' array from `keryx workspace catch-up --json`", () => {
-  const stdout = JSON.stringify({ proposals: [{ type: "decision" }], blocked: [], unboundCandidates: [] });
+  const stdout = JSON.stringify({
+    proposals: [{ type: "decision", workspaceId: "ws-1", proposalId: "p-1" }],
+    blocked: [],
+    unboundCandidates: [],
+  });
   expect(parsePendingProposals(stdout)).toHaveLength(1);
 });
 
@@ -114,7 +119,7 @@ test("parsePendingProposals returns an empty array for garbled/missing output, n
 
 test("needsAttentionItems merges flow tasks and sac proposals, flows sorted before proposals", () => {
   const flows: FlowListEntry[] = [{ id: "185", status: "in-progress", title: "vscode ext", tasksDone: 2, tasksTotal: 11 }];
-  const proposals: SacProposalEntry[] = [{ type: "decision" }];
+  const proposals: SacProposalEntry[] = [{ type: "decision", workspaceId: "ws-1", proposalId: "p-1" }];
   const items = needsAttentionItems(flows, proposals);
   expect(items).toHaveLength(2);
   expect(items[0]?.kind).toBe("flow");
@@ -139,6 +144,28 @@ test("AC5: isNeedsAttentionEmpty is false as soon as either source has an item",
   );
   expect(isNeedsAttentionEmpty(withFlow)).toBe(false);
 
-  const withProposal = needsAttentionItems([], [{ type: "decision" }]);
+  const withProposal = needsAttentionItems([], [{ type: "decision", workspaceId: "ws-1", proposalId: "p-1" }]);
   expect(isNeedsAttentionEmpty(withProposal)).toBe(false);
+});
+
+// --- Needs Your Attention click action --------------------------------------
+
+test("needsAttentionAction: a flow item runs `keryx flow status <id>` immediately — it's a complete, read-only command", () => {
+  const action = needsAttentionAction({ kind: "flow", label: "x", description: "y", flowId: "185" });
+  expect(action).toEqual({ text: "keryx flow status 185", execute: true });
+});
+
+test("needsAttentionAction: a sac-proposal item types the review command up to --decision but does NOT run it — the decision value is the human's to pick", () => {
+  const action = needsAttentionAction({
+    kind: "sac-proposal",
+    label: "x",
+    description: "y",
+    workspaceId: "ws-1",
+    proposalId: "p-1",
+  });
+  expect(action).toEqual({ text: "keryx workspace review ws-1 p-1 --decision ", execute: false });
+});
+
+test("needsAttentionAction: the empty-state item has no action", () => {
+  expect(needsAttentionAction({ kind: "empty", label: "x", description: "y" })).toBeUndefined();
 });
