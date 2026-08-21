@@ -1,0 +1,466 @@
+{
+  "schemaVersion": 2,
+  "id": "187",
+  "slug": "keryx-mcp-client-stdio-client-codex-elic",
+  "title": "Keryx MCP Client: stdio client, codex elicitation handling, tool-registry bridge",
+  "status": "done",
+  "createdAt": "2026-08-20T15:37:07.807Z",
+  "updatedAt": "2026-08-21T17:05:11.951Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fec6842e4a8d0edc292612b308a7d02a8095fb4257196ea50a687b28eb5990c6",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T18:06:49.849Z",
+      "note": "src/mcp-client/client.smoke.test.ts: live handshake against real codex-cli 0.147.0, re-verified this session with KERYX_ALLOW_REAL_SUBPROCESS=1 (1 pass)"
+    },
+    "AC2": {
+      "at": "2026-08-20T18:06:49.938Z",
+      "note": "fixtures/mcp-client/codex/approve.jsonl+deny.jsonl (captured:true from a real codex mcp-server run), replayed offline by src/mcp-client/fixtures.test.ts"
+    },
+    "AC3": {
+      "at": "2026-08-20T18:06:50.026Z",
+      "note": "src/mcp-client/live-elicitation.smoke.test.ts: superviseCodexMcpRun driven against a real spawned codex mcp-server, both approve (file created) and decline (file never created) cases; re-verified this session, both pass (92.71s decline, within its own 90s internal timeout)"
+    },
+    "AC4": {
+      "at": "2026-08-20T18:06:50.120Z",
+      "note": "fixtures/mcp-client/codex/timeout.jsonl (captured:true, reproduces openai/codex#11816's turn_aborted/reason:interrupted) + supervise-mcp.test.ts's elicitation-answer-timeout suite (requestApproval that never resolves still completes, recorded as ElicitationHandledRecord.timedOut:true, not a hang)"
+    },
+    "AC5": {
+      "at": "2026-08-20T18:06:50.207Z",
+      "note": "buildElicitationResponse declines without a decision field for any uncorrelated elicitation (no sibling codex/event, or empty available_decisions) - the live-reconfirmed manifestation of openai/codex#23383; fixtures/mcp-client/codex/malformed-empty-content.SYNTHETIC.jsonl + supervise-mcp.test.ts/elicitation.test.ts coverage"
+    },
+    "AC6": {
+      "at": "2026-08-20T18:06:50.292Z",
+      "note": "supervise-mcp.ts calls resolveApprovalDecision unconditionally for every elicitation before responding; supervise-mcp.test.ts asserts the call and gateDecision for both auto and ask modes, re-confirmed live in live-elicitation.smoke.test.ts (gateDecision:\"ask\" asserted in both live cases)"
+    },
+    "AC7": {
+      "at": "2026-08-20T18:06:50.375Z",
+      "note": "src/mcp-client/credential-boundary.test.ts: no credential-shaped env/identifier read in src/mcp-client/ or supervise-mcp.ts; child env is forwarded verbatim from the caller (McpSpawnOptions.env), same D-01 boundary keryx-external-agent-runtime already verifies"
+    },
+    "AC8": {
+      "at": "2026-08-20T18:06:50.465Z",
+      "note": "src/harness/external/agent-event-bridge.test.ts is byte-for-byte unmodified (git diff main -- that file is empty) and passes 24/24; the elicitation exchange records to ElicitationHandledRecord/elicitations, never to ExternalEvent"
+    },
+    "AC9": {
+      "at": "2026-08-20T18:06:50.560Z",
+      "note": "elicitation.test.ts's classifyElicitationRisk suite: a single fixture (sudo cat .../auth.json-shaped command) independently proves destructive:true and credentials:true via reused isDestructiveCommand/touchesAgentCredentials, feeding resolveApprovalDecision exactly like classifyPatchRisk does for write"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/362"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Live probe against real codex mcp-server: capture elicitation request/response shapes, confirm codex_call_id version-fix status",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "src/mcp-client/: stdio MCP client module on @modelcontextprotocol/sdk",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "MCP-shaped supervisor for codex-cli: new supervision path wired into external dispatch, ExternalEvent vocabulary preserved",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Elicitation handling: resolveApprovalDecision + requestApproval/AgentIO wiring, ElicitResult response",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Escalation classifier (destructive/credentials) feeding resolveApprovalDecision, ADR-0010 shape",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Three rough-edge defenses: timeout->named refusal, malformed/empty content->deny, codex_call_id version-skew",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Capability gate: fold into gdskills.external-agents descriptor, no second toggle",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "TUI surfacing for a pending elicitation (same path as existing write-risk approval prompt)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fixtures fixtures/mcp-client/codex/* + tests for AC1-AC9; confirm original external-agent-runtime AC5 suite passes unmodified",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Revise keryx-external-agent-runtime spec/decisions to record the D-05 approval-routing layer",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T15:37:07.807Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T15:40:03.871Z",
+      "event": "task-added",
+      "detail": "T5: Live probe against real codex mcp-server: capture elicitation request/response shapes, confirm codex_call_id version-fix status"
+    },
+    {
+      "at": "2026-08-20T15:40:03.983Z",
+      "event": "task-added",
+      "detail": "T6: src/mcp-client/: stdio MCP client module on @modelcontextprotocol/sdk"
+    },
+    {
+      "at": "2026-08-20T15:40:04.085Z",
+      "event": "task-added",
+      "detail": "T7: MCP-shaped supervisor for codex-cli: new supervision path wired into external dispatch, ExternalEvent vocabulary preserved"
+    },
+    {
+      "at": "2026-08-20T15:40:04.186Z",
+      "event": "task-added",
+      "detail": "T8: Elicitation handling: resolveApprovalDecision + requestApproval/AgentIO wiring, ElicitResult response"
+    },
+    {
+      "at": "2026-08-20T15:40:04.292Z",
+      "event": "task-added",
+      "detail": "T9: Escalation classifier (destructive/credentials) feeding resolveApprovalDecision, ADR-0010 shape"
+    },
+    {
+      "at": "2026-08-20T15:40:04.384Z",
+      "event": "task-added",
+      "detail": "T10: Three rough-edge defenses: timeout->named refusal, malformed/empty content->deny, codex_call_id version-skew"
+    },
+    {
+      "at": "2026-08-20T15:40:04.485Z",
+      "event": "task-added",
+      "detail": "T11: Capability gate: fold into gdskills.external-agents descriptor, no second toggle"
+    },
+    {
+      "at": "2026-08-20T15:40:04.593Z",
+      "event": "task-added",
+      "detail": "T12: TUI surfacing for a pending elicitation (same path as existing write-risk approval prompt)"
+    },
+    {
+      "at": "2026-08-20T15:40:04.696Z",
+      "event": "task-added",
+      "detail": "T13: Fixtures fixtures/mcp-client/codex/* + tests for AC1-AC9; confirm original external-agent-runtime AC5 suite passes unmodified"
+    },
+    {
+      "at": "2026-08-20T15:40:04.808Z",
+      "event": "task-added",
+      "detail": "T14: Revise keryx-external-agent-runtime spec/decisions to record the D-05 approval-routing layer"
+    },
+    {
+      "at": "2026-08-20T15:40:40.786Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T15:40:48.102Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T16:00:14.024Z",
+      "event": "task-done",
+      "detail": "T5: Live probe against real codex mcp-server: capture elicitation request/response shapes, confirm codex_call_id version-fix status"
+    },
+    {
+      "at": "2026-08-20T17:00:01.394Z",
+      "event": "task-done",
+      "detail": "T6: src/mcp-client/: stdio MCP client module on @modelcontextprotocol/sdk"
+    },
+    {
+      "at": "2026-08-20T17:00:01.494Z",
+      "event": "task-done",
+      "detail": "T7: MCP-shaped supervisor for codex-cli: new supervision path wired into external dispatch, ExternalEvent vocabulary preserved"
+    },
+    {
+      "at": "2026-08-20T17:00:01.586Z",
+      "event": "task-done",
+      "detail": "T8: Elicitation handling: resolveApprovalDecision + requestApproval/AgentIO wiring, ElicitResult response"
+    },
+    {
+      "at": "2026-08-20T17:13:49.869Z",
+      "event": "task-done",
+      "detail": "T9: Escalation classifier (destructive/credentials) feeding resolveApprovalDecision, ADR-0010 shape"
+    },
+    {
+      "at": "2026-08-20T17:13:49.970Z",
+      "event": "task-done",
+      "detail": "T10: Three rough-edge defenses: timeout->named refusal, malformed/empty content->deny, codex_call_id version-skew"
+    },
+    {
+      "at": "2026-08-20T17:28:50.046Z",
+      "event": "task-done",
+      "detail": "T11: Capability gate: fold into gdskills.external-agents descriptor, no second toggle"
+    },
+    {
+      "at": "2026-08-20T17:28:50.150Z",
+      "event": "task-done",
+      "detail": "T12: TUI surfacing for a pending elicitation (same path as existing write-risk approval prompt)"
+    },
+    {
+      "at": "2026-08-20T18:06:12.352Z",
+      "event": "task-done",
+      "detail": "T13: Fixtures fixtures/mcp-client/codex/* + tests for AC1-AC9; confirm original external-agent-runtime AC5 suite passes unmodified"
+    },
+    {
+      "at": "2026-08-20T18:06:12.438Z",
+      "event": "task-done",
+      "detail": "T14: Revise keryx-external-agent-runtime spec/decisions to record the D-05 approval-routing layer"
+    },
+    {
+      "at": "2026-08-20T18:06:49.849Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/mcp-client/client.smoke.test.ts: live handshake against real codex-cli 0.147.0, re-verified this session with KERYX_ALLOW_REAL_SUBPROCESS=1 (1 pass)"
+    },
+    {
+      "at": "2026-08-20T18:06:49.938Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: fixtures/mcp-client/codex/approve.jsonl+deny.jsonl (captured:true from a real codex mcp-server run), replayed offline by src/mcp-client/fixtures.test.ts"
+    },
+    {
+      "at": "2026-08-20T18:06:50.026Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/mcp-client/live-elicitation.smoke.test.ts: superviseCodexMcpRun driven against a real spawned codex mcp-server, both approve (file created) and decline (file never created) cases; re-verified this session, both pass (92.71s decline, within its own 90s internal timeout)"
+    },
+    {
+      "at": "2026-08-20T18:06:50.120Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: fixtures/mcp-client/codex/timeout.jsonl (captured:true, reproduces openai/codex#11816's turn_aborted/reason:interrupted) + supervise-mcp.test.ts's elicitation-answer-timeout suite (requestApproval that never resolves still completes, recorded as ElicitationHandledRecord.timedOut:true, not a hang)"
+    },
+    {
+      "at": "2026-08-20T18:06:50.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: buildElicitationResponse declines without a decision field for any uncorrelated elicitation (no sibling codex/event, or empty available_decisions) - the live-reconfirmed manifestation of openai/codex#23383; fixtures/mcp-client/codex/malformed-empty-content.SYNTHETIC.jsonl + supervise-mcp.test.ts/elicitation.test.ts coverage"
+    },
+    {
+      "at": "2026-08-20T18:06:50.292Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: supervise-mcp.ts calls resolveApprovalDecision unconditionally for every elicitation before responding; supervise-mcp.test.ts asserts the call and gateDecision for both auto and ask modes, re-confirmed live in live-elicitation.smoke.test.ts (gateDecision:\"ask\" asserted in both live cases)"
+    },
+    {
+      "at": "2026-08-20T18:06:50.375Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/mcp-client/credential-boundary.test.ts: no credential-shaped env/identifier read in src/mcp-client/ or supervise-mcp.ts; child env is forwarded verbatim from the caller (McpSpawnOptions.env), same D-01 boundary keryx-external-agent-runtime already verifies"
+    },
+    {
+      "at": "2026-08-20T18:06:50.465Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/harness/external/agent-event-bridge.test.ts is byte-for-byte unmodified (git diff main -- that file is empty) and passes 24/24; the elicitation exchange records to ElicitationHandledRecord/elicitations, never to ExternalEvent"
+    },
+    {
+      "at": "2026-08-20T18:06:50.560Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: elicitation.test.ts's classifyElicitationRisk suite: a single fixture (sudo cat .../auth.json-shaped command) independently proves destructive:true and credentials:true via reused isDestructiveCommand/touchesAgentCredentials, feeding resolveApprovalDecision exactly like classifyPatchRisk does for write"
+    },
+    {
+      "at": "2026-08-20T18:07:09.732Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-20T18:07:09.822Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T18:07:09.905Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T18:07:09.989Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T19:45:41.713Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/362 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T19:45:50.381Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T19:45:53.010Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-21T17:05:11.951Z",
+      "event": "renumbered",
+      "detail": "182 -> 187: duplicate id 182: this flow is a local, never-committed directory; 182-2026-08-21-slate-v3-slate-22-26-private-mcp-slate-l is the shared/committed one (merged via PR #377, referenced by flow 186's own specification.md SLATE table) — renumbering the local copy to the next free id instead"
+    }
+  ]
+}

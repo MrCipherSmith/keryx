@@ -3,12 +3,12 @@
   "id": "186",
   "slug": "bounded-autonomous-continuation-for-goal",
   "title": "Bounded autonomous continuation for /goal (Task-Manager-backed, self-verified stop)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-21T15:04:07.276Z",
-  "updatedAt": "2026-08-21T16:33:55.356Z",
+  "updatedAt": "2026-08-21T17:05:00.000Z",
   "source": {
-    "type": "description",
-    "ref": null
+    "type": "github-issue",
+    "ref": "https://github.com/MrCipherSmith/keryx/issues/379"
   },
   "acChecksum": "sha256:c3c6c16f0d407c92ced86fbf50ee7af25351569aeff0f0f3e96df2da82788eb4",
   "acConfirmed": {
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/378"
   },
   "tasks": [
     {
@@ -527,6 +527,25 @@
       "at": "2026-08-21T16:33:55.356Z",
       "event": "task-done",
       "detail": "T5: Confirm SLATE numbering, flow-plan granularity, and existing token/turn budget accounting to reuse"
+    },
+    {
+      "at": "2026-08-21T16:53:50.332Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/378 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-21T16:53:57.056Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-21T16:54:00.150Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-21T17:05:00.000Z",
+      "event": "source-linked",
+      "detail": "Manual hand-edit (no CLI command retrofits `source` post-init): retroactively linked to https://github.com/MrCipherSmith/keryx/issues/379, created and closed for the record after the flow was already done."
     }
   ]
 }

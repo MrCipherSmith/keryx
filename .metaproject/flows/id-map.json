@@ -110,5 +110,13 @@
     "toDir": "178-2026-08-19-external-agent-runtime",
     "at": "2026-08-20T08:59:24.321Z",
     "reason": "flow id collision: another clone also allocated 176 (security-detector-false-positives, PR #353, merged first). Renumbering mine to the next free id."
+  },
+  {
+    "from": "182",
+    "to": "187",
+    "fromDir": "182-2026-08-20-keryx-mcp-client-stdio-client-codex-elic",
+    "toDir": "187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic",
+    "at": "2026-08-21T17:05:11.951Z",
+    "reason": "duplicate id 182: this flow is a local, never-committed directory; 182-2026-08-21-slate-v3-slate-22-26-private-mcp-slate-l is the shared/committed one (merged via PR #377, referenced by flow 186's own specification.md SLATE table) — renumbering the local copy to the next free id instead"
   }
 ]
