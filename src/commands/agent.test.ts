@@ -1943,6 +1943,64 @@ test("SLATE-2a: a second identical tool call (same path, no new info) does NOT i
   expect(anchorsMsgs.length).toBe(1);
 });
 
+test("SLATE-2a: a batch of two DIFFERENT-path tool calls keeps both tool-result messages contiguous, with the single Anchors-block AFTER both — never spliced between them", async () => {
+  // Regression test: the per-tool-call Anchors injection used to push its
+  // {role:"user"} message mid-loop, immediately after whichever call in the
+  // batch first changed `touched` — splicing it BETWEEN two `tool` messages
+  // that both answer the SAME assistant `tool_calls` turn. Every
+  // OpenAI-compatible provider requires those `tool` messages to be
+  // contiguous immediately after the assistant turn; several (observed:
+  // DeepSeek's endpoint) reject a request with an interleaved role in
+  // between with "An assistant message with 'tool_calls' must be followed
+  // by tool messages responding to each 'tool_call_id'".
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "src/foo.ts" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "src/bar.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "hello", { slateSession });
+
+  const assistantIndex = history.findIndex((m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) === 2);
+  expect(assistantIndex).toBeGreaterThanOrEqual(0);
+  // Both `tool` results sit immediately, contiguously after the assistant
+  // turn — no other role between the assistant message and either result,
+  // and none between the two results themselves.
+  expect(history[assistantIndex + 1]?.role).toBe("tool");
+  expect(history[assistantIndex + 1]?.toolCallId).toBe("c1");
+  expect(history[assistantIndex + 2]?.role).toBe("tool");
+  expect(history[assistantIndex + 2]?.toolCallId).toBe("c2");
+  // Exactly one Anchors-block, AFTER both tool results, covering both paths.
+  expect(history[assistantIndex + 3]?.role).toBe("user");
+  expect(history[assistantIndex + 3]?.content).toContain("src/foo.ts");
+  expect(history[assistantIndex + 3]?.content).toContain("src/bar.ts");
+  const anchorsMsgs = history.filter((m) => m.role === "user" && m.content.includes("src/foo.ts"));
+  expect(anchorsMsgs.length).toBe(1);
+});
+
 test("SLATE-2a: with options.slateSession undefined, tool-call history is BYTE-FOR-BYTE unchanged — no Anchors-block ever appears", async () => {
   const { provider } = scriptedProvider([
     [
