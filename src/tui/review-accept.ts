@@ -63,3 +63,26 @@ export async function acceptProposalViaShell(
   }
   return { ok: true };
 }
+
+/**
+ * Declines a proposal via `keryx workspace review --decision rejected`.
+ * Unlike accept, this never writes to any owning subsystem (wiki/memory/
+ * skill) — proposal-lifecycle.ts's `review()` only demands a confirm token
+ * when `decision === "accepted"` (its own SLATE-20 comment: the token gate
+ * exists because ACCEPTING is the consequential action a caller with only
+ * tool access must not be able to do alone). So one shell command is the
+ * whole flow here, not `acceptProposalViaShell`'s two.
+ */
+export async function declineProposalViaShell(
+  run: CommandRunner,
+  workspaceId: string,
+  proposalId: string,
+): Promise<AcceptProposalOutcome> {
+  const decline = await run(
+    `keryx workspace review ${shQuote(workspaceId)} ${shQuote(proposalId)} --decision rejected`,
+  );
+  if (decline.isError) {
+    return { ok: false, message: decline.output };
+  }
+  return { ok: true };
+}

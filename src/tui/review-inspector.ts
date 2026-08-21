@@ -3,12 +3,18 @@
 // sessions). Mirrors flow-inspector.ts's list+detail interaction model
 // (`[`/`]`/enter, ↑/↓ scroll the active tab).
 //
-// The Detail tab's [a]-then-[y] accept is the one mutating action this modal
-// offers, and only for `type: "proposal"` items — everything else (resume a
-// blocked session, bind an unbound candidate, investigate an unknown one) is
-// a recommendation to run from a terminal, not a button here. Accept is
-// two keys, not one, so a stray `a` from scrolling/navigating never fires it;
-// pressing anything other than `y` while armed cancels back to idle.
+// The Detail tab's [a]-then-[y] accept and [d]-then-[y] decline are the only
+// mutating actions this modal offers, and only for `type: "proposal"` items —
+// everything else (resume a blocked session, bind an unbound candidate,
+// investigate an unknown one) is a recommendation to run from a terminal, not
+// a button here. Both are two keys, not one, so a stray `a`/`d` from
+// scrolling/navigating never fires them; pressing anything other than `y`
+// while armed cancels back to idle. Pressing `a`/`d` on a non-proposal item
+// (or with no handler wired) sets `status: "unavailable"` rather than doing
+// nothing silently — the footer's hint is the same regardless of which item
+// is selected (it's a static per-modal legend, not per-item), so a user who
+// presses it on, say, a blocked session needs to be told why nothing
+// happened instead of concluding the feature is broken.
 
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import type { CatchUpItem, CatchUpProposalItem } from "../sac/catch-up";
@@ -18,7 +24,8 @@ export const REVIEW_COMMAND = "/review";
 
 export const REVIEW_FOOTER = [
   { key: "[/]", label: "item" },
-  { key: "a y", label: "accept" },
+  { key: "a y", label: "accept proposal" },
+  { key: "d y", label: "decline proposal" },
   { key: "↑/↓", label: "scroll" },
   { key: "←/→", label: "tabs" },
   { key: "esc", label: "close" },
@@ -90,7 +97,7 @@ function describeReviewItem(item: CatchUpItem): string[] {
         `Evidence   ${item.fresh ? "fresh" : "stale — evidence has drifted since this proposal was created; re-run wrap-up before deciding"}`,
         ...(item.note !== undefined ? ["", `Note       ${item.note}`] : []),
         "",
-        `Reject/dismiss from a terminal: keryx workspace review ${item.workspaceId} ${item.proposalId} --decision <rejected|dismissed>`,
+        `Dismiss (archive with no decision) from a terminal: keryx workspace review ${item.workspaceId} ${item.proposalId} --decision dismissed`,
       ];
     case "blocked":
       return [
@@ -154,11 +161,30 @@ function describeGroupOutcome(g: WrapUpGroupOutcome): string {
   }
 }
 
+/** The two mutating actions this modal offers — `accept` or `decline` (a
+ * `--decision rejected`; `dismissed` stays terminal-only, see
+ * `describeReviewItem`'s proposal case). */
+export type ReviewDecision = "accept" | "decline";
+
 export type ReviewDetailStatus =
   | { kind: "idle" }
-  | { kind: "armed" }
-  | { kind: "running" }
-  | { kind: "done"; outcome: { ok: true } | { ok: false; message: string } };
+  /** `a`/`d` was pressed but nothing could arm — either the selected item
+   * isn't a proposal, or the caller wired no handler for this decision.
+   * Distinct from `idle` so the Detail pane can say WHY, instead of the key
+   * just silently doing nothing (the footer's `a y`/`d y` hint is a static,
+   * per-modal legend — it can't itself tell the user it doesn't apply here). */
+  | { kind: "unavailable"; decision: ReviewDecision }
+  | { kind: "armed"; decision: ReviewDecision }
+  | { kind: "running"; decision: ReviewDecision }
+  | { kind: "done"; decision: ReviewDecision; outcome: { ok: true } | { ok: false; message: string } };
+
+const DECISION_VERB: Record<ReviewDecision, string> = { accept: "Accept", decline: "Decline" };
+const DECISION_ING: Record<ReviewDecision, string> = { accept: "Accepting", decline: "Declining" };
+const DECISION_DONE: Record<ReviewDecision, string> = { accept: "Accepted", decline: "Declined" };
+const DECISION_COMMAND: Record<ReviewDecision, string> = {
+  accept: "running `keryx workspace confirm-review` then `keryx workspace review`",
+  decline: "running `keryx workspace review --decision rejected`",
+};
 
 export function formatReviewDetailLines(item: CatchUpItem | undefined, status: ReviewDetailStatus): string[] {
   if (item === undefined) {
@@ -166,19 +192,24 @@ export function formatReviewDetailLines(item: CatchUpItem | undefined, status: R
   }
   const lines = describeReviewItem(item);
   if (item.type !== "proposal") {
+    if (status.kind === "unavailable") {
+      return [...lines, "", `[${status.decision === "accept" ? "a" : "d"}] does nothing here — accept/decline only apply to a pending proposal, not to this item.`];
+    }
     return lines;
   }
   const withAction = [...lines, ""];
   if (status.kind === "armed") {
-    withAction.push("Press [y] to CONFIRM accept, any other key cancels.");
+    withAction.push(`Press [y] to CONFIRM ${status.decision}, any other key cancels.`);
   } else if (status.kind === "running") {
-    withAction.push("Accepting… running `keryx workspace confirm-review` then `keryx workspace review`.");
+    withAction.push(`${DECISION_ING[status.decision]}… ${DECISION_COMMAND[status.decision]}.`);
   } else if (status.kind === "done" && status.outcome.ok) {
-    withAction.push("✓ Accepted.");
+    withAction.push(`✓ ${DECISION_DONE[status.decision]}.`);
   } else if (status.kind === "done" && !status.outcome.ok) {
-    withAction.push(`✗ Accept failed: ${status.outcome.message}`);
+    withAction.push(`✗ ${DECISION_VERB[status.decision]} failed: ${status.outcome.message}`);
+  } else if (status.kind === "unavailable") {
+    withAction.push(`[${status.decision === "accept" ? "a" : "d"}] does nothing — no ${status.decision} handler is configured for this modal.`);
   } else {
-    withAction.push("[a] Accept this proposal");
+    withAction.push("[a] Accept this proposal   [d] Decline this proposal");
   }
   return withAction;
 }
@@ -248,15 +279,22 @@ function paintLines(
 
 export type AcceptProposalOutcome = { ok: true } | { ok: false; message: string };
 export type AcceptProposalFn = (item: CatchUpProposalItem) => Promise<AcceptProposalOutcome>;
+/** Same shape as {@link AcceptProposalFn} — a separate alias only so call
+ * sites read as what they wire, not as "reusing the accept type for decline". */
+export type DeclineProposalFn = (item: CatchUpProposalItem) => Promise<AcceptProposalOutcome>;
 
 export type PresentReviewOptions = {
   items: readonly CatchUpItem[];
-  /** Omitted entirely (rather than a no-op) when the caller has no way to
-   * run the accept commands — the Detail tab then never offers `[a]` at all. */
+  /** Omitted entirely (rather than a no-op) when the caller has no way to run
+   * the accept commands — `[a]` then sets `status: "unavailable"` instead of
+   * arming, and the Detail pane says so, rather than doing nothing silently. */
   acceptProposal?: AcceptProposalFn;
-  /** Fires once, after a successful accept — the caller's cue to refresh the
-   * sidebar badge count; this modal's own list is already updated locally. */
-  onAccepted?: (item: CatchUpProposalItem) => void;
+  /** Same as {@link acceptProposal}, for `[d]` (`--decision rejected`). */
+  declineProposal?: DeclineProposalFn;
+  /** Fires once, after a successful accept OR decline — the caller's cue to
+   * refresh the sidebar badge count; this modal's own list is already
+   * updated locally either way. */
+  onResolved?: (item: CatchUpProposalItem) => void;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
@@ -314,22 +352,27 @@ export function presentReview(
     paintSelection();
   };
 
-  const runAccept = (): void => {
+  const handlerFor = (decision: ReviewDecision): AcceptProposalFn | DeclineProposalFn | undefined =>
+    decision === "accept" ? options.acceptProposal : options.declineProposal;
+
+  const runDecision = (decision: ReviewDecision): void => {
     const item = items[selected];
-    if (item === undefined || item.type !== "proposal" || options.acceptProposal === undefined) {
+    const run = handlerFor(decision);
+    if (item === undefined || item.type !== "proposal" || run === undefined) {
       return;
     }
-    status = { kind: "running" };
+    status = { kind: "running", decision };
     paintSelection();
-    void options.acceptProposal(item).then((outcome) => {
-      status = { kind: "done", outcome };
+    void run(item).then((outcome) => {
+      status = { kind: "done", decision, outcome };
       // Deliberately NOT spliced out of `items` here: the Detail tab needs to
-      // keep showing this item so the "✓ Accepted." confirmation is actually
-      // visible. The real catch-up report will simply no longer include it
-      // the next time `/review` opens (a fresh `buildCatchUp` call) — this
-      // modal instance's own list is a point-in-time snapshot, not a live view.
+      // keep showing this item so the "✓ Accepted."/"✓ Declined." confirmation
+      // is actually visible. The real catch-up report will simply no longer
+      // include it the next time `/review` opens (a fresh `buildCatchUp` call)
+      // — this modal instance's own list is a point-in-time snapshot, not a
+      // live view.
       if (outcome.ok) {
-        options.onAccepted?.(item);
+        options.onResolved?.(item);
       }
       paintSelection();
     });
@@ -368,12 +411,12 @@ export function presentReview(
         return;
       }
       const onDetail = handle.activeTab() === "detail";
-      // Armed accept consumes the very next key unconditionally — only an
-      // exact `y` confirms; everything else (including nav keys) cancels
-      // back to idle rather than falling through to navigation.
+      // Armed accept/decline consumes the very next key unconditionally —
+      // only an exact `y` confirms; everything else (including nav keys)
+      // cancels back to idle rather than falling through to navigation.
       if (onDetail && status.kind === "armed") {
         if (token === "y") {
-          runAccept();
+          runDecision(status.decision);
         } else {
           status = { kind: "idle" };
           paintSelection();
@@ -392,14 +435,12 @@ export function presentReview(
         handle.setTab("detail");
         return;
       }
-      if (
-        onDetail &&
-        token === "a" &&
-        items[selected]?.type === "proposal" &&
-        options.acceptProposal !== undefined &&
-        status.kind !== "running"
-      ) {
-        status = { kind: "armed" };
+      if (onDetail && (token === "a" || token === "d") && status.kind !== "running") {
+        const decision: ReviewDecision = token === "a" ? "accept" : "decline";
+        status =
+          items[selected]?.type === "proposal" && handlerFor(decision) !== undefined
+            ? { kind: "armed", decision }
+            : { kind: "unavailable", decision };
         paintSelection();
         return;
       }

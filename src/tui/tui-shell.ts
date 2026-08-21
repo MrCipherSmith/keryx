@@ -68,7 +68,7 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
-import { acceptProposalViaShell } from "./review-accept";
+import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
 import {
@@ -3113,7 +3113,8 @@ export async function launchTuiAgentShell(opts: {
         openReview(otui, chrome, {
           items,
           acceptProposal: (item) => acceptProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
-          onAccepted: () => {
+          declineProposal: (item) => declineProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
+          onResolved: () => {
             void refreshReviewSidebar();
           },
           renderer: r,
