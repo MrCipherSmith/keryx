@@ -7,6 +7,7 @@ import {
   CLAUDE_RUNTIME,
   CURSOR_RUNTIME,
   OPENCODE_RUNTIME,
+  VSCODE_RUNTIME,
   MCP_MANAGED_KEY,
   MCP_MANAGED_SENTINEL,
   MCP_SDK_HINT,
@@ -338,6 +339,135 @@ test("AC3: opencode uninstall does not remove an unmanaged user keryx entry", as
   expect(config.mcp?.[MCP_SERVER_NAME]?.command).toEqual(["custom"]);
 });
 
+// VS Code's client config shape differs from every other runtime here:
+// `{ servers: { <name>: { type: "stdio", command, args } } }`, not
+// `mcpServers.<name>.{command,args}` (cursor/claude) nor opencode's own
+// `mcp.<name>.{type,command:[...],enabled}` shape. Confirmed live via
+// WebSearch/WebFetch against current code.visualstudio.com docs (no VS Code
+// install available in this environment to verify against a real instance —
+// honestly noted).
+type VscodeConfig = {
+  servers?: Record<string, { type?: string; command?: string; args?: string[]; [k: string]: unknown }>;
+  [key: string]: unknown;
+};
+
+async function readVscodeConfig(file: string): Promise<VscodeConfig> {
+  return JSON.parse(await readFile(file, "utf8")) as VscodeConfig;
+}
+
+test("AC1: --runtime vscode writes .vscode/mcp.json with the servers/type:stdio shape", async () => {
+  const report = await installMcpClient(root, ["vscode"]);
+  const file = VSCODE_RUNTIME.settingsPath(root) as string;
+  expect(file).toBe(path.join(root, ".vscode", "mcp.json"));
+
+  const config = await readVscodeConfig(file);
+  const entry = config.servers?.[MCP_SERVER_NAME];
+  expect(entry?.type).toBe("stdio");
+  expect(entry?.command).toBe("keryx");
+  expect(entry?.args).toEqual(["mcp", "serve", "--cwd", root]);
+  expect((entry as Record<string, unknown>)?.[MCP_MANAGED_KEY]).toBe(MCP_MANAGED_SENTINEL);
+  expect(report.outcomes[0]?.errors).toEqual([]);
+});
+
+test("AC1: vscode is not included in resolveMcpRuntimes('all') (opt-in only)", () => {
+  const { runtimes } = resolveMcpRuntimes(["all"]);
+  expect(runtimes.map((r) => r.id)).not.toContain("vscode");
+});
+
+test("AC2: vscode merge preserves pre-existing servers and unrelated top-level keys", async () => {
+  const file = VSCODE_RUNTIME.settingsPath(root) as string;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(
+    file,
+    `${JSON.stringify(
+      {
+        inputs: [],
+        servers: {
+          other: { type: "stdio", command: "other-server", args: ["--stdio"] },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  await installMcpClient(root, ["vscode"]);
+  const config = await readVscodeConfig(file);
+
+  expect(config.servers?.other?.command).toBe("other-server");
+  expect(config.inputs).toEqual([]);
+  expect(config.servers?.[MCP_SERVER_NAME]?.command).toBe("keryx");
+  expect(config.servers?.[MCP_SERVER_NAME]?.type).toBe("stdio");
+});
+
+test("AC2: vscode re-install is idempotent (byte-identical second run)", async () => {
+  const file = VSCODE_RUNTIME.settingsPath(root) as string;
+  await installMcpClient(root, ["vscode"]);
+  const first = await readFile(file, "utf8");
+  await installMcpClient(root, ["vscode"]);
+  await installMcpClient(root, ["vscode"]);
+  const third = await readFile(file, "utf8");
+  expect(third).toBe(first);
+});
+
+test("AC3: vscode uninstall removes ONLY the managed entry, preserving other servers", async () => {
+  await installMcpClient(root, ["vscode"]);
+  const file = VSCODE_RUNTIME.settingsPath(root) as string;
+  const config = await readVscodeConfig(file);
+  config.servers = {
+    ...config.servers,
+    other: { type: "stdio", command: "other-server", args: [] },
+  };
+  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  const report = await uninstallMcpClient(root, ["vscode"]);
+  expect(report.outcomes[0]?.removed).toBe(true);
+
+  const after = await readVscodeConfig(file);
+  expect(after.servers?.[MCP_SERVER_NAME]).toBeUndefined();
+  expect(after.servers?.other?.command).toBe("other-server");
+});
+
+test("AC3: vscode uninstall when nothing installed is a no-op", async () => {
+  const report = await uninstallMcpClient(root, ["vscode"]);
+  expect(report.outcomes[0]?.removed).toBe(false);
+});
+
+test("AC3: vscode uninstall does not remove an unmanaged user keryx entry", async () => {
+  const file = VSCODE_RUNTIME.settingsPath(root) as string;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(
+    file,
+    `${JSON.stringify(
+      { servers: { [MCP_SERVER_NAME]: { type: "stdio", command: "custom", args: ["x"] } } },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  const report = await uninstallMcpClient(root, ["vscode"]);
+  expect(report.outcomes[0]?.removed).toBe(false);
+  const config = await readVscodeConfig(file);
+  expect(config.servers?.[MCP_SERVER_NAME]?.command).toBe("custom");
+});
+
+test("AC4: vscode validate flags a wrong command and a missing type:stdio", async () => {
+  const errorsMissingType = VSCODE_RUNTIME.validate({
+    servers: { [MCP_SERVER_NAME]: { command: "keryx", args: [] } },
+  });
+  expect(errorsMissingType).toContain(`vscode: servers.${MCP_SERVER_NAME}.type must be "stdio"`);
+
+  const errorsWrongCommand = VSCODE_RUNTIME.validate({
+    servers: { [MCP_SERVER_NAME]: { type: "stdio", command: "not-keryx" } },
+  });
+  expect(errorsWrongCommand).toContain(
+    `vscode: servers.${MCP_SERVER_NAME}.command must be "keryx"`,
+  );
+
+  expect(VSCODE_RUNTIME.validate({})).toEqual(["vscode: servers is missing or not an object"]);
+});
+
 test("AC5: probeMcpSdk returns an actionable hint when the SDK is absent", async () => {
   const absent = await probeMcpSdk(() => Promise.reject(new Error("ERR_MODULE_NOT_FOUND")));
   expect(absent.available).toBe(false);
@@ -364,8 +494,9 @@ test("AC5/no-network: install opens no socket and makes no network call", async 
   } as typeof net.Socket.prototype.connect;
 
   try {
-    await installMcpClient(root, ["cursor", "claude", "opencode", "generic"]);
+    await installMcpClient(root, ["cursor", "claude", "opencode", "vscode", "generic"]);
     await uninstallMcpClient(root, ["all"]);
+    await uninstallMcpClient(root, ["vscode"]);
   } finally {
     globalThis.fetch = originalFetch;
     net.Socket.prototype.connect = originalConnect;

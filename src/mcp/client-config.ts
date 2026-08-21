@@ -236,18 +236,108 @@ export const GENERIC_RUNTIME: McpClientRuntime = {
   hasManaged: mcpHasManaged,
 };
 
+// VS Code's client config is project-local `.vscode/mcp.json`, but its shape
+// differs from every other runtime here in two ways, confirmed live
+// (WebSearch+WebFetch against current code.visualstudio.com docs — no VS
+// Code install available in this environment to verify against a real
+// instance, honestly noted, same pattern as the opencode investigation
+// above): (1) the top-level key is `servers`, NOT `mcpServers`; (2) each
+// entry requires an explicit `"type": "stdio"` field alongside
+// `command`/`args` — none of `fileRuntime`'s two clients (cursor/claude) or
+// opencode's own distinct shape carry a `type` discriminant on the entry
+// itself. Mirrors `OPENCODE_RUNTIME`'s pattern: its own merge/strip/validate/
+// hasManaged, not the generic `mcpServers` helpers `fileRuntime` reuses.
+function readVscodeServers(settings: Settings): Settings {
+  return typeof settings.servers === "object" &&
+    settings.servers !== null &&
+    !Array.isArray(settings.servers)
+    ? { ...(settings.servers as Settings) }
+    : {};
+}
+
+function vscodeManagedEntry(projectRoot: string): Record<string, unknown> {
+  return {
+    type: "stdio",
+    ...mcpServerEntry(projectRoot),
+    [MCP_MANAGED_KEY]: MCP_MANAGED_SENTINEL,
+  };
+}
+
+function vscodeMerge(settings: Settings, projectRoot: string): Settings {
+  const servers = readVscodeServers(settings);
+  servers[MCP_SERVER_NAME] = vscodeManagedEntry(projectRoot);
+  settings.servers = servers;
+  return settings;
+}
+
+function vscodeStrip(settings: Settings): Settings {
+  if (
+    typeof settings.servers !== "object" ||
+    settings.servers === null ||
+    Array.isArray(settings.servers)
+  ) {
+    return settings;
+  }
+  const servers = { ...(settings.servers as Settings) };
+  if (isManagedEntry(servers[MCP_SERVER_NAME])) {
+    delete servers[MCP_SERVER_NAME];
+  }
+  if (Object.keys(servers).length > 0) settings.servers = servers;
+  else delete settings.servers;
+  return settings;
+}
+
+function vscodeValidate(settings: Settings): string[] {
+  const errors: string[] = [];
+  const servers = settings.servers;
+  if (typeof servers !== "object" || servers === null || Array.isArray(servers)) {
+    errors.push("vscode: servers is missing or not an object");
+    return errors;
+  }
+  const entry = (servers as Settings)[MCP_SERVER_NAME] as Record<string, unknown> | undefined;
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    errors.push(`vscode: missing servers.${MCP_SERVER_NAME} entry`);
+    return errors;
+  }
+  if (entry.type !== "stdio") {
+    errors.push(`vscode: servers.${MCP_SERVER_NAME}.type must be "stdio"`);
+  }
+  if (entry.command !== MCP_SERVER_COMMAND) {
+    errors.push(`vscode: servers.${MCP_SERVER_NAME}.command must be "${MCP_SERVER_COMMAND}"`);
+  }
+  return errors;
+}
+
+function vscodeHasManaged(settings: Settings): boolean {
+  return isManagedEntry(readVscodeServers(settings)[MCP_SERVER_NAME]);
+}
+
+export const VSCODE_RUNTIME: McpClientRuntime = {
+  id: "vscode",
+  settingsPath: (root) => path.join(root, ".vscode", "mcp.json"),
+  merge: vscodeMerge,
+  strip: vscodeStrip,
+  validate: vscodeValidate,
+  hasManaged: vscodeHasManaged,
+};
+
 export const MCP_CLIENT_RUNTIMES: McpClientRuntime[] = [
   CURSOR_RUNTIME,
   CLAUDE_RUNTIME,
   OPENCODE_RUNTIME,
+  VSCODE_RUNTIME,
   GENERIC_RUNTIME,
 ];
 
 // `all` expands to the file-backed, project-scoped runtimes. `generic` is
 // deliberately excluded — it writes no file, so bundling it into `all` would be
-// a no-op surprise. `codex` is deliberately NOT a runtime here: its client
-// config is a single GLOBAL `~/.codex/config.toml` (not a project-local JSON
-// file), and codex already ships its own safe, native installer for it —
+// a no-op surprise. `vscode` is also deliberately excluded from `all`: unlike
+// cursor/claude/opencode, a VS Code workspace is not a safe default assumption
+// for every project this installer runs against, so `--runtime vscode` (or
+// `vscode` in an explicit comma-list) is opt-in only. `codex` is deliberately
+// NOT a runtime here: its client config is a single GLOBAL
+// `~/.codex/config.toml` (not a project-local JSON file), and codex already
+// ships its own safe, native installer for it —
 // `codex mcp add keryx -- keryx mcp serve --cwd <projectRoot>` (verified live).
 // Building a parallel TOML writer here would duplicate that without adding
 // safety; `renderMcpManifest()` documents the real command instead.
@@ -387,16 +477,18 @@ protocol adapter — it defines no new module logic.
   requires \`http.enabled=true\` in this module's manifest entry).
 - \`keryx mcp serve --cwd <project-root>\` — expose a specific project,
   independent of the MCP client's launch directory.
-- \`keryx mcp install --runtime <cursor|claude|opencode|generic|all> [--dry-run]\` —
+- \`keryx mcp install --runtime <cursor|claude|opencode|vscode|generic|all> [--dry-run]\` —
   wire this project into an editor/agent: writes a project-local client
   config (cursor → \`.cursor/mcp.json\`, claude → \`.mcp.json\`, opencode →
-  \`opencode.json\`) and sets \`modules.mcp.enabled=true\`. \`--dry-run\`
-  prints the change without writing anything. This is the command to run
-  when a user asks to "connect" or "enable" MCP for this project — it is
-  the full, real setup step; hand-editing a client config file directly is
-  unnecessary and skips setting \`modules.mcp.enabled\`. \`all\` expands to
-  cursor + claude + opencode.
-- \`keryx mcp uninstall --runtime <cursor|claude|opencode|generic|all>\` —
+  \`opencode.json\`, vscode → \`.vscode/mcp.json\`) and sets
+  \`modules.mcp.enabled=true\`. \`--dry-run\` prints the change without
+  writing anything. This is the command to run when a user asks to
+  "connect" or "enable" MCP for this project — it is the full, real setup
+  step; hand-editing a client config file directly is unnecessary and skips
+  setting \`modules.mcp.enabled\`. \`all\` expands to cursor + claude +
+  opencode; \`vscode\` is opt-in only (not bundled into \`all\`) — request it
+  explicitly with \`--runtime vscode\`.
+- \`keryx mcp uninstall --runtime <cursor|claude|opencode|vscode|generic|all>\` —
   remove the managed client config again.
 - **codex CLI**: not a \`--runtime\` here — codex's client config is a single
   GLOBAL \`~/.codex/config.toml\`, not a project-local file, and it already
