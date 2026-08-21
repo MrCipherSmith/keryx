@@ -67,6 +67,15 @@ test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal", () => {
   expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal"]);
 });
 
+test("filterCommands: a trailing space after a fully-typed command name matches nothing (the composer dropdown must not stay open once the user is typing arguments)", () => {
+  // A `.trim()`'d query would still equal "/goal", the bare command name —
+  // that kept the TUI `/`-dropdown reopening itself every time a command with
+  // required arguments (`/goal <text>`) was accepted, since the composer
+  // value right after acceptance IS "/goal " (name + one trailing space).
+  expect(filterCommands("/goal ", "agent")).toEqual([]);
+  expect(filterCommands("/goal", "agent").map((c) => c.name)).toEqual(["/goal"]);
+});
+
 test("flow 167: /queue is agent-only (main-queue remove/edit/force has no chat-mode meaning)", () => {
   const queue = AGENT_SLASH_COMMANDS.find((c) => c.name === "/queue");
   expect(queue).toBeDefined();
