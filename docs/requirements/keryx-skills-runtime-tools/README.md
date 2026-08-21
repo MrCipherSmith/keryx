@@ -40,9 +40,13 @@ the path for every other supported assistant (`codex`, `cursor`, `zed`,
 
 ## Status
 
-**draft.** Nothing in this package is implemented. It follows a live
-comparative review (this package's [brainstorm.md](brainstorm.md)) of how
-Claude Code itself, and five open-source coding-agent CLIs
+**implemented** (R1/R2/R4/R5; R3's verification mechanism remains deferred
+per D-03). `skills_catalog`/`skill_load` are registered in
+`src/harness/tool/metaproject-operations.ts` and shipped in the 0.2.50
+release (PR #359, `feat(metaproject): add skills_catalog + skill_load
+operations`). This package's design followed a live comparative review
+(this package's [brainstorm.md](brainstorm.md)) of how Claude Code itself,
+and five open-source coding-agent CLIs
 (`opencode`, `cline`, `kilocode`, `continue`, `oh-my-claudecode`), each
 implement skill/capability discovery and loading, and of how eleven CLIs
 implement `web_fetch` — the latter only as a calibration reference for how
