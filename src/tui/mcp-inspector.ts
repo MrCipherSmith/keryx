@@ -1,9 +1,23 @@
 // Tools/MCP inspector modal: a "Tools" tab listing the tools this agent has
 // access to, and an "MCP" tab listing every registered MCP client runtime
 // (cursor, claude, opencode, vscode, generic) with its live connect status and
-// a two-key confirm connect/disconnect action. Mirrors review-inspector.ts's
-// list+detail interaction model (openModal host, injectable openModal/keypress
-// for pure testing, [key]-then-[y] confirm for the one mutating action).
+// a clickable connect/disconnect action per row.
+//
+// Rows are real per-row `TextRenderable`s with their own `onMouseDown`, not
+// one text blob — the same `onMouseDown`-per-row idiom `background-job-
+// inspector.ts`'s sidebar and Kill button already use (that file's header
+// comment calls it out explicitly as the reusable pattern for a clickable
+// list row in this modal-host family). A single joined-string node can only
+// ever be keyboard-driven — OpenTUI mouse events target a whole Renderable,
+// not a substring inside one — so per-row buttons are a hard requirement,
+// not a style choice.
+//
+// Clicking a row is a two-step confirm exactly like the keyboard path: first
+// click arms the action (same as pressing `c`/`d` after selecting the row),
+// second click on the same row confirms (same as pressing `y`). Keyboard nav
+// is untouched — arrows still move the selection, `c`/`d` still arm, `y`
+// still confirms; the click just gives the same state machine a mouse entry
+// point that doesn't require first knowing the keyboard sequence.
 //
 // Deliberately keeps "LLM providers" (OpenAI-compat chat endpoints, configured
 // via `/search-provider`) and "MCP" (keryx's own outbound `mcp serve` server,
@@ -11,12 +25,14 @@
 // modal is MCP only. An LLM provider picker is a different surface.
 
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
-import { clampScroll, scrollToReveal, windowLines } from "./review-inspector";
+import { clampScroll, scrollToReveal } from "./review-inspector";
+import { clearTranscriptChildren } from "./transcript-blocks";
 import type { McpRuntimeStatus } from "../mcp/client-config";
 import type { NormalizedToolDefinition } from "../harness/provider/types";
 
 export const MCP_INSPECTOR_FOOTER = [
   { key: "↑/↓", label: "select" },
+  { key: "click", label: "row: select/act" },
   { key: "c/d", label: "connect/disconnect" },
   { key: "y", label: "confirm" },
   { key: "←/→", label: "tabs" },
@@ -62,15 +78,17 @@ function runtimeLabel(id: string): string {
   return RUNTIME_LABELS[id] ?? id;
 }
 
+function formatToolRowLine(tool: NormalizedToolDefinition): string {
+  const risk = (tool.risk ?? "read").padEnd(6);
+  const name = tool.name.padEnd(28);
+  return `${name} ${risk} ${tool.description ?? ""}`.trimEnd();
+}
+
 export function formatToolsListLines(tools: readonly NormalizedToolDefinition[]): string[] {
   if (tools.length === 0) {
     return ["No tools available."];
   }
-  return tools.map((tool) => {
-    const risk = (tool.risk ?? "read").padEnd(6);
-    const name = tool.name.padEnd(28);
-    return `${name} ${risk} ${tool.description ?? ""}`.trimEnd();
-  });
+  return tools.map(formatToolRowLine);
 }
 
 export type McpArmedAction = { id: string; action: "connect" | "disconnect" };
@@ -85,6 +103,25 @@ function isActionable(id: string): boolean {
   return id !== "generic";
 }
 
+function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status: McpActionStatus): string {
+  const mark = isSelected ? ">" : " ";
+  const label = runtimeLabel(runtime.id).padEnd(20);
+  const statusText = runtime.connected ? "● connected" : "○ not connected";
+  let action = "";
+  if (!isActionable(runtime.id)) {
+    action = "  (copy snippet manually)";
+  } else if (status.kind === "armed" && status.target.id === runtime.id) {
+    action = `  [click again or press y to ${status.target.action}]`;
+  } else if (status.kind === "running" && status.target.id === runtime.id) {
+    action = `  ${status.target.action === "connect" ? "connecting…" : "disconnecting…"}`;
+  } else if (status.kind === "done" && status.target.id === runtime.id) {
+    action = status.outcome.ok ? "  ✓ done" : `  ✗ ${status.outcome.message}`;
+  } else {
+    action = runtime.connected ? "  [d] disconnect" : "  [c] connect";
+  }
+  return `${mark} ${label} ${statusText}${action}`;
+}
+
 export function formatMcpListLines(
   runtimes: readonly McpRuntimeStatus[],
   selected: number,
@@ -93,24 +130,7 @@ export function formatMcpListLines(
   if (runtimes.length === 0) {
     return ["No MCP client runtimes registered."];
   }
-  return runtimes.map((runtime, index) => {
-    const mark = index === selected ? ">" : " ";
-    const label = runtimeLabel(runtime.id).padEnd(20);
-    const statusText = runtime.connected ? "● connected" : "○ not connected";
-    let action = "";
-    if (!isActionable(runtime.id)) {
-      action = "  (copy snippet manually)";
-    } else if (status.kind === "armed" && status.target.id === runtime.id) {
-      action = `  [press y to ${status.target.action}]`;
-    } else if (status.kind === "running" && status.target.id === runtime.id) {
-      action = `  ${status.target.action === "connect" ? "connecting…" : "disconnecting…"}`;
-    } else if (status.kind === "done" && status.target.id === runtime.id) {
-      action = status.outcome.ok ? "  ✓ done" : `  ✗ ${status.outcome.message}`;
-    } else {
-      action = runtime.connected ? "  [d] disconnect" : "  [c] connect";
-    }
-    return `${mark} ${label} ${statusText}${action}`;
-  });
+  return runtimes.map((runtime, index) => formatMcpRowLine(runtime, index === selected, status));
 }
 
 export type ConnectOutcome = { ok: true } | { ok: false; message: string };
@@ -128,6 +148,33 @@ export type PresentMcpToolsOptions = {
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
+type RowNode = { content: string };
+type RowTextCtor = new (
+  renderer: unknown,
+  opts: { id: string; content: string; onMouseDown?: () => void },
+) => RowNode;
+type RowTarget = {
+  add: (child: unknown) => void;
+  getChildren: () => readonly unknown[];
+  remove: (child: unknown) => void;
+};
+
+function asRowTarget(body: unknown): RowTarget | undefined {
+  const parent = body as {
+    add?: (child: unknown) => void;
+    getChildren?: () => readonly unknown[];
+    remove?: (child: unknown) => void;
+  };
+  if (parent.add === undefined || parent.getChildren === undefined || parent.remove === undefined) {
+    return undefined;
+  }
+  return {
+    add: parent.add.bind(parent),
+    getChildren: parent.getChildren.bind(parent),
+    remove: parent.remove.bind(parent),
+  };
+}
+
 export function presentMcpTools(
   openModal: OpenModalFn,
   otui: unknown,
@@ -139,8 +186,10 @@ export function presentMcpTools(
   let toolsScroll = 0;
   let mcpScroll = 0;
   let status: McpActionStatus = { kind: "idle" };
-  let toolsNode: { content: string } | undefined;
-  let mcpNode: { content: string } | undefined;
+  let toolsBody: RowTarget | undefined;
+  let mcpBody: RowTarget | undefined;
+  let rowCtor: RowTextCtor | undefined;
+  let activeRenderer: unknown;
   let unsubscribeKey: (() => void) | undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
@@ -149,19 +198,49 @@ export function presentMcpTools(
       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
       : 13);
 
-  const toolLines = (): string[] => formatToolsListLines(options.tools);
-  const mcpLines = (): string[] => formatMcpListLines(runtimes, mcpSelected, status);
+  const paintToolsRows = (): void => {
+    if (toolsBody === undefined || rowCtor === undefined) {
+      return;
+    }
+    clearTranscriptChildren(toolsBody);
+    if (options.tools.length === 0) {
+      toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-empty", content: "No tools available." }));
+      return;
+    }
+    const start = clampScroll(toolsScroll, options.tools.length, bodyRows);
+    for (const [i, tool] of options.tools.slice(start, start + bodyRows).entries()) {
+      toolsBody.add(new rowCtor(activeRenderer, { id: `mcp-tool-row-${start + i}`, content: formatToolRowLine(tool) }));
+    }
+  };
+
+  const paintMcpRows = (): void => {
+    if (mcpBody === undefined || rowCtor === undefined) {
+      return;
+    }
+    clearTranscriptChildren(mcpBody);
+    if (runtimes.length === 0) {
+      mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-empty", content: "No MCP client runtimes registered." }));
+      return;
+    }
+    const start = clampScroll(mcpScroll, runtimes.length, bodyRows);
+    for (const [i, runtime] of runtimes.slice(start, start + bodyRows).entries()) {
+      const index = start + i;
+      mcpBody.add(
+        new rowCtor(activeRenderer, {
+          id: `mcp-row-${runtime.id}`,
+          content: formatMcpRowLine(runtime, index === mcpSelected, status),
+          onMouseDown: () => handleRowClick(runtime.id, index),
+        }),
+      );
+    }
+  };
 
   const paint = (): void => {
-    toolsScroll = clampScroll(toolsScroll, toolLines().length, bodyRows);
+    toolsScroll = clampScroll(toolsScroll, options.tools.length, bodyRows);
     mcpScroll = scrollToReveal(mcpSelected, mcpScroll, bodyRows);
-    mcpScroll = clampScroll(mcpScroll, mcpLines().length, bodyRows);
-    if (toolsNode !== undefined) {
-      toolsNode.content = windowLines(toolLines(), toolsScroll, bodyRows).join("\n");
-    }
-    if (mcpNode !== undefined) {
-      mcpNode.content = windowLines(mcpLines(), mcpScroll, bodyRows).join("\n");
-    }
+    mcpScroll = clampScroll(mcpScroll, runtimes.length, bodyRows);
+    paintToolsRows();
+    paintMcpRows();
   };
 
   const moveMcpSelection = (next: number): void => {
@@ -198,6 +277,38 @@ export function presentMcpTools(
     });
   };
 
+  /** Arms the given row's action (connect if disconnected, disconnect if connected) — the keyboard `c`/`d` and a first row click both funnel through here. */
+  const armFor = (id: string): void => {
+    const index = runtimes.findIndex((r) => r.id === id);
+    const row = runtimes[index];
+    if (index < 0 || row === undefined || !isActionable(row.id) || status.kind === "running") {
+      return;
+    }
+    mcpSelected = index;
+    status = { kind: "armed", target: { id: row.id, action: row.connected ? "disconnect" : "connect" } };
+    paint();
+  };
+
+  /** First click on a row arms its action; a second click on the SAME armed row confirms — the mouse mirrors the keyboard's [c/d]-then-[y] gate exactly. */
+  const handleRowClick = (id: string, index: number): void => {
+    if (status.kind === "armed" && status.target.id === id) {
+      runAction();
+      return;
+    }
+    if (status.kind === "running") {
+      return;
+    }
+    if (!isActionable(id)) {
+      if (index !== mcpSelected) {
+        mcpSelected = index;
+        status = { kind: "idle" };
+        paint();
+      }
+      return;
+    }
+    armFor(id);
+  };
+
   const handle = openModal(otui, chrome, {
     title: "Tools & MCP",
     tabs: [
@@ -208,24 +319,24 @@ export function presentMcpTools(
     footer: MCP_INSPECTOR_FOOTER,
     renderTab: (tabId, body, ctx) => {
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
-      const parent = body as { add?: (child: unknown) => void };
-      const ctor = (
-        otui as { TextRenderable?: new (r: unknown, opts: { id: string; content: string }) => { content: string } }
-      ).TextRenderable;
-      if (parent.add === undefined || ctor === undefined) {
+      const ctor = (otui as { TextRenderable?: RowTextCtor }).TextRenderable;
+      const target = asRowTarget(body);
+      if (target === undefined || ctor === undefined) {
         return;
       }
+      rowCtor = ctor;
+      activeRenderer = renderer;
       if (tabId === "tools") {
-        toolsScroll = clampScroll(toolsScroll, toolLines().length, bodyRows);
-        toolsNode = new ctor(renderer, { id: "mcp-tools-body", content: windowLines(toolLines(), toolsScroll, bodyRows).join("\n") });
-        parent.add(toolsNode);
+        toolsBody = target;
+        toolsScroll = clampScroll(toolsScroll, options.tools.length, bodyRows);
+        paintToolsRows();
         return;
       }
+      mcpBody = target;
       mcpScroll = scrollToReveal(mcpSelected, mcpScroll, bodyRows);
-      mcpNode = new ctor(renderer, { id: "mcp-mcp-body", content: windowLines(mcpLines(), mcpScroll, bodyRows).join("\n") });
-      parent.add(mcpNode);
-      // Passing `ctx?.width` through would wrap rows mid-status-text; rows here
-      // are already fixed-width columns, so no width-based wrapping is applied.
+      paintMcpRows();
+      // Rows are fixed-width columns already; `ctx?.width` wrapping would
+      // break mid-status-text, so it is deliberately unused here.
       void ctx;
     },
     onClose: () => {
@@ -273,7 +384,7 @@ export function presentMcpTools(
         if (onMcp) {
           moveMcpSelection(mcpSelected - 1);
         } else {
-          toolsScroll = clampScroll(toolsScroll - 1, toolLines().length, bodyRows);
+          toolsScroll = clampScroll(toolsScroll - 1, options.tools.length, bodyRows);
           paint();
         }
         return;
@@ -282,7 +393,7 @@ export function presentMcpTools(
         if (onMcp) {
           moveMcpSelection(mcpSelected + 1);
         } else {
-          toolsScroll = clampScroll(toolsScroll + 1, toolLines().length, bodyRows);
+          toolsScroll = clampScroll(toolsScroll + 1, options.tools.length, bodyRows);
           paint();
         }
         return;
@@ -290,9 +401,9 @@ export function presentMcpTools(
       if (token === "pageup" || token === "pagedown") {
         const step = token === "pageup" ? -bodyRows : bodyRows;
         if (onMcp) {
-          mcpScroll = clampScroll(mcpScroll + step, mcpLines().length, bodyRows);
+          mcpScroll = clampScroll(mcpScroll + step, runtimes.length, bodyRows);
         } else {
-          toolsScroll = clampScroll(toolsScroll + step, toolLines().length, bodyRows);
+          toolsScroll = clampScroll(toolsScroll + step, options.tools.length, bodyRows);
         }
         paint();
       }

@@ -74,37 +74,186 @@ test("presentMcpTools opens Tools+MCP tabs with the MCP footer", () => {
   expect(calls[0]?.title).toBe("Tools & MCP");
   expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["tools", "mcp"]);
   expect(calls[0]?.footer?.some((action) => action.key === "c/d")).toBe(true);
+  expect(calls[0]?.footer?.some((action) => action.key === "click")).toBe(true);
 });
 
-function fakeOtui(): { TextRenderable: new (r: unknown, opts: { content: string }) => { content: string } } {
+/** Fake `TextRenderable`: one instance per row, each carrying its own `onMouseDown` — mirrors `background-job-inspector.test.ts`'s `FakeText`. */
+type FakeRow = { id: string; content: string; onMouseDown: (() => void) | undefined };
+function fakeOtui(): { TextRenderable: new (r: unknown, opts: { id: string; content: string; onMouseDown?: () => void }) => FakeRow } {
   return {
-    TextRenderable: class {
+    TextRenderable: class implements FakeRow {
+      id: string;
       content: string;
-      constructor(_r: unknown, opts: { content: string }) {
+      onMouseDown: (() => void) | undefined;
+      constructor(_r: unknown, opts: { id: string; content: string; onMouseDown?: () => void }) {
+        this.id = opts.id;
         this.content = opts.content;
+        this.onMouseDown = opts.onMouseDown;
       }
     },
   };
 }
 
+/** A live per-tab body: `add`/`getChildren`/`remove` back a plain array, exactly what `clearTranscriptChildren` (and a real OpenTUI `Box`) expects — so a repaint that clears-then-rebuilds rows behaves the same as it would against a real renderer. */
+function fakeBody(): { add: (c: unknown) => void; getChildren: () => readonly unknown[]; remove: (c: unknown) => void; rows: () => FakeRow[] } {
+  const children: unknown[] = [];
+  return {
+    add: (c) => children.push(c),
+    getChildren: () => children,
+    remove: (c) => {
+      const i = children.indexOf(c);
+      if (i >= 0) children.splice(i, 1);
+    },
+    rows: () => children as FakeRow[],
+  };
+}
+
+function findRow(rows: FakeRow[], id: string): FakeRow | undefined {
+  return rows.find((r) => r.id === id);
+}
+
+test("Tools tab renders one clickable-free row per tool, in order", () => {
+  let active = "tools";
+  const body = fakeBody();
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("tools", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
+    },
+    fakeOtui(),
+    {},
+    { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+  );
+  const rows = body.rows();
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.content).toContain("gdgraph_affected");
+  expect(rows[0]?.onMouseDown).toBeUndefined();
+  expect(rows[1]?.content).toContain("shell_exec");
+});
+
+test("MCP tab renders one clickable row per runtime, marking the selection", () => {
+  let active = "mcp";
+  const body = fakeBody();
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
+    },
+    fakeOtui(),
+    {},
+    { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+  );
+  const rows = body.rows();
+  expect(rows).toHaveLength(3);
+  expect(findRow(rows, "mcp-row-cursor")?.content).toContain(">");
+  expect(findRow(rows, "mcp-row-cursor")?.content).toContain("[d] disconnect");
+  expect(findRow(rows, "mcp-row-cursor")?.onMouseDown).toBeTypeOf("function");
+  expect(findRow(rows, "mcp-row-claude")?.content).toContain("[c] connect");
+  expect(findRow(rows, "mcp-row-generic")?.content).toContain("copy snippet manually");
+  expect(findRow(rows, "mcp-row-generic")?.onMouseDown).toBeTypeOf("function");
+});
+
+test("clicking a disconnected row's line arms connect; clicking the same row again confirms and connects", async () => {
+  let active = "mcp";
+  const body = fakeBody();
+  let connectedId: string | undefined;
+  let changed: readonly McpRuntimeStatus[] | undefined;
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
+    },
+    fakeOtui(),
+    {},
+    {
+      tools: TOOLS,
+      runtimes: RUNTIMES,
+      visibleRows: 20,
+      connect: async (id) => {
+        connectedId = id;
+        return { ok: true };
+      },
+      disconnect: async () => ({ ok: true }),
+      onStatusChange: (r) => {
+        changed = r;
+      },
+    },
+  );
+
+  findRow(body.rows(), "mcp-row-claude")?.onMouseDown?.();
+  expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("press y to connect");
+  expect(connectedId).toBeUndefined();
+
+  findRow(body.rows(), "mcp-row-claude")?.onMouseDown?.();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(connectedId).toBe("claude");
+  expect(changed?.find((r) => r.id === "claude")?.connected).toBe(true);
+  expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("✓ done");
+});
+
+test("clicking a different actionable row while one is armed re-arms the new row instead of confirming the old one", () => {
+  let active = "mcp";
+  const body = fakeBody();
+  const connectCalls: string[] = [];
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
+    },
+    fakeOtui(),
+    {},
+    {
+      tools: TOOLS,
+      runtimes: RUNTIMES,
+      visibleRows: 20,
+      connect: async (id) => {
+        connectCalls.push(id);
+        return { ok: true };
+      },
+      disconnect: async (id) => {
+        connectCalls.push(id);
+        return { ok: true };
+      },
+    },
+  );
+
+  findRow(body.rows(), "mcp-row-claude")?.onMouseDown?.(); // arms connect on claude
+  expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("press y to connect");
+
+  findRow(body.rows(), "mcp-row-cursor")?.onMouseDown?.(); // clicks a DIFFERENT row instead
+  expect(findRow(body.rows(), "mcp-row-cursor")?.content).toContain("press y to disconnect");
+  expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("[c] connect"); // claude's arm was cancelled
+  expect(connectCalls).toEqual([]); // neither action actually ran yet — only armed
+});
+
+test("clicking the generic row only selects it — it never arms, since there is no file to connect/disconnect", () => {
+  let active = "mcp";
+  const body = fakeBody();
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
+    },
+    fakeOtui(),
+    {},
+    { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+  );
+  findRow(body.rows(), "mcp-row-generic")?.onMouseDown?.();
+  const generic = findRow(body.rows(), "mcp-row-generic");
+  expect(generic?.content).toContain(">");
+  expect(generic?.content).toContain("copy snippet manually");
+  expect(generic?.content).not.toContain("press y");
+});
+
 test("[c] arms connect on the MCP tab for a disconnected runtime; any non-y key cancels", () => {
   let active = "mcp";
-  let node: { content: string } | undefined;
+  const body = fakeBody();
   let connectCalls = 0;
   presentMcpTools(
     (_otui, _chrome, input) => {
-      input.renderTab("mcp", {
-        add: (child: { content?: string }) => {
-          node = child as { content: string };
-        },
-      });
-      return {
-        close: () => input.onClose?.(),
-        setTab: (id) => {
-          active = id;
-        },
-        activeTab: () => active,
-      };
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
     },
     fakeOtui(),
     {},
@@ -121,10 +270,10 @@ test("[c] arms connect on the MCP tab for a disconnected runtime; any non-y key 
         // Move to the disconnected "claude" row (index 1) first.
         handler({ name: "down", sequence: "" });
         handler({ name: "c", sequence: "c" });
-        expect(node?.content).toContain("press y to connect");
+        expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("press y to connect");
         handler({ name: "x", sequence: "x" });
-        expect(node?.content).not.toContain("press y to connect");
-        expect(node?.content).toContain("[c] connect");
+        expect(findRow(body.rows(), "mcp-row-claude")?.content).not.toContain("press y to connect");
+        expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("[c] connect");
         expect(connectCalls).toBe(0);
         return () => {};
       },
@@ -134,23 +283,13 @@ test("[c] arms connect on the MCP tab for a disconnected runtime; any non-y key 
 
 test("[c] then [y] connects, flips the row's status locally, and fires onStatusChange", async () => {
   let active = "mcp";
-  let node: { content: string } | undefined;
+  const body = fakeBody();
   let changed: readonly McpRuntimeStatus[] | undefined;
   let resolveConnect: (() => void) | undefined;
   presentMcpTools(
     (_otui, _chrome, input) => {
-      input.renderTab("mcp", {
-        add: (child: { content?: string }) => {
-          node = child as { content: string };
-        },
-      });
-      return {
-        close: () => input.onClose?.(),
-        setTab: (id) => {
-          active = id;
-        },
-        activeTab: () => active,
-      };
+      input.renderTab("mcp", body);
+      return { close: () => input.onClose?.(), setTab: (id) => { active = id; }, activeTab: () => active };
     },
     fakeOtui(),
     {},
@@ -171,7 +310,7 @@ test("[c] then [y] connects, flips the row's status locally, and fires onStatusC
         handler({ name: "down", sequence: "" });
         handler({ name: "c", sequence: "c" });
         handler({ name: "y", sequence: "y" });
-        expect(node?.content).toContain("connecting…");
+        expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("connecting…");
         return () => {};
       },
     },
@@ -181,24 +320,16 @@ test("[c] then [y] connects, flips the row's status locally, and fires onStatusC
   await Promise.resolve();
   await Promise.resolve();
   expect(changed?.find((r) => r.id === "claude")?.connected).toBe(true);
-  expect(node?.content).toContain("✓ done");
+  expect(findRow(body.rows(), "mcp-row-claude")?.content).toContain("✓ done");
 });
 
 test("[d] never arms for generic (no file to disconnect)", () => {
   let active = "mcp";
-  let node: { content: string } | undefined;
+  const body = fakeBody();
   presentMcpTools(
     (_otui, _chrome, input) => {
-      input.renderTab("mcp", {
-        add: (child: { content?: string }) => {
-          node = child as { content: string };
-        },
-      });
-      return {
-        close: () => input.onClose?.(),
-        setTab: () => {},
-        activeTab: () => active,
-      };
+      input.renderTab("mcp", body);
+      return { close: () => {}, setTab: () => {}, activeTab: () => active };
     },
     fakeOtui(),
     {},
@@ -212,7 +343,7 @@ test("[d] never arms for generic (no file to disconnect)", () => {
         handler({ name: "down", sequence: "" });
         handler({ name: "down", sequence: "" });
         handler({ name: "d", sequence: "d" });
-        expect(node?.content).not.toContain("press y to disconnect");
+        expect(findRow(body.rows(), "mcp-row-generic")?.content).not.toContain("press y to disconnect");
         return () => {};
       },
     },
