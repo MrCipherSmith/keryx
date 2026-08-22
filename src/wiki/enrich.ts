@@ -81,10 +81,6 @@ export interface WikiEnrichInput {
   concurrency?: number;
   /** Skip paths already recorded as completed in the resume state file. */
   resume?: boolean;
-  /** After a successful write, set frontmatter Status to accepted (default true). */
-  markAccepted?: boolean;
-  /** Keep model Status field as returned (disables markAccepted). */
-  keepStatus?: boolean;
   /** Run `gdgraph build` before enriching. */
   refreshGraph?: boolean;
   /** Validate each page after enrich (frontmatter + wikiValidate). Default true. */
@@ -622,6 +618,21 @@ export function setFrontmatterStatus(markdown: string, status: string): string {
   return markdown;
 }
 
+/**
+ * Read the Status field out of a page's (already frontmatter-normalized)
+ * markdown, defaulting to "draft" when absent.
+ *
+ * Used to re-assert a page's PRE-enrichment Status onto the finalized
+ * content (flow 194 / issue #391 — see the callers of {@link setFrontmatterStatus}
+ * below): `wiki enrich` must never itself be the thing that promotes a page
+ * to `Status: accepted`, since that is a SAC-reviewed / human editorial act,
+ * not a side effect of model-generated prose.
+ */
+function extractFrontmatterStatus(markdown: string): string {
+  const bodyMatch = /\nStatus:\s*(\S+)/i.exec(markdown) ?? /^Status:\s*(\S+)/im.exec(markdown);
+  return bodyMatch?.[1] ?? "draft";
+}
+
 /** Run async work over items with a concurrency cap (page swarm primitive). */
 export async function mapPool<T, R>(
   items: readonly T[],
@@ -665,7 +676,15 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   );
   const maxOutputTokens = input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
   const validate = input.validate !== false;
-  const markAccepted = input.keepStatus === true ? false : input.markAccepted !== false;
+  // Flow 194 / issue #391 (SAC CLI bypass): `wiki enrich` used to accept a
+  // `markAccepted`/`keepStatus` pair of options that defaulted to writing
+  // `Status: accepted` on every successful page — landing durable,
+  // "reviewed"-looking knowledge with zero SAC proposal/review record. Status
+  // is now ALWAYS re-asserted back to whatever it was before this run (see
+  // `extractFrontmatterStatus`/`setFrontmatterStatus` below) — `wiki enrich`
+  // only ever rewrites prose; promoting a page's Status is a separate,
+  // human/reviewed editorial act it can no longer perform by itself, no
+  // matter what flags are passed or what Status the model itself returns.
   // Flow 169 T7: `.metaproject/wiki.config.json`'s `rlm.enabled` is the
   // single NFR-4/AC1 branch point below — absent config (or `rlm.enabled:
   // false`) takes the untouched pre-flow-169 per-page path.
@@ -796,9 +815,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         }
       }
 
-      if (markAccepted) {
-        enriched = setFrontmatterStatus(enriched, "accepted");
-      }
+      // Never let this write change Status — see the flow 194 / issue #391
+      // comment above `wikiEnrich`'s `validate` declaration.
+      enriched = setFrontmatterStatus(enriched, extractFrontmatterStatus(original));
 
       if (input.dryRun) {
         onPage({ index, total, path: page.relativePath, status, phase: "done" });
@@ -813,7 +832,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
 
       await writeFile(page.absolutePath, `${enriched.endsWith("\n") ? enriched : `${enriched}\n`}`, "utf8");
 
-      onPage({ index, total, path: page.relativePath, status: markAccepted ? "accepted" : status, phase: "done" });
+      onPage({ index, total, path: page.relativePath, status, phase: "done" });
       return {
         path: page.relativePath,
         action: "enriched" as const,
@@ -839,7 +858,6 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       model,
       maxOutputTokens,
       validate,
-      markAccepted,
       concurrency,
       total,
       onPage,
@@ -969,7 +987,6 @@ interface RlmCtx {
   model: string;
   maxOutputTokens: number;
   validate: boolean;
-  markAccepted: boolean;
   total: number;
   onPage: EnrichOnPage;
   input: WikiEnrichInput;
@@ -987,7 +1004,6 @@ interface RunRlmPipelineInput {
   model: string;
   maxOutputTokens: number;
   validate: boolean;
-  markAccepted: boolean;
   concurrency: number;
   total: number;
   onPage: EnrichOnPage;
@@ -1001,16 +1017,22 @@ interface FinalizeResult {
 }
 
 /**
- * Shared repair/validate/accept pipeline for RLM-mode `light` and `deep`
- * tiers (flow 169 T7) — the SAME steps the RLM-off path already applies
- * inline (`repairEnrichedFrontmatter` -> `validateEnrichedMarkdown` ->
- * `setFrontmatterStatus`), extracted once so both tiers apply them
+ * Shared repair/validate/re-assert-Status pipeline for RLM-mode `light` and
+ * `deep` tiers (flow 169 T7) — the SAME steps the RLM-off path already
+ * applies inline (`repairEnrichedFrontmatter` -> `validateEnrichedMarkdown`
+ * -> `setFrontmatterStatus`), extracted once so both tiers apply them
  * identically instead of re-deriving the pipeline per tier.
+ *
+ * Flow 194 / issue #391: Status is always forced back to whatever it was in
+ * `original` (pre-enrichment), never left as whatever the model itself
+ * returned — `wiki enrich` must never be able to land `Status: accepted` (or
+ * any other Status change) by itself. See `wikiEnrich`'s comment above its
+ * `validate` declaration for the full rationale.
  */
 function finalizeEnrichedText(
   original: string,
   rawText: string,
-  options: { validate: boolean; markAccepted: boolean },
+  options: { validate: boolean },
 ): FinalizeResult {
   const trimmed = rawText.trim();
   if (trimmed.length === 0) {
@@ -1021,8 +1043,8 @@ function finalizeEnrichedText(
   if (options.validate) {
     structuralError = validateEnrichedMarkdown(original, content);
   }
-  if (structuralError === null && options.markAccepted) {
-    content = setFrontmatterStatus(content, "accepted");
+  if (structuralError === null) {
+    content = setFrontmatterStatus(content, extractFrontmatterStatus(original));
   }
   return { content, structuralError };
 }
@@ -1067,7 +1089,7 @@ async function finishSuccess(
     index,
     total: ctx.total,
     path: page.relativePath,
-    status: ctx.markAccepted ? "accepted" : status,
+    status,
     phase: "done",
   });
   return {
@@ -1127,7 +1149,6 @@ async function runDeepSingle(ctx: RlmCtx, item: LightBatchItem): Promise<WikiEnr
     if (rawText !== null) {
       const finalized = finalizeEnrichedText(original, rawText, {
         validate: ctx.validate,
-        markAccepted: ctx.markAccepted,
       });
       if (finalized.structuralError === null) {
         content = finalized.content;
@@ -1400,7 +1421,6 @@ async function runLightBatch(ctx: RlmCtx, items: readonly LightBatchItem[]): Pro
 
     const finalized = finalizeEnrichedText(item.original, rawText, {
       validate: ctx.validate,
-      markAccepted: ctx.markAccepted,
     });
     if (finalized.structuralError !== null) {
       ctx.onPage({ index, total: ctx.total, path: item.page.relativePath, status, phase: "failed" });
@@ -1472,7 +1492,6 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
     model: ctxInput.model,
     maxOutputTokens: ctxInput.maxOutputTokens,
     validate: ctxInput.validate,
-    markAccepted: ctxInput.markAccepted,
     total: ctxInput.total,
     onPage: ctxInput.onPage,
     input,

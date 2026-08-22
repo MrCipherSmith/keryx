@@ -541,7 +541,9 @@ test("deep tier — a page classified deep (fan-in) is enriched via enrichPageDe
       "utf8",
     );
     expect(written).toContain("Deep enriched prose");
-    expect(written).toMatch(/Status:\s*accepted/i);
+    // Flow 194 / issue #391: enrich never promotes a page's Status itself —
+    // this page started `Status: draft` and must remain draft after enrich.
+    expect(written).toMatch(/Status:\s*draft/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
