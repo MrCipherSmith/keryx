@@ -410,7 +410,7 @@ test("AC1: /goal --workspace <invalid id> rejects fail-closed — no slate is ev
   expect(history.length).toBe(0);
 });
 
-test("SLATE-16 supersedes AC2: /goal with no --workspace now resolves-or-creates via the injected resolver and binds the result; the turn actually runs", async () => {
+test("flow 200 (lazy binding): /goal with no --workspace leaves the slate UNBOUND — no resolver is called, the turn still runs", async () => {
   const cwd = await tempCwd();
   const dir = await tempSessionDir();
   const slateSession: SlateSessionRef = { dir, cwd, opened: false };
@@ -425,7 +425,6 @@ test("SLATE-16 supersedes AC2: /goal with no --workspace now resolves-or-creates
   };
   const { io } = collectingIo();
   const history: NormalizedMessage[] = [];
-  const resolveCalls: Array<{ cwd: string; topicHint: string; provider?: string; model?: string }> = [];
 
   await runGoalCommand({
     raw: "implement the thing",
@@ -435,83 +434,14 @@ test("SLATE-16 supersedes AC2: /goal with no --workspace now resolves-or-creates
     history,
     slateSession,
     mintAttemptId: () => "attempt-0",
-    resolveWorkspace: async (input) => {
-      resolveCalls.push(input);
-      return { ok: true, workspaceId: "workspace-resolved", action: "created" };
-    },
   });
 
   expect(slateSession.opened).toBe(true);
   const slate = await readSlate(dir);
   expect(slate).toBeDefined();
-  expect(slate?.workspaceId).toBe("workspace-resolved");
-  expect(resolveCalls).toEqual([{ cwd, topicHint: "implement the thing", provider: "scripted", model: "m" }]);
-
-  // The turn actually ran with the parsed text as the userLine.
-  expect(callCount()).toBe(1);
-  expect(history.some((m) => m.role === "user" && m.content === "implement the thing")).toBe(true);
-});
-
-test("SLATE-16: a resolver that fails/is ambiguous never blocks /goal — the turn still runs and workspaceId stays unset", async () => {
-  const cwd = await tempCwd();
-  const dir = await tempSessionDir();
-  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
-  const { provider, callCount } = textOnlyProvider("On it.");
-  const deps: AgentDeps = {
-    provider,
-    providerId: "scripted",
-    modelId: "m",
-    tools: [],
-    systemInstruction: "sys",
-    idSeq: fixedIdSeq(),
-  };
-  const { io } = collectingIo();
-  const history: NormalizedMessage[] = [];
-
-  await runGoalCommand({
-    raw: "implement the thing",
-    cwd,
-    io,
-    deps,
-    history,
-    slateSession,
-    mintAttemptId: () => "attempt-0",
-    resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
-  });
-
-  expect(slateSession.opened).toBe(true);
-  const slate = await readSlate(dir);
   expect(slate?.workspaceId).toBeUndefined();
   expect(callCount()).toBe(1);
-});
-
-test("SLATE-16 (AC-25): a second /goal with no --workspace on an already-bound slate is never re-resolved", async () => {
-  const cwd = await tempCwd();
-  const dir = await tempSessionDir();
-  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
-  const { provider } = textOnlyProvider("On it.");
-  const deps: AgentDeps = {
-    provider,
-    providerId: "scripted",
-    modelId: "m",
-    tools: [],
-    systemInstruction: "sys",
-    idSeq: fixedIdSeq(),
-  };
-  const { io } = collectingIo();
-  let resolveCalls = 0;
-  const resolveWorkspace = async () => {
-    resolveCalls += 1;
-    return { ok: true as const, workspaceId: "workspace-resolved", action: "created" as const };
-  };
-
-  await runGoalCommand({ raw: "first goal", cwd, io, deps, history: [], slateSession, mintAttemptId: () => "attempt-0", resolveWorkspace });
-  expect(resolveCalls).toBe(1);
-
-  await runGoalCommand({ raw: "second, unrelated goal", cwd, io, deps, history: [], slateSession, mintAttemptId: () => "attempt-1", resolveWorkspace });
-  expect(resolveCalls).toBe(1);
-  const slate = await readSlate(dir);
-  expect(slate?.workspaceId).toBe("workspace-resolved");
+  expect(history.some((m) => m.role === "user" && m.content === "implement the thing")).toBe(true);
 });
 
 test("AC1 success path: /goal --workspace <real, visible id> opens the slate AND binds slate.workspaceId to it; the turn runs", async () => {

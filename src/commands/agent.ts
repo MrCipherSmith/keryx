@@ -30,7 +30,6 @@ import type {
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
-import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
   closeSlateSession,
@@ -282,15 +281,13 @@ export interface RunAgentTurnOptions {
    */
   skipCloseTrigger?: boolean;
   /**
-   * SLATE-16 (flow 166, Phase 3) test seam: overrides the real
-   * `resolveOrCreateWorkspace` (`../sac/workspace-resolve`) called at the
-   * default action-intent open trigger below. Every real call site leaves
-   * this unset and gets the real resolver (real `workspace_list`/
-   * `workspace_create` tool calls, a real bounded model turn); tests inject
-   * a canned decision here instead of wiring model-turn/provider-factory
-   * plumbing through this file.
+   * Flow 200: SLATE-16's auto resolve-or-create was REMOVED from the first
+   * action-intent open — a session opens with `workspaceId` unset and the
+   * AGENT decides (via workspace_list/workspace_create/workspace_propose)
+   * whether a workspace is needed, or runWrapUp resolves-or-creates one
+   * from Seeds at wrap-up time. No `resolveWorkspace` seam remains here;
+   * `src/sac/workspace-resolve.ts` still exists for runWrapUp/MCP.
    */
-  resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
   /**
    * SLATE-18 (flow 166, Phase 4) test seam: overrides the real `runWrapUp`
    * (`../sac/machine-wrap-up`) dispatched at the flow-complete and explicit
@@ -727,9 +724,17 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "- This session has its own Slate (working-set scratch, not project knowledge): " +
     "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
     "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
-    "`{ text, kind? }` records a draft hypothesis/decision/follow-up worth a later human review " +
-    "— use it for a real finding worth not losing (e.g. a root cause, a risk, a suggested " +
-    "change), not for routine progress notes. A Seed is never accepted knowledge by itself.\n" +
+    "`{ text, kind? }` records a draft hypothesis/decision/follow-up worth a later human " +
+    "review. WRITE A SEED when you: found a root cause or a bug worth remembering; changed or " +
+    "added code (summarize WHAT changed and WHY); took a design/architecture decision; " +
+    "identified a risk; or discovered a constraint/lesson. Use the `kind` that fits: " +
+    "`decision` (a choice made), `wiki-update` (something a wiki page should say), " +
+    "`memory-entry` (a lesson/constraint), `follow-up` (a TODO for a later session), " +
+    "`risk`, or `contract-change`. Keep each Seed to 2-3 sentences, concrete and specific. " +
+    "Do NOT write Seeds for routine progress notes, one-shot operational requests (e.g. " +
+    "\"run git pull\", \"count files\"), or trivia — those need no workspace and no proposal. " +
+    "Seeds are the ONLY input wrap-up proposes from: a session whose Slate has zero Seeds " +
+    "produces zero proposals. A Seed is never accepted knowledge by itself.\n" +
     "- Shared Agent Context (SAC) workspaces hold accepted, evidence-backed project context " +
     "beyond this codebase. **workspace_list** with `{ includeArchived? }` shows every workspace " +
     "visible to you — call it first when the user references a shared team workspace or accepted " +
@@ -737,9 +742,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "already fits the current topic. **workspace_show** with `{ workspaceId }` shows one " +
     "workspace's manifest. **workspace_overview** with `{ workspaceId }`, then **workspace_read** " +
     "with `{ workspaceId, itemId }` for one specific item, reads its accepted Facts/Work/Know-how. " +
-    "**workspace_create** with `{ title, component? }` creates a new workspace — only when " +
-    "workspace_list found no fitting one; a workspace is meant to persist across sessions, so " +
-    "prefer an existing one over creating another for the same topic. **workspace_propose** with " +
+    "**workspace_create** with `{ title, component? }` creates a new workspace AND binds it to " +
+    "this session's slate (wrap-up then proposes into it) — only when workspace_list found no " +
+    "fitting one and the session has real, durable results worth persisting; a workspace is " +
+    "meant to persist across sessions, so prefer an existing one over creating another for the " +
+    "same topic, and do NOT create one for one-shot operational requests. **workspace_propose** with " +
     "`{ workspaceId, kind, sessionId?, note? }` (sessionId defaults to this session) proposes a decision/wiki-update/memory-entry/" +
     "follow-up/contract-change/risk from this session for later human review — it never accepts " +
     "anything by itself; accepting always requires a human running `keryx workspace review` at a " +
@@ -1198,31 +1205,11 @@ async function runAgentTurnCore(
           if (freshSlate !== undefined) {
             history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
             io.onHistoryChange?.("tool");
-            // SLATE-16 (AC-25): resolve-or-create fires exactly here — a
-            // slate that just opened with no workspaceId bound yet (the
-            // default action-intent open; `/goal`'s own explicit open runs
-            // the identical call in goal-command.ts). A slate that already
-            // has workspaceId set (v1 explicit `/goal --workspace`, or an
-            // earlier SLATE-16 run this session) is never re-resolved merely
-            // because a new turn started. Failure (no credential, timeout,
-            // ambiguous judgment) never blocks this turn — the resolver
-            // itself fails closed, and an unresolved workspaceId simply
-            // retries at the next action-intent open.
-            if (freshSlate.workspaceId === undefined) {
-              const resolver = options.resolveWorkspace ?? resolveOrCreateWorkspace;
-              const resolved = await resolver({
-                cwd: options.slateSession.cwd,
-                topicHint: userLine,
-                provider: deps.providerId,
-                model: deps.modelId,
-              });
-              if (resolved.ok) {
-                await writeSlate(options.slateSession.dir, (prev) => {
-                  if (!prev) throw new Error(`SLATE-16 bind: no open slate in ${options.slateSession!.dir}`);
-                  return { ...prev, workspaceId: resolved.workspaceId };
-                });
-              }
-            }
+            // Flow 200: NO auto resolve-or-create here anymore. The slate
+            // opens with workspaceId unset; the agent binds/creates a
+            // workspace explicitly via workspace_create (which writes
+            // slate.workspaceId) when the session's real topic is known, or
+            // runWrapUp resolves-or-creates from Seeds at close time.
           }
         }
       }

@@ -72,6 +72,7 @@ import { resolveMachineWrapUp, runWrapUp } from "./machine-wrap-up";
 import type { MachineWrapUpResolution, WrapUpOutcome } from "./machine-wrap-up";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import type { Slate, SlateSeed } from "../session/slate";
+import { readSlate } from "../session/slate";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
 const time = "2026-08-16T00:00:00.000Z";
@@ -206,6 +207,10 @@ function baseSlate(overrides: Partial<Slate> = {}): Slate {
   };
 }
 
+async function readSlateForTest(dir: string): Promise<Slate | undefined> {
+  return readSlate(dir);
+}
+
 async function proposalFiles(cwd: string, workspaceId: string): Promise<string[]> {
   const dir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
   try {
@@ -316,7 +321,7 @@ test("resolveMachineWrapUp falls back to a mechanical summary on a bounded model
 // propose; untagged seeds group under "follow-up"; empty kinds never
 // invented. ------------------------------------------------------------------
 
-test("AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifact (never calls propose) and groups untagged seeds as follow-up", async () => {
+test("flow 200: with no workspaceId and a FAILED resolve, runWrapUp writes an unbound-candidate artifact (never calls propose) and groups untagged seeds as follow-up", async () => {
   const cwd = await tempGitCwd();
   const dir = await tempSessionDir();
 
@@ -336,10 +341,13 @@ test("AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifa
     trigger: "process-termination",
     now: () => new Date(time),
     providerFactory: () => stubModelProvider("mechanical or model summary"),
+    // Flow 200 lazy binding: resolve-or-create is attempted from Seeds; a
+    // failed resolve degrades to the unbound-candidate artifact (AC6).
+    resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
   });
 
   // Every group outcome must be the unbound-candidate degrade — never
-  // "proposed" — since no workspaceId was ever captured.
+  // "proposed" — since no workspaceId could be resolved.
   expect(outcome.groups.length).toBeGreaterThan(0);
   for (const group of outcome.groups) {
     expect(group.outcome).toBe("unbound-candidate");
@@ -351,7 +359,7 @@ test("AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifa
   expect(kinds).toEqual(["decision", "follow-up"]);
 
   // No proposal was ever created anywhere under the (nonexistent) workspace
-  // tree — the ONLY outcome for an unset workspaceId per AC6.
+  // tree — the ONLY outcome for an unresolved workspaceId per AC6.
   const workspacesRoot = path.join(cwd, ".metaproject", "workspaces");
   await expect(readdir(workspacesRoot).catch(() => [])).resolves.toEqual([]);
 
@@ -368,6 +376,47 @@ test("AC6/AC7: with no workspaceId, runWrapUp writes an unbound-candidate artifa
   ).join("\n");
   expect(archived).toContain("no kind given at all");
   expect(archived).toContain("also no kind");
+});
+
+test("flow 200 (lazy binding): with no workspaceId and a SUCCESSFUL resolve, runWrapUp binds the resolved workspace to the slate and proposes per kind-group", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-seed-resolved");
+  await writeFlowFixture(cwd, "042-lazy-flow");
+
+  const slate = baseSlate({
+    // workspaceId deliberately omitted — the resolver must bind it from seeds.
+    seeds: [seed("s1", "lazy binding from seeds", "decision")],
+  });
+  const resolveCalls: Array<{ cwd: string; topicHint: string }> = [];
+
+  const outcome: WrapUpOutcome = await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    providerFactory: () => stubModelProvider("lazy summary"),
+    resolveWorkspace: async (input) => {
+      resolveCalls.push(input);
+      return { ok: true, workspaceId: "workspace-seed-resolved", action: "bound-existing" };
+    },
+  });
+
+  // The resolver saw the SEEDS' texts as the topic hint, not the first
+  // message.
+  expect(resolveCalls).toHaveLength(1);
+  expect(resolveCalls[0]?.topicHint).toContain("lazy binding from seeds");
+
+  // A proposal landed in the bound workspace.
+  const files = await proposalFiles(cwd, "workspace-seed-resolved");
+  expect(files.length).toBe(1);
+  const decision = outcome.groups.find((group) => group.kind === "decision");
+  expect(decision?.outcome).toBe("proposed");
+
+  // The slate was bound so future wrap-ups reuse the same workspace.
+  const slateAfter = await readSlateForTest(dir);
+  expect(slateAfter?.workspaceId).toBe("workspace-seed-resolved");
 });
 
 // --- AC4: two near-simultaneous wrap-up triggers for the SAME flow
@@ -529,7 +578,8 @@ test("AC1/AC2/AC3/AC9: runWrapUp writes a wrap-up-outcome artifact for the unbou
   const dir = await tempSessionDir();
 
   const slate = baseSlate({
-    // workspaceId deliberately omitted -> unbound-candidate degrade path.
+    // workspaceId deliberately omitted -> resolve fails -> unbound-candidate
+    // degrade path.
     seeds: [seed("s1", "tagged as a decision", "decision")],
   });
 
@@ -540,6 +590,7 @@ test("AC1/AC2/AC3/AC9: runWrapUp writes a wrap-up-outcome artifact for the unbou
     trigger: "process-termination",
     now: () => new Date(time),
     providerFactory: () => stubModelProvider("mechanical or model summary"),
+    resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
   });
 
   const artifacts = await readWrapUpOutcomeArtifacts(dir);

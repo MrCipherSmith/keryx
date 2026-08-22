@@ -37,6 +37,7 @@ import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService } f
 import { createHarnessProposalLifecycleService, normalizeProposalLifecycleResult } from "../../../sac/proposal-lifecycle";
 import { proposalNotePath } from "../../../sac/proposal-evidence";
 import { sessionEvidenceRef } from "../../../sac/session-wrap-up";
+import { writeSlate } from "../../../session/slate";
 import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";
 
@@ -56,12 +57,12 @@ function errorOutput(prefix: string, cause: unknown): { output: string; isError:
   return { output: `${prefix}: ${cause instanceof Error ? cause.message : String(cause)}`, isError: true };
 }
 
-export function workspaceCreateTool(cwd: string): InteractiveTool {
+export function workspaceCreateTool(cwd: string, getSessionDir?: () => string | undefined): InteractiveTool {
   return {
     definition: {
       name: "workspace_create",
       description:
-        "Create a new Shared Agent Context (SAC) workspace to bind this session's work to. Call workspace_list FIRST and only create when no existing workspace already fits the current topic — a workspace is meant to persist and accumulate context across sessions, not to be created per-session. Input: { title: string, component?: string }. `component` is an optional workspace-relative path this workspace is scoped to.",
+        "Create a new Shared Agent Context (SAC) workspace to bind this session's work to. Call workspace_list FIRST and only create when no existing workspace already fits the current topic — a workspace is meant to persist and accumulate context across sessions, not to be created per-session. The created workspace is BOUND to this session's slate (its workspaceId is written to the slate), so wrap-up can propose into it. Input: { title: string, component?: string }. `component` is an optional workspace-relative path this workspace is scoped to.",
       inputSchema: {
         type: "object",
         properties: { title: { type: "string" }, component: { type: "string" } },
@@ -82,6 +83,24 @@ export function workspaceCreateTool(cwd: string): InteractiveTool {
           title,
           ...(component ? { component: { kind: "component" as const, uri: component } } : {}),
         });
+        // Flow 200 (lazy binding): bind the created workspace to the current
+        // session's slate so wrap-up can propose into it without a second
+        // manual bind. Best-effort — no active session (or a slate-write
+        // failure) never fails the create itself.
+        const dir = getSessionDir?.();
+        if (dir !== undefined) {
+          try {
+            await writeSlate(dir, (prev) => ({
+              anchors: prev?.anchors ?? { root: "", touched: [] },
+              course: prev?.course ?? {},
+              seeds: prev?.seeds ?? [],
+              ...(prev !== undefined ? { workspaceId: prev.workspaceId } : {}),
+              workspaceId: workspace.id,
+            }));
+          } catch {
+            // ignored — the workspace exists; binding is best-effort
+          }
+        }
         return { output: JSON.stringify(workspace, null, 2), isError: false };
       } catch (cause) {
         return errorOutput("workspace_create failed", cause);

@@ -18,7 +18,6 @@ import type { NormalizedMessage } from "../harness/provider/types";
 import { ensureSlateOpened, type SlateSessionRef } from "../session/slate-lifecycle";
 import { readSlate, renderAnchorsBlock, writeSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
-import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
 import { acPath, resolveFlowDir } from "../flow/store";
@@ -181,11 +180,10 @@ export interface RunGoalCommandParams {
   slateSession: SlateSessionRef | undefined;
   mintAttemptId: () => string;
   /**
-   * SLATE-16 test seam, mirrors `agent.ts`'s `RunAgentTurnOptions.resolveWorkspace`
-   * exactly — every real call site leaves this unset and gets the real
-   * `resolveOrCreateWorkspace` (real tool calls, a real bounded model turn).
+   * Flow 200: SLATE-16's auto resolve-or-create was REMOVED — `/goal`
+   * without `--workspace` leaves the slate unbound (the agent decides, or
+   * runWrapUp resolves-or-creates from Seeds at close). No seam remains.
    */
-  resolveWorkspace?: (input: { cwd: string; topicHint: string; provider?: string; model?: string }) => Promise<ResolveOrCreateResult>;
 }
 
 /** Emit `text` via `io.onSystem` when present, else `io.write` (mirrors `agent.ts`'s own `system` helper). */
@@ -638,7 +636,7 @@ async function runGoalVerifier(
  * most one extra "second chance" round if it disagrees.
  */
 export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
-  const { raw, cwd, io, deps, history, slateSession, mintAttemptId, resolveWorkspace } = params;
+  const { raw, cwd, io, deps, history, slateSession, mintAttemptId } = params;
   const parsed = parseGoalArgs(raw);
   if ("error" in parsed) {
     systemLine(io, `/goal: ${parsed.error}\n`);
@@ -713,22 +711,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           return { ...base, workspaceId };
         });
       } else {
-        // SLATE-16 supersedes SLATE-15's old "omitted --workspace = leave
-        // unset" behavior: `/goal` without `--workspace` now triggers
-        // resolve-or-create instead. Only when this slate does not already
-        // have a workspaceId bound (AC-25) — a `/goal` reusing an
-        // already-bound slate mid-session is never re-resolved.
-        const current = await readSlate(slateSession.dir);
-        if (current !== undefined && current.workspaceId === undefined) {
-          const resolver = resolveWorkspace ?? resolveOrCreateWorkspace;
-          const resolved = await resolver({ cwd, topicHint: parsed.text, provider: deps.providerId, model: deps.modelId });
-          if (resolved.ok) {
-            await writeSlate(slateSession.dir, (prev) => {
-              if (!prev) throw new Error(`SLATE-16 bind: no open slate in ${slateSession.dir}`);
-              return { ...prev, workspaceId: resolved.workspaceId };
-            });
-          }
-        }
+        // Flow 200: NO auto resolve-or-create here anymore. `/goal`
+        // without `--workspace` leaves the slate unbound — the agent
+        // explicitly binds/creates via workspace_create (which writes
+        // slate.workspaceId) when a workspace is actually warranted, or
+        // runWrapUp resolves-or-creates from Seeds at close time.
       }
       // SLATE-27 (flow 186, T7, AC2): --auto provisions a Task Manager flow
       // when this slate's course has none bound yet — never re-provisioned

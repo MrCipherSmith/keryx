@@ -51,10 +51,11 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { writeFileAtomic } from "../lib/fs";
-import { dedupeSeeds, type Slate, type SlateChildDispatch, type SlateSeed, type SlateSeedKind } from "../session/slate";
+import { dedupeSeeds, type Slate, type SlateChildDispatch, type SlateSeed, type SlateSeedKind, writeSlate } from "../session/slate";
 import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
+import { resolveOrCreateWorkspace } from "./workspace-resolve";
 import type { ProviderFactory, ModelTurnResult } from "../harness/provider/single-turn";
 import { runModelTurn } from "../harness/provider/single-turn";
 
@@ -364,6 +365,20 @@ export type RunWrapUpInput = {
   env?: Record<string, string | undefined>;
   providerFactory?: ProviderFactory;
   modelTurnTimeoutMs?: number;
+  /**
+   * Flow 200 test seam: overrides the real `resolveOrCreateWorkspace`
+   * (`./workspace-resolve`) used to bind a workspace from Seeds when
+   * `slate.workspaceId` is unset at wrap-up time. Every real call site
+   * leaves this unset and gets the real resolver; tests inject a canned
+   * decision here.
+   */
+  resolveWorkspace?: (input: {
+    cwd: string;
+    topicHint: string;
+    env?: Record<string, string | undefined>;
+    providerFactory?: ProviderFactory;
+    modelTurnTimeoutMs?: number;
+  }) => Promise<{ ok: true; workspaceId: string; action: "bound-existing" | "created" } | { ok: false; reason: string }>;
 };
 
 /**
@@ -582,14 +597,49 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
     return { groups: [] };
   }
 
-  if (input.slate.workspaceId === undefined) {
-    await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-    const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
-    await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
-    return { groups };
+  let workspaceId = input.slate.workspaceId;
+  if (workspaceId === undefined) {
+    // Flow 200 (lazy binding): a session with REAL Seeds but no bound
+    // workspace resolves-or-creates one FROM THE SEEDS (their texts are the
+    // session's actual topic — far better judgment context than the first
+    // message was), binds it to the slate, then proposes per kind-group as
+    // usual. Only when the resolver fails closed (no credential, timeout,
+    // ambiguous) does the old unbound-candidate artifact remain the degrade.
+    const topicHint = dedupedAttributedSeeds(input.slate)
+      .map((seed) => seed.text)
+      .join("; ")
+      .trim()
+      .slice(0, 2000);
+    const resolver = input.resolveWorkspace ?? resolveOrCreateWorkspace;
+    const resolved = await resolver({
+      cwd: input.cwd,
+      topicHint: topicHint.length > 0 ? topicHint : "Untitled session wrap-up",
+      ...(input.env !== undefined ? { env: input.env } : {}),
+      ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
+      ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
+    });
+    if (!resolved.ok) {
+      await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
+      const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
+      await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
+      return { groups };
+    }
+    workspaceId = resolved.workspaceId;
+    // Bind the resolved workspace to the slate so future wrap-ups reuse it
+    // instead of re-resolving every close (best-effort, never fatal).
+    const boundWorkspaceId = resolved.workspaceId;
+    try {
+      await writeSlate(input.dir, (prev) => ({
+        anchors: prev?.anchors ?? { root: "", touched: [] },
+        course: prev?.course ?? {},
+        seeds: prev?.seeds ?? [],
+        workspaceId: boundWorkspaceId,
+      }));
+    } catch {
+      // ignored — proposal evidence does not depend on the slate write
+    }
   }
 
-  const workspaceId = input.slate.workspaceId;
   const groups = await Promise.all(
     nonEmptyKinds.map((kind) =>
       proposeOneGroup({

@@ -81,7 +81,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     applyPatchTool(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),
-    workspaceCreateTool(input.cwd),
+    workspaceCreateTool(input.cwd, getSessionDir),
     workspaceListTool(input.cwd),
     workspaceShowTool(input.cwd),
     workspaceProposeTool(input.cwd, getSessionDir),
