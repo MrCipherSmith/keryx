@@ -100,6 +100,7 @@ import {
   themeLabel,
 } from "./theme";
 import { openThemePicker } from "./theme-picker";
+import { openGameModal } from "./game-modal";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -3089,6 +3090,12 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    const showGame = (): void => {
+      openGameModal(otui, chrome, {
+        renderer: r,
+        ...inspectorKeys,
+      });
+    };
     const showWorkspace = (): void => {
       void (async () => {
         const dir = slateSession?.dir;
@@ -3910,6 +3917,10 @@ export async function launchTuiAgentShell(opts: {
             showTools();
             return;
           }
+          case "game": {
+            showGame();
+            return;
+          }
           case "deferred": {
             // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
             transcript.add(
@@ -4217,6 +4228,10 @@ export async function launchTuiAgentShell(opts: {
               chrome.showToast(`Theme: ${themeLabel(id)}`);
             },
           });
+          return;
+        }
+        if (command.name === "/game") {
+          showGame();
           return;
         }
         if (command.name === "/mode") {
