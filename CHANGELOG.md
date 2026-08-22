@@ -5,6 +5,26 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.59] — 2026-08-23
+
+### Fixed
+
+- **`/game` drew its board as one 9-cell vertical column instead of a 3×3
+  grid.** The board was a single `flexDirection: "column"` box holding nine
+  bare text nodes — with no row boxes between the board and the cells, flex
+  put every cell on its own line. The tree is now built once in `renderTab`
+  as three row boxes of three bordered cell boxes, and `paint()` only
+  mutates the retained cell handles instead of clearing and re-adding all
+  nine nodes on every keypress. The cursor is a real highlight (focus border
+  + highlight fill) rather than a swapped glyph, the winning line takes the
+  winner's colour, and legend/board/status are centred.
+
+- **A model error during the game's turn was never visible.**
+  `applyModelMove` wrote the message straight onto the status node and the
+  `paint()` immediately after overwrote it. The message now goes through a
+  `notice` state that `paint()` owns and renders on its own line — the same
+  line that carries "agent is thinking…".
+
 ## [0.2.58] — 2026-08-23
 
 ### Added
