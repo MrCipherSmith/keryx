@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "id": "197",
+  "slug": "catchup-external-slates",
+  "title": "keryx workspace catch-up never scans .keryx/external-slates/ — an unbound external MCP slate silently never surfaces, contradicting slate.md",
+  "status": "in-progress",
+  "createdAt": "2026-08-22T11:00:47.618Z",
+  "updatedAt": "2026-08-22T11:03:37.487Z",
+  "source": {
+    "type": "github-issue",
+    "ref": "https://github.com/MrCipherSmith/keryx/issues/395"
+  },
+  "acChecksum": "sha256:7e13e71a0cda6a16f87255673a66b12be40651a1dba8330fc3bf327eeb46adec",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-22T11:00:47.618Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-22T11:03:37.412Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-22T11:03:37.487Z",
+      "event": "started"
+    }
+  ]
+}

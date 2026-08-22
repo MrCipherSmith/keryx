@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "id": "196",
+  "slug": "theme-dispatch-gap",
+  "title": "agent-mode readline: /help advertises /theme but it has no dispatch branch — self-contradicting \"Unknown command\" (correction: /status and /flows are NOT affected, see comments)",
+  "status": "in-progress",
+  "createdAt": "2026-08-22T11:00:46.184Z",
+  "updatedAt": "2026-08-22T11:03:37.334Z",
+  "source": {
+    "type": "github-issue",
+    "ref": "https://github.com/MrCipherSmith/keryx/issues/393"
+  },
+  "acChecksum": "sha256:1b9d538557ddfc0e00c56e24ad53c0e8dee0a1f0e90eff95d68d04e8ea48467c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-22T11:00:46.184Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-22T11:03:37.257Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-22T11:03:37.334Z",
+      "event": "started"
+    }
+  ]
+}

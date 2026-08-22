@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "id": "193",
+  "slug": "wildcard-shell-guard",
+  "title": "shell-permission validation lets a bare \"keryx *\" wildcard through — defeats per-call approval for the entire CLI surface",
+  "status": "in-progress",
+  "createdAt": "2026-08-22T11:00:33.616Z",
+  "updatedAt": "2026-08-22T11:03:36.877Z",
+  "source": {
+    "type": "github-issue",
+    "ref": "https://github.com/MrCipherSmith/keryx/issues/390"
+  },
+  "acChecksum": "sha256:240adde84fab9abde8e3d88ce9c2956c5be6a130b2d3ded0902c7f54fc94f8af",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-22T11:00:33.616Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-22T11:03:36.796Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-22T11:03:36.877Z",
+      "event": "started"
+    }
+  ]
+}
