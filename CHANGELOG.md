@@ -5,6 +5,37 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.60] — 2026-08-23
+
+### Fixed
+
+- **`/game`'s cursor would not move left or right.** `modal-host` claims both
+  arrows for its own tab switch and calls `stopPropagation()`, so the game's
+  keypress listener only ever saw up/down. The cursor now moves through the
+  host's `onArrowKeys` hook, and left/right are removed from the keypress
+  handler — that hook returns without stopping propagation, so handling them
+  in both places would move the cursor two cells per press.
+
+- **The board is sized from the modal body width**: 9×5 cells where the 33
+  columns they need fit, the previous 5×3 where they do not.
+
+- **A model turn could hang the game indefinitely.** There was no deadline on
+  the provider call, so a stalled request left "agent is thinking…" on screen
+  with `R` as the only way out. The turn now has a 12s deadline; on timeout —
+  or on a reply that names no free cell — the game plays a local move (win,
+  block, centre, corner) and says so, instead of silently passing the turn
+  back and letting the user win against nobody. A hard error (no credential,
+  provider failure) still hands the turn back with the reason. `runModelTurn`
+  takes no abort signal, so a timed-out request is abandoned, not cancelled.
+
+- **The model turn's output budget was 16 tokens.** On a reasoning-capable
+  model that budget covers the thinking pass, so the answer digit could be
+  truncated away before it was ever emitted — the turn then looked like a slow
+  model that skipped. Raised to 256; the visible reply is still one character.
+
+- The status line read "Your turn — O" while the agent was thinking. It now
+  reads "Agent's turn — O".
+
 ## [0.2.59] — 2026-08-23
 
 ### Fixed
