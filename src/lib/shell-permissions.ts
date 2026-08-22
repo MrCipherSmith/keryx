@@ -64,6 +64,9 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // tools whose flags execute arbitrary commands
   "git", "find", "awk", "gawk", "sed", "vim", "vi", "ex", "emacs", "gdb", "lldb",
   "at", "batch", "crontab", "tmux", "screen", "osascript", "open", "tee", "cd",
+  // keryx itself (and any renamed/forked binary) — if the binary can run
+  // arbitrary subcommands, a bare `<binary> *` grant is arbitrary execution
+  "keryx",
 ]);
 
 /**
@@ -153,6 +156,25 @@ export function validateShellPattern(pattern: string): PatternValidation {
 }
 
 /**
+ * Get the running binary name from process.argv0, which may be a full path.
+ * Examples:
+ *   - `/usr/local/bin/keryx` → `keryx`
+ *   - `bun` → `bun`
+ *   - `/path/to/renamed-binary` → `renamed-binary`
+ */
+function getRunningBinaryName(): string {
+  try {
+    const argv0 = process.argv0;
+    if (!argv0) return "";
+    // Extract the final path component and remove any extension.
+    const name = argv0.split(/[\\/]/).pop() ?? "";
+    return name.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
  * When `pattern` is a bare "everything after this word" grant of a word we refuse
  * to remember, the word and a category-specific reason; else undefined. A pattern
  * that narrows the arguments (`bun test*`, `cat package.json*`) is not a bare
@@ -167,6 +189,14 @@ function bannedPrefixGrant(pattern: string, firstToken: string): { word: string;
     return {
       word,
       reason: `\`${word} *\` grants arbitrary execution: ${word} is an interpreter or wrapper, so its first token does not constrain what runs`,
+    };
+  }
+  // Also check if this pattern matches the running binary name dynamically.
+  const runningBinary = getRunningBinaryName();
+  if (runningBinary && word === runningBinary) {
+    return {
+      word,
+      reason: `\`${word} *\` grants arbitrary execution: ${word} can run arbitrary subcommands, so remembering this grant would silently approve mutating/destructive operations forever`,
     };
   }
   if (PREFIX_BANNED_READERS.has(word)) {

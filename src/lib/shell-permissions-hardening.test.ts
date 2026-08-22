@@ -157,13 +157,13 @@ test("F5: no bare prefix grant for destructive-capable file mutators", () => {
   expect(validateShellPattern("rm build/*.tmp").ok).toBe(true);
 });
 
-test("B3: an ordinary command still offers both grants", () => {
+test("B3: keryx is now banned from prefix grants (like git, bash, etc.)", () => {
   const s = suggestShellPatterns("keryx wiki index");
   expect(s).toEqual({
     exact: "keryx wiki index",
     prefix: "keryx *",
     offerExact: true,
-    offerPrefix: true,
+    offerPrefix: false,
   });
 });
 
@@ -182,7 +182,7 @@ test("B3: an empty or comment-only first token is never a pattern", () => {
 // --- validation + migration -------------------------------------------------
 
 test("validateShellPattern names why a pattern is refused", () => {
-  expect(validateShellPattern("keryx *").ok).toBe(true);
+  expect(validateShellPattern("keryx *").ok).toBe(false);
   expect(validateShellPattern("git status").ok).toBe(true);
 
   const meta = validateShellPattern("hostname; *");
@@ -230,9 +230,9 @@ test("migration: loading drops unsafe patterns and reports every one", () => {
   );
 
   const audit = loadShellPermissionsWithAudit(dir);
-  expect(audit.permissions.allow).toEqual(["keryx *", "free *", "ps *", "df *", "echo *", "which *"]);
+  expect(audit.permissions.allow).toEqual(["free *", "ps *", "df *", "echo *", "which *"]);
   expect(audit.rejected.map((r) => r.pattern).sort()).toEqual(
-    ["# *", "bash *", "bun *", "cd *", "curl *", "docker *", "hostname; *", "python3 *", "rm -rf /", "sudo *"].sort(),
+    ["# *", "bash *", "bun *", "cd *", "curl *", "docker *", "hostname; *", "keryx *", "python3 *", "rm -rf /", "sudo *"].sort(),
   );
   for (const r of audit.rejected) {
     expect(r.reason.length).toBeGreaterThan(0);
@@ -248,6 +248,18 @@ test("migration is non-destructive: the file on disk is not rewritten by loading
   loadShellPermissions(dir);
   const audit = loadShellPermissionsWithAudit(dir);
   // Still reported as rejected on every load ⇒ nothing was silently deleted.
-  expect(audit.rejected.map((r) => r.pattern)).toEqual(["rm -rf /"]);
+  // "keryx *" is now also rejected as a bare wildcard grant.
+  expect(audit.rejected.map((r) => r.pattern).sort()).toEqual(["keryx *", "rm -rf /"].sort());
   cleanup();
+});
+
+// --- keryx bare wildcard guard (flow 193) ------------------------------------
+
+test("keryx * is rejected as a bare wildcard grant (like git *, bash *, etc.)", () => {
+  const v = validateShellPattern("keryx *");
+  expect(v.ok).toBe(false);
+  expect(v.ok === false && v.reason).toMatch(/execution|subcommand/i);
+  // A narrower pattern that constrains the subcommand stays offerable.
+  expect(validateShellPattern("keryx wiki *").ok).toBe(true);
+  expect(validateShellPattern("keryx flow status").ok).toBe(true);
 });

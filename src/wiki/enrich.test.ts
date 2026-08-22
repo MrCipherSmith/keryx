@@ -95,7 +95,61 @@ test("enrich rewrites every draft page with the model reply", async () => {
     expect(first).toBeDefined();
     const written = await readFile(path.join(root, ".metaproject", "wiki", first!.path), "utf8");
     expect(written).toContain("Full prose body");
-    expect(written).toMatch(/Status:\s*accepted/i);
+    // Flow 194 / issue #391: `wiki enrich` rewrites prose only — it must
+    // never itself promote a page's Status. These pages started as
+    // `Status: draft` (seeded by wikiCollect); enrich must leave them draft,
+    // not silently land `Status: accepted` with zero SAC review.
+    expect(written).toMatch(/Status:\s*draft/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 194 / issue #391 regression: enrich never lands Status: accepted on a draft page, even when the model's own reply claims accepted", async () => {
+  const root = await seedDrafts();
+  // Reproduces the original repro's shape (`wiki new` + `wiki enrich
+  // --prompt`): a model turn that itself returns `Status: accepted` in its
+  // frontmatter — the exact vector a compromised/prompt-injected turn (or,
+  // pre-fix, the CLI's own default `markAccepted`) used to bypass SAC review
+  // entirely. The write path must force Status back to what it was before
+  // this run, regardless of what the model claims and regardless of any
+  // flags passed.
+  const modelClaimsAccepted = `---
+Title: Enriched
+Version: 1.0.0
+Type: component
+Status: accepted
+Summary: Test page
+---
+
+# Enriched
+
+Full prose body with enough text for validation checks to pass cleanly.
+`;
+  const factory: ProviderFactory = () => stubProvider(modelClaimsAccepted);
+  try {
+    // Single page, `validate: false` — same pattern the "rewrites every draft
+    // page" test above uses for this same `seedDrafts()` fixture (its
+    // generated draft body is long enough that a short stub reply trips the
+    // unrelated truncation-size check under `validate: true`). This test is
+    // about the Status-forcing behavior, not structural validation.
+    const result = await wikiEnrich({
+      cwd: root,
+      page: "components/src-alpha.md",
+      providerFactory: factory,
+      validate: false,
+    });
+
+    expect(result.failed).toBe(0);
+    expect(result.enriched).toBe(1);
+
+    const written = await readFile(
+      path.join(root, ".metaproject", "wiki", "components", "src-alpha.md"),
+      "utf8",
+    );
+    expect(written).toContain("Full prose body");
+    expect(written).toMatch(/Status:\s*draft/i);
+    expect(written).not.toMatch(/Status:\s*accepted/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

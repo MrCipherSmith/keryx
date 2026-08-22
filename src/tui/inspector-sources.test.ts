@@ -176,6 +176,7 @@ test("catchUpItems concatenates proposals, blocked, unbound-candidates, unknown 
     lifecycleFlags: [
       { kind: "workspace", ref: "ws-2", missingComponent: "src/gone.ts", flaggedAt: "2026-08-16T00:00:00.000Z" },
     ],
+    unreviewedPaths: [],
   };
   const items = catchUpItems(report);
   expect(items.map((item) => item.type)).toEqual(["proposal", "blocked", "unbound-candidate", "unknown"]);

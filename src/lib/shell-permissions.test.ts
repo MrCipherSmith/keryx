@@ -70,11 +70,12 @@ test("isShellCommandAllowed scans allow list", () => {
 
 test("suggestShellPatterns: exact + first-token prefix", () => {
   // Since flow 115 each suggestion also says whether it may be OFFERED.
+  // keryx is now treated like git/bash — its prefix grant is not offerable.
   expect(suggestShellPatterns("keryx wiki index")).toEqual({
     exact: "keryx wiki index",
     prefix: "keryx *",
     offerExact: true,
-    offerPrefix: true,
+    offerPrefix: false,
   });
   // `git *` is no longer offerable (git -c/-exec run arbitrary commands), but
   // the exact command still is.
@@ -103,11 +104,12 @@ test("parseShellExecCommand: JSON or raw", () => {
 test("load/save/allowShellPattern round-trip", () => {
   const dir = tempDir();
   expect(loadShellPermissions(dir)).toEqual(emptyShellPermissions());
-  allowShellPattern("keryx *", dir);
-  allowShellPattern("keryx *", dir); // dedupe
-  allowShellPattern("git status", dir);
+  // "keryx *" is now rejected as a bare wildcard grant (like "git *")
+  expect(allowShellPattern("keryx *", dir)).toBe("");
+  // But a specific keryx command is allowed.
+  expect(allowShellPattern("keryx wiki index", dir)).toBe("keryx wiki index");
   const loaded = loadShellPermissions(dir);
-  expect(loaded.allow).toEqual(["keryx *", "git status"]);
+  expect(loaded.allow).toEqual(["keryx wiki index"]);
   saveShellPermissions({ allow: ["bun test*"] }, dir);
   expect(loadShellPermissions(dir).allow).toEqual(["bun test*"]);
 });

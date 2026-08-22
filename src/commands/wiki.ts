@@ -244,7 +244,6 @@ async function runEnrich(args: string[]): Promise<void> {
   const resume = args.includes("--resume");
   const refreshGraph = args.includes("--refresh-graph");
   const dryRun = args.includes("--dry-run");
-  const keepStatus = args.includes("--keep-status");
   const noValidate = args.includes("--no-validate");
   // Positional page = first bare token that is neither a flag nor a flag's value.
   const valueFlags = new Set([
@@ -325,9 +324,7 @@ async function runEnrich(args: string[]): Promise<void> {
     resume,
     refreshGraph,
     dryRun,
-    keepStatus,
     validate: !noValidate,
-    markAccepted: !keepStatus,
     ...(prompt ? { prompt } : {}),
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
@@ -423,10 +420,12 @@ Usage:
   keryx wiki validate
   keryx wiki ask "<question>" [--k <n>] [--rerank]
   keryx wiki enrich [<page>|--all] [--force] [--list] [--resume] [--limit N] [--concurrency N]
-                    [--refresh-graph] [--max-tokens N] [--keep-status] [--no-validate]
+                    [--refresh-graph] [--max-tokens N] [--no-validate]
                     [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]
                          # defaults: drafts only; provider/model from auth.json; validate on;
-                         # mark Status: accepted; concurrency 1 (raise for parallel page swarm)
+                         # concurrency 1 (raise for parallel page swarm)
+                         # rewrites prose only — Status is always left exactly as it was
+                         # before the run; enrich can never itself accept a page (issue #391)
   keryx wiki context
   keryx wiki backlinks <wiki-page-or-code-file>
 
