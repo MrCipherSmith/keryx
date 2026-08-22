@@ -286,6 +286,9 @@ function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): str
   sections.push(renderSection("Unknown (no resolution recorded)", report.unknown, (item) =>
     `- Session ${item.sessionId} was last seen ${item.lastSeenAt} with no proposal, terminal state, or unbound-candidate artifact recorded. Investigate, or ignore? ` +
     `Recommendation: \`keryx sessions list\` / \`keryx shell -r ${item.sessionId}\` to see what happened.`));
+  sections.push(renderSection("Unreviewed SAC-owned changes (no proposal on record)", report.unreviewedPaths, (item) =>
+    `- Session ${item.sessionId} changed ${item.owner} path \`${item.path}\`${item.status !== undefined ? ` (Status: ${item.status})` : ""} at ${item.changedAt} with NO SAC proposal/receipt behind it — this looks like it bypassed review. Was this reviewed some other way, or should it be? ` +
+    `Recommendation: \`keryx shell -r ${item.sessionId}\` to see what happened; if the content is good, route it through a real proposal (\`keryx workspace propose ...\`) before trusting it as durable knowledge.`));
   if (includeLifecycleFlags) {
     sections.push(renderSection("Lifecycle flags (component no longer in the graph)", report.lifecycleFlags, (item) =>
       `- ${item.kind} \`${item.ref}\` scopes to \`${item.missingComponent}\`, which is no longer in the code graph (flagged ${item.flaggedAt}). Still relevant, or safe to clean up? ` +

@@ -258,7 +258,7 @@ export async function loadInspectorCatchUp(cwd: string): Promise<CatchUpReport> 
   try {
     return await buildCatchUp({ cwd });
   } catch {
-    return { proposals: [], blocked: [], unboundCandidates: [], unknown: [], lifecycleFlags: [] };
+    return { proposals: [], blocked: [], unboundCandidates: [], unknown: [], lifecycleFlags: [], unreviewedPaths: [] };
   }
 }
 
