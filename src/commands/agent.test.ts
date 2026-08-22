@@ -5,22 +5,21 @@ import path from "node:path";
 import {
   buildAgentSystemInstruction,
   buildToollessReprompt,
+  DEFAULT_MAX_ROUNDS,
   DEFAULT_MAX_SUBAGENT_CONCURRENCY,
-  DEFAULT_MAX_TOOL_CALLS,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
-  ENV_AGENT_MAX_TOOL_CALLS,
+  ENV_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_ATTEMPTS_PER_HASH,
-  MAX_AGENT_MAX_TOOL_CALLS,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
   reserveToolAttempt,
   resolveAgentMaxAttemptsPerHash,
-  resolveAgentMaxToolCalls,
+  resolveAgentMaxRounds,
   runAgentTurn,
   toolCallHash,
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
-import { compactMessages } from "../session/compact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
@@ -40,21 +39,21 @@ import type { TerminalState } from "../session/slate-terminal-state";
 // yet. Colocated sibling of `shell-exec-tool.ts`; see this flow's journal.md.
 import { createJobRegistry, shellJobKillTool, shellJobOutputTool } from "../harness/tool/builtin/background-job-registry";
 
-test("resolveAgentMaxToolCalls: default is generous for multi-step prompts", () => {
-  expect(DEFAULT_MAX_TOOL_CALLS).toBeGreaterThanOrEqual(48);
-  expect(resolveAgentMaxToolCalls({})).toBe(DEFAULT_MAX_TOOL_CALLS);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "" })).toBe(DEFAULT_MAX_TOOL_CALLS);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "  " })).toBe(DEFAULT_MAX_TOOL_CALLS);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "nope" })).toBe(DEFAULT_MAX_TOOL_CALLS);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "0" })).toBe(DEFAULT_MAX_TOOL_CALLS);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "-3" })).toBe(DEFAULT_MAX_TOOL_CALLS);
+test("resolveAgentMaxRounds: default is generous for multi-step prompts", () => {
+  expect(DEFAULT_MAX_ROUNDS).toBeGreaterThanOrEqual(20);
+  expect(resolveAgentMaxRounds({})).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "" })).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "  " })).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "nope" })).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "0" })).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "-3" })).toBe(DEFAULT_MAX_ROUNDS);
 });
 
-test("resolveAgentMaxToolCalls: env override clamped to ceiling", () => {
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "12" })).toBe(12);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: " 96 " })).toBe(96);
-  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: String(MAX_AGENT_MAX_TOOL_CALLS + 50) })).toBe(
-    MAX_AGENT_MAX_TOOL_CALLS,
+test("resolveAgentMaxRounds: env override clamped to ceiling", () => {
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "12" })).toBe(12);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: " 96 " })).toBe(96);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: String(MAX_AGENT_MAX_ROUNDS + 50) })).toBe(
+    MAX_AGENT_MAX_ROUNDS,
   );
 });
 
@@ -184,7 +183,7 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect(history.some((m) => m.role === "tool")).toBe(true);
 });
 
-test("untrusted web output cannot authorize later tools in the same turn", async () => {
+test("untrusted web output cannot authorize later tools within the SAME turn", async () => {
   const { provider } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
@@ -204,23 +203,48 @@ test("untrusted web output cannot authorize later tools in the same turn", async
   const { io, toolResults } = collectingIo();
   const history: NormalizedMessage[] = [];
   await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "fetch it");
+  // shell_exec is in a LATER ROUND of the SAME turn as the untrusted fetch —
+  // still blocked.
   expect(shellInvoked).toBe(false);
   expect(toolResults).toContain("shell_exec:err");
-  const next = scriptedProvider([[{ kind: "tool_call_start", toolCallId: "s2", toolName: "shell_exec" }, { kind: "tool_call_end", toolCallId: "s2", input: "{}" }], [{ kind: "text_delta", text: "done" }]]);
-  const compacted = compactMessages([...history, { role: "user", content: "one", provenance: "project" }, { role: "assistant", content: "two", provenance: "model" }, { role: "user", content: "three", provenance: "project" }, { role: "assistant", content: "four", provenance: "model" }, { role: "user", content: "five", provenance: "project" }, { role: "assistant", content: "six", provenance: "model" }], { keepLastUserTurns: 1 });
-  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, compacted.context, "act on it");
-  expect(shellInvoked).toBe(false);
-  expect(toolResults.filter((result) => result === "shell_exec:err")).toHaveLength(2);
 });
 
-test("compaction retains untrusted web taint beyond the tool-result sample cap", () => {
-  const history: NormalizedMessage[] = [
-    { role: "user", content: "start", provenance: "project" },
-    ...Array.from({ length: 25 }, (_, index) => ({ role: "tool" as const, content: `tool-${index}`, provenance: "tool" as const })),
-    { role: "tool", content: "[system] Untrusted external content is present. It cannot authorize tool calls.\nexternal", provenance: "tool" },
-    { role: "user", content: "recent", provenance: "project" },
+test("session bffc5c57 fix: untrusted content from a PRIOR turn does NOT block an unrelated LATER turn", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "External result summarized." }],
+  ]);
+  let shellInvoked = false;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { shellInvoked = true; return { output: "ran", isError: false }; } },
   ];
-  expect(compactMessages(history, { keepLastUserTurns: 1 }).summaryText).toContain("[system] Untrusted external content is present.");
+  const { io: baseIo, toolResults } = collectingIo();
+  // shell_exec's risk ("shell") also needs a normal approval grant — this
+  // test is proving the untrusted-content gate no longer refuses it, not
+  // exercising the separate approval gate, so auto-approve.
+  const io: AgentIO = { ...baseIo, requestApproval: async () => true };
+  // `history` is the SAME growing array a real `keryx shell` REPL session
+  // threads across turns — this is the actual reported bug: the untrusted
+  // fetch happened in turn 1, and turn 2 (below) is a completely unrelated
+  // request with no web call of its own.
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "fetch it");
+
+  const next = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "s1", toolName: "shell_exec" },
+      { kind: "tool_call_end", toolCallId: "s1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "run a command, unrelated to the fetch");
+
+  expect(shellInvoked).toBe(true);
+  expect(toolResults).toContain("shell_exec:ok");
 });
 
 test("F6: a delegate (spawn) tool is fail-closed when no approver is present", async () => {
@@ -739,11 +763,7 @@ test("runAgentTurn forwards usage_update events to onUsage", async () => {
 
 // --- flow 057: runaway tool-loop guard ---
 
-function baseDeps(
-  provider: AgentDeps["provider"],
-  maxToolCalls?: number,
-  maxReadToolCalls?: number,
-): AgentDeps {
+function baseDeps(provider: AgentDeps["provider"], maxRounds?: number): AgentDeps {
   return {
     provider,
     providerId: "s",
@@ -751,8 +771,7 @@ function baseDeps(
     tools: builtinReadOnlyTools(tmpdir()),
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    ...(maxToolCalls !== undefined ? { maxToolCalls } : {}),
-    ...(maxReadToolCalls !== undefined ? { maxReadToolCalls } : {}),
+    ...(maxRounds !== undefined ? { maxRounds } : {}),
   };
 }
 
@@ -771,39 +790,21 @@ test("toolCallHash is stable for key order and distinguishes different inputs", 
   expect(toolCallHash("search_code", '{"pattern":"a"}')).not.toBe(toolCallHash("search_code", '{"pattern":"b"}'));
 });
 
-test("reserveToolAttempt: same hash costs 1 budget slot for up to MAX_ATTEMPTS_PER_HASH tries", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 2,
-    maxReadUnique: 2,
-    maxNonReadUnique: 2,
-  };
-  const a1 = reserveToolAttempt(state, "get_cwd", "{}", "read");
-  const a2 = reserveToolAttempt(state, "get_cwd", "{}", "read");
-  const a3 = reserveToolAttempt(state, "get_cwd", "{}", "read");
-  const a4 = reserveToolAttempt(state, "get_cwd", "{}", "read");
-  expect(a1.ok && a1.chargedNew).toBe(true);
-  expect(a2.ok && !a2.chargedNew).toBe(true);
-  expect(a3.ok && !a3.chargedNew).toBe(true);
-  expect(a4.ok).toBe(false);
-  expect(state.charged.size).toBe(1);
+test("reserveToolAttempt: same hash allows up to MAX_ATTEMPTS_PER_HASH tries, then refuses", () => {
+  const state = { attempts: new Map<string, number>() };
+  const a1 = reserveToolAttempt(state, "get_cwd", "{}");
+  const a2 = reserveToolAttempt(state, "get_cwd", "{}");
+  const a3 = reserveToolAttempt(state, "get_cwd", "{}");
+  const a4 = reserveToolAttempt(state, "get_cwd", "{}");
+  expect(a1.ok && a1.attempt).toBe(1);
+  expect(a2.ok && a2.attempt).toBe(2);
   expect(a3.ok && a3.attempt).toBe(MAX_ATTEMPTS_PER_HASH);
+  expect(a4.ok).toBe(false);
+  expect(!a4.ok && a4.reason).toContain(`already tried ${MAX_ATTEMPTS_PER_HASH}×`);
 });
 
 test("reserveToolAttempt: state.maxAttempts overrides the per-signature cap and refusal message", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 4,
-    maxReadUnique: 4,
-    maxNonReadUnique: 4,
-    maxAttempts: 2,
-  };
+  const state = { attempts: new Map<string, number>(), maxAttempts: 2 };
   const a1 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
   const a2 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
   const a3 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
@@ -813,116 +814,33 @@ test("reserveToolAttempt: state.maxAttempts overrides the per-signature cap and 
   expect(!a3.ok && a3.reason).toContain("already tried 2×");
 });
 
-test("reserveToolAttempt: read calls consume both total and read pools", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 4,
-    maxReadUnique: 1,
-    maxNonReadUnique: 4,
-  };
-
-  const firstRead = reserveToolAttempt(state, "read_file", '{"path":"a"}', "read");
-  const secondRead = reserveToolAttempt(state, "read_file", '{"path":"b"}', "read");
-  const shell = reserveToolAttempt(state, "shell_exec", '{"command":"true"}', "shell");
-
-  expect(firstRead.ok).toBe(true);
-  expect(secondRead.ok).toBe(false);
-  expect(!secondRead.ok && secondRead.reason).toMatch(/read tool-call budget exhausted/);
-  expect(shell.ok).toBe(true);
-  expect(state.charged.size).toBe(2);
-  expect(state.readCharged.size).toBe(1);
-  expect(state.nonReadCharged.size).toBe(1);
+test("reserveToolAttempt: a big task with many DIFFERENT signatures is never refused (no unique-count ceiling)", () => {
+  const state = { attempts: new Map<string, number>() };
+  const results = Array.from({ length: 200 }, (_, i) =>
+    reserveToolAttempt(state, "read_file", JSON.stringify({ path: `file-${i}.ts` })),
+  );
+  expect(results.every((r) => r.ok)).toBe(true);
 });
 
 // --- flow 173 review finding F-006: shell_job_output is exempt from the per-hash attempt cap ---
 
 test("reserveToolAttempt: shell_job_output (repeatable) can be called on the SAME job_id more than MAX_ATTEMPTS_PER_HASH times in one turn", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 10,
-    maxReadUnique: 10,
-    maxNonReadUnique: 10,
-  };
+  const state = { attempts: new Map<string, number>() };
   const input = '{"job_id":"job-1-4242"}';
   const calls = Array.from({ length: MAX_ATTEMPTS_PER_HASH + 5 }, () =>
-    reserveToolAttempt(state, "shell_job_output", input, "read"),
+    reserveToolAttempt(state, "shell_job_output", input),
   );
   expect(calls.every((c) => c.ok)).toBe(true);
-  // Still exactly ONE budget slot — the exemption lifts only the per-signature
-  // attempt ceiling, not the total/read-pool accounting.
-  expect(state.charged.size).toBe(1);
-  expect(state.readCharged.size).toBe(1);
 });
 
 test("reserveToolAttempt: an UNRELATED repeated tool call is still capped at MAX_ATTEMPTS_PER_HASH (no regression to the loop-safety guard)", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 10,
-    maxReadUnique: 10,
-    maxNonReadUnique: 10,
-  };
-  const calls = Array.from({ length: MAX_ATTEMPTS_PER_HASH + 1 }, () =>
-    reserveToolAttempt(state, "get_cwd", "{}", "read"),
-  );
+  const state = { attempts: new Map<string, number>() };
+  const calls = Array.from({ length: MAX_ATTEMPTS_PER_HASH + 1 }, () => reserveToolAttempt(state, "get_cwd", "{}"));
   expect(calls.slice(0, MAX_ATTEMPTS_PER_HASH).every((c) => c.ok)).toBe(true);
   const last = calls[calls.length - 1];
   if (last === undefined) throw new Error("test setup: expected a last call result");
   expect(last.ok).toBe(false);
-  expect(!last.ok && last.kind).toBe("repeat");
-});
-
-test("reserveToolAttempt: non-read and unknown risks share a conservative sub-limit", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 4,
-    maxReadUnique: 4,
-    maxNonReadUnique: 1,
-  };
-
-  const shell = reserveToolAttempt(state, "shell_exec", '{"command":"true"}', "shell");
-  const unknownRisk = reserveToolAttempt(state, "mystery", "{}", undefined);
-  const read = reserveToolAttempt(state, "read_file", '{"path":"a"}', "read");
-
-  expect(shell.ok).toBe(true);
-  expect(unknownRisk.ok).toBe(false);
-  expect(!unknownRisk.ok && unknownRisk.reason).toMatch(/non-read tool-call budget exhausted/);
-  expect(read.ok).toBe(true);
-  expect(state.nonReadCharged.size).toBe(1);
-  expect(state.readCharged.size).toBe(1);
-  expect(state.charged.size).toBe(2);
-});
-
-test("reserveToolAttempt: the total pool remains a hard ceiling for read calls", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 4,
-    maxReadUnique: 40,
-    maxNonReadUnique: 4,
-  };
-
-  for (let i = 0; i < 4; i += 1) {
-    expect(reserveToolAttempt(state, "list_dir", JSON.stringify({ path: `p${i}` }), "read").ok).toBe(true);
-  }
-  const fifth = reserveToolAttempt(state, "list_dir", '{"path":"p4"}', "read");
-  expect(fifth.ok).toBe(false);
-  expect(!fifth.ok && fifth.reason).toMatch(/tool-call budget exhausted/);
-  expect(state.charged.size).toBe(4);
-  expect(state.readCharged.size).toBe(4);
+  expect(!last.ok && last.reason).toContain("already tried");
 });
 
 test("runAgentTurn: reaching the exact budget still allows a normal final model answer", async () => {
@@ -947,7 +865,7 @@ test("runAgentTurn: reaching the exact budget still allows a normal final model 
     write: (s) => text.push(s),
     onSystem: (t) => systemMsgs.push(t),
   };
-  await runAgentTurn(io, baseDeps(provider, 2, 2), [], "loop");
+  await runAgentTurn(io, baseDeps(provider, 2), [], "loop");
 
   expect(systemMsgs.join("")).not.toMatch(/\[budget\]|wrap-up/i);
   expect(text.join("")).toContain("I have enough information.");
@@ -956,9 +874,9 @@ test("runAgentTurn: reaching the exact budget still allows a normal final model 
   expect((last?.tools?.length ?? 0) > 0).toBe(true);
 });
 
-test("runAgentTurn: a new read signature beyond the read pool triggers a tool-free wrap-up", async () => {
+test("runAgentTurn: needing a round BEYOND the round budget triggers a tool-free wrap-up (each individual call still ran)", async () => {
   const wrap: Partial<NormalizedEvent>[] = [
-    { kind: "text_delta", text: "Read budget done." },
+    { kind: "text_delta", text: "Round budget done." },
     { kind: "model_end" },
   ];
   const { provider, requests } = scriptedProvider([
@@ -975,18 +893,21 @@ test("runAgentTurn: a new read signature beyond the read pool triggers a tool-fr
       onSystem: (text) => systemMsgs.push(text),
       onToolResult: (_name, result) => results.push(result.output),
     },
-    baseDeps(provider, 8, 2),
+    baseDeps(provider, 2),
     [],
     "read",
   );
 
-  expect(results.some((result) => /read tool-call budget exhausted/.test(result))).toBe(true);
-  expect(systemMsgs.join("")).toMatch(/read signature budget 2\/2/);
+  // All three reads are DIFFERENT signatures and all ran — the round budget
+  // never refuses an individual call, only a round beyond the limit.
+  expect(results.every((result) => !/budget exhausted/.test(result))).toBe(true);
+  expect(systemMsgs.join("")).toMatch(/round limit 3\/2/);
   const last = requests[requests.length - 1];
   expect(last?.tools === undefined || last?.tools?.length === 0).toBe(true);
+  expect(requests).toHaveLength(4);
 });
 
-test("runAgentTurn: the default read budget permits more than eight distinct reads", async () => {
+test("runAgentTurn: the default round budget permits many more than eight distinct reads", async () => {
   const rounds = Array.from({ length: 9 }, (_unused, index) =>
     readToolRound(`r${index}`, `missing-${index}`),
   );
@@ -1008,19 +929,19 @@ test("runAgentTurn: the default read budget permits more than eight distinct rea
   expect(systemMsgs.join("")).not.toMatch(/\[budget\]/i);
 });
 
-test("runAgentTurn: askUser answering 'reset' on an exhausted budget raises the ceiling and continues instead of stopping", async () => {
+test("runAgentTurn: askUser answering 'reset' on an exceeded round budget raises the ceiling and continues instead of stopping", async () => {
   const { provider, requests } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
-      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
-      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
       { kind: "model_end" },
     ],
     [
-      // Retried AFTER the reset — now within budget.
-      { kind: "tool_call_start", toolCallId: "c3", toolName: "probe" },
-      { kind: "tool_call_end", toolCallId: "c3", input: JSON.stringify({ path: "b" }) },
+      // This round (round 2) is the one BEYOND the 1-round budget — its own
+      // call still runs (the round budget never refuses an individual call),
+      // and the excess is only noticed once this round is done.
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
       { kind: "model_end" },
     ],
     [
@@ -1042,7 +963,7 @@ test("runAgentTurn: askUser answering 'reset' on an exhausted budget raises the 
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 1,
     askUser,
   };
   await runAgentTurn(
@@ -1054,16 +975,19 @@ test("runAgentTurn: askUser answering 'reset' on an exhausted budget raises the 
 
   expect(asked.length).toBe(1);
   expect(requests.length).toBe(3);
-  expect(systemMsgs.join("")).toMatch(/\[budget\] Limit increased — total 2/);
+  expect(systemMsgs.join("")).toMatch(new RegExp(`\\[budget\\] Round limit increased — ${1 + DEFAULT_MAX_ROUNDS}`));
   expect(systemMsgs.join("")).not.toMatch(/Tool loop stopped/);
   expect(text.join("")).toContain("Done after reset.");
 });
 
-test("runAgentTurn: askUser answering 'cancel' on an exhausted budget falls through to the existing wrap-up", async () => {
+test("runAgentTurn: askUser answering 'cancel' on an exceeded round budget falls through to the existing wrap-up", async () => {
   const { provider, requests } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "model_end" },
+    ],
+    [
       { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
       { kind: "model_end" },
@@ -1082,12 +1006,12 @@ test("runAgentTurn: askUser answering 'cancel' on an exhausted budget falls thro
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 1,
     askUser,
   };
   await runAgentTurn({ write: () => {}, onSystem: (t) => systemMsgs.push(t) }, deps, [], "probe twice");
 
-  expect(requests.length).toBe(2);
+  expect(requests.length).toBe(3);
   expect(systemMsgs.join("")).toMatch(/\[budget\] Stopping tools/);
 });
 
@@ -2157,9 +2081,10 @@ function fixedNow(iso: string): () => string {
 test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budget_exhausted) and adds NO history beyond what the tool-execution loop itself already wrote", async () => {
   const OCCURRED_AT = "2026-08-16T00:00:00.000Z";
   const { provider, requests } = scriptedProvider([
-    // Round 1: two DISTINCT "probe" calls (different `path` → different hash).
-    // maxToolCalls: 1 means the first charges the sole slot; the second is
-    // refused for total-budget reasons, tripping `exhaustedBudget`.
+    // Round 1: two DISTINCT "probe" calls. `maxRounds: 0` means round 1 is
+    // already beyond the round budget — both calls still execute normally
+    // (the round budget never refuses an individual call, only a round
+    // beyond the limit), and the excess is noticed right after this round.
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
@@ -2175,7 +2100,7 @@ test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budge
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 0,
     unattended: true,
     now: fixedNow(OCCURRED_AT),
   };
@@ -2189,9 +2114,9 @@ test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budge
 
   // History: the initial user push + the assistant turn carrying the calls
   // (flow 177) + the two tool-loop entries the calls loop itself wrote
-  // (call1's real result, call2's budget-refusal message) — and NOTHING
-  // beyond that (no "[system] Tool loop stopped..." message, no wrap-up
-  // assistant text).
+  // (both real results — the round budget never refuses an individual call)
+  // — and NOTHING beyond that (no "[system] Tool loop stopped..." message,
+  // no wrap-up assistant text).
   expect(history.length).toBe(4);
   expect(history[0]?.role).toBe("user");
   expect(history[1]?.role).toBe("assistant");
@@ -2199,6 +2124,7 @@ test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budge
   expect(history[2]?.role).toBe("tool");
   expect(history[2]?.content).toBe("probed");
   expect(history[3]?.role).toBe("tool");
+  expect(history[3]?.content).toBe("probed");
   expect(history.some((m) => m.content.includes("Do NOT call tools"))).toBe(false);
   expect(history.some((m) => m.content.includes("Tool loop stopped"))).toBe(false);
 
@@ -2241,7 +2167,7 @@ test("SLATE-11: unattended budget exhaustion with an OPEN slateSession snapshots
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 0,
     unattended: true,
     now: fixedNow("2026-08-16T00:00:00.000Z"),
   };
@@ -2253,8 +2179,8 @@ test("SLATE-11: unattended budget exhaustion with an OPEN slateSession snapshots
   // T11 fix (documented deviation — see subagent-result): the ORIGINAL
   // assertion here compared against `openedSlate`, read immediately after
   // `openSlate` but BEFORE `runAgentTurn` ran. That is a genuine test bug,
-  // not a behavior this test is actually trying to pin: with `maxToolCalls:
-  // 1`, the FIRST "probe" call (path "a") genuinely executes, and the
+  // not a behavior this test is actually trying to pin: with `maxRounds:
+  // 0`, both "probe" calls genuinely execute, and the
   // already-shipped SLATE-2a per-tool-call wiring in `runAgentTurnCore`
   // (`recordSlateTouch`, unrelated to this flow) unconditionally updates the
   // on-disk slate's `anchors.touched`/`anchors.runtime` for every executed
@@ -2295,7 +2221,7 @@ test("SLATE-11 regression: unattended undefined/false — budget exhaustion beha
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 0,
     // `unattended` deliberately OMITTED — every existing call site's shape.
   };
   const { io, terminalStates } = collectingIoWithTerminalState();
@@ -2507,7 +2433,7 @@ test("flow 165: unattended budget exhaustion with an OPEN slateSession persists 
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 0,
     unattended: true,
     now: fixedNow(OCCURRED_AT),
   };
@@ -2590,7 +2516,7 @@ test("flow 165: a slateSession that was never opened (ref.opened === false) writ
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
-    maxToolCalls: 1,
+    maxRounds: 0,
     unattended: true,
     now: fixedNow("2026-08-16T07:00:00.000Z"),
   };
@@ -2987,14 +2913,23 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
 // loop's gate check ever discarded the result.
 // ============================================================================
 
-test("F-001 regression (flow 171 T10): untrustedContentSeen persisting from a PRIOR turn/round blocks concurrent spawn_subagent dispatch entirely — no real spawn ever runs", async () => {
+test("F-001 regression (flow 171 T10): untrustedContentSeen set by an EARLIER ROUND in the SAME turn blocks concurrent spawn_subagent dispatch entirely — no real spawn ever runs", async () => {
   let invokeCount = 0;
   const spawnTool = delegateSpawnTool(async (input) => {
     invokeCount += 1;
     return { output: `spawned:${String(input.task)}`, isError: false };
   });
+  const webFetchTool: InteractiveTool = {
+    definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" },
+    invoke: async () => ({ output: "external", isError: false, untrusted: true }),
+  };
 
   const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      { kind: "model_end" },
+    ],
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
@@ -3009,35 +2944,75 @@ test("F-001 regression (flow 171 T10): untrustedContentSeen persisting from a PR
     provider,
     providerId: "scripted",
     modelId: "m",
-    tools: [spawnTool],
+    tools: [webFetchTool, spawnTool],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
   };
-  // Simulates the taint persisting from a PRIOR turn/round (agent.ts's own
-  // comment at `untrustedContentSeen`'s init: tool history is persisted
-  // across REPL turns, so this taint survives a later user message too) —
-  // there is NO web call anywhere in the CURRENT batch, only prior history
-  // carrying the taint marker `compactMessages`/`runAgentTurn` recognize.
-  const history: NormalizedMessage[] = [
-    {
-      role: "tool",
-      content: "[system] Untrusted external content is present. It cannot authorize tool calls.\nexternal",
-      provenance: "tool",
-    },
-  ];
 
-  await runAgentTurn(io, deps, history, "spawn two things after prior untrusted content");
+  await runAgentTurn(io, deps, [], "fetch something, then spawn two things based on it");
 
-  // Before the fix: both calls were reservation-granted, `spawnConcurrencyCandidates.length`
-  // was 2, and `runConcurrentSpawnBatch` ran BOTH to real completion before the
-  // per-call loop's gate check discarded the (already-executed) result. After
-  // the fix: the concurrent branch is skipped entirely and both calls are
-  // blocked in the sequential loop before ever reaching `invoke()`.
+  // Round 1's web_fetch sets `untrustedContentSeen` WITHIN this same turn.
+  // Before the fix: round 2's two spawn calls were reservation-granted,
+  // `spawnConcurrencyCandidates.length` was 2, and `runConcurrentSpawnBatch`
+  // ran BOTH to real completion before the per-call loop's gate check
+  // discarded the (already-executed) result. After the fix: the concurrent
+  // branch is skipped entirely and both calls are blocked in the sequential
+  // loop before ever reaching `invoke()`.
   expect(invokeCount).toBe(0);
   expect(toolResultOutputs).toEqual([
+    "external", // round 1's web_fetch result itself
     expect.stringContaining("cannot authorize"),
     expect.stringContaining("cannot authorize"),
   ]);
+});
+
+test("session bffc5c57 fix: untrustedContentSeen from a PRIOR turn does NOT block a LATER turn's concurrent spawn_subagent dispatch", async () => {
+  let invokeCount = 0;
+  const spawnTool = delegateSpawnTool(async (input) => {
+    invokeCount += 1;
+    return { output: `spawned:${String(input.task)}`, isError: false };
+  });
+  const webFetchTool: InteractiveTool = {
+    definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" },
+    invoke: async () => ({ output: "external", isError: false, untrusted: true }),
+  };
+  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const history: NormalizedMessage[] = [];
+
+  const first = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "fetched" }, { kind: "model_end" }],
+  ]);
+  await runAgentTurn(
+    io,
+    { provider: first.provider, providerId: "scripted", modelId: "m", tools: [webFetchTool, spawnTool], systemInstruction: "sys", idSeq: fixedIdSeq() },
+    history,
+    "fetch it",
+  );
+
+  const second = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  await runAgentTurn(
+    io,
+    { provider: second.provider, providerId: "scripted", modelId: "m", tools: [webFetchTool, spawnTool], systemInstruction: "sys", idSeq: fixedIdSeq() },
+    history,
+    "now spawn two things, unrelated to the earlier fetch",
+  );
+
+  expect(invokeCount).toBe(2);
+  expect(toolResultOutputs).toEqual(["external", "spawned:s1", "spawned:s2"]);
 });
 
 test("F-001 regression (flow 171 T10): a same-batch untrusted web call blocks concurrent spawn_subagent dispatch BEFORE any real spawn runs (not merely a discarded-after-the-fact result)", async () => {
@@ -3151,56 +3126,12 @@ test("F-002 regression (flow 171 T10): the `!plan.ok` sequential fallback degrad
 });
 
 // --- flow 173 (background shell jobs) AC6: shell_job_output/shell_job_kill
-// must be risk:"read" so they draw from the LARGE read pool
-// (DEFAULT_MAX_READ_TOOL_CALLS) and never the small non-read pool
-// (DEFAULT_MAX_NON_READ_TOOL_CALLS) — extends the reserveToolAttempt
-// budget-split coverage above (flow 057) with the two new tool definitions.
+// must be risk:"read" (used by the untrusted-content gate and tool-budget
+// UI labeling, not by any per-risk pool — that concept was removed along
+// with the unique-signature budget, see the round-cap redesign above).
 
 test("AC6: shell_job_output and shell_job_kill are both classified risk:\"read\"", () => {
   const registry = createJobRegistry();
   expect(shellJobOutputTool(registry).definition.risk).toBe("read");
   expect(shellJobKillTool(registry).definition.risk).toBe("read");
-});
-
-test("AC6: polling shell_job_output for several jobs never touches the small non-read pool", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 10,
-    maxReadUnique: 10,
-    maxNonReadUnique: 1, // deliberately tiny — a background-job poll must never consume this
-  };
-  const registry = createJobRegistry();
-  const risk = shellJobOutputTool(registry).definition.risk;
-
-  // Distinct job_id inputs so each is a NEW signature — the scenario a real
-  // polling loop across several background jobs would hit.
-  const first = reserveToolAttempt(state, "shell_job_output", '{"job_id":"a"}', risk);
-  const second = reserveToolAttempt(state, "shell_job_output", '{"job_id":"b"}', risk);
-
-  expect(first.ok).toBe(true);
-  expect(second.ok).toBe(true);
-  expect(state.nonReadCharged.size).toBe(0); // the tiny non-read pool was never touched
-  expect(state.readCharged.size).toBe(2);
-});
-
-test("AC6: shell_job_kill also draws from the read pool, not the non-read pool", () => {
-  const state = {
-    charged: new Set<string>(),
-    readCharged: new Set<string>(),
-    nonReadCharged: new Set<string>(),
-    attempts: new Map<string, number>(),
-    maxUnique: 10,
-    maxReadUnique: 10,
-    maxNonReadUnique: 0, // zero — any non-read charge at all would be a bug
-  };
-  const registry = createJobRegistry();
-  const risk = shellJobKillTool(registry).definition.risk;
-  const result = reserveToolAttempt(state, "shell_job_kill", '{"job_id":"a"}', risk);
-
-  expect(result.ok).toBe(true);
-  expect(state.readCharged.size).toBe(1);
-  expect(state.nonReadCharged.size).toBe(0);
 });

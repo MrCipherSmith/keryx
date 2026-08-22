@@ -28,9 +28,9 @@ import path from "node:path";
 
 import {
   runAgentTurn,
-  DEFAULT_MAX_TOOL_CALLS,
+  DEFAULT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
-  resolveAgentMaxToolCalls,
+  resolveAgentMaxRounds,
 } from "../../src/commands/agent";
 import type { AgentDeps, AgentIO } from "../../src/commands/agent";
 import {
@@ -994,8 +994,8 @@ const SUITE: Record<string, () => Promise<void>> = {
 async function main(): Promise<void> {
   console.log(`keryx shell stress — root=${FIX_ROOT}`);
   console.log(
-    `config: sandbox-shell=${resolveShellSandboxMode(process.env)} maxToolCalls=${resolveAgentMaxToolCalls()} ` +
-      `(default ${DEFAULT_MAX_TOOL_CALLS}) platform=${process.platform} egress=${ALLOW_EGRESS}\n`,
+    `config: sandbox-shell=${resolveShellSandboxMode(process.env)} maxRounds=${resolveAgentMaxRounds()} ` +
+      `(default ${DEFAULT_MAX_ROUNDS}) platform=${process.platform} egress=${ALLOW_EGRESS}\n`,
   );
   makeFixtures();
 

@@ -168,17 +168,17 @@ export function buildDeepEnrichTools(port: MetaprojectPort): InteractiveTool[] {
 }
 
 /** Assemble the child's system instruction: the wiki writer prompt + read-only tool guidance. */
-function buildDeepSystemInstruction(systemPrompt: string, maxToolCalls: number): string {
+function buildDeepSystemInstruction(systemPrompt: string, maxRounds: number): string {
   return (
     `${systemPrompt}\n\n` +
     "You ALSO have READ-ONLY code-graph tools for this page: graph_query, graph_path, " +
     "graph_symbol, graph_affected, repomap, read_wiki. This page was flagged as complex " +
     "(high PageRank/fan-in) — use these tools to verify facts about the actual code before " +
     "writing prose (key files, callers/dependents, related pages) instead of guessing. You have " +
-    `a budget of ${maxToolCalls} unique tool calls for this whole task — an identical call ` +
-    "repeated is NOT a new attempt, so do not retry the same query hoping for a different " +
-    "answer. No further subagents are available to you; do not attempt to spawn one. " +
-    "Return ONLY the full Markdown page (frontmatter + body), no commentary."
+    `up to ${maxRounds} model turns (rounds) for this whole task — each round may include ` +
+    "several tool calls; an identical call repeated does not start a new round, so do not retry " +
+    "the same query hoping for a different answer. No further subagents are available to you; " +
+    "do not attempt to spawn one. Return ONLY the full Markdown page (frontmatter + body), no commentary."
   );
 }
 
@@ -223,10 +223,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
       };
     }
 
-    const ledger = new RemainingBudgetLedger(
-      { maxRuntimeMs: input.maxRuntimeMs, maxToolCalls: input.maxToolCalls },
-      { maxChildren: 1 },
-    );
+    const ledger = new RemainingBudgetLedger({ maxRuntimeMs: input.maxRuntimeMs }, { maxChildren: 1 });
     const parentRunId = idSeq();
     const parentSessionId = idSeq();
     const parentProvenance: Provenance = {
@@ -257,7 +254,6 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
         budgetRequest: {
           reservationId: idSeq(),
           maxRuntimeMs: input.maxRuntimeMs,
-          maxToolCalls: input.maxToolCalls,
         },
         policyRequest: shellChildReadOnlyProfile(),
         durableResultArtifact: {
@@ -287,19 +283,22 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
         ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
       });
     } catch (cause) {
-      ledger.release(spawned.reservation.reservationId, { maxRuntimeMs: 0, maxToolCalls: 0 });
+      ledger.release(spawned.reservation.reservationId, { maxRuntimeMs: 0 });
       return { fallback: true, reason: `provider construction failed: ${errorMessage(cause)}`, toolCalls };
     }
 
-    const effectiveMaxToolCalls = spawned.reservation.maxToolCalls ?? input.maxToolCalls;
+    // `input.maxToolCalls` is the persisted config field name (`rlm.deep.maxToolCalls`,
+    // TRD §3.1 — kept unchanged, see this input's own doc comment); its value is
+    // now interpreted as a round count, not a unique-tool-call count.
+    const effectiveMaxRounds = input.maxToolCalls;
     const deps: AgentDeps = {
       provider,
       providerId: runModel.provider,
       modelId: runModel.model,
       tools,
-      systemInstruction: buildDeepSystemInstruction(input.systemPrompt, effectiveMaxToolCalls),
+      systemInstruction: buildDeepSystemInstruction(input.systemPrompt, effectiveMaxRounds),
       idSeq,
-      maxToolCalls: effectiveMaxToolCalls,
+      maxRounds: effectiveMaxRounds,
     };
 
     let assistant = "";

@@ -3713,7 +3713,7 @@ export async function launchTuiAgentShell(opts: {
               ...base,
               tools,
               systemInstruction: buildSideWorkerSystemInstruction(currentSel.provider, currentSel.model),
-              maxToolCalls: 4,
+              maxRounds: 4,
               idSeq: () => `${SIDE_WORKER_ID}-${base.idSeq()}`,
             };
             const sideHistory: NormalizedMessage[] = [];

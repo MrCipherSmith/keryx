@@ -5,7 +5,7 @@
 // `provider.stream(request WITH tools)`, and on each `tool_call_end` it validates
 // the tool input, applies a read-only risk gate, invokes the content-returning
 // executor, appends the result as a `role:"tool"` message, and re-requests —
-// looping until a text-only finish or the `maxToolCalls` guard. `runShell`'s
+// looping until a text-only finish or the `maxRounds` guard. `runShell`'s
 // chat core is untouched; this is a separate, opt-in path.
 //
 // Determinism: uses ONLY `deps.idSeq` (never `Date.now`/`Math.random`); all
@@ -159,17 +159,17 @@ export interface AgentDeps {
   systemInstruction: string;
   idSeq: () => string;
   /**
-   * Max total **unique** tool signatures per user turn (loop-safety guard).
-   * Default {@link DEFAULT_MAX_TOOL_CALLS} (overridable via
-   * {@link resolveAgentMaxToolCalls} / `KERYX_AGENT_MAX_TOOL_CALLS`).
-   * The same call (name + normalized input hash) may be retried up to
-   * {@link MAX_ATTEMPTS_PER_HASH} times and still counts as **one** budget slot.
+   * Max model round-trips per user turn (loop-safety guard). A round is one
+   * `provider.stream()` request/response cycle and may carry a batch of
+   * several tool calls, so this bounds runaway ROUNDS, not the number of
+   * distinct legitimate actions a big task needs — a large task with many
+   * unique tool calls in few rounds is unaffected. Default
+   * {@link DEFAULT_MAX_ROUNDS} (overridable via {@link resolveAgentMaxRounds}
+   * / `KERYX_AGENT_MAX_ROUNDS`). The same call (name + normalized input hash)
+   * may still be retried only up to {@link MAX_ATTEMPTS_PER_HASH} times
+   * regardless of round budget — that guard is independent and unchanged.
    */
-  maxToolCalls?: number;
-  /** Max unique risk-`read` signatures inside the total budget. Default 40. */
-  maxReadToolCalls?: number;
-  /** Max unique non-read signatures inside the total budget. Default 8. */
-  maxNonReadToolCalls?: number;
+  maxRounds?: number;
   /**
    * SLATE-11 (AC3): operator-set signal that this run has no human present
    * (mirrors `HarnessCommandDeps`'s `--unattended` flag, SLATE-8). Default
@@ -326,34 +326,25 @@ export interface RunAgentTurnResult {
 }
 
 /**
- * Default unique tool-signature budget per user turn for interactive agent
- * (`keryx shell` / TUI). Sized so multi-step operator prompts (read several
- * docs, run a probe matrix, write a report) complete without the user needing
- * "budget mode" wording or one-shot script workarounds.
- * Still a finite loop-safety guard — not unlimited.
+ * Default model-round-trip budget per user turn for interactive agent
+ * (`keryx shell` / TUI). A round is one `provider.stream()` request/response
+ * cycle and may carry a batch of several tool calls, so this bounds runaway
+ * ROUNDS rather than the number of distinct legitimate tool calls a big task
+ * needs (see ADR-0010's "shape problem" — counting unique tool-call
+ * signatures conflated task volume with actual repetition; this replaces
+ * that axis rather than re-tuning its numbers, matching how grok-build,
+ * Codex, and opencode all gate on rounds/tokens instead of call-signature
+ * count). Real repetition is still caught independently by
+ * {@link MAX_ATTEMPTS_PER_HASH}. Still a finite loop-safety guard — not
+ * unlimited.
  */
-export const DEFAULT_MAX_TOOL_CALLS = 48;
+export const DEFAULT_MAX_ROUNDS = 40;
 
-/** Env override for {@link DEFAULT_MAX_TOOL_CALLS} (positive integer). */
-export const ENV_AGENT_MAX_TOOL_CALLS = "KERYX_AGENT_MAX_TOOL_CALLS";
+/** Env override for {@link DEFAULT_MAX_ROUNDS} (positive integer). */
+export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
 
 /** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
-export const MAX_AGENT_MAX_TOOL_CALLS = 256;
-
-/** Default unique risk-`read` signature budget inside the total pool. */
-export const DEFAULT_MAX_READ_TOOL_CALLS = 40;
-
-/**
- * Default unique non-read/unknown-risk signature budget inside the total pool
- * (shell/write/destructive/network/credential/delegate combined — every
- * `ToolRisk` other than `"read"`). Raised from 8 (flow 033's original,
- * conservative loop-safety value) after real interactive sessions kept
- * hitting it on small, legitimate tasks: any file edit has to go through
- * `shell_exec` (there is no dedicated write tool), so a handful of edits plus
- * a verification run already exhausted a single-digit budget. Still a finite
- * loop-safety guard, not unlimited.
- */
-export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 32;
+export const MAX_AGENT_MAX_ROUNDS = 200;
 
 /**
  * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
@@ -372,24 +363,24 @@ export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 32;
 export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
 
 /**
- * Resolve unique tool-signature budget for an interactive agent turn.
- * - unset / empty / invalid env → {@link DEFAULT_MAX_TOOL_CALLS}
- * - valid integer ≥ 1 → clamped to {@link MAX_AGENT_MAX_TOOL_CALLS}
+ * Resolve model-round-trip budget for an interactive agent turn.
+ * - unset / empty / invalid env → {@link DEFAULT_MAX_ROUNDS}
+ * - valid integer ≥ 1 → clamped to {@link MAX_AGENT_MAX_ROUNDS}
  *
  * Callers pass `process.env` in production; tests inject a stub map.
  */
-export function resolveAgentMaxToolCalls(
+export function resolveAgentMaxRounds(
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const raw = env[ENV_AGENT_MAX_TOOL_CALLS];
+  const raw = env[ENV_AGENT_MAX_ROUNDS];
   if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_MAX_TOOL_CALLS;
+    return DEFAULT_MAX_ROUNDS;
   }
   const n = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(n) || n < 1) {
-    return DEFAULT_MAX_TOOL_CALLS;
+    return DEFAULT_MAX_ROUNDS;
   }
-  return Math.min(n, MAX_AGENT_MAX_TOOL_CALLS);
+  return Math.min(n, MAX_AGENT_MAX_ROUNDS);
 }
 
 /**
@@ -411,10 +402,9 @@ export const MAX_AGENT_MAX_ATTEMPTS_PER_HASH = 10;
  * so polling the SAME background job repeatedly in one turn — its entire
  * documented purpose — hashes identically every call; without this exemption
  * the 4th poll of the same job in a turn is hard-refused, breaking the tool.
- * Narrowly scoped by name (not a global cap raise): the call still charges
- * exactly ONE budget slot (read/non-read + total) like any other repeated
- * hash — only the per-signature ATTEMPT ceiling is lifted, so this does not
- * weaken the loop-safety guard for any other tool.
+ * Narrowly scoped by name (not a global cap raise): only the per-signature
+ * ATTEMPT ceiling is lifted for this tool — the round budget still applies
+ * normally, so this does not weaken the loop-safety guard for any other tool.
  */
 const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_output"]);
 
@@ -870,52 +860,25 @@ export function toolCallHash(name: string, input: string): string {
 }
 
 interface ToolBudgetState {
-  /** All unique signatures that have consumed a total budget slot. */
-  charged: Set<string>;
-  /** Risk-`read` signatures, also present in {@link charged}. */
-  readCharged: Set<string>;
-  /** All other signatures, including unknown risks, also present in {@link charged}. */
-  nonReadCharged: Set<string>;
   /** Attempt count per signature (capped at {@link maxAttempts}). */
   attempts: Map<string, number>;
-  maxUnique: number;
-  maxReadUnique: number;
-  maxNonReadUnique: number;
   /** Per-signature attempt cap; defaults to {@link MAX_ATTEMPTS_PER_HASH} when absent. */
   maxAttempts?: number;
 }
 
-function budgetUsed(state: ToolBudgetState): number {
-  return state.charged.size;
-}
-
-function readBudgetUsed(state: ToolBudgetState): number {
-  return state.readCharged.size;
-}
-
-function nonReadBudgetUsed(state: ToolBudgetState): number {
-  return state.nonReadCharged.size;
-}
-
 /**
- * Decide whether to run this call and whether it charges a new budget slot.
- * - Same hash: up to {@link MAX_ATTEMPTS_PER_HASH} attempts, **one** budget slot.
- * - New read hash: charges both the total and read pools if both have room.
- * - New non-read/unknown-risk hash: charges both total and non-read pools.
+ * Decide whether to run this call. The ONLY guard here is per-signature
+ * repetition — no volume/unique-count ceiling (see {@link DEFAULT_MAX_ROUNDS}
+ * for the actual runaway-loop guard, which bounds ROUNDS, not distinct calls).
+ * - Same hash: up to {@link MAX_ATTEMPTS_PER_HASH} attempts.
+ * - Any new hash: always admitted — a big legitimate task doing many
+ *   DIFFERENT things is not a loop, so it is never refused here.
  */
 export function reserveToolAttempt(
   state: ToolBudgetState,
   name: string,
   input: string,
-  risk?: string,
-):
-  | { ok: true; hash: string; attempt: number; chargedNew: boolean }
-  | {
-      ok: false;
-      hash: string;
-      reason: string;
-      kind: "repeat" | "total_budget" | "read_budget" | "non_read_budget";
-    } {
+): { ok: true; hash: string; attempt: number } | { ok: false; hash: string; reason: string } {
   const hash = toolCallHash(name, input);
   const maxAttempts = state.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const prev = state.attempts.get(hash) ?? 0;
@@ -926,46 +889,11 @@ export function reserveToolAttempt(
       ok: false,
       hash,
       reason: `same tool call already tried ${maxAttempts}× (hash budget); change the arguments or a different tool`,
-      kind: "repeat",
     };
-  }
-  const isNew = !state.charged.has(hash);
-  if (isNew && state.charged.size >= state.maxUnique) {
-    return {
-      ok: false,
-      hash,
-      reason: `tool-call budget exhausted (${state.maxUnique} unique signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
-      kind: "total_budget",
-    };
-  }
-  const isRead = risk === "read";
-  if (isNew && isRead && state.readCharged.size >= state.maxReadUnique) {
-    return {
-      ok: false,
-      hash,
-      reason: `read tool-call budget exhausted (${state.maxReadUnique} unique read signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
-      kind: "read_budget",
-    };
-  }
-  if (isNew && !isRead && state.nonReadCharged.size >= state.maxNonReadUnique) {
-    return {
-      ok: false,
-      hash,
-      reason: `non-read tool-call budget exhausted (${state.maxNonReadUnique} unique non-read signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
-      kind: "non_read_budget",
-    };
-  }
-  if (isNew) {
-    state.charged.add(hash);
-    if (isRead) {
-      state.readCharged.add(hash);
-    } else {
-      state.nonReadCharged.add(hash);
-    }
   }
   const attempt = prev + 1;
   state.attempts.set(hash, attempt);
-  return { ok: true, hash, attempt, chargedNew: isNew };
+  return { ok: true, hash, attempt };
 }
 
 /**
@@ -1152,10 +1080,7 @@ async function runAgentTurnCore(
 
   const toolByName = new Map(deps.tools.map((t) => [t.definition.name, t]));
   const toolDefs = deps.tools.map((t) => t.definition);
-  const maxToolCalls = deps.maxToolCalls ?? resolveAgentMaxToolCalls();
   const maxAttempts = resolveAgentMaxAttemptsPerHash();
-  const maxReadToolCalls = deps.maxReadToolCalls ?? DEFAULT_MAX_READ_TOOL_CALLS;
-  const maxNonReadToolCalls = deps.maxNonReadToolCalls ?? DEFAULT_MAX_NON_READ_TOOL_CALLS;
   const parentRunId = deps.idSeq();
   const actionRequest = isActionRequest(userLine);
   if (options.slateSession !== undefined) {
@@ -1218,15 +1143,16 @@ async function runAgentTurnCore(
     }
   }
   const budget: ToolBudgetState = {
-    charged: new Set(),
-    readCharged: new Set(),
-    nonReadCharged: new Set(),
     attempts: new Map(),
-    maxUnique: maxToolCalls,
     maxAttempts,
-    maxReadUnique: maxReadToolCalls,
-    maxNonReadUnique: maxNonReadToolCalls,
   };
+  /**
+   * Round-count loop-safety guard (replaces the old unique-tool-signature
+   * pools — see `DEFAULT_MAX_ROUNDS`'s doc comment). A single mutable object
+   * so `offerRoundLimitReset` can bump `maxRounds` in place and `continue`
+   * the same loop.
+   */
+  const roundState = { round: 0, maxRounds: deps.maxRounds ?? resolveAgentMaxRounds() };
   /** Short log of tool outcomes for the budget-exhausted wrap-up. */
   const toolLog: string[] = [];
   /**
@@ -1237,12 +1163,19 @@ async function runAgentTurnCore(
   const lastErrorByHash = new Map<string, string>();
   const errorStreakByHash = new Map<string, number>();
   const warnedFailingHashes = new Set<string>();
-  // Tool history is persisted across REPL turns, so this taint survives a later
-  // user message too. `/new` / `/clear` creates fresh history and is the explicit
-  // user acknowledgement boundary for acting again.
-  let untrustedContentSeen = history.some((message) =>
-    message.content.includes("[system] Untrusted external content is present."),
-  );
+  // Scoped to THIS turn only (this one `runAgentTurnCore` call) — matches how
+  // every competitor harness we compared against (Codex's Guardian, grok-build's
+  // Auto Mode classifier) re-evaluates untrusted-content risk per turn/action
+  // rather than latching a flag across the whole session. A prior turn's
+  // untrusted content does NOT carry forward here (session bffc5c57: an
+  // unrelated `shell_exec` several turns later must not be refused for
+  // something that happened turns ago) — only a `result.untrusted === true`
+  // tool result produced DURING this call sets it below, and it then correctly
+  // keeps gating every later ROUND within this same turn (a multi-round attack
+  // within one user request is still caught). Only gates non-`read` tool calls
+  // (see the `risk !== "read"` check) — a `read` tool cannot carry out a side
+  // effect an injected instruction asked for, so it stays usable.
+  let untrustedContentSeen = false;
 
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -1260,6 +1193,7 @@ async function runAgentTurnCore(
   // so the remaining budget is abandoned rather than spent (see below).
   let lastToollessText: string | undefined;
   for (;;) {
+    roundState.round += 1;
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
@@ -1408,7 +1342,6 @@ async function runAgentTurnCore(
     }
 
     // Execute each tool call and append its result, then loop to re-request.
-    let exhaustedBudget: "total" | "read" | "non-read" | undefined;
     let executedAny = false;
     const batchContainsUntrustedWeb = calls.some((call) => call.name === "web_fetch" || call.name === "web_search");
 
@@ -1420,16 +1353,16 @@ async function runAgentTurnCore(
     // `spawn_subagent` calls, and every non-`spawn_subagent` call in a mixed
     // batch, falls through the per-call loop exactly as before, untouched.
     //
-    // Reservation (`reserveToolAttempt`, the per-turn unique-signature dedup
-    // budget) is computed for EVERY call in `calls` HERE, in one forward
+    // Reservation (`reserveToolAttempt`, the per-signature repeat-attempt
+    // guard) is computed for EVERY call in `calls` HERE, in one forward
     // pass, in the SAME array order the per-call loop below iterates — so
     // the running `budget` state this produces is identical to what today's
     // interleaved reserve-then-execute sequence would produce. Only a call
     // whose reservation is GRANTED here can join the concurrent group; a
-    // call that would be denied (hash/total/read/non-read budget exhausted)
+    // call that would be denied (same signature already at its attempt cap)
     // is never dispatched, matching the sequential path's "skip, never
     // execute" contract. The loop below looks these results UP instead of
-    // recomputing them, so no call's budget slot is charged twice.
+    // recomputing them, so no call's attempt count is charged twice.
     //
     // One narrow, deliberate trade-off: this pre-pass cannot know whether a
     // LATER call in the batch will be blocked by the untrusted-content gate
@@ -1444,16 +1377,16 @@ async function runAgentTurnCore(
     // rather than threading live results back into a synchronous pre-pass.
     const reservationByCallId = new Map<string, ReturnType<typeof reserveToolAttempt>>();
     for (const call of calls) {
-      const callRisk = toolByName.get(call.name)?.definition.risk;
-      reservationByCallId.set(call.id, reserveToolAttempt(budget, call.name, call.input, callRisk));
+      reservationByCallId.set(call.id, reserveToolAttempt(budget, call.name, call.input));
     }
     const spawnConcurrencyCandidates = calls.filter(
       (call) => call.name === "spawn_subagent" && reservationByCallId.get(call.id)?.ok === true,
     );
     // Review finding F-001 (flow 171 T10): the sequential loop below blocks EVERY
-    // `spawn_subagent` call once `untrustedContentSeen` is true (persists across
-    // turns, see the comment at this function's `untrustedContentSeen` init) or
-    // once this batch itself contains untrusted `web_fetch`/`web_search` content
+    // `spawn_subagent` call once `untrustedContentSeen` is true (set by an
+    // earlier ROUND within THIS turn, see the comment at this function's
+    // `untrustedContentSeen` init) or once this batch itself contains untrusted
+    // `web_fetch`/`web_search` content
     // (`spawn_subagent` is never in that exemption list) — so a candidate that
     // would be blocked there must never reach `runConcurrentSpawnBatch` here,
     // which has NO knowledge of this gate and would otherwise really spawn the
@@ -1505,7 +1438,19 @@ async function runAgentTurnCore(
         await emitTerminalState(io, deps, options, "ask_user_unanswerable");
         return {};
       }
-      if (untrustedContentSeen || (batchContainsUntrustedWeb && call.name !== "web_fetch" && call.name !== "web_search")) {
+      const risk = toolByName.get(call.name)?.definition.risk;
+      // Only a non-`read` tool (write/shell/network/credential/delegate/
+      // destructive) can carry out a side effect an injected instruction
+      // asked for, so only those are worth blocking here. A `read` tool
+      // (search/graph/wiki/web_fetch/web_search included — see
+      // `ToolRisk`/`ToolClassification`) cannot itself fulfill an injected
+      // instruction; it can only surface more (already-scrubbed-on-render)
+      // content the user can see, so gating it too was pure false-positive
+      // friction — the actual session bffc5c57 report: once ANY untrusted
+      // web content entered history, EVERY later tool call for the rest of
+      // the session was refused, including plain code/graph/wiki lookups
+      // that have nothing to do with the tainted content.
+      if (risk !== "read" && (untrustedContentSeen || batchContainsUntrustedWeb)) {
         const result: InteractiveToolResult = {
           output: "tool blocked: external web content cannot authorize further tool calls in this turn",
           isError: true,
@@ -1516,28 +1461,20 @@ async function runAgentTurnCore(
         continue;
       }
       io.onToolCall?.(call.name, call.input);
-      const risk = toolByName.get(call.name)?.definition.risk;
       // Look up the reservation the pre-pass above already computed for this
       // exact call (same array, same order, same `budget` object) — the `??`
       // fallback recomputes only if the lookup is ever unexpectedly empty
       // (unreachable in practice: the pre-pass iterates this same `calls`
       // array in full), so a defensive gap here can never silently skip
-      // budget accounting.
+      // attempt accounting.
       const reservation =
-        reservationByCallId.get(call.id) ?? reserveToolAttempt(budget, call.name, call.input, risk);
+        reservationByCallId.get(call.id) ?? reserveToolAttempt(budget, call.name, call.input);
       if (!reservation.ok) {
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
         history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id });
         io.onHistoryChange?.("tool");
         toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
-        if (reservation.kind === "total_budget") {
-          exhaustedBudget = "total";
-        } else if (reservation.kind === "read_budget") {
-          exhaustedBudget = "read";
-        } else if (reservation.kind === "non_read_budget") {
-          exhaustedBudget = "non-read";
-        }
         continue;
       }
 
@@ -1596,12 +1533,8 @@ async function runAgentTurnCore(
         }
       }
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
-      const riskUsage =
-        risk === "read"
-          ? `, read ${readBudgetUsed(budget)}/${maxReadToolCalls}`
-          : `, non-read ${nonReadBudgetUsed(budget)}/${maxNonReadToolCalls}`;
       toolLog.push(
-        `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${maxAttempts}, unique ${budgetUsed(budget)}/${maxToolCalls}${riskUsage}]`,
+        `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${maxAttempts}, round ${roundState.round}/${roundState.maxRounds}]`,
       );
 
       // Preventive hint: a tool failing identically N× in a row is almost never
@@ -1639,19 +1572,22 @@ async function runAgentTurnCore(
       io.onHistoryChange?.("tool");
     }
 
-    // Reaching a limit exactly is not itself a stop: give the model one normal
-    // round to answer from the latest result. Stop only when it actually asks for
-    // a new signature beyond a pool, or only re-issues exhausted hashes.
+    // Reaching the limit exactly is not itself a stop: round `maxRounds` still
+    // runs its tool calls normally, same as the old per-signature budget let a
+    // call landing exactly on the ceiling through. Stop only once a round
+    // BEYOND the limit was needed, or every call this round only re-issued
+    // exhausted hashes.
     const noProgress = !executedAny && calls.length > 0;
-    if (exhaustedBudget !== undefined || noProgress) {
+    const roundLimitReached = roundState.round > roundState.maxRounds;
+    if (roundLimitReached || noProgress) {
       // D2a (flow 171, Phase D): surface WHICH of the two conditions above
       // stopped this turn, for `spawn-subagent-tool.ts` (D2b) to distinguish
       // `BudgetExhausted` from `NoProgress` on a child's own turn. Both
       // branches below (unattended terminal-state / interactive wrap-up) hit
       // this same `if`, so `finishReason` is computed once and returned from
       // either exit — this is not new detection, only labeling of the
-      // already-computed `exhaustedBudget`/`noProgress` values above.
-      const finishReason: "budget" | "no-progress" = exhaustedBudget !== undefined ? "budget" : "no-progress";
+      // already-computed `roundLimitReached`/`noProgress` values above.
+      const finishReason: "budget" | "no-progress" = roundLimitReached ? "budget" : "no-progress";
       if (deps.unattended === true) {
         // SLATE-11 (AC3): in place of `finishWithBudgetSummary`'s free-text
         // "Do NOT call tools." push AND its text-only wrap-up model round,
@@ -1661,28 +1597,18 @@ async function runAgentTurnCore(
         await emitTerminalState(io, deps, options, "budget_exhausted");
         return { finishReason };
       }
-      if (exhaustedBudget !== undefined) {
-        const resolution = await offerBudgetReset(
-          deps,
-          budget,
-          exhaustedBudget,
-          { maxToolCalls, maxReadToolCalls, maxNonReadToolCalls },
-          system,
-        );
+      if (roundLimitReached) {
+        const resolution = await offerRoundLimitReset(deps, roundState, system);
         if (resolution === "reset") {
           continue;
         }
       }
       await finishWithBudgetSummary(io, deps, history, parentRunId, {
-        maxUnique: maxToolCalls,
         maxAttempts,
-        used: budgetUsed(budget),
-        maxReadUnique: maxReadToolCalls,
-        readUsed: readBudgetUsed(budget),
-        maxNonReadUnique: maxNonReadToolCalls,
-        nonReadUsed: nonReadBudgetUsed(budget),
+        round: roundState.round,
+        maxRounds: roundState.maxRounds,
         toolLog,
-        ...(exhaustedBudget !== undefined ? { exhaustedBudget } : {}),
+        roundLimitReached,
         noProgress,
       });
       return { finishReason };
@@ -1691,42 +1617,32 @@ async function runAgentTurnCore(
 }
 
 /**
- * Offer the user a way out of a hit budget ceiling INSTEAD of unconditionally
- * stopping: "increase limit and continue" vs "cancel", via the same host-side
- * picker `ask_user` uses (`deps.askUser`). Mutates `budget` in place on
- * "reset" — grants another full allotment of whichever pool(s) were
- * exhausted (always the total pool, plus the specific read/non-read
- * sub-pool when that is what tripped) — and returns `"reset"` so the caller
- * can `continue` the round loop with room to retry the skipped call(s).
+ * Offer the user a way out of a hit round-count ceiling INSTEAD of
+ * unconditionally stopping: "increase limit and continue" vs "cancel", via
+ * the same host-side picker `ask_user` uses (`deps.askUser`). Mutates
+ * `roundState` in place on "reset" — grants another full allotment of
+ * rounds — and returns `"reset"` so the caller can `continue` the round loop.
  * Returns `"cancel"` for any other answer, a thrown/rejected picker, or when
  * no picker is wired (`deps.askUser === undefined`) — every one of those
  * falls through to the existing `finishWithBudgetSummary` wrap-up unchanged.
  */
-async function offerBudgetReset(
+async function offerRoundLimitReset(
   deps: AgentDeps,
-  budget: ToolBudgetState,
-  exhaustedBudget: "total" | "read" | "non-read",
-  amounts: { maxToolCalls: number; maxReadToolCalls: number; maxNonReadToolCalls: number },
+  roundState: { round: number; maxRounds: number },
   system: (text: string) => void,
 ): Promise<"reset" | "cancel"> {
   if (deps.askUser === undefined) {
     return "cancel";
   }
-  const label =
-    exhaustedBudget === "read"
-      ? `read (${readBudgetUsed(budget)}/${budget.maxReadUnique})`
-      : exhaustedBudget === "non-read"
-        ? `non-read (${nonReadBudgetUsed(budget)}/${budget.maxNonReadUnique})`
-        : `total (${budgetUsed(budget)}/${budget.maxUnique})`;
   let chosen: string;
   try {
     chosen = await deps.askUser({
-      question: `Tool-call budget reached this turn: ${label} unique signatures. What should I do?`,
+      question: `Tool-loop round limit reached this turn: ${roundState.round}/${roundState.maxRounds} rounds. What should I do?`,
       options: [
         {
           id: "reset",
           label: "Increase limit and continue",
-          description: "Grants this turn another allotment of the exhausted budget and resumes tool calls.",
+          description: "Grants this turn another allotment of rounds and resumes tool calls.",
           recommended: true,
         },
         {
@@ -1742,21 +1658,13 @@ async function offerBudgetReset(
   if (chosen !== "reset") {
     return "cancel";
   }
-  budget.maxUnique += amounts.maxToolCalls;
-  if (exhaustedBudget === "read") {
-    budget.maxReadUnique += amounts.maxReadToolCalls;
-  } else if (exhaustedBudget === "non-read") {
-    budget.maxNonReadUnique += amounts.maxNonReadToolCalls;
-  }
-  system(
-    `\n[budget] Limit increased — total ${budget.maxUnique}, read ${budget.maxReadUnique}, ` +
-      `non-read ${budget.maxNonReadUnique}. Continuing…\n`,
-  );
+  roundState.maxRounds += resolveAgentMaxRounds();
+  system(`\n[budget] Round limit increased — ${roundState.maxRounds} rounds. Continuing…\n`);
   return "reset";
 }
 
 /**
- * Budget exhausted (or maxed unique signatures): one final model turn **without
+ * Round limit reached (or no progress): one final model turn **without
  * tools** so the assistant explains what happened and suggests next steps.
  */
 async function finishWithBudgetSummary(
@@ -1765,15 +1673,11 @@ async function finishWithBudgetSummary(
   history: NormalizedMessage[],
   parentRunId: string,
   info: {
-    maxUnique: number;
     maxAttempts?: number;
-    used: number;
-    maxReadUnique: number;
-    readUsed: number;
-    maxNonReadUnique: number;
-    nonReadUsed: number;
+    round: number;
+    maxRounds: number;
     toolLog: string[];
-    exhaustedBudget?: "total" | "read" | "non-read";
+    roundLimitReached: boolean;
     noProgress?: boolean;
   },
 ): Promise<void> {
@@ -1786,14 +1690,9 @@ async function finishWithBudgetSummary(
   };
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
-  const why =
-    info.exhaustedBudget === "read"
-      ? `read signature budget ${info.readUsed}/${info.maxReadUnique} (total ${info.used}/${info.maxUnique}; same call may retry up to ${maxAttempts}× as one slot)`
-      : info.exhaustedBudget === "non-read"
-        ? `non-read signature budget ${info.nonReadUsed}/${info.maxNonReadUnique} (total ${info.used}/${info.maxUnique}; same call may retry up to ${maxAttempts}× as one slot)`
-      : info.exhaustedBudget === "total"
-          ? `unique signature budget ${info.used}/${info.maxUnique} (read ${info.readUsed}/${info.maxReadUnique}, non-read ${info.nonReadUsed}/${info.maxNonReadUnique}; same call may retry up to ${maxAttempts}× as one slot)`
-          : `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
+  const why = info.roundLimitReached
+    ? `round limit ${info.round}/${info.maxRounds} (same call may still retry up to ${maxAttempts}× as one signature)`
+    : `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
 
   system(`\n[budget] Stopping tools: ${why}. Asking the model for a short wrap-up…\n`);
 

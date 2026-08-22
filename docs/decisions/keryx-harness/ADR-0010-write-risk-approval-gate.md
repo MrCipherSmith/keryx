@@ -6,6 +6,16 @@
   (destructive-command escalation) — this decision reuses that ADR's
   "escalation, never a block" posture for a new domain (file patches instead
   of shell commands).
+- **Update:** the "shape problem" this Context section names —
+  `DEFAULT_MAX_NON_READ_TOOL_CALLS` counting unique tool-call signatures
+  conflated task volume with actual runaway repetition — was never revisited
+  by this ADR's own resolution (it only added a `write` branch to the risk
+  gate). A later change replaced that whole counting axis: `src/commands/
+  agent.ts` now bounds model round-trips (`DEFAULT_MAX_ROUNDS`) instead of
+  unique tool-call signatures, keeping only the per-signature repeat cap
+  (`MAX_ATTEMPTS_PER_HASH`) as the actual repetition guard. The three
+  `DEFAULT_MAX_*_TOOL_CALLS` pools this Context section describes no longer
+  exist.
 
 ## Context
 

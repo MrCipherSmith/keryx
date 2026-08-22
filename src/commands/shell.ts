@@ -84,7 +84,7 @@ import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
-  resolveAgentMaxToolCalls,
+  resolveAgentMaxRounds,
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
@@ -1901,9 +1901,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           providerId: sel.provider,
           modelId: sel.model,
         }),
-        // Generous default (48) so multi-step operator prompts do not hit the
-        // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
-        maxToolCalls: resolveAgentMaxToolCalls(),
+        // Generous default so multi-step operator prompts do not hit the
+        // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
+        maxRounds: resolveAgentMaxRounds(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
@@ -2118,7 +2118,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           providerId: provider,
           modelId: model,
         }),
-        maxToolCalls: resolveAgentMaxToolCalls(),
+        maxRounds: resolveAgentMaxRounds(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
