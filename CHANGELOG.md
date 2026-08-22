@@ -5,6 +5,71 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.56] — 2026-08-22
+
+Fixes every finding from the 0.2.55 live-testing campaign
+(`docs/verification/` on the `real-test-keryx` branch): 118 real test cases
+run against a live shell, live DeepSeek traffic, and a live MCP server,
+covering the full `/goal`, Slate, SAC, permission-mode, and slash-command
+surface. This release closes the six flows that came out of it.
+
+### Fixed
+
+- **A stored `keryx *` shell-permission grant silently auto-approved every
+  future `keryx` subcommand forever, including destructive ones.**
+  `validateShellPattern` refused bare `<verb> *` wildcards for known
+  destructive verbs but never covered the harness's own binary. The binary
+  name is now resolved dynamically and added to that same guard; any
+  pre-existing bare wildcard already loaded from `permissions.json` is now
+  flagged the same way `rejected`/`tampered` patterns already are.
+  ([#390](https://github.com/MrCipherSmith/keryx/issues/390))
+
+- **Mutating `keryx` CLI subcommands could bypass SAC review entirely.**
+  `keryx wiki enrich` could land `Status: accepted` content with zero SAC
+  proposal, once its `shell_exec` call was approved. It can no longer set a
+  page's `Status` at all — it always re-asserts whatever the page's Status
+  was before the run, regardless of flags or what the model itself returns.
+  `keryx workspace catch-up` also gained a standing backstop: it now flags
+  any SAC-owned path (wiki/memory/skill) that changed with no matching
+  review receipt, as its own distinct category.
+  ([#391](https://github.com/MrCipherSmith/keryx/issues/391))
+
+- **`/goal --auto`'s independent verifier pass was silent, evidence-blind,
+  and its "one more round" safety net was unreachable.** Three related
+  reliability gaps in the T10 verifier (SLATE-27), all fixed together:
+  the verifier's dispatch and verdict are now recorded in the visible
+  transcript on every outcome — achieved, not achieved, or unavailable —
+  instead of only the disagreement case; the verifier is now handed the
+  run's actual evidence (recent Slate Seeds and `workspace_propose` records)
+  instead of just the bare goal text; and the round loop can now exit early
+  on a real, deterministic "this round is done" signal, so the verifier is
+  reached with round budget still available instead of always exhausting it.
+  ([#389](https://github.com/MrCipherSmith/keryx/issues/389),
+  [#392](https://github.com/MrCipherSmith/keryx/issues/392),
+  [#394](https://github.com/MrCipherSmith/keryx/issues/394))
+
+- **`/theme` was advertised by `/help` in agent-mode readline but had no
+  dispatch branch there**, falling through to "Unknown command: /theme."
+  right after `/help` listed it. It now dispatches to a working
+  readline-mode theme picker.
+  ([#393](https://github.com/MrCipherSmith/keryx/issues/393))
+
+- **`keryx workspace catch-up` never scanned `.keryx/external-slates/`**, so
+  a closed, never-bound external MCP Slate genuinely persisted on disk but
+  never surfaced as `unbound-candidate` the way `slate.md` documents. It now
+  scans that store too.
+  ([#395](https://github.com/MrCipherSmith/keryx/issues/395))
+
+- **`/mode auto`'s auto-approval line lacked test coverage that the
+  `[destructive]` audit tag actually reaches it** for a genuinely
+  destructive command — the rendering itself was already correct.
+
+- **A headless/piped `keryx shell` process ignored `SIGINT`**, only exiting
+  on `SIGTERM` — consistent with an interactive "press again to confirm
+  exit" trap a non-TTY process can never satisfy. A single `SIGINT` now
+  exits immediately when stdin is not a TTY; interactive behavior is
+  unchanged.
+
 ## [0.2.55] — 2026-08-21
 
 ### Fixed
