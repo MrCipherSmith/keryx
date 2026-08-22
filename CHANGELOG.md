@@ -5,6 +5,45 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.58] — 2026-08-23
+
+### Added
+
+- **`/game` — tic-tac-toe vs the model in a TUI modal.** A pure game core
+  plus a model move via an injectable, fail-closed provider factory; state
+  lives in the modal's own closure so `Esc` minimizes without resetting and
+  reopening `/game` resumes the same board. Available while the main agent
+  is busy, registered alongside the other agent-only slash commands.
+
+### Fixed
+
+- **The interactive agent's runaway-tool-loop guard counted unique
+  tool-call signatures, conflating a big legitimate task with an actual
+  loop.** A task with many DIFFERENT tool calls (e.g. a wide refactor) was
+  indistinguishable, under that metric, from real repetition, and hit the
+  same budget wall either way. Replaced the three unique-signature pools
+  (`DEFAULT_MAX_TOOL_CALLS`/`_READ_`/`_NON_READ_`) with a model-round-trip
+  cap (`DEFAULT_MAX_ROUNDS`, `KERYX_AGENT_MAX_ROUNDS`); the existing
+  per-signature attempt cap (`MAX_ATTEMPTS_PER_HASH`) remains the actual
+  repetition guard. `spawn_subagent` and wiki deep-enrich child budgets
+  migrated the same way.
+
+- **Untrusted web content could permanently block an unrelated tool call
+  turns later in the same session.** Once any `web_fetch`/`web_search`
+  result came back untrusted, every later non-read tool call was refused
+  for the rest of the session, with no way back short of `/new`/`/clear` —
+  including actions that had nothing to do with the tainted content. The
+  gate is now scoped to the turn the untrusted content appeared in: it
+  still blocks every later round within that same turn, but a following
+  user turn starts clean.
+
+- **External Slate-Adjacent Context (SAC) hands could get a workspace
+  auto-created for them at close.** Flow 200's lazy resolve-or-create in
+  `runWrapUp` now excludes external slates entirely — a hand that never
+  bound a `workspaceId` gets the unbound-candidate artifact, never a
+  created workspace. Internal session/flow wrap-ups keep the lazy resolve
+  (AC-38, flow 182).
+
 ## [0.2.57] — 2026-08-22
 
 ### Added
