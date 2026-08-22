@@ -4,10 +4,12 @@
 import { expect, test } from "bun:test";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 import {
+  bestLocalMove,
   checkWinner,
   currentGameState,
   emptyBoard,
   freshGame,
+  gameBoardWidth,
   gameSystemPrompt,
   gameUserPrompt,
   isGameCommand,
@@ -17,9 +19,9 @@ import {
   placeMark,
   presentGame,
   resetGame,
+  resolveCellSize,
   GAME_CELL_GAP,
-  GAME_CELL_HEIGHT,
-  GAME_CELL_WIDTH,
+  GAME_CELL_SIZES,
   type Cell,
 } from "./game-modal";
 import { getTheme } from "./theme";
@@ -28,23 +30,22 @@ import type { OpenModalInput } from "./modal-host";
 
 // --- fake provider ----------------------------------------------------------
 
+const CAPABILITIES = {
+  streaming: true,
+  toolCalls: false,
+  parallelToolCalls: false,
+  structuredOutput: false,
+  reasoningMetadata: false,
+  promptCaching: false,
+  vision: false,
+  tokenCounting: false,
+  modelListing: false,
+} as const;
+
 function stubProvider(reply: string): ProviderPort {
   return {
     describe() {
-      return {
-        capabilities: {
-          streaming: true,
-          toolCalls: false,
-          parallelToolCalls: false,
-          structuredOutput: false,
-          reasoningMetadata: false,
-          promptCaching: false,
-          vision: false,
-          tokenCounting: false,
-          modelListing: false,
-        },
-        descriptor: { providerId: "stub" },
-      };
+      return { capabilities: { ...CAPABILITIES }, descriptor: { providerId: "stub" } };
     },
     async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
       yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: reply };
@@ -53,8 +54,30 @@ function stubProvider(reply: string): ProviderPort {
   };
 }
 
+/** A provider whose turn never completes — for the model deadline. */
+function hangingProvider(): ProviderPort {
+  return {
+    describe() {
+      return { capabilities: { ...CAPABILITIES }, descriptor: { providerId: "stub-hang" } };
+    },
+    async *stream(): AsyncIterable<NormalizedEvent> {
+      await new Promise<never>(() => {});
+    },
+  };
+}
+
 function factoryFor(reply: string): ProviderFactory {
   return () => stubProvider(reply);
+}
+
+/** One reply per model turn; the last one repeats. */
+function factoryForSequence(replies: readonly string[]): ProviderFactory {
+  let turn = 0;
+  return () => {
+    const reply = replies[Math.min(turn, replies.length - 1)] ?? "";
+    turn += 1;
+    return stubProvider(reply);
+  };
 }
 
 /** Let the (synchronous fake) model turn's microtasks settle. */
@@ -103,6 +126,17 @@ test("parseModelMove takes a free cell index only", () => {
   expect(parseModelMove("0", occupied)).toBeUndefined();
 });
 
+test("bestLocalMove takes the win first, then the block, then the centre", () => {
+  // O completes [0,1,2] — its own win outranks blocking X's [3,4,5].
+  expect(bestLocalMove(["O", "O", null, "X", "X", null, null, null, null] as Cell[], "O")).toBe(2);
+  // Nothing to win: block X at 5.
+  expect(bestLocalMove([null, null, null, "X", "X", null, "O", null, null] as Cell[], "O")).toBe(5);
+  expect(bestLocalMove(emptyBoard(), "O")).toBe(4);
+  // Centre gone → a corner.
+  expect(bestLocalMove([null, null, null, null, "X", null, null, null, null] as Cell[], "O")).toBe(0);
+  expect(bestLocalMove(["X", "O", "X", "O", "X", "O", "O", "X", "O"] as Cell[], "O")).toBeUndefined();
+});
+
 test("modelMove uses the injected factory and parses the reply", async () => {
   const result = await modelMove(emptyBoard(), {
     provider: "stub",
@@ -133,7 +167,17 @@ test("isGameCommand matches only /game", () => {
   expect(isGameCommand("/gamez")).toBe(false);
 });
 
+test("resolveCellSize takes the large board when it fits", () => {
+  expect(resolveCellSize(80)).toEqual(GAME_CELL_SIZES.large);
+  expect(resolveCellSize(gameBoardWidth(GAME_CELL_SIZES.large.width))).toEqual(GAME_CELL_SIZES.large);
+  expect(resolveCellSize(gameBoardWidth(GAME_CELL_SIZES.large.width) - 1)).toEqual(GAME_CELL_SIZES.small);
+  expect(resolveCellSize(20)).toEqual(GAME_CELL_SIZES.small);
+});
+
 // --- presentGame with fakes -------------------------------------------------
+
+const ESC = String.fromCharCode(27);
+const ARROW = { up: `${ESC}[A`, down: `${ESC}[B`, right: `${ESC}[C`, left: `${ESC}[D` } as const;
 
 type KeyEvent = { name: string; sequence: string };
 
@@ -184,18 +228,22 @@ interface CapturedModal {
   title?: string;
   tabs?: readonly { id: string; label: string }[];
   onClose?: (() => void) | undefined;
+  onArrowKeys?: OpenModalInput["onArrowKeys"];
   /** The tab body the host handed to `renderTab`. */
   body?: FakeBox;
 }
+
+const BODY_WIDTH = 80;
 
 function fakeHost(captured: CapturedModal) {
   return (_otui: unknown, _chrome: unknown, input: OpenModalInput) => {
     captured.title = input.title;
     captured.tabs = input.tabs;
     captured.onClose = input.onClose;
+    captured.onArrowKeys = input.onArrowKeys;
     const body = new FakeBox();
     captured.body = body;
-    input.renderTab("game", body, { width: 80 });
+    input.renderTab("game", body, { width: BODY_WIDTH });
     return {
       close: () => {
         captured.onClose?.();
@@ -206,17 +254,46 @@ function fakeHost(captured: CapturedModal) {
   };
 }
 
-function openGame(captured: CapturedModal, reply: string): (key: KeyEvent) => void {
+function arrowEvent(direction: "left" | "right") {
+  return {
+    name: direction,
+    ctrl: false,
+    meta: false,
+    sequence: direction === "left" ? ARROW.left : ARROW.right,
+    preventDefault: () => {},
+    stopPropagation: () => {},
+  };
+}
+
+function openGameWith(
+  captured: CapturedModal,
+  providerFactory: ProviderFactory,
+  extra: { timeoutMs?: number } = {},
+): (key: KeyEvent) => void {
   let keyHandler: ((key: KeyEvent) => void) | undefined;
   presentGame(fakeHost(captured), fakeOtui, {}, {
-    providerFactory: factoryFor(reply),
+    providerFactory,
     env: {},
+    ...(extra.timeoutMs !== undefined ? { timeoutMs: extra.timeoutMs } : {}),
     onKeypress: (handler) => {
       keyHandler = handler;
       return () => {};
     },
   });
-  return (key) => keyHandler?.(key);
+  // Mirrors modal-host: left/right are offered to the tab body through
+  // `onArrowKeys` FIRST and, when the body declines, swallowed by the host's
+  // own tab switch — they never reach a game-side keypress listener.
+  return (key) => {
+    if (key.name === "left" || key.name === "right") {
+      captured.onArrowKeys?.(arrowEvent(key.name), key.name);
+      return;
+    }
+    keyHandler?.(key);
+  };
+}
+
+function openGame(captured: CapturedModal, reply: string): (key: KeyEvent) => void {
+  return openGameWith(captured, factoryFor(reply));
 }
 
 /** Every id'd renderable under the tab body, by id. */
@@ -240,6 +317,11 @@ function nodes(captured: CapturedModal): { boxes: Map<string, FakeBox>; texts: M
     walk(body);
   }
   return { boxes, texts };
+}
+
+function cursorCells(boxes: Map<string, FakeBox>): number[] {
+  const focus = getTheme().focus;
+  return [0, 1, 2, 3, 4, 5, 6, 7, 8].filter((i) => boxes.get(`game-cell-${i}`)?.borderColor === focus);
 }
 
 test("presentGame: user X at center, model O replies, state survives close", async () => {
@@ -273,28 +355,28 @@ test("presentGame: user X at center, model O replies, state survives close", asy
 test("presentGame: user can drive a full game and win", async () => {
   resetGame();
   const captured: CapturedModal = {};
-  const press = openGame(captured, "0"); // model always tries cell 0 (fails when occupied)
+  const press = openGameWith(captured, factoryForSequence(["0", "1"]));
 
   // Cursor starts at center (4). X at 4; model O at 0.
   press({ name: "enter", sequence: "\r" });
   await settle();
   expect(currentGameState().board[4]).toBe("X");
+  expect(currentGameState().board[0]).toBe("O");
 
-  // Move cursor to cell 2 (up, right) and place X.
-  press({ name: "up", sequence: "\u001b[A" });
-  press({ name: "right", sequence: "\u001b[C" });
+  // Move cursor to cell 2 (up, right) and place X; model O at 1.
+  press({ name: "up", sequence: ARROW.up });
+  press({ name: "right", sequence: ARROW.right });
   press({ name: "enter", sequence: "\r" });
   await settle();
   expect(currentGameState().board[2]).toBe("X");
-
-  // Model tries 0 again (occupied) → its move is skipped, turn stays X.
+  expect(currentGameState().board[1]).toBe("O");
   expect(currentGameState().turn).toBe("X");
 
   // Move cursor from 2 to 6 (down, down, left, left) and place X → wins [2,4,6].
-  press({ name: "down", sequence: "\u001b[B" });
-  press({ name: "down", sequence: "\u001b[B" });
-  press({ name: "left", sequence: "\u001b[D" });
-  press({ name: "left", sequence: "\u001b[D" });
+  press({ name: "down", sequence: ARROW.down });
+  press({ name: "down", sequence: ARROW.down });
+  press({ name: "left", sequence: ARROW.left });
+  press({ name: "left", sequence: ARROW.left });
   press({ name: "enter", sequence: "\r" });
   await settle();
 
@@ -311,6 +393,7 @@ test("presentGame: the board is a 3x3 grid of bordered cells, not one column", (
   const captured: CapturedModal = {};
   openGame(captured, "0");
   const { boxes, texts } = nodes(captured);
+  const size = resolveCellSize(BODY_WIDTH);
 
   expect(boxes.get("game-wrap")?.opts.alignItems).toBe("center");
   expect(boxes.get("game-board")?.opts.flexDirection).toBe("column");
@@ -328,8 +411,8 @@ test("presentGame: the board is a 3x3 grid of bordered cells, not one column", (
   for (let index = 0; index < 9; index++) {
     const cell = boxes.get(`game-cell-${index}`);
     expect(cell?.opts.border).toBe(true);
-    expect(cell?.opts.width).toBe(GAME_CELL_WIDTH);
-    expect(cell?.opts.height).toBe(GAME_CELL_HEIGHT);
+    expect(cell?.opts.width).toBe(size.width);
+    expect(cell?.opts.height).toBe(size.height);
     expect(cell?.opts.alignItems).toBe("center");
     expect(cell?.opts.justifyContent).toBe("center");
     expect(texts.get(`game-cell-text-${index}`)?.content).toBe("·");
@@ -337,24 +420,43 @@ test("presentGame: the board is a 3x3 grid of bordered cells, not one column", (
   resetGame();
 });
 
-test("presentGame: exactly one cell carries the cursor, and the arrows move it", () => {
+test("presentGame: exactly one cell carries the cursor, and up/down move it", () => {
   resetGame();
   const captured: CapturedModal = {};
   const press = openGame(captured, "0");
   const { boxes } = nodes(captured);
   const theme = getTheme();
-  const cursorCells = (): number[] =>
-    [0, 1, 2, 3, 4, 5, 6, 7, 8].filter((i) => boxes.get(`game-cell-${i}`)?.borderColor === theme.focus);
 
-  expect(cursorCells()).toEqual([4]);
+  expect(cursorCells(boxes)).toEqual([4]);
   expect(boxes.get("game-cell-4")?.backgroundColor).toBe(theme.highlight);
   expect(boxes.get("game-cell-3")?.backgroundColor).toBeUndefined();
 
-  press({ name: "left", sequence: "\u001b[D" });
-  expect(cursorCells()).toEqual([3]);
+  press({ name: "up", sequence: ARROW.up });
+  expect(cursorCells(boxes)).toEqual([1]);
+  press({ name: "down", sequence: ARROW.down });
+  expect(cursorCells(boxes)).toEqual([4]);
+  resetGame();
+});
 
-  press({ name: "up", sequence: "\u001b[A" });
-  expect(cursorCells()).toEqual([0]);
+test("presentGame: left/right come through the host's onArrowKeys, and are claimed", () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGame(captured, "0");
+  const { boxes } = nodes(captured);
+
+  // The modal host consumes both arrows for its tab switch unless the tab
+  // body claims them here — returning true is what keeps them off the strip.
+  expect(captured.onArrowKeys?.(arrowEvent("left"), "left")).toBe(true);
+  expect(cursorCells(boxes)).toEqual([3]);
+
+  press({ name: "right", sequence: ARROW.right });
+  expect(cursorCells(boxes)).toEqual([4]);
+  press({ name: "right", sequence: ARROW.right });
+  expect(cursorCells(boxes)).toEqual([5]);
+
+  // Once only: the same keypress must not also reach the keypress handler.
+  press({ name: "left", sequence: ARROW.left });
+  expect(cursorCells(boxes)).toEqual([4]);
   resetGame();
 });
 
@@ -369,6 +471,7 @@ test("presentGame: marks paint into their own cell, notice tracks the model turn
   // Synchronous prefix of the model turn: busy, before the first await.
   expect(texts.get("game-cell-text-4")?.content).toBe("X");
   expect(texts.get("game-cell-text-4")?.fg).toBe(theme.ok);
+  expect(texts.get("game-status")?.content).toBe("Agent's turn — O");
   expect(texts.get("game-notice")?.content).toBe("agent is thinking…");
 
   await settle();
@@ -380,23 +483,58 @@ test("presentGame: marks paint into their own cell, notice tracks the model turn
   resetGame();
 });
 
+test("presentGame: a hung model turn hits the deadline and a local move is played", async () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGameWith(captured, () => hangingProvider(), { timeoutMs: 20 });
+  const { texts } = nodes(captured);
+
+  press({ name: "enter", sequence: "\r" });
+  expect(currentGameState().turn).toBe("O");
+  expect(texts.get("game-notice")?.content).toBe("agent is thinking…");
+
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const state = currentGameState();
+  expect(state.board.filter((cell) => cell === "O").length).toBe(1);
+  expect(state.turn).toBe("X");
+  expect(String(texts.get("game-notice")?.content)).toContain("timed out");
+  resetGame();
+});
+
+test("presentGame: an unusable reply plays a local move instead of skipping the turn", async () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGame(captured, "no idea");
+  const { texts } = nodes(captured);
+
+  press({ name: "enter", sequence: "\r" }); // X at 4
+  await settle();
+
+  const state = currentGameState();
+  expect(state.board.filter((cell) => cell === "O").length).toBe(1);
+  expect(state.turn).toBe("X");
+  expect(String(texts.get("game-notice")?.content)).toContain("no usable answer");
+  resetGame();
+});
+
 test("presentGame: the winning line takes the winner's colour", async () => {
   resetGame();
   const captured: CapturedModal = {};
-  const press = openGame(captured, "0");
+  const press = openGameWith(captured, factoryForSequence(["0", "1"]));
   const { boxes, texts } = nodes(captured);
   const theme = getTheme();
 
   press({ name: "enter", sequence: "\r" }); // X at 4, O at 0
   await settle();
-  press({ name: "up", sequence: "\u001b[A" });
-  press({ name: "right", sequence: "\u001b[C" });
-  press({ name: "enter", sequence: "\r" }); // X at 2
+  press({ name: "up", sequence: ARROW.up });
+  press({ name: "right", sequence: ARROW.right });
+  press({ name: "enter", sequence: "\r" }); // X at 2, O at 1
   await settle();
-  press({ name: "down", sequence: "\u001b[B" });
-  press({ name: "down", sequence: "\u001b[B" });
-  press({ name: "left", sequence: "\u001b[D" });
-  press({ name: "left", sequence: "\u001b[D" });
+  press({ name: "down", sequence: ARROW.down });
+  press({ name: "down", sequence: ARROW.down });
+  press({ name: "left", sequence: ARROW.left });
+  press({ name: "left", sequence: ARROW.left });
   press({ name: "enter", sequence: "\r" }); // X at 6 → wins [2,4,6]
   await settle();
 
@@ -404,7 +542,7 @@ test("presentGame: the winning line takes the winner's colour", async () => {
     expect(boxes.get(`game-cell-${index}`)?.borderColor).toBe(theme.ok);
     expect(boxes.get(`game-cell-${index}`)?.backgroundColor).toBe(theme.highlight);
   }
-  expect(boxes.get("game-cell-1")?.borderColor).toBe(theme.border);
+  expect(boxes.get("game-cell-3")?.borderColor).toBe(theme.border);
   expect(texts.get("game-status")?.content).toContain("X wins!");
   resetGame();
 });
