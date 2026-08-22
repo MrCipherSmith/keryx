@@ -36,6 +36,8 @@ export type OpenModalInput = {
   /** Footer key-hints. Default: tab switch + Esc close. */
   footer?: readonly ModalFooterAction[];
   renderTab: (tabId: string, body: unknown, ctx: ModalTabContext) => void | (() => void);
+  /** Claim left/right arrows before modal-host's tab switch. */
+  onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
   onClose?: () => void;
 };
 
@@ -433,6 +435,16 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     }
     const idx = state.tabs.findIndex((tab) => tab.id === state.active);
     const onStrip = focused !== null && containsNode(state.tabStrip, focused);
+    // The arrows can be claimed by the tab body (review buttons) BEFORE the
+    // tab-switch below; tab/shift+tab remain modal-host's own switch.
+    const claimArrow = (direction: "left" | "right"): boolean =>
+      state.input?.onArrowKeys?.(key, direction) === true;
+    if (key.name === "left" && claimArrow("left")) {
+      return;
+    }
+    if (key.name === "right" && claimArrow("right")) {
+      return;
+    }
     if (key.name === "left" || (onStrip && key.name === "tab" && key.shift === true)) {
       const prev = idx > 0 ? state.tabs[idx - 1] : undefined;
       if (prev !== undefined) {

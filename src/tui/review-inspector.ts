@@ -19,15 +19,15 @@
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import type { CatchUpItem, CatchUpProposalItem } from "../sac/catch-up";
 import type { WrapUpGroupOutcome } from "../sac/machine-wrap-up";
+import { getTheme } from "./theme";
 
 export const REVIEW_COMMAND = "/review";
 
 export const REVIEW_FOOTER = [
   { key: "[/]", label: "item" },
-  { key: "a y", label: "accept proposal" },
-  { key: "d y", label: "decline proposal" },
+  { key: "←/→ a d", label: "accept/decline" },
+  { key: "enter y", label: "arm → confirm" },
   { key: "↑/↓", label: "scroll" },
-  { key: "←/→", label: "tabs" },
   { key: "esc", label: "close" },
 ] as const;
 
@@ -39,6 +39,8 @@ export type OpenModalInput = {
   initialTab?: string;
   footer?: readonly { key: string; label: string }[];
   renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
+  /** Claim `←`/`→` before modal-host's tab switch (review buttons). */
+  onArrowKeys?: (key: { name: string; sequence: string }, direction: "left" | "right") => boolean | undefined;
   onClose?: () => void;
 };
 
@@ -277,6 +279,79 @@ function paintLines(
   return node;
 }
 
+/** Minimal structural view of the OpenTUI renderables the buttons paint:
+ * a BoxRenderable with `add` + `backgroundColor`, a TextRenderable with
+ * `content` + `fg`. Kept structural so unit tests can fake them. */
+type BoxLike = { add: (child: unknown) => void; backgroundColor: string | undefined };
+type TextLike = { content: string; fg: string | undefined };
+
+type ActionButtonCallbacks = {
+  onAccept: () => void;
+  onDecline: () => void;
+};
+
+function paintActionButtons(
+  otui: unknown,
+  renderer: unknown,
+  body: unknown,
+  callbacks: ActionButtonCallbacks,
+): { accept: ButtonRef; decline: ButtonRef } | undefined {
+  if (otui === undefined || otui === null || body === undefined || body === null) {
+    return undefined;
+  }
+  const parent = body as { add?: (child: unknown) => void };
+  const boxCtor = (otui as {
+    BoxRenderable?: new (r: unknown, opts: Record<string, unknown>) => BoxLike;
+  }).BoxRenderable;
+  const textCtor = (otui as {
+    TextRenderable?: new (r: unknown, opts: { id: string; content: string }) => TextLike;
+  }).TextRenderable;
+  if (parent.add === undefined || boxCtor === undefined || textCtor === undefined) {
+    return undefined;
+  }
+  // Local aliases so TS's narrowing survives the `make` closure below
+  // (`boxCtor`/`textCtor` are narrowed at this point, but the capture
+  // inside `make` re-widens them; exactOptionalPropertyTypes also wants
+  // plain `string | undefined` members, not optional ones).
+  const BoxCtor = boxCtor;
+  const TextCtor = textCtor;
+  // `parent.add` is the real Box.add — must be called as a METHOD (its
+  // implementation reads `this._ctx`), so no detached alias here; optional
+  // call keeps TS happy without re-widening.
+  const addChild = (child: unknown): void => parent.add?.(child);
+  const theme = getTheme();
+  const make = (label: string, id: string, color: string, onClick: () => void): ButtonRef => {
+    const box = new BoxCtor(renderer, {
+      id,
+      flexShrink: 0,
+      marginLeft: 1,
+      paddingLeft: 1,
+      paddingRight: 1,
+      onMouseDown: (event: { stopPropagation: () => void }) => {
+        event.stopPropagation();
+        onClick();
+      },
+    });
+    const text = new TextCtor(renderer, { id: `${id}-t`, content: `[${label}]` });
+    text.fg = color;
+    box.add(text);
+    addChild(box);
+    const setActive = (active: boolean): void => {
+      box.backgroundColor = active ? theme.highlight : undefined;
+      text.content = `[${label}]`;
+      text.fg = color;
+    };
+    return { setActive };
+  };
+  return {
+    accept: make("Accept", "review-accept", theme.ok, callbacks.onAccept),
+    decline: make("Decline", "review-decline", theme.error, callbacks.onDecline),
+  };
+}
+
+/** Highlight handle for one rendered Accept/Decline button: `setActive`
+ * repaints the focused state, mirroring the queue's button refs. */
+export type ButtonRef = { setActive: (active: boolean) => void };
 export type AcceptProposalOutcome = { ok: true } | { ok: false; message: string };
 export type AcceptProposalFn = (item: CatchUpProposalItem) => Promise<AcceptProposalOutcome>;
 /** Same shape as {@link AcceptProposalFn} — a separate alias only so call
@@ -311,8 +386,12 @@ export function presentReview(
   let listScroll = 0;
   let detailScroll = 0;
   let status: ReviewDetailStatus = { kind: "idle" };
+  /** Which button the arrows/`a`/`d` currently highlight on a proposal's
+   * Detail tab; the default is Accept. */
+  let focusedAction: ReviewDecision = "accept";
   let listNode: { content: string } | undefined;
   let detailNode: { content: string } | undefined;
+  let actionButtons: { accept: ButtonRef; decline: ButtonRef } | undefined;
   let unsubscribeKey: (() => void) | undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
@@ -336,6 +415,7 @@ export function presentReview(
     if (detailNode !== undefined) {
       detailNode.content = windowLines(detailLines(), detailScroll, bodyRows).join("\n");
     }
+    updateButtons();
   };
 
   const moveSelection = (next: number): void => {
@@ -354,6 +434,33 @@ export function presentReview(
 
   const handlerFor = (decision: ReviewDecision): AcceptProposalFn | DeclineProposalFn | undefined =>
     decision === "accept" ? options.acceptProposal : options.declineProposal;
+
+  /** Repaint the Accept/Decline button highlights to match `focusedAction`
+   * (idle) or the armed/running decision. No-op when buttons aren't mounted
+   * (non-proposal item, or this tab isn't rendered yet). */
+  const updateButtons = (): void => {
+    if (actionButtons === undefined) {
+      return;
+    }
+    const onProposal = items[selected]?.type === "proposal" && status.kind !== "done";
+    const highlighted = status.kind === "armed" ? status.decision : focusedAction;
+    actionButtons.accept.setActive(onProposal && highlighted === "accept");
+    actionButtons.decline.setActive(onProposal && highlighted === "decline");
+  };
+
+  /** Arm the given decision (or mark it unavailable when the item isn't a
+   * proposal or no handler is wired) — shared by the `a`/`d` keys and by
+   * clicking a button. */
+  const armDecision = (decision: ReviewDecision): void => {
+    if (status.kind === "running") {
+      return;
+    }
+    status =
+      items[selected]?.type === "proposal" && handlerFor(decision) !== undefined
+        ? { kind: "armed", decision }
+        : { kind: "unavailable", decision };
+    paintSelection();
+  };
 
   const runDecision = (decision: ReviewDecision): void => {
     const item = items[selected];
@@ -386,16 +493,56 @@ export function presentReview(
     ],
     initialTab: "list",
     footer: REVIEW_FOOTER,
+    onArrowKeys: (key, direction) => {
+      // Claim the arrow on a proposal's Detail tab so it moves the button
+      // highlight instead of switching tabs; everywhere else modal-host's
+      // tab switch wins.
+      if (
+        items[selected]?.type === "proposal" &&
+        status.kind !== "running" &&
+        status.kind !== "done" &&
+        handle?.activeTab() === "detail"
+      ) {
+        focusedAction = direction === "left" ? "accept" : "decline";
+        status = { kind: "idle" };
+        paintSelection();
+        return true;
+      }
+      return false;
+    },
     renderTab: (tabId, body, ctx) => {
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
       tabWidth = ctx?.width;
       if (tabId === "list") {
+        // The detail tab's nodes were destroyed by modal-host when this tab
+        // mounted; drop the stale references so paintSelection never writes
+        // into a destroyed TextBuffer (the list and detail bodies are never
+        // mounted at the same time — one `body` is reused).
+        detailNode = undefined;
+        actionButtons = undefined;
         listScroll = scrollToReveal(selected, listScroll, bodyRows);
         listNode = paintLines(otui, renderer, body, windowLines(listLines(), listScroll, bodyRows));
         return;
       }
+      // Same stale-node reset for the list tab's node when Detail mounts.
+      listNode = undefined;
       detailScroll = clampScroll(detailScroll, detailLines().length, bodyRows);
       detailNode = paintLines(otui, renderer, body, windowLines(detailLines(), detailScroll, bodyRows), tabWidth);
+      if (items[selected]?.type === "proposal") {
+        actionButtons = paintActionButtons(otui, renderer, body, {
+          onAccept: () => {
+            focusedAction = "accept";
+            armDecision("accept");
+          },
+          onDecline: () => {
+            focusedAction = "decline";
+            armDecision("decline");
+          },
+        });
+        updateButtons();
+      } else {
+        actionButtons = undefined;
+      }
     },
     onClose: () => {
       unsubscribeKey?.();
@@ -412,10 +559,11 @@ export function presentReview(
       }
       const onDetail = handle.activeTab() === "detail";
       // Armed accept/decline consumes the very next key unconditionally —
-      // only an exact `y` confirms; everything else (including nav keys)
-      // cancels back to idle rather than falling through to navigation.
+      // only an exact `y` or Enter confirms; everything else (including nav
+      // keys) cancels back to idle rather than falling through to
+      // navigation.
       if (onDetail && status.kind === "armed") {
-        if (token === "y") {
+        if (token === "y" || token === "return" || token === "enter") {
           runDecision(status.decision);
         } else {
           status = { kind: "idle" };
@@ -432,16 +580,33 @@ export function presentReview(
         return;
       }
       if (token === "return" || token === "enter") {
+        // Enter on a proposal's Detail tab arms the focused button; Enter
+        // again (or `y`) confirms it. Enter anywhere else opens the Detail
+        // tab (the list's "open item" action).
+        if (onDetail && items[selected]?.type === "proposal" && status.kind !== "running" && status.kind !== "done") {
+          if (status.kind === "armed") {
+            runDecision(status.decision);
+          } else {
+            armDecision(focusedAction);
+          }
+          return;
+        }
         handle.setTab("detail");
         return;
       }
-      if (onDetail && (token === "a" || token === "d") && status.kind !== "running") {
-        const decision: ReviewDecision = token === "a" ? "accept" : "decline";
-        status =
-          items[selected]?.type === "proposal" && handlerFor(decision) !== undefined
-            ? { kind: "armed", decision }
-            : { kind: "unavailable", decision };
+      // The arrows already moved the highlight via onArrowKeys; the
+      // keypress still sees them (modal-host skipped its tab switch), so
+      // this is the same no-op update — idempotent.
+      if (onDetail && (token === "left" || token === "right") && status.kind !== "running" && status.kind !== "done") {
+        focusedAction = token === "left" ? "accept" : "decline";
+        status = { kind: "idle" };
         paintSelection();
+        return;
+      }
+      if (onDetail && (token === "a" || token === "d") && status.kind !== "running" && status.kind !== "done") {
+        const decision: ReviewDecision = token === "a" ? "accept" : "decline";
+        focusedAction = decision;
+        armDecision(decision);
         return;
       }
       if (token === "up" || token === "k") {
