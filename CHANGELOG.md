@@ -5,6 +5,39 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.57] — 2026-08-22
+
+### Added
+
+- **Lazy SAC workspace binding.** A session no longer auto-resolves-or-creates
+  a workspace from its first message (which produced junk workspaces like
+  "git pull --rebase" before the session's real topic was known). A session
+  now opens with no workspace bound; the agent decides via
+  `workspace_list`/`workspace_create`/`workspace_propose` when a workspace is
+  actually warranted, `workspace_create` binds the created workspace to the
+  session's slate, and `runWrapUp` resolves-or-creates a workspace **from the
+  session's Seeds** (the real topic) when the slate is unbound at close time,
+  then proposes per kind-group. A failed resolve still degrades to the
+  unbound-candidate artifact.
+
+- **Explicit agent seed-writing instruction.** `buildAgentSystemInstruction`
+  now teaches the model when to write a `slate_write_seed` (root cause found,
+  code changed, decision taken, risk identified), which `kind` to use, the
+  2-3 sentence length, and that one-shot operational requests need no Seeds —
+  making wrap-up's proposal pipeline actually fed, since Seeds are its only
+  input.
+
+### Fixed
+
+- **`/review` Accept/Decline were a plain text hint, not buttons.** On the
+  Detail tab of a proposal, `[a] Accept this proposal [d] Decline this
+  proposal` rendered as text: mouse clicks did nothing and there was no
+  arrow-key navigation. They are now real clickable buttons (same style as
+  the main-queue buttons) with a two-step keyboard flow: `←`/`→` (or `a`/`d`)
+  move the highlight, Enter arms, Enter/`y` confirms. A new
+  `modal-host` `onArrowKeys` hook lets the tab body claim the arrows, and a
+  stale-node write into destroyed `TextBuffer`s on tab switch was fixed.
+
 ## [0.2.56] — 2026-08-22
 
 Fixes every finding from the 0.2.55 live-testing campaign
