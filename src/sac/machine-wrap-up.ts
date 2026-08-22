@@ -598,13 +598,25 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
   }
 
   let workspaceId = input.slate.workspaceId;
+  if (workspaceId === undefined && input.wrapUpSource === "external-slate") {
+    // AC-38 (flow 182): an EXTERNAL slate that never bound a workspaceId
+    // must never have one created for it at close — the artifact path is
+    // the ONLY outcome, unconditionally.
+    await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
+    const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
+    await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
+    return { groups };
+  }
   if (workspaceId === undefined) {
-    // Flow 200 (lazy binding): a session with REAL Seeds but no bound
+    // Flow 200 (lazy binding): a SESSION with REAL Seeds but no bound
     // workspace resolves-or-creates one FROM THE SEEDS (their texts are the
     // session's actual topic — far better judgment context than the first
     // message was), binds it to the slate, then proposes per kind-group as
     // usual. Only when the resolver fails closed (no credential, timeout,
     // ambiguous) does the old unbound-candidate artifact remain the degrade.
+    // AC-38 (flow 182): EXTERNAL slates are exempt — an external hand that
+    // never bound a workspaceId must never have one created for it at close
+    // (the artifact path is the ONLY outcome for those).
     const topicHint = dedupedAttributedSeeds(input.slate)
       .map((seed) => seed.text)
       .join("; ")
