@@ -48,6 +48,7 @@ import { createLocalProposalLifecycleService, type ProposalLifecycleService } fr
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
 import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
 import { readSidecarNote } from "./proposal-evidence";
+import { externalSlatesDir, readExternalSlate } from "../session/external-slate";
 
 // `Proposal` is not exported from `proposal-lifecycle.ts` (it is that
 // module's own private record shape) — derived structurally from the public
@@ -77,7 +78,13 @@ export type CatchUpProposalItem = {
   note: string | undefined;
 };
 export type CatchUpBlockedItem = { type: "blocked"; sessionId: string; workspaceId?: string; terminalState: TerminalState };
-export type CatchUpUnboundCandidateItem = { type: "unbound-candidate"; sessionId: string; evidencePath: string; summary: string };
+export type CatchUpUnboundCandidateItem = {
+  type: "unbound-candidate";
+  sessionId?: string;
+  externalSessionId?: string;
+  evidencePath: string;
+  summary: string;
+};
 export type CatchUpUnknownItem = {
   type: "unknown";
   sessionId: string;
@@ -258,9 +265,113 @@ async function classifySession(session: SessionSummary): Promise<ClassifiedSessi
   return { kind: "unknown", item: { type: "unknown", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), lastSeenAt: session.updatedAt } };
 }
 
+/**
+ * Scans `.keryx/external-slates/` for closed, never-bound external MCP slates.
+ * Reports them as unbound candidates in the same shape as internal sessions.
+ * An external slate is "bound" if it has a `workspaceId`; "closed" if it has
+ * a `closedAt` field (set by `closeExternalSlate` after `runWrapUp` completes).
+ *
+ * For each closed+unbound external slate, looks for an unbound-candidate
+ * artifact in `.keryx/external-slates/<id>/` (written by `runWrapUp` when
+ * closing a slate with no workspaceId). Falls back to a minimal summary from
+ * the seeds in the external slate file itself if the artifact is missing.
+ */
+async function readExternalUnboundCandidates(cwd: string): Promise<CatchUpUnboundCandidateItem[]> {
+  const extDir = externalSlatesDir(cwd);
+  let externalIds: string[];
+  try {
+    const entries = await readdir(extDir);
+    externalIds = entries.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -".json".length));
+  } catch {
+    return []; // external-slates directory doesn't exist yet
+  }
+
+  const candidates: CatchUpUnboundCandidateItem[] = [];
+  for (const id of externalIds) {
+    const slate = await readExternalSlate(cwd, id);
+    if (!slate) continue; // skip unreadable files
+
+    // Only include slates that are BOTH closed AND never bound to a workspace
+    if (slate.closedAt === undefined || slate.workspaceId !== undefined) continue;
+
+    // Look for the newest unbound-candidate artifact in the external slate's evidence dir
+    const unbound = await readNewestUnboundCandidateForExternal(cwd, id);
+    if (unbound) {
+      candidates.push({
+        type: "unbound-candidate",
+        externalSessionId: id,
+        evidencePath: unbound.evidencePath,
+        summary: unbound.summary,
+      });
+    } else {
+      // Fallback: generate a minimal summary from the seeds in the slate itself
+      const summary = summarizeUnboundCandidate(
+        (slate.seeds ?? []).reduce((groups, seed) => {
+          const kind = seed.kind ?? "follow-up";
+          const existing = groups.find((g) => g.kind === kind);
+          if (existing) {
+            existing.seeds = (existing.seeds ?? []).concat([{ text: seed.text }]);
+          } else {
+            groups.push({ kind, seeds: [{ text: seed.text }] });
+          }
+          return groups;
+        }, [] as Array<{ kind: string; seeds?: Array<{ text?: string }> }>),
+      );
+      candidates.push({
+        type: "unbound-candidate",
+        externalSessionId: id,
+        evidencePath: path.join(extDir, `${id}.json`),
+        summary,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Looks for the newest unbound-candidate artifact in an external slate's
+ * evidence directory (`.keryx/external-slates/<id>/`). Mirrors
+ * `readNewestUnboundCandidate`'s scanning logic but scoped to external-slate
+ * evidence, not session `slate-archive/`.
+ */
+async function readNewestUnboundCandidateForExternal(
+  cwd: string,
+  externalSessionId: string,
+): Promise<{ evidencePath: string; summary: string } | undefined> {
+  const evidenceDir = path.join(externalSlatesDir(cwd), externalSessionId);
+  let entries: string[];
+  try {
+    entries = (await readdir(evidenceDir)).filter((name) => name.endsWith("-unbound-candidate.json"));
+  } catch {
+    return undefined; // evidence dir doesn't exist yet
+  }
+
+  // Filenames are `<iso-ts-with-":"/"."-as-"-">-unbound-candidate.json`
+  // — sorting lexically visits newest-first (same pattern as internal sessions)
+  entries.sort();
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const evidencePath = path.join(evidenceDir, entries[i]!);
+    const result = readConfigFile(evidencePath);
+    if (!result.ok) {
+      continue; // malformed/partial/oversized entry — try the next-newest
+    }
+    try {
+      const parsed = JSON.parse(result.text) as UnboundCandidateContent;
+      if (parsed.recordType !== "unbound-candidate") continue;
+      return { evidencePath, summary: summarizeUnboundCandidate(parsed.groups) };
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 async function collectSessionCategories(cwd: string): Promise<SessionCategories> {
-  // `listSessions` is already `cwd`-scoped by construction (AC4).
-  const classified = await Promise.all(listSessions(cwd).map((session) => classifySession(session)));
+  // Collect internal session categories and external unbound candidates in parallel
+  const [classified, externalUnboundCandidates] = await Promise.all([
+    Promise.all(listSessions(cwd).map((session) => classifySession(session))),
+    readExternalUnboundCandidates(cwd),
+  ]);
 
   const blocked: CatchUpBlockedItem[] = [];
   const unboundCandidates: CatchUpUnboundCandidateItem[] = [];
@@ -271,6 +382,8 @@ async function collectSessionCategories(cwd: string): Promise<SessionCategories>
     else if (category.kind === "unbound-candidate") unboundCandidates.push(category.item);
     else unknown.push(category.item);
   }
+  // Add external unbound candidates to the same list (both internal and external are reported together)
+  unboundCandidates.push(...externalUnboundCandidates);
   return { blocked, unboundCandidates, unknown };
 }
 
