@@ -61,11 +61,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentDeps, AgentIO } from "./agent";
 // RED: `./goal-command` does not exist yet (T11 creates it).
-import { DEFAULT_AUTO_GOAL_ROUNDS, parseGoalArgs, parseVerifierVerdict, runGoalCommand } from "./goal-command";
+import { DEFAULT_AUTO_GOAL_ROUNDS, ROUND_DONE_MARKER, parseGoalArgs, parseVerifierVerdict, runGoalCommand } from "./goal-command";
 import type { GoalArgsError, GoalVerifierVerdict, ParsedGoalArgs } from "./goal-command";
-import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
-import { readSlate } from "../session/slate";
+import { appendSeed, readSlate } from "../session/slate";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 
@@ -345,9 +345,26 @@ function textOnlyProvider(text: string): { provider: AgentDeps["provider"]; call
   };
 }
 
-function collectingIo(): { io: AgentIO; system: string[] } {
+function collectingIo(): {
+  io: AgentIO;
+  system: string[];
+  toolCalls: Array<{ name: string; input: string }>;
+  toolResults: Array<{ name: string; result: InteractiveToolResult }>;
+} {
   const system: string[] = [];
-  return { system, io: { write: () => {}, onSystem: (s) => system.push(s) } };
+  const toolCalls: Array<{ name: string; input: string }> = [];
+  const toolResults: Array<{ name: string; result: InteractiveToolResult }> = [];
+  return {
+    system,
+    toolCalls,
+    toolResults,
+    io: {
+      write: () => {},
+      onSystem: (s) => system.push(s),
+      onToolCall: (name, input) => toolCalls.push({ name, input }),
+      onToolResult: (name, result) => toolResults.push({ name, result }),
+    },
+  };
 }
 
 let idCounter = 0;
@@ -1297,7 +1314,7 @@ test("parseVerifierVerdict: non-string entries in gaps are dropped, not left to 
   expect(verdict).toEqual({ achieved: false, gaps: ["real"] });
 });
 
-test("AC4: a verifier that reports achieved:true adds no extra round and no gaps message", async () => {
+test("AC4/#389: a verifier that reports achieved:true adds no extra round, no gaps message, and IS now visibly reported as confirmed (not silent)", async () => {
   const cwd = await tempCwd();
   const dir = await tempSessionDir();
   const slateSession: SlateSessionRef = { dir, cwd, opened: false };
@@ -1314,14 +1331,15 @@ test("AC4: a verifier that reports achieved:true adds no extra round and no gaps
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
   };
-  const { io, system } = collectingIo();
+  const { io, system, toolCalls, toolResults } = collectingIo();
+  const history: NormalizedMessage[] = [];
 
   await runGoalCommand({
     raw: "implement the login flow --auto 1",
     cwd,
     io,
     deps,
-    history: [],
+    history,
     slateSession,
     mintAttemptId: () => "attempt-0",
   });
@@ -1330,6 +1348,23 @@ test("AC4: a verifier that reports achieved:true adds no extra round and no gaps
   // the goal was achieved, so no extra round was added.
   expect(callCount()).toBe(2);
   expect(system.some((line) => line.includes("not fully achieved"))).toBe(false);
+
+  // #389: success is no longer silent — a clear confirmation line is emitted.
+  expect(system.some((line) => line.includes("verifier confirmed the goal is achieved"))).toBe(true);
+
+  // #389: the dispatch itself goes through the SAME io.onToolCall/onToolResult
+  // visibility path a real assistant-turn tool call uses, and is persisted into
+  // `history` as an assistant tool-call + matching tool-result pair — a resumed/
+  // exported transcript shows T10 actually ran, not just its final verdict.
+  expect(toolCalls.some((call) => call.name === "spawn_subagent")).toBe(true);
+  expect(toolResults.some((result) => result.name === "spawn_subagent" && !result.result.isError)).toBe(true);
+  const dispatchMessage = history.find(
+    (m) => m.role === "assistant" && m.toolCalls?.some((c) => c.name === "spawn_subagent"),
+  );
+  expect(dispatchMessage).toBeDefined();
+  const callId = dispatchMessage?.toolCalls?.find((c) => c.name === "spawn_subagent")?.id;
+  const resultMessage = history.find((m) => m.role === "tool" && m.toolCallId === callId);
+  expect(resultMessage?.content).toContain('"achieved": true');
 });
 
 test("AC4: a verifier that reports achieved:false with round budget already exhausted surfaces gaps and stops anyway", async () => {
@@ -1460,7 +1495,7 @@ test("AC4: a verifier that reports achieved:false with round budget remaining ru
   expect(continuationMessages[0]?.content).toContain(`Flow ${flowId} tasks remaining`);
 });
 
-test("AC4: an unreachable/erroring verifier degrades silently — no crash, no extra round, no gaps message", async () => {
+test("AC4/#389: an unreachable/erroring verifier degrades safely (no crash, no extra round, no gaps message) but is NOW visibly reported as unavailable, not silent", async () => {
   const cwd = await tempCwd();
   const dir = await tempSessionDir();
   const slateSession: SlateSessionRef = { dir, cwd, opened: false };
@@ -1477,6 +1512,7 @@ test("AC4: an unreachable/erroring verifier degrades silently — no crash, no e
     idSeq: fixedIdSeq(),
   };
   const { io, system } = collectingIo();
+  const history: NormalizedMessage[] = [];
 
   await expect(
     runGoalCommand({
@@ -1484,7 +1520,7 @@ test("AC4: an unreachable/erroring verifier degrades silently — no crash, no e
       cwd,
       io,
       deps,
-      history: [],
+      history,
       slateSession,
       mintAttemptId: () => "attempt-0",
     }),
@@ -1492,9 +1528,18 @@ test("AC4: an unreachable/erroring verifier degrades silently — no crash, no e
 
   expect(callCount()).toBe(2);
   expect(system.some((line) => line.includes("not fully achieved"))).toBe(false);
+  // #389: "verifier never actually ran" is no longer indistinguishable from
+  // silent success — an explicit "unavailable" line is emitted.
+  expect(system.some((line) => line.includes("verifier unavailable — outcome not independently checked"))).toBe(true);
+  // The failed dispatch attempt itself is still recorded in history (#389)
+  // even though no verdict could be extracted from it.
+  const dispatchMessage = history.find(
+    (m) => m.role === "assistant" && m.toolCalls?.some((c) => c.name === "spawn_subagent"),
+  );
+  expect(dispatchMessage).toBeDefined();
 });
 
-test("AC4: a verifier whose output does not parse as a verdict degrades the same way an unreachable one does", async () => {
+test("AC4/#389: a verifier whose output does not parse as a verdict degrades the same way an unreachable one does, and is reported unavailable", async () => {
   const cwd = await tempCwd();
   const dir = await tempSessionDir();
   const slateSession: SlateSessionRef = { dir, cwd, opened: false };
@@ -1522,9 +1567,10 @@ test("AC4: a verifier whose output does not parse as a verdict degrades the same
 
   expect(callCount()).toBe(2);
   expect(system.some((line) => line.includes("not fully achieved"))).toBe(false);
+  expect(system.some((line) => line.includes("verifier unavailable — outcome not independently checked"))).toBe(true);
 });
 
-test("AC4: /goal --auto with no spawn_subagent tool wired in behaves exactly as if the verifier were unreachable", async () => {
+test("AC4/#389: /goal --auto with no spawn_subagent tool wired in behaves exactly as if the verifier were unreachable, and is reported unavailable", async () => {
   const cwd = await tempCwd();
   const dir = await tempSessionDir();
   const slateSession: SlateSessionRef = { dir, cwd, opened: false };
@@ -1551,4 +1597,273 @@ test("AC4: /goal --auto with no spawn_subagent tool wired in behaves exactly as 
 
   expect(callCount()).toBe(2);
   expect(system.some((line) => line.includes("not fully achieved"))).toBe(false);
+  expect(system.some((line) => line.includes("verifier unavailable — outcome not independently checked"))).toBe(true);
+});
+
+// --- #392: verifier evidence trail ------------------------------------------
+
+test("#392: the verifier's dispatch includes this run's recent Slate Seeds as evidence, not just the bare goal text", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  let calls = 0;
+  const provider: AgentDeps["provider"] = {
+    describe: () => description,
+    stream: (_request, opts) => {
+      calls += 1;
+      const thisCall = calls;
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        if (thisCall === 1) {
+          // The first turn's own work-in-progress writes a real Seed — the
+          // SAME kind of evidence a genuine `slate_write_seed` tool call
+          // would leave behind.
+          await appendSeed(dir, {
+            id: "seed-1",
+            text: "Implemented and verified the login validation logic end to end.",
+            ts: new Date().toISOString(),
+            kind: "decision",
+          });
+        }
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: "ok" } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  let capturedTask = "";
+  const spawnSubagent = fakeSpawnSubagentTool(async (input) => {
+    capturedTask = String(input.task);
+    return { output: '{"achieved": true, "gaps": []}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 1",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(capturedTask).toContain("Implemented and verified the login validation logic end to end.");
+});
+
+test("#392: the verifier's dispatch includes this run's workspace_propose records from history", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider } = textOnlyProvider("still working");
+  let capturedTask = "";
+  const spawnSubagent = fakeSpawnSubagentTool(async (input) => {
+    capturedTask = String(input.task);
+    return { output: '{"achieved": true, "gaps": []}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  // Pre-existing history, as if an earlier round already dispatched a real
+  // `workspace_propose` call through the normal `executeCall` path (agent.ts)
+  // — `runGoalVerifier` must read THIS, not re-derive it from SAC state.
+  const history: NormalizedMessage[] = [
+    {
+      role: "assistant",
+      content: "",
+      provenance: "model",
+      toolCalls: [
+        {
+          id: "call-1",
+          name: "workspace_propose",
+          arguments: '{"workspaceId":"w1","kind":"decision","note":"chose JWT for session auth"}',
+        },
+      ],
+    },
+    { role: "tool", content: "proposed decision d-1 for review", provenance: "tool", toolCallId: "call-1" },
+  ];
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 1",
+    cwd,
+    io,
+    deps,
+    history,
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(capturedTask).toContain("chose JWT for session auth");
+  expect(capturedTask).toContain("proposed decision d-1 for review");
+});
+
+test("#392: when the auto-provisioned flow's own AC defers completion to the verifier, the verifier is instructed not to weight flow-task-checkbox state as non-completion evidence", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider } = textOnlyProvider("still working");
+  let capturedTask = "";
+  const spawnSubagent = fakeSpawnSubagentTool(async (input) => {
+    capturedTask = String(input.task);
+    return { output: '{"achieved": true, "gaps": []}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+
+  // `--auto` auto-provisions a flow via `autoProvisionFlow`, whose own AC1
+  // text always contains the literal phrase this detection keys on ("judged
+  // by the verifier subagent") — no extra setup needed to exercise this.
+  await runGoalCommand({
+    raw: "implement the login flow --auto 1",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(capturedTask).toContain("explicitly defer the completion");
+  expect(capturedTask).toContain("Do NOT");
+});
+
+// --- #394: deterministic early round-loop exit ------------------------------
+
+test("#394: a deterministic done-signal from the model ends the round loop before the round budget is exhausted, and the verifier's 'one more round' branch is reachable when it still disagrees", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  let calls = 0;
+  const provider: AgentDeps["provider"] = {
+    describe: () => description,
+    stream: (_request, opts) => {
+      calls += 1;
+      const thisCall = calls;
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        // Call 1: the always-runs first turn — ordinary work, no done-signal.
+        // Call 2: the FIRST continuation round — the model claims the round's
+        // work is complete via the deterministic marker, well short of the
+        // large --auto 5 round budget below.
+        const text = thisCall === 2 ? `All done here. ${ROUND_DONE_MARKER}` : "still working";
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  // The verifier still disagrees — proves the early exit did not skip
+  // verification, and that "one more round" (`goal-command.ts`'s own
+  // previously-dead branch) is genuinely reachable with round budget left.
+  const spawnSubagent = fakeSpawnSubagentTool(async () => ({
+    output: '{"achieved": false, "gaps": ["missed the edge case"]}',
+    isError: false,
+  }));
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 5",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  // Without the fix, the loop would burn its full --auto 5 budget (6 provider
+  // calls: 1 first turn + 5 rounds) before ever reaching the verifier. With
+  // the fix: 1 (first turn) + 1 (round 2, claims done, breaks the loop early)
+  // + 1 (the verifier's "one more round", since 4 rounds of budget remained).
+  expect(calls).toBe(3);
+  expect(system.some((line) => line.includes("model signaled this round's work is complete"))).toBe(true);
+  expect(system.some((line) => line.includes("missed the edge case"))).toBe(true);
+});
+
+test("#394: with no done-signal, the round loop still runs the full --auto budget exactly as before (no regression)", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider, callCount } = textOnlyProvider("still working, no marker here");
+  const spawnSubagent = fakeSpawnSubagentTool(async () => ({
+    output: '{"achieved": true, "gaps": []}',
+    isError: false,
+  }));
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 2",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  // 1 first turn + 2 full rounds (the --auto 2 cap) — never claimed done, so
+  // the loop runs to full budget exhaustion exactly as before this fix.
+  expect(callCount()).toBe(3);
+  expect(system.some((line) => line.includes("model signaled this round's work is complete"))).toBe(false);
 });
