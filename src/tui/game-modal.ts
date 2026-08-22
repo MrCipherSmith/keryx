@@ -66,6 +66,39 @@ export function freeCells(board: readonly Cell[]): number[] {
   return board.flatMap((cell, index) => (cell === null ? [index] : []));
 }
 
+/**
+ * A decent local move for `mark`: take the win, else block the opponent's,
+ * else centre, else a corner, else the first free cell.
+ *
+ * This is the stand-in when the model cannot answer — a turn that is simply
+ * skipped reads as a broken game (the user walks into a win against nobody),
+ * so an unusable reply plays this instead and says so on the notice line.
+ */
+export function bestLocalMove(board: readonly Cell[], mark: Mark): number | undefined {
+  const free = freeCells(board);
+  if (free.length === 0) {
+    return undefined;
+  }
+  const opponent: Mark = mark === "X" ? "O" : "X";
+  // Own win first, then the block: the order is what makes it play to win
+  // rather than only defend.
+  for (const candidate of [mark, opponent]) {
+    for (const index of free) {
+      const next = board.slice();
+      next[index] = candidate;
+      if (checkWinner(next)?.winner === candidate) {
+        return index;
+      }
+    }
+  }
+  for (const index of [4, 0, 2, 6, 8]) {
+    if (board[index] === null) {
+      return index;
+    }
+  }
+  return free[0];
+}
+
 /** Place `mark` at `index`; returns the next state, or `undefined` for illegal. */
 export function placeMark(
   board: readonly Cell[],
@@ -126,6 +159,7 @@ export function gameSystemPrompt(): string {
     "6 7 8",
     "Reply with ONLY the index of the cell you choose, as a single digit 0-8.",
     "Choose an empty cell. Prefer winning, then blocking, then center/corner.",
+    "Answer immediately. No explanation, no working out — one character.",
   ].join("\n");
 }
 
@@ -157,7 +191,12 @@ export async function modelMove(board: readonly Cell[], opts: GameModelOptions =
     user: gameUserPrompt(board),
     ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
-    maxOutputTokens: 16,
+    // Not 16. On a reasoning-capable model the budget covers the thinking
+    // pass too, and a 16-token ceiling truncates it before the answer digit
+    // is ever emitted — the turn then looks like a slow model that skipped.
+    // The visible reply is still one character; `reasoning_delta` events are
+    // dropped by `runModelTurn`.
+    maxOutputTokens: 256,
     requestId: "keryx-game",
     ...(opts.providerFactory !== undefined ? { providerFactory: opts.providerFactory } : {}),
     ...(opts.env !== undefined ? { env: opts.env } : {}),
@@ -180,9 +219,6 @@ export const GAME_FOOTER = [
   { key: "esc", label: "minimize" },
 ] as const;
 
-/** A cell box: one mark centred inside its own rounded border. */
-export const GAME_CELL_WIDTH = 5;
-export const GAME_CELL_HEIGHT = 3;
 /**
  * Columns between two cells in a row; rows themselves sit flush. A terminal
  * cell is roughly twice as tall as it is wide, so one column of horizontal
@@ -190,6 +226,37 @@ export const GAME_CELL_HEIGHT = 3;
  * symmetric `gap: 1` would stretch the board into a tall rectangle.
  */
 export const GAME_CELL_GAP = 1;
+/** Board border (2) + horizontal padding (2). */
+export const GAME_BOARD_CHROME_X = 4;
+
+/** A cell box: one mark centred inside its own rounded border. */
+export const GAME_CELL_SIZES = {
+  large: { width: 9, height: 5 },
+  small: { width: 5, height: 3 },
+} as const;
+
+/** Columns a board of `cellWidth` cells occupies, chrome included. */
+export function gameBoardWidth(cellWidth: number): number {
+  return cellWidth * 3 + GAME_CELL_GAP * 2 + GAME_BOARD_CHROME_X;
+}
+
+/**
+ * The largest cell size that fits the modal body. `renderTab` is handed the
+ * panel's inner width, and the panel is 95% of the terminal — so a normal
+ * window gets the large board and a cramped one still gets a whole grid
+ * rather than a clipped one.
+ */
+export function resolveCellSize(availableWidth: number): { width: number; height: number } {
+  const large = GAME_CELL_SIZES.large;
+  return gameBoardWidth(large.width) <= availableWidth ? large : GAME_CELL_SIZES.small;
+}
+
+/**
+ * How long the model gets before the game plays a local move for it. Without
+ * a ceiling a hung provider leaves "agent is thinking…" on screen forever,
+ * with `R` as the only way out.
+ */
+export const GAME_MODEL_TIMEOUT_MS = 12_000;
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -225,6 +292,8 @@ export interface OpenGameOptions {
   /** Injected provider factory (tests). */
   providerFactory?: ProviderFactory;
   env?: Record<string, string | undefined>;
+  /** Model deadline before a local move is played. Default `GAME_MODEL_TIMEOUT_MS`. */
+  timeoutMs?: number;
   renderer?: unknown;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 }
@@ -262,7 +331,7 @@ function statusText(state: TicTacToeState): string {
   if (state.draw) {
     return "Draw!  (r — new game)";
   }
-  return `Your turn — ${state.turn}`;
+  return state.turn === "X" ? "Your turn — X" : "Agent's turn — O";
 }
 
 /** One board square: the bordered box plus the text node holding its mark. */
@@ -333,27 +402,54 @@ export function presentGame(
     modelBusy = true;
     notice = undefined;
     paint();
-    const result = await modelMove(currentGame.board, {
-      ...(options.provider !== undefined ? { provider: options.provider } : {}),
-      ...(options.model !== undefined ? { model: options.model } : {}),
-      ...(options.providerFactory !== undefined ? { providerFactory: options.providerFactory } : {}),
-      ...(options.env !== undefined ? { env: options.env } : {}),
+    const timeoutMs = options.timeoutMs ?? GAME_MODEL_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // `runModelTurn` takes no abort signal, so the losing request is only
+    // abandoned, not cancelled — acceptable for a 250-token completion, and
+    // the alternative is threading a signal through a helper six commands
+    // share.
+    const deadline = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), timeoutMs);
     });
+    const outcome = await Promise.race([
+      modelMove(currentGame.board, {
+        ...(options.provider !== undefined ? { provider: options.provider } : {}),
+        ...(options.model !== undefined ? { model: options.model } : {}),
+        ...(options.providerFactory !== undefined ? { providerFactory: options.providerFactory } : {}),
+        ...(options.env !== undefined ? { env: options.env } : {}),
+      }),
+      deadline,
+    ]);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
     modelBusy = false;
-    if (result.move !== undefined) {
-      const placed = placeMark(currentGame.board, result.move, "O");
-      if (placed !== undefined) {
-        currentGame = placed;
-      } else {
-        // The model named an occupied cell: hand the turn back to the user.
-        currentGame = { ...currentGame, turn: "X" };
-      }
+    const timedOut = outcome === "timeout";
+    const result = timedOut ? { move: undefined, error: undefined } : outcome;
+
+    // A hard error (no credential, provider failure) is the user's to fix, so
+    // it hands the turn back and says why. A timeout or an unusable reply is
+    // the game's problem, and it plays on rather than silently passing.
+    let move = result.move;
+    let playedLocally = false;
+    if (move === undefined && result.error === undefined) {
+      move = bestLocalMove(currentGame.board, "O");
+      playedLocally = move !== undefined;
+    }
+    const placed = move === undefined ? undefined : placeMark(currentGame.board, move, "O");
+    // Never strand the game on "O".
+    currentGame = placed ?? { ...currentGame, turn: "X" };
+
+    // The notice goes through state, not straight onto the text node: the
+    // `paint()` below owns that line and would overwrite it.
+    if (result.error !== undefined) {
+      notice = `agent: ${result.error}`;
+    } else if (timedOut && playedLocally) {
+      notice = `agent timed out after ${Math.round(timeoutMs / 1000)}s — played a local move`;
+    } else if (playedLocally) {
+      notice = "agent gave no usable answer — played a local move";
     } else {
-      // Skipped (invalid reply) or errored: never strand the game on "O".
-      currentGame = { ...currentGame, turn: "X" };
-      // The notice goes through state, not straight onto the text node: the
-      // `paint()` two lines down owns that line and would overwrite it.
-      notice = result.error === undefined ? undefined : `agent: ${result.error}`;
+      notice = undefined;
     }
     paint();
   };
@@ -395,7 +491,18 @@ export function presentGame(
     title: "/game",
     tabs: [{ id: "game", label: "Tic-tac-toe" }],
     footer: GAME_FOOTER,
-    renderTab: (_tabId, body) => {
+    // Left/right MUST be claimed here, not in the `onKeypress` handler below.
+    // The modal host consumes both arrows for its own tab switch and calls
+    // `stopPropagation()`, so a game-side keypress listener never saw them —
+    // the cursor moved up and down but not sideways. `onArrowKeys` is the
+    // host's documented hook for a tab body to take them first. It returns
+    // without stopping propagation, so the same keys must NOT also be handled
+    // in `onKeypress` or every press would move the cursor twice.
+    onArrowKeys: (_key, direction) => {
+      moveCursor(0, direction === "left" ? -1 : 1);
+      return true;
+    },
+    renderTab: (_tabId, body, ctx) => {
       if (body === undefined || body === null) {
         return;
       }
@@ -405,6 +512,7 @@ export function presentGame(
       }
       const theme = getTheme();
       const r = renderer as Renderer;
+      const cellSize = resolveCellSize(ctx.width);
 
       // `alignItems: "center"` on a full-width column is what centres the
       // legend, the board and the status as a group. A child `alignSelf`
@@ -450,8 +558,8 @@ export function presentGame(
           const index = row * 3 + col;
           const cellBox = new core.BoxRenderable(r, {
             id: `game-cell-${index}`,
-            width: GAME_CELL_WIDTH,
-            height: GAME_CELL_HEIGHT,
+            width: cellSize.width,
+            height: cellSize.height,
             flexShrink: 0,
             flexGrow: 0,
             flexDirection: "row",
@@ -512,11 +620,13 @@ export function presentGame(
         moveCursor(1, 0);
         return;
       }
-      if (token === "left" || token === "h") {
+      // "left"/"right" are deliberately absent — the modal host routes those
+      // through `onArrowKeys` above. Their vim twins are ours alone.
+      if (token === "h") {
         moveCursor(0, -1);
         return;
       }
-      if (token === "right" || token === "l") {
+      if (token === "l") {
         moveCursor(0, 1);
         return;
       }
