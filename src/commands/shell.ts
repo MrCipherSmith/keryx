@@ -1985,6 +1985,13 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   }
 
   const rl = readline.createInterface({ input: process.stdin });
+  // SIGINT handling for non-TTY: exit immediately on SIGINT, not wait for confirmation.
+  if (!process.stdin.isTTY) {
+    process.on("SIGINT", () => {
+      rl.close();
+      process.exit(130);
+    });
+  }
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();

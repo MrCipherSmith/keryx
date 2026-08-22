@@ -358,6 +358,46 @@ test("onAutoApproved fires with the escalation flags when a mode skips the promp
   expect(seen).toEqual([{ tool: "shell_exec", destructive: false, credentials: false }]);
 });
 
+// PERM-05 (0.2.55 live-testing campaign, flow 198): the campaign's own repro
+// command (`rm -rf ./some-relative-dir`) is NOT actually destructive by this
+// codebase's own classifier (`command-risk.ts`'s `ruleRm` only escalates a
+// CATASTROPHIC target — filesystem root, home, a system root — not an
+// ordinary scoped relative path), so the missing `[destructive]` tag observed
+// in that live session was correct behavior, not a bug: `meta.destructive`
+// was genuinely `false` for that command. This test instead exercises the
+// real destructive path (`rm -rf /`) to confirm the escalation flag — and
+// therefore shell.ts's `[destructive]` tag, which renders directly off this
+// same `meta.destructive` — DOES reach `onAutoApproved` correctly under
+// `auto` mode (the only mode that bypasses a destructive command's prompt;
+// `trust` still escalates to `requestApproval` for `destructive`, per
+// `resolveApprovalDecision`).
+test("onAutoApproved fires with destructive:true for a genuinely catastrophic command under auto mode", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const seen: { tool: string; destructive: boolean; credentials: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => true,
+    permissionMode: () => "auto",
+    onAutoApproved: (t, _input, meta) => {
+      seen.push({ tool: t, ...meta });
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"rm -rf /"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ tool: "shell_exec", destructive: true, credentials: false }]);
+});
+
 test("onAutoApproved does NOT fire when the mode still asks", async () => {
   const { tool } = fakeTool("shell_exec", "shell");
   let autoApprovedCalls = 0;
