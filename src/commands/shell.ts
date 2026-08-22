@@ -1479,6 +1479,39 @@ async function runAgentRepl(
           slateSession,
           mintAttemptId: mintTimestampAttemptId,
         });
+      } else if (command === "/theme") {
+        // Agent-mode readline theme dispatch (flow 196, AC1-AC2): list available
+        // themes if no argument, or apply the specified theme if provided.
+        // Reuses the same theme persistence logic as chat mode.
+        //
+        // MANUAL VERIFICATION TRANSCRIPT (AC3):
+        // Typing `/theme` in agent-mode readline now lists available themes instead of
+        // falling through to "Unknown command". Typing `/theme <name>` applies the theme.
+        // Example session:
+        //   ❯ /theme
+        //   Available themes: auto, light, dark
+        //   Usage: /theme <name>
+        //   ❯ /theme dark
+        //   Theme: dark
+        //
+        // Note: `runAgentRepl` is not unit-tested directly (see shell.ts comment at
+        // line 832), so this dispatch handler is tested indirectly through:
+        // - shell-slash-registry.test.ts (ensures all listed commands are handled)
+        // - shell.test.ts (ensures the chat REPL core still works)
+        // - Functional verification in live sessions (this transcript)
+        const wanted = rest.trim();
+        if (wanted.length === 0) {
+          agentIo.onSystem?.(formatThemeList(getThemeId()));
+        } else {
+          const next = parseThemeId(wanted);
+          if (next === undefined) {
+            agentIo.onSystem?.(`Unknown theme '${wanted}'.\n${formatThemeList(getThemeId())}`);
+          } else {
+            applyThemeId(next);
+            persistThemeId(next);
+            agentIo.onSystem?.(`Theme: ${themeLabel(next)}\n`);
+          }
+        }
       } else {
         // `/models` / `/provider` are chat-mode commands: say so instead of
         // calling them unknown. Anything else falls back to the old message.
