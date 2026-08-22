@@ -99,8 +99,8 @@ readline-only gap is structurally indistinguishable from a typo.
 | SLASH-12 | `/goal` | confirmed real (`shell.ts:58219`) | Deterministic Slate open — see §6 for full coverage | Same engine |
 | SLASH-13 | `/resume` | no dispatch branch exists | `Unknown command: /resume. Type /help.` (generic fallback, `shell.ts:1482-1489`) | TUI: session list picker |
 | SLASH-14 | `/sessions` | no dispatch branch exists | Same generic fallback | TUI picker |
-| SLASH-15 | `/status` | **advertised by `/help` but has NO dispatch branch — confirmed self-contradicting, see below** | `Unknown command: /status. Type /help.` | Same, richer rendering |
-| SLASH-16 | `/flows` | **same confirmed gap as `/status`** | `Unknown command: /flows. Type /help.` | Same |
+| SLASH-15 | `/status` | **CORRECTED after live re-test (see note below): works.** Dispatched via `isSessionInfoCommand(command)` — a helper-function check my original grep-based trace (literal `command === "/…"` only) missed entirely. | Real session identity/context/workspace/flow info | Same, richer rendering |
+| SLASH-16 | `/flows` | **CORRECTED after live re-test: works.** Dispatched via `isFlowsCommand(command)` (`src/tui/flow-inspector.ts:35`) — same class of missed indirect dispatch as `/status`. | Real project flow list (verified live: 190 flows rendered) | Same |
 | SLASH-17 | `/workspace` | no dispatch branch; also not `describeUnavailableCommand`-eligible (that only fires for a WRONG-MODE command, and `/workspace` is `agent`-mode same as readline itself) | `Unknown command: /workspace. Type /help.` — **not** a "TUI-only" explanation despite the registry comment saying this is deliberately TUI-only | Sidebar + 3-tab modal |
 | SLASH-18 | `/review` | same as SLASH-17 | `Unknown command: /review. Type /help.` | Sidebar badge + list/detail modal, `[a]`/`[d]`-then-`[y]` |
 | SLASH-19 | `/mcp` | same as SLASH-17 | `Unknown command: /mcp. Type /help.` | Tools/MCP inspector modal, `[c]`/`[d]`-then-`[y]` |
@@ -113,28 +113,37 @@ readline-only gap is structurally indistinguishable from a typo.
 | SLASH-26 | `/delegate` | no dispatch branch exists (confirmed: zero occurrences of the literal string `/delegate` anywhere in `shell.ts`) | `Unknown command: /delegate. Type /help.` — §13's DELEG-01/02/03 rows below are **TUI-only in practice**, not readline-testable as written; revise those rows before running them | Sidebar `⤳` marker, 3-tab modal (Work/Meta/Command) |
 | SLASH-27 | `/exit` (and `/quit` alias) | confirmed real dispatch branch, both spellings (`shell.ts:49149`) | Leaves the shell | `/quit` maps to `/exit` via `commandToken` |
 
-**Confirmed-by-code finding, not just a hypothesis (traced every `command
-===` branch in `shell.ts`'s agent-mode dispatch chain — offsets 49149
-through 58219 — against `READLINE_AGENT_COMMANDS`):** the agent-mode
-readline REPL implements exactly nine commands — `/exit`/`/quit`, `/help`,
-`/expand`, `/new`/`/clear`, `/compact`, `/mode`, `/search-provider`,
-`/search-connect`, `/goal` — full stop. `READLINE_AGENT_COMMANDS`
-(`shell.ts:143-157`, what `/help` *advertises*) additionally lists `/status`,
-`/flows`, and `/theme`, which have **no matching dispatch branch anywhere in
-the agent-mode chain** (`/theme`'s only handler is in the separate CHAT-mode
-block). Typing any of `/status`, `/flows`, or `/theme` in agent-mode readline
-therefore produces `Unknown command: /status. Type /help.` — a
-self-contradicting message, since `/help` just told you it exists. This is a
-real, precise, ready-to-file bug (three-line `READLINE_AGENT_COMMANDS`
-whitelist vs. the actual `else if` chain silently drifted apart), not
-speculation — SLASH-15/16/21 above are the confirming test cases. Separately,
-`/resume`, `/sessions`, `/workspace`, `/review`, `/mcp`, `/interrupt`,
-`/queue`, and `/delegate` are genuinely unimplemented in readline (correctly
-*not* advertised by `/help` there) but get the same unhelpful generic
-"Unknown command" rather than the more informative TUI-only explanation the
-registry's own comments claim these commands deserve — `describeUnavailableCommand`
-structurally cannot produce that message because the registry only encodes a
-chat-vs-agent `modes` dimension, never a TUI-vs-readline one.
+**CORRECTION (2026-08-22, after live re-testing found the original claim
+wrong for 2 of 3 commands — see GitHub issue #393's own correction
+comment):** the original static trace here (grepping `shell.ts` for literal
+`command === "/…"` comparisons, offsets 49149–58219) is an **incomplete
+methodology** — it misses dispatch performed through a helper predicate
+function rather than a literal string comparison. Live-tested against the
+real `keryx 0.2.55` binary:
+
+- **`/status` works** — dispatched via `isSessionInfoCommand(command)`.
+- **`/flows` works** — dispatched via `isFlowsCommand(command)`
+  (`src/tui/flow-inspector.ts:35`, imported into `shell.ts`), confirmed live:
+  a real `/flows` call rendered all 190 project flows correctly.
+- **`/theme` is genuinely broken** — confirmed live:
+  `Unknown command: /theme. Type /help.` `/help` still advertises it
+  (`READLINE_AGENT_COMMANDS`, `shell.ts:143-157`); its only actual
+  `command === "/theme"` handler lives in the separate CHAT-mode dispatch
+  block, never reached from agent-mode readline. **This is the one real bug
+  in this family** — issue #393 has been corrected and re-titled to cover
+  only `/theme`.
+
+Lesson for any future audit of this dispatch chain: check for indirect
+dispatch (`isFlowsCommand`, `isSessionInfoCommand`, and any sibling of that
+shape) in addition to literal `command === "/…"` comparisons — a
+grep-only trace will produce false positives exactly like this one did.
+
+Separately (unaffected by the above correction — these genuinely have no
+dispatch of any kind, literal or indirect): `/resume`, `/sessions`,
+`/workspace`, `/review`, `/mcp`, `/interrupt`, `/queue`, and `/delegate` fall
+through to the generic `Unknown command: <cmd>. Type /help.` rather than a
+more informative TUI-only explanation, because `describeUnavailableCommand`
+only encodes a chat-vs-agent `modes` dimension, never a TUI-vs-readline one.
 
 ## 3. Permission modes
 
