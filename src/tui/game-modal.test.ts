@@ -17,8 +17,12 @@ import {
   placeMark,
   presentGame,
   resetGame,
+  GAME_CELL_GAP,
+  GAME_CELL_HEIGHT,
+  GAME_CELL_WIDTH,
   type Cell,
 } from "./game-modal";
+import { getTheme } from "./theme";
 import type { ProviderFactory } from "../harness/provider/single-turn";
 import type { OpenModalInput } from "./modal-host";
 
@@ -135,6 +139,19 @@ type KeyEvent = { name: string; sequence: string };
 
 class FakeBox {
   children: unknown[] = [];
+  readonly id: string | undefined;
+  /** The construction options, so layout assertions can read them back. */
+  readonly opts: Record<string, unknown>;
+  // Repainted in place by `paint()` — these are the cursor/win affordances.
+  borderColor: unknown;
+  backgroundColor: unknown;
+
+  constructor(_renderer?: unknown, opts: Record<string, unknown> = {}) {
+    this.opts = opts;
+    this.id = typeof opts.id === "string" ? opts.id : undefined;
+    this.borderColor = opts.borderColor;
+    this.backgroundColor = opts.backgroundColor;
+  }
   add(child: unknown): void {
     this.children.push(child);
   }
@@ -148,21 +165,27 @@ class FakeBox {
 
 class FakeText {
   content: unknown;
+  fg: unknown;
+  readonly id: string | undefined;
+
   constructor(_renderer: unknown, opts: Record<string, unknown>) {
     this.content = opts.content;
+    this.fg = opts.fg;
+    this.id = typeof opts.id === "string" ? opts.id : undefined;
   }
 }
 
 const fakeOtui = {
   BoxRenderable: FakeBox,
   TextRenderable: FakeText,
-  bold: (v: unknown) => v,
 };
 
 interface CapturedModal {
   title?: string;
   tabs?: readonly { id: string; label: string }[];
   onClose?: (() => void) | undefined;
+  /** The tab body the host handed to `renderTab`. */
+  body?: FakeBox;
 }
 
 function fakeHost(captured: CapturedModal) {
@@ -170,7 +193,9 @@ function fakeHost(captured: CapturedModal) {
     captured.title = input.title;
     captured.tabs = input.tabs;
     captured.onClose = input.onClose;
-    input.renderTab("game", new FakeBox(), { width: 80 });
+    const body = new FakeBox();
+    captured.body = body;
+    input.renderTab("game", body, { width: 80 });
     return {
       close: () => {
         captured.onClose?.();
@@ -192,6 +217,29 @@ function openGame(captured: CapturedModal, reply: string): (key: KeyEvent) => vo
     },
   });
   return (key) => keyHandler?.(key);
+}
+
+/** Every id'd renderable under the tab body, by id. */
+function nodes(captured: CapturedModal): { boxes: Map<string, FakeBox>; texts: Map<string, FakeText> } {
+  const boxes = new Map<string, FakeBox>();
+  const texts = new Map<string, FakeText>();
+  const walk = (root: FakeBox): void => {
+    for (const child of root.children) {
+      if (child instanceof FakeBox) {
+        if (child.id !== undefined) {
+          boxes.set(child.id, child);
+        }
+        walk(child);
+      } else if (child instanceof FakeText && child.id !== undefined) {
+        texts.set(child.id, child);
+      }
+    }
+  };
+  const body = captured.body;
+  if (body !== undefined) {
+    walk(body);
+  }
+  return { boxes, texts };
 }
 
 test("presentGame: user X at center, model O replies, state survives close", async () => {
@@ -253,5 +301,110 @@ test("presentGame: user can drive a full game and win", async () => {
   const end = currentGameState();
   expect(end.winner).toBe("X");
   expect(end.winLine).toEqual([2, 4, 6]);
+  resetGame();
+});
+
+// --- board layout -----------------------------------------------------------
+
+test("presentGame: the board is a 3x3 grid of bordered cells, not one column", () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  openGame(captured, "0");
+  const { boxes, texts } = nodes(captured);
+
+  expect(boxes.get("game-wrap")?.opts.alignItems).toBe("center");
+  expect(boxes.get("game-board")?.opts.flexDirection).toBe("column");
+  expect(boxes.get("game-board")?.opts.border).toBe(true);
+
+  // Three row boxes, each laying its three cells out horizontally. Without
+  // these the nine cells stacked into a single 9-row column.
+  for (let row = 0; row < 3; row++) {
+    const rowBox = boxes.get(`game-row-${row}`);
+    expect(rowBox?.opts.flexDirection).toBe("row");
+    expect(rowBox?.opts.gap).toBe(GAME_CELL_GAP);
+    expect(rowBox?.children.length).toBe(3);
+  }
+
+  for (let index = 0; index < 9; index++) {
+    const cell = boxes.get(`game-cell-${index}`);
+    expect(cell?.opts.border).toBe(true);
+    expect(cell?.opts.width).toBe(GAME_CELL_WIDTH);
+    expect(cell?.opts.height).toBe(GAME_CELL_HEIGHT);
+    expect(cell?.opts.alignItems).toBe("center");
+    expect(cell?.opts.justifyContent).toBe("center");
+    expect(texts.get(`game-cell-text-${index}`)?.content).toBe("·");
+  }
+  resetGame();
+});
+
+test("presentGame: exactly one cell carries the cursor, and the arrows move it", () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGame(captured, "0");
+  const { boxes } = nodes(captured);
+  const theme = getTheme();
+  const cursorCells = (): number[] =>
+    [0, 1, 2, 3, 4, 5, 6, 7, 8].filter((i) => boxes.get(`game-cell-${i}`)?.borderColor === theme.focus);
+
+  expect(cursorCells()).toEqual([4]);
+  expect(boxes.get("game-cell-4")?.backgroundColor).toBe(theme.highlight);
+  expect(boxes.get("game-cell-3")?.backgroundColor).toBeUndefined();
+
+  press({ name: "left", sequence: "\u001b[D" });
+  expect(cursorCells()).toEqual([3]);
+
+  press({ name: "up", sequence: "\u001b[A" });
+  expect(cursorCells()).toEqual([0]);
+  resetGame();
+});
+
+test("presentGame: marks paint into their own cell, notice tracks the model turn", async () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGame(captured, "0");
+  const { texts } = nodes(captured);
+  const theme = getTheme();
+
+  press({ name: "enter", sequence: "\r" });
+  // Synchronous prefix of the model turn: busy, before the first await.
+  expect(texts.get("game-cell-text-4")?.content).toBe("X");
+  expect(texts.get("game-cell-text-4")?.fg).toBe(theme.ok);
+  expect(texts.get("game-notice")?.content).toBe("agent is thinking…");
+
+  await settle();
+  expect(texts.get("game-cell-text-0")?.content).toBe("O");
+  expect(texts.get("game-cell-text-0")?.fg).toBe(theme.error);
+  expect(texts.get("game-cell-text-1")?.content).toBe("·");
+  expect(texts.get("game-notice")?.content).toBe("");
+  expect(texts.get("game-status")?.content).toBe("Your turn — X");
+  resetGame();
+});
+
+test("presentGame: the winning line takes the winner's colour", async () => {
+  resetGame();
+  const captured: CapturedModal = {};
+  const press = openGame(captured, "0");
+  const { boxes, texts } = nodes(captured);
+  const theme = getTheme();
+
+  press({ name: "enter", sequence: "\r" }); // X at 4, O at 0
+  await settle();
+  press({ name: "up", sequence: "\u001b[A" });
+  press({ name: "right", sequence: "\u001b[C" });
+  press({ name: "enter", sequence: "\r" }); // X at 2
+  await settle();
+  press({ name: "down", sequence: "\u001b[B" });
+  press({ name: "down", sequence: "\u001b[B" });
+  press({ name: "left", sequence: "\u001b[D" });
+  press({ name: "left", sequence: "\u001b[D" });
+  press({ name: "enter", sequence: "\r" }); // X at 6 → wins [2,4,6]
+  await settle();
+
+  for (const index of [2, 4, 6]) {
+    expect(boxes.get(`game-cell-${index}`)?.borderColor).toBe(theme.ok);
+    expect(boxes.get(`game-cell-${index}`)?.backgroundColor).toBe(theme.highlight);
+  }
+  expect(boxes.get("game-cell-1")?.borderColor).toBe(theme.border);
+  expect(texts.get("game-status")?.content).toContain("X wins!");
   resetGame();
 });

@@ -17,7 +17,6 @@
 // structurally via `typeof import(...)`, never imported at top level.
 import { runModelTurn, type ProviderFactory } from "../harness/provider/single-turn";
 import { openModal, type ModalHandle, type OpenModalInput } from "./modal-host";
-import { clearTranscriptChildren } from "./transcript-blocks";
 import { getTheme } from "./theme";
 
 // --- pure game core ---------------------------------------------------------
@@ -181,6 +180,17 @@ export const GAME_FOOTER = [
   { key: "esc", label: "minimize" },
 ] as const;
 
+/** A cell box: one mark centred inside its own rounded border. */
+export const GAME_CELL_WIDTH = 5;
+export const GAME_CELL_HEIGHT = 3;
+/**
+ * Columns between two cells in a row; rows themselves sit flush. A terminal
+ * cell is roughly twice as tall as it is wide, so one column of horizontal
+ * space and zero rows of vertical space read as the *same* visual gap — a
+ * symmetric `gap: 1` would stretch the board into a tall rectangle.
+ */
+export const GAME_CELL_GAP = 1;
+
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
@@ -189,7 +199,6 @@ type Text = InstanceType<OpenTui["TextRenderable"]>;
 type OtuiLike = {
   BoxRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Box;
   TextRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Text;
-  bold?: (value: unknown) => unknown;
 };
 
 function asOtui(otui: unknown): OtuiLike | undefined {
@@ -256,10 +265,20 @@ function statusText(state: TicTacToeState): string {
   return `Your turn — ${state.turn}`;
 }
 
+/** One board square: the bordered box plus the text node holding its mark. */
+type CellView = { box: Box; text: Text };
+
 /**
  * Present the game modal. The single modal host replaces any open modal, so
  * opening `/game` while another inspector is up swaps to the game (and Esc
  * closes back to the transcript). State persists across closes.
+ *
+ * The board is built ONCE in `renderTab`, as three row boxes of three cell
+ * boxes; `paint` then only mutates the retained `CellView`s. An earlier version
+ * cleared a single `flexDirection: "column"` box and re-added nine bare text
+ * nodes on every keypress, which both flickered and — with no row boxes between
+ * the board and the cells — stacked the whole board into one 9-row column
+ * instead of a 3×3 grid.
  */
 export function presentGame(
   openModalFn: OpenGameModalFn,
@@ -270,34 +289,40 @@ export function presentGame(
   const renderer = options.renderer;
   const core = asOtui(otui);
   let handle: ModalHandle | undefined;
-  let boardBox: Box | undefined;
+  let cells: CellView[] = [];
   let statusBox: Text | undefined;
-  let hintBox: Text | undefined;
+  let noticeBox: Text | undefined;
   let cursor = 4;
+  /** One-off line under the status (model errors); cleared on the next move. */
+  let notice: string | undefined;
   let unsubscribeKey: (() => void) | undefined;
 
   const paint = (): void => {
-    if (core === undefined || boardBox === undefined || statusBox === undefined || hintBox === undefined) {
+    if (statusBox === undefined || noticeBox === undefined || cells.length !== 9) {
       return;
     }
     const theme = getTheme();
-    clearTranscriptChildren(boardBox);
     statusBox.content = statusText(currentGame);
-    hintBox.content = modelBusy ? "agent is thinking…" : "←↑↓→ move · enter place · r new game · esc minimize";
-    for (let i = 0; i < 9; i++) {
-      const cell = currentGame.board[i] ?? null;
-      const isCursor = i === cursor && !isGameOver(currentGame) && !modelBusy;
-      const win = currentGame.winLine?.includes(i) === true;
-      const content = cell === null ? (isCursor ? "·" : ".") : cell;
-      const fg = cell === null ? (isCursor ? theme.focus : theme.muted) : markColor(cell);
-      const styled = win && core.bold !== undefined ? core.bold(content) : content;
-      boardBox.add(
-        new core.TextRenderable(renderer as Renderer, {
-          id: `game-cell-${i}`,
-          content: styled,
-          fg,
-        }),
-      );
+    statusBox.fg = theme.text;
+    if (modelBusy) {
+      noticeBox.content = "agent is thinking…";
+      noticeBox.fg = theme.focus;
+    } else {
+      noticeBox.content = notice ?? "";
+      noticeBox.fg = theme.error;
+    }
+    for (const [index, view] of cells.entries()) {
+      const cell = currentGame.board[index] ?? null;
+      const isCursor = index === cursor && !isGameOver(currentGame) && !modelBusy;
+      const won = currentGame.winLine?.includes(index) === true;
+      view.text.content = cell ?? "·";
+      view.text.fg = cell === null ? theme.muted : markColor(cell);
+      view.box.borderColor = won
+        ? markColor(currentGame.winner ?? "X")
+        : isCursor
+          ? theme.focus
+          : theme.border;
+      view.box.backgroundColor = isCursor || won ? theme.highlight : undefined;
     }
   };
 
@@ -306,6 +331,7 @@ export function presentGame(
       return;
     }
     modelBusy = true;
+    notice = undefined;
     paint();
     const result = await modelMove(currentGame.board, {
       ...(options.provider !== undefined ? { provider: options.provider } : {}),
@@ -325,9 +351,9 @@ export function presentGame(
     } else {
       // Skipped (invalid reply) or errored: never strand the game on "O".
       currentGame = { ...currentGame, turn: "X" };
-      if (result.error !== undefined) {
-        statusBox !== undefined && (statusBox.content = `agent: ${result.error}`);
-      }
+      // The notice goes through state, not straight onto the text node: the
+      // `paint()` two lines down owns that line and would overwrite it.
+      notice = result.error === undefined ? undefined : `agent: ${result.error}`;
     }
     paint();
   };
@@ -341,6 +367,7 @@ export function presentGame(
       return;
     }
     currentGame = placed;
+    notice = undefined;
     paint();
     if (!isGameOver(currentGame) && currentGame.turn === "O") {
       void applyModelMove();
@@ -360,6 +387,7 @@ export function presentGame(
   const restart = (): void => {
     resetGame();
     cursor = 4;
+    notice = undefined;
     paint();
   };
 
@@ -376,11 +404,33 @@ export function presentGame(
         return;
       }
       const theme = getTheme();
+      const r = renderer as Renderer;
 
-      const board = new core.BoxRenderable(renderer as Renderer, {
-        id: "game-board",
-        width: 15,
+      // `alignItems: "center"` on a full-width column is what centres the
+      // legend, the board and the status as a group. A child `alignSelf`
+      // would do it too, but stops that box measuring its own height —
+      // see the collapse notes in transcript-blocks.
+      const wrap = new core.BoxRenderable(r, {
+        id: "game-wrap",
+        width: "100%",
         flexDirection: "column",
+        alignItems: "center",
+      });
+
+      const legend = new core.BoxRenderable(r, {
+        id: "game-legend",
+        flexDirection: "row",
+        marginBottom: 1,
+      });
+      legend.add(new core.TextRenderable(r, { id: "game-legend-x", content: "X you", fg: theme.ok }));
+      legend.add(new core.TextRenderable(r, { id: "game-legend-sep", content: "  ·  ", fg: theme.muted }));
+      legend.add(new core.TextRenderable(r, { id: "game-legend-o", content: "O model", fg: theme.error }));
+      wrap.add(legend);
+
+      const board = new core.BoxRenderable(r, {
+        id: "game-board",
+        flexDirection: "column",
+        flexShrink: 0,
         border: true,
         borderStyle: "rounded",
         borderColor: theme.border,
@@ -388,24 +438,60 @@ export function presentGame(
         paddingLeft: 1,
         paddingRight: 1,
       });
-      boardBox = board;
-      parent.add(board);
+      cells = [];
+      for (let row = 0; row < 3; row++) {
+        const rowBox = new core.BoxRenderable(r, {
+          id: `game-row-${row}`,
+          flexDirection: "row",
+          flexShrink: 0,
+          gap: GAME_CELL_GAP,
+        });
+        for (let col = 0; col < 3; col++) {
+          const index = row * 3 + col;
+          const cellBox = new core.BoxRenderable(r, {
+            id: `game-cell-${index}`,
+            width: GAME_CELL_WIDTH,
+            height: GAME_CELL_HEIGHT,
+            flexShrink: 0,
+            flexGrow: 0,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            border: true,
+            borderStyle: "rounded",
+            borderColor: theme.border,
+          });
+          const cellText = new core.TextRenderable(r, {
+            id: `game-cell-text-${index}`,
+            content: "·",
+            fg: theme.muted,
+          });
+          cellBox.add(cellText);
+          rowBox.add(cellBox);
+          cells.push({ box: cellBox, text: cellText });
+        }
+        board.add(rowBox);
+      }
+      wrap.add(board);
 
-      const status = new core.TextRenderable(renderer as Renderer, {
+      const status = new core.TextRenderable(r, {
         id: "game-status",
         content: "",
         marginTop: 1,
       });
       statusBox = status;
-      parent.add(status);
+      wrap.add(status);
 
-      const hint = new core.TextRenderable(renderer as Renderer, {
-        id: "game-hint",
+      // Kept mounted even while empty: a line that appears and disappears
+      // would shift the board as the model takes its turn.
+      const noticeText = new core.TextRenderable(r, {
+        id: "game-notice",
         content: "",
-        marginTop: 1,
       });
-      hintBox = hint;
-      parent.add(hint);
+      noticeBox = noticeText;
+      wrap.add(noticeText);
+
+      parent.add(wrap);
       paint();
     },
     onClose: () => {
