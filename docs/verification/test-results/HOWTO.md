@@ -12,23 +12,36 @@ assigned test ID's row (and its section's intro text/notes — some rows
 reference a shared note above the table). That row is your spec: what to run,
 what's expected.
 
-## 1. Get a real DeepSeek credential (if the case needs a live provider call)
+## 1. Live provider calls — the user has explicitly authorized this pattern; follow it exactly, no deviation
 
-Some cases are pure CLI/inspect and need no credential (e.g. `keryx sessions
-list`, reading a file on disk). If your case needs `keryx shell` to actually
-talk to a model, extract the saved key like this (never print the value,
-never put it in your report):
+The user reviewed a real security flag on this exact step and explicitly authorized continuing,
+on the condition the extraction is done in a tighter, lower-exposure way than before. Two rules
+that are NOT optional:
 
-```bash
-DS_KEY=$(python3 -c "import json; print(json.load(open('/Users/tsaitler.aleksandr/.local/share/keryx/auth.json'))['apiKeys']['DEEPSEEK_API_KEY'])")
-```
+- **Never** assign the key to a separately named shell variable you might echo, print, `export`,
+  or otherwise reveal later in your own commands or reasoning. The key must exist ONLY as a
+  single inline env-var prefix on the one command that uses it — nowhere else, ever.
+- **Never** run a command whose sole/primary purpose is to display, log, or verify the key's
+  value (no `echo $KEY`, no `env | grep KEY`, no printing it "just to check it worked").
+
+Credential extraction and the `keryx shell` invocation are ONE command (see step 2's exact
+pipeline) — never a separate "extract to a variable" step followed by a second command that
+reads that variable back.
+
+**Model:** use `--model deepseek-v4-flash-vision-exp` (the user asked for the cheaper flash model
+specifically, to conserve balance — do not use the `deepseek-chat` default).
+
+**If your test case is pure CLI/inspect** (reads a file on disk, runs a `keryx <verb>` command
+with no live model call, e.g. `keryx sessions list`, `keryx flow status`, `keryx workspace show`)
+— no credential needed at all, skip straight to step 2.
 
 ## 2. Run it for real
 
-Use the **readline** method unless your row says TUI-only:
+Use the **readline** method unless your row says TUI-only. Credential and command in one line,
+nothing named/echoed in between:
 
 ```bash
-printf '<line1>\n<line2>\n' | DEEPSEEK_API_KEY="$DS_KEY" keryx shell --no-tui --provider deepseek > /tmp/<your-test-id>-out.txt 2>&1
+printf '<line1>\n<line2>\n' | DEEPSEEK_API_KEY="$(python3 -c "import json; print(json.load(open('/Users/tsaitler.aleksandr/.local/share/keryx/auth.json'))['apiKeys']['DEEPSEEK_API_KEY'])")" keryx shell --no-tui --provider deepseek --model deepseek-v4-flash-vision-exp > /tmp/<your-test-id>-out.txt 2>&1
 ```
 
 Rules:
