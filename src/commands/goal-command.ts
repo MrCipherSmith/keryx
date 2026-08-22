@@ -11,15 +11,18 @@
 // `shell.test.ts` / `tui-shell.test.ts`'s source-text audits).
 
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import type { AgentDeps, AgentIO } from "./agent";
 import { runAgentTurn } from "./agent";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { ensureSlateOpened, type SlateSessionRef } from "../session/slate-lifecycle";
-import { readSlate, renderAnchorsBlock, writeSlate, type Slate } from "../session/slate";
+import { readSlate, renderAnchorsBlock, writeSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { resolveOrCreateWorkspace, type ResolveOrCreateResult } from "../sac/workspace-resolve";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
+import { acPath, resolveFlowDir } from "../flow/store";
+import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { writeFileAtomic } from "../lib/fs";
 
 /** `/goal <text> [--workspace <id>] [--auto [N]]`, successfully parsed. */
@@ -299,6 +302,60 @@ async function autoProvisionFlow(cwd: string, goalText: string): Promise<string>
  * read fails for any reason; a missing task list is not a reason to stop
  * the loop, only to say less about what remains.
  */
+/**
+ * SLATE-27 (flow 186, T10/#394): a deterministic, model-emittable signal
+ * that THIS round's work is genuinely finished — checked after every
+ * continuation round (see `continuationRoundClaimsDone` below), not only
+ * once at final round-budget exhaustion the way T10's verifier is. Deliberately
+ * NOT reusing `slate-lifecycle.ts`'s `CLOSE_PHRASES` heuristic: that scans
+ * ordinary natural-language USER text for common phrases ("wrap up", "task
+ * complete", …) and is explicitly disabled for `/goal` (`skipCloseTrigger`)
+ * because the GOAL text itself can innocently contain one of those phrases.
+ * This marker instead scans the MODEL's own final reply for one exact,
+ * deliberately unusual literal token this file itself instructs the model to
+ * emit ONLY when it judges the round's work complete — there is no goal-text
+ * collision risk (the model was never asked to echo arbitrary user text back
+ * verbatim), and no fuzzy substring matching that could false-positive on
+ * ordinary prose.
+ *
+ * Why this exists at all (the actual #394 bug): the round loop's ONLY other
+ * early-exit path is `slateSession.opened` flipping to `false`, which only
+ * happens when the bound flow's on-disk status is independently `"done"`
+ * (`isCourseDone`/`closeSlateOnFlowDone`, agent.ts) — and nothing in the
+ * model's actual tool set can ever cause that flip (no tool marks a flow
+ * task, let alone the whole flow, done). Left unfixed, the loop always burns
+ * its full `roundsCap`. This marker gives the loop a second, independent way
+ * to stop early WITHOUT touching that flow-status machinery at all — it
+ * never closes/archives the slate itself (that remains solely
+ * `closeSlateOnFlowDone`'s job); it only ends the round loop early so T10's
+ * verifier pass (which always runs next, unconditionally) is reached sooner.
+ * A false "done" claim from the model is not fatal: T10 is the authority on
+ * whether the goal is ACTUALLY achieved, and can still grant one more round
+ * (`roundsLeft > 0` below) if it disagrees — this marker only ever saves
+ * rounds, it never skips verification.
+ */
+export const ROUND_DONE_MARKER = "GOAL_ROUND_COMPLETE";
+
+/**
+ * True when the most recent assistant message in `history` (the final
+ * text-only reply that just ended a continuation round — `agent.ts` always
+ * pushes exactly one of these per completed turn) contains
+ * {@link ROUND_DONE_MARKER}. Scans backward from the tail rather than
+ * indexing `history.length - 1` directly: `runAgentTurn` can push several
+ * messages for one round (tool calls/results, Anchors re-injects, …), and
+ * the assistant's own final text is the last `role: "assistant"` entry, not
+ * necessarily the very last entry pushed.
+ */
+function continuationRoundClaimsDone(history: readonly NormalizedMessage[]): boolean {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message?.role === "assistant") {
+      return message.content.includes(ROUND_DONE_MARKER);
+    }
+  }
+  return false;
+}
+
 async function buildContinuationMessage(
   cwd: string,
   slateSession: SlateSessionRef,
@@ -306,7 +363,11 @@ async function buildContinuationMessage(
   roundsCap: number,
 ): Promise<string> {
   const totalRounds = roundsCap + 1;
-  const generic = `Continue working toward the stated goal (round ${round} of ${totalRounds}).`;
+  const doneInstruction =
+    `If — and only if — the stated goal is now FULLY achieved and there is nothing further to do this round, ` +
+    `end your reply with the exact line ${ROUND_DONE_MARKER} on its own, and nothing else on that line. ` +
+    `Otherwise do not include that line at all.`;
+  const generic = `Continue working toward the stated goal (round ${round} of ${totalRounds}). ${doneInstruction}`;
   const slate = await readSlate(slateSession.dir).catch(() => undefined);
   const flowId = slate?.course.flowRef;
   if (flowId === undefined) {
@@ -361,6 +422,95 @@ export function parseVerifierVerdict(output: string): GoalVerifierVerdict | unde
   }
 }
 
+/** Upper bound on how many recent Seeds are quoted verbatim into the verifier's evidence (#392). Generous but bounded — a Seed's own text is already capped at `SEED_TEXT_MAX_LENGTH`. */
+const MAX_EVIDENCE_SEEDS = 10;
+
+function summarizeRecentSeeds(seeds: readonly SlateSeed[]): string[] {
+  return seeds.slice(-MAX_EVIDENCE_SEEDS).map((seed) => `- Seed${seed.kind !== undefined ? ` [${seed.kind}]` : ""}: ${seed.text}`);
+}
+
+/**
+ * Extracts a compact summary of every `workspace_propose` call THIS run
+ * made, from `history` — never a fresh SAC/workspace read. `history` already
+ * carries the real, ordered dispatch/result pairs for every tool call the
+ * normal `executeCall` path ran this session (`agent.ts`), so this is the
+ * SAME live evidence the run itself produced, not a re-derived approximation.
+ * Pairs each `workspace_propose` call with its own result by `toolCallId` —
+ * never assumes adjacency, since a parallel tool-call batch (agent.ts's own
+ * `anchorsToAnnounce`/`repeatedFailureHint` deferral comment explains why)
+ * can interleave several calls' results together.
+ */
+function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): string[] {
+  const lines: string[] = [];
+  for (const message of history) {
+    if (message.role !== "assistant" || message.toolCalls === undefined) {
+      continue;
+    }
+    for (const call of message.toolCalls) {
+      if (call.name !== "workspace_propose") {
+        continue;
+      }
+      const resultMessage = history.find((candidate) => candidate.role === "tool" && candidate.toolCallId === call.id);
+      let argSummary = call.arguments;
+      try {
+        const parsedArgs = JSON.parse(call.arguments) as Record<string, unknown>;
+        const kind = typeof parsedArgs.kind === "string" ? parsedArgs.kind : "?";
+        const note = typeof parsedArgs.note === "string" ? parsedArgs.note : undefined;
+        argSummary = `kind=${kind}${note !== undefined ? `, note=${note}` : ""}`;
+      } catch {
+        // Unparseable arguments (should not happen for a real dispatched call) — fall back to the raw string.
+      }
+      const outcome = resultMessage !== undefined ? resultMessage.content : "(no result recorded this run)";
+      lines.push(`- workspace_propose: ${argSummary} -> ${outcome}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * SLATE-27 (flow 186, T10, #392): true when the bound flow's own
+ * `acceptance-criteria.md` already defers completion judgment to THIS
+ * verifier check, rather than to the flow's own task checkboxes — detected
+ * by the exact literal phrase `autoProvisionFlow` (above) writes into that
+ * file, not by any flow-id/source check. A `/goal --auto` run can reuse an
+ * ALREADY-bound flow (SLATE-27's "existing one is reused" behavior) that a
+ * human authored with ordinary completion semantics — that flow's tasks
+ * genuinely ARE evidence of non-completion, and must not be waved off just
+ * because `/goal --auto` happens to be driving it this time. Fails closed
+ * (`false`) on any read error: the "don't trust flow-task state" instruction
+ * is only ever ADDED to the verifier's task, never assumed by default.
+ */
+async function flowDefersCompletionToVerifier(cwd: string, flowId: string): Promise<boolean> {
+  try {
+    const dir = await resolveFlowDir(cwd, flowId);
+    const text = await readFile(acPath(cwd, dir), "utf8");
+    // Whitespace-normalized: `autoProvisionFlow`'s own AC1 text (above) wraps
+    // this exact phrase across two lines ("...judged by the\n  verifier
+    // subagent...") for readability in the rendered markdown file — a plain
+    // substring match against the raw file content would never see it as
+    // contiguous. Collapsing all whitespace runs to a single space makes the
+    // match robust to that line wrap without caring about exact formatting.
+    const normalized = text.replace(/\s+/g, " ");
+    return normalized.includes("judged by the verifier subagent");
+  } catch {
+    return false;
+  }
+}
+
+/** Combined evidence trail + defer-to-verifier detection for one `runGoalVerifier` dispatch (#392). */
+async function buildVerifierEvidence(
+  cwd: string,
+  slateSession: SlateSessionRef,
+  history: readonly NormalizedMessage[],
+): Promise<{ evidenceText: string; deferToVerifier: boolean }> {
+  const slate = await readSlate(slateSession.dir).catch(() => undefined);
+  const lines = [...(slate !== undefined ? summarizeRecentSeeds(slate.seeds) : []), ...summarizeWorkspaceProposals(history)];
+  const evidenceText = lines.length > 0 ? lines.join("\n") : "(no Seeds or workspace_propose records were recorded this run)";
+  const flowId = slate?.course.flowRef;
+  const deferToVerifier = flowId !== undefined ? await flowDefersCompletionToVerifier(cwd, flowId) : false;
+  return { evidenceText, deferToVerifier };
+}
+
 /**
  * SLATE-27 (flow 186, T10, AC4): one independent check on whether the goal
  * text was actually achieved, dispatched through the SAME `spawn_subagent`
@@ -369,18 +519,48 @@ export function parseVerifierVerdict(output: string): GoalVerifierVerdict | unde
  * "read_only"` (no shell, no writes): a verifier that could itself mutate
  * the repo while "checking" it is not an independent check.
  *
+ * #392: the child is handed this run's actual evidence trail (recent Slate
+ * Seeds and `workspace_propose` records, via `buildVerifierEvidence`) rather
+ * than the bare goal text alone, and — when the bound flow's own AC text
+ * defers completion judgment to this very check — an explicit instruction
+ * not to weight the flow's own (by-design, permanently unchecked) task list
+ * as evidence of non-completion.
+ *
+ * #389: unlike a real assistant-turn tool call, this dispatch never goes
+ * through `executeCall`'s `io.onToolCall`/`onToolResult` hooks (this
+ * function calls `tool.invoke` directly — see this module's header comment
+ * for why: `runGoalVerifier` is not itself a model-driven turn). This
+ * function now fires those SAME hooks itself, and pushes the SAME shape of
+ * assistant-tool-call + tool-result pair into `history` a real dispatch
+ * would have produced (`NormalizedMessage.toolCalls`/`toolCallId`) — so a
+ * resumed/exported session transcript shows whether T10 actually ran, not
+ * just its final achieved/not-achieved verdict.
+ *
  * Returns `undefined` — never throws — when: the session has no
  * `spawn_subagent` tool wired in, the dispatch itself errors, or the
  * child's summary does not parse as a verdict. Every one of those means
  * "the loop's existing stop decision stands, unverified" — an unavailable
  * or unparseable verifier must never be the reason `/goal --auto` loops
- * forever chasing a second opinion it can't get.
+ * forever chasing a second opinion it can't get. Also unlike a silent
+ * `undefined` return alone, EVERY one of these outcomes is now recorded in
+ * `history` (or, when no tool is wired in at all, is simply not dispatchable
+ * — there is no call to record) so the caller's own `systemLine` on every
+ * outcome (achieved / not achieved / unavailable) is backed by a real trace.
  */
-async function runGoalVerifier(deps: AgentDeps, goalText: string): Promise<GoalVerifierVerdict | undefined> {
+async function runGoalVerifier(
+  deps: AgentDeps,
+  goalText: string,
+  cwd: string,
+  slateSession: SlateSessionRef,
+  history: NormalizedMessage[],
+  io: AgentIO,
+  mintCallId: () => string,
+): Promise<GoalVerifierVerdict | undefined> {
   const tool = deps.tools.find((candidate) => candidate.definition.name === "spawn_subagent");
   if (tool === undefined) {
     return undefined;
   }
+  const { evidenceText, deferToVerifier } = await buildVerifierEvidence(cwd, slateSession, history);
   const task = [
     "Independently verify whether the following goal has ACTUALLY been achieved, based on the",
     "current, real state of the repository (read the real files/tests — never trust a prior",
@@ -388,16 +568,50 @@ async function runGoalVerifier(deps: AgentDeps, goalText: string): Promise<GoalV
     "",
     `Goal: "${goalText}"`,
     "",
+    "Evidence this run already produced (recent Slate Seeds and workspace_propose records) —",
+    "weigh this as real evidence of what was actually done, not merely a claim:",
+    evidenceText,
+    "",
+    ...(deferToVerifier
+      ? [
+          "This run's Task Manager flow acceptance criteria explicitly defer the completion",
+          "judgment to THIS verifier check, not to the flow's own task checkboxes — its tasks",
+          "are expected to remain unchecked even when the goal is genuinely achieved. Do NOT",
+          "treat an incomplete/unchecked flow task list, by itself, as evidence the goal is NOT",
+          "achieved; judge achievement from the real repository state and the evidence above.",
+          "",
+        ]
+      : []),
     "Reply with EXACTLY one JSON object and nothing else, no prose before or after it:",
     '{"achieved": true or false, "gaps": ["specific reason it is not fully achieved", ...]}',
     '"gaps" must be empty when "achieved" is true.',
   ].join("\n");
-  let result: { output: string; isError: boolean };
+  const input = { task, mode: "read_only", label: "goal-verifier" };
+  const callId = mintCallId();
+  io.onToolCall?.("spawn_subagent", JSON.stringify(input));
+  history.push({
+    role: "assistant",
+    content: "",
+    provenance: "model",
+    toolCalls: [{ id: callId, name: "spawn_subagent", arguments: JSON.stringify(input) }],
+  });
+  io.onHistoryChange?.("tool");
+  let result: InteractiveToolResult;
   try {
-    result = await tool.invoke({ task, mode: "read_only", label: "goal-verifier" });
-  } catch {
+    result = await tool.invoke(input);
+  } catch (err) {
+    const errorResult: InteractiveToolResult = {
+      output: `spawn_subagent dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+      isError: true,
+    };
+    io.onToolResult?.("spawn_subagent", errorResult);
+    history.push({ role: "tool", content: errorResult.output, provenance: "tool", toolCallId: callId });
+    io.onHistoryChange?.("tool");
     return undefined;
   }
+  io.onToolResult?.("spawn_subagent", result);
+  history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: callId });
+  io.onHistoryChange?.("tool");
   if (result.isError) {
     return undefined;
   }
@@ -604,6 +818,20 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
       systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — continuing toward the goal.\n`);
       await runAgentTurn(io, deps, history, continuationText, turnOptions);
+      // #394: a real, deterministic way for the model to end the round loop
+      // short of full round-budget exhaustion — see `continuationRoundClaimsDone`'s
+      // own doc comment for why this (rather than flow-status/`slateSession.opened`)
+      // is the actual fix. Never closes/archives the slate itself; it only stops
+      // THIS loop early so T10's verifier pass (below, unconditional) is reached
+      // sooner, with the remaining `roundsLeft` budget still available to it.
+      if (continuationRoundClaimsDone(history)) {
+        systemLine(
+          io,
+          `/goal --auto: model signaled this round's work is complete (round ${round}/${roundsCap + 1}) — ` +
+            `ending the round budget early; the verifier will confirm.\n`,
+        );
+        break;
+      }
     }
 
     // T10 (AC4): one verifier pass before the loop finally stops. This
@@ -615,8 +843,18 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     // disagreement between the verifier and the course tracker must still
     // terminate, not spin).
     const wasOpenBeforeVerifier = slateSession.opened;
-    const verdict = await runGoalVerifier(deps, parsed.text);
-    if (verdict !== undefined && !verdict.achieved) {
+    const verdict = await runGoalVerifier(deps, parsed.text, cwd, slateSession, history, io, mintAttemptId);
+    // #389: every outcome — achieved, not achieved, unavailable — is now
+    // observable, not only the "not achieved" branch. "Unavailable" covers
+    // every reason `runGoalVerifier` returns `undefined` (no `spawn_subagent`
+    // tool wired in, the dispatch itself errored, or the child's summary did
+    // not parse as a verdict) — all mean the same thing to the caller: the
+    // outcome was never independently checked.
+    if (verdict === undefined) {
+      systemLine(io, "/goal --auto: verifier unavailable — outcome not independently checked.\n");
+    } else if (verdict.achieved) {
+      systemLine(io, "/goal --auto: verifier confirmed the goal is achieved.\n");
+    } else {
       systemLine(
         io,
         `/goal --auto: verifier found the goal not fully achieved${
