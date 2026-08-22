@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-19T12:50:38.360Z
+generatedAt: 2026-08-22T15:31:16.206Z
 
 ## Frameworks
 
@@ -16,6 +16,7 @@ generatedAt: 2026-08-19T12:50:38.360Z
 
 - bunfig.toml
 - tsconfig.json
+- vscode-extension/tsconfig.json
 
 ## Test Files
 
@@ -29,6 +30,7 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - src/assets/command.test.ts
 - src/assets/resolver.test.ts
 - src/assets/seed.test.ts
+- src/capability/external-agents.test.ts
 - src/capability/golden-rule.test.ts
 - src/capability/no-optional-imports.test.ts
 - src/capability/reference.test.ts
@@ -43,6 +45,7 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - src/commands/agent-destructive-gate.test.ts
 - src/commands/agent-permission-mode.test.ts
 - src/commands/agent.test.ts
+- src/commands/agents-external.test.ts
 - src/commands/agents.monitor.test.ts
 - src/commands/ctx.rg-argv.test.ts
 - src/commands/ctx.test.ts
@@ -55,6 +58,7 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - src/commands/harness.replay.test.ts
 - src/commands/harness.test.ts
 - src/commands/init-mcp-offer.test.ts
+- src/commands/init-mcp-runtimes.test.ts
 - src/commands/init.escape.test.ts
 - src/commands/init.no-git.test.ts
 - src/commands/init.test.ts
@@ -79,6 +83,7 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - src/commands/serve.recovery.test.ts
 - src/commands/sessions.fork.test.ts
 - src/commands/shell-approval.test.ts
+- src/commands/shell-headless-sigint.test.ts
 - src/commands/shell-launch.test.ts
 - src/commands/shell-pty-launch.smoke.test.ts
 - src/commands/shell-slash-registry.test.ts
@@ -95,12 +100,8 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - src/ctx/orient.test.ts
 - src/ctx/runtimes.test.ts
 - src/eval/block-d-corpora.test.ts
-- src/eval/corpus.test.ts
-- src/flow/allocation.test.ts
-- src/flow/context-inject.test.ts
-- src/flow/context-p0.test.ts
 
-- ... 326 more
+- ... 372 more
 
 ## CI
 
@@ -115,6 +116,9 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - CLAUDE.md: For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.
 - CLAUDE.md: For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.
 - docs/README.md: [Implementation spec](report/release-readiness-2026-07-10/implementation-spec.md)
+- docs/analysis/keryx-harness-comparison/2026-08-20/report/en/report.md: | Testing intelligence | **2** | 1 | – | – | **2** | – | 1 | – |
+- docs/analysis/keryx-harness-comparison/2026-08-20/report/en/report.md: 5. **Quality gates** — single weighted risk score (lint/type/test/complexity/coverage/hotspots) checked in CI against a main baseline. Gemini CLI's `preflight` chains checks but doesn't roll into one score.
+- docs/analysis/keryx-harness-comparison/2026-08-20/report/en/report.md: Testing intelligence ceiling
 - docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: failing_candidate_output_test
 - docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: budget_33_of_32_test
 - docs/analysis/keryx-improvements-1/2026-08-14/plans/ai/implementation-plan.md: stable_id_reorder_test
@@ -137,9 +141,6 @@ generatedAt: 2026-08-19T12:50:38.360Z
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-026 | P1 | Sibling worktrees cannot share checkout-rooted SAC state | containment/storage | explicit clone/worktree model test |
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-027 | P1 | Every read performs a durable locked append; no surfaced retention | FWK ledger | 10k-read SLO, prune/repair tests |
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-034 | P1 | Historical test totals are presented as current evidence | SAC docs | evidence pinned to commit/tag/date |
-- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
-- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://github.com/a2aproject/A2A/blob/main/docs/specification.md
-- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: owner_contract_tests
 
 ## Recommendations
 

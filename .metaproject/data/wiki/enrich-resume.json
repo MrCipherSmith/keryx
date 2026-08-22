@@ -1,7 +1,7 @@
 {
-  "updatedAt": "2026-08-19T12:51:30.712Z",
+  "updatedAt": "2026-08-21T20:26:50.012Z",
   "provider": "deepseek",
-  "model": "deepseek-v4-flash",
+  "model": "deepseek-chat",
   "completed": [
     "architecture/quality-map.md",
     "architecture/testing-map.md",
@@ -25,7 +25,8 @@
     "components/src-harness-provider.md",
     "components/src-harness-tool-builtin.md",
     "components/src-metrics.md",
-    "components/src-harness-tool.md"
+    "components/src-harness-tool.md",
+    "components/src-sac.md"
   ],
   "failed": [
     {

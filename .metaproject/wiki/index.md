@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-19T12:51:43.237Z | pages: 49 -->
+<!-- generated: 2026-08-22T15:31:04.690Z | pages: 50 -->
 
 ### Architecture
 
@@ -87,6 +87,7 @@ _No pages yet._
 - [src/metrics](components/src-metrics.md) (accepted)
 - [src/review](components/src-review.md) (accepted)
 - [src/rules](components/src-rules.md) (accepted)
+- [src/sac (Shared Agent Context)](components/src-sac.md) (accepted)
 - [src/security](components/src-security.md) (accepted)
   - [src/security/agent-hooks](components/src-security-agent-hooks.md) (accepted)
   - [src/security/detect](components/src-security-detect.md) (accepted)
