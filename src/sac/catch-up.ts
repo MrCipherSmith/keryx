@@ -35,7 +35,7 @@
 // has had a chance to clear an old `terminal-state.json`).
 
 import { randomUUID } from "node:crypto";
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { isLockHeld, pathExists } from "../lib/fs";
 import { readConfigFile } from "../lib/config-dir";
@@ -49,6 +49,8 @@ import { localWorkspaceAuthorizationServer } from "./workspace-service";
 import { computeLifecycleFlags, type LifecycleFlag } from "./lifecycle-flag";
 import { readSidecarNote } from "./proposal-evidence";
 import { externalSlatesDir, readExternalSlate } from "../session/external-slate";
+import { collectPages } from "../wiki/collect";
+import { collectEntries } from "../memory/store";
 
 // `Proposal` is not exported from `proposal-lifecycle.ts` (it is that
 // module's own private record shape) — derived structurally from the public
@@ -100,6 +102,32 @@ export type CatchUpUnknownItem = {
   // such artifact, same as before this change.
   wrapUpOutcome?: { trigger: WrapUpTrigger; generatedAt: string; groups: WrapUpGroupOutcome[] };
 };
+/**
+ * Flow 194 / issue #391 (SAC CLI bypass backstop): a session during whose
+ * time window an SAC-owned path (wiki/memory/skill) picked up durable,
+ * "reviewed"-looking content on disk with NO corresponding SAC receipt for
+ * that exact path — i.e. it did not get there via an accepted proposal's
+ * guarded owner-writer (`wiki-owner-writer.ts` / `memory-owner-writer.ts` /
+ * `skill-owner-writer.ts`). `keryx wiki enrich`'s old default (fixed in this
+ * same flow) was one concrete way to produce this; this category is the
+ * general, standing backstop for any OTHER present or future SAC-owned CLI
+ * subcommand with the same structural gap — distinct and separately named
+ * (never folded into `unknown`) precisely because "some CLI command bypassed
+ * review" is a different, more actionable finding than "nothing is known
+ * about this session at all."
+ */
+export type CatchUpUnreviewedPathItem = {
+  type: "unreviewed-sac-path";
+  sessionId: string;
+  workspaceId?: string;
+  owner: "wiki" | "memory" | "skill";
+  /** Workspace-relative path under `.metaproject/`, e.g. `wiki/components/foo.md`. */
+  path: string;
+  /** The frontmatter Status value found (wiki/memory only — skill has none). */
+  status?: string;
+  /** The file's on-disk mtime (ISO) — how this got attributed to `sessionId`. */
+  changedAt: string;
+};
 export type CatchUpItem = CatchUpProposalItem | CatchUpBlockedItem | CatchUpUnboundCandidateItem | CatchUpUnknownItem;
 
 export type CatchUpReport = {
@@ -115,6 +143,12 @@ export type CatchUpReport = {
   // itself — the CLI layer decides whether to DISPLAY the section
   // (`--include-lifecycle-flags`, default shown).
   lifecycleFlags: LifecycleFlag[];
+  // Flow 194 / issue #391: ALSO a separate, additive category, same posture
+  // as `lifecycleFlags` above — a session can appear here AND in `unknown`
+  // (or AND in `proposals[]`) at once; this is an independent fact about
+  // what changed on disk, not a replacement classification for the session
+  // as a whole. Always populated; never folded into `unknown`.
+  unreviewedPaths: CatchUpUnreviewedPathItem[];
 };
 
 /**
@@ -129,17 +163,21 @@ export type CatchUpReport = {
  * `proposals[]`, never an error (never leaking whether the id exists).
  */
 export async function buildCatchUp(input: { cwd: string; workspaceId?: string }): Promise<CatchUpReport> {
-  const [proposals, sessionCategories, lifecycleFlagsAll] = await Promise.all([
+  const [proposals, sessionCategories, lifecycleFlagsAll, unreviewedPathsAll] = await Promise.all([
     collectProposals(input.cwd, input.workspaceId),
     collectSessionCategories(input.cwd),
     computeLifecycleFlags(input.cwd),
+    detectUnreviewedSacPathChanges(input.cwd, listSessions(input.cwd)),
   ]);
   // Same `input.workspaceId` scoping `collectProposals` already applies —
   // never expanding beyond what the caller asked to see.
   const lifecycleFlags = input.workspaceId === undefined
     ? lifecycleFlagsAll
     : lifecycleFlagsAll.filter((flag) => flag.kind !== "workspace" || flag.ref === input.workspaceId);
-  return { proposals, ...sessionCategories, lifecycleFlags };
+  const unreviewedPaths = input.workspaceId === undefined
+    ? unreviewedPathsAll
+    : unreviewedPathsAll.filter((item) => item.workspaceId === input.workspaceId);
+  return { proposals, ...sessionCategories, lifecycleFlags, unreviewedPaths };
 }
 
 async function collectProposals(cwd: string, workspaceId: string | undefined): Promise<CatchUpProposalItem[]> {
@@ -385,6 +423,208 @@ async function collectSessionCategories(cwd: string): Promise<SessionCategories>
   // Add external unbound candidates to the same list (both internal and external are reported together)
   unboundCandidates.push(...externalUnboundCandidates);
   return { blocked, unboundCandidates, unknown };
+}
+
+// ============================================================================
+// Flow 194 / issue #391 backstop: SAC-owned paths (wiki/memory/skill) that
+// picked up durable content with no SAC receipt behind it — see
+// `CatchUpUnreviewedPathItem`'s doc comment above for the full rationale.
+// ============================================================================
+
+/** How long after a session's last-seen timestamp a file mtime still counts
+ * as "during this session" — covers the write flushing to disk shortly after
+ * the session's last recorded activity, not a meaningfully different window. */
+const SESSION_ATTRIBUTION_SLACK_MS = 5 * 60_000;
+
+type OwnerReceiptLike = { targetRef?: unknown };
+
+/**
+ * Every `<owner>-write-receipts/*.json` file across every workspace under
+ * `cwd`, as the set of `targetRef`s (workspace-relative under `.metaproject/`,
+ * e.g. `wiki/decisions/sac-abc.md`) a real accepted SAC proposal already
+ * legitimately wrote — the SAME receipts `wiki-owner-writer.ts` /
+ * `memory-owner-writer.ts` / `skill-owner-writer.ts` write via `persist()`.
+ * A path in this set is proven reviewed; anything else this scan finds is not.
+ */
+async function collectReceiptTargets(cwd: string, owner: "wiki" | "memory" | "skill"): Promise<Set<string>> {
+  const targets = new Set<string>();
+  const workspacesDir = path.join(cwd, ".metaproject", "workspaces");
+  let workspaceIds: string[];
+  try {
+    workspaceIds = (await readdir(workspacesDir, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return targets; // no workspaces dir yet — nothing has ever been reviewed
+  }
+  for (const workspaceId of workspaceIds) {
+    const receiptsDir = path.join(workspacesDir, workspaceId, `${owner}-write-receipts`);
+    let files: string[];
+    try {
+      files = (await readdir(receiptsDir)).filter((name) => name.endsWith(".json"));
+    } catch {
+      continue; // this workspace never had this owner write anything
+    }
+    for (const file of files) {
+      const result = readConfigFile(path.join(receiptsDir, file));
+      if (!result.ok) continue; // malformed/oversized — never block the scan
+      try {
+        const receipt = JSON.parse(result.text) as OwnerReceiptLike;
+        if (typeof receipt.targetRef === "string") {
+          targets.add(receipt.targetRef.replace(/^\.\//, ""));
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return targets;
+}
+
+/** Best-effort: which of `sessions` (already `cwd`-scoped, newest-first) was
+ * active when `absolutePath` last changed. `undefined` when no session's
+ * window covers the mtime (e.g. content that predates session tracking, or a
+ * stat failure) — such items are never reported, so this backstop only ever
+ * flags a change it can actually attribute to a real session (AC2's "a
+ * session where..."), never every pre-existing accepted page in the repo. */
+async function attributeToSession(
+  absolutePath: string,
+  sessionsNewestFirst: readonly SessionSummary[],
+): Promise<{ sessionId: string; workspaceId: string | undefined; changedAt: string } | undefined> {
+  let mtimeMs: number;
+  try {
+    mtimeMs = (await stat(absolutePath)).mtimeMs;
+  } catch {
+    return undefined;
+  }
+  for (const session of sessionsNewestFirst) {
+    const start = Date.parse(session.createdAt);
+    const end = Date.parse(session.updatedAt);
+    if (Number.isNaN(start) || Number.isNaN(end)) continue;
+    if (mtimeMs >= start && mtimeMs <= end + SESSION_ATTRIBUTION_SLACK_MS) {
+      const workspaceId = (await safeReadSlate(sessionDir(session.projectPath, session.id)))?.workspaceId;
+      return { sessionId: session.id, workspaceId, changedAt: new Date(mtimeMs).toISOString() };
+    }
+  }
+  return undefined;
+}
+
+/** Recursively finds every `SKILL.md` under `dir` (small, bounded trees —
+ * `.metaproject/project-skills/sac/`, not the whole repo). */
+async function findSkillFiles(dir: string): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const found: string[] = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await findSkillFiles(full)));
+    } else if (entry.isFile() && entry.name === "SKILL.md") {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+/**
+ * The backstop itself (AC2): scans wiki + memory for `Status: accepted`
+ * content, and the SAC-reserved `project-skills/sac/` module for any skill at
+ * all, each cross-checked against that owner's real SAC receipts
+ * (`collectReceiptTargets`). Anything both "looks durable/reviewed" and
+ * "has no receipt" is attributed to whichever `cwd`-scoped session was active
+ * when it last changed (`attributeToSession`) and reported.
+ *
+ * Skill is intentionally narrower than wiki/memory: a normal `keryx skills
+ * create` (any module) is common, everyday, non-SAC activity — scanning it
+ * broadly the way wiki/memory are scanned would flood this report with
+ * routine noise. `project-skills/sac/` is different: `skill-owner-writer.ts`
+ * says outright that "every SAC-derived skill lands under the fixed `sac`
+ * module so it is always distinguishable from a skill a person created via
+ * `keryx skills create` directly" — so ANYTHING under that specific module
+ * with no matching receipt is, by that module's own stated purpose, exactly
+ * this bug's shape: something impersonating (or bypassing) an SAC-reviewed
+ * skill. Wiki/memory have no such reserved-namespace convention to lean on,
+ * so they get the broader "any accepted content, no receipt" check instead —
+ * the one that would have caught the original `wiki enrich` repro directly.
+ */
+async function detectUnreviewedSacPathChanges(
+  cwd: string,
+  sessions: readonly SessionSummary[],
+): Promise<CatchUpUnreviewedPathItem[]> {
+  const scoped = [...sessions]
+    .filter((session) => session.projectPath === cwd)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  if (scoped.length === 0) return [];
+
+  const [wikiReceipts, memoryReceipts, skillReceipts] = await Promise.all([
+    collectReceiptTargets(cwd, "wiki"),
+    collectReceiptTargets(cwd, "memory"),
+    collectReceiptTargets(cwd, "skill"),
+  ]);
+
+  const items: CatchUpUnreviewedPathItem[] = [];
+
+  const wikiPages = await collectPages(cwd).catch(() => []);
+  for (const page of wikiPages) {
+    if ((page.status ?? "").toLowerCase() !== "accepted") continue;
+    const targetRef = `wiki/${page.relativePath}`;
+    if (wikiReceipts.has(targetRef)) continue;
+    const attribution = await attributeToSession(page.absolutePath, scoped);
+    if (attribution === undefined) continue;
+    items.push({
+      type: "unreviewed-sac-path",
+      sessionId: attribution.sessionId,
+      ...(attribution.workspaceId !== undefined ? { workspaceId: attribution.workspaceId } : {}),
+      owner: "wiki",
+      path: targetRef,
+      ...(page.status !== null ? { status: page.status } : {}),
+      changedAt: attribution.changedAt,
+    });
+  }
+
+  const memoryEntries = await collectEntries(cwd).catch(() => []);
+  for (const entry of memoryEntries) {
+    if (entry.status !== "accepted") continue;
+    const targetRef = `memory/${entry.relativePath}`;
+    if (memoryReceipts.has(targetRef)) continue;
+    const attribution = await attributeToSession(entry.absolutePath, scoped);
+    if (attribution === undefined) continue;
+    items.push({
+      type: "unreviewed-sac-path",
+      sessionId: attribution.sessionId,
+      ...(attribution.workspaceId !== undefined ? { workspaceId: attribution.workspaceId } : {}),
+      owner: "memory",
+      path: targetRef,
+      status: entry.status,
+      changedAt: attribution.changedAt,
+    });
+  }
+
+  const sacSkillsDir = path.join(cwd, ".metaproject", "project-skills", "sac");
+  const skillFiles = await findSkillFiles(sacSkillsDir);
+  for (const absolutePath of skillFiles) {
+    const targetRef = path
+      .relative(path.join(cwd, ".metaproject"), absolutePath)
+      .split(path.sep)
+      .join("/");
+    if (skillReceipts.has(targetRef)) continue;
+    const attribution = await attributeToSession(absolutePath, scoped);
+    if (attribution === undefined) continue;
+    items.push({
+      type: "unreviewed-sac-path",
+      sessionId: attribution.sessionId,
+      ...(attribution.workspaceId !== undefined ? { workspaceId: attribution.workspaceId } : {}),
+      owner: "skill",
+      path: targetRef,
+      changedAt: attribution.changedAt,
+    });
+  }
+
+  return items;
 }
 
 async function isSlateEngaged(dir: string): Promise<boolean> {

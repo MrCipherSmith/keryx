@@ -748,3 +748,142 @@ test("AC-395 (AC2): integration test — open, seed, close an external slate via
   // Verify the evidence path points to the external slate file
   expect(item?.evidencePath).toContain(externalSessionId);
 });
+
+// --- Flow 194 / issue #391: unreviewedPaths backstop ------------------------
+// `keryx wiki enrich` used to write + auto-accept content with zero SAC
+// proposal record (the original repro this flow closes). Part 1 fixes that
+// specific command; this is the general backstop — `buildCatchUp` must flag
+// ANY session during which an SAC-owned path (wiki/memory/skill) picked up
+// durable content with no SAC receipt behind it, as its OWN distinct,
+// separately-named category — never folded into "unknown".
+
+async function writeWikiPage(cwd: string, relativePath: string, status: string, type = "component"): Promise<string> {
+  const abs = path.join(cwd, ".metaproject", "wiki", relativePath);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(
+    abs,
+    `---\nTitle: Test Page\nVersion: 1.0.0\nType: ${type}\nStatus: ${status}\nSummary: test\n---\n\n# Test Page\n\nSome body content.\n`,
+  );
+  return abs;
+}
+
+async function writeMemoryEntry(cwd: string, relativePath: string, status: string): Promise<string> {
+  const abs = path.join(cwd, ".metaproject", "memory", relativePath);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(
+    abs,
+    `# Test Entry\n\nVersion: 0.1.0\nType: task-note\nStatus: ${status}\nConfidence: medium\n\n## Summary\n\nSome memory content.\n`,
+  );
+  return abs;
+}
+
+async function writeOwnerReceipt(cwd: string, workspaceId: string, owner: "wiki" | "memory" | "skill", targetRef: string): Promise<void> {
+  const dir = path.join(cwd, ".metaproject", "workspaces", workspaceId, `${owner}-write-receipts`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, `${randomUUID()}.json`),
+    `${JSON.stringify({ receiptRef: `./${targetRef.replace(/\.md$/, "")}.receipt.json`, targetRef: `./${targetRef}`, completedAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+}
+
+test("flow 194 AC2: a wiki page that reached Status: accepted during a session, with no SAC receipt, surfaces as its own 'unreviewed-sac-path' item — not lumped into 'unknown'", async () => {
+  const cwd = await tempCwd("keryx-catchup-unreviewed-wiki-");
+  const handle = createSession({ cwd, title: "bypassed wiki enrich" });
+  await writeWikiPage(cwd, "components/bypass.md", "accepted");
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id);
+  expect(item).toBeDefined();
+  expect(item?.type).toBe("unreviewed-sac-path");
+  expect(item?.owner).toBe("wiki");
+  expect(item?.path).toBe("wiki/components/bypass.md");
+  expect(item?.status).toBe("accepted");
+
+  // This session never touched Slate at all — absent this backstop it would
+  // not appear ANYWHERE in the report, let alone get folded into "unknown".
+  expect(sessionIds(report.unknown)).not.toContain(handle.summary.id);
+});
+
+test("flow 194: a wiki page still Status: draft is never flagged — enrich rewriting prose without accepting is legitimate, ordinary activity", async () => {
+  const cwd = await tempCwd("keryx-catchup-draft-wiki-");
+  const handle = createSession({ cwd, title: "ordinary draft enrichment" });
+  await writeWikiPage(cwd, "components/still-draft.md", "draft");
+
+  const report = await buildCatchUp({ cwd });
+
+  expect(report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeUndefined();
+});
+
+test("flow 194: a wiki page covered by a real SAC write receipt is never flagged — this IS the reviewed path, not a bypass", async () => {
+  const cwd = await tempCwd("keryx-catchup-reviewed-wiki-");
+  const handle = createSession({ cwd, title: "properly reviewed wiki change" });
+  await writeWikiPage(cwd, "decisions/sac-real-proposal.md", "accepted", "decision");
+  await writeOwnerReceipt(cwd, "ws-194-wiki", "wiki", "wiki/decisions/sac-real-proposal.md");
+
+  const report = await buildCatchUp({ cwd });
+
+  expect(report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeUndefined();
+});
+
+test("flow 194: a memory entry that reached Status: accepted with no SAC receipt is flagged the same way as wiki", async () => {
+  const cwd = await tempCwd("keryx-catchup-unreviewed-memory-");
+  const handle = createSession({ cwd, title: "bypassed memory write" });
+  await writeMemoryEntry(cwd, "task-notes/bypass.md", "accepted");
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id && entry.owner === "memory");
+  expect(item).toBeDefined();
+  expect(item?.path).toBe("memory/task-notes/bypass.md");
+  expect(item?.status).toBe("accepted");
+});
+
+test("flow 194: a skill file landing under the SAC-reserved 'sac' module with no receipt is flagged", async () => {
+  const cwd = await tempCwd("keryx-catchup-unreviewed-skill-");
+  const handle = createSession({ cwd, title: "bypassed skill write" });
+  const skillPath = path.join(cwd, ".metaproject", "project-skills", "sac", "bypass-proposal", "SKILL.md");
+  await mkdir(path.dirname(skillPath), { recursive: true });
+  await writeFile(skillPath, "# Bypass Skill\n\nLanded with no SAC review.\n");
+
+  const report = await buildCatchUp({ cwd });
+
+  const item = report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id && entry.owner === "skill");
+  expect(item).toBeDefined();
+  expect(item?.path).toBe("project-skills/sac/bypass-proposal/SKILL.md");
+});
+
+test("flow 194: an ordinary skill created via keryx skills create (any OTHER module) is never flagged — only the SAC-reserved module namespace is scanned, to avoid flooding this report with routine skill authoring", async () => {
+  const cwd = await tempCwd("keryx-catchup-ordinary-skill-");
+  const handle = createSession({ cwd, title: "ordinary skill authoring" });
+  const skillPath = path.join(cwd, ".metaproject", "project-skills", "my-module", "my-skill", "SKILL.md");
+  await mkdir(path.dirname(skillPath), { recursive: true });
+  await writeFile(skillPath, "# My Skill\n\nCreated the normal way.\n");
+
+  const report = await buildCatchUp({ cwd });
+
+  expect(report.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeUndefined();
+});
+
+test("flow 194: content whose mtime falls outside every known session's window is never flagged — no flood of pre-existing accepted pages", async () => {
+  const cwd = await tempCwd("keryx-catchup-unattributed-wiki-");
+  // No session created in this cwd at all.
+  await writeWikiPage(cwd, "components/pre-existing.md", "accepted");
+
+  const report = await buildCatchUp({ cwd });
+
+  expect(report.unreviewedPaths).toEqual([]);
+});
+
+test("flow 194: --workspace scoping restricts unreviewedPaths to items attributed to that workspace only", async () => {
+  const cwd = await tempCwd("keryx-catchup-unreviewed-scope-");
+  const handle = createSession({ cwd, title: "bypass with a bound workspace" });
+  await writeSlate(handle.dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [], workspaceId: "workspace-194-scope" }));
+  await writeWikiPage(cwd, "components/scoped-bypass.md", "accepted");
+
+  const scopedToOther = await buildCatchUp({ cwd, workspaceId: "some-other-workspace" });
+  expect(scopedToOther.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeUndefined();
+
+  const scopedToMatch = await buildCatchUp({ cwd, workspaceId: "workspace-194-scope" });
+  expect(scopedToMatch.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeDefined();
+});
