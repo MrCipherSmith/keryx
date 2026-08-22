@@ -436,6 +436,22 @@ async function collectSessionCategories(cwd: string): Promise<SessionCategories>
  * the session's last recorded activity, not a meaningfully different window. */
 const SESSION_ATTRIBUTION_SLACK_MS = 5 * 60_000;
 
+/**
+ * How far BEFORE a session's `createdAt` a file's mtime is still treated as
+ * "during this session". Real writes never happen before the session that
+ * caused them was created, but the two timestamps come from different
+ * clocks: `createdAt` is a millisecond-precision `Date.now()` snapshot taken
+ * in-process, while a file's mtime is whatever precision the underlying
+ * filesystem actually stores (some CI runners' overlay/tmpfs mounts round to
+ * whole seconds). A write that lands the same instant as session creation
+ * can therefore report an mtime that floors to just BEFORE `createdAt`, with
+ * no real reordering having occurred. A few seconds of tolerance absorbs
+ * that rounding without weakening the check: a false attribution here still
+ * requires the file to genuinely change within seconds of a real session's
+ * activity, not merely "at some point in the repo's history".
+ */
+const MTIME_CLOCK_SKEW_TOLERANCE_MS = 5_000;
+
 type OwnerReceiptLike = { targetRef?: unknown };
 
 /**
@@ -501,7 +517,7 @@ async function attributeToSession(
     const start = Date.parse(session.createdAt);
     const end = Date.parse(session.updatedAt);
     if (Number.isNaN(start) || Number.isNaN(end)) continue;
-    if (mtimeMs >= start && mtimeMs <= end + SESSION_ATTRIBUTION_SLACK_MS) {
+    if (mtimeMs >= start - MTIME_CLOCK_SKEW_TOLERANCE_MS && mtimeMs <= end + SESSION_ATTRIBUTION_SLACK_MS) {
       const workspaceId = (await safeReadSlate(sessionDir(session.projectPath, session.id)))?.workspaceId;
       return { sessionId: session.id, workspaceId, changedAt: new Date(mtimeMs).toISOString() };
     }
