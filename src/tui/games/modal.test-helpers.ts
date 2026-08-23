@@ -100,11 +100,14 @@ export const fakeOtui = { BoxRenderable: FakeBox, TextRenderable: FakeText };
 export interface CapturedModal {
   tabs?: readonly { id: string; label: string }[];
   body?: FakeBox;
+  /** The full modal input handed to the host — lets tests exercise onArrowKeys. */
+  input?: OpenModalInput;
 }
 
 export function fakeHost(captured: CapturedModal) {
   return (_otui: unknown, _chrome: unknown, input: OpenModalInput) => {
     captured.tabs = input.tabs;
+    captured.input = input;
     const body = new FakeBox();
     captured.body = body;
     input.renderTab("tic-tac-toe", body, { width: 80 });

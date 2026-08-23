@@ -612,6 +612,55 @@ otuiTest("AC4: setBusyPhase is reflected in the footer, and stopBusy restores th
   h.destroy();
 });
 
+otuiTest("AC4b: the in-transcript busy line is re-pinned to the end when content is added after it", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 30 });
+  h.chrome.startBusy("waiting for model");
+  await h.flush();
+  // A block streams BELOW the busy line (the line was added first, so it used
+  // to drift to the top); the chrome must re-pin it as the last transcript row.
+  h.chrome.transcript.add(
+    new otui.core.TextRenderable(h.chrome.renderer, { id: "pin-probe", content: "block after busy" }),
+  );
+  await h.flush();
+  const lines = nonEmptyLines(h.captureCharFrame());
+  // The in-transcript copy is the dim line WITHOUT the status label (the
+  // footer copy carries STATUS on the same row).
+  const inTranscript = (): string =>
+    lines.find((l) => l.includes("waiting for model") && !l.includes(STATUS)) ?? "";
+  const blockIdx = lines.findIndex((l) => l.includes("block after busy"));
+  const busyIdx = lines.indexOf(inTranscript());
+  expect(blockIdx).toBeGreaterThanOrEqual(0);
+  expect(busyIdx).toBeGreaterThan(blockIdx); // status stayed BELOW the new block
+  // Footer still shows phase + timer + status on its row.
+  expect(lines[lines.length - 1]).toContain("waiting for model");
+  expect(lines[lines.length - 1]).toContain(STATUS);
+  h.destroy();
+});
+
+otuiTest("AC4c: the footer right slot shows the permission mode while busy", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, {
+    width: 90,
+    height: 24,
+    chrome: { permissionMode: () => "auto" },
+  });
+  const footerRow = (): string => {
+    const lines = nonEmptyLines(h.captureCharFrame());
+    return lines[lines.length - 1] ?? "";
+  };
+  expect(footerRow()).not.toContain("auto"); // idle: status label only
+  h.chrome.startBusy("waiting for model");
+  await h.flush();
+  expect(footerRow()).toContain("waiting for model");
+  expect(footerRow()).toContain("mode auto");
+  h.chrome.stopBusy();
+  await h.flush();
+  expect(footerRow()).toContain(FOOTER_HINT);
+  expect(footerRow()).not.toContain("mode auto");
+  h.destroy();
+});
+
 otuiTest("AC5: resize keeps the composer and footer on screen at four terminal sizes (flow-075 guard)", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });

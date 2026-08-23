@@ -30,9 +30,9 @@ test("games modal renders the game board and the agent panel", () => {
   expect(captured.tabs?.map((t) => t.id)).toEqual(["tic-tac-toe"]);
   expect(handle).toBeDefined();
   const texts = textsOf(captured.body ?? new FakeBox());
-  expect(texts.get("game-system")?.content).toContain("system:");
-  expect(texts.get("game-stats")?.content).toContain("model:");
-  expect(String(texts.get("game-stats")?.content)).toContain("turns 0");
+  expect(String(texts.get("game-system")?.content)).toContain("tic-tac-toe");
+  expect(String(texts.get("game-session-turns")?.content)).toBe("0");
+  expect(texts.get("game-stats-empty")?.content).toBe("no turns yet");
 });
 
 test("a model turn updates board, stats and status", async () => {
@@ -41,10 +41,11 @@ test("a model turn updates board, stats and status", async () => {
   press({ name: "enter", sequence: "\r" }); // X at centre
   await settle();
   const texts = textsOf(captured.body ?? new FakeBox());
-  expect(String(texts.get("game-stats")?.content)).toContain("turns 1");
-  expect(String(texts.get("game-stats")?.content)).toContain("in 40");
-  expect(String(texts.get("game-stats")?.content)).toContain("out 3");
-  expect(String(texts.get("game-stats")?.content)).toContain("reasoning");
+  expect(String(texts.get("game-session-turns")?.content)).toBe("1");
+  expect(String(texts.get("game-stats-model")?.content)).toMatch(/\//);
+  expect(String(texts.get("game-stats-tokens")?.content)).toContain("in 40");
+  expect(String(texts.get("game-stats-tokens")?.content)).toContain("out 3");
+  expect(String(texts.get("game-stats-reasoning")?.content)).toBe("yes");
 });
 
 test("a hung model turn hits the deadline and plays a local move", async () => {
@@ -54,7 +55,7 @@ test("a hung model turn hits the deadline and plays a local move", async () => {
   await new Promise((resolve) => setTimeout(resolve, 100));
   const texts = textsOf(captured.body ?? new FakeBox());
   expect(String(texts.get("game-notice")?.content)).toContain("timed out");
-  expect(String(texts.get("game-stats")?.content)).toContain("fallbacks 1");
+  expect(String(texts.get("game-session-fallbacks")?.content)).toBe("1");
 });
 
 test("restart resets the board and the stats", async () => {
@@ -64,7 +65,7 @@ test("restart resets the board and the stats", async () => {
   await settle();
   press({ name: "r", sequence: "r" });
   const texts = textsOf(captured.body ?? new FakeBox());
-  expect(String(texts.get("game-stats")?.content)).toContain("turns 0");
+  expect(String(texts.get("game-session-turns")?.content)).toBe("0");
 });
 
 test("a provider error surfaces on the notice line and counts as an error", async () => {
@@ -85,7 +86,47 @@ test("a provider error surfaces on the notice line and counts as an error", asyn
   await settle();
   const texts = textsOf(captured.body ?? new FakeBox());
   expect(String(texts.get("game-notice")?.content)).toContain("busy");
-  expect(String(texts.get("game-stats")?.content)).toContain("errors 1");
+  expect(String(texts.get("game-session-errors")?.content)).toBe("1");
+});
+
+
+test("left/right arrows are claimed for the active game before the tab strip", () => {
+  const captured: CapturedModal = {};
+  openWith(captured, factoryFor(() => stubProvider("0")));
+  const arrows = captured.input?.onArrowKeys as unknown as
+    | ((key: { name: string; sequence: string }, direction: "left" | "right") => boolean | undefined)
+    | undefined;
+  expect(arrows).toBeDefined();
+  expect(arrows?.({ name: "left", sequence: "\u001b[D" }, "left")).toBe(true);
+  expect(arrows?.({ name: "right", sequence: "\u001b[C" }, "right")).toBe(true);
+  // A key the active game does not consume falls through to tab switching.
+  expect(arrows?.({ name: "a", sequence: "a" }, "left")).toBe(false);
+});
+
+test("arrow keys move the tic-tac-toe cursor", () => {
+  const captured: CapturedModal = {};
+  const { press } = openWith(captured, factoryFor(() => stubProvider("0")));
+  const cells = (): Map<string, FakeBox> => {
+    const found = new Map<string, FakeBox>();
+    const walk = (node: FakeBox): void => {
+      for (const child of node.children) {
+        if (child instanceof FakeBox) {
+          const id = child.opts.id;
+          if (typeof id === "string") {
+            found.set(id, child);
+          }
+          walk(child);
+        }
+      }
+    };
+    walk(captured.body ?? new FakeBox());
+    return found;
+  };
+  expect(cells().get("game-cell-4")?.opts.borderColor).toBe(getTheme().focus);
+  press({ name: "left", sequence: "\u001b[D" });
+  const after = cells();
+  expect(after.get("game-cell-3")?.opts.borderColor).toBe(getTheme().focus);
+  expect(after.get("game-cell-4")?.opts.borderColor).toBe(getTheme().border);
 });
 
 test("extra games appear as tabs and keep their own state", () => {

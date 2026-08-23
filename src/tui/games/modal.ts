@@ -214,9 +214,24 @@ export function presentGamesModal(
     title: "/game",
     tabs: games.map((game) => ({ id: game.id, label: game.label })),
     footer: GAMES_FOOTER,
-    // Left/right are deliberately NOT claimed: the modal host switches tabs
-    // with them. A game moves its cursor with h/l (vim) or the arrows that
-    // reach its key handler.
+    // Left/right go to the active game FIRST. The modal host's own tab switch
+    // would otherwise consume both arrows and stopPropagation them, so the
+    // game's onKeypress handler below would never see them — the cursor moved
+    // up/down but not sideways (regression of the 0.2.60 fix: the multi-tab
+    // games-host split of flow 174 dropped the onArrowKeys claim the legacy
+    // game-modal.ts keeps). This hook is a pure probe: it only answers "does
+    // the active game want this key?" so the host declines to switch tabs.
+    // The move itself is applied by the onKeypress handler below — applying it
+    // here too would move the cursor twice per press, because a claimed key is
+    // not stopPropagation'd and both listeners receive it.
+    onArrowKeys: (key, _direction) => {
+      const game = registry.get(activeId);
+      if (game === undefined || modelBusy) {
+        return false;
+      }
+      const state = stateOf(activeId);
+      return game.onKey(state, { name: key.name, sequence: key.sequence }) !== undefined;
+    },
     renderTab: (_tabId, body, ctx) => {
       if (body === undefined || body === null) {
         return;

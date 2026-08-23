@@ -206,6 +206,8 @@ export interface ShellChromeOptions {
   filterCommands?: ((query: string) => readonly SlashCommandOption[]) | undefined;
   /** One shell-scoped, already-started advisory check. Never awaited by chrome. */
   versionCheck?: Promise<VersionCheckResult> | undefined;
+  /** Current permission mode (ask/trust/auto), shown in the footer's right slot while busy. */
+  permissionMode?: (() => string | undefined) | undefined;
 }
 
 /**
@@ -483,6 +485,27 @@ export async function createShellChrome(
   main.add(scroll);
   const transcript = scroll.content;
 
+  /** In-transcript live status line; re-pinned to the END of the transcript on every add. */
+  let liveStatus: Text | undefined;
+  // The busy line used to be added FIRST and every later block landed BELOW it,
+  // so it scrolled off the top while a turn streamed (user-reported: the line
+  // "shows the overall state" yet drifts away). Patching transcript.add here
+  // (the chrome owns the transcript) keeps the line the LAST child whenever
+  // anything else is added: pull it out, append the new child, re-append the
+  // status. Every caller — transcript.add(...) in tui-shell and the block
+  // renderers — goes through this instance method, so pinning is free for all.
+  const originalTranscriptAdd = transcript.add.bind(transcript);
+  const originalTranscriptRemove = transcript.remove.bind(transcript);
+  transcript.add = (child: unknown, index?: number): number => {
+    if (liveStatus !== undefined && child !== liveStatus) {
+      originalTranscriptRemove(liveStatus);
+      const added = originalTranscriptAdd(child, index);
+      originalTranscriptAdd(liveStatus);
+      return added;
+    }
+    return originalTranscriptAdd(child, index);
+  };
+
   // --- queue dock -----------------------------------------------------------
   // Persistent (not ephemeral like `dock` below): lists queued main-turn
   // messages so they stop being painted into `transcript` (flow 170). Mirrors
@@ -734,8 +757,8 @@ export async function createShellChrome(
   footer.add(footerRight);
   main.add(footer);
 
-  /** In-transcript live status line, updated in place while the shell works. */
-  let liveStatus: Text | undefined;
+  // `liveStatus` is declared with the transcript pin wrapper above; this block
+  // only owns the phase/timer/spinner state.
   let busyPhase = "waiting for model";
   let busyStartedAt = 0;
   let spinIdx = 0;
@@ -753,12 +776,19 @@ export async function createShellChrome(
     }
     if (!busy) {
       footerLeft.content = otui.t`${otui.dim(opts.footerHint)}`;
+      footerRight.content = otui.t`${otui.dim(opts.status)}`;
       return;
     }
     const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
     const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
     const line = `${frame} ${busyPhase} · ${secs}s`;
     footerLeft.content = otui.t`${otui.yellow(line)}`;
+    // The footer's right slot carries the permission mode while a turn runs
+    // (provider/model stays in the header title); idle restores the status.
+    const perm = opts.permissionMode?.();
+    footerRight.content = otui.t`${otui.dim(
+      perm !== undefined && perm.length > 0 ? `mode ${perm}` : opts.status,
+    )}`;
     if (liveStatus !== undefined) {
       liveStatus.content = otui.t`${otui.dim(line)}`;
     }

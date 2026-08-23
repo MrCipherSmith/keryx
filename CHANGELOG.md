@@ -5,6 +5,30 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`/game`'s agent panel is now real cards with a stats table.** The system
+  prompt, last-turn latency/tokens and session totals were one undifferentiated
+  dim line; they are now three bordered cards — a status line ("agent is
+  thinking…" / notice / "waiting for your move"), the system prompt wrapped as
+  lines (capped at 6 + "… (N more)"), and a side-by-side last-turn/session table
+  (model, first byte, total, in/out tokens, reasoning/fallback/error flags;
+  turns, fallbacks, errors, token totals), with long provider/model ids
+  truncated so a half-width card never clips. Footer hints now say
+  `arrows move` / `tab games`.
+
+### Fixed
+
+- **`/game`'s left/right arrows stopped moving the cursor again.** The
+  multi-tab games-host split (0.2.62) dropped the `onArrowKeys` claim the
+  legacy single-game modal keeps, so the modal host's own tab switch consumed
+  both arrows and `stopPropagation`'d them before the game saw them — the
+  cursor moved up/down but not sideways, and with one game the tab switch was
+  a silent no-op. The games host now claims both arrows for the active game
+  through the host's `onArrowKeys` hook again (a pure probe; the game's own
+  keypress handler still applies the move, so each press moves once) and only
+  falls back to tab switching when the game declines the key.
+
 ## [0.2.62] — 2026-08-23
 
 ### Added

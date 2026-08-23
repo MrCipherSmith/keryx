@@ -6,9 +6,9 @@
 export const GAME_MODEL_TIMEOUT_MS = 60_000;
 
 export const GAMES_FOOTER = [
-  { key: "h/l", label: "move" },
+  { key: "arrows", label: "move" },
   { key: "enter", label: "place" },
   { key: "r", label: "new game" },
-  { key: "←/→", label: "games" },
+  { key: "tab", label: "games" },
   { key: "esc", label: "minimize" },
 ] as const;

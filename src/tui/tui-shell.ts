@@ -1951,6 +1951,10 @@ export async function launchTuiAgentShell(opts: {
       placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
       commands: commandsForMode("agent"),
       headerMeta: "↑0 ↓0",
+      // Closure-only: `permissionMode` is declared later in this function —
+      // TDZ is a call-time concern for a closure (the same pattern as the
+      // `() => slateSession` ref documented above).
+      permissionMode: () => permissionMode,
       // The shared registry stays the single source of truth for the dropdown,
       // resolved through THIS surface's mode so the wording is agent-mode's.
       filterCommands: (query) => filterCommands(query, "agent"),
