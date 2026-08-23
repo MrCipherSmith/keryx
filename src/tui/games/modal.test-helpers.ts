@@ -95,7 +95,9 @@ export class FakeText {
   }
 }
 
-export const fakeOtui = { BoxRenderable: FakeBox, TextRenderable: FakeText };
+export class FakeScrollBox extends FakeBox {}
+
+export const fakeOtui = { BoxRenderable: FakeBox, TextRenderable: FakeText, ScrollBoxRenderable: FakeScrollBox };
 
 export interface CapturedModal {
   tabs?: readonly { id: string; label: string }[];

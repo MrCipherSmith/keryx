@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.64] — 2026-08-23
+
+### Fixed
+
+- **`/game`'s system-prompt card is no longer capped at 6 lines.** The agent
+  panel truncated the prompt the model sees to 6 lines plus "… (N more)" and
+  left dead space below it. The card now renders the full prompt, flexes to
+  absorb the leftover body height, and scrolls (wheel, scrollbar, or
+  j/k/↑/↓ once the scrollbar has focus) when the prompt is taller than the
+  space the layout leaves it.
+
 ## [0.2.63] — 2026-08-23
 
 ### Changed

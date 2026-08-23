@@ -35,6 +35,15 @@ test("games modal renders the game board and the agent panel", () => {
   expect(texts.get("game-stats-empty")?.content).toBe("no turns yet");
 });
 
+test("the system prompt card shows the FULL prompt — no +N more truncation cap", () => {
+  const captured: CapturedModal = {};
+  openWith(captured, factoryFor(() => stubProvider("0")));
+  const texts = textsOf(captured.body ?? new FakeBox());
+  const full = ticTacToeGame.systemPrompt();
+  expect(full.split("\n").length).toBeGreaterThan(6); // the old cap would have truncated this
+  expect(String(texts.get("game-system")?.content)).toBe(full);
+});
+
 test("a model turn updates board, stats and status", async () => {
   const captured: CapturedModal = {};
   const { press } = openWith(captured, factoryFor(() => usageProvider("0")));

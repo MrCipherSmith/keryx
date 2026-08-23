@@ -3,15 +3,17 @@
 // `typeof import(...)`, never imported at top level.
 //
 // asOtui narrows an `unknown` runtime value (the shell's `otui` handle) to
-// the two renderable constructors the games actually use. Everything else the
+// the renderable constructors the games actually use. Everything else the
 // host needs comes from the shell's own `chrome`/`renderer` objects.
 
 type OpenTui = typeof import("@opentui/core");
 export type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 export type Box = InstanceType<OpenTui["BoxRenderable"]>;
 export type Text = InstanceType<OpenTui["TextRenderable"]>;
+export type ScrollBox = InstanceType<OpenTui["ScrollBoxRenderable"]>;
 
 export type OtuiLike = {
+  ScrollBoxRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => ScrollBox;
   BoxRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Box;
   TextRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Text;
 };

@@ -13,8 +13,10 @@ type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Text = InstanceType<OpenTui["TextRenderable"]>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
+type ScrollBox = InstanceType<OpenTui["ScrollBoxRenderable"]>;
 
 type Core = {
+  ScrollBoxRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => ScrollBox;
   BoxRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Box;
   TextRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Text;
 };
@@ -75,11 +77,27 @@ export function renderAgentPanel(
   parent.add(statusCard);
 
   // System prompt card — what the model sees each turn, wrapped as lines.
-  const sysLines = game.systemPrompt().split("\n");
-  const sysShown = sysLines.length > 6 ? [...sysLines.slice(0, 6), `… (+${sysLines.length - 6} more)`] : sysLines;
-  const sysCard = card("game-system-card", { width: "100%", marginTop: 1 });
+  // The FULL prompt renders — no "+N more" cap. The card flexes to absorb the
+  // leftover body height below the board, and scrolls (wheel, scrollbar, or
+  // j/k/↑/↓ once the scrollbar has focus) when the prompt is taller than the
+  // space the layout leaves it.
+  const sysCard = new core.ScrollBoxRenderable(renderer, {
+    id: "game-system-card",
+    width: "100%",
+    flexGrow: 1,
+    minHeight: 0,
+    marginTop: 1,
+    border: true,
+    borderStyle: "rounded",
+    borderColor: theme.border,
+    backgroundColor: theme.panel,
+    paddingLeft: 1,
+    paddingRight: 1,
+    scrollY: true,
+    contentOptions: { flexDirection: "column" },
+  });
   sysCard.add(text({ id: "game-system-title", content: "system prompt", fg: theme.muted }));
-  sysCard.add(text({ id: "game-system", content: sysShown.join("\n"), fg: theme.muted }));
+  sysCard.add(text({ id: "game-system", content: game.systemPrompt(), fg: theme.muted }));
   parent.add(sysCard);
 
   // Stats cards — last turn | session totals, side by side.
