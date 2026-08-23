@@ -3,6 +3,38 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.65] — 2026-08-23
+
+### Fixed
+
+- **`/game`'s modal no longer scrolls as a whole and the board is never
+  clipped.** The 0.2.64 prompt card used `flexGrow: 1` on a ScrollBox with no
+  height cap, which made OpenTUI measure the card at the full parent height —
+  the card ballooned to the whole modal body, pushed the stats/footer out of
+  view and gave the modal a body-wide scrollbar that also clipped the bottom
+  of the board. The agent panel now reserves a fixed slice (status + stats
+  lines), the board is sized from the modal body HEIGHT (cell heights 2..5:
+  tiny/small/medium/large), and the prompt card is a bounded minmax-style
+  block (5..14 rows) that scrolls only inside itself. Board + panel now sum
+  exactly to the body height, so everything is on screen at once on any
+  terminal of ~30 rows or more.
+
+- **The agent panel now shows what the model actually receives and with what
+  parameters.** The prompt card shows the system prompt AND the per-turn user
+  prompt (the exact board state sent each turn, so you can see how the model
+  learned your move); the status card shows the provider/model in effect
+  (`auto/auto` until the first turn) and the compact last-turn/session stats
+  (latency, in/out tokens, reasoning/fallback/error flags, fallback/error
+  counts) on three lines instead of two tall cards.
+
+- **Modal tab bodies got a stale 68x13 viewport instead of the real one.** At
+  mount time OpenTUI's `width`/`height` getters still return the last LAYOUT
+  value (the 72x18 creation-time floor), so `renderTab`'s context claimed the
+  panel body was 68x13 even on a normal terminal — the /game board was sized
+  from that floor. The host now computes the body size deterministically from
+  the renderer (`resolveModalPanelSize`), matching the panel's actual resolved
+  size at open.
+
 ## [0.2.64] — 2026-08-23
 
 ### Fixed

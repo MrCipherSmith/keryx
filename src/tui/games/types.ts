@@ -37,6 +37,13 @@ export interface GameRenderContext {
   parent: { add(child: unknown): void };
   /** Columns available inside the tab body. */
   width: number;
+  /**
+   * Rows the game may use for its board region: the modal body height minus
+   * the agent panel's minimum (PANEL_MIN_ROWS). The game picks the largest
+   * cell size that fits; the modal computes the same budget (see
+   * tic-tac-toe/layout.ts), so board + panel always sum to the body height.
+   */
+  height: number;
 }
 
 export interface GameDefinition {

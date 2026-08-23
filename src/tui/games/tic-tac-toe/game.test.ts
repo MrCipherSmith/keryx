@@ -64,6 +64,7 @@ test("GameDefinition renders a 3x3 board into the parent", () => {
     theme: { ok: "#1", error: "#2", muted: "#3", border: "#4", panel: "#5", focus: "#6", highlight: "#7" },
     parent: root,
     width: 80,
+    height: 24,
   };
   ticTacToeGame.render(ticTacToeGame.fresh(), ctx);
   const boxes: FakeBox[] = [];

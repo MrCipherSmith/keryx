@@ -27,6 +27,8 @@ export type ModalFooterAction = { key: string; label: string };
 export type ModalTabContext = {
   /** Columns available inside the panel after border + padding. */
   width: number;
+  /** Rows available inside the panel body (the scrollbox viewport). */
+  height: number;
 };
 
 export type OpenModalInput = {
@@ -249,7 +251,18 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   unmountActiveTab(state);
   state.active = tabId;
   paintTabs(state);
-  const cleanup = input.renderTab(tabId, state.body, { width: innerWidthOf(state) });
+  // Deterministic panel-body size from the renderer, NOT from the panel's own
+  // width/height getters: OpenTUI's getters return the last LAYOUT value, so
+  // at mount time (before the first layout pass) they still read the
+  // creation-time floor (72x18) even though openModal already assigned the
+  // resolved 95%-of-terminal size — tab bodies would see a stale 68x13
+  // viewport instead of the real one (the /game board/prompt budget depends
+  // on ctx.height and must not be sized from that floor).
+  const size = resolveModalPanelSize(state.chrome.renderer.width, state.chrome.renderer.height);
+  const cleanup = input.renderTab(tabId, state.body, {
+    width: resolveModalInnerWidth(size.width),
+    height: modalBodyRows(size.height),
+  });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
 }
 

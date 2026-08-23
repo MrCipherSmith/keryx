@@ -112,7 +112,7 @@ export function fakeHost(captured: CapturedModal) {
     captured.input = input;
     const body = new FakeBox();
     captured.body = body;
-    input.renderTab("tic-tac-toe", body, { width: 80 });
+    input.renderTab("tic-tac-toe", body, { width: 80, height: 24 });
     return {
       close: () => {
         input.onClose?.();

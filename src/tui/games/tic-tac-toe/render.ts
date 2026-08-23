@@ -2,6 +2,10 @@
 // every paint (the games modal clears the tab body between paints); the board
 // is three row boxes of three bordered cell boxes — a single column box would
 // stack all nine cells vertically.
+//
+// Cells are resolved from BOTH the body width and the body height budget
+// (ctx.height — see layout.ts): the panel needs a guaranteed slice of the
+// modal body, so the board takes the largest size that fits the remainder.
 
 import type { GameRenderContext } from "../types";
 import type { Mark, TicTacToeState } from "./core";
@@ -26,7 +30,7 @@ export function render(state: TicTacToeState, ctx: GameRenderContext): void {
   const core = ctx.core;
   const r = ctx.renderer;
   const theme = ctx.theme;
-  const cellSize = resolveCellSize(ctx.width);
+  const cellSize = resolveCellSize(ctx.width, ctx.height);
 
   const wrap = new core.BoxRenderable(r, {
     id: "game-wrap",

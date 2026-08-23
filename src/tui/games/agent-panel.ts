@@ -1,9 +1,16 @@
-// The "agent panel": the block under the board showing the system prompt the
-// model sees each turn plus per-turn latency/token statistics. Rendered as
-// three bordered cards — status, system prompt, and a two-column stats table
-// (last turn | session totals) — so the operator can read what agent work
-// costs at a glance instead of parsing one undifferentiated line.
-// Deliberately separate from game rendering so any game gets it for free.
+// The "agent panel": the block under the board showing the status line, the
+// model-facing prompts (system + the per-turn user prompt with the current
+// board state) and the provider/latency/token statistics.
+//
+// Layout contract (see constants.ts + tic-tac-toe/layout.ts): the panel must
+// fit in the modal body TOGETHER with the board — everything on screen, no
+// modal-level scroll. The board is sized from the body HEIGHT, the prompt
+// card is a BOUNDED block (PROMPT_MIN_ROWS..PROMPT_MAX_ROWS) that scrolls
+// only inside itself, and the stats live as compact lines on the status card
+// rather than two tall cards. That is what replaces the 0.2.63/0.2.64
+// regression: a ScrollBox with `flexGrow: 1` and no height cap measured its
+// content at the full parent height, ballooning the card, clipping the
+// board below it and pushing the whole modal into a body-wide scroll.
 import { getTheme } from "../theme";
 import type { GameDefinition } from "./types";
 import type { AgentTurnStats, AgentTurnTotals } from "./stats";
@@ -21,7 +28,7 @@ type Core = {
   TextRenderable: new (renderer: Renderer, opts: Record<string, unknown>) => Text;
 };
 
-/** A half-width stats card at the modal's minimum width; longer ids clip. */
+/** A long provider/model id truncates so a status line never clips. */
 const MODEL_MAX = 22;
 
 function truncate(value: string, max: number): string {
@@ -38,6 +45,12 @@ export function renderAgentPanel(
     modelBusy: boolean;
     lastTurn: AgentTurnStats | undefined;
     totals: AgentTurnTotals;
+    /** The per-turn user prompt (current board state) the model receives. */
+    userPrompt: string;
+    /** Fixed height of the prompt card, PROMPT_MIN_ROWS..PROMPT_MAX_ROWS. */
+    promptRows: number;
+    /** Configured provider/model ("auto/auto" until the first turn). */
+    modelParam: string;
   },
 ): void {
   const theme = getTheme();
@@ -57,14 +70,9 @@ export function renderAgentPanel(
       ...extra,
     });
 
-  const statRow = (owner: Box, label: string, value: string, id: string, valueFg: string = theme.text): void => {
-    const rowBox = box({ flexDirection: "row", gap: 1 });
-    rowBox.add(text({ content: label, fg: theme.muted }));
-    rowBox.add(text({ id, content: value, fg: valueFg }));
-    owner.add(rowBox);
-  };
-
-  // Status card — one colored line: thinking / error / idle hint.
+  // Status card — status line + parameters + compact last-turn/session stats.
+  // Three content lines (2 + border + 1 margin = 6 rows) so the board gets
+  // the rest of the body; the full two-card table would cost ~13 rows.
   const idle = args.notice === undefined || args.notice === "";
   const statusCard = card("game-status-card", { width: "100%", marginTop: 1 });
   statusCard.add(
@@ -74,18 +82,50 @@ export function renderAgentPanel(
       fg: args.modelBusy ? theme.focus : idle ? theme.text : theme.error,
     }),
   );
+  const lt = args.lastTurn;
+  const tot = args.totals;
+  const shownModel =
+    lt !== undefined && lt.provider !== "–" ? truncate(`${lt.provider}/${lt.model}`, MODEL_MAX) : args.modelParam;
+  statusCard.add(text({ id: "game-stats-model", content: `model: ${shownModel}`, fg: theme.muted }));
+  const lastCore =
+    lt === undefined
+      ? "no turns yet"
+      : `${formatMs(lt.totalMs)} · in ${formatTokens(lt.inputTokens)}/out ${formatTokens(lt.outputTokens)}`;
+  const flags: string[] = [];
+  if (lt?.reasoning) {
+    flags.push("reasoning");
+  }
+  if (lt?.localFallback) {
+    flags.push("fallback");
+  }
+  if (lt?.error) {
+    flags.push("error");
+  }
+  // One combined stats line keeps the status card at exactly 3 content rows
+  // (2 + border + 1 margin = 6), matching PANEL_FIXED_ROWS — four lines would
+  // add a row and push the whole modal one row into scroll on a 40-row
+  // terminal.
+  statusCard.add(
+    text({
+      id: "game-stats-line",
+      content: `last: ${lastCore}${flags.length > 0 ? ` · ${flags.join(", ")}` : ""} · session: ${tot.turns} turn${tot.turns === 1 ? "" : "s"} · ${tot.localFallbacks} fb · ${tot.errors} err · in ${formatTokens(tot.inputTokens)}/out ${formatTokens(tot.outputTokens)}`,
+      fg: theme.muted,
+    }),
+  );
   parent.add(statusCard);
 
-  // System prompt card — what the model sees each turn, wrapped as lines.
-  // The FULL prompt renders — no "+N more" cap. The card flexes to absorb the
-  // leftover body height below the board, and scrolls (wheel, scrollbar, or
-  // j/k/↑/↓ once the scrollbar has focus) when the prompt is taller than the
-  // space the layout leaves it.
+  // Prompt card — system + per-turn user prompt, a BOUNDED minmax-style
+  // block: fixed height (promptRows), scrollY, no flexGrow, so it can never
+  // absorb the whole modal body. Scrolls only inside itself (wheel / scroll
+  // bar / j/k/↑/↓ once focused).
   const sysCard = new core.ScrollBoxRenderable(renderer, {
     id: "game-system-card",
     width: "100%",
-    flexGrow: 1,
-    minHeight: 0,
+    height: args.promptRows,
+    minHeight: args.promptRows,
+    maxHeight: args.promptRows,
+    flexShrink: 0,
+    flexGrow: 0,
     marginTop: 1,
     border: true,
     borderStyle: "rounded",
@@ -96,54 +136,11 @@ export function renderAgentPanel(
     scrollY: true,
     contentOptions: { flexDirection: "column" },
   });
+  // The per-turn user prompt goes FIRST: it changes every move and is what
+  // tells the model how the user played; the stable system prompt follows.
+  sysCard.add(text({ id: "game-user-title", content: "your turn prompt (board)", fg: theme.muted }));
+  sysCard.add(text({ id: "game-user-prompt", content: args.userPrompt, fg: theme.muted }));
   sysCard.add(text({ id: "game-system-title", content: "system prompt", fg: theme.muted }));
   sysCard.add(text({ id: "game-system", content: game.systemPrompt(), fg: theme.muted }));
   parent.add(sysCard);
-
-  // Stats cards — last turn | session totals, side by side.
-  const lt = args.lastTurn;
-  const tot = args.totals;
-  const statsRow = box({ id: "game-stats-row", width: "100%", flexDirection: "row", gap: 1, marginTop: 1 });
-
-  const lastTurnCard = card("game-last-turn", { flexGrow: 1, flexShrink: 0 });
-  lastTurnCard.add(text({ id: "game-last-turn-title", content: "last turn", fg: theme.muted }));
-  if (lt === undefined) {
-    lastTurnCard.add(text({ id: "game-stats-empty", content: "no turns yet", fg: theme.muted }));
-  } else {
-    const model = lt.provider === "–" ? "–" : truncate(`${lt.provider}/${lt.model}`, MODEL_MAX);
-    statRow(lastTurnCard, "model", model, "game-stats-model");
-    statRow(lastTurnCard, "first byte", formatMs(lt.latencyMs), "game-stats-latency");
-    statRow(lastTurnCard, "total", formatMs(lt.totalMs), "game-stats-total");
-    statRow(
-      lastTurnCard,
-      "tokens",
-      `in ${formatTokens(lt.inputTokens)} · out ${formatTokens(lt.outputTokens)}`,
-      "game-stats-tokens",
-    );
-    if (lt.reasoning) {
-      statRow(lastTurnCard, "reasoning", "yes", "game-stats-reasoning", theme.focus);
-    }
-    if (lt.localFallback) {
-      statRow(lastTurnCard, "fallback", "local", "game-stats-fallback", theme.error);
-    }
-    if (lt.error) {
-      statRow(lastTurnCard, "error", "yes", "game-stats-error", theme.error);
-    }
-  }
-
-  const sessionCard = card("game-session", { flexGrow: 1, flexShrink: 0 });
-  sessionCard.add(text({ id: "game-session-title", content: "session", fg: theme.muted }));
-  statRow(sessionCard, "turns", String(tot.turns), "game-session-turns");
-  statRow(sessionCard, "fallbacks", String(tot.localFallbacks), "game-session-fallbacks");
-  statRow(sessionCard, "errors", String(tot.errors), "game-session-errors");
-  statRow(
-    sessionCard,
-    "tokens",
-    `in ${formatTokens(tot.inputTokens)} · out ${formatTokens(tot.outputTokens)}`,
-    "game-session-tokens",
-  );
-
-  statsRow.add(lastTurnCard);
-  statsRow.add(sessionCard);
-  parent.add(statsRow);
 }

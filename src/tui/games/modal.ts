@@ -2,11 +2,16 @@
 //
 // One modal, one tab per game. The modal owns the tab strip, the key routing,
 // the model-turn plumbing (one fail-closed provider completion per turn, with
-// a deadline), and the "agent panel" (see agent-panel.ts): the system prompt
-// the model sees plus per-turn latency/token statistics, rendered
-// dim/secondary under the board so the operator can watch what the agent work
-// actually costs. Games are pure GameDefinitions (see types.ts) — adding a
-// game is adding a definition to the registry.
+// a deadline), and the "agent panel" (see agent-panel.ts): the prompts the
+// model sees (system + the per-turn user prompt with the current board) plus
+// per-turn latency/token statistics, rendered dim/secondary under the board
+// so the operator can watch what the agent work actually costs. The vertical
+// budget is shared with the board (see tic-tac-toe/layout.ts): the panel
+// takes a fixed minimum, the board gets the rest sized by body height, and
+// the prompt card gets the leftover bounded to PROMPT_MIN_ROWS..
+// PROMPT_MAX_ROWS — everything is on screen at once, only the prompt card
+// ever scrolls, inside itself. Games are pure GameDefinitions (see types.ts)
+// — adding a game is adding a definition to the registry.
 import { openModal, type ModalHandle, type OpenModalInput } from "../modal-host";
 import { getTheme } from "../theme";
 import { clearTranscriptChildren } from "../transcript-blocks";
@@ -24,6 +29,7 @@ import { GAME_MODEL_TIMEOUT_MS, GAMES_FOOTER } from "./constants";
 import { ticTacToeGame } from "./tic-tac-toe";
 import { runGameModelTurn } from "./model-turn";
 import { renderAgentPanel } from "./agent-panel";
+import { resolveGameBudget } from "./tic-tac-toe/layout";
 
 export const DEFAULT_GAMES: readonly GameDefinition[] = [ticTacToeGame];
 
@@ -69,6 +75,9 @@ export function presentGamesModal(
   let unsubscribeKey: (() => void) | undefined;
   let bodyRef: { add(child: unknown): void } | undefined;
   let bodyWidth = 0;
+  let bodyHeight = 0;
+  /** Provider/model in effect; the stats line shows the real one after the first turn. */
+  const modelParam = `${options.provider ?? "auto"}/${options.model ?? "auto"}`;
 
   const stateOf = (id: string): GameState => {
     const game = registry.get(id);
@@ -102,12 +111,16 @@ export function presentGamesModal(
       return;
     }
     const state = stateOf(activeId);
+    // Joint board/panel height budget: the board takes the largest cell size
+    // that fits bodyHeight − panel minimum; the prompt card gets the leftover.
+    const budget = resolveGameBudget(bodyWidth, Math.max(1, bodyHeight));
     const ctx: GameRenderContext = {
       core: core as unknown as GameRenderContext["core"],
       renderer,
       theme: getTheme() as unknown as Record<string, string>,
       parent: bodyRef,
       width: bodyWidth,
+      height: budget.boardBudgetRows,
     };
     game.render(state, ctx);
     renderAgentPanel(game, bodyRef, core, renderer as Renderer, {
@@ -115,6 +128,9 @@ export function presentGamesModal(
       modelBusy,
       lastTurn: lastTurn.get(activeId),
       totals: totalsOf(activeId),
+      userPrompt: game.stateForModel(state),
+      promptRows: budget.promptRows,
+      modelParam,
     });
   };
 
@@ -238,6 +254,7 @@ export function presentGamesModal(
       }
       bodyRef = body as { add(child: unknown): void };
       bodyWidth = ctx.width;
+      bodyHeight = ctx.height;
       paint();
     },
     onClose: () => {

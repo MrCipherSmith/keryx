@@ -19,9 +19,11 @@ import {
   MODAL_PANEL_MIN_WIDTH,
   destroyModalHost,
   formatModalFooter,
+  modalBodyRows,
   openModal,
   resolveModalInnerWidth,
   resolveModalPanelSize,
+  type ModalTabContext,
 } from "./modal-host";
 import { applyThemeId, getThemeId } from "./theme";
 
@@ -138,6 +140,31 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
   expect(host).not.toMatch(/\bimport\b[^()]*?\bfrom\s*['"]@opentui\/core['"]/s);
   expect(host).not.toMatch(/\bimport\s*['"]@opentui\/core['"]/);
   expect(host).not.toMatch(/session-info/);
+});
+
+otuiTest("renderTab receives the resolved panel-body size, not the pre-layout floor", async () => {
+  const otui = requireOtui();
+  // 120x40: panel resolves to 114x38 → tab body must see 110x33, NOT the
+  // creation-time floor 72x18 (OpenTUI's width/height getters return the last
+  // LAYOUT value, which at mount time is still the floor — the /game board
+  // and prompt budget depends on ctx.height and must not be sized from it).
+  const h = await mountChrome(otui, { width: 120, height: 40 });
+  let ctx: ModalTabContext | undefined;
+  openModal(otui.core, h.chrome, {
+    title: "Probe",
+    tabs: [{ id: "t", label: "T" }],
+    renderTab: (_tabId, _body, c) => {
+      ctx = c;
+    },
+  });
+  await h.flush();
+  const sized = resolveModalPanelSize(120, 40);
+  expect(ctx).toEqual({
+    width: resolveModalInnerWidth(sized.width),
+    height: modalBodyRows(sized.height),
+  });
+  expect(ctx?.width).not.toBe(MODAL_PANEL_INNER_WIDTH); // the floor
+  h.destroy();
 });
 
 otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent backdrop; slash menu stays closed on /", async () => {

@@ -243,7 +243,7 @@ function fakeHost(captured: CapturedModal) {
     captured.onArrowKeys = input.onArrowKeys;
     const body = new FakeBox();
     captured.body = body;
-    input.renderTab("game", body, { width: BODY_WIDTH });
+    input.renderTab("game", body, { width: BODY_WIDTH, height: 24 });
     return {
       close: () => {
         captured.onClose?.();
