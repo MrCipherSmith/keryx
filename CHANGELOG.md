@@ -5,6 +5,17 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.61] — 2026-08-23
+
+### Fixed
+
+- **Web search returned empty results on bun-in-`~/.bun` installs.** The
+  bwrap profile for the sandboxed web worker masked `$HOME` entirely
+  (`--tmpfs`), hiding `process.execPath` itself when bun lives under home.
+  The worker could not start and the search bridge silently returned empty
+  results. The profile now masks only home's secret subdirectories via
+  `defaultReadDenyList`, leaving the runtime readable.
+
 ## [0.2.60] — 2026-08-23
 
 ### Fixed

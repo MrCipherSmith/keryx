@@ -94,7 +94,14 @@
       "hooks": {
         "gitPostCommit": ".git/hooks/post-commit",
         "postUpdate": ".metaproject/hooks/post-update.d"
-      }
+      },
+      "capabilities": [
+        {
+          "id": "gdskills.external-agents",
+          "enabled": false,
+          "kind": "ceiling"
+        }
+      ]
     },
     "memory": {
       "enabled": true,
@@ -263,5 +270,5 @@
     "ci",
     "full"
   ],
-  "updatedAt": "2026-08-18T05:57:34.579Z"
+  "updatedAt": "2026-08-21T06:52:04.085Z"
 }

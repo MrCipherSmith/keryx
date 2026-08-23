@@ -14,6 +14,14 @@ coverage/
 # `.claude/` ignore.
 .claude/worktrees/
 
+
+
+# keryx-shell-benchmark harness: raw run output (thousands of per-scenario
+# files), not curated docs. Keep locally for analysis; do not commit.
+docs/requirements/keryx-shell-benchmark/harness/logs/
+docs/requirements/keryx-shell-benchmark/harness/runs/
+docs/requirements/keryx-shell-benchmark/harness/__pycache__/
+
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
 .metaproject/runtime/
@@ -23,11 +31,6 @@ coverage/
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
 .metaproject/data/gdctx/artifacts/
-# `keryx ctx` writes its logs relative to the CURRENT directory, so a routed
-# command started from a subdirectory creates a nested .metaproject/data/gdctx
-# tree there. The patterns above are root-anchored and miss those; this one is
-# not. Twice caught disposable logs being staged into a docs package.
-**/.metaproject/data/gdctx/
 .metaproject/data/gdwiki/artifacts/
 .metaproject/data/gdwiki/link-check/
 .metaproject/data/health/history/
@@ -47,8 +50,8 @@ coverage/
 .metaproject/data/memory/artifacts/
 .metaproject/runtime/memory/
 # Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
-# Guard nested copies too (e.g. a security command run with cwd inside a flow or docs dir).
-**/.metaproject/data/security/raw/
+.metaproject/data/security/raw/
+.metaproject/data/security/raw/**
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
 .metaproject/reports/
