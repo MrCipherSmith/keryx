@@ -148,3 +148,31 @@ describe("runModelTurn", () => {
     expect(result.text).toBe("via deepseek");
   });
 });
+
+describe("runModelTurn instrumentation", () => {
+  test("collects usage, reasoning flag and first-byte latency", async () => {
+    const factory: ProviderFactory = () => ({
+      describe: stubProvider("x").describe,
+      async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        yield { kind: "reasoning_delta", sequence: 0, attemptId: opts.attemptId, text: "think" };
+        yield { kind: "usage_update", sequence: 1, attemptId: opts.attemptId, usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, exact: true } };
+        yield { kind: "text_delta", sequence: 2, attemptId: opts.attemptId, text: "4" };
+        yield { kind: "model_end", sequence: 3, attemptId: opts.attemptId };
+      },
+    });
+    const result = await runModelTurn({
+      system: "s",
+      user: "u",
+      provider: "anthropic",
+      env: {},
+      preferSavedShell: false,
+      providerFactory: factory,
+      requestId: "t-usage",
+    });
+    expect(result.text).toBe("4");
+    expect(result.reasoning).toBe(true);
+    expect(result.usage?.inputTokens).toBe(10);
+    expect(result.usage?.outputTokens).toBe(2);
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+  });
+});

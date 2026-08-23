@@ -18,7 +18,7 @@
 //   3. legacy fallback name `anthropic` (fail-closed if no ANTHROPIC_API_KEY)
 
 import { makeProvider } from "./make-provider";
-import type { NormalizedError, NormalizedRequest, ProviderPort } from "./types";
+import type { NormalizedError, NormalizedRequest, NormalizedUsage, ProviderPort } from "./types";
 import { OPENAI_COMPAT_PROVIDERS, providerByName } from "../../commands/providers";
 import { envWithSavedApiKeys, loadShellConfig } from "../../lib/shell-config";
 
@@ -170,6 +170,9 @@ export interface ModelTurnResult {
   credentialAvailable: boolean;
   text: string;
   error?: NormalizedError;
+  usage?: NormalizedUsage;
+  latencyMs?: number;
+  reasoning?: boolean;
 }
 
 /**
@@ -226,15 +229,32 @@ export async function runModelTurn(input: ModelTurnInput): Promise<ModelTurnResu
 
   let text = "";
   let error: NormalizedError | undefined;
+  let usage: NormalizedUsage | undefined;
+  let reasoning = false;
+  const startedAt = performance.now();
+  let firstByteAt: number | undefined;
   for await (const event of port.stream(request, { attemptId: request.requestId })) {
+    if (firstByteAt === undefined) {
+      firstByteAt = performance.now();
+    }
     if (event.kind === "text_delta" && event.text) {
       text += event.text;
     } else if (event.kind === "provider_error" && event.error) {
       error = event.error;
+    } else if (event.kind === "reasoning_delta") {
+      reasoning = true;
+    } else if (event.kind === "usage_update" && event.usage) {
+      usage = event.usage;
     }
   }
 
+  const latencyMs =
+    firstByteAt !== undefined ? Math.max(0, Math.round(firstByteAt - startedAt)) : undefined;
+
+  const usageField = usage !== undefined ? { usage } : {};
+  const latencyField = latencyMs !== undefined ? { latencyMs } : {};
+  const reasoningField = reasoning ? { reasoning } : {};
   return error
-    ? { provider, model, credentialAvailable, text, error }
-    : { provider, model, credentialAvailable, text };
+    ? { provider, model, credentialAvailable, text, error, ...usageField, ...latencyField, ...reasoningField }
+    : { provider, model, credentialAvailable, text, ...usageField, ...latencyField, ...reasoningField };
 }

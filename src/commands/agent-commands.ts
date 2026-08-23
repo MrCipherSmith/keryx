@@ -162,7 +162,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   {
     name: "/game",
-    description: "Play tic-tac-toe against the model — the game minimizes while the agent works",
+    description: "Games against the model — /game [seconds] raises the model-turn deadline; add games via src/tui/games/",
     // Agent-only, same reasoning as /workspace and /review: the game needs the
     // OpenTUI modal host; chat mode has no modal surface.
     modes: AGENT_ONLY,

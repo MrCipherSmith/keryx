@@ -1,3 +1,8 @@
+// LEGACY single-game modal (pre-multi-game split, flow 174).
+// The /game shell command now uses src/tui/games/ (multi-tab games host with
+// model stats); this file is kept only because game-modal.test.ts still pins
+// the old presentGame surface. New games go into src/tui/games/.
+//
 // Tic-tac-toe vs the model, in the OpenTUI shell.
 //
 // The user plays X; the model plays O. The game opens as a modal on the shared

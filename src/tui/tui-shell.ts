@@ -100,7 +100,7 @@ import {
   themeLabel,
 } from "./theme";
 import { openThemePicker } from "./theme-picker";
-import { openGameModal } from "./game-modal";
+import { openGamesModal } from "./games";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -3090,10 +3090,12 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
-    const showGame = (): void => {
-      openGameModal(otui, chrome, {
+    const showGame = (line: string): void => {
+      const timeoutMatch = /\/game\s+(\d+)/.exec(line);
+      openGamesModal(otui, chrome, {
         renderer: r,
         ...inspectorKeys,
+        ...(timeoutMatch !== null ? { timeoutMs: Math.max(1, Number(timeoutMatch[1])) * 1000 } : {}),
       });
     };
     const showWorkspace = (): void => {
@@ -3918,7 +3920,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "game": {
-            showGame();
+            showGame(line);
             return;
           }
           case "deferred": {
@@ -4231,7 +4233,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/game") {
-          showGame();
+          showGame(line);
           return;
         }
         if (command.name === "/mode") {
