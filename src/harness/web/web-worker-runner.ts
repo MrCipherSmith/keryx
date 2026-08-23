@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { wrapWithSandbox } from "../process/sandbox/wrap";
 import type { SandboxProfile } from "../process/sandbox/profile";
+import { defaultReadDenyList } from "../process/sandbox/profile";
 import type { WebPolicyResult } from "./web-policy";
 import type { WebWorkerRequest, WebWorkerResponse, WebWorkerRunner } from "./sandboxed-web-transport";
 
@@ -71,7 +72,7 @@ function webSandboxProfile(workspace: string, home: string): SandboxProfile {
     // The worker is evaluated from stdin, not loaded from the project. Mask its
     // parent workspace and home even where the platform launcher otherwise needs
     // system runtime files readable.
-    readDenyList: [workspace, home],
+    readDenyList: [workspace, ...defaultReadDenyList(home)],
     allowedDomains: [],
     required: true,
   };
