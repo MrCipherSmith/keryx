@@ -37,6 +37,13 @@ export interface OpenAiCompatProvider {
   models: string[];
   /** Short picker note (e.g. `coding plan`). */
   note?: string;
+  /**
+   * Optional balance-check endpoint (path appended to `baseUrl`) for providers
+   * that expose one. `balanceKind` selects the response parser; absent when the
+   * provider has no public balance API (Z.AI, Cerebras, Groq, Moonshot, Grok…).
+   */
+  balancePath?: string;
+  balanceKind?: "deepseek" | "openrouter";
 }
 
 /** Normalize a provider registry entry's platform policy.
@@ -93,6 +100,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "OPENROUTER_API_KEY",
     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
     note: "hosted · 400+ models",
+    // GET /api/v1/credits -> { credits: { total, used, remaining, total_usd, ... } }
+    balancePath: "/api/v1/credits",
+    balanceKind: "openrouter",
   },
   {
     name: "deepseek",
@@ -101,6 +111,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "DEEPSEEK_API_KEY",
     models: ["deepseek-chat", "deepseek-reasoner"],
     note: "cheap per-token",
+    // GET /user/balance -> { is_available, balance_infos: [{ currency, total_balance, granted_balance, topped_up_balance }] }
+    balancePath: "/user/balance",
+    balanceKind: "deepseek",
   },
   {
     name: "zai",
@@ -298,4 +311,129 @@ export async function resolveModelsForPicker(
     apiKey,
     opts,
   );
+}
+
+
+// --- balance ----------------------------------------------------------------
+
+/** Normalized provider balance (null when the provider has no balance API). */
+export interface ProviderBalance {
+  /** Currency code the amounts are in (e.g. "USD"). */
+  currency: string;
+  /** Total balance available to spend. */
+  total: number;
+  /** Amount already spent (OpenRouter). Undefined when not reported. */
+  used?: number;
+  /** Amount remaining after spend (OpenRouter). Undefined when not reported. */
+  remaining?: number;
+  /** True when the response was provider-reported (vs. a default). */
+  exact: boolean;
+}
+
+/** Network timeout for balance probes (a slow endpoint must not hang the UI). */
+export const BALANCE_FETCH_TIMEOUT_MS = 8_000;
+
+/** Look up a registry provider that exposes a balance endpoint, by name. */
+export function balanceCapableProvider(name: string): OpenAiCompatProvider | undefined {
+  const provider = providerByName(name);
+  if (provider === undefined || provider.balancePath === undefined || provider.balanceKind === undefined) {
+    return undefined;
+  }
+  return provider;
+}
+
+function parseDeepSeekBalance(body: unknown): ProviderBalance | undefined {
+  if (typeof body !== "object" || body === null) {
+    return undefined;
+  }
+  const infos = (body as { balance_infos?: unknown }).balance_infos;
+  if (!Array.isArray(infos)) {
+    return undefined;
+  }
+  for (const info of infos) {
+    if (typeof info !== "object" || info === null) {
+      continue;
+    }
+    const total = Number((info as { total_balance?: unknown }).total_balance);
+    if (Number.isFinite(total)) {
+      const currency = String((info as { currency?: unknown }).currency ?? "USD");
+      return { currency, total, exact: true };
+    }
+  }
+  return undefined;
+}
+
+function parseOpenRouterBalance(body: unknown): ProviderBalance | undefined {
+  if (typeof body !== "object" || body === null) {
+    return undefined;
+  }
+  const credits = (body as { credits?: unknown }).credits;
+  if (typeof credits !== "object" || credits === null) {
+    return undefined;
+  }
+  const total = Number((credits as { total?: unknown }).total);
+  const used = Number((credits as { used?: unknown }).used);
+  if (!Number.isFinite(total)) {
+    return undefined;
+  }
+  const usedField = Number.isFinite(used) ? { used } : {};
+  const remaining = Number.isFinite(used) ? total - used : undefined;
+  return {
+    currency: String((credits as { currency?: unknown }).currency ?? "USD"),
+    total,
+    ...usedField,
+    ...(remaining !== undefined ? { remaining } : {}),
+    exact: true,
+  };
+}
+
+/**
+ * Fetch the current balance for a provider that exposes a balance endpoint.
+ * Returns `undefined` for providers without one, on network error, or on a
+ * non-2xx / malformed response. Never throws.
+ */
+export async function fetchProviderBalance(
+  fetchFn: typeof fetch,
+  provider: OpenAiCompatProvider,
+  apiKey?: string,
+  opts?: { timeoutMs?: number },
+): Promise<ProviderBalance | undefined> {
+  if (provider.balancePath === undefined || provider.balanceKind === undefined) {
+    return undefined;
+  }
+  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.balancePath}`;
+  const timeoutMs = opts?.timeoutMs ?? BALANCE_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const init: RequestInit = { signal: controller.signal };
+    if (apiKey !== undefined && apiKey.length > 0) {
+      init.headers = { authorization: `Bearer ${apiKey}` };
+    }
+    const res = await fetchFn(url, init);
+    if (!res.ok) {
+      return undefined;
+    }
+    const body = (await res.json()) as unknown;
+    return provider.balanceKind === "deepseek"
+      ? parseDeepSeekBalance(body)
+      : parseOpenRouterBalance(body);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Resolve the API key for a provider from an env-like record. */
+export function providerApiKey(
+  provider: OpenAiCompatProvider,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const envKey = provider.envKey;
+  if (envKey === undefined) {
+    return undefined;
+  }
+  const raw = env[envKey];
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
 }

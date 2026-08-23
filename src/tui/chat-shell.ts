@@ -44,6 +44,7 @@ import { createShellChrome, createShellRenderer, type ShellChrome } from "./shel
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
 import { applyThemeId, getThemeId, loadPersistedThemeId, parseThemeId, persistThemeId, themeLabel, formatThemeList } from "./theme";
 import { isThemeCommand, openThemePicker } from "./theme-picker";
+import { mountBalancePanel } from "./balance-panel";
 import type { VersionCheckResult } from "../lib/version-check";
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
@@ -370,6 +371,10 @@ export async function mountChatShell(
   sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
   const sbModel = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(label())}` });
   sidebar.add(sbModel);
+  // Balance under Model: live for the active provider, fetched on mount/click.
+  mountBalancePanel(sidebar, otui, r, {
+    provider: selection.provider,
+  });
   sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
   const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("~0 tokens (est)")}` });
   sidebar.add(sbContext);

@@ -101,6 +101,7 @@ import {
 } from "./theme";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
+import { mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
 import {
   MODELS_FETCH_TIMEOUT_MS,
@@ -598,6 +599,8 @@ export interface UsageChrome {
   setContextTotal: (total: number) => void;
   /** Called once a provider reports real numbers (retires the estimate). */
   onExactUsage?: () => void;
+  /** Sidebar Usage row: running in/out tokens, e.g. `↑1.2K ↓340`. */
+  setUsage?: (input: number, output: number) => void;
 }
 
 /**
@@ -639,6 +642,7 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { res
     totalOut += usage.outputTokens ?? 0;
     chrome.setHeaderMeta(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`);
     chrome.setContextTotal(totalIn + totalOut);
+    chrome.setUsage?.(totalIn, totalOut);
   };
   return Object.assign(io, {
     resetUsage(): void {
@@ -1999,6 +2003,20 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
+    // Usage row under Model: cumulative in/out tokens this session, fed by
+    // `attachUsageIo`'s setUsage chrome. Starts "↑0 ↓0"; real numbers replace
+    // it the first time the provider reports usage.
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-usage-k", content: otui.t`${otui.dim("Usage")}`, marginTop: 1 }));
+    const sbUsageV = new otui.TextRenderable(r, { id: "sb-usage-v", content: otui.t`${otui.dim("↑0 ↓0")}` });
+    sidebar.add(sbUsageV);
+    // Balance row under Usage: live balance for the ACTIVE provider, fetched
+    // on mount and on click (mountBalancePanel). "—" when the provider has no
+    // balance endpoint (Z.AI/Cerebras/Groq/…).
+    // Default fetch + merged shell auth keys; the active provider resolves
+    // from `sel.provider`. Clicking the value re-fetches.
+    const balancePanel = mountBalancePanel(sidebar, otui, r, {
+      provider: sel.provider,
+    });
     // The directory the agent's tools act on — directly under Model, matching the
     // readline header's `provider/model … · <cwd>` order (gap G-2).
     mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd());
@@ -2343,6 +2361,9 @@ export async function launchTuiAgentShell(opts: {
       },
       onExactUsage: () => {
         hasExactUsage = true;
+      },
+      setUsage: (input, output) => {
+        sbUsageV.content = otui.t`${otui.dim(`↑${fmtTokens(input)} ↓${fmtTokens(output)}`)}`;
       },
     });
     let lastUsage: NormalizedUsage | undefined;

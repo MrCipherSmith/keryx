@@ -5,6 +5,38 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.62] — 2026-08-23
+
+### Added
+
+- **`/game` is now a multi-tab games host with an agent-stats panel.**
+  The single tic-tac-toe modal became a component-based games module
+  (`src/tui/games/`): one `GameDefinition` contract (rules, prompts, render,
+  input) plus a registry, so adding a game is adding one definition — its tab
+  appears automatically on the shared modal host, with `←`/`→` switching
+  games. Tic-tac-toe itself is split into `core`/`prompts`/`layout`/`render`/
+  `input`/`game`. Under the board sits the new agent panel (dim/secondary):
+  the exact system prompt the model sees each turn, plus per-turn
+  latency/token stats — provider/model, time-to-first-byte, total time,
+  input/output tokens, reasoning flag, local-fallback count, errors. `runModelTurn`
+  now surfaces `usage`/`latencyMs`/`reasoning` from the stream so any caller
+  can show what an agent turn actually costs.
+- **`/game <seconds>` raises the model-turn deadline; the default went from
+  12s to 60s.** Local models are slow, and the stats panel's point is to
+  observe that latency, not to race it. `/game 45` sets a 45-second deadline
+  for that modal.
+
+### Fixed
+
+- **The sidebar now shows provider balance and session usage.** A new
+  `Balance` row under Model fetches the ACTIVE provider's balance live
+  (DeepSeek `GET /user/balance`, OpenRouter `GET /api/v1/credits` — the only
+  registry providers with public balance APIs; the rest render `—`), on
+  mount and again on click, honouring `KERYX_<NAME>_BASE_URL` overrides. A
+  new `Usage` row shows the cumulative in/out token totals for the session,
+  fed from the same `io.onUsage` stream that drives the header counter.
+  Both are wired into the agent and chat shells.
+
 ## [0.2.61] — 2026-08-23
 
 ### Fixed
