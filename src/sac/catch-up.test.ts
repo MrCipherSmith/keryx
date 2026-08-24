@@ -26,7 +26,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { buildCatchUp } from "./catch-up";
+import { buildCatchUp, dismissUnboundCandidate } from "./catch-up";
 import { proposalNotePath } from "./proposal-evidence";
 import { ProposalLifecycleService } from "./proposal-lifecycle";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
@@ -886,4 +886,43 @@ test("flow 194: --workspace scoping restricts unreviewedPaths to items attribute
 
   const scopedToMatch = await buildCatchUp({ cwd, workspaceId: "workspace-194-scope" });
   expect(scopedToMatch.unreviewedPaths.find((entry) => entry.sessionId === handle.summary.id)).toBeDefined();
+});
+
+test("dismissUnboundCandidate removes the artifact and writes a receipt; the candidate stops surfacing in catch-up", async () => {
+  const cwd = await tempCwd("keryx-catchup-dismiss-");
+  const unbound = await makeUnboundCandidateSession(cwd);
+  const report = await buildCatchUp({ cwd });
+  const item = report.unboundCandidates.find((i) => i.sessionId === unbound.sessionId);
+  expect(item).toBeDefined();
+  expect(item?.type).toBe("unbound-candidate");
+  expect(item?.evidencePath).toBeDefined();
+
+  const result = await dismissUnboundCandidate(item!.evidencePath, "test teardown");
+  expect(result.removed).toBe(item!.evidencePath);
+  expect(result.receipt).toBeDefined();
+  // receipt exists
+  const { readFile, access } = await import("node:fs/promises");
+  await access(result.receipt); // throws if missing
+  const receiptText = await readFile(result.receipt, "utf8");
+  const receipt = JSON.parse(receiptText);
+  expect(receipt.recordType).toBe("unbound-dismissed");
+  expect(receipt.reason).toBe("test teardown");
+
+  // candidate no longer surfaces
+  const after = await buildCatchUp({ cwd });
+  expect(after.unboundCandidates.find((i) => i.sessionId === unbound.sessionId)).toBeUndefined();
+});
+
+test("dismissUnboundCandidate is idempotent — dismissing a missing artifact still writes the receipt", async () => {
+  const cwd = await tempCwd("keryx-catchup-dismiss-idem-");
+  const unbound = await makeUnboundCandidateSession(cwd);
+  const report = await buildCatchUp({ cwd });
+  const item = report.unboundCandidates.find((i) => i.sessionId === unbound.sessionId);
+  expect(item).toBeDefined();
+  const result = await dismissUnboundCandidate(item!.evidencePath);
+  // second call: artifact already gone
+  const again = await dismissUnboundCandidate(item!.evidencePath);
+  expect(again.receipt).toBeDefined();
+  const after = await buildCatchUp({ cwd });
+  expect(after.unboundCandidates.find((i) => i.sessionId === unbound.sessionId)).toBeUndefined();
 });

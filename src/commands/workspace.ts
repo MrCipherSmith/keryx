@@ -10,7 +10,7 @@ import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
 import { findSession } from "../session/store";
-import { buildCatchUp, type CatchUpReport } from "../sac/catch-up";
+import { buildCatchUp, dismissUnboundCandidate, type CatchUpReport } from "../sac/catch-up";
 
 // Every kind a real writer now exists for: wiki-update -> wiki, memory-entry
 // -> memory, everything else -> skill (see ownerFor in proposal-lifecycle.ts).
@@ -145,6 +145,41 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       // ProposalLifecycleService.review()'s gate).
       const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, interactive: true, ...(reason ? { reason } : {}), ...(confirmToken ? { confirmToken } : {}) });
       console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
+    }
+    if (subcommand === "dismiss-candidate") {
+      rejectUnknownOptions(args.slice(2), new Set(["--reason", "--evidence"]));
+      const target = args[1];
+      const reason = optionValue(args, "--reason");
+      const evidence = optionValue(args, "--evidence");
+      if (!target) throw new Error("Usage: keryx workspace dismiss-candidate <evidence-path> [--reason <reason>] [--evidence <path>]");
+      // Accept either the direct evidence path or a session id. When a session
+      // id is given, resolve it to its slate-archive evidence path via findSession.
+      let evidencePath = evidence;
+      if (!evidencePath) {
+        const session = findSession(process.cwd(), target);
+        if (session !== undefined) {
+          // session dir: use sessionDir() to locate slate-archive
+          const { sessionDir } = await import("../session/paths");
+          const { join } = await import("node:path");
+          const dir = sessionDir(process.cwd(), session.id);
+          const { readdir } = await import("node:fs/promises");
+          let entries: string[];
+          try {
+            entries = (await readdir(join(dir, "slate-archive"))).filter((name) => name.endsWith("-unbound-candidate.json"));
+          } catch {
+            throw new Error(`No unbound-candidate artifacts for session ${session.id}`);
+          }
+          if (entries.length === 0) throw new Error(`No unbound-candidate artifacts for session ${session.id}`);
+          entries.sort();
+          evidencePath = join(dir, "slate-archive", entries[entries.length - 1]!);
+        } else {
+          evidencePath = target;
+        }
+      }
+      if (!evidencePath) throw new Error("Could not resolve an unbound-candidate evidence path");
+      const result = await dismissUnboundCandidate(evidencePath, reason);
+      console.log(JSON.stringify(result, null, 2));
+      return;
     }
     if (subcommand === "collaboration") {
       rejectUnknownOptions(args.slice(2), new Set()); const workspaceId = args[1];

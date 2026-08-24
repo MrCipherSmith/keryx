@@ -355,10 +355,13 @@ async function readExternalUnboundCandidates(cwd: string): Promise<CatchUpUnboun
           return groups;
         }, [] as Array<{ kind: string; seeds?: Array<{ text?: string }> }>),
       );
+      const metaPath = path.join(extDir, `${id}.json`);
+      // A dismissed slate (receipt next to its metadata file) stops surfacing.
+      if (await pathExists(unboundDismissedReceiptPath(metaPath))) continue;
       candidates.push({
         type: "unbound-candidate",
         externalSessionId: id,
-        evidencePath: path.join(extDir, `${id}.json`),
+        evidencePath: metaPath,
         summary,
       });
     }
@@ -389,6 +392,8 @@ async function readNewestUnboundCandidateForExternal(
   entries.sort();
   for (let i = entries.length - 1; i >= 0; i--) {
     const evidencePath = path.join(evidenceDir, entries[i]!);
+    // Same dismissed-receipt skip as the internal reader (external slates).
+    if (await pathExists(unboundDismissedReceiptPath(evidencePath))) continue;
     const result = readConfigFile(evidencePath);
     if (!result.ok) {
       continue; // malformed/partial/oversized entry — try the next-newest
@@ -693,6 +698,52 @@ type UnboundCandidateContent = {
   groups?: Array<{ kind?: unknown; seeds?: Array<{ text?: unknown }> }>;
 };
 
+
+/**
+ * Dismissed-receipt naming: `<same-prefix-as-candidate>-unbound-dismissed.json`
+ * lives next to `*-unbound-candidate.json` in the same `slate-archive/`.
+ * `dismissUnboundCandidate` writes it; `readNewestUnboundCandidate` treats a
+ * candidate with a sibling dismissed receipt as handled and skips it, so a
+ * dismissed candidate stops showing in `catch-up` and `/review`.
+ */
+export function unboundDismissedReceiptPath(candidatePath: string): string {
+  // Primary: `<prefix>-unbound-candidate.json` -> `<prefix>-unbound-dismissed.json`
+  if (/-unbound-candidate\.json$/.test(candidatePath)) {
+    return candidatePath.replace(/-unbound-candidate\.json$/, "-unbound-dismissed.json");
+  }
+  // Fallback: external-slate metadata `<id>.json` -> `<id>.dismissed.json`
+  return candidatePath.replace(/\.json$/, ".dismissed.json");
+}
+
+/**
+ * Delete one `*-unbound-candidate.json` artifact (and its directory when it
+ * becomes empty) and write a dismissed receipt next to it. The receipt
+ * records the decision so a re-created candidate with the same prefix is
+ * still recognized as handled. Best-effort on the directory removal; the
+ * receipt write is what actually gates future reads.
+ */
+export async function dismissUnboundCandidate(candidatePath: string, reason?: string): Promise<{ removed: string; receipt: string }> {
+  const { rm, writeFile } = await import("node:fs/promises");
+  const { dirname } = await import("node:path");
+  await rm(candidatePath, { force: true });
+  const receiptPath = unboundDismissedReceiptPath(candidatePath);
+  const receipt = {
+    recordType: "unbound-dismissed",
+    dismissedAt: new Date().toISOString(),
+    candidatePath: candidatePath.split("/").pop(),
+    ...(reason !== undefined ? { reason } : {}),
+  };
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  // Best-effort: remove the now-empty parent dir (the external-slate case).
+  const parent = dirname(candidatePath);
+  try {
+    await rm(parent, { force: true, recursive: false });
+  } catch {
+    // not empty or not removable — fine, the receipt already gates reads
+  }
+  return { removed: candidatePath, receipt: receiptPath };
+}
+
 async function readNewestUnboundCandidate(dir: string): Promise<{ evidencePath: string; summary: string } | undefined> {
   const archiveDir = path.join(dir, "slate-archive");
   let entries: string[];
@@ -708,6 +759,9 @@ async function readNewestUnboundCandidate(dir: string): Promise<{ evidencePath: 
   entries.sort();
   for (let i = entries.length - 1; i >= 0; i--) {
     const evidencePath = path.join(archiveDir, entries[i]!);
+    // A dismissed candidate has a sibling `*-unbound-dismissed.json` receipt —
+    // skip it so it stops surfacing in catch-up/review (see dismissUnboundCandidate).
+    if (await pathExists(unboundDismissedReceiptPath(evidencePath))) continue;
     const result = readConfigFile(evidencePath);
     if (!result.ok) {
       continue; // malformed/partial/oversized entry — try the next-newest, never throw
