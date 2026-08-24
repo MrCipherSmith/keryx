@@ -40,6 +40,7 @@
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
+import { runModelTurn } from "../harness/provider/single-turn";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
@@ -4574,6 +4575,34 @@ export async function launchTuiAgentShell(opts: {
       };
       const controller = new AbortController();
       mainTurnAbortController = controller;
+      // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
+      // After a settled main turn with an empty queue, ask the model for ONE
+      // short follow-up and show it as the composer placeholder. Fail-closed:
+      // no credential, a timeout, an error, or a "." reply simply shows
+      // nothing — never blocks the shell, never throws into the turn's
+      // finally chain.
+      const suggestNextStep = async (): Promise<void> => {
+        try {
+          const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+          const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
+          const tail = lastAssistant.slice(-3000);
+          const result = await runModelTurn({
+            provider: sel.provider,
+            model: sel.model,
+            system:
+              "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .",
+            user: `User: ${lastUser.slice(-800)}\n\nAssistant reply (tail):\n${tail}`,
+            maxOutputTokens: 40,
+            requestId: `suggest-next-step-${Date.now()}`,
+          });
+          if (!result.credentialAvailable || result.text.trim().length === 0 || result.text.trim() === ".") {
+            return;
+          }
+          chrome.showSuggestion(result.text.trim().split(/\s+/).slice(0, 20).join(" "));
+        } catch {
+          // fail-closed: never surface an error for an optional hint
+        }
+      };
       void runAgentTurn(io, deps, history, line, {
         signal: controller.signal,
         ...(slateSession !== undefined ? { slateSession } : {}),
@@ -4605,6 +4634,11 @@ export async function launchTuiAgentShell(opts: {
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
         focusComposer(); // never steal focus from an active block-nav mode (R3)
+        // Only suggest a next step when nothing is already queued — a queued
+        // turn is the real next step and would immediately overwrite the hint.
+        if (priorityMainQuestion === undefined && mainQueue.length === 0 && !turnFailed) {
+          void suggestNextStep();
+        }
         // A forced item (AC6) wins over FIFO order — it is the reason the
         // turn just settled. Otherwise FIFO-drain the head of the main queue
         // (AC7), once the current one has fully settled (stopBusy/setMainAgent

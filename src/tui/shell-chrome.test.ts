@@ -956,3 +956,65 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
   }
 });
 
+otuiTest("next-step suggestion: shows in the composer placeholder while empty, and clears on input", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  h.chrome.showSuggestion("git push origin main");
+  await h.flush();
+  // Empty composer → the suggestion is the placeholder.
+  expect(h.captureCharFrame()).toContain("git push origin main");
+  expect(h.chrome.suggestionActive()).toBe(true);
+
+  // Typing dismisses the hint (the key still lands in the composer).
+  await h.mockInput.pressKeys(["h"]);
+  await h.flush();
+  expect(h.chrome.suggestionActive()).toBe(false);
+  expect(h.chrome.input.value).toBe("h");
+  h.destroy();
+});
+
+otuiTest("next-step suggestion: Tab inserts it without submitting; Enter submits it directly", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const submitted: string[] = [];
+  h.chrome.onSubmit((line) => submitted.push(line));
+
+  // Tab fills the composer, does NOT submit.
+  h.chrome.showSuggestion("run the tests");
+  await h.flush();
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(h.chrome.input.value).toBe("run the tests");
+  expect(h.chrome.suggestionActive()).toBe(false);
+  expect(submitted).toEqual([]);
+
+  // Enter on an EMPTY composer with an active suggestion submits it. (The
+  // composer was filled by Tab above, so it must be emptied first — Enter
+  // deliberately only accepts the hint when nothing is typed.)
+  h.chrome.input.value = "";
+  h.chrome.showSuggestion("commit the fix");
+  await h.flush();
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(submitted).toEqual(["commit the fix"]);
+  expect(h.chrome.suggestionActive()).toBe(false);
+  h.destroy();
+});
+
+otuiTest("next-step suggestion: stored but hidden while the composer has text; reappears once emptied", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  await h.mockInput.pressKeys(["h", "i"]);
+  await h.flush();
+  h.chrome.showSuggestion("does not appear");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("hi");
+  expect(h.captureCharFrame()).not.toContain("does not appear");
+  expect(h.chrome.suggestionActive()).toBe(true); // stored, just hidden
+
+  // Clearing the composer reveals the hint again (live placeholder).
+  h.chrome.input.value = "";
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("does not appear");
+  h.destroy();
+});

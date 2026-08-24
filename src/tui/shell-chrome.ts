@@ -411,6 +411,17 @@ export interface ShellChrome {
   /** Subscribe to submitted lines (composer Enter + `/`-menu selection). */
   onSubmit(handler: (line: string) => void): () => void;
 
+  /**
+   * Show a model-suggested "next step" in the composer placeholder while the
+   * composer is empty. Tab inserts it (without submitting); Enter submits it;
+   * any printable input dismisses it. No-op while the composer has text.
+   */
+  showSuggestion(text: string): void;
+  /** Drop the active suggestion and restore the default placeholder. */
+  clearSuggestion(): void;
+  /** True while a suggestion is set (test seam / footer hint). */
+  suggestionActive(): boolean;
+
   /** Clear timers and drop the chrome's own listeners. */
   destroy(): void;
 }
@@ -1007,6 +1018,15 @@ export async function createShellChrome(
     input.value = "";
     hideMenu();
     syncComposerHeight();
+    // Enter on an empty composer with an active placeholder suggestion submits
+    // the suggestion itself (Claude-style accept). Handled HERE, in the
+    // textarea's own submit path, so it is independent of key-dispatch order.
+    if (line.length === 0 && suggestion !== null) {
+      const next = suggestion;
+      clearSuggestion();
+      emitSubmit(next);
+      return;
+    }
     emitSubmit(line);
   };
 
@@ -1066,6 +1086,55 @@ export async function createShellChrome(
       refilter();
       key.preventDefault();
       key.stopPropagation();
+    }
+  });
+
+  // --- next-step suggestion (Claude-style placeholder + Tab accept) ---------
+  // A model-generated "what to do next" shown as the composer placeholder while
+  // it is empty. Tab fills it in without submitting; Enter submits it directly;
+  // typing dismisses it. Mirrors qwen-code's InputForm followup mechanism
+  // (placeholder swap + tab/enter/right accept + dismiss on input).
+  const defaultPlaceholder = opts.placeholder;
+  let suggestion: string | null = null;
+  const syncPlaceholder = (): void => {
+    textarea.placeholder = suggestion !== null && input.value.length === 0 ? suggestion : defaultPlaceholder;
+  };
+  const showSuggestion = (text: string): void => {
+    if (text.length === 0) return;
+    suggestion = text;
+    syncPlaceholder();
+  };
+  const clearSuggestion = (): void => {
+    if (suggestion === null) return;
+    suggestion = null;
+    syncPlaceholder();
+  };
+  // Dismiss the suggestion the moment the composer gets text (typing or
+  // paste), and restore it when the field is emptied again — a live
+  // placeholder, not a one-shot swap.
+  const prevContentChange = textarea.onContentChange;
+  textarea.onContentChange = (event) => {
+    if (suggestion !== null) syncPlaceholder();
+    prevContentChange?.(event);
+  };
+  const unsubscribeSuggestionKeys = onKeypress(r, (key) => {
+    if (suggestion === null || overlayActive()) return;
+    if (menu.visible && menuNav) return; // the `/`-menu owns Tab while open
+    if (key.name === "tab" || key.name === "right") {
+      if (input.value.length === 0) {
+        input.value = suggestion;
+        clearSuggestion();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      return;
+    }
+    // Any other printable input dismisses the hint (the key still goes to the
+    // composer normally — we only preventDefault'd above where we consumed it).
+    const ch = key.sequence;
+    if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+      clearSuggestion();
     }
   });
 
@@ -1162,6 +1231,10 @@ export async function createShellChrome(
     setStatus: (text) => paintDim(footerRight, text),
     setHeaderMeta: (text) => paintDim(headerRight, text),
 
+    showSuggestion,
+    clearSuggestion,
+    suggestionActive: () => suggestion !== null,
+
     onSubmit: (handler) => {
       submitHandlers.add(handler);
       return () => {
@@ -1176,6 +1249,7 @@ export async function createShellChrome(
       clearBusyTimer();
       clearToastTimer();
       unsubscribeMenuKeys();
+      unsubscribeSuggestionKeys();
       try {
         textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
       } catch {
