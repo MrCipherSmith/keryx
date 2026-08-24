@@ -1,6 +1,7 @@
 {
-  "generatedAt": "2026-08-03T15:18:53.206Z",
-  "entryCount": 8,
+  "catalogVersion": 1,
+  "sourceFingerprint": "eee73efca808eb5d2a82db418d48c755ede8d07cec013f5f8b99b84755924625",
+  "entryCount": 11,
   "entries": [
     {
       "path": "constraints/code-blanks-string-literals.md",
@@ -108,6 +109,21 @@
       }
     },
     {
+      "path": "lessons/theme-switch-repaint.md",
+      "type": "lesson",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+      "updated": "2026-08-24",
+      "tags": [],
+      "scopes": {
+        "module": "src/tui",
+        "entity": "shell-chrome.ts",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
       "path": "lessons/tui-alignself-height-collapse.md",
       "type": "lesson",
       "status": "accepted",
@@ -118,6 +134,40 @@
       "scopes": {
         "module": "tui",
         "entity": "transcript-blocks, shell-chrome",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+      "type": "task-note",
+      "status": "accepted",
+      "confidence": "medium",
+      "title": "SAC: Anchors: root: /Users/tsaitler.aleksandr/goodea/keryx tre…",
+      "updated": "2026-08-22",
+      "tags": [
+        "sac-wrap-up"
+      ],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+      "type": "task-note",
+      "status": "accepted",
+      "confidence": "medium",
+      "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+      "updated": "2026-08-24",
+      "tags": [
+        "sac-wrap-up"
+      ],
+      "scopes": {
+        "module": null,
+        "entity": null,
         "files": [],
         "skills": []
       }
