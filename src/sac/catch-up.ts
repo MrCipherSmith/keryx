@@ -42,7 +42,7 @@ import { readConfigFile } from "../lib/config-dir";
 import { sessionDir } from "../session/paths";
 import { readSlate, slateLockPath, type Slate } from "../session/slate";
 import type { TerminalState } from "../session/slate-terminal-state";
-import { listSessions, type SessionSummary } from "../session/store";
+import { findSession, listSessions, type SessionSummary } from "../session/store";
 import type { WrapUpGroupOutcome, WrapUpTrigger } from "./machine-wrap-up";
 import { createLocalProposalLifecycleService, type ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer } from "./workspace-service";
@@ -722,6 +722,41 @@ export function unboundDismissedReceiptPath(candidatePath: string): string {
  * still recognized as handled. Best-effort on the directory removal; the
  * receipt write is what actually gates future reads.
  */
+/**
+ * Resolve a session id (or a bare evidence path) to the newest
+ * `*-unbound-candidate.json` artifact under that session's `slate-archive/`.
+ * When `target` is already a path that looks like one, it is used as-is.
+ */
+export async function resolveUnboundCandidateTarget(cwd: string, target: string): Promise<string> {
+  if (target.endsWith("-unbound-candidate.json") || target.endsWith(".json")) {
+    return target;
+  }
+  const session = findSession(cwd, target);
+  if (session === undefined) {
+    throw new Error(`No session or evidence path matches "${target}"`);
+  }
+  const archiveDir = path.join(sessionDir(session.projectPath, session.id), "slate-archive");
+  let entries: string[];
+  try {
+    entries = (await readdir(archiveDir)).filter((name) => name.endsWith("-unbound-candidate.json"));
+  } catch {
+    throw new Error(`No unbound-candidate artifacts for session ${session.id}`);
+  }
+  if (entries.length === 0) throw new Error(`No unbound-candidate artifacts for session ${session.id}`);
+  entries.sort();
+  return path.join(archiveDir, entries[entries.length - 1]!);
+}
+
+/**
+ * Dismiss an unbound candidate by session id OR evidence path, resolving the
+ * former to its newest artifact first. Convenience wrapper around
+ * {@link resolveUnboundCandidateTarget} + {@link dismissUnboundCandidate}.
+ */
+export async function dismissUnboundByTarget(cwd: string, target: string, reason?: string): Promise<{ removed: string; receipt: string }> {
+  const evidencePath = await resolveUnboundCandidateTarget(cwd, target);
+  return dismissUnboundCandidate(evidencePath, reason);
+}
+
 export async function dismissUnboundCandidate(candidatePath: string, reason?: string): Promise<{ removed: string; receipt: string }> {
   const { rm, writeFile } = await import("node:fs/promises");
   const { dirname } = await import("node:path");

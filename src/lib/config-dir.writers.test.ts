@@ -125,6 +125,11 @@ const EXEMPTIONS: ReadonlyArray<Exemption> = [
     reason:
       "creates a directory TREE below the shared root and forces 0700 down each level; calls ensureKeryxConfigDir for the root. Files are written temp+rename",
   },
+  {
+    file: "sac/catch-up.ts",
+    reason:
+      "dismissUnboundCandidate writes an unbound-dismissed receipt into the SESSION's slate-archive/ (project-scoped, never the shared config dir) and removes the candidate artifact; the config-path resolver it names (readConfigFile) is only for READING candidate JSON, never for writing",
+  },
 ];
 
 function sourceFiles(): string[] {
