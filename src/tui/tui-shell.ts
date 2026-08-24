@@ -110,7 +110,7 @@ import {
   resolveModelsForPicker,
 } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
-import { classifyDiffLine } from "../lib/md-blocks";
+import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
@@ -401,6 +401,13 @@ type StyledContent = string | ReturnType<OpenTui["t"]>;
 export type TuiAgentIo = AgentIO & {
   /** Drop an in-flight assistant stream so the next turn starts a new container. */
   resetStream(): void;
+  /**
+   * The most recently rendered fenced-code segment in the reply text. A fence
+   * inside the reply has no block-registry entry of its own (unlike a
+   * `thought`/`tool` block), so `/copy` and `y` fall back to this when there is
+   * no registered block to copy instead.
+   */
+  lastCodeSegment(): { lang: string; body: string } | undefined;
 };
 
 export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): TuiAgentIo {
@@ -459,6 +466,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     resetStream: () => {
       messages.reset();
     },
+    lastCodeSegment: () => messages.lastCodeSegment(),
   };
 }
 
@@ -2343,6 +2351,30 @@ export async function launchTuiAgentShell(opts: {
     const newestBlock = (kind?: string): BlockState | undefined => nav.newest(kind);
     const toggleNewestBlock = (kind?: string): BlockState | undefined => nav.toggleNewest(kind);
     const copyBlock = (id: string): boolean => nav.copy(id);
+    /**
+     * `/copy` and `y` target the newest registered block (thought/tool/output).
+     * A fenced code block embedded in the reply text has no registry entry of
+     * its own, so with no block to copy this falls back to the last one shown —
+     * the same block the segment header's `y copy` hint (`transcript-blocks.ts`)
+     * is advertising.
+     */
+    const copyNewestOrLastCode = (): boolean => {
+      const target = newestBlock();
+      if (target !== undefined) {
+        return copyBlock(target.id);
+      }
+      const code = io.lastCodeSegment();
+      if (code === undefined) {
+        return false;
+      }
+      try {
+        r.copyToClipboardOSC52(code.body);
+        chrome.showToast("Copied to clipboard");
+        return true;
+      } catch {
+        return false; // clipboard access not permitted — ignore
+      }
+    };
 
     /** Register + render a new collapsed block at the end of the transcript. */
     const addBlock: BlockSink = (input, options = {}) => {
@@ -3655,15 +3687,6 @@ export async function launchTuiAgentShell(opts: {
       }, 12_000);
     };
 
-    const summarizeSubmittedLine = (line: string): string => {
-      const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-      const count = normalized.split("\n").filter((linePart) => linePart.length > 0).length;
-      if (count <= 1) {
-        return line;
-      }
-      return `[pasted ${count} lines]`;
-    };
-
     const spawnSideWorker = (question: string, displayQuestion = question): void => {
       sideQueue.push({ question, displayQuestion });
       if (sideQueue.length > 1 || sideWorkerRunning) {
@@ -3914,8 +3937,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "copy": {
-            const target = newestBlock();
-            if (target === undefined || !copyBlock(target.id)) {
+            if (!copyNewestOrLastCode()) {
               io.onSystem?.("Nothing to copy yet.\n");
             }
             return;
@@ -4225,8 +4247,9 @@ export async function launchTuiAgentShell(opts: {
           // Always the newest block: a slash command can only be submitted from
           // the composer, and in nav mode the composer is blurred — so there is
           // no reachable "focused block wins" case to honor here (`y` covers it).
-          const target = newestBlock();
-          if (target === undefined || !copyBlock(target.id)) {
+          // Falls back to the last fenced code block in the reply text when
+          // there is no registered block (a fence has no registry entry).
+          if (!copyNewestOrLastCode()) {
             io.onSystem?.("Nothing to copy yet.\n");
           }
           return;

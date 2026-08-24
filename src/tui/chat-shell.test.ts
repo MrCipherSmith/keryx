@@ -224,7 +224,7 @@ otuiTest("AC10: a chat turn runs end to end through the real runShell and the re
   h.destroy();
 });
 
-otuiTest("multiline input shows pasted placeholder and submits once", async () => {
+otuiTest("multiline input echoes the user's own first line, not just a paste placeholder, and submits once", async () => {
   const otui = requireOtui();
   const h = await mountChat(otui, { replies: ["ok"] });
 
@@ -234,8 +234,8 @@ otuiTest("multiline input shows pasted placeholder and submits once", async () =
   await settle(h);
 
   const frame = h.captureCharFrame();
-  expect(frame).toContain("[pasted 3 lines]");
-  expect(frame).not.toContain("line one");
+  expect(frame).toContain("line one [+ 2 pasted lines]");
+  expect(frame).not.toContain("line two");
   expect(h.handle.chrome.input.value).toBe("");
 
   h.destroy();

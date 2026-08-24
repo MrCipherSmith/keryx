@@ -10,6 +10,7 @@ import {
   segmentMarkdown,
   splitLines,
   stripTrailingCr,
+  summarizeSubmittedLine,
   visualWidth,
 } from "./md-blocks";
 
@@ -341,6 +342,28 @@ describe("blockLabel", () => {
   test("the label is plain text so callers own the styling (flow 115 anchor)", () => {
     const label = blockLabel({ kind: "thought", lineCount: 9, collapsed: true, hint: "ctrl+r" });
     expect(label).not.toContain("");
+  });
+});
+
+// --- summarizeSubmittedLine ---------------------------------------------
+
+describe("summarizeSubmittedLine", () => {
+  test("a single line passes through unchanged", () => {
+    expect(summarizeSubmittedLine("hello")).toBe("hello");
+    expect(summarizeSubmittedLine("")).toBe("");
+  });
+
+  test("multi-line input keeps the user's own first line and counts the rest", () => {
+    expect(summarizeSubmittedLine("line one\nline two\nline three")).toBe("line one [+ 2 pasted lines]");
+    expect(summarizeSubmittedLine("line one\nline two")).toBe("line one [+ 1 pasted line]");
+  });
+
+  test("CRLF is normalized like LF", () => {
+    expect(summarizeSubmittedLine("line one\r\nline two\r\nline three")).toBe("line one [+ 2 pasted lines]");
+  });
+
+  test("blank lines are not counted, mirroring the prior collapse behavior", () => {
+    expect(summarizeSubmittedLine("only line\n\n\n")).toBe("only line\n\n\n");
   });
 });
 

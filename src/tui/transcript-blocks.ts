@@ -27,6 +27,7 @@ import {
   segmentMarkdown,
   splitLines,
   stripTrailingCr,
+  tokenizeCodeLine,
   type MdSegment,
 } from "../lib/md-blocks";
 import { getTheme } from "./theme";
@@ -495,14 +496,48 @@ export function diffChunks(otui: OpenTui, text: string): Chunk[] {
   return out;
 }
 
-/** Flat dim body — the code payload, with no tree-sitter highlighting (D-2). */
-function codeChunks(otui: OpenTui, text: string): Chunk[] {
+/** Flat dim body, one chunk per line — no language, so nothing to tokenize. */
+function flatDimChunks(otui: OpenTui, text: string): Chunk[] {
   const out: Chunk[] = [];
   for (const [index, line] of splitLines(text).entries()) {
     if (index > 0) {
       out.push(...otui.stringToStyledText("\n").chunks);
     }
     out.push(otui.dim(line));
+  }
+  return out;
+}
+
+/**
+ * Code payload, lightly highlighted by `tokenizeCodeLine` — a plain string
+ * scan, not the native `CodeRenderable`'s tree-sitter worker (D-2 keeps this
+ * worker-free and network-free). Comments dim, strings green, numbers yellow,
+ * keywords cyan; everything else keeps the surrounding text color.
+ */
+function codeChunks(otui: OpenTui, text: string, lang: string): Chunk[] {
+  const out: Chunk[] = [];
+  for (const [index, line] of splitLines(text).entries()) {
+    if (index > 0) {
+      out.push(...otui.stringToStyledText("\n").chunks);
+    }
+    for (const token of tokenizeCodeLine(line, lang)) {
+      switch (token.kind) {
+        case "comment":
+          out.push(otui.dim(token.text));
+          break;
+        case "string":
+          out.push(otui.green(token.text));
+          break;
+        case "number":
+          out.push(otui.yellow(token.text));
+          break;
+        case "keyword":
+          out.push(otui.cyan(token.text));
+          break;
+        default:
+          out.push(...otui.stringToStyledText(token.text).chunks);
+      }
+    }
   }
   return out;
 }
@@ -520,7 +555,7 @@ export function payloadChunks(otui: OpenTui, text: string, lang = ""): Chunk[] {
   if (kind === "markdown" || lang.length === 0) {
     return markdownToChunks(otui, text);
   }
-  return codeChunks(otui, text);
+  return codeChunks(otui, text, lang);
 }
 
 /** One rendered `MdSegment` of an assistant message. */
@@ -567,7 +602,7 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
 
   const tag = (lang: string, body: string): string => {
     const n = lineCountOf(body);
-    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"}`;
+    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"} · y copy`;
   };
   const frameWidth = (lang: string, body: string): number =>
     Math.max(hugWidth(body, FRAME_CHROME), hugWidth(tag(lang, body), FRAME_CHROME));
@@ -629,6 +664,13 @@ export interface AssistantMessageStream {
   open(): boolean;
   /** Drop an in-flight message so the next push starts a new container. */
   reset(): void;
+  /**
+   * The most recently rendered fenced-code segment, across all messages this
+   * stream has shown — a fence embedded in the reply text has no registry
+   * entry of its own (unlike a `thought`/`tool` block), so `y`/`/copy` fall
+   * back to this when no block is focused/newest.
+   */
+  lastCodeSegment(): { lang: string; body: string } | undefined;
 }
 
 let messageSeq = 0;
@@ -659,6 +701,7 @@ export function createAssistantMessageStream(
     frozen: number;
   };
   let message: Message | undefined;
+  let lastCode: { lang: string; body: string } | undefined;
 
   const start = (): Message => {
     messageSeq += 1;
@@ -689,6 +732,11 @@ export function createAssistantMessageStream(
       stale.destroy();
     }
     m.frozen = frozen;
+    for (const segment of segments) {
+      if (segment.kind === "code") {
+        lastCode = { lang: segment.lang, body: segment.body };
+      }
+    }
   };
 
   return {
@@ -732,6 +780,7 @@ export function createAssistantMessageStream(
       }
       message = undefined;
     },
+    lastCodeSegment: () => lastCode,
   };
 }
 
@@ -865,10 +914,11 @@ export function createBlockView(
       return;
     }
     const shown = clipBody(text, options.maxLines ?? MAX_BODY_LINES);
-    // `codeChunks` is the one dim-per-line renderer; reusing it keeps a single
-    // dim implementation rather than a second styling path (flow 115 D-4).
+    // `flatDimChunks` is the one dim-per-line renderer for UNTYPED bodies
+    // (reasoning, raw tool output) — no fence language, so nothing to tokenize
+    // and no keyword set to misapply to arbitrary prose (flow 115 D-4).
     const content = new otui.StyledText(
-      options.dim === true ? codeChunks(otui, shown) : payloadChunks(otui, shown),
+      options.dim === true ? flatDimChunks(otui, shown) : payloadChunks(otui, shown),
     );
     painted = text;
     if (bodyText !== undefined) {

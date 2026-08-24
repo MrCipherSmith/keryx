@@ -145,6 +145,364 @@ export function looksLikeUnifiedDiff(text: string): boolean {
   return false;
 }
 
+// --- lightweight code tokenizer ---------------------------------------------
+//
+// A single-pass, per-line scanner — NOT a grammar. Flow 109 (D-2) ruled out the
+// native `CodeRenderable`'s tree-sitter worker (it can fetch grammars over the
+// network at render time, which the shell's worker-free/no-egress stance
+// forbids). This stays a plain string scan: no worker, no network, no grammar
+// file, so it composes with that decision instead of reopening it. It only
+// recognizes comments, quoted strings, and a per-language keyword list — good
+// enough to make a block readable at a glance, not a real lexer (nested
+// template literals, regex literals and multi-line block comments are not
+// tracked).
+
+export type CodeTokenKind = "keyword" | "string" | "number" | "comment" | "plain";
+export type CodeToken = { kind: CodeTokenKind; text: string };
+
+const CODE_LANG_ALIASES: Record<string, string> = {
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  py: "python",
+  py3: "python",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
+  console: "bash",
+  yml: "yaml",
+  rb: "ruby",
+  rs: "rust",
+  kt: "kotlin",
+  cs: "csharp",
+  "c++": "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  hpp: "cpp",
+};
+
+const GENERIC_KEYWORDS = new Set([
+  "if",
+  "else",
+  "for",
+  "while",
+  "return",
+  "function",
+  "class",
+  "const",
+  "let",
+  "var",
+  "import",
+  "export",
+  "from",
+  "true",
+  "false",
+  "null",
+  "new",
+  "this",
+  "try",
+  "catch",
+  "throw",
+  "switch",
+  "case",
+  "break",
+  "continue",
+  "default",
+  "static",
+  "public",
+  "private",
+]);
+
+const CODE_LANG_KEYWORDS: Record<string, ReadonlySet<string>> = {
+  javascript: new Set([
+    ...GENERIC_KEYWORDS,
+    "async",
+    "await",
+    "yield",
+    "typeof",
+    "instanceof",
+    "in",
+    "of",
+    "void",
+    "undefined",
+    "super",
+    "extends",
+    "finally",
+    "do",
+    "delete",
+  ]),
+  typescript: new Set([
+    ...GENERIC_KEYWORDS,
+    "async",
+    "await",
+    "yield",
+    "typeof",
+    "instanceof",
+    "in",
+    "of",
+    "void",
+    "undefined",
+    "super",
+    "extends",
+    "implements",
+    "interface",
+    "type",
+    "enum",
+    "namespace",
+    "declare",
+    "readonly",
+    "abstract",
+    "as",
+    "satisfies",
+    "finally",
+    "do",
+    "delete",
+  ]),
+  python: new Set([
+    "def",
+    "return",
+    "if",
+    "elif",
+    "else",
+    "for",
+    "while",
+    "break",
+    "continue",
+    "class",
+    "import",
+    "from",
+    "as",
+    "try",
+    "except",
+    "finally",
+    "raise",
+    "with",
+    "lambda",
+    "yield",
+    "pass",
+    "None",
+    "True",
+    "False",
+    "and",
+    "or",
+    "not",
+    "in",
+    "is",
+    "global",
+    "nonlocal",
+    "assert",
+    "async",
+    "await",
+    "del",
+    "self",
+  ]),
+  bash: new Set([
+    "if",
+    "then",
+    "else",
+    "elif",
+    "fi",
+    "for",
+    "while",
+    "do",
+    "done",
+    "case",
+    "esac",
+    "function",
+    "return",
+    "local",
+    "export",
+    "exit",
+    "break",
+    "continue",
+    "in",
+    "select",
+    "until",
+  ]),
+  go: new Set([
+    "func",
+    "return",
+    "if",
+    "else",
+    "for",
+    "range",
+    "switch",
+    "case",
+    "default",
+    "break",
+    "continue",
+    "package",
+    "import",
+    "var",
+    "const",
+    "type",
+    "struct",
+    "interface",
+    "map",
+    "chan",
+    "go",
+    "defer",
+    "select",
+    "fallthrough",
+    "nil",
+    "true",
+    "false",
+  ]),
+  rust: new Set([
+    "fn",
+    "let",
+    "mut",
+    "return",
+    "if",
+    "else",
+    "for",
+    "while",
+    "loop",
+    "match",
+    "struct",
+    "enum",
+    "impl",
+    "trait",
+    "pub",
+    "use",
+    "mod",
+    "crate",
+    "self",
+    "Self",
+    "super",
+    "const",
+    "static",
+    "async",
+    "await",
+    "move",
+    "ref",
+    "dyn",
+    "where",
+    "unsafe",
+    "true",
+    "false",
+    "None",
+    "Some",
+    "Ok",
+    "Err",
+  ]),
+  json: new Set(["true", "false", "null"]),
+};
+
+/** `//` / `#` / `--` line-comment prefix for a normalized language, or "" if unknown. */
+function codeCommentPrefix(normalizedLang: string): string {
+  switch (normalizedLang) {
+    case "javascript":
+    case "typescript":
+    case "go":
+    case "rust":
+    case "java":
+    case "c":
+    case "cpp":
+    case "csharp":
+    case "swift":
+    case "kotlin":
+    case "scala":
+    case "php":
+      return "//";
+    case "python":
+    case "bash":
+    case "ruby":
+    case "yaml":
+    case "toml":
+    case "r":
+    case "perl":
+      return "#";
+    case "sql":
+    case "lua":
+    case "haskell":
+      return "--";
+    default:
+      return "";
+  }
+}
+
+/** Lowercase + alias a fence's info-string language for tokenizer lookups. */
+function normalizeCodeLang(lang: string): string {
+  const key = lang.trim().toLowerCase();
+  return CODE_LANG_ALIASES[key] ?? key;
+}
+
+const CODE_WORD_OR_NUMBER = /[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?/g;
+
+/** Split a comment/string-free segment into keyword/number/plain tokens. */
+function tokenizeCodeWords(text: string, keywords: ReadonlySet<string>): CodeToken[] {
+  const tokens: CodeToken[] = [];
+  let last = 0;
+  CODE_WORD_OR_NUMBER.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = CODE_WORD_OR_NUMBER.exec(text)) !== null) {
+    if (m.index > last) {
+      tokens.push({ kind: "plain", text: text.slice(last, m.index) });
+    }
+    const word = m[0];
+    if (/^[0-9]/.test(word)) {
+      tokens.push({ kind: "number", text: word });
+    } else if (keywords.has(word)) {
+      tokens.push({ kind: "keyword", text: word });
+    } else {
+      tokens.push({ kind: "plain", text: word });
+    }
+    last = m.index + word.length;
+  }
+  if (last < text.length) {
+    tokens.push({ kind: "plain", text: text.slice(last) });
+  }
+  return tokens;
+}
+
+/**
+ * Tokenize one line of code for a fence's language: quoted strings and a
+ * trailing line comment are pulled out first (a quote INSIDE a comment is not
+ * re-scanned, and a comment marker inside a string is not treated as one),
+ * then whatever code text remains is split into keyword/number/plain tokens.
+ */
+export function tokenizeCodeLine(line: string, lang: string): CodeToken[] {
+  const normalized = normalizeCodeLang(lang);
+  const keywords = CODE_LANG_KEYWORDS[normalized] ?? GENERIC_KEYWORDS;
+  const commentPrefix = codeCommentPrefix(normalized);
+  const tokens: CodeToken[] = [];
+  let plainBuf = "";
+  const flushPlain = (): void => {
+    if (plainBuf.length > 0) {
+      tokens.push(...tokenizeCodeWords(plainBuf, keywords));
+      plainBuf = "";
+    }
+  };
+  let i = 0;
+  while (i < line.length) {
+    if (commentPrefix.length > 0 && line.startsWith(commentPrefix, i)) {
+      flushPlain();
+      tokens.push({ kind: "comment", text: line.slice(i) });
+      break;
+    }
+    const ch = line[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      flushPlain();
+      let j = i + 1;
+      while (j < line.length && line[j] !== ch) {
+        j += line[j] === "\\" ? 2 : 1;
+      }
+      j = Math.min(j + 1, line.length);
+      tokens.push({ kind: "string", text: line.slice(i, j) });
+      i = j;
+      continue;
+    }
+    plainBuf += ch;
+    i += 1;
+  }
+  flushPlain();
+  return tokens;
+}
+
 // Which frame a fenced segment gets, from its info string alone. `lineCount` is
 // part of the contract (callers pass what they measured) but deliberately does
 // not influence the mapping — a one-line diff is still a diff. Body sniffing via
@@ -168,6 +526,25 @@ export function blockLabel({ kind, lineCount, collapsed, hint }: BlockLabelInput
   const unit = lineCount === 1 ? "line" : "lines";
   const suffix = hint !== undefined && hint.length > 0 ? ` · ${hint}` : "";
   return `${marker} ${kind} (${lineCount} ${unit})${suffix}`;
+}
+
+/**
+ * The transcript echo for a submitted composer line. A single line passes
+ * through unchanged. Multi-line input (typed via Shift+Enter or pasted) keeps
+ * the user's OWN first line instead of discarding it: a typed question in
+ * front of a large paste used to vanish entirely behind a bare
+ * `[pasted N lines]` placeholder, which is indistinguishable from "I said
+ * nothing." The remaining lines still collapse to a count so a large paste
+ * does not flood the transcript.
+ */
+export function summarizeSubmittedLine(line: string): string {
+  const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const nonEmpty = normalized.split("\n").filter((linePart) => linePart.length > 0);
+  if (nonEmpty.length <= 1) {
+    return line;
+  }
+  const [first, ...rest] = nonEmpty;
+  return `${first} [+ ${rest.length} pasted line${rest.length === 1 ? "" : "s"}]`;
 }
 
 // --- terminal width (flow 115) ---------------------------------------------

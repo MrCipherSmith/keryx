@@ -38,6 +38,7 @@ import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { saveShellConfig } from "../lib/shell-config";
+import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
@@ -401,15 +402,6 @@ export async function mountChatShell(
     chrome.setTitle(`keryx · chat · ${label()}`);
     chrome.setStatus(label());
     sbModel.content = otui.t`${otui.dim(label())}`;
-  };
-
-  const summarizeSubmittedLine = (line: string): string => {
-    const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    const count = normalized.split("\n").filter((linePart) => linePart.length > 0).length;
-    if (count <= 1) {
-      return line;
-    }
-    return `[pasted ${count} lines]`;
   };
 
   const bridge = createChatBridge({
