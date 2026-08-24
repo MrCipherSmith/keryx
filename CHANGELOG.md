@@ -3,6 +3,42 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.66] — 2026-08-24
+
+### Fixed
+
+- **A typed message in front of a paste vanished from the transcript, leaving
+  only `[pasted N lines]`.** The composer's submit echo collapsed ANY
+  multi-line input into that bare placeholder, so typing a question and then
+  pasting a block after it discarded your own words entirely — the transcript
+  looked like you'd said nothing. It now keeps your own first line and
+  summarizes only the rest as a paste count (`explain this [+ 12 pasted
+  lines]`). The logic was also duplicated between the chat and agent shells;
+  it is now one shared function.
+
+- **Fenced code blocks in a reply had no way to copy them.** `y`/`/copy` only
+  ever reached the block-nav registry (thought/tool/output blocks) — a fence
+  embedded in the reply text had no registry entry of its own, so there was no
+  copy path at all. Both now fall back to the most recently rendered code
+  block when nothing is registered to copy, and the block's header advertises
+  the shortcut (`python · 15 lines · y copy`).
+
+### Added
+
+- **Code blocks get lightweight local syntax highlighting.** Comments,
+  strings, numbers and keywords are colorized via a plain-string tokenizer —
+  no tree-sitter worker, no network or grammar fetch, so it stays inside flow
+  109's worker-free, no-egress rendering stance (D-2).
+
+### Known gaps
+
+- **A paste can occasionally split** — part of it lands in the transcript as
+  a sent message, the rest stays stuck in the input. This traces to an open
+  upstream bug in `@opentui/core`'s `StdinParser`
+  ([anomalyco/opentui#1270](https://github.com/anomalyco/opentui/issues/1270),
+  unterminated bracketed paste), present in both the installed `0.4.5` and the
+  latest `0.5.7` — not fixable from here until it lands upstream.
+
 ## [0.2.65] — 2026-08-23
 
 ### Fixed
