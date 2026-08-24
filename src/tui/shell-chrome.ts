@@ -145,6 +145,100 @@ export function composerMaxRowsForViewport(viewportRows: number): number {
 }
 
 /**
+ * Normalize a renderable's color prop to a lowercase `#rrggbb` hex so a theme
+ * slot lookup can compare it. OpenTUI stores colors as parsed RGBA objects
+ * (its setters parse the hex strings the shell writes), so a read of
+ * `borderColor` / `backgroundColor` / `fg` is an object with `toInts()`, not
+ * the original string. Non-opaque colors (`transparent`, the default) are
+ * deliberately skipped — they are not theme slot hexes.
+ */
+export function themeColorToHex(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : undefined;
+  }
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { toInts?: unknown }).toInts === "function"
+  ) {
+    const [r, g, b, a] = (value as { toInts(): [number, number, number, number] }).toInts();
+    if (a !== 255) {
+      return undefined;
+    }
+    return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+  }
+  return undefined;
+}
+
+/**
+ * Old→new hex map over every color slot of a theme switch. `name` is a
+ * label, not a color. The map feeds {@link recolorThemeTree} so a `/theme`
+ * switch repaints every renderable the shell painted with the OLD palette —
+ * not just the chrome's own surfaces listed in `applyTheme` below.
+ *
+ * Why value matching is safe: the shell writes theme slot hexes into
+ * renderable `borderColor` / `backgroundColor` / `fg` props and nothing else
+ * (OpenTUI's dim/bold/cyan/green/red styling lives inside styled CHUNKS of
+ * `content`, which the walk deliberately leaves alone), so a prop whose hex
+ * equals an old slot value is by construction a theme-painted element.
+ */
+function themeColorRemap(from: Theme, to: Theme): Map<string, string> {
+  const remap = new Map<string, string>();
+  for (const slot of Object.keys(from) as ReadonlyArray<keyof Theme>) {
+    if (slot === "name") {
+      continue;
+    }
+    const oldColor = from[slot];
+    const newColor = to[slot];
+    if (typeof oldColor === "string" && typeof newColor === "string" && oldColor !== newColor) {
+      remap.set(oldColor, newColor);
+    }
+  }
+  return remap;
+}
+
+type ThemePainted = {
+  borderColor?: unknown;
+  backgroundColor?: unknown;
+  fg?: unknown;
+  getChildren?: () => readonly unknown[];
+};
+
+/**
+ * Recolor one renderable and its descendants from the old→new slot map: any
+ * `borderColor` / `backgroundColor` / `fg` whose color equals an old slot
+ * value becomes the new slot's hex (written as a string — the renderable's
+ * setter parses it), then recurse into children. Idempotent — a second pass
+ * with the same map finds nothing, so overlapping container walks (a box
+ * walked both directly and through a parent) are harmless.
+ *
+ * Covers what `applyTheme`'s explicit list cannot know: transcript frames
+ * (user echoes, code segments, block bodies, side-worker boxes), tone-colored
+ * block headers (`theme.error` / `theme.tool`), dock/queue-dock buttons and
+ * sidebar panels painted with `getTheme()` at creation time.
+ */
+function recolorThemeTree(node: unknown, remap: Map<string, string>): void {
+  if (node === null || node === undefined) {
+    return;
+  }
+  const target = node as ThemePainted;
+  for (const prop of ["borderColor", "backgroundColor", "fg"] as const) {
+    const hex = themeColorToHex(target[prop]);
+    if (hex !== undefined) {
+      const next = remap.get(hex);
+      if (next !== undefined) {
+        target[prop] = next;
+      }
+    }
+  }
+  if (typeof target.getChildren === "function") {
+    for (const child of target.getChildren()) {
+      recolorThemeTree(child, remap);
+    }
+  }
+}
+
+/**
  * Soft-wrap estimate for a single paragraph at `width` columns (char wrap).
  * Used when OpenTUI's `virtualLineCount` has not yet seen a finite width.
  */
@@ -361,6 +455,8 @@ export async function createShellChrome(
   /** Unique suffix for generated renderable ids. */
   let uid = 0;
   let alive = true;
+  /** The palette every currently-painted renderable was colored with. */
+  let appliedTheme: Theme = getTheme();
 
   // --- layout skeleton ----------------------------------------------------
   // opencode-style: a main chat column on the left + a right status sidebar.
@@ -974,6 +1070,13 @@ export async function createShellChrome(
   });
 
   const applyTheme = (theme: Theme = getTheme()): void => {
+    // Theme-switch repaint, in place. The chrome's own surfaces are listed
+    // explicitly below; everything else the shell painted with the theme —
+    // transcript frames, tone-colored block headers, dock/queue-dock buttons,
+    // sidebar panels — carried the OLD palette's hex into `borderColor` /
+    // `backgroundColor` / `fg` and is moved to the new palette by the tree
+    // walk below (value-matching old slot hexes, see `themeColorRemap`).
+    const remap = themeColorRemap(appliedTheme, theme);
     try {
       r.setBackgroundColor(theme.bg);
     } catch {
@@ -993,6 +1096,18 @@ export async function createShellChrome(
     menu.selectedTextColor = theme.focus;
     menu.descriptionColor = theme.muted;
     menu.selectedDescriptionColor = theme.muted;
+    // Walk the content containers by direct reference rather than trusting a
+    // parent chain (ScrollBox children semantics vary): each walk is
+    // idempotent, so overlapping trees cost nothing.
+    recolorThemeTree(transcript, remap);
+    recolorThemeTree(dock, remap);
+    recolorThemeTree(queueDock, remap);
+    recolorThemeTree(sidebarTop, remap);
+    recolorThemeTree(menu, remap);
+    recolorThemeTree(composer, remap);
+    recolorThemeTree(header, remap);
+    recolorThemeTree(footer, remap);
+    appliedTheme = theme;
   };
   const unsubTheme = onThemeChange((theme) => applyTheme(theme));
 

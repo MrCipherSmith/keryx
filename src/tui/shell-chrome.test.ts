@@ -31,6 +31,9 @@ import {
   VERSION_STRING_LIMIT_CHARS,
   type VersionCheckResult,
 } from "../lib/version-check";
+import { applyThemeId, getThemeId, resolveTheme } from "./theme";
+import { themeColorToHex } from "./shell-chrome";
+import { appendUserEcho, createBlockView, createSegmentView } from "./transcript-blocks";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -846,3 +849,110 @@ otuiTest("AC11/AC14: clicking the sidebar never steals or blocks composer focus"
   h.chrome.dock.visible = false;
   h.destroy();
 });
+
+otuiTest("a theme switch repaints every theme-colored renderable in place, not just the chrome's own surfaces", async () => {
+  const otui = requireOtui();
+  const previous = getThemeId();
+  let h: Awaited<ReturnType<typeof mountChrome>> | undefined;
+  try {
+    h = await mountChrome(otui);
+    // Deterministic base palette for the walk: content below is painted with
+    // groknight's hexes, and a switch to grokday must move every one of them.
+    applyThemeId("groknight");
+    await h.flush();
+
+    // Content painted at creation with the CURRENT palette: a user echo frame,
+    // an assistant code-segment frame and a red-toned tool block header.
+    const echo = appendUserEcho(otui.core, h.renderer, h.chrome.transcript, { id: "ue-1", line: "hello" });
+    createSegmentView(otui.core, h.renderer, h.chrome.transcript, { kind: "code", lang: "ts", body: "const x = 1;" });
+    const toolState = {
+      id: "b1",
+      kind: "tool",
+      summary: "ran ls",
+      lineCount: 3,
+      fullText: "a\nb\nc",
+      collapsed: true,
+      retained: true,
+      truncated: false,
+    };
+    const block = createBlockView(otui.core, h.renderer, h.chrome.transcript, toolState, { tone: "red" });
+    block.render(toolState);
+    expect(block).toBeDefined();
+    await h.flush();
+
+    const collect = (node: unknown, out: string[]): void => {
+      const target = node as {
+        borderColor?: unknown;
+        backgroundColor?: unknown;
+        fg?: unknown;
+        getChildren?: () => readonly unknown[];
+      };
+      for (const prop of ["borderColor", "backgroundColor", "fg"] as const) {
+        const hex = themeColorToHex(target[prop]);
+        if (hex !== undefined) {
+          out.push(hex);
+        }
+      }
+      if (typeof target.getChildren === "function") {
+        for (const child of target.getChildren()) {
+          collect(child, out);
+        }
+      }
+    };
+    const slots = (id: "groknight" | "grokday"): string[] => {
+      const palette = resolveTheme(id);
+      return [
+        palette.bg,
+        palette.panel,
+        palette.highlight,
+        palette.border,
+        palette.text,
+        palette.muted,
+        palette.user,
+        palette.assistant,
+        palette.tool,
+        palette.side,
+        palette.focus,
+        palette.error,
+        palette.ok,
+      ];
+    };
+
+    const before: string[] = [];
+    collect(h.chrome.transcript, before);
+    expect(before.length).toBeGreaterThan(0);
+    // The walk must have captured the theme-painted elements, not just the
+    // boxes' DEFAULT border (#ffffff, materialized for every borderless box).
+    const night = slots("groknight");
+    expect(before.some((color) => night.includes(color))).toBe(true);
+
+    // The switch: every renderable painted with a groknight slot must move to
+    // the matching grokday slot; no groknight slot may survive anywhere under
+    // the transcript (the chrome's own surfaces are covered by the explicit
+    // assignments in `applyTheme`).
+    applyThemeId("grokday");
+    await h.flush();
+
+    const after: string[] = [];
+    collect(h.chrome.transcript, after);
+    expect(after.length).toBe(before.length);
+    const day = slots("grokday");
+    for (const color of before) {
+      const slot = night.indexOf(color);
+      const expected = slot >= 0 ? day[slot] : undefined;
+      if (expected !== undefined) {
+        expect(expected).not.toBe(color);
+        expect(after).toContain(expected);
+      }
+    }
+    expect(after.some((color) => night.includes(color))).toBe(false);
+    expect(after).not.toEqual(before);
+
+    // Direct handles: the echo frame's border moved with the palette.
+    expect(themeColorToHex(echo.borderColor)).toBe(day[night.indexOf(resolveTheme("groknight").border)]);
+  } finally {
+    applyThemeId(previous);
+    h?.destroy();
+  }
+});
+
