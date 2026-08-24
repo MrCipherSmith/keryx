@@ -65,21 +65,6 @@ its tab bodies re-color on next open.
 - Skills:
 
 ## Tags
-## Provenance
-
-- Source: manual
-- Link:
-- Created: 2026-08-24
-- Updated: 2026-08-24
-
-## Related Scopes
-
-- Module:
-- Entity:
-- Files:
-- Skills:
-
-## Tags
 
 ## Changelog
 
