@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 2,
+  "id": "185",
+  "slug": "keryx-vs-code-extension-init-status-auto",
+  "title": "Keryx VS Code Extension: init/status auto-detect, MCP registration, status bar, tree view, output channel, wiki hover",
+  "status": "done",
+  "createdAt": "2026-08-20T22:30:05.475Z",
+  "updatedAt": "2026-08-21T05:38:03.220Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:cedbb6753b5f5111b957a35966d76b7b390fea97279d718163fd6aedb8bf9785",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T23:06:01.144Z",
+      "note": "vscode-extension/src/status-logic.test.ts: interpretStatus tests for not-initialized, incomplete, ready (all AC1-tagged); 3-state prompt logic in status-logic.ts:30"
+    },
+    "AC2": {
+      "at": "2026-08-20T23:06:01.260Z",
+      "note": "vscode-extension/src/status-logic.test.ts: 'AC2: shouldRevealAfterInit is true only on exit 0 AND a ready status afterward'; logic in status-logic.ts:47. Real VS Code UI reveal not executable in this environment (unit-level reveal-trigger logic only, as pre-authorized)."
+    },
+    "AC4": {
+      "at": "2026-08-20T23:06:15.915Z",
+      "note": "vscode-extension/src/status-bar-logic.test.ts: 'AC4: failingChecks names the Metaproject check by label when not-initialized' and 'AC4: failingChecks names the health gate check by label when failing'; logic in status-bar-logic.ts:99 (never a bare color, always names the specific check)."
+    },
+    "AC5": {
+      "at": "2026-08-20T23:06:16.017Z",
+      "note": "vscode-extension/src/tree-view-logic.test.ts: 'AC5: needsAttentionItems returns an explicit, legible empty state when neither flow nor sac has anything'; dedicated empty-state test per AC wording; logic in tree-view-logic.ts:221 (isNeedsAttentionEmpty)."
+    },
+    "AC6": {
+      "at": "2026-08-20T23:06:16.117Z",
+      "note": "vscode-extension/src/audit-log.test.ts + output-channel-logic.test.ts: 'AC6: buildAuditEvent + formatAuditLine produce exactly one line for a successful mutating action' and the FAILED-action variant (error still exactly one line, never zero)."
+    },
+    "AC7": {
+      "at": "2026-08-20T23:06:16.227Z",
+      "note": "vscode-extension/src/hover-logic.test.ts: 'AC7 (staleness-present)' appends muted indicator when flagged; 'AC7 (staleness-absent)' does not fabricate a claim when absent, including a real-world-shaped fixture parsed from the actual keryx wiki ask CLI output (no --json, no staleness field)."
+    },
+    "AC8": {
+      "at": "2026-08-20T23:06:16.322Z",
+      "note": "vscode-extension/src/version-logic.test.ts: 'AC8: checkKeryxVersion is ok when installed >= minimum', 'below-minimum (non-blocking)', and 'undetermined (never blocks) on unparseable output'; logic in version-logic.ts:41."
+    },
+    "AC3": {
+      "at": "2026-08-20T23:06:30.664Z",
+      "note": "NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no VS Code/vsce/Copilot Chat available in this environment, so real end-to-end tool-call verification could not run. Delivered instead: VSCODE_RUNTIME (src/mcp/client-config.ts:315) config shape + merge/strip/validate verified by unit test 'AC1: --runtime vscode writes .vscode/mcp.json with the servers/type:stdio shape' (src/mcp/client-config.test.ts:358), against the documented .vscode/mcp.json schema sourced live via WebSearch/WebFetch against official VS Code docs. Real Copilot Chat end-to-end verification remains an open follow-up."
+    },
+    "AC9": {
+      "at": "2026-08-20T23:06:42.232Z",
+      "note": "NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no vsce available in this environment, so a real 'vsce package'/Marketplace publish validation could not run. Delivered instead: vscode-extension/package.json hand-verified against VS Code's documented contribution-points schema — engines.vscode, activationEvents, contributes.viewsContainers/views/commands, all view/container ids (keryx, keryx.status, keryx.projects, keryx.recentTurns, keryx.needsAttention) cross-checked consistent with the TypeScript registration code; no undisclosed network access beyond loopback keryx serve. tsc -p ./ --noEmit clean. Real vsce package validation remains an open follow-up."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/366"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "src/mcp/client-config.ts: VSCODE_RUNTIME entry (.vscode/mcp.json, servers key, type:stdio) + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "vscode-extension/ scaffold: package.json manifest, activation, keryx status/init flow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Status bar item + version check (minKeryxVersion warning)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Tree view: 4 nodes (Status, Projects, Recent Turns, Needs Your Attention) with empty-state handling",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Output channel: SSE turn-event pipe + mandatory audit-log line per mutating action",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Hover provider: wiki.query/wiki.ask with staleness indicator",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Unit tests for all of the above + manifest schema hand-verification (AC1-AC9 evidence, AC3/AC9 honestly partial)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T22:30:05.475Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T22:32:12.385Z",
+      "event": "task-added",
+      "detail": "T5: src/mcp/client-config.ts: VSCODE_RUNTIME entry (.vscode/mcp.json, servers key, type:stdio) + tests"
+    },
+    {
+      "at": "2026-08-20T22:32:12.472Z",
+      "event": "task-added",
+      "detail": "T6: vscode-extension/ scaffold: package.json manifest, activation, keryx status/init flow"
+    },
+    {
+      "at": "2026-08-20T22:32:12.555Z",
+      "event": "task-added",
+      "detail": "T7: Status bar item + version check (minKeryxVersion warning)"
+    },
+    {
+      "at": "2026-08-20T22:32:12.652Z",
+      "event": "task-added",
+      "detail": "T8: Tree view: 4 nodes (Status, Projects, Recent Turns, Needs Your Attention) with empty-state handling"
+    },
+    {
+      "at": "2026-08-20T22:32:12.746Z",
+      "event": "task-added",
+      "detail": "T9: Output channel: SSE turn-event pipe + mandatory audit-log line per mutating action"
+    },
+    {
+      "at": "2026-08-20T22:32:12.919Z",
+      "event": "task-added",
+      "detail": "T10: Hover provider: wiki.query/wiki.ask with staleness indicator"
+    },
+    {
+      "at": "2026-08-20T22:32:13.017Z",
+      "event": "task-added",
+      "detail": "T11: Unit tests for all of the above + manifest schema hand-verification (AC1-AC9 evidence, AC3/AC9 honestly partial)"
+    },
+    {
+      "at": "2026-08-20T22:32:38.761Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T22:32:38.878Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T22:49:24.203Z",
+      "event": "task-done",
+      "detail": "T5: src/mcp/client-config.ts: VSCODE_RUNTIME entry (.vscode/mcp.json, servers key, type:stdio) + tests"
+    },
+    {
+      "at": "2026-08-20T22:49:24.285Z",
+      "event": "task-done",
+      "detail": "T6: vscode-extension/ scaffold: package.json manifest, activation, keryx status/init flow"
+    },
+    {
+      "at": "2026-08-20T23:02:47.186Z",
+      "event": "task-done",
+      "detail": "T7: Status bar item + version check (minKeryxVersion warning)"
+    },
+    {
+      "at": "2026-08-20T23:02:47.309Z",
+      "event": "task-done",
+      "detail": "T8: Tree view: 4 nodes (Status, Projects, Recent Turns, Needs Your Attention) with empty-state handling"
+    },
+    {
+      "at": "2026-08-20T23:02:47.431Z",
+      "event": "task-done",
+      "detail": "T9: Output channel: SSE turn-event pipe + mandatory audit-log line per mutating action"
+    },
+    {
+      "at": "2026-08-20T23:02:47.554Z",
+      "event": "task-done",
+      "detail": "T10: Hover provider: wiki.query/wiki.ask with staleness indicator"
+    },
+    {
+      "at": "2026-08-20T23:06:01.144Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: vscode-extension/src/status-logic.test.ts: interpretStatus tests for not-initialized, incomplete, ready (all AC1-tagged); 3-state prompt logic in status-logic.ts:30"
+    },
+    {
+      "at": "2026-08-20T23:06:01.260Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: vscode-extension/src/status-logic.test.ts: 'AC2: shouldRevealAfterInit is true only on exit 0 AND a ready status afterward'; logic in status-logic.ts:47. Real VS Code UI reveal not executable in this environment (unit-level reveal-trigger logic only, as pre-authorized)."
+    },
+    {
+      "at": "2026-08-20T23:06:15.915Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: vscode-extension/src/status-bar-logic.test.ts: 'AC4: failingChecks names the Metaproject check by label when not-initialized' and 'AC4: failingChecks names the health gate check by label when failing'; logic in status-bar-logic.ts:99 (never a bare color, always names the specific check)."
+    },
+    {
+      "at": "2026-08-20T23:06:16.017Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: vscode-extension/src/tree-view-logic.test.ts: 'AC5: needsAttentionItems returns an explicit, legible empty state when neither flow nor sac has anything'; dedicated empty-state test per AC wording; logic in tree-view-logic.ts:221 (isNeedsAttentionEmpty)."
+    },
+    {
+      "at": "2026-08-20T23:06:16.117Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: vscode-extension/src/audit-log.test.ts + output-channel-logic.test.ts: 'AC6: buildAuditEvent + formatAuditLine produce exactly one line for a successful mutating action' and the FAILED-action variant (error still exactly one line, never zero)."
+    },
+    {
+      "at": "2026-08-20T23:06:16.227Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: vscode-extension/src/hover-logic.test.ts: 'AC7 (staleness-present)' appends muted indicator when flagged; 'AC7 (staleness-absent)' does not fabricate a claim when absent, including a real-world-shaped fixture parsed from the actual keryx wiki ask CLI output (no --json, no staleness field)."
+    },
+    {
+      "at": "2026-08-20T23:06:16.322Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: vscode-extension/src/version-logic.test.ts: 'AC8: checkKeryxVersion is ok when installed >= minimum', 'below-minimum (non-blocking)', and 'undetermined (never blocks) on unparseable output'; logic in version-logic.ts:41."
+    },
+    {
+      "at": "2026-08-20T23:06:30.664Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no VS Code/vsce/Copilot Chat available in this environment, so real end-to-end tool-call verification could not run. Delivered instead: VSCODE_RUNTIME (src/mcp/client-config.ts:315) config shape + merge/strip/validate verified by unit test 'AC1: --runtime vscode writes .vscode/mcp.json with the servers/type:stdio shape' (src/mcp/client-config.test.ts:358), against the documented .vscode/mcp.json schema sourced live via WebSearch/WebFetch against official VS Code docs. Real Copilot Chat end-to-end verification remains an open follow-up."
+    },
+    {
+      "at": "2026-08-20T23:06:42.233Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no vsce available in this environment, so a real 'vsce package'/Marketplace publish validation could not run. Delivered instead: vscode-extension/package.json hand-verified against VS Code's documented contribution-points schema — engines.vscode, activationEvents, contributes.viewsContainers/views/commands, all view/container ids (keryx, keryx.status, keryx.projects, keryx.recentTurns, keryx.needsAttention) cross-checked consistent with the TypeScript registration code; no undisclosed network access beyond loopback keryx serve. tsc -p ./ --noEmit clean. Real vsce package validation remains an open follow-up."
+    },
+    {
+      "at": "2026-08-20T23:06:59.284Z",
+      "event": "task-done",
+      "detail": "T11: Unit tests for all of the above + manifest schema hand-verification (AC1-AC9 evidence, AC3/AC9 honestly partial)"
+    },
+    {
+      "at": "2026-08-20T23:09:30.754Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/366 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-21T05:38:00.442Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-21T05:38:03.220Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

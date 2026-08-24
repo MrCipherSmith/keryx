@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "id": "191",
+  "slug": "2-2",
+  "title": "Скажи одним словом: сколько будет 2+2",
+  "status": "in-progress",
+  "createdAt": "2026-08-22T09:11:41.089Z",
+  "updatedAt": "2026-08-22T09:11:41.118Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8d2b77360eb8d031fd41bea2cd94116b1b83d1811a5212b3e11c64e5bc563a47",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-22T09:11:41.089Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-22T09:11:41.107Z",
+      "event": "frozen",
+      "detail": "1 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-22T09:11:41.118Z",
+      "event": "started"
+    }
+  ]
+}

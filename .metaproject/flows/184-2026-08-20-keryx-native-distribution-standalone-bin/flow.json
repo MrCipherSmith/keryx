@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 2,
+  "id": "184",
+  "slug": "keryx-native-distribution-standalone-bin",
+  "title": "Keryx Native Distribution: standalone binaries, Homebrew tap, install-binary.sh",
+  "status": "done",
+  "createdAt": "2026-08-20T21:14:51.965Z",
+  "updatedAt": "2026-08-20T23:18:05.500Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d59d64094066072b555e82f6e8f3b4772bb6856040960ac74f959197ac6a8ff1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-20T22:28:10.988Z",
+      "note": "All 4 targets (darwin-arm64/x64, linux-x64/arm64) build correctly on a single runner after adding bun install --os='*' --cpu='*' before the loop; verified locally, correct Mach-O/ELF formats confirmed via file(1)."
+    },
+    "AC2": {
+      "at": "2026-08-20T22:28:11.118Z",
+      "note": "Each binary smoke-tested in release.yml: real --help execution for bun-linux-x64 (matches the runner), file(1) format verification for the 3 cross-compiled targets, honestly not claiming execution for those."
+    },
+    "AC3": {
+      "at": "2026-08-20T22:28:11.231Z",
+      "note": "gdgraph build from a compiled binary now produces a genuine tree-sitter AST (verified: symbols.jsonl/calls.jsonl written with real parsed content matching source line numbers, no fallback warning), via T6's adapter-level literal-import fix. Dev-mode behavior confirmed byte-for-byte unchanged."
+    },
+    "AC4": {
+      "at": "2026-08-20T22:28:11.336Z",
+      "note": "Verified in this flow's own investigation: a real MCP client did a full JSON-RPC handshake against mcp serve run from a compiled binary and received tools/list with 34 real tools."
+    },
+    "AC5": {
+      "at": "2026-08-20T22:28:11.443Z",
+      "note": "OpenTUI native library load verified via a real createCliRenderer() construction from the compiled binary with genuine terminal-control-sequence output, zero node_modules present. Full interactive-TTY verification remains best-effort/manual, named honestly in specification.md's amendment."
+    },
+    "AC6": {
+      "at": "2026-08-20T22:28:11.541Z",
+      "note": "Homebrew formula created and pushed to the new MrCipherSmith/homebrew-keryx tap (user-approved). Checksums are placeholders pending the first real tagged release with binaries attached -- documented explicitly in the formula and tap README, not fabricated."
+    },
+    "AC7": {
+      "at": "2026-08-20T22:28:11.637Z",
+      "note": "release.yml's existing 'Build and smoke-test the packed artifact' step (npm tarball) is untouched; the new standalone-binary step is purely additive, inserted after it."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/365"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "release.yml: add the 4-target bun build --compile loop + smoke test, attach binaries to gh release create",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Fix web-tree-sitter bundling: adapter-level literal await import(\"web-tree-sitter\") fast path, seam.ts and its lock-test untouched",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "scripts/install-binary.sh: detect platform, download matching asset, install to ~/.local/bin/keryx",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Homebrew formula + tap repo (MrCipherSmith/homebrew-keryx), SHA256-pinned",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Correct specification.md/decisions.md D-01 tree-sitter claim; verify MCP client round-trip and opentui native-load evidence are accurately reflected",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "CI verification: 4 platform binaries build+smoke-test in the actual release workflow (dry run via a test tag or workflow copy, not a real release)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-20T21:14:51.965Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-20T21:30:47.734Z",
+      "event": "task-added",
+      "detail": "T5: release.yml: add the 4-target bun build --compile loop + smoke test, attach binaries to gh release create"
+    },
+    {
+      "at": "2026-08-20T21:30:47.851Z",
+      "event": "task-added",
+      "detail": "T6: Fix web-tree-sitter bundling: adapter-level literal await import(\"web-tree-sitter\") fast path, seam.ts and its lock-test untouched"
+    },
+    {
+      "at": "2026-08-20T21:30:47.957Z",
+      "event": "task-added",
+      "detail": "T7: scripts/install-binary.sh: detect platform, download matching asset, install to ~/.local/bin/keryx"
+    },
+    {
+      "at": "2026-08-20T21:30:48.060Z",
+      "event": "task-added",
+      "detail": "T8: Homebrew formula + tap repo (MrCipherSmith/homebrew-keryx), SHA256-pinned"
+    },
+    {
+      "at": "2026-08-20T21:30:48.147Z",
+      "event": "task-added",
+      "detail": "T9: Correct specification.md/decisions.md D-01 tree-sitter claim; verify MCP client round-trip and opentui native-load evidence are accurately reflected"
+    },
+    {
+      "at": "2026-08-20T21:30:48.256Z",
+      "event": "task-added",
+      "detail": "T10: CI verification: 4 platform binaries build+smoke-test in the actual release workflow (dry run via a test tag or workflow copy, not a real release)"
+    },
+    {
+      "at": "2026-08-20T21:31:59.487Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-20T21:31:59.592Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-20T21:44:09.841Z",
+      "event": "task-done",
+      "detail": "T5: release.yml: add the 4-target bun build --compile loop + smoke test, attach binaries to gh release create"
+    },
+    {
+      "at": "2026-08-20T21:44:10.017Z",
+      "event": "task-done",
+      "detail": "T6: Fix web-tree-sitter bundling: adapter-level literal await import(\"web-tree-sitter\") fast path, seam.ts and its lock-test untouched"
+    },
+    {
+      "at": "2026-08-20T21:44:10.104Z",
+      "event": "task-done",
+      "detail": "T8: Homebrew formula + tap repo (MrCipherSmith/homebrew-keryx), SHA256-pinned"
+    },
+    {
+      "at": "2026-08-20T21:44:10.217Z",
+      "event": "task-done",
+      "detail": "T9: Correct specification.md/decisions.md D-01 tree-sitter claim; verify MCP client round-trip and opentui native-load evidence are accurately reflected"
+    },
+    {
+      "at": "2026-08-20T22:19:18.477Z",
+      "event": "task-done",
+      "detail": "T7: scripts/install-binary.sh: detect platform, download matching asset, install to ~/.local/bin/keryx"
+    },
+    {
+      "at": "2026-08-20T22:27:44.834Z",
+      "event": "task-done",
+      "detail": "T10: CI verification: 4 platform binaries build+smoke-test in the actual release workflow (dry run via a test tag or workflow copy, not a real release)"
+    },
+    {
+      "at": "2026-08-20T22:27:44.920Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-20T22:27:45.000Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-20T22:27:45.083Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-20T22:27:45.163Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-20T22:28:10.988Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: All 4 targets (darwin-arm64/x64, linux-x64/arm64) build correctly on a single runner after adding bun install --os='*' --cpu='*' before the loop; verified locally, correct Mach-O/ELF formats confirmed via file(1)."
+    },
+    {
+      "at": "2026-08-20T22:28:11.118Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Each binary smoke-tested in release.yml: real --help execution for bun-linux-x64 (matches the runner), file(1) format verification for the 3 cross-compiled targets, honestly not claiming execution for those."
+    },
+    {
+      "at": "2026-08-20T22:28:11.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: gdgraph build from a compiled binary now produces a genuine tree-sitter AST (verified: symbols.jsonl/calls.jsonl written with real parsed content matching source line numbers, no fallback warning), via T6's adapter-level literal-import fix. Dev-mode behavior confirmed byte-for-byte unchanged."
+    },
+    {
+      "at": "2026-08-20T22:28:11.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified in this flow's own investigation: a real MCP client did a full JSON-RPC handshake against mcp serve run from a compiled binary and received tools/list with 34 real tools."
+    },
+    {
+      "at": "2026-08-20T22:28:11.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: OpenTUI native library load verified via a real createCliRenderer() construction from the compiled binary with genuine terminal-control-sequence output, zero node_modules present. Full interactive-TTY verification remains best-effort/manual, named honestly in specification.md's amendment."
+    },
+    {
+      "at": "2026-08-20T22:28:11.541Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Homebrew formula created and pushed to the new MrCipherSmith/homebrew-keryx tap (user-approved). Checksums are placeholders pending the first real tagged release with binaries attached -- documented explicitly in the formula and tap README, not fabricated."
+    },
+    {
+      "at": "2026-08-20T22:28:11.637Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: release.yml's existing 'Build and smoke-test the packed artifact' step (npm tarball) is untouched; the new standalone-binary step is purely additive, inserted after it."
+    },
+    {
+      "at": "2026-08-20T23:17:41.904Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/365 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-20T23:18:03.032Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-20T23:18:05.500Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

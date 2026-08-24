@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0","correlationId":"f25bc91d-3cf2-4a18-861e-ecd1f68e43e8","outcome":"assembled","configurationRevision":"context-operations-v1","policy":{"ref":"./security/policy/local","revision":"local-offline-v1"},"selected":[],"omittedOptional":[],"partial":false}

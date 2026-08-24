@@ -1,0 +1,31 @@
+# Flow Journal
+
+- 2026-08-20T21:14:51.965Z - flow created
+- 2026-08-20T21:30:47.734Z - task-added: T5: release.yml: add the 4-target bun build --compile loop + smoke test, attach binaries to gh release create
+- 2026-08-20T21:30:47.851Z - task-added: T6: Fix web-tree-sitter bundling: adapter-level literal await import("web-tree-sitter") fast path, seam.ts and its lock-test untouched
+- 2026-08-20T21:30:47.957Z - task-added: T7: scripts/install-binary.sh: detect platform, download matching asset, install to ~/.local/bin/keryx
+- 2026-08-20T21:30:48.060Z - task-added: T8: Homebrew formula + tap repo (MrCipherSmith/homebrew-keryx), SHA256-pinned
+- 2026-08-20T21:30:48.147Z - task-added: T9: Correct specification.md/decisions.md D-01 tree-sitter claim; verify MCP client round-trip and opentui native-load evidence are accurately reflected
+- 2026-08-20T21:30:48.256Z - task-added: T10: CI verification: 4 platform binaries build+smoke-test in the actual release workflow (dry run via a test tag or workflow copy, not a real release)
+- 2026-08-20T21:31:59.487Z - frozen: 7 criteria; checksum recorded
+- 2026-08-20T21:31:59.592Z - started
+- 2026-08-20T21:44:09.841Z - task-done: T5: release.yml: add the 4-target bun build --compile loop + smoke test, attach binaries to gh release create
+- 2026-08-20T21:44:10.017Z - task-done: T6: Fix web-tree-sitter bundling: adapter-level literal await import("web-tree-sitter") fast path, seam.ts and its lock-test untouched
+- 2026-08-20T21:44:10.104Z - task-done: T8: Homebrew formula + tap repo (MrCipherSmith/homebrew-keryx), SHA256-pinned
+- 2026-08-20T21:44:10.217Z - task-done: T9: Correct specification.md/decisions.md D-01 tree-sitter claim; verify MCP client round-trip and opentui native-load evidence are accurately reflected
+- 2026-08-20T22:19:18.477Z - task-done: T7: scripts/install-binary.sh: detect platform, download matching asset, install to ~/.local/bin/keryx
+- 2026-08-20T22:27:44.834Z - task-done: T10: CI verification: 4 platform binaries build+smoke-test in the actual release workflow (dry run via a test tag or workflow copy, not a real release)
+- 2026-08-20T22:27:44.920Z - task-done: T1: Collect remaining context
+- 2026-08-20T22:27:45.000Z - task-done: T2: Implement per plan
+- 2026-08-20T22:27:45.083Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-20T22:27:45.163Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-20T22:28:10.988Z - ac-confirmed: AC1: All 4 targets (darwin-arm64/x64, linux-x64/arm64) build correctly on a single runner after adding bun install --os='*' --cpu='*' before the loop; verified locally, correct Mach-O/ELF formats confirmed via file(1).
+- 2026-08-20T22:28:11.118Z - ac-confirmed: AC2: Each binary smoke-tested in release.yml: real --help execution for bun-linux-x64 (matches the runner), file(1) format verification for the 3 cross-compiled targets, honestly not claiming execution for those.
+- 2026-08-20T22:28:11.231Z - ac-confirmed: AC3: gdgraph build from a compiled binary now produces a genuine tree-sitter AST (verified: symbols.jsonl/calls.jsonl written with real parsed content matching source line numbers, no fallback warning), via T6's adapter-level literal-import fix. Dev-mode behavior confirmed byte-for-byte unchanged.
+- 2026-08-20T22:28:11.336Z - ac-confirmed: AC4: Verified in this flow's own investigation: a real MCP client did a full JSON-RPC handshake against mcp serve run from a compiled binary and received tools/list with 34 real tools.
+- 2026-08-20T22:28:11.443Z - ac-confirmed: AC5: OpenTUI native library load verified via a real createCliRenderer() construction from the compiled binary with genuine terminal-control-sequence output, zero node_modules present. Full interactive-TTY verification remains best-effort/manual, named honestly in specification.md's amendment.
+- 2026-08-20T22:28:11.541Z - ac-confirmed: AC6: Homebrew formula created and pushed to the new MrCipherSmith/homebrew-keryx tap (user-approved). Checksums are placeholders pending the first real tagged release with binaries attached -- documented explicitly in the formula and tap README, not fabricated.
+- 2026-08-20T22:28:11.637Z - ac-confirmed: AC7: release.yml's existing 'Build and smoke-test the packed artifact' step (npm tarball) is untouched; the new standalone-binary step is purely additive, inserted after it.
+- 2026-08-20T23:17:41.904Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/365 (warning: PR is not a draft)
+- 2026-08-20T23:18:03.032Z - completing
+- 2026-08-20T23:18:05.500Z - done: all gates passed

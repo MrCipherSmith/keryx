@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "id": "192",
+  "slug": "say-hello",
+  "title": "say hello",
+  "status": "in-progress",
+  "createdAt": "2026-08-22T09:16:53.123Z",
+  "updatedAt": "2026-08-22T09:18:02.101Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6157cf2bfb0b368b11bca81435de5885c15d9b27baa9add57f6d8ce8ea51a837",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-22T09:18:02.101Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-22T09:16:53.123Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-22T09:16:53.167Z",
+      "event": "frozen",
+      "detail": "1 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-22T09:16:53.184Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-22T09:18:02.101Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    }
+  ]
+}

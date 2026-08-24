@@ -1,0 +1,31 @@
+# Flow Journal
+
+- 2026-08-22T15:43:01.915Z - flow created
+- 2026-08-22T15:43:06.041Z - task-added: T5: Remove auto resolve-or-create on first action-intent open in agent.ts
+- 2026-08-22T15:43:06.142Z - task-added: T6: Remove auto resolve-or-create on /goal without --workspace in goal-command.ts
+- 2026-08-22T15:43:06.240Z - task-added: T7: Make workspace_create bind the created workspace to the current slate
+- 2026-08-22T15:43:06.343Z - task-added: T8: runWrapUp: resolve-or-create workspace from seeds when workspaceId unset, then propose
+- 2026-08-22T15:43:06.447Z - task-added: T9: Improve buildAgentSystemInstruction seed-writing rules (when/what kind/operational tasks)
+- 2026-08-22T15:43:06.553Z - task-added: T10: Update SLATE-16 tests (agent.test, goal-command.test, workspace-resolve.test) to lazy-binding semantics
+- 2026-08-22T15:43:06.650Z - task-added: T11: Add tests for wrap-up lazy binding and seed prompt
+- 2026-08-22T15:43:06.754Z - task-added: T12: Run tsc + full test suite; update wiki/memory for new binding semantics
+- 2026-08-22T15:43:18.166Z - frozen: 6 criteria; checksum recorded
+- 2026-08-22T15:43:21.223Z - started
+- 2026-08-22T15:44:16.447Z - task-done: T5: Remove auto resolve-or-create on first action-intent open in agent.ts
+- 2026-08-22T15:44:16.557Z - task-done: T6: Remove auto resolve-or-create on /goal without --workspace in goal-command.ts
+- 2026-08-22T15:44:51.433Z - task-done: T7: Make workspace_create bind the created workspace to the current slate
+- 2026-08-22T15:47:04.810Z - task-done: T8: runWrapUp: resolve-or-create workspace from seeds when workspaceId unset, then propose
+- 2026-08-22T15:47:28.569Z - task-done: T9: Improve buildAgentSystemInstruction seed-writing rules (when/what kind/operational tasks)
+- 2026-08-22T15:49:16.492Z - task-done: T10: Update SLATE-16 tests (agent.test, goal-command.test, workspace-resolve.test) to lazy-binding semantics
+- 2026-08-22T15:52:22.117Z - task-done: T11: Add tests for wrap-up lazy binding and seed prompt
+- 2026-08-22T15:52:22.228Z - task-done: T12: Run tsc + full test suite; update wiki/memory for new binding semantics
+- 2026-08-22T15:52:25.971Z - ac-confirmed: AC1: verified via code+tests
+- 2026-08-22T15:52:26.054Z - ac-confirmed: AC2: verified via code+tests
+- 2026-08-22T15:52:26.137Z - ac-confirmed: AC3: verified via code+tests
+- 2026-08-22T15:52:26.218Z - ac-confirmed: AC4: verified via code+tests
+- 2026-08-22T15:52:26.315Z - ac-confirmed: AC5: verified via code+tests
+- 2026-08-22T15:52:26.407Z - ac-confirmed: AC6: verified via code+tests
+- 2026-08-22T15:52:46.804Z - completing: merged commit: 1cdb128
+- 2026-08-22T15:52:46.830Z - completion-failed: main-merge: 1cdb128 is not contained in origin/main
+- 2026-08-22T15:52:55.050Z - completing: merged commit: 1cdb128
+- 2026-08-22T15:52:55.076Z - done: all gates passed

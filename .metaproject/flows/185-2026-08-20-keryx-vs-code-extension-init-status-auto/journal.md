@@ -1,0 +1,31 @@
+# Flow Journal
+
+- 2026-08-20T22:30:05.475Z - flow created
+- 2026-08-20T22:32:12.385Z - task-added: T5: src/mcp/client-config.ts: VSCODE_RUNTIME entry (.vscode/mcp.json, servers key, type:stdio) + tests
+- 2026-08-20T22:32:12.472Z - task-added: T6: vscode-extension/ scaffold: package.json manifest, activation, keryx status/init flow
+- 2026-08-20T22:32:12.555Z - task-added: T7: Status bar item + version check (minKeryxVersion warning)
+- 2026-08-20T22:32:12.652Z - task-added: T8: Tree view: 4 nodes (Status, Projects, Recent Turns, Needs Your Attention) with empty-state handling
+- 2026-08-20T22:32:12.746Z - task-added: T9: Output channel: SSE turn-event pipe + mandatory audit-log line per mutating action
+- 2026-08-20T22:32:12.919Z - task-added: T10: Hover provider: wiki.query/wiki.ask with staleness indicator
+- 2026-08-20T22:32:13.017Z - task-added: T11: Unit tests for all of the above + manifest schema hand-verification (AC1-AC9 evidence, AC3/AC9 honestly partial)
+- 2026-08-20T22:32:38.761Z - frozen: 9 criteria; checksum recorded
+- 2026-08-20T22:32:38.878Z - started
+- 2026-08-20T22:49:24.203Z - task-done: T5: src/mcp/client-config.ts: VSCODE_RUNTIME entry (.vscode/mcp.json, servers key, type:stdio) + tests
+- 2026-08-20T22:49:24.285Z - task-done: T6: vscode-extension/ scaffold: package.json manifest, activation, keryx status/init flow
+- 2026-08-20T23:02:47.186Z - task-done: T7: Status bar item + version check (minKeryxVersion warning)
+- 2026-08-20T23:02:47.309Z - task-done: T8: Tree view: 4 nodes (Status, Projects, Recent Turns, Needs Your Attention) with empty-state handling
+- 2026-08-20T23:02:47.431Z - task-done: T9: Output channel: SSE turn-event pipe + mandatory audit-log line per mutating action
+- 2026-08-20T23:02:47.554Z - task-done: T10: Hover provider: wiki.query/wiki.ask with staleness indicator
+- 2026-08-20T23:06:01.144Z - ac-confirmed: AC1: vscode-extension/src/status-logic.test.ts: interpretStatus tests for not-initialized, incomplete, ready (all AC1-tagged); 3-state prompt logic in status-logic.ts:30
+- 2026-08-20T23:06:01.260Z - ac-confirmed: AC2: vscode-extension/src/status-logic.test.ts: 'AC2: shouldRevealAfterInit is true only on exit 0 AND a ready status afterward'; logic in status-logic.ts:47. Real VS Code UI reveal not executable in this environment (unit-level reveal-trigger logic only, as pre-authorized).
+- 2026-08-20T23:06:15.915Z - ac-confirmed: AC4: vscode-extension/src/status-bar-logic.test.ts: 'AC4: failingChecks names the Metaproject check by label when not-initialized' and 'AC4: failingChecks names the health gate check by label when failing'; logic in status-bar-logic.ts:99 (never a bare color, always names the specific check).
+- 2026-08-20T23:06:16.017Z - ac-confirmed: AC5: vscode-extension/src/tree-view-logic.test.ts: 'AC5: needsAttentionItems returns an explicit, legible empty state when neither flow nor sac has anything'; dedicated empty-state test per AC wording; logic in tree-view-logic.ts:221 (isNeedsAttentionEmpty).
+- 2026-08-20T23:06:16.117Z - ac-confirmed: AC6: vscode-extension/src/audit-log.test.ts + output-channel-logic.test.ts: 'AC6: buildAuditEvent + formatAuditLine produce exactly one line for a successful mutating action' and the FAILED-action variant (error still exactly one line, never zero).
+- 2026-08-20T23:06:16.227Z - ac-confirmed: AC7: vscode-extension/src/hover-logic.test.ts: 'AC7 (staleness-present)' appends muted indicator when flagged; 'AC7 (staleness-absent)' does not fabricate a claim when absent, including a real-world-shaped fixture parsed from the actual keryx wiki ask CLI output (no --json, no staleness field).
+- 2026-08-20T23:06:16.322Z - ac-confirmed: AC8: vscode-extension/src/version-logic.test.ts: 'AC8: checkKeryxVersion is ok when installed >= minimum', 'below-minimum (non-blocking)', and 'undetermined (never blocks) on unparseable output'; logic in version-logic.ts:41.
+- 2026-08-20T23:06:30.664Z - ac-confirmed: AC3: NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no VS Code/vsce/Copilot Chat available in this environment, so real end-to-end tool-call verification could not run. Delivered instead: VSCODE_RUNTIME (src/mcp/client-config.ts:315) config shape + merge/strip/validate verified by unit test 'AC1: --runtime vscode writes .vscode/mcp.json with the servers/type:stdio shape' (src/mcp/client-config.test.ts:358), against the documented .vscode/mcp.json schema sourced live via WebSearch/WebFetch against official VS Code docs. Real Copilot Chat end-to-end verification remains an open follow-up.
+- 2026-08-20T23:06:42.233Z - ac-confirmed: AC9: NOT FULLY MET (pre-authorized in acceptance-criteria.md/description.md): no vsce available in this environment, so a real 'vsce package'/Marketplace publish validation could not run. Delivered instead: vscode-extension/package.json hand-verified against VS Code's documented contribution-points schema — engines.vscode, activationEvents, contributes.viewsContainers/views/commands, all view/container ids (keryx, keryx.status, keryx.projects, keryx.recentTurns, keryx.needsAttention) cross-checked consistent with the TypeScript registration code; no undisclosed network access beyond loopback keryx serve. tsc -p ./ --noEmit clean. Real vsce package validation remains an open follow-up.
+- 2026-08-20T23:06:59.284Z - task-done: T11: Unit tests for all of the above + manifest schema hand-verification (AC1-AC9 evidence, AC3/AC9 honestly partial)
+- 2026-08-20T23:09:30.754Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/366 (warning: PR is not a draft)
+- 2026-08-21T05:38:00.442Z - completing
+- 2026-08-21T05:38:03.220Z - done: all gates passed
