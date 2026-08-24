@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.67] — 2026-08-24
+
+### Added
+
+- **A suggested next step after every settled turn** (Claude-style): when the
+  main agent finishes and the queue is empty, a short model-generated follow-up
+  appears in the composer placeholder. Tab / Right-arrow inserts it without
+  submitting; Enter on the empty composer submits it directly; typing dismisses
+  it. Fail-closed: no credential, a timeout, or a `.` reply shows nothing and
+  never blocks the shell.
+
+- **`keryx workspace dismiss-candidate <evidence-path|session-id>`** — UNBOUND
+  candidates (wrap-up ran with no workspace bound) can now be dismissed instead
+  of lingering in `catch-up` / `/review` forever: the artifact is removed and a
+  `*-unbound-dismissed.json` receipt is written, after which both the internal
+  and external-slate readers skip it.
+
+### Fixed
+
+- **`/theme` switch did not repaint already-rendered chrome.** Only the
+  chrome's own surfaces were recolored; transcript frames, tone block headers,
+  dock buttons and sidebar panels kept the old palette's hexes, so dark-to-dark
+  switches looked like the theme never applied. The tree is now walked with
+  theme-color remapping (OpenTUI stores colors as RGBA objects).
+
 ## [0.2.66] — 2026-08-24
 
 ### Fixed
