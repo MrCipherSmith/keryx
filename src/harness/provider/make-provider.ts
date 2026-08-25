@@ -123,7 +123,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
   const compat = providerByName(name);
   if (compat !== undefined) {
     const needsKey = compat.requiresApiKey !== false;
-    const apiKey = compat.envKey === undefined ? undefined : env[compat.envKey];
+    const apiKey = compat.apiKey ?? (compat.envKey === undefined ? undefined : env[compat.envKey]);
     if (needsKey && (apiKey === undefined || apiKey.length === 0)) {
       return new FakeProvider([]);
     }
@@ -131,12 +131,14 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       network: true;
       baseUrl: string;
       allowLoopback?: true;
+      allowPrivateLan?: true;
       chatPath?: string;
       apiKey?: string;
     } = {
       network: true,
       baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
+      ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
     };

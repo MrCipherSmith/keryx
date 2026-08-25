@@ -23,7 +23,7 @@
 
 import { isLoopbackHost, isPrivateEgressHost } from "../harness/mutation/guard";
 import {
-  OPENAI_COMPAT_PROVIDERS,
+  allOpenAiCompatProviders,
   fetchOpenAiCompatModels,
   isProviderPlatformSupported,
   providerByName,
@@ -216,7 +216,7 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
   // construction time, or the interactive shell prompts + persists it, so the user
   // need not pre-set env vars just to see them. Curated `models` are a fallback; the
   // picker fetches each provider's live `/models` list. Keys never surface here.
-  for (const p of OPENAI_COMPAT_PROVIDERS) {
+  for (const p of allOpenAiCompatProviders()) {
     if (!isProviderPlatformSupported(p, platform)) {
       continue;
     }

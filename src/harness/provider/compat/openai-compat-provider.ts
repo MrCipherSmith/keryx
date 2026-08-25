@@ -37,7 +37,7 @@
 // W14 flow-019 fix): an abort mid-read yields `cancelled`, any other read
 // failure `malformed`.
 
-import { isLoopbackHost, isPrivateEgressHost } from "../../mutation/guard";
+import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
@@ -60,6 +60,13 @@ export interface OpenAiCompatCapabilityGrant {
   /** Narrow opt-in that re-permits LOOPBACK egress only (never widens SSRF). */
   readonly allowLoopback?: boolean;
   /**
+   * Operator opt-in for custom file providers only: re-permits RFC1918
+   * private-LAN egress (10/8, 172.16/12, 192.168/16, CGNAT 100.64/10) for a
+   * hostname the operator typed into their own config. NEVER re-permits
+   * loopback (use `allowLoopback`), metadata/link-local (169.254/16), or the
+   * unspecified address — those stay denied even with this flag.
+   */
+  readonly allowPrivateLan?: boolean;  /**
    * Optional bearer credential for an authenticated OpenAI-compatible gateway
    * (e.g. OpenRouter). When set, an `Authorization: Bearer <apiKey>` header is
    * sent. Read from env by the caller; never logged or echoed here.
@@ -278,7 +285,10 @@ export class OpenAiCompatEngine implements ProviderPort {
     } catch {
       host = baseUrl;
     }
-    const permitted = !isPrivateEgressHost(host) || (grant.allowLoopback === true && isLoopbackHost(host));
+    const permitted =
+    !isPrivateEgressHost(host) ||
+    (grant.allowLoopback === true && isLoopbackHost(host)) ||
+    (grant.allowPrivateLan === true && isPrivateLanHost(host));
     if (!permitted) {
       yield errorEvent({
         kind: "invalid_request",

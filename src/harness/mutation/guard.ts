@@ -367,3 +367,25 @@ export function guardAction(input: GuardInput, deps: PolicyDeps): GuardOutcome {
   }
   return deny(decision.reason ?? `Denied by ${profile.profileId} policy for ${risk}.`);
 }
+/**
+ * Additive sibling to {@link isPrivateEgressHost}: TRUE only when `host` names
+ * an RFC1918 private-LAN or CGNAT destination — 10/8, 172.16/12, 192.168/16,
+ * 100.64/10 — in any plain OR alternate/encoded form (same lexical decoder as
+ * the SSRF predicates). FALSE for loopback (127/8, ::1), metadata/link-local
+ * (169.254/16), the unspecified address (0.0.0.0), and public hosts. Narrows —
+ * never widens — the SSRF guard: it is the explicit, narrow re-permit for
+ * operator-configured custom providers only. Pure lexical, no DNS/network.
+ */
+export function isPrivateLanHost(host: string): boolean {
+  if (typeof host !== "string" || host.length === 0) return false;
+  for (const candidate of extractHostCandidates(host.trim())) {
+    const octets = decodeEncodedIPv4(candidate);
+    if (octets === null) continue;
+    const [o0, o1] = octets;
+    if (o0 === 10) return true; // 10/8 RFC1918
+    if (o0 === 172 && o1 >= 16 && o1 <= 31) return true; // 172.16/12 RFC1918
+    if (o0 === 192 && o1 === 168) return true; // 192.168/16 RFC1918
+    if (o0 === 100 && o1 >= 64 && o1 <= 127) return true; // 100.64/10 CGNAT
+  }
+  return false;
+}

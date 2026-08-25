@@ -115,6 +115,7 @@ import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
   parseShellExecCommand,
@@ -368,7 +369,7 @@ export async function filterConnectedDetectedProviders(
       ...(prov.chatPath !== undefined ? { chatPath: prov.chatPath } : {}),
       ...(prov.modelsPath !== undefined ? { modelsPath: prov.modelsPath } : {}),
     };
-    const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, raw ?? "", {
+    const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, raw ?? compat.apiKey ?? "", {
       timeoutMs: MODELS_FETCH_TIMEOUT_MS,
     });
     if (result.source !== "live" || result.models.length === 0) {
@@ -378,6 +379,121 @@ export async function filterConnectedDetectedProviders(
     connected.push({ ...prov, models: result.models });
   }
   return connected;
+}
+
+/** Slug used by the picker's synthetic "add custom provider" entry. */
+const CUSTOM_PROVIDER_ADD_ID = "__add_custom_provider__";
+
+/** The picker's synthetic "add custom provider" row. */
+const CUSTOM_ADD_ENTRY: DetectedProvider = {
+  name: CUSTOM_PROVIDER_ADD_ID,
+  models: [],
+  label: "＋ Add custom provider (OpenAI-compatible)",
+  note: "name · URL · key · models → saved to llm-providers.json",
+};
+
+/** Result of one custom-provider field step: a value, or Esc (back). */
+type CustomFieldStepResult = { kind: "value"; value: string } | { kind: "back" };
+
+/** One text-input step of the "add custom provider" wizard (name/url/key/models). */
+function promptCustomFieldStep(
+  otui: OpenTui,
+  r: Renderer,
+  opts: { title: string; note?: string; value?: string },
+): Promise<CustomFieldStepResult> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "custom-field-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "cf-title", content: otui.t`${otui.bold(opts.title)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    if (opts.note !== undefined) {
+      box.add(new otui.TextRenderable(r, { id: "cf-note", content: otui.t`${otui.dim(opts.note)}`, marginTop: 1 }));
+    }
+    const input = new otui.InputRenderable(r, { id: "cf-input", value: opts.value ?? "", marginTop: 1 });
+    box.add(input);
+    input.focus();
+    // Blur before detaching: a delayed duplicate ENTER can otherwise still reach
+    // this input after the box is removed (see promptSearchFieldStep).
+    const cleanup = (): void => { unsub(); input.blur(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
+    });
+    input.on(otui.InputRenderableEvents.ENTER, () => {
+      const entered = input.value.trim();
+      cleanup();
+      resolve({ kind: "value", value: entered });
+    });
+  });
+}
+
+/** The definition the "add custom provider" wizard collects before persisting. */
+interface CustomProviderWizardResult {
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  models: string[];
+}
+
+/**
+ * The "add custom provider" mini-wizard: name → base URL → API key (optional) →
+ * models (optional). Saves nothing itself — returns the definition for the
+ * caller to persist. Esc at any step backs up one step; Esc at the first step
+ * cancels the whole wizard. Invalid input re-opens the same step.
+ */
+async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<CustomProviderWizardResult | undefined> {
+  while (true) {
+    const nameStep = await promptCustomFieldStep(otui, r, {
+      title: "Provider name",
+      note: "unique id used in /provider (letters, digits, - _)",
+    });
+    if (nameStep.kind === "back") {
+      return undefined; // Esc at the first step → cancel the wizard
+    }
+    const name = nameStep.value;
+    if (name.length === 0 || !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name) || providerByName(name) !== undefined) {
+      continue; // invalid or colliding with an existing provider → re-prompt
+    }
+    while (true) {
+      const urlStep = await promptCustomFieldStep(otui, r, {
+        title: "Base URL",
+        note: "before the chat path — /v1/chat/completions is appended, e.g. http://10.110.43.19:8080",
+        value: "http://localhost:8000",
+      });
+      if (urlStep.kind === "back") {
+        break; // → back to the name step
+      }
+      const baseUrlRaw = urlStep.value;
+      if (baseUrlRaw.length === 0) {
+        continue;
+      }
+      let parsed: URL;
+      try {
+        parsed = new URL(baseUrlRaw);
+      } catch {
+        continue;
+      }
+      if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.username.length > 0 || parsed.password.length > 0) {
+        continue; // only plain http(s) URLs, no embedded credentials
+      }
+      const baseUrl = baseUrlRaw.replace(/\/+$/, "");
+      const keyStep = await promptCustomFieldStep(otui, r, {
+        title: "API key (optional)",
+        note: "empty = no key · saved owner-only (0600) in your keryx config dir",
+      });
+      if (keyStep.kind === "back") {
+        continue; // → re-edit the base URL
+      }
+      const apiKey = keyStep.value.length > 0 ? keyStep.value : undefined;
+      const modelsStep = await promptCustomFieldStep(otui, r, {
+        title: "Models (optional)",
+        note: "comma-separated ids · empty = fetch the live /v1/models list",
+      });
+      if (modelsStep.kind === "back") {
+        continue; // → re-enter the key
+      }
+      const models = modelsStep.value.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+      return { name, baseUrl, ...(apiKey !== undefined ? { apiKey } : {}), models };
+    }
+  }
 }
 
 /** The `@opentui/core` module shape, referenced structurally (type-only import). */
@@ -1490,6 +1606,13 @@ export function selectProviderModelInTui(
         return;
       }
 
+      // Non-`/connect` selection also offers the synthetic "add custom provider"
+      // entry: choosing it runs the mini-wizard, persists llm-providers.json,
+      // and appends the new provider so it is selectable this session too.
+      const allCandidates: DetectedProvider[] = options.onlyConnected
+        ? candidates
+        : [...candidates, CUSTOM_ADD_ENTRY];
+
       // Provider ← Esc cancels.
       // Key (when required) ← Esc backs to provider.
       // Model ← Esc backs to provider.
@@ -1497,10 +1620,34 @@ export function selectProviderModelInTui(
       // OpenAI-compat gateways return 401 without a Bearer key, and we would
       // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
-        const prov = await pickProviderStep(otui, r, candidates);
+        const prov = await pickProviderStep(otui, r, allCandidates);
         if (prov === undefined) {
           resolve(undefined);
           return;
+        }
+
+        // Synthetic "add custom provider" entry — run the mini-wizard, persist,
+        // and loop back so the fresh provider appears in the picker.
+        if (prov.name === CUSTOM_PROVIDER_ADD_ID) {
+          const created = await promptCustomProviderWizard(otui, r);
+          if (created !== undefined) {
+            saveCustomCompatProvider({
+              name: created.name,
+              label: created.name,
+              baseUrl: created.baseUrl,
+              ...(created.apiKey !== undefined ? { apiKey: created.apiKey } : {}),
+              models: created.models,
+              requiresApiKey: false,
+            });
+            allCandidates.push({
+              name: created.name,
+              models: created.models,
+              baseUrl: created.baseUrl,
+              label: created.name,
+              note: "custom",
+            });
+          }
+          continue; // Esc inside the wizard or after a save → re-pick the provider
         }
 
         // `/connect` only switches: never edit the endpoint or collect a key.

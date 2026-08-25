@@ -13,6 +13,8 @@
 // are versioned `…/paas/v4` and answer at `/chat/completions` + `/models`
 // (no `/v1`), hence the per-provider `chatPath`/`modelsPath` overrides.
 
+import { loadCustomCompatProviders } from "../lib/provider-config";
+
 /** A hosted OpenAI-compatible provider offered in the picker. */
 export interface OpenAiCompatProvider {
   /** Stable id used as the provider name (e.g. `deepseek`). */
@@ -35,6 +37,14 @@ export interface OpenAiCompatProvider {
   modelsPath?: string;
   /** Curated fallback model ids (used when the live `/models` fetch fails). */
   models: string[];
+  /** Optional in-file Bearer credential (custom file providers) — read directly, never env. */
+  apiKey?: string;
+  /**
+   * Operator opt-in for custom file providers only: re-permits RFC1918
+   * private-LAN egress for a hostname typed into the operator's own config.
+   * Built-ins are never granted this. Metadata/link-local stay denied.
+   */
+  allowPrivateLan?: boolean;
   /** Short picker note (e.g. `coding plan`). */
   note?: string;
   /**
@@ -203,7 +213,40 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
 
 /** Look up a registry provider by its `name`. */
 export function providerByName(name: string): OpenAiCompatProvider | undefined {
-  return OPENAI_COMPAT_PROVIDERS.find((p) => p.name === name);
+  return allOpenAiCompatProviders().find((p) => p.name === name);
+}
+
+/**
+ * Operator-defined custom providers from `llm-providers.json` (the in-TUI
+ * "add custom provider" wizard), mapped onto the registry shape. Custom
+ * entries are an explicit operator trust boundary: `allowLoopback` +
+ * `allowPrivateLan` re-permit loopback and RFC1918 private-LAN egress for
+ * them (a URL the operator typed into their own 0600 config file is operator
+ * intent), while built-in providers remain denied on both. A custom entry
+ * whose `name` collides with a built-in is excluded (built-ins win).
+ */
+export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
+  const builtinNames = new Set(OPENAI_COMPAT_PROVIDERS.map((p) => p.name));
+  return loadCustomCompatProviders(dir)
+    .filter((p) => !builtinNames.has(p.name))
+    .map((p): OpenAiCompatProvider => ({
+      name: p.name,
+      label: p.label ?? p.name,
+      baseUrl: p.baseUrl,
+      ...(p.apiKey !== undefined ? { apiKey: p.apiKey } : {}),
+      requiresApiKey: false,
+      allowLoopback: true,
+      allowPrivateLan: true,
+      ...(p.chatPath !== undefined ? { chatPath: p.chatPath } : {}),
+      ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),
+      models: p.models,
+      ...(p.note !== undefined ? { note: p.note } : {}),
+    }));
+}
+
+/** Built-in + operator-defined custom providers, in picker order. */
+export function allOpenAiCompatProviders(dir?: string): OpenAiCompatProvider[] {
+  return [...OPENAI_COMPAT_PROVIDERS, ...customCompatProviders(dir)];
 }
 
 /** Default network timeout for live `/models` probes (offline must not hang the picker). */
@@ -304,7 +347,7 @@ export async function resolveModelsForPicker(
   }
   const envKey = provider.envKey ?? compat.envKey;
   const raw = envKey === undefined ? undefined : env[envKey];
-  const apiKey = typeof raw === "string" && raw.length > 0 ? raw : undefined;
+  const apiKey = typeof raw === "string" && raw.length > 0 ? raw : compat.apiKey;
   return fetchOpenAiCompatModelsDetailed(
     fetchFn,
     { ...compat, ...(provider.baseUrl !== undefined ? { baseUrl: provider.baseUrl } : {}) },
