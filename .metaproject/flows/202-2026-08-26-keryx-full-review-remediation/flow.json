@@ -5,7 +5,7 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-26T05:26:45.555Z",
+  "updatedAt": "2026-08-26T05:44:31.067Z",
   "source": {
     "type": "description",
     "ref": null
@@ -91,7 +91,7 @@
       "id": "T6",
       "title": "Restore architecture health and guarded-sink waves",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -99,13 +99,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Complete catch disposition tests and degraded outcome",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -113,13 +114,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Restore web-taint session wiki and acknowledgement security boundary",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -127,7 +129,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -244,6 +247,21 @@
       "at": "2026-08-26T05:26:45.555Z",
       "event": "task-done",
       "detail": "T5: Restore validation report and requirements docpack"
+    },
+    {
+      "at": "2026-08-26T05:44:30.707Z",
+      "event": "task-done",
+      "detail": "T6: Restore architecture health and guarded-sink waves"
+    },
+    {
+      "at": "2026-08-26T05:44:30.884Z",
+      "event": "task-done",
+      "detail": "T7: Complete catch disposition tests and degraded outcome"
+    },
+    {
+      "at": "2026-08-26T05:44:31.067Z",
+      "event": "task-done",
+      "detail": "T8: Restore web-taint session wiki and acknowledgement security boundary"
     }
   ]
 }

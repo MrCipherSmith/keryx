@@ -606,3 +606,39 @@ test("F-009: a terminated job's outputBuffer is shrunk to a small tail once its 
   if (!after.ok) return;
   expect(after.output.length).toBeLessThanOrEqual(TERMINATED_OUTPUT_TAIL_BYTES);
 });
+
+describe("C-09/C-10: background teardown dispositions", () => {
+  test("C-09: a killed job keeps pre-teardown output and reaches a terminal state", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 1 });
+    const started = await registry.start("long-running-command");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    handle.emitData("before teardown");
+    await expect(registry.kill(started.jobId)).resolves.toEqual({ ok: true });
+    handle.emitExit(143);
+
+    const output = registry.readOutput(started.jobId);
+    expect(output).toEqual({ ok: true, output: "before teardown" });
+    expect(registry.get(started.jobId)?.status).toBe("killed");
+  });
+
+  test("C-10: killing after exit is an ordinary tool error and never re-signals the process", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 1 });
+    const started = await registry.start("already-exited-command");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+    handle.emitExit(0);
+
+    const result = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("is not running");
+    expect(handle.kills).toEqual([]);
+  });
+});

@@ -29,6 +29,7 @@ import type { ResumeState } from "./resume-state";
 import { wikiValidate } from "./service";
 import { computePageNodeHash, isPageUnchangedSinceLastEnrich } from "./staleness";
 import type { WikiPage } from "./types";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 export type { ProviderFactory } from "../harness/provider/single-turn";
 export { hasCredential } from "../harness/provider/single-turn";
@@ -830,14 +831,23 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         };
       }
 
-      await writeFile(page.absolutePath, `${enriched.endsWith("\n") ? enriched : `${enriched}\n`}`, "utf8");
+      const output = enriched.endsWith("\n") ? enriched : `${enriched}\n`;
+      const materialized = prepareOutputForPersistence(
+        await guardOutput({ cwd: input.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
+        output,
+      );
+      if (!materialized.allowed) {
+        onPage({ index, total, path: page.relativePath, status, phase: "failed" });
+        return { path: page.relativePath, action: "failed" as const, reason: materialized.reason };
+      }
+      await writeFile(page.absolutePath, materialized.content, "utf8");
 
       onPage({ index, total, path: page.relativePath, status, phase: "done" });
       return {
         path: page.relativePath,
         action: "enriched" as const,
         bytesBefore: originalRaw.length,
-        bytesAfter: enriched.length,
+        bytesAfter: materialized.content.length,
       };
     } catch (cause) {
       onPage({ index, total, path: page.relativePath, status, phase: "failed" });
@@ -1084,7 +1094,22 @@ async function finishSuccess(
     };
   }
 
-  await writeFile(page.absolutePath, content.endsWith("\n") ? content : `${content}\n`, "utf8");
+  const output = content.endsWith("\n") ? content : `${content}\n`;
+  const materialized = prepareOutputForPersistence(
+    await guardOutput({ cwd: ctx.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
+    output,
+  );
+  if (!materialized.allowed) {
+    ctx.onPage({ index, total: ctx.total, path: page.relativePath, status, phase: "failed" });
+    return {
+      path: page.relativePath,
+      action: "failed",
+      reason: materialized.reason,
+      tier: extra.tier,
+      ...(extra.deepToolCalls !== undefined ? { deepToolCalls: extra.deepToolCalls } : {}),
+    };
+  }
+  await writeFile(page.absolutePath, materialized.content, "utf8");
   ctx.onPage({
     index,
     total: ctx.total,
@@ -1096,7 +1121,7 @@ async function finishSuccess(
     path: page.relativePath,
     action: "enriched",
     bytesBefore: originalRaw.length,
-    bytesAfter: content.length,
+    bytesAfter: materialized.content.length,
     tier: extra.tier,
     ...(nodeHash !== undefined ? { nodeHash } : {}),
     ...(extra.deepToolCalls !== undefined ? { deepToolCalls: extra.deepToolCalls } : {}),

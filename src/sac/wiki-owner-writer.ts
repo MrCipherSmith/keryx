@@ -21,7 +21,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
-import { guardOutput } from "../security/guard";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
 import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
 
@@ -126,9 +126,10 @@ export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; n
       const relativePath = wikiPageRelativePath(proposal.id);
 
       const guard = await guardOutput({ cwd, content, target: "wiki", source: "tool-output", path: `wiki/${relativePath}` });
-      if (!guard.allowed) return { ok: false, code: `security_gate_${guard.reason ?? "blocked"}` };
+      const output = prepareOutputForPersistence(guard, content);
+      if (!output.allowed) return { ok: false, code: `security_gate_${output.reason}` };
 
-      await writeFileAtomic(path.join(cwd, ".metaproject", "wiki", relativePath), content);
+      await writeFileAtomic(path.join(cwd, ".metaproject", "wiki", relativePath), output.content);
 
       // receiptRef/targetRef are schema-typed as workspace-relative `path`s (no `#`,
       // no query strings — see workspace-proposal.schema.json's `path` pattern), so

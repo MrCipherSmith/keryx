@@ -326,3 +326,15 @@ describe("credential redaction", () => {
     expect(events[0]!.error?.message).toContain("[redacted]");
   });
 });
+
+test("C-04: a non-JSON HTTP error keeps OpenAI's generic status message", async () => {
+  const { fetch: fetchMock } = makeFetchMock(() => new Response("opaque upstream body", { status: 503 }));
+  const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("catch-c04"), { attemptId: "catch-c04" }));
+
+  expect(events).toHaveLength(1);
+  expect(events[0]?.kind).toBe("provider_error");
+  expect(events[0]?.error?.kind).toBe("unavailable");
+  expect(events[0]?.error?.message).toBe("OpenAI API returned HTTP 503");
+  expect(JSON.stringify(events)).not.toContain("opaque upstream body");
+});

@@ -16,7 +16,7 @@
 // process-ownership bug class hit live by opencode/Codex (see context.md).
 
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
-import { resolveSandboxedSpawn, resolveShellEnv } from "./shell-exec-tool";
+import { resolveShellEnv, resolveShellSpawn } from "../../process/shell-spawn";
 
 /** One background process, abstracted so tests can inject a fake (no real subprocess). */
 export interface BackgroundProcessHandle {
@@ -171,9 +171,9 @@ function nowIso(): string {
 function realSpawner(): BackgroundSpawner {
   return async (command, cwd) => {
     const baseEnv = await resolveShellEnv();
-    const resolved = await resolveSandboxedSpawn(cwd, command, baseEnv);
+    const resolved = await resolveShellSpawn(cwd, command, baseEnv);
     if (!resolved.ok) {
-      throw new Error(resolved.result.output);
+      throw new Error(resolved.error);
     }
     const { spawnArgs, env, netClose } = resolved.plan;
 

@@ -95,8 +95,8 @@ async function runStatus(): Promise<void> {
   console.log(`last run: ${status.lastRunAt ?? "never"}`);
   console.log(`gate: ${status.gate ?? "n/a"}`);
   console.log(`project score: ${status.projectScore ?? "n/a"}`);
-    console.log(`declining scopes: ${status.decliningScopes}`);
-    console.log(`regressed scopes: ${status.regressedScopes}`);
+  console.log(`declining scopes: ${status.decliningScopes}`);
+  console.log(`regressed scopes: ${status.regressedScopes}`);
 
   const trend = computeTrend(await loadHistory(process.cwd()), "project");
   if (trend.count >= 2) {

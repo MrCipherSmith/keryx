@@ -31,6 +31,7 @@ import {
 } from "./paths";
 import { compactMessages, type CompactOptions } from "./compact";
 import { readSlate, type Slate } from "./slate";
+import { redactSensitiveText } from "../security/redact";
 
 export const SESSION_SCHEMA_VERSION = 1 as const;
 
@@ -285,6 +286,13 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
     lines.push(JSON.stringify(row));
   }
   atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
+}
+
+function redactHistory(history: readonly NormalizedMessage[]): NormalizedMessage[] {
+  return history.map((message) => ({
+    ...message,
+    content: redactSensitiveText(message.content),
+  }));
 }
 
 /**
@@ -554,18 +562,19 @@ export function persistHistory(
   meta?: PersistMeta,
 ): SessionHandle {
   const ts = nowIso();
-  const archive = meta?.archive ?? context;
+  const safeContext = redactHistory(context);
+  const safeArchive = redactHistory(meta?.archive ?? context);
 
-  writeJsonl(path.join(handle.dir, "context.jsonl"), context, ts);
-  writeJsonl(path.join(handle.dir, "archive.jsonl"), archive, ts);
+  writeJsonl(path.join(handle.dir, "context.jsonl"), safeContext, ts);
+  writeJsonl(path.join(handle.dir, "archive.jsonl"), safeArchive, ts);
   // Legacy mirror: tools/docs that still look for transcript.jsonl.
-  writeJsonl(path.join(handle.dir, "transcript.jsonl"), context, ts);
+  writeJsonl(path.join(handle.dir, "transcript.jsonl"), safeContext, ts);
 
   let title = meta?.title ?? handle.summary.title;
   if (title === "New session" || title === "Untitled session") {
     const firstUser =
-      archive.find((m) => m.role === "user" && !m.content.startsWith("[Compacted")) ??
-      context.find((m) => m.role === "user");
+      safeArchive.find((m) => m.role === "user" && !m.content.startsWith("[Compacted")) ??
+      safeContext.find((m) => m.role === "user");
     if (firstUser !== undefined) {
       title = titleFromPrompt(firstUser.content);
     }
@@ -576,8 +585,8 @@ export function persistHistory(
     schemaVersion: SESSION_SCHEMA_VERSION,
     title,
     updatedAt: ts,
-    messageCount: context.length,
-    archiveMessageCount: archive.length,
+    messageCount: safeContext.length,
+    archiveMessageCount: safeArchive.length,
     ...(meta?.provider !== undefined ? { provider: meta.provider } : {}),
     ...(meta?.model !== undefined ? { model: meta.model } : {}),
   };

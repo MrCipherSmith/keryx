@@ -2,7 +2,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { guardOutput } from "../security/guard";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 export type ProjectSkillFormat = "auto" | "single" | "package";
 
@@ -143,14 +143,15 @@ async function writeProjectSkillPackage({
   // would steer every future agent turn that reads this skill.
   const relativeSkillMdPath = toPosix(path.join(path.relative(projectRoot, packageRoot), "SKILL.md"));
   const guard = await guardOutput({ cwd: projectRoot, content: skillContent, target: "skill", source: "generated", path: relativeSkillMdPath });
-  if (!guard.allowed) {
-    throw new Error(`Project skill blocked by the security gate: ${guard.reason ?? "policy violation"}`);
+  const output = prepareOutputForPersistence(guard, skillContent);
+  if (!output.allowed) {
+    throw new Error(`Project skill blocked by the security gate: ${output.reason}`);
   }
 
   await mkdir(packageRoot, { recursive: true });
 
   const skillPath = path.join(packageRoot, "SKILL.md");
-  await writeFileAtomic(skillPath, skillContent);
+  await writeFileAtomic(skillPath, output.content);
 
   const changelogPath = path.join(packageRoot, "skill-changelog.md");
   if (!(await pathExists(changelogPath))) {

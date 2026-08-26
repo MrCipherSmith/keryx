@@ -1,0 +1,31 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-HEALTH-FIX",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Fix health compatibility alias and add status tests", "description": "Preserve the historical regressions count as a decliningScopes compatibility alias, correct formatting/docs, and prove service/CLI labels separately.", "intent": "fix"},
+  "acceptance_criteria": [
+    "regressions remains equal to the historical regression_score>0 count, while regressedScopes counts trend=regressed.",
+    "HealthStatusResult documents regressions as deprecated alias for decliningScopes.",
+    "New service-status and command health-status tests prove distinct values and labels; gate semantics remain unchanged.",
+    "Focused health tests and tsc pass."
+  ],
+  "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "custom", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/health/service.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/health/types.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/commands/health.ts"
+  ],
+  "constraints": [
+    "Read exact worktree index and testing context first; use gdgraph/gdctx/keryx ctx rg.",
+    "Modify only health service/types/command and focused health tests; no flow/docs/graph/commit/full suite.",
+    "Use apply_patch; preserve compatibility and gate behavior; STATUS first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/health/service-status.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:39:00Z", "created_by": "flow-orchestrator"}
+}

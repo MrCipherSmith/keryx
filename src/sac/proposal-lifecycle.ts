@@ -29,7 +29,7 @@ export type OwnerWriteAdapter = (input: OwnerWriteIntent & { owner: TargetOwner 
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
-  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "token_required" | "token_invalid" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
+  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "token_required" | "token_invalid" | "security_acknowledgement_required" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
 }
 
 /**
@@ -192,13 +192,22 @@ export class ProposalLifecycleService {
         // any write, so a missing/invalid/reused token blocks before
         // anything is persisted.
         if (input.decision === "accepted") {
-          const confirmed = await consumeConfirmToken(this.root, input.workspaceId, proposal.id, input.idempotencyKey, input.confirmToken);
+          const confirmed = await consumeConfirmToken(
+            this.root,
+            input.workspaceId,
+            proposal.id,
+            input.idempotencyKey,
+            input.confirmToken,
+            { securityGate: proposal.security.gate },
+          );
           if (!confirmed.ok) {
             throw new ProposalLifecycleError(
               confirmed.reason,
               confirmed.reason === "token_required"
                 ? "accept requires a confirm token — run `keryx workspace confirm-review <workspace-id> <proposal-id>` from an interactive terminal first"
-                : "confirm token is missing, expired, already used, or does not match this proposal — mint a fresh one with `keryx workspace confirm-review <workspace-id> <proposal-id>`",
+                : confirmed.reason === "security_acknowledgement_required"
+                  ? "accept requires explicit human acknowledgement of the proposal security findings — mint a fresh token with `keryx workspace confirm-review <workspace-id> <proposal-id>`"
+                  : "confirm token is missing, expired, already used, or does not match this proposal — mint a fresh one with `keryx workspace confirm-review <workspace-id> <proposal-id>`",
             );
           }
         }

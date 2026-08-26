@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { formatGuardWarning, guardOutput } from "../security/guard";
+import { formatGuardWarning, guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { memoryRoot } from "./store";
 import { MEMORY_TYPES, type MemoryStatus } from "./types";
 
@@ -98,8 +98,9 @@ async function guardPrepared(cwd: string, prepared: PreparedWrite): Promise<{ va
   const guard = await guardOutput({ cwd, content: prepared.content, target: "memory", source: "tool-output", path: prepared.relativePath });
   const warning = formatGuardWarning(guard.decision, "memory");
   const warnings = warning ? [warning] : [];
-  if (!guard.allowed) return { result: { status: "skipped", path: prepared.relativePath, warnings, reason: guard.reason ?? "security gate blocked" } };
-  return { value: { ...prepared, warnings } };
+  const output = prepareOutputForPersistence(guard, prepared.content);
+  if (!output.allowed) return { result: { status: "skipped", path: prepared.relativePath, warnings, reason: output.reason } };
+  return { value: { ...prepared, content: output.content, warnings } };
 }
 
 function validateNextEntry(relativePath: string, content: string): string | null {

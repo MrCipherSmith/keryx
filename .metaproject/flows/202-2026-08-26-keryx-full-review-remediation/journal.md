@@ -12,3 +12,6 @@
 - 2026-08-26T05:22:56.895Z - frozen: 14 criteria; checksum recorded
 - 2026-08-26T05:22:57.013Z - started
 - 2026-08-26T05:26:45.555Z - task-done: T5: Restore validation report and requirements docpack
+- 2026-08-26T05:44:30.707Z - task-done: T6: Restore architecture health and guarded-sink waves
+- 2026-08-26T05:44:30.884Z - task-done: T7: Complete catch disposition tests and degraded outcome
+- 2026-08-26T05:44:31.067Z - task-done: T8: Restore web-taint session wiki and acknowledgement security boundary

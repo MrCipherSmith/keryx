@@ -216,8 +216,8 @@ export type HealthStatusResult = {
   gate: GateStatus | null;
   sources: Array<{ source: string; status: SourceStatus }>;
   projectScore: number | null;
+  /** Deprecated compatibility alias for decliningScopes. */
   regressions: number;
-  /** Deprecated compatibility alias for regressedScopes. */
   decliningScopes: number;
   regressedScopes: number;
 };

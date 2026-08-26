@@ -11,6 +11,7 @@ import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
 import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport } from "../sac/catch-up";
 import { findSession } from "../session/store";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 // Every kind a real writer now exists for: wiki-update -> wiki, memory-entry
 // -> memory, everything else -> skill (see ownerFor in proposal-lifecycle.ts).
@@ -107,16 +108,26 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       // this session up itself and never trusts this resolution as evidence.
       const session = findSession(cwd, sessionRef);
       if (!session) throw new Error(`no session matching "${sessionRef}" in this project — use \`keryx sessions list\``);
-      const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(note ? { note } : {}) });
+      const proposalId = `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+      const notePath = proposalNotePath(cwd, workspaceId, proposalId);
+      const materializedNote = note === undefined
+        ? undefined
+        : prepareOutputForPersistence(
+            await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
+            note,
+          );
+      if (materializedNote !== undefined && !materializedNote.allowed) throw new Error(materializedNote.reason);
+      const persistedNote = materializedNote?.allowed ? materializedNote.content : undefined;
+      const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(persistedNote ? { note: persistedNote } : {}) });
       const requestCorrelationId = randomUUID();
       const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
       if (!actor) throw new Error("trusted ActorContext is required");
       const wrapUp = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: sessionEvidenceRef(workspaceId, session.id) });
-      const proposal = await service.create({ request: undefined, requestCorrelationId, workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision, kind: kind as never, wrapUp });
+      const proposal = await service.create({ request: undefined, requestCorrelationId, workspaceId, id: proposalId, proposalRevision, kind: kind as never, wrapUp });
       // The note is not part of the frozen proposal schema (additionalProperties:
       // false) — it lives in a sidecar the memory owner-writer reads back at accept
       // time, since accept may happen in a different process/reviewer session.
-      if (note) await writeFile(proposalNotePath(cwd, workspaceId, proposal.id), note, "utf8");
+      if (persistedNote) await writeFile(notePath, persistedNote, "utf8");
       console.log(JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2)); return;
     }
     if (subcommand === "confirm-review") {
@@ -129,7 +140,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       // so accepting a proposal always takes two distinct approval-gated
       // shell_exec invocations, not one — an agent that only has MCP/tool
       // access, with no shell_exec at all, cannot mint this on its own.
-      const { token, expiresAt } = await mintConfirmToken(process.cwd(), workspaceId, proposalId);
+      const { token, expiresAt } = await mintConfirmToken(process.cwd(), workspaceId, proposalId, { securityAcknowledged: true });
       console.log(JSON.stringify({ token, expiresAt }, null, 2)); return;
     }
     if (subcommand === "review") {

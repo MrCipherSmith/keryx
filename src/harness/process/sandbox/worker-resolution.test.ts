@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { proxyWorkerUrl } from "./network-run";
@@ -22,5 +22,12 @@ describe("proxy worker resolution", () => {
       return; // nothing built in this environment — nothing to assert
     }
     expect(existsSync(path.join(dist, "proxy-worker.js"))).toBe(true);
+  });
+
+  test("C-12: an unreadable or absent TypeScript sibling falls back to the bundled worker", () => {
+    const source = readFileSync(new URL("./network-run.ts", import.meta.url), "utf8");
+
+    expect(source).toMatch(/try\s*{\s*if \(existsSync\(fileURLToPath\(ts\)\)\) return ts;\s*}\s*catch/s);
+    expect(source).toContain('return new URL("./proxy-worker.js", import.meta.url);');
   });
 });

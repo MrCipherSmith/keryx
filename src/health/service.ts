@@ -123,7 +123,7 @@ export function createCodeHealthService(): CodeHealthService {
           latest?.sources.map((s) => ({ source: s.source, status: s.status })) ??
           [],
         projectScore: project?.health_score ?? null,
-        regressions: regressedScopes,
+        regressions: decliningScopes,
         decliningScopes,
         regressedScopes,
       };

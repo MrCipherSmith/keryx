@@ -23,11 +23,14 @@ interface StoredToken {
   mintedAt: string;
   expiresAt: string;
   usedAt?: string;
+  securityAcknowledged?: boolean;
 }
 
 export type ConfirmTokenDeps = {
   now?: () => Date;
   randomToken?: () => string;
+  securityGate?: "pass" | "needs-approval";
+  securityAcknowledged?: boolean;
 };
 
 export function confirmTokenPath(cwd: string, workspaceId: string, proposalId: string): string {
@@ -71,6 +74,7 @@ export async function mintConfirmToken(
     proposalId,
     mintedAt: mintedAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
+    ...(deps.securityAcknowledged === true ? { securityAcknowledged: true } : {}),
   };
   await withFileLock(`${file}.lock`, async () => {
     await writeFileAtomic(file, `${JSON.stringify(stored, null, 2)}\n`);
@@ -78,7 +82,9 @@ export async function mintConfirmToken(
   return { token, expiresAt: stored.expiresAt };
 }
 
-export type ConfirmTokenResult = { ok: true } | { ok: false; reason: "token_required" | "token_invalid" };
+export type ConfirmTokenResult =
+  | { ok: true }
+  | { ok: false; reason: "token_required" | "token_invalid" | "security_acknowledgement_required" };
 
 /**
  * Verifies and consumes the token for one accept attempt, keyed by
@@ -117,6 +123,9 @@ export async function consumeConfirmToken(
       stored.proposalId !== proposalId
     ) {
       return { ok: false, reason: "token_invalid" };
+    }
+    if (deps.securityGate === "needs-approval" && stored.securityAcknowledged !== true) {
+      return { ok: false, reason: "security_acknowledgement_required" };
     }
     const consumed: StoredToken = { ...stored, usedAt: now().toISOString() };
     await writeFileAtomic(file, `${JSON.stringify(consumed, null, 2)}\n`);

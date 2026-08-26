@@ -3,6 +3,20 @@ import net from "node:net";
 import http from "node:http";
 import { createAllowlistProxy, matchesAllowlist, type AllowlistProxy } from "./proxy";
 
+function rawHttpRequest(proxyPort: number, request: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(proxyPort, "127.0.0.1", () => socket.write(request));
+    let response = "";
+    socket.setTimeout(4_000, () => {
+      socket.destroy();
+      reject(new Error("timeout"));
+    });
+    socket.on("data", (chunk) => (response += chunk.toString("utf8")));
+    socket.on("error", reject);
+    socket.on("end", () => resolve(response));
+  });
+}
+
 describe("matchesAllowlist", () => {
   test("exact match", () => {
     expect(matchesAllowlist("api.example.com", ["api.example.com"])).toBe(true);
@@ -142,5 +156,53 @@ describe("createAllowlistProxy credential masking (HTTP)", () => {
     const body = await proxiedGet(proxy.port, `http://localhost:${upPort}/`, { Authorization: "Bearer SENTINEL-XYZ" });
     expect(body).toContain("AUTH=Bearer SENTINEL-XYZ");
     expect(body).not.toContain("real-secret-123");
+  });
+});
+
+describe("C-13/C-14: malformed absolute HTTP targets", () => {
+  let proxy: AllowlistProxy | undefined;
+  let upstream: http.Server | undefined;
+
+  afterEach(async () => {
+    if (proxy) await proxy.close();
+    if (upstream) await new Promise<void>((resolve) => upstream!.close(() => resolve()));
+    proxy = undefined;
+    upstream = undefined;
+  });
+
+  test("C-13: a malformed absolute URL with no Host is denied without an exception", async () => {
+    proxy = await createAllowlistProxy({ allowedDomains: ["localhost"] });
+
+    const response = await rawHttpRequest(
+      proxy.port,
+      "GET http://%/no-host HTTP/1.0\r\nConnection: close\r\n\r\n",
+    );
+
+    expect(response).toContain("403 Forbidden");
+  });
+
+  test("C-14: a malformed absolute URL falls back without throwing when its preserved path is rejected upstream", async () => {
+    let seenPath = "";
+    upstream = http.createServer((req, res) => {
+      seenPath = req.url ?? "";
+      res.end("UPSTREAM-OK");
+    });
+    const upstreamPort = await new Promise<number>((resolve) =>
+      upstream!.listen(0, "127.0.0.1", () => resolve((upstream!.address() as net.AddressInfo).port)),
+    );
+    proxy = await createAllowlistProxy({ allowedDomains: ["localhost"] });
+
+    const malformedPath = "http://%/kept?query=1";
+    const response = await rawHttpRequest(
+      proxy.port,
+      `GET ${malformedPath} HTTP/1.1\r\nHost: localhost:${upstreamPort}\r\nConnection: close\r\n\r\n`,
+    );
+
+    // The invalid absolute request-target cannot be re-parsed by Node's
+    // outbound client, but the proxy must contain that failure as its normal
+    // upstream response rather than throwing out of the request handler.
+    expect(response).toContain("502 Bad Gateway");
+    expect(response).toContain("upstream error");
+    expect(seenPath).toBe("");
   });
 });

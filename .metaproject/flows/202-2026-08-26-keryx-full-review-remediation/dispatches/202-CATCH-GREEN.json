@@ -1,0 +1,30 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-CATCH-GREEN",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Surface the C-11 degraded Slate-binding outcome", "description": "Make the sole C-11 RED assertion green without changing successful workspace creation or exposing raw errors.", "intent": "fix"},
+  "acceptance_criteria": [
+    "A workspace remains successfully created and listable when lazy Slate binding rejects.",
+    "The tool result includes a stable redaction-safe degraded-binding indicator and no raw exception message.",
+    "CATCH-B focused tests and tsc pass without weakening existing workspace ACL/denial behavior."
+  ],
+  "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/catch-dispositions.md", "kind": "custom", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.test.ts"
+  ],
+  "constraints": [
+    "Read exact worktree .metaproject/index.md first; use gdgraph/gdctx and keryx ctx rg.",
+    "Wait until the security worker has finished workspace-lifecycle changes before editing.",
+    "Modify production workspace-lifecycle-tool.ts only; do not alter accepted tests/docs/flow/graph or commit.",
+    "Keep result backward-compatible and redaction-safe; apply_patch; no full suite; STATUS first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/harness/tool/builtin/workspace-lifecycle-tool.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:37:00Z", "created_by": "flow-orchestrator"}
+}
