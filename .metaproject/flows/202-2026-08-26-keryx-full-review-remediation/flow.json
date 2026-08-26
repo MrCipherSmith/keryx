@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 2,
+  "id": "202",
+  "slug": "keryx-full-review-remediation",
+  "title": "Validate and remediate findings from the 2026-08-24 full project review",
+  "status": "in-progress",
+  "createdAt": "2026-08-26T05:21:02.408Z",
+  "updatedAt": "2026-08-26T05:26:45.555Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f86ac75f0b68dda0196ba32e58336df3049c96f79f6400c210e982bc9eee7b93",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Restore validation report and requirements docpack",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Restore architecture health and guarded-sink waves",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Complete catch disposition tests and degraded outcome",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Restore web-taint session wiki and acknowledgement security boundary",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Run focused tests graph and TypeScript build gates",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Run full-suite baseline health and code-verifier",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Run independent review and fix round",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Write change report and execution metrics",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-26T05:21:02.408Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-26T05:22:52.068Z",
+      "event": "task-added",
+      "detail": "T5: Restore validation report and requirements docpack"
+    },
+    {
+      "at": "2026-08-26T05:22:52.179Z",
+      "event": "task-added",
+      "detail": "T6: Restore architecture health and guarded-sink waves"
+    },
+    {
+      "at": "2026-08-26T05:22:52.303Z",
+      "event": "task-added",
+      "detail": "T7: Complete catch disposition tests and degraded outcome"
+    },
+    {
+      "at": "2026-08-26T05:22:52.415Z",
+      "event": "task-added",
+      "detail": "T8: Restore web-taint session wiki and acknowledgement security boundary"
+    },
+    {
+      "at": "2026-08-26T05:22:52.530Z",
+      "event": "task-added",
+      "detail": "T9: Run focused tests graph and TypeScript build gates"
+    },
+    {
+      "at": "2026-08-26T05:22:52.641Z",
+      "event": "task-added",
+      "detail": "T10: Run full-suite baseline health and code-verifier"
+    },
+    {
+      "at": "2026-08-26T05:22:52.753Z",
+      "event": "task-added",
+      "detail": "T11: Run independent review and fix round"
+    },
+    {
+      "at": "2026-08-26T05:22:52.869Z",
+      "event": "task-added",
+      "detail": "T12: Write change report and execution metrics"
+    },
+    {
+      "at": "2026-08-26T05:22:56.895Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-26T05:22:57.013Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-26T05:26:45.555Z",
+      "event": "task-done",
+      "detail": "T5: Restore validation report and requirements docpack"
+    }
+  ]
+}

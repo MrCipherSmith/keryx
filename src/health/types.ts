@@ -217,6 +217,9 @@ export type HealthStatusResult = {
   sources: Array<{ source: string; status: SourceStatus }>;
   projectScore: number | null;
   regressions: number;
+  /** Deprecated compatibility alias for regressedScopes. */
+  decliningScopes: number;
+  regressedScopes: number;
 };
 
 export type HealthGateInput = { cwd: string; strictWarn?: boolean };

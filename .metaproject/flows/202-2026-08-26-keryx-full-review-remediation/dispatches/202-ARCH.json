@@ -1,0 +1,38 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-ARCH",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Restore architecture health and guarded-sink fixes", "description": "Reimplement the previously verified neutral shell seam, injected fleet sink, SAC lifecycle composition/facade, health terminology, and shared guarded-persistence materializer with focused tests.", "intent": "fix"},
+  "acceptance_criteria": [
+    "Neutral shell-spawn module is shared by foreground/background and spawn-subagent uses optional injected fleet events without TUI import.",
+    "SAC runtime SCC is removed through shared wrap-up evidence and workspace tools use src/sac/harness-facade.ts.",
+    "Health exposes decliningScopes/regressedScopes with regressions compatibility and exact -3..+3/null tests.",
+    "prepareOutputForPersistence is consumed by memory, wiki, SAC owner, project-skill, metrics, testing, and coverage guarded sinks.",
+    "Focused architecture/health/persistence tests and bunx tsc --noEmit pass."
+  ],
+  "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/shell-exec-tool.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/background-job-registry.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/machine-wrap-up.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/session-wrap-up.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/security/guard.ts"
+  ],
+  "constraints": [
+    "Read the new worktree .metaproject/index.md first; use local testing skill/context, gdgraph, and keryx ctx rg.",
+    "Use apply_patch; no flow/docs/security-boundary files beyond the named guarded sinks; no commit.",
+    "Preserve public compatibility, sandbox fail-closed behavior, health gate semantics, and proposal immutability.",
+    "Recreate the focused RED tests before production changes; no full suite.",
+    "Return STATUS first with exact files, tests, typecheck, and routing audit."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/harness/process/shell-spawn.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:25:00Z", "created_by": "flow-orchestrator"}
+}

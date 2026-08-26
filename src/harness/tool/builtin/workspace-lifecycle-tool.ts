@@ -33,10 +33,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService } from "../../../sac/workspace-service";
-import { createHarnessProposalLifecycleService, normalizeProposalLifecycleResult } from "../../../sac/proposal-lifecycle";
-import { proposalNotePath } from "../../../sac/proposal-evidence";
-import { sessionEvidenceRef } from "../../../sac/session-wrap-up";
+import { createHarnessProposalLifecycleService, localWorkspaceAuthorizationServer, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
 import { writeSlate } from "../../../session/slate";
 import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";

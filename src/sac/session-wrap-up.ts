@@ -28,7 +28,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { findSession, exportSessionMarkdown, readSessionSlate, TranscriptUnreadableError } from "../session/store";
-import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./machine-wrap-up";
+import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./wrap-up-evidence";
 import { readCourse } from "../session/slate-course";
 import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
 

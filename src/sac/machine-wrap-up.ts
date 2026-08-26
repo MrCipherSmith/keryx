@@ -46,20 +46,20 @@
 //      `{ dir, cwd }` convention in `../session/slate-lifecycle.ts`.
 
 import { createHash, randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import { writeFileAtomic } from "../lib/fs";
-import { dedupeSeeds, type Slate, type SlateChildDispatch, type SlateSeed, type SlateSeedKind, writeSlate } from "../session/slate";
+import { type Slate, type SlateSeedKind, writeSlate } from "../session/slate";
 import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
+import { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, type AttributedSeed } from "./wrap-up-evidence";
 import type { ProviderFactory, ModelTurnResult } from "../harness/provider/single-turn";
 import { runModelTurn } from "../harness/provider/single-turn";
 
-const execFileAsync = promisify(execFile);
+export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff } from "./wrap-up-evidence";
+export type { AttributedSeed } from "./wrap-up-evidence";
 
 /**
  * Same TTL `session-wrap-up.ts` uses for its own `TrustedWrapUpResolution`.
@@ -99,12 +99,6 @@ export type MachineWrapUpResolution =
  * (SLATE-21): `session-wrap-up.ts` reuses this SAME attribution shape for the
  * "session" wrap-up source, so a proposal's evidence taxonomy (diff/flow/seeds)
  * looks identical regardless of which of the two wrap-up sources produced it. */
-export type AttributedSeed = { text: string; kind: SlateSeedKind; source: "parent" | { childDispatchId: string } };
-
-export function describeSource(source: AttributedSeed["source"]): string {
-  return source === "parent" ? "parent" : `child:${source.childDispatchId}`;
-}
-
 /**
  * Deduped (SLATE-4's `dedupeSeeds`, applied per-source THEN globally —
  * mirrors `runWrapUp`'s own step 1) Seeds from `slate.seeds` (tagged
@@ -114,25 +108,6 @@ export function describeSource(source: AttributedSeed["source"]): string {
  * about the LIVE slate structure; this is the read-side analog for wrap-up).
  * Untagged Seeds default to `"follow-up"` (AC7) — never an invented kind.
  */
-export function dedupedAttributedSeeds(slate: Slate): AttributedSeed[] {
-  const seen = new Set<string>();
-  const result: AttributedSeed[] = [];
-  const take = (seeds: SlateSeed[], source: AttributedSeed["source"]): void => {
-    for (const seed of dedupeSeeds(seeds)) {
-      const key = seed.text.trim();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({ text: seed.text, kind: seed.kind ?? "follow-up", source });
-    }
-  };
-  take(slate.seeds, "parent");
-  const childDispatches: Record<string, SlateChildDispatch> = slate.childDispatches ?? {};
-  for (const [dispatchId, dispatch] of Object.entries(childDispatches)) {
-    take(dispatch.seeds, { childDispatchId: dispatchId });
-  }
-  return result;
-}
-
 /** All non-empty `(kind -> Seeds)` groups over the FULL deduped seed pool. */
 function groupSeedsByKind(slate: Slate): Map<SlateSeedKind, AttributedSeed[]> {
   const map = new Map<SlateSeedKind, AttributedSeed[]>();
@@ -153,27 +128,6 @@ function sha256(value: string): string {
  * diff is still valid evidence (a real "nothing changed" observation), never
  * a reason to fail the whole wrap-up. Exported (SLATE-21): `session-wrap-up.ts`
  * reuses this exact best-effort git-diff primitive for its own evidence. */
-export async function gitDiff(cwd: string): Promise<string> {
-  try {
-    const { stdout } = await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 });
-    return stdout;
-  } catch {
-    return "";
-  }
-}
-
-export function diffStatLine(diffText: string): string {
-  if (diffText.trim().length === 0) return "no working-tree changes";
-  const added = (diffText.match(/^\+(?!\+\+)/gm) ?? []).length;
-  const removed = (diffText.match(/^-(?!--)/gm) ?? []).length;
-  return `working-tree diff: +${added}/-${removed} line(s)`;
-}
-
-export function courseStatusLine(course: CourseProjection): string {
-  if (course.state !== "bound") return "flow: unbound";
-  return `flow ${course.flowRef.uri} snapshot=${course.flowRef.snapshot} completed=${course.completed.length} next=${course.next.length} blocked=${course.blocked.length}`;
-}
-
 /** Bounded-timeout fallback template — "git diff stat + flow status line"
  * per plan.md, never a hang and never an invented fact. */
 function mechanicalSummary(diffText: string, course: CourseProjection): string {

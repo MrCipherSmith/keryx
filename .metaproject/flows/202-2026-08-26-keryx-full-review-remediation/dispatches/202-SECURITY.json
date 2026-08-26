@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-SECURITY",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Restore the web-tainted durable-write security boundary", "description": "Recreate the 12-case security contract and reimplement durable-tool denial, session/SAC projections, normal/RLM wiki guards, and explicit security acknowledgement.", "intent": "fix"},
+  "acceptance_criteria": [
+    "After untrusted web output named durable tools are denied before invocation and read_file remains permitted.",
+    "Session archive/evidence, Slate, proposal record/note, normal and RLM wiki enrichment persist redacted content or no raw sentinel on block.",
+    "needs-approval requires explicit human security acknowledgement while binding/single-use/expiry and safe flow remain intact.",
+    "The dedicated 12-case test passes with an explicit 30000ms timeout, affected suites pass, and tsc passes."
+  ],
+  "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/commands/agent.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/session/store.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/session-wrap-up.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/review-confirm-token.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/wiki/enrich.ts"
+  ],
+  "constraints": [
+    "Read the new worktree .metaproject/index.md first; use local testing/gdgraph/gdwiki/gdctx routing.",
+    "Use apply_patch; do not edit flow/docs/graph or architecture-owned files except session-wrap-up after the architecture agent finishes.",
+    "Before touching session-wrap-up, wait until 202-ARCH reports completion to the parent; meanwhile implement non-overlapping security files/tests.",
+    "Reuse prepareOutputForPersistence once available; preserve sync public APIs and fail closed on raw taint.",
+    "Use synthetic sentinels only; no full suite or commit; return STATUS first with exact results."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/security/web-taint-durable-boundary.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:25:00Z", "created_by": "flow-orchestrator"}
+}

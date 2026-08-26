@@ -1,0 +1,34 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-ARCH-B",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Restore shell fleet and guarded-sink waves", "description": "Recreate only the neutral shell-spawn/fleet-event and shared guarded-persistence materializer waves with their focused tests.", "intent": "fix"},
+  "acceptance_criteria": [
+    "Foreground/background consume src/harness/process/shell-spawn.ts and background registry has no shell-exec-tool runtime import.",
+    "spawn-subagent-tool has optional onFleetEvent injection and no TUI runtime import; shell composition injects the TUI bridge.",
+    "prepareOutputForPersistence consumes guard.redacted or blocks before write across memory, wiki, SAC wiki owner, project skills, metrics, testing service, and coverage map.",
+    "Focused shell/fleet tests pass 6/6, persistence matrix passes 16/16, and tsc passes."
+  ],
+  "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/shell-exec-tool.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/background-job-registry.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/security/guard.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/testing/service.ts"
+  ],
+  "constraints": [
+    "Read the exact new worktree .metaproject/index.md first; use local testing/gdgraph/gdctx and keryx ctx rg.",
+    "Do not touch SAC lifecycle, health, docs, flow state, graph, or security web-taint/session/wiki-enrich boundary files.",
+    "Recreate focused RED tests before production; preserve sandbox/env dependency injection and all existing public APIs.",
+    "Use apply_patch; no commit/full suite; return STATUS first with exact checks."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/security/persistence-sinks.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:29:00Z", "created_by": "flow-orchestrator"}
+}
