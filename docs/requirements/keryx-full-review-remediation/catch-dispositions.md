@@ -1,11 +1,11 @@
 # Catch Dispositions
-Version: 1.0.0
+Version: 1.1.0
 
-Status: **audit complete — production remediation not implemented**.
+Status: **implemented and covered**.
 
 This is the canonical inventory of the fourteen validated production
-comment-only catches. The targeted tests named below are the RED-phase
-assertions to add or extend; no production behavior is changed by this audit.
+comment-only catches. The targeted-test column preserves the original RED-phase
+contract; the implementation matrix below records its final GREEN disposition.
 
 Allowed dispositions are `intentional-fallback` for a parser/cleanup fallback
 with a proven observable result, and `observable-degraded` for a typed degraded
@@ -29,3 +29,18 @@ and source-text copies are forbidden.
 | C-13 | src/harness/process/sandbox/proxy.ts:144 | intentional-fallback | Invalid absolute HTTP URL falls back to a redaction-safe Host-header target; no usable host returns no target rather than throwing. | MISSING (RED): `src/harness/process/sandbox/proxy.test.ts` — malformed absolute URL uses Host-header fallback. |
 | C-14 | src/harness/process/sandbox/proxy.ts:346 | intentional-fallback | Invalid absolute URL falls back to its parsed request path/query value; parser exception does not escape. | MISSING (RED): `src/harness/process/sandbox/proxy.test.ts` — malformed absolute URL preserves path fallback. |
 
+## Implementation Verification
+
+| IDs | Final outcome | Test evidence |
+|---|---|---|
+| C-01..C-04 | Intentional provider fallback, raw error body withheld | Provider compatibility, Anthropic, OpenAI, and single-turn tests pass. |
+| C-05 | Intentional MCP cleanup fallback | `supervise-mcp.test.ts` passes. |
+| C-06..C-08 | Intentional bounded shell teardown fallback | `shell-exec-tool.test.ts` passes. |
+| C-09..C-10 | Intentional background-job cleanup fallback | `background-job-registry.test.ts` passes. |
+| C-11 | Observable degraded outcome | `workspace-lifecycle-tool.test.ts` verifies `binding_degraded`. |
+| C-12 | Intentional worker-resolution fallback | `worker-resolution.test.ts` passes. |
+| C-13..C-14 | Intentional redaction-safe proxy parsing fallback | `proxy.test.ts` passes. |
+
+All fourteen contracts were exercised in the focused 189-pass remediation run.
+Thirteen remain proven intentional fallbacks; only C-11 required a production
+change to expose an explicit degraded outcome.

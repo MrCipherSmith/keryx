@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-REVIEW-ARCH",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-architecture",
+  "task": {
+    "title": "Review remediation architecture and logic",
+    "description": "Independent review of architecture seams, SAC lifecycle/facade changes, health semantics, catch dispositions, and injected fleet sink in the base-to-working-tree diff.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Find only actionable correctness, dependency-direction, lifecycle, or compatibility issues backed by code evidence.",
+    "Verify the intended runtime cycle removals and absence of production TUI coupling.",
+    "Return severity-ranked findings or explicit no-findings verdict with residual risks."
+  ],
+  "context_refs": [
+    {"path": "docs/reviews/keryx-full-project-review-validation-2026-08-26.md", "kind": "review", "exists": true},
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+  ],
+  "constraints": [
+    "Read the exact worktree index and reviewer skill before navigation; use gdgraph/gdwiki/gdctx and keryx ctx rg.",
+    "Read-only: do not modify files, flow state, generated artifacts, or commits.",
+    "Review commit range 1ece28b2818d6ce2d5bfa89e0bc8a8b57b96c797..HEAD plus working-tree changes.",
+    "Do not report pre-existing full-suite failures unless the diff causes or worsens them."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-architecture.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:57:30Z", "created_by": "review-orchestrator"}
+}

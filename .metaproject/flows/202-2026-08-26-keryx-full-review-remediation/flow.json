@@ -5,13 +5,70 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-26T05:44:31.067Z",
+  "updatedAt": "2026-08-26T06:07:16.357Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:f86ac75f0b68dda0196ba32e58336df3049c96f79f6400c210e982bc9eee7b93",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-26T06:06:53.581Z",
+      "note": "Validation report distinguishes confirmed, corrected, and rejected review claims."
+    },
+    "AC2": {
+      "at": "2026-08-26T06:06:55.353Z",
+      "note": "Neutral shell-spawn seam removes background registry dependency on shell-exec-tool."
+    },
+    "AC3": {
+      "at": "2026-08-26T06:06:57.034Z",
+      "note": "SAC runtime SCC removed through wrap-up-evidence and lifecycle facades; focused tests pass."
+    },
+    "AC4": {
+      "at": "2026-08-26T06:06:58.824Z",
+      "note": "Harness workspace tools depend on src/sac/harness-facade.ts only."
+    },
+    "AC5": {
+      "at": "2026-08-26T06:07:00.500Z",
+      "note": "spawn-subagent production tool uses injected onFleetEvent and has no TUI runtime import."
+    },
+    "AC6": {
+      "at": "2026-08-26T06:07:02.381Z",
+      "note": "decliningScopes/regressedScopes separated; regressions compatibility preserved; health tests pass."
+    },
+    "AC7": {
+      "at": "2026-08-26T06:07:04.099Z",
+      "note": "C-01 through C-14 classified and covered; C-11 exposes binding_degraded."
+    },
+    "AC8": {
+      "at": "2026-08-26T06:07:06.448Z",
+      "note": "prepareOutputForPersistence centralizes guard-before-write and redacted materialization."
+    },
+    "AC9": {
+      "at": "2026-08-26T06:07:08.136Z",
+      "note": "Web-tainted durable write-risk tools denied; read_file positive control passes."
+    },
+    "AC10": {
+      "at": "2026-08-26T06:07:09.728Z",
+      "note": "Session store/wrap-up, proposal lifecycle, and normal/RLM wiki enrichment are guarded."
+    },
+    "AC11": {
+      "at": "2026-08-26T06:07:11.353Z",
+      "note": "needs-approval confirmation requires explicit human security acknowledgement."
+    },
+    "AC12": {
+      "at": "2026-08-26T06:07:13.078Z",
+      "note": "195 focused pass, tsc/build/diff gates pass; full suite has no new failure identity."
+    },
+    "AC13": {
+      "at": "2026-08-26T06:07:14.756Z",
+      "note": "Graph contains only documented type-only modal-host/shell-chrome cycle; target runtime cycles absent."
+    },
+    "AC14": {
+      "at": "2026-08-26T06:07:16.357Z",
+      "note": "Validation, requirements, change report, managed review, baseline comparison, and metrics persisted."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -20,7 +77,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +85,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +100,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -136,7 +197,7 @@
       "id": "T9",
       "title": "Run focused tests graph and TypeScript build gates",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -144,13 +205,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Run full-suite baseline health and code-verifier",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -158,13 +220,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Run independent review and fix round",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -172,13 +235,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Write change report and execution metrics",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -186,7 +250,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -262,6 +327,116 @@
       "at": "2026-08-26T05:44:31.067Z",
       "event": "task-done",
       "detail": "T8: Restore web-taint session wiki and acknowledgement security boundary"
+    },
+    {
+      "at": "2026-08-26T05:45:26.459Z",
+      "event": "task-done",
+      "detail": "T9: Run focused tests graph and TypeScript build gates"
+    },
+    {
+      "at": "2026-08-26T06:03:53.414Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-26T06:03:54.575Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-26T06:03:56.026Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-26T06:03:57.689Z",
+      "event": "task-done",
+      "detail": "T10: Run full-suite baseline health and code-verifier"
+    },
+    {
+      "at": "2026-08-26T06:03:59.095Z",
+      "event": "task-done",
+      "detail": "T11: Run independent review and fix round"
+    },
+    {
+      "at": "2026-08-26T06:06:43.109Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-26T06:06:44.931Z",
+      "event": "task-done",
+      "detail": "T12: Write change report and execution metrics"
+    },
+    {
+      "at": "2026-08-26T06:06:53.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Validation report distinguishes confirmed, corrected, and rejected review claims."
+    },
+    {
+      "at": "2026-08-26T06:06:55.353Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Neutral shell-spawn seam removes background registry dependency on shell-exec-tool."
+    },
+    {
+      "at": "2026-08-26T06:06:57.034Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: SAC runtime SCC removed through wrap-up-evidence and lifecycle facades; focused tests pass."
+    },
+    {
+      "at": "2026-08-26T06:06:58.824Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Harness workspace tools depend on src/sac/harness-facade.ts only."
+    },
+    {
+      "at": "2026-08-26T06:07:00.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: spawn-subagent production tool uses injected onFleetEvent and has no TUI runtime import."
+    },
+    {
+      "at": "2026-08-26T06:07:02.381Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: decliningScopes/regressedScopes separated; regressions compatibility preserved; health tests pass."
+    },
+    {
+      "at": "2026-08-26T06:07:04.099Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: C-01 through C-14 classified and covered; C-11 exposes binding_degraded."
+    },
+    {
+      "at": "2026-08-26T06:07:06.448Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: prepareOutputForPersistence centralizes guard-before-write and redacted materialization."
+    },
+    {
+      "at": "2026-08-26T06:07:08.136Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Web-tainted durable write-risk tools denied; read_file positive control passes."
+    },
+    {
+      "at": "2026-08-26T06:07:09.728Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Session store/wrap-up, proposal lifecycle, and normal/RLM wiki enrichment are guarded."
+    },
+    {
+      "at": "2026-08-26T06:07:11.353Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: needs-approval confirmation requires explicit human security acknowledgement."
+    },
+    {
+      "at": "2026-08-26T06:07:13.078Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: 195 focused pass, tsc/build/diff gates pass; full suite has no new failure identity."
+    },
+    {
+      "at": "2026-08-26T06:07:14.756Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Graph contains only documented type-only modal-host/shell-chrome cycle; target runtime cycles absent."
+    },
+    {
+      "at": "2026-08-26T06:07:16.357Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Validation, requirements, change report, managed review, baseline comparison, and metrics persisted."
     }
   ]
 }

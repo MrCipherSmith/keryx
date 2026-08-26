@@ -15,3 +15,25 @@
 - 2026-08-26T05:44:30.707Z - task-done: T6: Restore architecture health and guarded-sink waves
 - 2026-08-26T05:44:30.884Z - task-done: T7: Complete catch disposition tests and degraded outcome
 - 2026-08-26T05:44:31.067Z - task-done: T8: Restore web-taint session wiki and acknowledgement security boundary
+- 2026-08-26T05:45:26.459Z - task-done: T9: Run focused tests graph and TypeScript build gates
+- 2026-08-26T06:03:53.414Z - task-done: T1: Collect remaining context
+- 2026-08-26T06:03:54.575Z - task-done: T2: Implement per plan
+- 2026-08-26T06:03:56.026Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-26T06:03:57.689Z - task-done: T10: Run full-suite baseline health and code-verifier
+- 2026-08-26T06:03:59.095Z - task-done: T11: Run independent review and fix round
+- 2026-08-26T06:06:43.109Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-26T06:06:44.931Z - task-done: T12: Write change report and execution metrics
+- 2026-08-26T06:06:53.582Z - ac-confirmed: AC1: Validation report distinguishes confirmed, corrected, and rejected review claims.
+- 2026-08-26T06:06:55.353Z - ac-confirmed: AC2: Neutral shell-spawn seam removes background registry dependency on shell-exec-tool.
+- 2026-08-26T06:06:57.034Z - ac-confirmed: AC3: SAC runtime SCC removed through wrap-up-evidence and lifecycle facades; focused tests pass.
+- 2026-08-26T06:06:58.824Z - ac-confirmed: AC4: Harness workspace tools depend on src/sac/harness-facade.ts only.
+- 2026-08-26T06:07:00.500Z - ac-confirmed: AC5: spawn-subagent production tool uses injected onFleetEvent and has no TUI runtime import.
+- 2026-08-26T06:07:02.381Z - ac-confirmed: AC6: decliningScopes/regressedScopes separated; regressions compatibility preserved; health tests pass.
+- 2026-08-26T06:07:04.099Z - ac-confirmed: AC7: C-01 through C-14 classified and covered; C-11 exposes binding_degraded.
+- 2026-08-26T06:07:06.448Z - ac-confirmed: AC8: prepareOutputForPersistence centralizes guard-before-write and redacted materialization.
+- 2026-08-26T06:07:08.136Z - ac-confirmed: AC9: Web-tainted durable write-risk tools denied; read_file positive control passes.
+- 2026-08-26T06:07:09.728Z - ac-confirmed: AC10: Session store/wrap-up, proposal lifecycle, and normal/RLM wiki enrichment are guarded.
+- 2026-08-26T06:07:11.353Z - ac-confirmed: AC11: needs-approval confirmation requires explicit human security acknowledgement.
+- 2026-08-26T06:07:13.078Z - ac-confirmed: AC12: 195 focused pass, tsc/build/diff gates pass; full suite has no new failure identity.
+- 2026-08-26T06:07:14.756Z - ac-confirmed: AC13: Graph contains only documented type-only modal-host/shell-chrome cycle; target runtime cycles absent.
+- 2026-08-26T06:07:16.357Z - ac-confirmed: AC14: Validation, requirements, change report, managed review, baseline comparison, and metrics persisted.

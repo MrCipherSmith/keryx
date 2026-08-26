@@ -1,0 +1,38 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-VERIFY-FINAL",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "code-verifier",
+  "task": {
+    "title": "Independently verify full review remediation",
+    "description": "Read-only verification of the remediation diff against base 1ece28b, including types, build, focused tests, graph predicates, health, and full-suite baseline evidence.",
+    "intent": "verify"
+  },
+  "acceptance_criteria": [
+    "TypeScript, build, diff-check, focused architecture/health/security/catch suites pass.",
+    "Background-registry and SAC runtime cycles are absent; only the documented type-only modal-host cycle remains.",
+    "Full-suite result has no newly introduced failure identity relative to the recorded baseline/post-implementation comparison.",
+    "Return a structured VERIFICATION_RESULT with gate status and evidence."
+  ],
+  "context_refs": [
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/data/gdctx/artifacts/2026-08-26T05-55-42-425Z_run.md", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/quality/code-verifier/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+  ],
+  "constraints": [
+    "Read the exact worktree index and code-verifier skill first; use gdgraph/gdctx and keryx ctx rg.",
+    "Read-only: do not modify files, flow state, graph, health artifacts, or commits.",
+    "Review the diff from base 1ece28b2818d6ce2d5bfa89e0bc8a8b57b96c797 through working tree.",
+    "Do not rerun the entire 3+ minute suite; independently inspect the preserved full-suite raw/summary and run focused checks."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/code-verification.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:57:30Z", "created_by": "flow-orchestrator"}
+}

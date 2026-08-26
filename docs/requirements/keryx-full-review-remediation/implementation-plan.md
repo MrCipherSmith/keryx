@@ -1,7 +1,7 @@
 # Implementation Plan — Keryx Full Review Remediation
-Version: 1.1.0
+Version: 1.2.0
 
-Status: **spec ready — not implemented**.
+Status: **implemented and independently verified**.
 
 ## Preconditions
 
@@ -27,6 +27,13 @@ Run `keryx gdgraph build` and `keryx gdgraph query cycles`; verify source import
 predicates. Run the exact targeted commands in the specification and record
 the 5325/49/18 baseline comparison with test identities and skip count.
 
+## Execution Result
+
+All four waves were implemented in managed flow 202. The final full-suite run
+recorded 5372/48/18 with no new failure identity; focused suites, TypeScript,
+build, health, and graph predicates passed. See `change-report.md` and the flow
+artifact `artifacts/full-suite-baseline-comparison.md` for evidence.
+
 ## Rollback boundaries
 
 Keep behavior-preserving seams separate from security changes. If lifecycle
@@ -38,4 +45,3 @@ durable-write boundary rather than weakening the guard.
 
 No provider-auth implementation, module-wide reorganization, orphan cleanup,
 or health-gate policy change.
-

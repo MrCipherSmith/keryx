@@ -92,4 +92,3 @@ commands remain compatible; internal dependency injection may be added.
 Provider-auth implementation, wholesale harness/lib reorganization, deleting
 intentional graph orphans, treating type-only imports as runtime cycles,
 changing gate policy, or retaining blocked raw content.
-

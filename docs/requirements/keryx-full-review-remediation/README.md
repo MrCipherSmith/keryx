@@ -1,7 +1,7 @@
 # Keryx Full Review Remediation
-Version: 1.0.0
+Version: 1.1.0
 
-Status: **spec ready — not implemented**.
+Status: **implemented and independently verified**.
 
 ## Purpose
 
@@ -15,13 +15,15 @@ failure observability, and pre-persistence handling of untrusted content.
 - [Specification](specification.md) — behavioral and integration contracts.
 - [Implementation plan](implementation-plan.md) — sequencing and verification.
 - [Catch dispositions](catch-dispositions.md) — exact C-01 through C-14 audit.
+- [Change report](change-report.md) — delivered behavior and verification.
 - [Validation report](../../reviews/keryx-full-project-review-validation-2026-08-26.md).
 
 ## Scope
 
 In scope are the two runtime cycles, the harness/SAC and harness/TUI seams,
 health decline terminology, fourteen comment-only catches, and durable-write
-security ordering. The package does not claim that implementation is complete.
+security ordering. Implementation evidence is recorded in the change report
+and managed flow 202.
 
 ## Non-goals
 
@@ -33,4 +35,3 @@ content are out of scope.
 
 `src/harness`, `src/sac`, `src/health`, `src/security`, `src/session`,
 `src/wiki`, `src/memory`, `src/testing`, and `src/tui`.
-

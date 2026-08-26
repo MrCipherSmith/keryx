@@ -71,4 +71,3 @@ implementation claim.
   permission-modes, project-map, quality-map, testing-map, and SAC pages.
 - `ctx_used`: `keryx ctx read`, `keryx ctx rg`, and `keryx ctx run`.
 - `raw_rg_used`: no.
-

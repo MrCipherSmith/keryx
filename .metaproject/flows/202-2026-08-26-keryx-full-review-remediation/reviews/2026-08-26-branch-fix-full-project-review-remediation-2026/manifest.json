@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-26-branch-fix-full-project-review-remediation-2026",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "branch",
+    "ref": "fix/full-project-review-remediation-2026-08-24"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/scope.md",
+    "coverage": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/coverage.md",
+    "report": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/report.md",
+    "findings": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/findings.json",
+    "learning": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/learning.md",
+    "decisions": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-26T06:01:55.299Z",
+  "updatedAt": "2026-08-26T06:03:44.126Z",
+  "flow": {
+    "id": "202",
+    "path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation"
+  }
+}

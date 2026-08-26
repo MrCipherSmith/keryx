@@ -45,4 +45,3 @@ testable and reversible.
 Use bounded contract-first waves: architecture seams, health/observability,
 durable-write security, then integrated verification. Keep behavior-preserving
 seams separate from security behavior changes.
-
