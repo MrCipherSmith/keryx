@@ -230,6 +230,14 @@ gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
 `moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
 lists each provider with the environment variable it reads.
 
+Operator-defined OpenAI-compatible providers can be added on top of that list
+by registering them in `~/.local/share/keryx/llm-providers.json`; the
+`/provider` wizard in `keryx shell` has an "add custom provider" entry that
+writes this file for you (name → URL → key → models). A custom name colliding
+with a built-in provider is rejected. Custom providers may target private LAN
+hosts (RFC1918/CGNAT) — an explicit opt-in that built-in providers never get;
+loopback and link-local metadata addresses stay denied regardless.
+
 | `exec` | Run a subprocess under the containment options below. |
 | `extension` | Run a declared extension from a spec file. |
 | `wave` | Run a declared multi-agent wave from a spec file. |

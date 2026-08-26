@@ -225,6 +225,15 @@ What is in it today:
   gateway — OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok — plus an
   offline fake provider for deterministic runs. Swapping the model does not
   change the loop, the tools or the policy.
+- **Custom file-backed providers.** Register any OpenAI-compatible endpoint —
+  including one on your own LAN — in `~/.local/share/keryx/llm-providers.json`;
+  it merges into the built-in provider list. The `/provider` wizard in the TUI
+  has an "add custom provider" entry that walks name → URL → key → models and
+  writes the file for you; a name that collides with a built-in provider is
+  rejected. Custom providers get a narrow, opt-in SSRF allowance for private
+  LAN hosts (RFC1918/CGNAT) as an explicit operator-trust boundary — built-in
+  providers never get it, and loopback/link-local metadata addresses stay
+  denied regardless.
 - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
   process restart, and context compaction that keeps the full archive.
   `/resume`, `/sessions`, `/status`, `/flows`, `/compact`, `/new`, and
