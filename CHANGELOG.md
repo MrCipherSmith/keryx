@@ -3,6 +3,25 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.68] — 2026-08-26
+
+### Added
+
+- **Custom file-backed LLM providers.** Operator-defined OpenAI-compatible
+  providers can now be registered in `~/.local/share/keryx/llm-providers.json`,
+  merged into the built-in provider list. The TUI `/provider` wizard offers a
+  new "add custom provider" entry (name → URL → key → models) that persists to
+  the file. Custom names colliding with a built-in provider are excluded.
+
+### Security
+
+- Custom file-backed providers get a narrow, opt-in SSRF allowance: a new
+  `isPrivateLanHost()` predicate (RFC1918 + CGNAT ranges) paired with
+  `grant.allowPrivateLan`, granted only to custom providers as an explicit
+  operator-trust boundary. Loopback still requires `allowLoopback` separately;
+  link-local metadata addresses (`169.254.x`) stay denied regardless. Built-in
+  providers never receive the LAN grant.
+
 ## [0.2.67] — 2026-08-24
 
 ### Added

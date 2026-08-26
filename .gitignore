@@ -31,6 +31,23 @@ docs/requirements/keryx-shell-benchmark/harness/logs/
 docs/requirements/keryx-shell-benchmark/harness/runs/
 docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 
+
+
+# Slate v3 (SLATE-22..26): external-hand slate storage — private, task-local
+# working memory an MCP-connected external hand (Claude Code, Codex, ...)
+# opens for itself via `slate.open`/`slate.writeSeed`/`slate.close`. Always
+# project-scoped, never `.metaproject/`, never committed — unlike the
+# neighboring `.keryx/sandbox-policy.json` (a project policy file meant to be
+# trackable), so this ignores only the `external-slates/` subpath, not all of
+# `.keryx/`.
+.keryx/external-slates/
+
+# keryx-shell-benchmark harness: raw run output (thousands of per-scenario
+# files), not curated docs. Keep locally for analysis; do not commit.
+docs/requirements/keryx-shell-benchmark/harness/logs/
+docs/requirements/keryx-shell-benchmark/harness/runs/
+docs/requirements/keryx-shell-benchmark/harness/__pycache__/
+
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
 .metaproject/runtime/
