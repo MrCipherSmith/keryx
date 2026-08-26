@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-22T15:31:16.206Z
+generatedAt: 2026-08-26T06:08:59.856Z
 
 ## Frameworks
 
@@ -57,6 +57,7 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/commands/harness-network-posture.test.ts
 - src/commands/harness.replay.test.ts
 - src/commands/harness.test.ts
+- src/commands/health-status.test.ts
 - src/commands/init-mcp-offer.test.ts
 - src/commands/init-mcp-runtimes.test.ts
 - src/commands/init.escape.test.ts
@@ -72,6 +73,7 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/commands/orient.dry-run.test.ts
 - src/commands/permission-mode.test.ts
 - src/commands/projects.escape.test.ts
+- src/commands/providers.balance.test.ts
 - src/commands/providers.test.ts
 - src/commands/rules.test.ts
 - src/commands/security-hooks-init.test.ts
@@ -98,10 +100,8 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/ctx/hook.test.ts
 - src/ctx/orient-runtimes.test.ts
 - src/ctx/orient.test.ts
-- src/ctx/runtimes.test.ts
-- src/eval/block-d-corpora.test.ts
 
-- ... 372 more
+- ... 387 more
 
 ## CI
 
