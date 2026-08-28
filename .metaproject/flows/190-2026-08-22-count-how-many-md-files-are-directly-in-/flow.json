@@ -3,9 +3,9 @@
   "id": "190",
   "slug": "count-how-many-md-files-are-directly-in-",
   "title": "Count how many .md files are directly in docs/verification (no subfolders)",
-  "status": "in-progress",
+  "status": "blocked",
   "createdAt": "2026-08-22T08:53:56.012Z",
-  "updatedAt": "2026-08-22T08:53:56.039Z",
+  "updatedAt": "2026-08-28T09:56:17.597Z",
   "source": {
     "type": "description",
     "ref": null
@@ -86,6 +86,12 @@
     {
       "at": "2026-08-22T08:53:56.039Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T09:56:17.597Z",
+      "event": "blocked",
+      "detail": "throwaway test prompt from an ad-hoc harness run, not real work; parked rather than completed because completing it would record work that does not exist"
     }
-  ]
+  ],
+  "previousStatus": "in-progress"
 }
