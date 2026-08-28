@@ -3,24 +3,41 @@
   "id": "194",
   "slug": "sac-cli-bypass",
   "title": "Mutating keryx CLI subcommands (wiki enrich, etc.) are not structurally coupled to SAC review — an agent can bypass propose/review entirely once shell_exec is approved",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:43.395Z",
-  "updatedAt": "2026-08-22T11:03:37.032Z",
+  "updatedAt": "2026-08-28T08:23:25.176Z",
   "source": {
     "type": "github-issue",
     "ref": "https://github.com/MrCipherSmith/keryx/issues/391"
   },
   "acChecksum": "sha256:3911791804bd66b872a72a2322a7d3ece6d32209f33a27de53c1f69233a52ca5",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:23:22.836Z",
+      "note": "Verified: PR #401 (fix(sac): route wiki enrich through review; catch-up flags unreviewed SAC changes, merged 2026-08-22, commit 737b3c1d) forces finalizeEnrichedText/wiki.ts to always re-assert the pre-enrichment Status, removing markAccepted/keepStatus so wiki enrich can no longer auto-accept content outside review."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:23:22.928Z",
+      "note": "Verified: PR #401 adds unreviewedPaths on CatchUpReport (catch-up.ts) that cross-checks wiki/memory Status:accepted and project-skills/sac/ content against SAC receipts and reports unreviewed changes as a distinct named case, not folded into Unknown."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:23:23.022Z",
+      "note": "Verified: PR #401 test plan states a new regression test reproduces the original repro (draft page enriched by a stubbed model turn claiming Status: accepted) and asserts content lands as Status: draft, never accepted."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:23:23.113Z",
+      "note": "Verified: PR #401 test plan reports tsc --noEmit clean and 480 pass / 0 fail on the targeted wiki/sac/workspace/tui/agent/command-registry suites; full bun test failures confirmed pre-existing/unrelated via git-stash comparison."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/401"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +45,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +60,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +75,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +107,65 @@
     {
       "at": "2026-08-22T11:03:37.032Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:23:22.459Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:23:22.558Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:23:22.656Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:23:22.747Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:23:22.836Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #401 (fix(sac): route wiki enrich through review; catch-up flags unreviewed SAC changes, merged 2026-08-22, commit 737b3c1d) forces finalizeEnrichedText/wiki.ts to always re-assert the pre-enrichment Status, removing markAccepted/keepStatus so wiki enrich can no longer auto-accept content outside review."
+    },
+    {
+      "at": "2026-08-28T08:23:22.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #401 adds unreviewedPaths on CatchUpReport (catch-up.ts) that cross-checks wiki/memory Status:accepted and project-skills/sac/ content against SAC receipts and reports unreviewed changes as a distinct named case, not folded into Unknown."
+    },
+    {
+      "at": "2026-08-28T08:23:23.022Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #401 test plan states a new regression test reproduces the original repro (draft page enriched by a stubbed model turn claiming Status: accepted) and asserts content lands as Status: draft, never accepted."
+    },
+    {
+      "at": "2026-08-28T08:23:23.113Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #401 test plan reports tsc --noEmit clean and 480 pass / 0 fail on the targeted wiki/sac/workspace/tui/agent/command-registry suites; full bun test failures confirmed pre-existing/unrelated via git-stash comparison."
+    },
+    {
+      "at": "2026-08-28T08:23:25.067Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/401 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:23:25.167Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:23:25.176Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "737b3c1deb97463592d1e8d5ec5fb4e015cc4cbb",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:23:25.175Z"
+  }
 }

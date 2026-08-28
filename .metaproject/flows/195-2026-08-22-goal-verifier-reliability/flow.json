@@ -3,24 +3,41 @@
   "id": "195",
   "slug": "goal-verifier-reliability",
   "title": "/goal --auto: T10 verifier pass is silent on success — no observable confirmation it ran",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:44.803Z",
-  "updatedAt": "2026-08-22T11:03:37.184Z",
+  "updatedAt": "2026-08-28T08:23:36.247Z",
   "source": {
     "type": "github-issue",
     "ref": "https://github.com/MrCipherSmith/keryx/issues/389"
   },
   "acChecksum": "sha256:1a99a65a402b568efc543d6caad3e46cd9af1fc8a136cc5646d3c03026ea49df",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:23:33.269Z",
+      "note": "Verified: PR #399 (fix(goal): verifier observability, evidence-aware verdicts, early loop exit, merged 2026-08-22, commit cb04532a) makes runGoalVerifier's spawn_subagent dispatch fire io.onToolCall/onToolResult and persist to history; runGoalCommand emits a systemLine on every outcome (achieved/not achieved/unavailable), closing #389."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:23:33.458Z",
+      "note": "Verified: PR #399 hands the verifier child the run's actual evidence trail (recent Slate Seeds and workspace_propose records from history) instead of bare goal text, closing #392."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:23:33.634Z",
+      "note": "Verified: PR #399 adds a deterministic ROUND_DONE_MARKER the model emits when a round's work is complete; the loop checks for it and breaks early, and test plan cites a new test exercising the previously dead 'one more round' branch, closing #394."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:23:33.817Z",
+      "note": "Verified: PR #399 test plan reports tsc --noEmit clean, 56/56 goal-command tests pass (9 new/updated), 267/267 on broader regression sweep."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/399"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +45,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +60,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +75,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +107,65 @@
     {
       "at": "2026-08-22T11:03:37.184Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:23:32.483Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:23:32.673Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:23:32.884Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:23:33.075Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:23:33.269Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #399 (fix(goal): verifier observability, evidence-aware verdicts, early loop exit, merged 2026-08-22, commit cb04532a) makes runGoalVerifier's spawn_subagent dispatch fire io.onToolCall/onToolResult and persist to history; runGoalCommand emits a systemLine on every outcome (achieved/not achieved/unavailable), closing #389."
+    },
+    {
+      "at": "2026-08-28T08:23:33.458Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #399 hands the verifier child the run's actual evidence trail (recent Slate Seeds and workspace_propose records from history) instead of bare goal text, closing #392."
+    },
+    {
+      "at": "2026-08-28T08:23:33.634Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #399 adds a deterministic ROUND_DONE_MARKER the model emits when a round's work is complete; the loop checks for it and breaks early, and test plan cites a new test exercising the previously dead 'one more round' branch, closing #394."
+    },
+    {
+      "at": "2026-08-28T08:23:33.817Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #399 test plan reports tsc --noEmit clean, 56/56 goal-command tests pass (9 new/updated), 267/267 on broader regression sweep."
+    },
+    {
+      "at": "2026-08-28T08:23:35.986Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/399 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:23:36.229Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:23:36.247Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "cb04532a57e0704b6322db83390b9c6f7ee214d7",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:23:36.247Z"
+  }
 }

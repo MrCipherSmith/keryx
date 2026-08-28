@@ -3,24 +3,41 @@
   "id": "193",
   "slug": "wildcard-shell-guard",
   "title": "shell-permission validation lets a bare \"keryx *\" wildcard through — defeats per-call approval for the entire CLI surface",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:33.616Z",
-  "updatedAt": "2026-08-22T11:03:36.877Z",
+  "updatedAt": "2026-08-28T08:23:14.509Z",
   "source": {
     "type": "github-issue",
     "ref": "https://github.com/MrCipherSmith/keryx/issues/390"
   },
   "acChecksum": "sha256:240adde84fab9abde8e3d88ce9c2956c5be6a130b2d3ded0902c7f54fc94f8af",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:23:08.705Z",
+      "note": "Verified: PR #398 (fix(shell): reject bare 'keryx *' wildcard, merged 2026-08-22, commit 04ec6138) adds 'keryx' to PREFIX_BANNED and updates round-trip/pattern tests to reject bare 'keryx *'."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:23:08.799Z",
+      "note": "Verified: PR #398 adds getRunningBinaryName() resolving the binary name dynamically from process.argv0, not a hardcoded literal, per shell-permissions.ts diff."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:23:08.896Z",
+      "note": "Verified: PR #398 updates bannedPrefixGrant() to check the running binary name against loaded permissions.json; migration test asserts pre-existing bare 'keryx *' grants are rejected/flagged."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:23:08.987Z",
+      "note": "Verified: PR #398 test plan reports 22/22 shell-permissions tests pass, no type errors; CI required for merge."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/398"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +45,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +60,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +75,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +107,65 @@
     {
       "at": "2026-08-22T11:03:36.877Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:23:03.195Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:23:03.294Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:23:03.386Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:23:03.477Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:23:08.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #398 (fix(shell): reject bare 'keryx *' wildcard, merged 2026-08-22, commit 04ec6138) adds 'keryx' to PREFIX_BANNED and updates round-trip/pattern tests to reject bare 'keryx *'."
+    },
+    {
+      "at": "2026-08-28T08:23:08.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #398 adds getRunningBinaryName() resolving the binary name dynamically from process.argv0, not a hardcoded literal, per shell-permissions.ts diff."
+    },
+    {
+      "at": "2026-08-28T08:23:08.896Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #398 updates bannedPrefixGrant() to check the running binary name against loaded permissions.json; migration test asserts pre-existing bare 'keryx *' grants are rejected/flagged."
+    },
+    {
+      "at": "2026-08-28T08:23:08.987Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #398 test plan reports 22/22 shell-permissions tests pass, no type errors; CI required for merge."
+    },
+    {
+      "at": "2026-08-28T08:23:14.338Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/398 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:23:14.495Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:23:14.509Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "04ec6138bfc8761b329e42cec08abaac481acba7",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:23:14.508Z"
+  }
 }

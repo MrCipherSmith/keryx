@@ -3,17 +3,34 @@
   "id": "145",
   "slug": "probe-oversized-config-reader",
   "title": "Стабилизировать probe oversized config reader",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-11T21:05:09.868Z",
-  "updatedAt": "2026-08-11T21:07:15.454Z",
+  "updatedAt": "2026-08-28T08:24:57.815Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:7a4403eab4cde87dfa4bafedd26a7d4936aae50cdd8c3f251e669fd4605e06dc",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:24:54.759Z",
+      "note": "Verified: PR #267 (fix(test): bound config reader probe, merged 2026-08-11, commit 36523ce1) gives the oversized raw-read probe its own deadline shorter than the outer test timeout and ensures the child process cannot be left running."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:24:54.959Z",
+      "note": "Verified: PR #267 waits for child termination before draining stdout/stderr pipes, avoiding the pipe-induced outer-test timeout."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:24:55.164Z",
+      "note": "Verified: PR #267 body states the target raw oversized-read probe passes in ~2.5s (proves non-zero termination) and a probe timeout is reported directly with a clear assertion rather than silently passing."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:24:55.360Z",
+      "note": "Verified: PR #267 test plan reports typecheck passes locally and clean CI was the merge gate for src/lib/config-dir.readers.test.ts."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/267"
   },
   "tasks": [
     {
@@ -65,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -104,6 +122,50 @@
       "at": "2026-08-11T21:07:15.454Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:24:54.543Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:24:54.759Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #267 (fix(test): bound config reader probe, merged 2026-08-11, commit 36523ce1) gives the oversized raw-read probe its own deadline shorter than the outer test timeout and ensures the child process cannot be left running."
+    },
+    {
+      "at": "2026-08-28T08:24:54.959Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #267 waits for child termination before draining stdout/stderr pipes, avoiding the pipe-induced outer-test timeout."
+    },
+    {
+      "at": "2026-08-28T08:24:55.164Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #267 body states the target raw oversized-read probe passes in ~2.5s (proves non-zero termination) and a probe timeout is reported directly with a clear assertion rather than silently passing."
+    },
+    {
+      "at": "2026-08-28T08:24:55.360Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #267 test plan reports typecheck passes locally and clean CI was the merge gate for src/lib/config-dir.readers.test.ts."
+    },
+    {
+      "at": "2026-08-28T08:24:57.580Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/267 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:24:57.800Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:24:57.815Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "36523ce1",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:24:57.815Z"
+  }
 }
