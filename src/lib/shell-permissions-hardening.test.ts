@@ -173,6 +173,22 @@ test("B3: a destructive command offers NEITHER grant", () => {
   expect(s.offerPrefix).toBe(false);
 });
 
+test("P2: a prefix grant is only offered when it would actually approve the command", () => {
+  // The pattern's own text is clean — `validateShellPattern("echo *")` passes —
+  // but a stored grant of `echo *` would refuse this command for its unquoted
+  // metacharacter. Offering it would advertise an "always" the grant could
+  // never honour.
+  const command = "echo hi && rm -rf /tmp/x";
+  const shellMeta = suggestShellPatterns(command);
+  expect(validateShellPattern(shellMeta.prefix).ok).toBe(true);
+  expect(isShellCommandAllowed(command, [shellMeta.prefix])).toBe(false);
+  expect(shellMeta.offerPrefix).toBe(false);
+
+  // An ordinary command whose grant WOULD approve it is still offered.
+  const plain = suggestShellPatterns("echo hello");
+  expect(plain.offerPrefix).toBe(true);
+});
+
 test("B3: an empty or comment-only first token is never a pattern", () => {
   expect(suggestShellPatterns("# just a comment").offerPrefix).toBe(false);
   expect(suggestShellPatterns("   ").offerExact).toBe(false);
