@@ -479,7 +479,19 @@ export function suggestShellPatterns(command: string): ShellPatternSuggestion {
     exact,
     prefix,
     offerExact: !neverRemember && validateShellPattern(exact).ok,
-    offerPrefix: !neverRemember && validateShellPattern(prefix).ok,
+    // `prefix` is a DERIVED pattern (`echo *`), not the command. Validating it
+    // alone only proves the pattern's own text is clean and says nothing about
+    // the command on screen, so the menu could offer an "always" grant that a
+    // stored grant would then refuse to honour. `isShellCommandAllowed` is the
+    // predicate a stored grant is actually run through, so ask IT whether a
+    // grant of `prefix` would approve `trimmed` — the check `offerExact` gets
+    // for free, because there the pattern IS the command.
+    //
+    // Kept in conjunction with `neverRemember` rather than replacing it: the
+    // two overlap today, but a conjunction can only ever refuse more, and this
+    // is not the place to bet on that overlap staying total.
+    offerPrefix:
+      !neverRemember && validateShellPattern(prefix).ok && isShellCommandAllowed(trimmed, [prefix]),
   };
 }
 
