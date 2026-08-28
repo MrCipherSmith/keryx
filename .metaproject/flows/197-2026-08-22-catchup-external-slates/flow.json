@@ -3,24 +3,41 @@
   "id": "197",
   "slug": "catchup-external-slates",
   "title": "keryx workspace catch-up never scans .keryx/external-slates/ — an unbound external MCP slate silently never surfaces, contradicting slate.md",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:47.618Z",
-  "updatedAt": "2026-08-22T11:03:37.487Z",
+  "updatedAt": "2026-08-28T08:23:59.247Z",
   "source": {
     "type": "github-issue",
     "ref": "https://github.com/MrCipherSmith/keryx/issues/395"
   },
   "acChecksum": "sha256:7e13e71a0cda6a16f87255673a66b12be40651a1dba8330fc3bf327eeb46adec",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:23:55.950Z",
+      "note": "Verified: PR #397 (fix(sac): catch-up now scans external MCP slates for unbound candidates, merged 2026-08-22, commit 458017a1) adds readExternalUnboundCandidates() so keryx workspace catch-up lists closed, unbound external MCP slates under Unbound candidates."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:23:56.211Z",
+      "note": "Verified: PR #397 test plan reports 3 new external slate tests in catch-up.test.ts covering the open+seed+close external-slate repro end-to-end."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:23:56.443Z",
+      "note": "Verified: PR #397 notes bound external slates (with workspaceId) are correctly excluded from the unbound candidate list; PR body explicitly calls out 'no false positives' as a covered case."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:23:56.684Z",
+      "note": "Verified: PR #397 test plan reports all 250 SAC tests pass, all 29 catch-up.test.ts tests pass, tsc --noEmit clean, ESLint clean."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/397"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +45,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +60,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +75,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +107,65 @@
     {
       "at": "2026-08-22T11:03:37.487Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:23:54.888Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:23:55.164Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:23:55.442Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:23:55.698Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:23:55.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #397 (fix(sac): catch-up now scans external MCP slates for unbound candidates, merged 2026-08-22, commit 458017a1) adds readExternalUnboundCandidates() so keryx workspace catch-up lists closed, unbound external MCP slates under Unbound candidates."
+    },
+    {
+      "at": "2026-08-28T08:23:56.211Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #397 test plan reports 3 new external slate tests in catch-up.test.ts covering the open+seed+close external-slate repro end-to-end."
+    },
+    {
+      "at": "2026-08-28T08:23:56.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #397 notes bound external slates (with workspaceId) are correctly excluded from the unbound candidate list; PR body explicitly calls out 'no false positives' as a covered case."
+    },
+    {
+      "at": "2026-08-28T08:23:56.684Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #397 test plan reports all 250 SAC tests pass, all 29 catch-up.test.ts tests pass, tsc --noEmit clean, ESLint clean."
+    },
+    {
+      "at": "2026-08-28T08:23:58.949Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/397 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:23:59.222Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:23:59.247Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "458017a123d8af8262ea50c58bb6cb109f0e659c",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:23:59.246Z"
+  }
 }

@@ -3,24 +3,41 @@
   "id": "196",
   "slug": "theme-dispatch-gap",
   "title": "agent-mode readline: /help advertises /theme but it has no dispatch branch — self-contradicting \"Unknown command\" (correction: /status and /flows are NOT affected, see comments)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:46.184Z",
-  "updatedAt": "2026-08-22T11:03:37.334Z",
+  "updatedAt": "2026-08-28T08:23:47.812Z",
   "source": {
     "type": "github-issue",
     "ref": "https://github.com/MrCipherSmith/keryx/issues/393"
   },
   "acChecksum": "sha256:1b9d538557ddfc0e00c56e24ad53c0e8dee0a1f0e90eff95d68d04e8ea48467c",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:23:44.203Z",
+      "note": "Verified: PR #396 (fix(shell): add agent-mode readline dispatch for /theme, merged 2026-08-22, commit 3863295d) adds a /theme dispatch branch in runAgentRepl; typing /theme in agent-mode readline no longer falls through to 'Unknown command'."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:23:44.474Z",
+      "note": "Verified: PR #396 gives /theme a working readline handler consistent with the /help-advertised READLINE_AGENT_COMMANDS list, matching the pattern used for /mode and /search-provider."
+    },
+    "AC3": {
+      "at": "2026-08-28T08:23:44.759Z",
+      "note": "Verified: PR #396 body documents a manual verification transcript included in code comments (readline REPL not amenable to a scripted unit test)."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:23:45.040Z",
+      "note": "Verified: PR #396 test plan reports tsc --noEmit clean; shell-slash-registry.test.ts 16/16, shell.test.ts 64/64, agent-commands.test.ts 31/31 all pass."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/396"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +45,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +60,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +75,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +107,65 @@
     {
       "at": "2026-08-22T11:03:37.334Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:23:43.128Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:23:43.396Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:23:43.667Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:23:43.952Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:23:44.203Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #396 (fix(shell): add agent-mode readline dispatch for /theme, merged 2026-08-22, commit 3863295d) adds a /theme dispatch branch in runAgentRepl; typing /theme in agent-mode readline no longer falls through to 'Unknown command'."
+    },
+    {
+      "at": "2026-08-28T08:23:44.474Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #396 gives /theme a working readline handler consistent with the /help-advertised READLINE_AGENT_COMMANDS list, matching the pattern used for /mode and /search-provider."
+    },
+    {
+      "at": "2026-08-28T08:23:44.759Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Verified: PR #396 body documents a manual verification transcript included in code comments (readline REPL not amenable to a scripted unit test)."
+    },
+    {
+      "at": "2026-08-28T08:23:45.040Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #396 test plan reports tsc --noEmit clean; shell-slash-registry.test.ts 16/16, shell.test.ts 64/64, agent-commands.test.ts 31/31 all pass."
+    },
+    {
+      "at": "2026-08-28T08:23:47.515Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/396 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:23:47.792Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:23:47.812Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "3863295d134a2e365c5bb2af6e56e8f53b81cf9a",
+    "ref": "origin/main",
+    "at": "2026-08-28T08:23:47.811Z"
+  }
 }

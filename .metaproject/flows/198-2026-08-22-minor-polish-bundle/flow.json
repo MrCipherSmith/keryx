@@ -5,22 +5,35 @@
   "title": "Minor polish: [destructive] audit tag, headless SIGINT exit, SESSCLI-04 spec correction",
   "status": "in-progress",
   "createdAt": "2026-08-22T11:00:48.538Z",
-  "updatedAt": "2026-08-22T11:03:37.638Z",
+  "updatedAt": "2026-08-28T08:24:16.156Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-28T08:24:08.603Z",
+      "note": "Verified: PR #400 (fix(shell): headless SIGINT exit, PERM-05 destructive-tag coverage, SESSCLI-04 note, merged 2026-08-22, commit e7967747) adds a test in agent-permission-mode.test.ts asserting the [destructive] flag reaches onAutoApproved for a catastrophic command (rm -rf /) under auto mode; existing rendering in shell.ts already reflects meta.destructive in ask/trust/auto."
+    },
+    "AC2": {
+      "at": "2026-08-28T08:24:08.845Z",
+      "note": "Verified: PR #400 adds shell-headless-sigint.test.ts spawning a real piped keryx shell process, sending SIGINT, and asserting prompt exit; shellCommand now installs an immediate-exit SIGINT handler when !process.stdin.isTTY."
+    },
+    "AC4": {
+      "at": "2026-08-28T08:24:09.110Z",
+      "note": "Verified: PR #400 test plan reports 88/88 tests pass across agent-permission-mode.test.ts, shell.test.ts, shell-headless-sigint.test.ts, command-risk.test.ts; tsc --noEmit clean."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/400"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +41,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +56,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +71,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +86,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +103,55 @@
     {
       "at": "2026-08-22T11:03:37.638Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T08:24:07.604Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-28T08:24:07.850Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-28T08:24:08.099Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-28T08:24:08.362Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-28T08:24:08.604Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified: PR #400 (fix(shell): headless SIGINT exit, PERM-05 destructive-tag coverage, SESSCLI-04 note, merged 2026-08-22, commit e7967747) adds a test in agent-permission-mode.test.ts asserting the [destructive] flag reaches onAutoApproved for a catastrophic command (rm -rf /) under auto mode; existing rendering in shell.ts already reflects meta.destructive in ask/trust/auto."
+    },
+    {
+      "at": "2026-08-28T08:24:08.845Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified: PR #400 adds shell-headless-sigint.test.ts spawning a real piped keryx shell process, sending SIGINT, and asserting prompt exit; shellCommand now installs an immediate-exit SIGINT handler when !process.stdin.isTTY."
+    },
+    {
+      "at": "2026-08-28T08:24:09.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified: PR #400 test plan reports 88/88 tests pass across agent-permission-mode.test.ts, shell.test.ts, shell-headless-sigint.test.ts, command-risk.test.ts; tsc --noEmit clean."
+    },
+    {
+      "at": "2026-08-28T08:24:15.868Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/400 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-28T08:24:16.133Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-28T08:24:16.156Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC3"
     }
   ]
 }
