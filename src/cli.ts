@@ -16,6 +16,7 @@ import { rulesCommand } from "./commands/rules";
 import { standardCommand } from "./commands/standard";
 import { commandsCommand } from "./commands/commands";
 import { securityCommand } from "./commands/security";
+import { sandboxCommand } from "./commands/sandbox";
 import { mcpCommand } from "./commands/mcp";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
@@ -77,6 +78,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   standard: standardCommand,
   commands: commandsCommand,
   security: securityCommand,
+  sandbox: sandboxCommand,
   mcp: mcpCommand,
   harness: harnessCommand,
   shell: shellCommand,
@@ -192,6 +194,8 @@ Usage:
   keryx security scan <path> [--json]
   keryx security scan-mcp <manifest|dir> [--json]
   keryx security check-input [--source <kind>] [--file <path>]
+  keryx sandbox status [--json]
+                                               OS sandbox launcher availability + per-capability containment matrix (report, not a gate)
   keryx security check-output [--target <kind>] [--file <path>]
   keryx security redact <path> [--out <path>]
   keryx security report [--since <ref>]
@@ -233,6 +237,7 @@ Commands:
   standard  Validate the workspace against the Metaproject Standard
   commands  Agent-callable command registry (intents, args, output, model usage)
   security  Policy-based scanning, redaction, guardrails and audit reports
+  sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
 `);
 }
