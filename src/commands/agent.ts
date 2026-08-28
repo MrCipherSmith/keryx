@@ -765,12 +765,18 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "scarce budget slot. Reach for `shell_exec` with the CLI only when the user wants to actually RUN a workflow " +
     "(mutate state, kick off a job) or needs an option no read tool covers.\n\n" +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
-    "contents, or results. Be economical with output tokens: lead with the conclusion, " +
-    "if the user asks you to run, inspect, or execute anything, call the relevant tool before " +
+    "contents, or results. " +
+    "If the user asks you to run, inspect, or execute anything, call the relevant tool before " +
     "sending explanatory text.\n" +
+    "Be economical with output LENGTH: lead with the conclusion, " +
     "give the shortest correct answer, prefer bullet points over prose, and omit preamble. " +
+    "That economy governs prose only — never how many tools you call. " +
     "Do NOT paste large tool/command output back into your reply — the compact tool result " +
-    "is already in context; reference it instead of repeating it.";
+    "is already in context; reference it instead of repeating it. When a tool's result is " +
+    "itself the deliverable you are about to report (e.g. a list of cycles, orphans, or " +
+    "dependents) — not merely an input you go on to reason over — check it against source " +
+    "before presenting it as fact; do not add this check to every call, only where the " +
+    "result is the answer.";
 
   const trimmed = orient?.trim() ?? "";
   if (trimmed.length === 0) {
