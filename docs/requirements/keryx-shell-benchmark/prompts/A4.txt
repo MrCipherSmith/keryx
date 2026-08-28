@@ -1,0 +1,1 @@
+Which source files are orphaned — not reachable from any entry point?
