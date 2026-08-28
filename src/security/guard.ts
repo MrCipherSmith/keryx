@@ -14,7 +14,7 @@
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { loadSecurityConfig } from "./config";
+import { loadSecurityConfig, securityProjectRoot } from "./config";
 import { createSecurityService } from "./service";
 import type {
   SecurityDecision,
@@ -58,7 +58,10 @@ const ALLOW_DECISION: SecurityDecision = { gate: "pass", action: "allow", findin
 // in commands/update.ts and commands/rules.ts). When there is no manifest, the
 // module is treated as disabled and every seam becomes a no-op.
 export async function isSecurityEnabled(cwd: string): Promise<boolean> {
-  const manifestPath = path.join(cwd, ".metaproject", "metaproject.json");
+  // Resolved against the enclosing project, not the raw `cwd`: a seam invoked
+  // from a subdirectory otherwise found no manifest, reported the module as
+  // disabled, and silently skipped the check it exists to perform.
+  const manifestPath = path.join(securityProjectRoot(cwd), ".metaproject", "metaproject.json");
   if (!(await pathExists(manifestPath))) {
     return false;
   }

@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -132,6 +133,49 @@ async function git(cwd: string, args: string[]): Promise<void> {
     throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${stderr}`);
   }
 }
+
+// Regression: gdctx artifacts belong to the PROJECT, not to whatever directory
+// the command was started in. Rooted at `process.cwd()`, `keryx ctx rg` run
+// from a docs or fixture folder wrote a brand-new `.metaproject/data/gdctx/`
+// right there — this repository collected six such directories — and
+// `keryx ctx show latest` from the root then could not find what had just been
+// written.
+test("ctx run from a subdirectory writes artifacts to the project root, not beside the caller", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-root-"));
+  const sub = path.join(root, "docs", "requirements");
+
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      `${JSON.stringify({ modules: { gdctx: { enabled: true } } }, null, 2)}\n`,
+      "utf8",
+    );
+    await mkdir(sub, { recursive: true });
+
+    const proc = Bun.spawn(["bun", CLI, "ctx", "run", "--", "echo", "hello"], {
+      cwd: sub,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+    expect(exitCode).toBe(0);
+    // the bug's tell
+    expect(existsSync(path.join(sub, ".metaproject"))).toBe(false);
+    expect(existsSync(path.join(root, "docs", ".metaproject"))).toBe(false);
+
+    expect(existsSync(path.join(root, ".metaproject", "data", "gdctx", "artifacts", "latest.md"))).toBe(
+      true,
+    );
+    // Reported paths stay project-root-relative rather than becoming a `../../`
+    // walk out of the caller's directory.
+    expect(stdout).toContain(".metaproject/data/gdctx/");
+    expect(stdout).not.toContain("../");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
 
 // Regression: `keryx ctx diff` must describe the working tree it is invoked
 // from — including a linked `git worktree`, the isolation model used for
