@@ -13,15 +13,36 @@ new backend work, a client-building effort.
 
 ## Status
 
-**specification ready (future).** No code exists. This package supersedes
-the paused discovery notes at commit `a0ebce1` (branch
-`docs/keryx-vscode-extension-research`) — that document's four explicitly
-deferred open questions (UI shape, v1 capability scope, MCP-client
-sequencing, distribution) are now all resolved below, each through a
-structured brainstorm (Pragmatist/Innovator/Critic) + interview round with
-the operator. The discovery findings themselves (Findings 1–5, file:line
-grounded) are carried forward unchanged into specification.md — they were
-verified, not superseded.
+**implemented** (AC1–AC9 confirmed; AC3/AC9 honestly partial — see below;
+flow 185, PR #366). `vscode-extension/` is a real, scaffolded VS Code
+extension (own `package.json`/`tsconfig.json`, deliberately outside `src/`'s
+zero-dependency policy) shipping every v1 surface in scope: init/status
+auto-detect with an explicit confirm prompt before `keryx init --yes` and
+tree-view auto-reveal on success (`status-logic.ts`, AC1/AC2); a status bar
+item with health/security click-through detail (`status-bar.ts`/
+`status-bar-logic.ts`, AC4); a 4-node tree view — Status, Projects, Recent
+Turns, and the merged "Needs Your Attention" worklist with its explicit
+empty state (`tree-view.ts`/`tree-view-logic.ts`, AC5); an output channel
+piping SSE turn events plus a mandatory audit-log line per mutating action
+(`output-channel.ts`/`audit-log.ts`, AC6); a wiki-only hover provider with a
+staleness indicator (`hover-provider.ts`/`hover-logic.ts`, AC7); and a
+non-blocking `minKeryxVersion` version check (`version-logic.ts`, AC8).
+`src/mcp/client-config.ts` gained the `VSCODE_RUNTIME` entry (`.vscode/
+mcp.json`, `servers` key, `type: stdio`) all of this depends on. CI runs a
+dedicated `vscode-extension` job (`.github/workflows/ci.yml`) — there was
+none before this package.
+
+**AC3 and AC9 are honestly not fully met, not silently skipped.** No VS Code
+CLI or `vsce` is available in the build environment, so end-to-end Copilot
+Chat tool-call verification (AC3) and a real `vsce package`/Marketplace
+publish validation (AC9) could not run. Delivered instead: unit-tested
+config-shape/merge/strip/validate logic for AC3, and hand-verification of
+`package.json`'s contribution points against VS Code's documented schema for
+AC9 — both recorded as open follow-ups for whoever has a VS Code + Copilot
+Chat environment to finish. (The flow's own task list reads 7/11 — the 4
+unchecked are the generic context/implement/test/review housekeeping tasks,
+superseded by the concrete T5–T11 tasks that carry the actual work, all of
+which landed.)
 
 ## Document Index
 

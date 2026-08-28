@@ -20,11 +20,38 @@ format, one thin generic module for the OpenAI-Chat-compatible long tail.
 
 ## Status
 
-**draft.** No code exists. Grounded in direct reading of
-`src/harness/provider/types.ts`, `make-provider.ts`,
-`src/commands/providers.ts`, and the `AnthropicProvider`/`OllamaProvider`
-adapter shapes — not assumed from the earlier comparative research summary
-alone.
+**implemented** (AC3–AC6 confirmed; AC1/AC2 explicitly not met — no live
+API key in this environment, a pre-approved deviation, not a silent
+downgrade; flow 183, PR #364). `OpenAiProvider`
+(`src/harness/provider/openai/openai-provider.ts`, Responses API,
+`call_id` correlation) and `GeminiProvider`
+(`src/harness/provider/gemini/gemini-provider.ts`, legacy
+`generateContent`/`streamGenerateContent`) both implement `ProviderPort`
+and are wired additively into `make-provider.ts` and `select.ts`'s picker.
+The generic OpenAI-Chat-Completions-compatible engine formerly embedded in
+`OllamaProvider` was extracted into its own module
+(`src/harness/provider/compat/openai-compat-provider.ts`, `OpenAiCompatEngine`)
+with zero behavior change verified across the 8-file blast radius (AC3);
+`OllamaProvider` is kept as a thin wrapper over it (2 test files construct
+it directly). Both new adapters enforce the same SSRF/egress guard as the
+existing two (AC4), declare capabilities only where confirmed against
+live-researched vendor documentation rather than guessed (AC5), and add no
+vendor SDK dependency (AC6, import-audited).
+
+**AC1 and AC2 are explicitly not met**, named as such rather than
+overclaimed: no `OPENAI_API_KEY`/`GEMINI_API_KEY` was available to verify
+against a real live API call. What is delivered instead: both adapters
+build/stream/normalize correctly against `.SYNTHETIC.`-caveated fixtures
+under `fixtures/provider-breadth/{openai,gemini}/`, sourced from
+live-researched current vendor docs (not training-data recall), with
+provenance and unconfirmed shape details named in each fixture's
+`manifest.json`. Live verification against a real key remains an open
+follow-up. A post-review fix round also closed 4 real gaps found in this
+same PR's own new work — `single-turn.ts` auto-provider-detection and the
+sandbox credential-masking allowlist both silently ignored `openai`/`gemini`
+until fixed — while deliberately leaving pre-existing `OllamaProvider`
+behavior (e.g. `classifyHttpError`'s error-collapsing) untouched, per AC3's
+zero-behavior-change requirement.
 
 ## Document Index
 
