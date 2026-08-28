@@ -299,6 +299,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: ["renames .metaproject/flows/**", "writes .metaproject/flows/id-map.json"],
   },
+  // ---- sandbox (OS containment visibility) ------------------------------
+  {
+    module: "sandbox",
+    command: "sandbox status",
+    summary:
+      "OS sandbox launcher availability and the per-capability containment matrix for this platform. Report only — never runs a contained command, always exits 0.",
+    intent: [
+      "проверь sandbox",
+      "статус песочницы",
+      "sandbox status",
+      "is bubblewrap installed",
+      "установлен ли bubblewrap",
+      "os containment status",
+      "check os sandbox",
+      "какая изоляция доступна",
+    ],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured JSON report" }],
+    json: true,
+    read: true,
+  },
   // ---- security ---------------------------------------------------------
   {
     module: "security",
