@@ -83,7 +83,11 @@ test("mountBalancePanel mounts Balance row and fetches on start", async () => {
   expect(balance?.total).toBe(9.99);
 });
 
-test("mountBalancePanel shows — for providers without a balance endpoint", async () => {
+test("mountBalancePanel mounts NOTHING for providers without a balance endpoint", async () => {
+  // The sidebar is a fixed-height column: three rows that permanently read "—"
+  // are three rows taken off the panels below (Tools/Status/toast), which on an
+  // 80x24 terminal simply fall off the screen. Nothing to show ⇒ zero height,
+  // the same rule the Subagents/Background-Jobs boxes follow.
   const sidebar = makeSidebar();
   const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
     provider: "zai",
@@ -92,8 +96,10 @@ test("mountBalancePanel shows — for providers without a balance endpoint", asy
   }) as BalancePanelHandle;
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(handle.current()).toBeUndefined();
-  const value = sidebar.children.find((c) => c.id === "sb-balance-v");
-  expect(value?.content).toContain("—");
+  expect(sidebar.children).toEqual([]);
+  // …and the handle stays safe to call, so callers need no capability branch.
+  await handle.refresh();
+  expect(handle.current()).toBeUndefined();
 });
 
 test("clicking the balance value re-fetches", async () => {

@@ -2184,24 +2184,44 @@ export async function launchTuiAgentShell(opts: {
     // first action-intent turn binds one, so this row starts empty and is
     // refreshed — not mounted once like Directory/Branch/PR above, which are
     // static for the session's lifetime.
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-workspace-k", content: otui.t`${otui.dim("Workspace")}`, marginTop: 1 }));
-    const sbWorkspaceV = new otui.TextRenderable(r, {
-      id: "sb-workspace-v",
-      content: otui.t`${otui.dim("—")}`,
-      onMouseDown: () => {
-        showWorkspace();
-      },
+    // Hug-content box, and EMPTY until a workspace binds — the same idiom as the
+    // Subagents/Background-Jobs boxes below. `sidebarTop` is a fixed-height
+    // column, so a row that only ever says "—" is not free: it is taken from
+    // the panels underneath it (`Tools`, `Status`, and the pinned toast), which
+    // on an 80x24 terminal simply fall off the bottom of the screen —
+    // `shell-pty-launch.smoke.test.ts` is what catches that.
+    const sbWorkspace = new otui.BoxRenderable(r, {
+      id: "sb-workspace",
+      flexDirection: "column",
+      flexShrink: 0,
     });
-    sidebar.add(sbWorkspaceV);
+    sidebar.add(sbWorkspace);
     let currentWorkspace: WorkspaceInfo | undefined;
     let currentSlates: SlateInspectorItem[] = [];
+    /** Rebuild the Workspace panel: no bound workspace ⇒ no rows at all. */
+    const paintWorkspaceSidebar = (workspace: WorkspaceInfo | undefined, slates: readonly SlateInspectorItem[]): void => {
+      clearTranscriptChildren(sbWorkspace);
+      if (workspace === undefined) {
+        return;
+      }
+      sbWorkspace.add(new otui.TextRenderable(r, { id: "sb-workspace-k", content: otui.t`${otui.dim("Workspace")}`, marginTop: 1 }));
+      sbWorkspace.add(
+        new otui.TextRenderable(r, {
+          id: "sb-workspace-v",
+          content: otui.t`${otui.dim(`${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
+          onMouseDown: () => {
+            showWorkspace();
+          },
+        }),
+      );
+    };
     const refreshWorkspaceSidebar = async (): Promise<void> => {
       const dir = slateSession?.dir;
       const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
       if (workspaceId === undefined) {
         currentWorkspace = undefined;
         currentSlates = [];
-        sbWorkspaceV.content = otui.t`${otui.dim("—")}`;
+        paintWorkspaceSidebar(undefined, currentSlates);
         return;
       }
       const cwd = opts.session?.cwd ?? process.cwd();
@@ -2211,10 +2231,7 @@ export async function launchTuiAgentShell(opts: {
       ]);
       currentWorkspace = workspace;
       currentSlates = slates;
-      sbWorkspaceV.content =
-        workspace === undefined
-          ? otui.t`${otui.dim("—")}`
-          : otui.t`${otui.dim(`${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`;
+      paintWorkspaceSidebar(workspace, slates);
     };
     // SLATE-10 catch-up (RP-13-ish sidebar surface): project-wide, not
     // scoped to this session's own workspace — a human coming back after
@@ -2222,22 +2239,32 @@ export async function launchTuiAgentShell(opts: {
     // session/unbound candidate, not just this one's. Yellow (matches the
     // Status row's own "blocked = yellow" convention) once nonzero, so the
     // badge reads as a notification rather than a passive count.
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-review-k", content: otui.t`${otui.dim("Review")}`, marginTop: 1 }));
-    const sbReviewV = new otui.TextRenderable(r, {
-      id: "sb-review-v",
-      content: otui.t`${otui.dim("—")}`,
-      onMouseDown: () => {
-        showReview();
-      },
+    // A notification, so it is present only when it has something to notify
+    // about — nothing pending ⇒ zero rows, same reason as the Workspace box
+    // above (a fixed-height column has no spare rows to spend on "nothing").
+    const sbReview = new otui.BoxRenderable(r, {
+      id: "sb-review",
+      flexDirection: "column",
+      flexShrink: 0,
     });
-    sidebar.add(sbReviewV);
+    sidebar.add(sbReview);
     const refreshReviewSidebar = async (): Promise<void> => {
       const cwd = opts.session?.cwd ?? process.cwd();
       const count = catchUpItems(await loadInspectorCatchUp(cwd)).length;
-      sbReviewV.content =
-        count === 0
-          ? otui.t`${otui.dim("— nothing to review")}`
-          : otui.t`${otui.yellow(`${count} item${count === 1 ? "" : "s"} need review`)}`;
+      clearTranscriptChildren(sbReview);
+      if (count === 0) {
+        return;
+      }
+      sbReview.add(new otui.TextRenderable(r, { id: "sb-review-k", content: otui.t`${otui.dim("Review")}`, marginTop: 1 }));
+      sbReview.add(
+        new otui.TextRenderable(r, {
+          id: "sb-review-v",
+          content: otui.t`${otui.yellow(`${count} item${count === 1 ? "" : "s"} need review`)}`,
+          onMouseDown: () => {
+            showReview();
+          },
+        }),
+      );
     };
     sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
     const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
