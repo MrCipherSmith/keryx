@@ -3,9 +3,9 @@
   "id": "192",
   "slug": "say-hello",
   "title": "say hello",
-  "status": "in-progress",
+  "status": "blocked",
   "createdAt": "2026-08-22T09:16:53.123Z",
-  "updatedAt": "2026-08-22T09:18:02.101Z",
+  "updatedAt": "2026-08-28T09:56:17.778Z",
   "source": {
     "type": "description",
     "ref": null
@@ -95,6 +95,12 @@
       "at": "2026-08-22T09:18:02.101Z",
       "event": "ac-confirmed",
       "detail": "AC1"
+    },
+    {
+      "at": "2026-08-28T09:56:17.778Z",
+      "event": "blocked",
+      "detail": "throwaway test prompt from an ad-hoc harness run, not real work; parked rather than completed because completing it would record work that does not exist"
     }
-  ]
+  ],
+  "previousStatus": "in-progress"
 }

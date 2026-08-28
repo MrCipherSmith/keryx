@@ -3,9 +3,9 @@
   "id": "189",
   "slug": "read-only-spawn-subagent-mode-read-only-",
   "title": "Изучи параллельно три независимых read-only модуля через spawn_subagent (по одному сабагенту на модуль, mode read_only, диспетчеризуй их ОДНИМ батчем, не последовательно): src/wiki, src/gdgraph, src/health. Для каждого - краткое назначение и 3-5 ключевых файлов с ролью. Собери сравнительную сводку в финальном ответе",
-  "status": "in-progress",
+  "status": "blocked",
   "createdAt": "2026-08-21T20:40:35.682Z",
-  "updatedAt": "2026-08-21T20:40:35.714Z",
+  "updatedAt": "2026-08-28T09:56:17.507Z",
   "source": {
     "type": "description",
     "ref": null
@@ -86,6 +86,12 @@
     {
       "at": "2026-08-21T20:40:35.714Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T09:56:17.507Z",
+      "event": "blocked",
+      "detail": "throwaway test prompt from an ad-hoc harness run, not real work; parked rather than completed because completing it would record work that does not exist"
     }
-  ]
+  ],
+  "previousStatus": "in-progress"
 }

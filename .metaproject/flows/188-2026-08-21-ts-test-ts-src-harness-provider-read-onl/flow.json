@@ -3,9 +3,9 @@
   "id": "188",
   "slug": "ts-test-ts-src-harness-provider-read-onl",
   "title": "Посчитай, сколько .ts файлов (без .test.ts, без подпапок) лежит в src/harness/provider - только read-only, ничего не меняй, дай итоговое число",
-  "status": "in-progress",
+  "status": "blocked",
   "createdAt": "2026-08-21T20:12:44.913Z",
-  "updatedAt": "2026-08-21T20:12:44.949Z",
+  "updatedAt": "2026-08-28T09:56:17.413Z",
   "source": {
     "type": "description",
     "ref": null
@@ -86,6 +86,12 @@
     {
       "at": "2026-08-21T20:12:44.949Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-28T09:56:17.413Z",
+      "event": "blocked",
+      "detail": "throwaway test prompt from an ad-hoc harness run, not real work; parked rather than completed because completing it would record work that does not exist"
     }
-  ]
+  ],
+  "previousStatus": "in-progress"
 }
