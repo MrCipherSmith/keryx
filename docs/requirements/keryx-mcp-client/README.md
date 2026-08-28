@@ -19,13 +19,37 @@ it requires keryx to act as an MCP client, which does not exist yet.
 
 ## Status
 
-**specification ready (future).** No code exists. Both blocking design
-questions are resolved and traced to source: which decision layer an
-elicitation routes through (`resolveApprovalDecision`, decisions.md D-05) and
-whether a tool registry is touched (it is not, specification.md §6). D-03
-(full migration of `codex-cli` to `mcp-server`) was reaffirmed after
-discovering its real cost — a second, MCP-shaped supervision path, not a
-codec swap. See [decisions.md](decisions.md) for the full record.
+**implemented** (AC1–AC9 all confirmed; flow 187, PR #362). `src/mcp-client/`
+(`client.ts`, `wire.ts`, `elicitation.ts`, `types.ts`, 6 test files) ships a
+stdio MCP client on `@modelcontextprotocol/sdk`, plus a second, MCP-shaped
+supervisor for `codex-cli` (`gatedSuperviseCodexMcpRun`,
+`src/harness/external/supervise-mcp.ts`) — additive alongside the existing
+line-stream `superviseExternalRun` path, which `claude-cli` keeps unchanged
+(D-03). Elicitations are decided via `resolveApprovalDecision`
+(`src/commands/permission-mode.ts`, D-05) through the existing
+`requestApproval`/`AgentIO` prompt path; an escalation classifier
+(`classifyElicitationRisk`) derives `destructive`/`credentials` signal from
+the elicitation payload feeding it (AC9); the capability gate folds into the
+existing `gdskills.external-agents` descriptor rather than adding a second
+toggle; a pending elicitation surfaces in the TUI through the same path as an
+existing write-risk approval prompt.
+
+Verified against the real, live `codex mcp-server` (codex-cli 0.147.0), not
+only fixture replay: `fixtures/mcp-client/codex/` has three genuinely
+`captured: true` scenarios (approve, deny, timeout) plus two honestly
+`*.SYNTHETIC.jsonl`-caveated ones, and two flag-gated live smoke tests
+(`KERYX_ALLOW_REAL_SUBPROCESS=1`, excluded from CI) prove the spawn+handshake
+(AC1) and a full approve/decline elicitation round-trip (AC3) against the
+real binary. `keryx-external-agent-runtime`'s own D-03 and D-04 were revised,
+not silently reinterpreted, to name `resolveApprovalDecision` as the traced
+approval-routing layer this package's elicitation responses go through.
+
+One thing this status does not mean: nothing in `dispatch.ts`/`registry.ts`
+routes `codex-cli` through the new MCP-shaped supervisor by default —
+`gatedSuperviseCodexMcpRun` exists and is fully tested, but D-03's "full
+migration of `codex-cli` to `mcp-server`" (making it the default production
+path) was not this package's scope. See [decisions.md](decisions.md) for the
+full record.
 
 ## Document Index
 

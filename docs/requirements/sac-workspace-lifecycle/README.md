@@ -17,11 +17,21 @@ audit машинерии (собственный тест-сьют так и д�
 
 ## Статус
 
-Design. Кода нет. Сформирован тремя независимыми brainstorm-агентами
-(Pragmatist/Innovator/Critic), каждое утверждение сверено с реальным кодом
-(`src/sac/workspace-service.ts`, `src/sac/index.ts`,
-`src/sac/proposal-lifecycle.ts`, `docs/requirements/shared-agent-context/
-artifact-lifecycle.md`).
+**implemented** (WSL-1/2/3/4, все 10 AC подтверждены; flow 156, PR #296,
+`725d81ed feat(sac): workspace lifecycle completion — archive, resource
+removal, rename`). `src/sac/workspace-service.ts` теперь содержит
+`archive()` (WSL-1: `active→archived`, скрывается из `list()` по умолчанию,
+блокирует новые write-операции, не блокирует уже идущий review),
+`removeResource()` (WSL-3, зеркало `addResource`), `rename()` (WSL-4) и
+`--include-archived` во `list()`/`listForActor()` и в CLI
+(`src/commands/workspace.ts`) — WSL-2, pending-review discovery независим
+от archived-фильтра. Все три новых write-пути проходят через тот же
+`withAuthorizedActor`/owner-gate, что и `addResource`. Member management
+(`addMember`/`removeMember`/`updateRole`) и Delete остаются явными,
+задокументированными non-goals этого пакета (см. ниже) — не реализованы
+здесь намеренно, не пропущены по ошибке. Этот README раньше утверждал
+«Design. Кода нет.» — устарело после реализации flow 156 (2026-08-16) и не
+было обновлено вместе с ней; поправлено задним числом отдельной ревизией.
 
 ## Документы
 

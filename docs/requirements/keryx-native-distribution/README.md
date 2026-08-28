@@ -13,14 +13,38 @@ package-manager channels) does.
 
 ## Status
 
-**specification ready (future).** No code exists. Grounded in direct reading
-of `.github/workflows/release.yml`, `scripts/install.sh`,
-`install`/`install.ts`, and `package.json` — not assumed from the earlier
-comparative research summary, which undersold how much distribution
-infrastructure already exists. The one real go/no-go risk (whether
-`bun build --compile` can bundle keryx's optional dependencies) was
-live-tested during specification authorship, not left open — see
-decisions.md D-01.
+**implemented** (AC1–AC7 all confirmed; flow 184, PR #365).
+`.github/workflows/release.yml` builds all four targets
+(`bun-darwin-arm64`/`bun-darwin-x64`/`bun-linux-x64`/`bun-linux-arm64`) via
+the `bun build --compile` for-loop on the existing single `ubuntu-latest`
+runner and attaches them to `gh release create` alongside the existing npm
+tarball, unchanged (AC1/AC2/AC7). `scripts/install-binary.sh` detects
+platform/arch and installs the matching binary to `~/.local/bin/keryx`,
+additive to the existing clone-based `scripts/install.sh`. A Homebrew
+formula was created and pushed to a new tap
+(`MrCipherSmith/homebrew-keryx`, AC6) — its checksums are still placeholders
+pending the first real tagged release with binaries attached, documented as
+such in the formula itself, not fabricated.
+
+The original go/no-go risk was corrected mid-flow, not glossed over:
+`web-tree-sitter` did **not** actually bundle as first claimed below —
+`bun build --compile` cannot trace the runtime-string `import()` keryx's
+generic capability seam (`src/capability/seam.ts`) uses (confirmed against
+oven-sh/bun#11732); the earlier "1 nodes, 0 edges" evidence was the
+deterministic fallback, not a real parse. An adapter-level literal
+`await import("web-tree-sitter")` fast path fixed it for the gdgraph
+capability specifically (AC3), verified by a genuine parsed AST from the
+compiled binary. `mcp serve` (AC4) and the OpenTUI shell (AC5) were both
+re-verified for real — a full MCP JSON-RPC handshake plus `tools/list`
+returning 34 tools, and a real `createCliRenderer()` construction with
+genuine terminal output — stronger evidence than this document's original
+claim. The identical bundling bug is undiagnosed (not fixed) for three other
+optional-dependency call sites
+(`src/memory/embedding/adapter.ts`,
+`src/security/detect/pii/ner-adapter.ts`,
+`src/security/detect/injection/adapter.ts`) — explicitly out of this
+package's scope; see specification.md §2's final amendment and
+decisions.md D-01's amendment for the full record.
 
 ## Document Index
 
