@@ -1,3 +1,0 @@
-round4-review.md:42:29:| stdout table control row `173B` | 222B — and my own "was 349B" in the same table proves it, since 349 = 222 + 127. The two rows the fix was about were instrumented; the control row was filled in from memory |
-round4-review.md:193:35:- The stdout table's control row `173B` should be `222B`.
-round3-review.md:100:9:stdout: 349 bytes, of which the last line is {"permission":"deny",…}
