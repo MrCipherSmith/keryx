@@ -1,5 +1,6 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { SECURITY_CONFIG_SCHEMA, validateAgainstSchema } from "./schemas";
@@ -36,12 +37,39 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   gate: { failOn: "critical", minConfidence: 0.5 },
 };
 
+/**
+ * The project whose `.metaproject/` this module reads and writes.
+ *
+ * Every security path used to be `path.join(cwd, ".metaproject", …)`, and `cwd`
+ * is whatever directory the process happened to start in. Run from a
+ * subdirectory — a docs folder, a fixture folder, a flow package — the module
+ * did not find the project's config and instead CREATED a second
+ * `.metaproject/` right there, holding `data/security/raw/hmac.key` and
+ * `data/security/raw/state.json`. That is worse than a stray directory: the
+ * per-project HMAC key that makes finding hashes non-brute-forceable was
+ * regenerated per working directory, and the self-protection state
+ * (`state.json`) that detects a mode downgrade or a disabled policy started
+ * empty every time, so a downgrade in a subdirectory invocation was never
+ * surfaced. The scattered directories are the visible half of a security
+ * control silently resetting itself.
+ *
+ * `resolveProjectRoot` is the shared answer (`src/lib/contained-path.ts`) and is
+ * already used by `security scan` to contain its target path — the same walk up
+ * to the nearest `.metaproject/` or `.git/`. A directory that is genuinely its
+ * own project root still resolves to itself, and a bare directory with neither
+ * marker still resolves to itself, so a standalone root behaves exactly as
+ * before.
+ */
+export function securityProjectRoot(cwd: string): string {
+  return resolveProjectRoot(cwd);
+}
+
 export function securityDataRoot(cwd: string): string {
-  return path.join(cwd, ".metaproject", "data", "security");
+  return path.join(securityProjectRoot(cwd), ".metaproject", "data", "security");
 }
 
 export function configPath(cwd: string): string {
-  return path.join(cwd, ".metaproject", "security.config.json");
+  return path.join(securityProjectRoot(cwd), ".metaproject", "security.config.json");
 }
 
 function mergePolicy(base: PolicyConfig, override?: Partial<PolicyConfig>): PolicyConfig {

@@ -31,6 +31,7 @@ import {
   verifyConfigChecksum,
   validateSecurityConfig,
   configPath,
+  securityDataRoot,
 } from "../security/config";
 import { listIncidents } from "../security/incidents";
 import {
@@ -229,7 +230,7 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
 type McpBaselineFile = { schemaVersion: number; tools: Record<string, string> };
 
 function mcpBaselinePath(cwd: string): string {
-  return path.join(cwd, ".metaproject", "data", "security", "mcp-baseline.json");
+  return path.join(securityDataRoot(cwd), "mcp-baseline.json");
 }
 
 // Collect the manifest JSON files to scan: a single file, or every *.json under

@@ -3,6 +3,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
 import { runCtxHook } from "../ctx/hook";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
@@ -112,7 +113,7 @@ export async function ctxCommand(args: string[]): Promise<void> {
 }
 
 async function printCtxStatus(): Promise<void> {
-  const root = path.join(process.cwd(), ".metaproject");
+  const root = path.join(resolveProjectRoot(process.cwd()), ".metaproject");
   const manifestPath = path.join(root, "metaproject.json");
   const configPath = path.join(root, "gdctx.config.json");
   const gdctxRoot = path.join(root, "data", "gdctx");
@@ -284,10 +285,23 @@ async function runAndSummarize(
   process.exitCode = result.exitCode;
 }
 
+// Where this project's gdctx artifacts live.
+//
+// Rooted at `process.cwd()` this wrote a NEW `.metaproject/data/gdctx/` into
+// whatever directory the command ran from, so `keryx ctx rg` from a docs or
+// fixture folder scattered half-empty `.metaproject/` trees through the repo —
+// and `keryx ctx show latest` from anywhere but the root then could not find
+// the artifact it had just written elsewhere. `resolveProjectRoot` walks up to
+// the nearest `.metaproject/` or `.git/`; at a genuine project root it returns
+// that root unchanged.
+function gdctxRootDir(): string {
+  return path.join(resolveProjectRoot(process.cwd()), ".metaproject", "data", "gdctx");
+}
+
 async function showArtifact(args: string[]): Promise<void> {
   const target = args[0] ?? "latest";
   const raw = args.includes("--raw");
-  const root = path.join(process.cwd(), ".metaproject", "data", "gdctx");
+  const root = gdctxRootDir();
   const filePath =
     target === "latest"
       ? path.join(root, raw ? "raw" : "artifacts", raw ? "latest.log" : "latest.md")
@@ -429,7 +443,8 @@ async function writeArtifact({
   summary: string;
   exitCode: number;
 }): Promise<CtxArtifact> {
-  const root = path.join(process.cwd(), ".metaproject", "data", "gdctx");
+  const projectRoot = resolveProjectRoot(process.cwd());
+  const root = gdctxRootDir();
   const rawRoot = path.join(root, "raw");
   const artifactsRoot = path.join(root, "artifacts");
   await mkdir(rawRoot, { recursive: true });
@@ -448,8 +463,11 @@ async function writeArtifact({
     kind,
     command,
     exitCode,
-    rawPath: path.relative(process.cwd(), rawPath),
-    summaryPath: path.relative(process.cwd(), summaryPath),
+    // Project-root-relative, not cwd-relative: the artifact now always lands
+    // under the project's `.metaproject/`, so a cwd-relative path printed from
+    // a subdirectory would be a `../../` walk that reads as a path escape.
+    rawPath: path.relative(projectRoot, rawPath),
+    summaryPath: path.relative(projectRoot, summaryPath),
     bytesIn,
     bytesOut,
     truncated: bytesOut < bytesIn,
@@ -960,7 +978,11 @@ function outlineEntries(lines: string[], pattern: RegExp, config: CtxConfig): st
 }
 
 async function loadConfig(): Promise<CtxConfig> {
-  const configPath = path.join(process.cwd(), ".metaproject", "gdctx.config.json");
+  const configPath = path.join(
+    resolveProjectRoot(process.cwd()),
+    ".metaproject",
+    "gdctx.config.json",
+  );
   if (!(await pathExists(configPath))) {
     return DEFAULT_CONFIG;
   }
