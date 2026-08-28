@@ -3,6 +3,34 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.69] — 2026-08-28
+
+### Fixed
+
+- **The sidebar outgrew a 24-row terminal and hid half of itself.** The
+  balance/usage panels added in 0.2.62 pushed the fixed-height sidebar stack
+  to 31 rows against the ~24 a standard terminal gives, so `Tools`, `Status`,
+  the sub-agent and background-job boxes and the pinned toast fell off the
+  bottom of the screen. CI's macOS pty leg caught this on the introducing
+  commit and had been red on every push since 2026-08-23; it was a real
+  regression, not a flaky job.
+
+- **`security` and `ctx` wrote their data wherever the process started.** Both
+  built `.metaproject/data/…` from `cwd` instead of resolving the project
+  root, so running either from a subdirectory created a stray `.metaproject/`
+  there — twelve had accumulated in this repository. For `security` the litter
+  was the lesser half: the per-project HMAC key that keeps finding hashes
+  unguessable was regenerated per working directory, the self-protection state
+  used to detect a mode downgrade started empty on every subdirectory run, and
+  `isSecurityEnabled()` returned false from a subdirectory, so every write
+  seam silently skipped its check.
+
+### Changed
+
+- **The `Balance`, `Workspace` and `Review` sidebar rows are hidden when they
+  have nothing to show**, rather than occupying rows with a placeholder. This
+  is what reclaims the space above; `/workspace` and `/review` are unaffected.
+
 ## [0.2.68] — 2026-08-26
 
 ### Added
