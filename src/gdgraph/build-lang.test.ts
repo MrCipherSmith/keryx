@@ -188,6 +188,13 @@ test("buildGraph resolves Python absolute, relative, and __init__.py imports", a
 // !!! NEVER regenerate these goldens to make a diff disappear. If this test
 // !!! fails, the TS/JS code path changed and AC4 is violated — fix the code,
 // !!! not the golden.
+//
+// EXCEPTION, recorded rather than silently applied: flow 140 (P1 — dynamic
+// imports counted as load-order cycles) intentionally adds an `importKind`
+// field to every edge record, TS/JS included — the whole point of that flow
+// is that the field was missing. That is a deliberate schema change, not a
+// TS/JS behavior drift from Java/Python work, so the AC4 invariant above
+// still holds; only the pinned literal needed the new field appended.
 // ---------------------------------------------------------------------------
 
 const GOLDEN_NODES_JSONL =
@@ -197,9 +204,9 @@ const GOLDEN_NODES_JSONL =
   `{"id":"src/feature/value.ts","kind":"file","path":"src/feature/value.ts","language":"typescript"}\n`;
 
 const GOLDEN_EDGES_JSONL =
-  `{"id":"edge:1","from":"src/feature/helper.js","to":"src/feature/value.ts","kind":"imports","specifier":"./value"}\n` +
-  `{"id":"edge:2","from":"src/feature/index.ts","to":"src/feature/style.css","kind":"asset","specifier":"./style.css"}\n` +
-  `{"id":"edge:3","from":"src/feature/index.ts","to":"src/feature/value.ts","kind":"imports","specifier":"./value"}\n`;
+  `{"id":"edge:1","from":"src/feature/helper.js","to":"src/feature/value.ts","kind":"imports","specifier":"./value","importKind":"import-statement"}\n` +
+  `{"id":"edge:2","from":"src/feature/index.ts","to":"src/feature/style.css","kind":"asset","specifier":"./style.css","importKind":"import-statement"}\n` +
+  `{"id":"edge:3","from":"src/feature/index.ts","to":"src/feature/value.ts","kind":"imports","specifier":"./value","importKind":"import-statement"}\n`;
 
 test("buildGraph output is byte-identical for a TS/JS-only project (AC4 guard)", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-regression");
