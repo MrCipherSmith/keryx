@@ -59,15 +59,25 @@ async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<Return
   await writeAc(path.basename(created), ["Criterion one"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
   await service.start({ cwd: ROOT, id: flow.id });
+  // Flows created by `init` opt in to the task gate (gates.tasks), so the
+  // scaffolded tasks must be terminal before `complete` can pass.
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
   await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/1" });
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
   return service.complete({ cwd: ROOT, id: flow.id });
 }
 
-test("no securityGate dep: only the three pre-existing gates run (no regression)", async () => {
+test("no securityGate dep: no security gate runs (no regression)", async () => {
   await fresh();
   const result = await driveToComplete(makeDeps());
-  expect(result.gates.map((g) => g.name)).toEqual(["acceptance-criteria", "pull-request", "health"]);
+  expect(result.gates.map((g) => g.name)).toEqual([
+    "acceptance-criteria",
+    "pull-request",
+    "tasks",
+    "health",
+  ]);
   expect(result.passed).toBe(true);
 });
 

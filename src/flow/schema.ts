@@ -73,6 +73,18 @@ export function flowStateSchema(): Record<string, unknown> {
         },
       },
       acChecksum: { type: ["string", "null"], description: "SHA-256 of the frozen acceptance criteria." },
+      gates: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "Which completion gates this package opted into at creation. Absent on packages created before a gate existed, which is how a gate is added without retroactively invalidating history: an absent flag reports the gate as skipped rather than passed.",
+        properties: {
+          tasks: {
+            type: "boolean",
+            description: "Written by `flow init`. When true, `flow complete` fails while any task is non-terminal.",
+          },
+        },
+      },
       acConfirmed: {
         type: "object",
         description: "Per-AC confirmation records keyed by AC id (e.g. AC1).",
@@ -161,6 +173,11 @@ export function flowStateSchema(): Record<string, unknown> {
             type: "string",
             enum: ["completed", "blocked", "failed", "skipped"],
             description: "v2: terminal outcome when status is done (distinct from status).",
+          },
+          dispositionReason: {
+            type: "string",
+            description:
+              "Why the task ended this way. Required in practice for `skipped`: the task gate treats an unreasoned skip as non-terminal, because a skip nobody has to justify is a one-flag bypass of the gate.",
           },
           acRefs: { type: "array", items: { type: "string" }, description: "v2: AC ids this task addresses." },
           evidenceRefs: { type: "array", items: { type: "string" }, description: "v2: artifact paths." },

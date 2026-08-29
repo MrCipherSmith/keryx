@@ -18,7 +18,14 @@ import {
   symbols,
   nextSteps,
 } from "../lib/ui";
-import type { FlowService, FlowStatus, TaskDisposition, TaskKind } from "../flow/types";
+import { ATTEMPT_CLI_OUTCOMES } from "../flow/types";
+import type {
+  AttemptCliOutcome,
+  FlowService,
+  FlowStatus,
+  TaskDisposition,
+  TaskKind,
+} from "../flow/types";
 
 const VALID_TASK_KINDS: readonly TaskKind[] = ["context", "implement", "test", "verify", "review", "docs"];
 
@@ -30,6 +37,25 @@ function parseTaskKind(raw: string | undefined): TaskKind | undefined {
     throw new Error(`Invalid --kind "${raw}". Expected one of: ${VALID_TASK_KINDS.join(", ")}`);
   }
   return raw as TaskKind;
+}
+
+/**
+ * Positional args only. Without this, `flow task attempt --outcome started`
+ * reads "--outcome" as the flow id and fails with "Flow not found: --outcome"
+ * instead of showing the usage line.
+ */
+function positional(args: string[], index: number): string | undefined {
+  const value = args[index];
+  return value === undefined || value.startsWith("--") ? undefined : value;
+}
+
+function parseAttemptOutcome(raw: string | undefined): AttemptCliOutcome {
+  if (raw === undefined || !(ATTEMPT_CLI_OUTCOMES as readonly string[]).includes(raw)) {
+    throw new Error(
+      `Invalid --outcome "${raw ?? ""}". Expected one of: ${ATTEMPT_CLI_OUTCOMES.join(", ")}`,
+    );
+  }
+  return raw as AttemptCliOutcome;
 }
 
 // Colorize a flow status: terminal states green/red, active states cyan,
@@ -276,22 +302,56 @@ async function runTask(args: string[]): Promise<void> {
     return;
   }
   if (sub === "done") {
-    const id = args[1];
-    const taskId = args[2];
+    const id = positional(args, 1);
+    const taskId = positional(args, 2);
     if (!id || !taskId) {
-      throw new Error("Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped]");
+      throw new Error(
+        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
+      );
     }
+    const disposition = optionValue(args, "--disposition") as TaskDisposition | undefined;
+    const reason = optionValue(args, "--reason");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
       id,
       taskId,
-      disposition: optionValue(args, "--disposition") as TaskDisposition | undefined,
+      disposition,
+      reason,
     });
     const done = flow.tasks.filter((task) => task.status === "done").length;
     console.log(`  ${style.green(symbols.ok)} Task ${style.bold(taskId.toUpperCase())} done ${style.dim(`(${done}/${flow.tasks.length})`)}`);
+    // Say it here rather than at `flow complete`, where the flow is already
+    // being closed and the fix is a round trip away.
+    if (disposition === "skipped" && !reason?.trim()) {
+      note(
+        'A skipped task without --reason "<why>" fails the task gate at `keryx flow complete`. ' +
+          "Re-run with a reason to record why the work was not needed.",
+      );
+    }
     return;
   }
-  throw new Error("Usage: keryx flow task <add|done> ...");
+  if (sub === "attempt") {
+    const id = positional(args, 1);
+    const taskId = positional(args, 2);
+    if (!id || !taskId) {
+      throw new Error(
+        `Usage: keryx flow task attempt <id> <taskId> --outcome ${ATTEMPT_CLI_OUTCOMES.join("|")} [--detail "<what happened>"]`,
+      );
+    }
+    const flow = await getService().taskAttempt({
+      cwd: process.cwd(),
+      id,
+      taskId,
+      outcome: parseAttemptOutcome(optionValue(args, "--outcome")),
+      detail: optionValue(args, "--detail"),
+    });
+    const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
+    console.log(
+      `  ${style.green(symbols.ok)} Attempt recorded on ${style.bold(taskId.toUpperCase())} ${style.dim(`(count ${task?.attempts?.count ?? 0})`)}`,
+    );
+    return;
+  }
+  throw new Error("Usage: keryx flow task <add|done|attempt> ...");
 }
 
 async function runAc(args: string[]): Promise<void> {
@@ -448,7 +508,8 @@ function printHelp(): void {
     "keryx flow freeze <id>",
     "keryx flow start <id>",
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
-    "keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped]",
+    'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
+    'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
     'keryx flow ac update <id> --reason "<why>"',
     "keryx flow implemented <id> --pr <url>",

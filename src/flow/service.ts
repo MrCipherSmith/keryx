@@ -2,7 +2,7 @@ import { mkdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { assertTransition } from "./machine";
+import { assertTransition, evaluateTaskGate } from "./machine";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
 import {
@@ -156,6 +156,11 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         const createdAt = now();
         const flow: FlowState = {
           schemaVersion: 1,
+          // Opt in this package to the task gate. Written at creation because
+          // that is the only moment that distinguishes "created under the new
+          // rules" from "created before them" — `schemaVersion` cannot, since
+          // read-time migration makes every package v2 (see FlowGates).
+          gates: { tasks: true },
           id,
           slug,
           title,
@@ -255,7 +260,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async taskDone({ cwd, id, taskId, disposition, evidenceRefs, runLink }): Promise<FlowState> {
+    async taskDone({ cwd, id, taskId, disposition, reason, evidenceRefs, runLink }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
@@ -266,6 +271,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // Disposition is distinct from status (TM-01 §6). Honor an explicit
       // disposition; otherwise default a completed task to "completed".
       task.disposition = disposition ?? task.disposition ?? "completed";
+      // The reason is what makes a "skipped" disposition auditable rather than
+      // a quiet way past the gate. Recorded for any disposition; only enforced
+      // for "skipped" (by the task gate, so state written by other paths is
+      // caught too).
+      if (reason?.trim()) {
+        task.dispositionReason = reason.trim();
+      }
       // v2 additive (backward-compatible): when the caller supplies mapped
       // evidence refs / run link (e.g. the harness ManagedFlowPort), record them
       // on the task. Omitted args leave existing behavior untouched.
@@ -276,6 +288,31 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         task.runLink = runLink;
       }
       return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}`);
+      });
+    },
+
+    async taskAttempt({ cwd, id, taskId, outcome, detail }): Promise<FlowState> {
+      return mutate(cwd, id, async ({ dir, flow }) => {
+        await assertAcIntact(cwd, dir, flow);
+        const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
+        if (!task) {
+          throw new Error(`Task not found: ${taskId}. Known: ${flow.tasks.map((t) => t.id).join(", ")}`);
+        }
+        // `attempts` is optional on v1-shaped tasks that were never migrated in
+        // this process; default rather than throw, so recording an attempt is
+        // always possible.
+        const attempts = task.attempts ?? { count: 0, log: [] };
+        attempts.count += 1;
+        // Append-only: a prior entry is never rewritten (TM-01 §5.1).
+        attempts.log.push({ at: now(), outcome, ...(detail?.trim() ? { detail: detail.trim() } : {}) });
+        task.attempts = attempts;
+        return save(
+          cwd,
+          dir,
+          flow,
+          "task-attempt",
+          `${task.id}: ${outcome} (attempt ${attempts.count})${detail?.trim() ? ` — ${detail.trim()}` : ""}`,
+        );
       });
     },
 
@@ -394,7 +431,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         });
       }
 
-      // Gate 3: code health.
+      // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
+      // 24 packages completed before this gate existed while carrying an open
+      // task, and turning it on retroactively would invalidate them. They lack
+      // the flag, so the gate reports `skipped` and never fails them.
+      gates.push(taskGate(flow));
+
+      // Gate 4: code health.
       try {
         const health = await deps.healthGate(cwd);
         gates.push(
@@ -410,7 +453,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         });
       }
 
-      // Gate 4: security (§11). Omitted entirely when the module is disabled
+      // Gate 5: security (§11). Omitted entirely when the module is disabled
       // (dep returns null), so advisory `flow complete` is never regressed.
       // Advisory -> pass (informational); enforced/ci -> may fail.
       if (deps.securityGate) {
@@ -633,6 +676,49 @@ async function appendIdMap(cwd: string, entry: FlowIdMapEntry): Promise<void> {
   }
   entries.push(entry);
   await writeFileAtomic(file, `${JSON.stringify(entries, null, 2)}\n`);
+}
+
+/**
+ * The task gate (flow 201, AC1-AC3).
+ *
+ * Opt-in per package: `gates.tasks` is written by `flow init`, so every flow
+ * created after the gate landed is covered and no historical package is
+ * retroactively invalidated. A package without the flag yields `skipped` —
+ * visible in the gate list rather than silently absent, because an invisible
+ * non-gate is exactly what let 34 unfinished tasks through.
+ */
+function taskGate(flow: FlowState): GateOutcome {
+  if (!flow.gates?.tasks) {
+    return {
+      name: "tasks",
+      status: "skipped",
+      detail:
+        "task gate not enabled for this package (created before the gate); " +
+        "flows created by this keryx version opt in automatically",
+    };
+  }
+  const verdict = evaluateTaskGate(flow.tasks);
+  if (verdict.passed) {
+    return {
+      name: "tasks",
+      status: "pass",
+      detail: `${verdict.total} task(s) terminal`,
+    };
+  }
+  const reasons: string[] = [];
+  if (verdict.open.length > 0) {
+    reasons.push(`not done: ${verdict.open.join(", ")}`);
+  }
+  if (verdict.failed.length > 0) {
+    reasons.push(`failed: ${verdict.failed.join(", ")}`);
+  }
+  if (verdict.unreasonedSkips.length > 0) {
+    reasons.push(
+      `skipped without a recorded reason: ${verdict.unreasonedSkips.join(", ")} ` +
+        '(use: keryx flow task done <id> <Tn> --disposition skipped --reason "<why>")',
+    );
+  }
+  return { name: "tasks", status: "fail", detail: reasons.join("; ") };
 }
 
 async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {

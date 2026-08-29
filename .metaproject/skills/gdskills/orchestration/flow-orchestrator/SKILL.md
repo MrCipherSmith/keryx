@@ -12,7 +12,7 @@ triggers:
   - "managed implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "orchestration"
 license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
@@ -54,9 +54,10 @@ Flow state lives in `.metaproject/flows/<flow-id>/`.
 
 CLI-owned files:
 
-- `flow.json` - never edit by hand.
+- `flow.json` - never edit by hand (read it freely; write only via the CLI).
 - status transitions - only through `keryx flow ...`.
 - task status - only through `keryx flow task done ...`.
+- task attempt counts - only through `keryx flow task attempt ...`.
 - frozen acceptance criteria changes - only through
   `keryx flow ac update <id> --reason "<why>"`.
 
@@ -96,7 +97,57 @@ flowchart TD
 
 ## Phase 0: Route And Resume
 
-1. Run `keryx flow list`.
+### 0.0 State Resumption Check
+
+The input contract accepts `mode: "resume"`; this is the procedure behind it.
+Run it before asking the user anything, on **every** invocation — not only when
+`mode` is `resume`. A session that restarts mid-flow remembers nothing of what
+it already tried. The flow package does.
+
+1. Run `keryx flow list`. Any flow whose status is `in-progress`,
+   `implemented`, `completing`, or `blocked` is an interrupted flow.
+2. If one exists, ASK the user, with the concrete numbers, once:
+   "Found an in-flight flow `<id>` '<title>' (status `<status>`, tasks
+   `<done>/<total>`). Resume it, or start a new flow?" Never guess.
+3. If resume:
+   1. Run `keryx flow status <id>` and read the flow package —
+      `description.md`, `plan.md`, `context.md`, `journal.md`, and the frozen
+      `acceptance-criteria.md`.
+   2. Read `.metaproject/flows/<dir>/flow.json` (read-only; it stays CLI-owned)
+      and take `tasks[].attempts.count` and `tasks[].attempts.log` for every
+      task that is not `done`. **That is the attempt count. Never count
+      attempts from your own context** — a resumed session's context starts at
+      zero while the real count does not, and a loop bound computed from zero
+      is not a bound.
+   3. Resume at the first task whose `status` is not `done`, respecting
+      `dependsOn` order.
+   4. Before dispatching a worker for that task, record the attempt:
+
+      ```bash
+      keryx flow task attempt <id> <Tn> --outcome started --detail "resumed after session restart"
+      ```
+
+   5. Apply the Phase 4 attempt budget against the **persisted** count. If
+      `attempts.count` for the task has already reached six, do not re-dispatch
+      the same approach: go to the re-planning step (Phase 4, PR review/fix
+      loop, step 4) and record the decision in `journal.md`.
+   6. If the flow is `blocked`, read the blocking reason from `journal.md`,
+      resolve or escalate it, then `keryx flow unblock <id>`.
+4. If the user wants a new flow, continue at 0.1.
+
+Record attempts as they happen, not only on resume:
+
+```bash
+keryx flow task attempt <id> <Tn> --outcome started|failed|blocked [--detail "<what happened>"]
+```
+
+`attempts.count` is append-only and lives in `flow.json`. A counter that lives
+only in the orchestrator's context resets to zero exactly when the loop bound
+matters most, which makes it not a counter.
+
+### 0.1 Route
+
+1. Reuse the `keryx flow list` output from 0.0.
 2. If an active flow obviously matches the user request, use it.
 3. If multiple active flows could match, ask one concise question.
 4. If no flow exists and the request is multi-step, create one:
@@ -169,9 +220,27 @@ agree at all - the change could not work in production. The check had been
 identified correctly and then skipped, because nothing made skipping it
 visible.
 
-Tasks are the mechanism that already exists for this: `flow complete` gates
-on them, so an unrun verification step keeps the flow open instead of being
+Tasks are the mechanism for this. `keryx flow complete` runs a `tasks` gate
+over them, so an unrun verification step keeps the flow open instead of being
 quietly dropped.
+
+Know the gate's exact scope, because for years this file claimed a gate that
+did not exist and 24 completed flows shipped with an open task:
+
+- the gate is **opt-in per flow package**, keyed on `gates.tasks` in
+  `flow.json`, which `keryx flow init` writes for every flow it creates. A
+  package created before the gate landed does not carry the flag, and for it
+  the gate reports `skipped` and blocks nothing;
+- a task fails the gate when its status is not `done`, when its disposition is
+  `failed`, or when its disposition is `skipped` with no recorded reason;
+- to close a task as deliberately not needed, record why:
+
+  ```bash
+  keryx flow task done <id> <Tn> --disposition skipped --reason "<why it was not needed>"
+  ```
+
+Read the `tasks` line in the `flow complete` output. If it says `skipped`, the
+gate did not run and the task list is yours to verify by hand.
 
 Then freeze and start:
 
@@ -258,9 +327,17 @@ properly formatted `subagent-result`.
 | `DONE_WITH_CONCERNS` | Accept, record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
 | `NEEDS_CONTEXT` | Do not fail. Enrich `context_refs`/`files_to_read` from gdgraph/gdctx/wiki/memory, then re-dispatch the same `dispatch_id`. |
 | `BLOCKED` | `keryx flow block <id> --reason "<worker reason>"`; resolve or escalate one concise question, then `flow unblock` and re-dispatch. |
-| `FAILED` | Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
+| `FAILED` | Emitted by harness **child** workers (`src/harness/child/contract.ts`), never by skill workers — `task-implementer` maps its own `failed` onto `BLOCKED`. Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
 
-Carry `run_id`/`dispatch_id` across retries so the flow journal stays traceable.
+Carry `run_id`/`dispatch_id` across retries so the flow journal stays traceable,
+and record every dispatch against the task's persisted counter so a session
+restart does not reset the budget:
+
+```bash
+keryx flow task attempt <id> <Tn> --outcome started --detail "<dispatch_id>"
+# on a BLOCKED or unusable reply, before re-dispatching:
+keryx flow task attempt <id> <Tn> --outcome blocked --detail "<worker reason>"
+```
 
 ## Phase 3: Verification And Review
 
@@ -316,7 +393,10 @@ How should this flow end?
 2. If findings or required check failures remain, create or update a flow fix
    task, dispatch `task-implementer`, push the fix, and run review again.
 3. Allow at most six review/fix attempts for the current approach. Count an
-   attempt when review/check results are available, including a clean result.
+   attempt when review/check results are available, including a clean result,
+   and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the
+   count survives a session restart. Read the budget from that task's
+   `attempts.count` in `flow.json`, never from this session's memory.
 4. If attempt six is not clean, do not blindly repeat the same loop. Enrich
    context from the findings, affected graph, relevant wiki, and
    health/testing artifacts; identify the likely cycle cause; choose a
