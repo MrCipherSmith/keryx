@@ -1,0 +1,171 @@
+{
+  "$comment": [
+    "What became of each finding that the automatic extractor in",
+    "scripts/review-precision-baseline.ts cannot reach. The extractor reads",
+    "`closed by <sha>` markers out of a report; these rows carry dispositions",
+    "that live in an owning flow's description or journal, or in a LATER review",
+    "record that resolves an earlier finding.",
+    "",
+    "Every row states the file its evidence is in and quotes it, so a reader can",
+    "check the claim without trusting this file. A finding with no defensible",
+    "evidence gets NO ROW: the script then reports it as `unknown`, which is the",
+    "honest answer and the one that keeps the precision figure from being",
+    "inflated by findings nobody dispositioned.",
+    "",
+    "Categories: acted-on | dismissed-incorrect | dismissed-wont-fix |",
+    "dismissed-out-of-scope | dismissed-deprioritised. Only the first two enter",
+    "the precision ratio."
+  ],
+  "rows": [
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-001",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:15 lists F-001 as a blocker to fix; flow 133 journal records 15/15 acceptance criteria confirmed and the flow completed."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-002",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:22 lists F-002 as a blocker to fix; flow 133 journal records 15/15 acceptance criteria confirmed and the flow completed."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-003",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T7: F-003: an injection finding blocks, at both sites of the class'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-004",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T8: F-004: one profile ranking, trustMode included, guarded'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-005",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-006",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-007",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-008",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T9: F-008: the error boundary on the listener'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-009",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T10: F-009/F-010/F-011: the three test defects'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-010",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T10: F-009/F-010/F-011: the three test defects'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-011",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/journal.md: 'task-done: T10: F-009/F-010/F-011: the three test defects'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-012",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:8 'F-012 is closed by the per-call exemption added during that rebase'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-013",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:9 'F-013/F-014/F-015 were this branch's siblings and are in `main`'; flow 132 journal 'task-done: T6: F-013a: widen the AC8 extractor to the whole instruction class'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-014",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:9 'F-013/F-014/F-015 ... are in `main`'; flow 132 journal 'task-done: T5: F-014c: source-level guard over the caller class'."
+    },
+    {
+      "reviewId": "2026-08-01-ingest-feat-r4c-turn-submission",
+      "findingId": "F-015",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/133-2026-08-01-fix-round-pr220/description.md:9 'F-013/F-014/F-015 ... are in `main`'; flow 132 journal ac-confirmed AC8/AC9 pin findingHeading() against the phantom-finding class this finding names."
+    },
+    {
+      "reviewId": "2026-08-11-pr-265",
+      "findingId": "F-001",
+      "category": "acted-on",
+      "evidence": ".metaproject/flows/143-2026-08-11-shared-agent-context-phase-0-contract-al/reviews/2026-08-12-pr-265-fix-round/report.md:8 'Prior finding: F-001 ... Verdict: APPROVE. F-001 is fully resolved'. An explicit disposition in a review record — the strongest evidence in this corpus, and the only instance of it."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-001",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated and the final strict re-review returned NO PROBLEMS'. Names no finding id; covers the round, not this finding individually."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-002",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; the same entry names 'evidence minting' among the remediated topics, which is this finding's subject."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-003",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'. This finding's subject (linkable pseudonyms) is NOT among the topics that entry enumerates."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-004",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'deterministic baseline execution' is named among the remediated topics."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-005",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'digest binding' is named among the remediated topics."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-006",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'sandbox containment' is named among the remediated topics."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-007",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'receipt checkpoint concurrency' is named among the remediated topics."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-008",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'deadline termination' is named among the remediated topics."
+    },
+    {
+      "reviewId": "2026-08-12-ingest-273",
+      "findingId": "F-009",
+      "category": "acted-on",
+      "evidence": "BLANKET: .metaproject/flows/151-.../journal.md 2026-08-12T11:06:57Z 'Every finding was remediated'; 'canonical receipt validation' is named among the remediated topics."
+    }
+  ]
+}
