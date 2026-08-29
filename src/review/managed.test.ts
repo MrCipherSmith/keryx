@@ -224,8 +224,14 @@ test("ingest writes classified findings and skill learning decision", async () =
 
   const findings = await readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
   expect(findings).toContain('"id": "F-001"');
-  expect(findings).toContain('"classification": "valid_followup"');
-  expect(findings).toContain('"class_scope_present": true');
+  // `classification` and `flow_relevance` are the pipeline's triage, not the
+  // reviewer's finding, and `review-finding.schema.json` is
+  // `additionalProperties: false`. They are recorded in decisions.md; findings.json
+  // carries the contract shape and only that.
+  expect(findings).not.toContain('"classification"');
+  expect(findings).toContain('"class_scope"');
+  const decisions = await readFile(path.join(ROOT, result.path, "decisions.md"), "utf8");
+  expect(decisions).toContain("F-001: create follow-up task or learning proposal (valid_followup, standalone_review).");
   const learning = await readFile(path.join(ROOT, result.path, "learning.md"), "utf8");
   expect(learning).toContain("## Skill Learning");
 });
@@ -311,10 +317,15 @@ test("a finding that cross-references another id keeps its own body", async () =
 
   const findings = JSON.parse(
     await readFile(path.join(ROOT, result.path, "findings.json"), "utf8"),
-  ) as Array<{ id: string; class_scope_present?: boolean }>;
+  ) as Array<{ id: string; class_scope?: { sites: string[] } }>;
   // One finding, not two: the prose mention of F-001 is not a heading.
   expect(findings.map((f) => f.id)).toEqual(["F-010"]);
-  expect(findings[0]?.class_scope_present).toBe(true);
+  // The class_scope written BELOW the cross-reference survived, and is now
+  // extracted rather than recorded as a bare boolean.
+  expect(findings[0]?.class_scope?.sites).toEqual([
+    "config-dir.readers.test.ts",
+    "config-dir.writers.test.ts",
+  ]);
 });
 
 // The report this pipeline was run against, byte-identical to the package
