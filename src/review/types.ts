@@ -72,6 +72,48 @@ export type ReviewFindingClassScope = {
 };
 
 /**
+ * What became of a finding.
+ *
+ * Six states, and the split is the point. Only `acted-on` and
+ * `dismissed-incorrect` say anything about whether the reviewer was RIGHT; the
+ * other three dismissals say the finding was correct and not worth doing now.
+ * Collapsing them into one `dismissed` bucket produces a dismissal rate that
+ * cannot be read, which is why they are separate here and separate in
+ * `scripts/review-precision-baseline.ts`, whose categories these mirror exactly.
+ *
+ * `unknown` is the default AND the reading of an absent disposition, so the 83
+ * pre-contract findings on disk report as unknown rather than as anything
+ * flattering.
+ */
+export const FINDING_DISPOSITION_STATES = [
+  "unknown",
+  "acted-on",
+  "dismissed-incorrect",
+  "dismissed-wont-fix",
+  "dismissed-out-of-scope",
+  "dismissed-deprioritised",
+] as const;
+export type FindingDispositionState = (typeof FINDING_DISPOSITION_STATES)[number];
+
+/** The dismissal states: a finding that was raised and then not acted on. */
+export const FINDING_DISMISSAL_STATES = FINDING_DISPOSITION_STATES.filter((state) =>
+  state.startsWith("dismissed-"),
+) as ReadonlyArray<FindingDispositionState>;
+
+/**
+ * A disposition, which is a state plus the evidence for it.
+ *
+ * `evidence` is not optional in practice: every state except `unknown` requires
+ * it, enforced by `review-finding.schema.json` and again by the writers in
+ * `managed.ts`. It is typed optional only so `{ state: "unknown" }` is
+ * expressible.
+ */
+export type ReviewFindingDisposition = {
+  state: FindingDispositionState;
+  evidence?: string | undefined;
+};
+
+/**
  * One finding, in exactly the shape `review-finding.schema.json` accepts.
  *
  * This type is the persisted record: `findings.json` is an array of these and
@@ -87,6 +129,25 @@ export type ReviewFindingClassScope = {
  */
 export type StructuredReviewFinding = {
   id: string;
+  /**
+   * The join key: `<reviewId>#<id>`, unique across packages and stable across
+   * rounds.
+   *
+   * `id` stays the display form because it is load-bearing for humans and for
+   * the legacy parser — it is read out of a markdown heading, printed into
+   * `decisions.md` and `learning.md`, quoted in flow journals and commit
+   * messages, and carried by all 83 records already on disk. It is also
+   * per-report: `F-001` denotes six different findings across the corpus, so it
+   * cannot be a key. The two jobs are separated rather than merged.
+   *
+   * Minted once, by {@link module:review/managed}, when a finding is first
+   * recorded; carried verbatim when the producer already supplies one, which is
+   * what makes it stable across rounds — round N+1 hands round N's finding back
+   * through `prior_findings[].finding`, key included.
+   *
+   * Optional because the pre-contract corpus has none and must still read.
+   */
+  global_id?: string | undefined;
   reviewer: string;
   severity: ReviewFindingSeverity;
   problem: string;
@@ -102,6 +163,18 @@ export type StructuredReviewFinding = {
   related_skill?: string | null | undefined;
   learning_candidate?: boolean | undefined;
   class_scope?: ReviewFindingClassScope | undefined;
+  /**
+   * What became of the finding. Absent reads as `unknown` — see
+   * {@link module:review/managed.findingDispositionState}.
+   *
+   * This is the one keryx-local judgement that DOES belong on the persisted
+   * record rather than in `decisions.md`, and the reason is the measurement:
+   * `decisions.md` is prose, so the disposition of 83 findings had to be
+   * reconstructed from commit messages and flow journals by a curated ledger,
+   * and the reconstruction could not find a single wrong finding because none
+   * was ever written down. A field on the record is the thing that ends that.
+   */
+  disposition?: ReviewFindingDisposition | undefined;
 };
 
 /**
@@ -153,6 +226,27 @@ export type ManagedReviewInput = {
    * travelling inside the report itself.
    */
   findings?: ReviewFindingsSource | undefined;
+  /**
+   * What this round RAISED AND THEN DISMISSED — the half that was never written
+   * down.
+   *
+   * Rounds 3 and 5 of PR #220 each carry a section headed "Where a reviewer was
+   * wrong", describing findings refuted during the round. Neither refuted
+   * finding became a record. PR #220's consolidated review abridged thirteen
+   * further observations and deferred to a "full set" that is not on disk, and
+   * the owning flow then declared the whole class out of scope — textbook
+   * `dismissed-out-of-scope` dispositions, correctly reasoned, and zero of them
+   * recorded. What survives to `findings.json` is therefore the survivors of an
+   * unlogged triage, which is why measuring the corpus measures the triage and
+   * returns 100% by construction.
+   *
+   * These are normalized, contract-gated and written exactly like reported
+   * findings, into the same `findings.json`, so nothing has to remember to read
+   * a second file. Each one is stamped with a dismissal disposition —
+   * `dismissed-incorrect` unless it names another `dismissed-*` state — and
+   * each one must carry `disposition.evidence`. Refusal becomes a write.
+   */
+  refuted?: ReviewFindingsSource | undefined;
   now?: Date | undefined;
 };
 

@@ -6,11 +6,14 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
+  FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
   REVIEW_FINDING_CONFIDENCES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
+  type FindingClassification,
+  type FindingDispositionState,
   type FlowMatchResult,
   type ManagedReviewInput,
   type ManagedReviewManifest,
@@ -21,6 +24,7 @@ import {
   type ReviewCoverageEntry,
   type ReviewFindingClassScope,
   type ReviewFindingConfidence,
+  type ReviewFindingDisposition,
   type ReviewFindingsSource,
   type ReviewerResultLike,
   type StructuredReviewFinding,
@@ -63,14 +67,26 @@ export async function createManagedReviewPackage(
   const packageDir = packagePath(input.cwd, input.mode, reviewId, flowMatch);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
-  const findings = await normalizeFindings({
+  const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  const reported = await normalizeFindings({
     report,
     reportLabel: reportLabel(input),
     mode: input.mode,
     attachedToFlow: flowMatch !== null,
     source: input.findings,
-    reviewers: coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer),
+    reviewers,
   });
+  // What the round reported, then what it refuted — one array, one file, one
+  // gate. A separate `refuted.json` would be a second thing every consumer has
+  // to remember to read, and the consumer that forgets keeps counting zero
+  // wrong findings, which is the state this exists to leave.
+  const findings = [
+    ...reported,
+    ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
+  ];
+  // Minted here rather than in the parsers because `reviewId` is the half of the
+  // key that makes it unique, and the parsers do not know it.
+  assignGlobalIds(findings, reviewId);
   const manifest = buildManifest({
     input,
     reviewId,
@@ -83,6 +99,24 @@ export async function createManagedReviewPackage(
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
   if (!validation.valid) {
     throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+  }
+
+  const collisions = findingKeyCollisions(findings);
+  if (collisions.length > 0) {
+    throw new Error(
+      `Refusing to record two findings under one key: ${collisions.join(
+        "; ",
+      )}. \`global_id\` is \`<reviewId>#<id>\`, so two findings sharing a display id in one package share a key — and a key that denotes two findings is the defect this field exists to remove.`,
+    );
+  }
+
+  const unevidenced = unevidencedDispositions(findings);
+  if (unevidenced.length > 0) {
+    throw new Error(
+      `Refusing to record a disposition with no evidence: ${unevidenced.join(
+        ", ",
+      )}. A disposition without evidence is an assertion, and a corpus of assertions is what measured 100% precision while recording zero wrong findings. Give the commit, the test, or the decision — or record nothing and let it read as unknown.`,
+    );
   }
 
   const violations = classScopeViolations(findings);
@@ -139,13 +173,55 @@ export async function getManagedReviewStatus(cwd: string, ref: string): Promise<
   return JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
 }
 
-export async function completeManagedReview(cwd: string, ref: string): Promise<ManagedReviewManifest> {
+/**
+ * One recorded outcome, naming the finding it is about.
+ *
+ * `finding` accepts either the `global_id` or the display `id`. The display form
+ * is what a human writing a fix-round note has in front of them; it is resolved
+ * against this package alone, and an ambiguous one is refused rather than
+ * guessed — which is the whole reason `global_id` exists.
+ */
+export type FindingDispositionRecord = {
+  finding: string;
+  state: FindingDispositionState;
+  evidence?: string | undefined;
+};
+
+export type CompleteManagedReviewOptions = {
+  dispositions?: readonly FindingDispositionRecord[] | undefined;
+};
+
+/**
+ * Close a review package, and record what became of its findings.
+ *
+ * This is where the disposition is written because this is the ONE place the
+ * pipeline already says a round is finished with something; inventing a second
+ * writer would mean a round could close without ever passing through it, which
+ * is how the outcome went unrecorded for 83 findings in the first place.
+ *
+ * The findings are re-read from disk and only the named ones are touched, so a
+ * package written before the finding contract existed can still be annotated. Its
+ * records are NOT re-validated as a whole — the ingest gate is where a finding's
+ * shape is decided, and re-running it at close time would make the entire
+ * pre-contract corpus impossible to disposition, which is the opposite of the
+ * point. The disposition itself IS validated, against the subschema in
+ * `review-finding.schema.json`, so there is one definition of a valid one.
+ */
+export async function completeManagedReview(
+  cwd: string,
+  ref: string,
+  options: CompleteManagedReviewOptions = {},
+): Promise<ManagedReviewManifest> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
   const manifestPath = path.join(packageDir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const missing = await missingArtifacts(packageDir);
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
+  }
+  const dispositions = options.dispositions ?? [];
+  if (dispositions.length > 0) {
+    await recordDispositions(packageDir, dispositions);
   }
   const updated: ManagedReviewManifest = {
     ...manifest,
@@ -420,7 +496,199 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   if (finding.class_scope !== undefined) {
     record.class_scope = finding.class_scope;
   }
+  // Written only when present, on both. `global_id` is absent on nothing the
+  // current pipeline writes but stays optional so a legacy record read back and
+  // rewritten does not acquire an invented key; `disposition` is absent unless
+  // an outcome was actually recorded, because writing `{state: "unknown"}` onto
+  // every finding says nothing while implying somebody decided — the exact
+  // failure `classification: valid_followup` on 82 of 83 records already is.
+  if (finding.global_id !== undefined) {
+    record.global_id = finding.global_id;
+  }
+  if (finding.disposition !== undefined) {
+    record.disposition = finding.disposition;
+  }
   return record;
+}
+
+// ---------------------------------------------------------------------------
+// Identity and disposition
+// ---------------------------------------------------------------------------
+
+/**
+ * What became of a finding, with an absent disposition read as `unknown`.
+ *
+ * The reading rule, in one place, because 83 findings on disk have no
+ * disposition property and every consumer must agree on what that means. It
+ * means nobody recorded an outcome. It does NOT mean the finding was fine.
+ */
+export function findingDispositionState(finding: {
+  disposition?: ReviewFindingDisposition | undefined;
+}): FindingDispositionState {
+  return finding.disposition?.state ?? "unknown";
+}
+
+/** The key a finding is joined by: `<reviewId>#<id>`. */
+export function mintGlobalFindingId(reviewId: string, id: string): string {
+  return `${reviewId}#${id}`;
+}
+
+/**
+ * Give every finding a key, without overwriting one it already carries.
+ *
+ * The non-overwrite half is what makes the key STABLE. A finding re-reported in
+ * round N+1 arrives through `prior_findings[].finding` carrying the key round N
+ * minted; re-minting it under round N+1's `reviewId` would give the same finding
+ * two keys and break the only join this field exists to provide.
+ */
+function assignGlobalIds(findings: NormalizedReviewFinding[], reviewId: string): void {
+  for (const finding of findings) {
+    if (typeof finding.global_id !== "string" || finding.global_id === "") {
+      finding.global_id = mintGlobalFindingId(reviewId, finding.id);
+    }
+  }
+}
+
+/** Keys claimed by more than one finding in this package, described. */
+function findingKeyCollisions(findings: readonly NormalizedReviewFinding[]): string[] {
+  const byKey = new Map<string, NormalizedReviewFinding[]>();
+  for (const finding of findings) {
+    const key = finding.global_id ?? finding.id;
+    byKey.set(key, [...(byKey.get(key) ?? []), finding]);
+  }
+  return [...byKey.entries()]
+    .filter(([, group]) => group.length > 1)
+    .map(([key, group]) => `${key} claimed by ${group.length} findings`);
+}
+
+/** Findings carrying a disposition that asserts an outcome and cites nothing. */
+function unevidencedDispositions(findings: readonly NormalizedReviewFinding[]): string[] {
+  return findings
+    .filter((finding) => {
+      const disposition = finding.disposition;
+      return (
+        disposition !== undefined &&
+        disposition.state !== "unknown" &&
+        (typeof disposition.evidence !== "string" || disposition.evidence.trim() === "")
+      );
+    })
+    .map((finding) => `${finding.global_id ?? finding.id} (${finding.disposition?.state})`);
+}
+
+/**
+ * The findings a round raised and then dismissed, in the shape that reaches disk.
+ *
+ * Stamped rather than trusted: a payload arriving on this channel is a statement
+ * that the round did NOT act on these, so `acted-on` and `unknown` are refused
+ * outright instead of being silently rewritten. `dismissed-incorrect` is the
+ * default because "refuted" is what the channel is for; the other dismissals are
+ * allowed because `dismissed-out-of-scope = 0` in the recorded corpus means "not
+ * written down" rather than "did not happen", and giving out-of-scope nowhere to
+ * go is how it got there.
+ */
+function fromRefutedSource(
+  source: ReviewFindingsSource | undefined,
+  reviewers: string[],
+  attachedToFlow: boolean,
+): NormalizedReviewFinding[] {
+  if (source === undefined) {
+    return [];
+  }
+  return fromStructuredSource(source, reviewers).map((finding) => {
+    const declared = finding.disposition?.state;
+    if (declared !== undefined && !FINDING_DISMISSAL_STATES.includes(declared)) {
+      throw new Error(
+        `Refusing to record ${finding.id} as refuted with disposition "${declared}": findings passed as refuted were raised and NOT acted on. Use one of ${FINDING_DISMISSAL_STATES.join(
+          ", ",
+        )}, or report it as a finding instead.`,
+      );
+    }
+    const state: FindingDispositionState = declared ?? "dismissed-incorrect";
+    const evidence = finding.disposition?.evidence;
+    const disposition: ReviewFindingDisposition =
+      typeof evidence === "string" ? { state, evidence } : { state };
+    return {
+      ...finding,
+      // The legacy mode-derived triage, made to agree with the disposition
+      // rather than left saying `valid_followup` about a finding this round
+      // just judged wrong. `disposition` is the field that means something;
+      // `classification` is kept consistent so `decisions.md` does not contradict
+      // `findings.json`.
+      classification: refutedClassification(state),
+      flow_relevance: attachedToFlow ? "post_flow_feedback" : "standalone_review",
+      disposition,
+    };
+  });
+}
+
+function refutedClassification(state: FindingDispositionState): FindingClassification {
+  return state === "dismissed-incorrect" ? "false_positive" : "out_of_scope";
+}
+
+/** Write the recorded outcomes into `findings.json`, or refuse and write nothing. */
+async function recordDispositions(
+  packageDir: string,
+  records: readonly FindingDispositionRecord[],
+): Promise<void> {
+  const findingsPath = path.join(packageDir, "findings.json");
+  const findings = JSON.parse(await readFile(findingsPath, "utf8")) as StructuredReviewFinding[];
+  const schema = await loadSchema("review-finding");
+  const dispositionSchema = schema.properties?.["disposition"];
+  if (!dispositionSchema) {
+    throw new Error(
+      "review-finding.schema.json declares no `disposition` property; refusing to write one the contract does not describe.",
+    );
+  }
+
+  // Validated and resolved in full BEFORE anything is assigned, so a batch that
+  // is wrong anywhere leaves findings.json exactly as it was.
+  const pending: Array<{ finding: StructuredReviewFinding; disposition: ReviewFindingDisposition }> = [];
+  for (const record of records) {
+    const matches = findings.filter(
+      (finding) => finding.global_id === record.finding || finding.id === record.finding,
+    );
+    if (matches.length === 0) {
+      throw new Error(
+        `Cannot record a disposition for "${record.finding}": this package holds no such finding. It holds ${
+          findings.length === 0
+            ? "no findings at all"
+            : findings.map((finding) => finding.global_id ?? finding.id).join(", ")
+        }.`,
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `"${record.finding}" names ${matches.length} findings in this package. Use the global_id: ${matches
+          .map((finding) => finding.global_id ?? finding.id)
+          .join(", ")}.`,
+      );
+    }
+    const finding = matches[0] as StructuredReviewFinding;
+    const disposition: ReviewFindingDisposition =
+      record.evidence === undefined ? { state: record.state } : { state: record.state, evidence: record.evidence };
+    const errors = await validateJson(disposition, dispositionSchema);
+    if (errors.length > 0) {
+      throw new Error(
+        `Refusing to record a disposition for ${finding.global_id ?? finding.id}: ${errors
+          .map((error) => `${error.path.replace(/^\$/, "disposition")} ${error.message}`)
+          .join("; ")}. A disposition that is not \`unknown\` must cite where the outcome is written down.`,
+      );
+    }
+    const existing = finding.disposition;
+    if (existing !== undefined && existing.state !== "unknown" && existing.state !== disposition.state) {
+      throw new Error(
+        `${finding.global_id ?? finding.id} is already recorded as "${existing.state}" (${
+          existing.evidence ?? "no evidence"
+        }); refusing to overwrite it with "${disposition.state}". Reversing a recorded verdict silently is the same erasure this field exists to stop — record the reversal as a new round.`,
+      );
+    }
+    pending.push({ finding, disposition });
+  }
+
+  for (const { finding, disposition } of pending) {
+    finding.disposition = disposition;
+  }
+  await writeFileAtomic(findingsPath, `${JSON.stringify(findings, null, 2)}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,13 +1299,20 @@ function renderDecisions(findings: NormalizedReviewFinding[]): string {
   // reviewer states what is wrong, the pipeline states what it intends to do
   // about it. Carrying the pipeline's judgement inside the reviewer's record is
   // what made `findings.json` unusable as `prior_findings[].finding`.
+  // A finding carrying a disposition gets THAT sentence rather than the
+  // template one. `decisions.md` saying `create follow-up task or learning
+  // proposal` for all 83 recorded findings is one of the four reasons the
+  // precision baseline could not be computed from history.
   return `# Decisions
 
 ${findings
-  .map(
-    (finding) =>
-      `- ${finding.id}: create follow-up task or learning proposal (${finding.classification}, ${finding.flow_relevance}).`,
-  )
+  .map((finding) => {
+    const disposition = finding.disposition;
+    if (disposition !== undefined && disposition.state !== "unknown") {
+      return `- ${finding.id}: ${disposition.state} — ${disposition.evidence ?? "no evidence recorded"} (${finding.classification}, ${finding.flow_relevance}).`;
+    }
+    return `- ${finding.id}: create follow-up task or learning proposal (${finding.classification}, ${finding.flow_relevance}).`;
+  })
   .join("\n")}
 `;
 }

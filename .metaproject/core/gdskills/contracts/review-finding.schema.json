@@ -16,7 +16,45 @@
   ],
   "properties": {
     "id": { "type": "string" },
+    "global_id": {
+      "title": "The finding's identity, unique across every review package",
+      "description": "`id` is the DISPLAY form (`F-001`) and is per-report: 15 of 43 distinct ids in the recorded corpus appear in more than one package, and `F-001` denotes six different findings, so joining a finding to a commit, a ledger row or a flow journal by `id` is unsafe for two thirds of it. `global_id` is the join key: `<reviewId>#<id>`, minted once when the finding is first recorded and CARRIED VERBATIM thereafter, so a finding re-reported in round N+1 keeps the key it was minted under in round N. Uniqueness comes from `reviewId` being a package directory name rather than from a registry, which is what makes the key recomputable from disk with no new state. Optional because 83 findings predate it and read back without one; a record written by the current pipeline always carries it.",
+      "type": "string",
+      "minLength": 1
+    },
     "reviewer": { "type": "string" },
+    "disposition": {
+      "title": "What became of this finding, and the evidence for saying so",
+      "description": "Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json: a reviewer states what is wrong, it never states what became of the finding. The measured reason this exists: precision = acted-on / (acted-on + dismissed-incorrect) computed over the recorded corpus returned 53/53 = 100%, not because the reviewers were right but because nothing on disk could express a wrong finding. `classification` looked like a validity verdict and was assigned from the ingest MODE; decisions.md said the same sentence for every finding. Only `acted-on` and `dismissed-incorrect` say anything about reviewer accuracy, which is why the three non-accuracy dismissals are separate states rather than one `dismissed` bucket — collapsing them is what makes a dismissal rate meaningless.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "acted-on",
+            "dismissed-incorrect",
+            "dismissed-wont-fix",
+            "dismissed-out-of-scope",
+            "dismissed-deprioritised"
+          ],
+          "default": "unknown",
+          "description": "`unknown` is the default and the reading of an absent `disposition`: nobody recorded an outcome. It is never counted as valid — an unknown counted as acted-on inflates the very figure this field exists to make measurable."
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the outcome is written down: the commit that closed it, the test that went red, the decision that dismissed it. A disposition without this is an assertion, and assertions are what produced a corpus whose findings all appear correct."
+        }
+      },
+      "if": {
+        "required": ["state"],
+        "properties": { "state": { "const": "unknown" } }
+      },
+      "else": { "required": ["evidence"] }
+    },
     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
     "file": { "type": ["string", "null"] },
     "line": { "type": ["integer", "null"], "minimum": 1 },

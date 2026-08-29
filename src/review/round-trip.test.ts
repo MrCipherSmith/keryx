@@ -17,7 +17,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
-import { createManagedReviewPackage } from "./managed";
+import { completeManagedReview, createManagedReviewPackage, findingDispositionState } from "./managed";
 import type { ManagedReviewInput, StructuredReviewFinding } from "./types";
 
 const REPO_ROOT = process.cwd();
@@ -254,6 +254,105 @@ describe("a round-2 dispatch is built from a round-1 artifact", () => {
   });
 });
 
+describe("a disposition and a finding key survive the round trip", () => {
+  // The instrumentation is worthless if it cannot be handed to the next round.
+  // `prior_findings[].finding` $refs `review-finding.schema.json`, which is
+  // `additionalProperties: false` — so a field this pipeline writes and that
+  // contract does not declare would make round 1's own artifact unusable as
+  // round 2's input, which is the exact failure this file was written for.
+
+  test("round 2's dispatch carries what round 1 decided, and validates", async () => {
+    await withTempRoot(async (root) => {
+      const findings = await round1Findings(root);
+      await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
+        dispositions: [
+          {
+            finding: "2026-08-29-round-1#F-001",
+            state: "acted-on",
+            evidence: "config-dir.writers.test.ts drives every writer under umask 002",
+          },
+          {
+            finding: "2026-08-29-round-1#F-002",
+            state: "dismissed-incorrect",
+            evidence: "deleted the guarded line and the test went red; the finding read the wrong guard",
+          },
+        ],
+      });
+
+      const closed = JSON.parse(
+        await readFile(
+          path.join(root, ".metaproject", "reviews", "2026-08-29-round-1", "findings.json"),
+          "utf8",
+        ),
+      ) as StructuredReviewFinding[];
+
+      // Non-vacuous: the round trip below would pass on findings carrying no
+      // disposition at all, so the payload is pinned first.
+      expect(closed.map((finding) => findingDispositionState(finding))).toEqual([
+        "acted-on",
+        "dismissed-incorrect",
+      ]);
+      expect(closed.map((finding) => finding.global_id)).toEqual([
+        "2026-08-29-round-1#F-001",
+        "2026-08-29-round-1#F-002",
+      ]);
+      // The display ids are untouched — they are what the markdown parser reads
+      // and what `decisions.md` prints.
+      expect(closed.map((finding) => finding.id)).toEqual(findings.map((finding) => finding.id));
+
+      const schema = await loadSchema("review-finding");
+      for (const finding of closed) {
+        expect(await validateJson(finding, schema)).toEqual([]);
+      }
+      expect(await validateJson(round2Input(closed), REVIEWER_INPUT_SCHEMA)).toEqual([]);
+    });
+  });
+
+  test("a refuted finding reaches disk and reaches the next reviewer", async () => {
+    // Rounds 3 and 5 of PR #220 refuted findings in a section headed "Where a
+    // reviewer was wrong" and recorded neither. A refutation that stays in prose
+    // is a refutation the next round re-discovers and the measurement cannot see.
+    await withTempRoot(async (root) => {
+      const result = await createManagedReviewPackage({
+        cwd: root,
+        mode: "ingest",
+        reviewId: "2026-08-29-round-1-refuted",
+        target: { kind: "report", ref: "review.md" },
+        reportText: ROUND_1_REPORT,
+        refuted: [
+          {
+            id: "F-003",
+            reviewer: "review-performance",
+            severity: "minor",
+            problem: "claimed the writer re-reads the config on every call",
+            impact: "would be a hot-path read",
+            suggested_fix: "cache it",
+            evidence: "the reviewer pointed at the resolver, not the writer",
+            confidence: "medium",
+            disposition: {
+              state: "dismissed-incorrect",
+              evidence: "instrumented the writer; one read per process, not per call",
+            },
+          },
+        ] as unknown as ManagedReviewInput["refuted"],
+        now: new Date("2026-08-29T10:00:00Z"),
+      });
+
+      const findings = JSON.parse(
+        await readFile(path.join(root, result.path, "findings.json"), "utf8"),
+      ) as StructuredReviewFinding[];
+
+      expect(findings.map((finding) => finding.id)).toEqual(["F-001", "F-002", "F-003"]);
+      expect(findings.map((finding) => findingDispositionState(finding))).toEqual([
+        "unknown",
+        "unknown",
+        "dismissed-incorrect",
+      ]);
+      expect(await validateJson(round2Input(findings), REVIEWER_INPUT_SCHEMA)).toEqual([]);
+    });
+  });
+});
+
 describe("legacy markdown reports are not stranded", () => {
   // The reports on disk are the reason the parser is kept rather than deleted.
   // Every package under `.metaproject/reviews/` was written by the pipeline
@@ -273,6 +372,42 @@ describe("legacy markdown reports are not stranded", () => {
     }
     return out;
   }
+
+  test("the findings already on disk have no disposition and read as unknown", async () => {
+    // The corpus the baseline was measured over: 83 findings in the
+    // pre-contract shape, none of which will ever gain a disposition. The
+    // reading rule is what keeps them legible, and it must be `unknown` — an
+    // absent disposition counted as valid is what inflates the very figure this
+    // instrumentation exists to make honest.
+    const roots = [REVIEWS_DIR];
+    const flowsDir = path.join(REPO_ROOT, ".metaproject", "flows");
+    if (existsSync(flowsDir)) {
+      for (const flow of readdirSync(flowsDir)) {
+        const reviews = path.join(flowsDir, flow, "reviews");
+        if (existsSync(reviews)) {
+          roots.push(reviews);
+        }
+      }
+    }
+
+    let total = 0;
+    for (const root of roots) {
+      for (const entry of readdirSync(root, { withFileTypes: true })) {
+        const file = path.join(root, entry.name, "findings.json");
+        if (!entry.isDirectory() || !existsSync(file)) {
+          continue;
+        }
+        for (const finding of JSON.parse(readFileSync(file, "utf8")) as StructuredReviewFinding[]) {
+          total += 1;
+          expect(finding.disposition).toBeUndefined();
+          expect(findingDispositionState(finding)).toBe("unknown");
+        }
+      }
+    }
+    // Non-vacuous: the assertion above holds trivially for an empty corpus, and
+    // the recorded corpus is 83 findings.
+    expect(total).toBeGreaterThan(80);
+  });
 
   test("every recorded review package still ingests", async () => {
     const reports = realReports();
