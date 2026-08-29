@@ -257,8 +257,62 @@ test("evaluateTaskGate reports every failing category at once, not just the firs
   expect(verdict.open).toEqual(["T1"]);
   expect(verdict.failed).toEqual(["T2"]);
   expect(verdict.unreasonedSkips).toEqual(["T3"]);
+  expect(verdict.blocked).toEqual(["T6"]);
   expect(verdict.total).toBe(6);
   expect(verdict.passed).toBe(false);
+});
+
+test("a blocked task fails the gate — it is terminal, but the work did not happen", () => {
+  // This is the bypass the first version of the gate shipped with, and it was
+  // cheaper than the one the gate was written to prevent: unlike `skipped`,
+  // `blocked` required no reason at all. It is also not hypothetical CLI abuse —
+  // `ManagedFlowPort` maps a harness completion gate of `blocked` to this exact
+  // disposition and writes it through `taskDone`.
+  const verdict = evaluateTaskGate([
+    { id: "T1", title: "a", kind: "implement", status: "done", disposition: "completed" },
+    { id: "T2", title: "b", kind: "review", status: "done", disposition: "blocked" },
+  ]);
+  expect(verdict.blocked).toEqual(["T2"]);
+  expect(verdict.passed).toBe(false);
+});
+
+test("a blocked task fails even when it carries a reason", () => {
+  // A reason makes a skip auditable; it does not make blocked work done.
+  const verdict = evaluateTaskGate([
+    {
+      id: "T1",
+      title: "a",
+      kind: "review",
+      status: "done",
+      disposition: "blocked",
+      dispositionReason: "waiting on upstream",
+    },
+  ]);
+  expect(verdict.blocked).toEqual(["T1"]);
+  expect(verdict.passed).toBe(false);
+});
+
+test("an unrecognised disposition fails the gate rather than passing it", () => {
+  // `--disposition skiped` used to reach disk verbatim, match neither the
+  // `=== "failed"` nor the `=== "skipped"` check, and pass. A gate whose
+  // default for the unknown case is "pass" is not a gate.
+  const verdict = evaluateTaskGate([
+    { id: "T1", title: "a", kind: "review", status: "done", disposition: "skiped" as never },
+  ]);
+  expect(verdict.unknownDisposition).toEqual(["T1"]);
+  expect(verdict.passed).toBe(false);
+});
+
+test("a task appears in exactly one failure bucket", () => {
+  // An unknown disposition is reported as unknown, not also as a non-skip.
+  const verdict = evaluateTaskGate([
+    { id: "T1", title: "a", kind: "review", status: "done", disposition: "bogus" as never },
+  ]);
+  expect(verdict.unknownDisposition).toEqual(["T1"]);
+  expect(verdict.blocked).toEqual([]);
+  expect(verdict.unreasonedSkips).toEqual([]);
+  expect(verdict.failed).toEqual([]);
+  expect(verdict.open).toEqual([]);
 });
 
 test("evaluateTaskGate passes an all-terminal list, including a disposition-less v1 done task", () => {

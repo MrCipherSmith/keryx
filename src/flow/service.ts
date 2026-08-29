@@ -270,7 +270,16 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       task.status = "done";
       // Disposition is distinct from status (TM-01 §6). Honor an explicit
       // disposition; otherwise default a completed task to "completed".
+      const previousDisposition = task.disposition;
       task.disposition = disposition ?? task.disposition ?? "completed";
+      // A reason justifies ONE disposition. `taskDone` is callable repeatedly on
+      // the same task, and without this a reason recorded for an earlier
+      // disposition survived into a later one — leaving "review done, PR
+      // approved" attached to a task then recorded as skipped. That reads as
+      // justified, which is worse than an empty reason.
+      if (disposition !== undefined && disposition !== previousDisposition) {
+        delete task.dispositionReason;
+      }
       // The reason is what makes a "skipped" disposition auditable rather than
       // a quiet way past the gate. Recorded for any disposition; only enforced
       // for "skipped" (by the task gate, so state written by other paths is
@@ -716,6 +725,18 @@ function taskGate(flow: FlowState): GateOutcome {
     reasons.push(
       `skipped without a recorded reason: ${verdict.unreasonedSkips.join(", ")} ` +
         '(use: keryx flow task done <id> <Tn> --disposition skipped --reason "<why>")',
+    );
+  }
+  if (verdict.blocked.length > 0) {
+    reasons.push(
+      `blocked: ${verdict.blocked.join(", ")} ` +
+        "(a blocked task did not get done; resolve it, or close it as skipped with a reason)",
+    );
+  }
+  if (verdict.unknownDisposition.length > 0) {
+    reasons.push(
+      `unrecognised disposition: ${verdict.unknownDisposition.join(", ")} ` +
+        "(expected completed | blocked | failed | skipped)",
     );
   }
   return { name: "tasks", status: "fail", detail: reasons.join("; ") };

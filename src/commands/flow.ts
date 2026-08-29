@@ -49,6 +49,31 @@ function positional(args: string[], index: number): string | undefined {
   return value === undefined || value.startsWith("--") ? undefined : value;
 }
 
+const VALID_DISPOSITIONS = ["completed", "blocked", "failed", "skipped"] as const;
+
+/**
+ * Validate `--disposition` instead of casting it.
+ *
+ * The first version of this cast the raw string straight to `TaskDisposition`.
+ * A typo therefore reached disk verbatim, and because the gate asked
+ * `=== "failed"` and `=== "skipped"` and nothing else, an unrecognised value
+ * matched neither check and passed — `--disposition skiped` closed a task with
+ * no warning from either the CLI guard or the gate. `flow check` caught it
+ * afterwards through the schema enum, which is too late: the flow was already
+ * `done`.
+ */
+function parseDisposition(raw: string | undefined): TaskDisposition | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!(VALID_DISPOSITIONS as readonly string[]).includes(raw)) {
+    throw new Error(
+      `Invalid --disposition "${raw}". Expected one of: ${VALID_DISPOSITIONS.join(", ")}`,
+    );
+  }
+  return raw as TaskDisposition;
+}
+
 function parseAttemptOutcome(raw: string | undefined): AttemptCliOutcome {
   if (raw === undefined || !(ATTEMPT_CLI_OUTCOMES as readonly string[]).includes(raw)) {
     throw new Error(
@@ -309,7 +334,7 @@ async function runTask(args: string[]): Promise<void> {
         'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
       );
     }
-    const disposition = optionValue(args, "--disposition") as TaskDisposition | undefined;
+    const disposition = parseDisposition(optionValue(args, "--disposition"));
     const reason = optionValue(args, "--reason");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
@@ -326,6 +351,12 @@ async function runTask(args: string[]): Promise<void> {
       note(
         'A skipped task without --reason "<why>" fails the task gate at `keryx flow complete`. ' +
           "Re-run with a reason to record why the work was not needed.",
+      );
+    }
+    if (disposition === "blocked") {
+      note(
+        "A blocked task fails the task gate at `keryx flow complete` — it is recorded as terminal, " +
+          "but the work did not happen. Resolve it, or close it as skipped with a reason.",
       );
     }
     return;

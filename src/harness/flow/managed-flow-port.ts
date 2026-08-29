@@ -40,6 +40,30 @@ export function gateToDisposition(gate: CompletionGateResult): TaskDisposition {
   }
 }
 
+/**
+ * Why a non-passing gate ended the way it did, in one line, for the task's
+ * `dispositionReason`.
+ *
+ * The port held this detail — `unresolvedBlockerIds`, and the failing checks'
+ * own messages — and dropped it, so a harness-blocked task landed on disk with
+ * a terminal disposition and no record anywhere of what blocked it. A `pass`
+ * needs no explanation and gets none.
+ */
+export function gateToReason(gate: CompletionGateResult): string | undefined {
+  if (gate.status === "pass") {
+    return undefined;
+  }
+  const blockers = gate.unresolvedBlockerIds ?? [];
+  if (blockers.length > 0) {
+    return `unresolved blockers: ${blockers.join(", ")}`;
+  }
+  const failing = (gate.checks ?? [])
+    .filter((check) => check.status !== "pass")
+    .map((check) => check.detail ?? check.checkId)
+    .filter((detail): detail is string => Boolean(detail));
+  return failing.length > 0 ? failing.join("; ") : `completion gate: ${gate.status}`;
+}
+
 /** Input to a single managed-flow completion through the Task Manager. */
 export interface CompleteFromGateInput {
   cwd: string;
@@ -74,6 +98,7 @@ export function createTaskManagerFlowPort(service: FlowService): ManagedFlowPort
         id: flowId,
         taskId,
         disposition: gateToDisposition(gate),
+        reason: gateToReason(gate),
         evidenceRefs,
         runLink,
       });

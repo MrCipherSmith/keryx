@@ -68,6 +68,44 @@ export function isUnreasonedSkip(task: FlowTask): boolean {
   return task.disposition === "skipped" && !task.dispositionReason?.trim();
 }
 
+/**
+ * The dispositions `taskGateStatus` is allowed to map to `terminal-pass`.
+ *
+ * Anything else — a typo, a value from a newer writer, a hand-edit — is treated
+ * as failing rather than passing. The first version of this gate cast the CLI's
+ * `--disposition` straight to the type without validating it, so
+ * `--disposition skiped` persisted verbatim, missed the `=== "skipped"` reason
+ * check, missed the `=== "failed"` fail check, and passed. A gate whose default
+ * for the unrecognised case is "pass" is not a gate.
+ */
+const GATE_PASSING_DISPOSITIONS: ReadonlySet<string> = new Set(["completed", "skipped"]);
+
+/**
+ * A task that ended `blocked` did not get done, and closing a flow over it is
+ * the same leak as closing over an open one.
+ *
+ * This is not a hypothetical CLI abuse: `ManagedFlowPort` maps a harness
+ * completion gate of `blocked` to `disposition: "blocked"` and writes it through
+ * `taskDone`, so a harness run that ends blocked would mark its task done, pass
+ * the gate, and complete the flow — with no reason recorded anywhere, because
+ * unlike `skipped` nothing required one. It was a cheaper bypass than the one
+ * this gate was written to prevent.
+ */
+export function isBlockedTask(task: FlowTask): boolean {
+  return task.disposition === "blocked";
+}
+
+/** A disposition this build does not recognise. Fails the gate; never passes it. */
+export function isUnknownDisposition(task: FlowTask): boolean {
+  if (task.disposition === undefined || task.disposition === null) {
+    return false; // absent disposition is v1-compatible implicit "completed"
+  }
+  if (task.disposition === "failed" || task.disposition === "blocked") {
+    return false; // recognised, and handled by their own predicates
+  }
+  return !GATE_PASSING_DISPOSITIONS.has(task.disposition);
+}
+
 export type TaskGateVerdict = {
   passed: boolean;
   /** Non-terminal tasks: status is not yet "done". */
@@ -76,6 +114,10 @@ export type TaskGateVerdict = {
   failed: string[];
   /** disposition "skipped" with no recorded reason. */
   unreasonedSkips: string[];
+  /** disposition "blocked" — terminal, but the work did not happen. */
+  blocked: string[];
+  /** A disposition this build does not recognise; never allowed to pass. */
+  unknownDisposition: string[];
   total: number;
 };
 
@@ -88,6 +130,8 @@ export function evaluateTaskGate(tasks: FlowTask[]): TaskGateVerdict {
   const open: string[] = [];
   const failed: string[] = [];
   const unreasonedSkips: string[] = [];
+  const blocked: string[] = [];
+  const unknownDisposition: string[] = [];
   for (const task of tasks) {
     const status = taskGateStatus(task);
     if (status === "not-terminal") {
@@ -98,15 +142,34 @@ export function evaluateTaskGate(tasks: FlowTask[]): TaskGateVerdict {
       failed.push(task.id);
       continue;
     }
+    // Everything below reaches `terminal-pass` from the pure (status,
+    // disposition) mapping and is then refused here, where the whole task is
+    // visible. Ordered most-specific first so a task appears in exactly one
+    // bucket and the operator gets one reason, not three.
+    if (isUnknownDisposition(task)) {
+      unknownDisposition.push(task.id);
+      continue;
+    }
+    if (isBlockedTask(task)) {
+      blocked.push(task.id);
+      continue;
+    }
     if (isUnreasonedSkip(task)) {
       unreasonedSkips.push(task.id);
     }
   }
   return {
-    passed: open.length === 0 && failed.length === 0 && unreasonedSkips.length === 0,
+    passed:
+      open.length === 0 &&
+      failed.length === 0 &&
+      unreasonedSkips.length === 0 &&
+      blocked.length === 0 &&
+      unknownDisposition.length === 0,
     open,
     failed,
     unreasonedSkips,
+    blocked,
+    unknownDisposition,
     total: tasks.length,
   };
 }
