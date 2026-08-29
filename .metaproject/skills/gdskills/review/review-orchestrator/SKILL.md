@@ -7,7 +7,7 @@ description: |
   "review --strict", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
   consolidates findings into one unified report.
   NOT for: running a single specialized reviewer — invoke it directly by name instead.
-version: "1.6.0"
+version: "1.7.0"
 triggers:
   - "review"
   - "code review"
@@ -34,7 +34,7 @@ triggers:
   - "review --mobx-store"
 metadata:
   author: "MrCipherSmith"
-  version: "1.6.0"
+  version: "1.7.0"
   category: "review"
 license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
@@ -54,7 +54,7 @@ unified report sorted by severity. It does not perform any review logic itself.
 Review Orchestrator Progress:
 - [ ] Step 1: Build Review Context Pack (PR metadata, scope, rules, context_doc summary)
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
-- [ ] Step 3: Collect bounded scope - git diff OR file list from path
+- [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
 - [ ] Step 4: Parse flags / auto-detect domain from scope
 - [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
 - [ ] Step 6: Plan sub-agent dispatch, token budgets, and model strategy
@@ -352,12 +352,27 @@ Before anything else, determine whether the request is **diff mode** or **path m
 
 See shared script: `skills/shared/git-merge-base.md`
 
-Run the script to determine `BASE_SHA`, then:
+Run the script to determine `BASE_SHA`, then let the pre-filter build the scope:
 
 ```bash
-git diff --name-only "${BASE_SHA}"   # changed files for auto-detection
-git diff "${BASE_SHA}"               # full diff passed to reviewers
+keryx review scope --ref "${BASE_SHA}" --append "<review-package>/scope.md"   # the record
+keryx review scope --ref "${BASE_SHA}" --scoped-diff                          # what reviewers get
+keryx review scope --ref "${BASE_SHA}" --json                                 # .files for auto-detection
 ```
+
+**Do not run `git diff` yourself, and do not decide what to leave out.** The
+pre-filter is deterministic code with no model call: it drops generated,
+lockfile, snapshot, vendored and minified paths, drops whitespace-only and
+comment-only change blocks, and bounds every retained change to ±20 lines of
+context (`--context <n>`) instead of the whole file. Dropping a lockfile needs no
+judgement, so it does not get one.
+
+`--append` writes the retained scope **and every drop with its reason** into the
+review record. Both halves are required: a scope that shrank without saying so
+reads afterwards as "we reviewed everything".
+
+Use `.files` from `--json` for the auto-detection table below. A dropped path
+must not select a reviewer.
 
 Scope is limited to **changes introduced in the current branch since merge-base**.
 
@@ -365,21 +380,26 @@ Scope is limited to **changes introduced in the current branch since merge-base*
 
 ### Path Mode
 
-When a path or target is named, collect the files to review:
+When a path or target is named, collect the candidate files:
 
 ```bash
 # If a directory path is given:
 find <path> -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \) | sort
-
-# If a file path is given:
-cat <file>
 
 # If a module name is given (e.g. "UserStore", "pipelines module"):
 find . -type f -name "*<name>*" \( -name "*.ts" -o -name "*.tsx" \)
 # Also check common locations: src/stores/, src/modules/, src/components/
 ```
 
-Pass the full **file contents** (not a diff) to sub-reviewers. Set `SCOPE_MODE: path`.
+Then put the list through the same exclusions before reading anything:
+
+```bash
+keryx review scope --path "src/a.ts,src/b.ts" --append "<review-package>/scope.md"
+```
+
+Pass the full **file contents** of the paths it **retained** to sub-reviewers, and
+read none of the ones it dropped. Set `SCOPE_MODE: path`. Path mode has no hunks
+and therefore no context window; the drop list is recorded exactly the same way.
 
 **Reviewer behavior in path mode:** reviewers check the entire file content — not just added lines. All findings apply to the current state of the code, not only to changes.
 
