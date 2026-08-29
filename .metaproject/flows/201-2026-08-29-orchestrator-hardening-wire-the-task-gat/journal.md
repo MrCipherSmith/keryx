@@ -314,3 +314,65 @@ when the fix is a round trip away.
 - 2026-08-29T10:30:20.950Z - ac-confirmed: AC11
 - 2026-08-29T10:30:21.121Z - ac-confirmed: AC12: diff over both skill trees reports no differences for every file touched.
 - 2026-08-29T10:30:21.292Z - ac-confirmed: AC13: typecheck clean; bun test 5423 pass / 18 skip / 0 fail against a 5398/18/0 baseline; test:guards 161/0; check:doc-links 1128 links 0 broken.
+- 2026-08-29T12:40:00.000Z - review-fix: b9c7ab82 post-review remediation, src/review/** + review-orchestrator SKILL.md + managed-review-feedback-loop/specification.md. Seven defects, each reproduced by execution first.
+  - MAJOR legacy path wrote schema-invalid records: the contract gate moved out of fromStructuredSource into createManagedReviewPackage, so schemaErrors now runs over the toContractFinding projection on BOTH paths. Additionally class_scope_present now derives from parseClassScope rather than a separate prose shape check, so the guard and the record cannot disagree. Proof: a legacy major whose class_scope was prose produced findings[0] with $.class_scope "Missing required property"; now refused before mkdir.
+  - MAJOR keryx:findings door degraded silently: presence is now decided by an opening-fence match (EMBEDDED_FINDINGS_FENCE, /gm, up to 3 leading spaces per CommonMark) instead of by the parsed value, and a present block that is neither an array nor a { reviewer, findings } result throws. Proof: a block holding JSON null and a block indented two spaces each wrote 1 prose finding with no error; both now throw.
+  - MAJOR a second block was dropped: fences are counted; more than one is an error naming both character offsets. Proof: two blocks with the real finding in the second ingested as 0 findings.
+  - MINOR "found by"/"found independently by" removed from the evidence labels (attribution is not evidence); round-trip.test.ts now asserts evidence on the repo fixture, which was the only one of the five contract-critical fields it never asserted.
+  - MINOR Step 12 named reviewer-finding.schema.json and called it additionalProperties:false; it is review-finding.schema.json and the findings item is additionalProperties:true, so unknown properties are DROPPED by toContractFinding, not rejected. Text corrected in both skill copies.
+  - MINOR Step 12 claimed a legacy round "cannot seed a fix round"; round-trip.test.ts proves it can. Replaced with what is true: four fields carry not-recorded provenance and confidence is stamped low.
+  - MINOR specification.md findings.json example was the removed shape (8 schema errors); replaced with a contract array (0 errors) and AC5 now points classification at decisions.md.
+  - INFO all three done: the report path is threaded into every block refusal, a non-array block reports "not an array", isFindingClassification (exported, called nowhere) deleted with its import.
+  - Verification: 7 new tests in round-trip.test.ts, all 7 fail against the reverted code and pass against the fix. bun test src/review/ src/gdskills/ 73 pass / 0 fail (was 66). bun run typecheck clean. bun test 5435 pass / 18 skip / 0 fail.
+
+
+## 2026-08-29 — self-review round 1, and what it caught
+
+Two reviewers, not nineteen — the branch's own conclusion applied to itself.
+Both were held to the discipline this branch proposes generalising: a finding
+not proven by executing something is not a finding, no theoretical findings, a
+concrete failure path above INFO, and a cap of ten.
+
+Both returned "not safe to merge". They were right, and three of the defects
+were in work I had just called finished.
+
+**The gate shipped with a wider hole than the one it closed.**
+`disposition: "blocked"` passed it — and unlike `skipped`, required no reason at
+all. Not a hypothetical: `ManagedFlowPort` maps a harness completion gate of
+`blocked` to exactly that disposition and writes it through `taskDone`, so a
+harness run ending blocked completed the flow. Separately, `--disposition` was
+cast rather than parsed, so `--disposition skiped` reached disk and passed,
+proven against the real CLI.
+
+**The protocol correction was written to a generated file.** I spent the day
+guarding two copies of every skill, wrote an acceptance criterion about it, and
+then edited `.metaproject/rules/core/` — an install target that
+`installBundledRules` overwrites from `src/gdskills/bundled/rules/core/` with
+`force: true`. The reviewer proved it by running the installer and watching the
+heading revert. The fix would have shipped nowhere and died at the next
+`keryx update`.
+
+A guard test now compares the two rule trees byte-for-byte, and was itself
+verified by breaking the source and watching it fail. The skill mirror had
+review discipline; the rule mirror had nothing, which is why it drifted
+silently.
+
+**The structured findings door failed open in three shapes** it claimed it
+could not: a block containing `null`, an indented fence, and a second block —
+each silently falling back to the lossy prose path, the exact behaviour the
+change was written to eliminate.
+
+Reviewers also checked my claims rather than only my code: the round-trip test
+was attacked by deliberately loosening the schema (it failed, as it should), and
+the `FAILED` analysis was verified accurate in both directions.
+
+All findings fixed, each with a test that fails without the fix. Suite: 5435
+pass / 18 skip / 0 fail against a 5398 baseline; guards 161/0; doc-links 0
+broken; both mirrors agree on every common file.
+
+**Note on this flow's own gate.** Flow 201 carries no `gates.tasks` field: it
+was created by the globally-installed keryx, which predates the gate. So the
+gate this flow adds reports `skipped` for the flow that added it. That is the
+opt-in-by-creation rule working as designed, and it is also the gap the reviewer
+flagged — there is no way to opt an in-flight package in. Recorded as follow-up
+rather than fixed here.
