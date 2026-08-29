@@ -3,9 +3,9 @@
   "id": "201",
   "slug": "orchestrator-hardening-wire-the-task-gat",
   "title": "Orchestrator hardening: wire the task gate, make review precise, add deep rounds / clean-round completion / PR-comment handling / adaptive models",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-29T09:30:41.636Z",
-  "updatedAt": "2026-08-29T10:30:21.292Z",
+  "updatedAt": "2026-08-29T12:41:35.970Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,7 +65,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/408"
   },
   "tasks": [
     {
@@ -117,7 +117,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -125,7 +125,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -631,6 +632,16 @@
       "at": "2026-08-29T10:30:21.292Z",
       "event": "ac-confirmed",
       "detail": "AC13: typecheck clean; bun test 5423 pass / 18 skip / 0 fail against a 5398/18/0 baseline; test:guards 161/0; check:doc-links 1128 links 0 broken."
+    },
+    {
+      "at": "2026-08-29T12:41:33.614Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-29T12:41:35.970Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/408 (warning: PR is not a draft)"
     }
   ]
 }

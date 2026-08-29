@@ -376,3 +376,5 @@ gate this flow adds reports `skipped` for the flow that added it. That is the
 opt-in-by-creation rule working as designed, and it is also the gap the reviewer
 flagged — there is no way to opt an in-flight package in. Recorded as follow-up
 rather than fixed here.
+- 2026-08-29T12:41:33.614Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-29T12:41:35.970Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/408 (warning: PR is not a draft)
