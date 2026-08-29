@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 2,
+  "id": "201",
+  "slug": "orchestrator-hardening-wire-the-task-gat",
+  "title": "Orchestrator hardening: wire the task gate, make review precise, add deep rounds / clean-round completion / PR-comment handling / adaptive models",
+  "status": "in-progress",
+  "createdAt": "2026-08-29T09:30:41.636Z",
+  "updatedAt": "2026-08-29T10:30:21.292Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c9f496a4d51a2270943b327b386b3803a5a932dda2f8d9c90f1868bab5042771",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-29T10:30:19.242Z",
+      "note": "src/flow/task-gate.test.ts drives a flow to completion with an open task and asserts the fifth gate fails; taskGateStatus() wired into service.ts complete()."
+    },
+    "AC2": {
+      "at": "2026-08-29T10:30:19.410Z",
+      "note": "Opt-in via FlowState.gates.tasks written by flow init, not schemaVersion (195/197 packages are already v2, so it cannot discriminate). Pre-existing packages report tasks: skipped; covered by task-gate.test.ts."
+    },
+    "AC3": {
+      "at": "2026-08-29T10:30:19.579Z",
+      "note": "skipped passes only with a recorded dispositionReason; enforced in evaluateTaskGate so harness-written state is caught too. Decision and reasoning recorded in journal.md."
+    },
+    "AC4": {
+      "at": "2026-08-29T10:30:19.750Z",
+      "note": "Commit cfb4c3b5 touches both src/flow/service.ts and flow-orchestrator/SKILL.md - the gate and the claim removal land together, verifiable on that commit."
+    },
+    "AC5": {
+      "at": "2026-08-29T10:30:19.918Z",
+      "note": "findings.json is now an array of pure contract objects validating against review-finding.schema.json and carrying the real reviewer; asserted in round-trip.test.ts."
+    },
+    "AC6": {
+      "at": "2026-08-29T10:30:20.086Z",
+      "note": "round-trip.test.ts builds a round-2 reviewer-input with is_fix_round true from a round-1 findings.json alone and validates it; green from both structured and legacy rounds. Non-vacuity pinned by asserting the old shape is still rejected."
+    },
+    "AC7": {
+      "at": "2026-08-29T10:30:20.270Z",
+      "note": "Legacy Markdown path retained and exercised over the 11 real packages under .metaproject/reviews/; covered in round-trip.test.ts."
+    },
+    "AC8": {
+      "at": "2026-08-29T10:30:20.448Z",
+      "note": "flow task attempt with --outcome started|failed|blocked increments attempts.count and appends to attempts.log through the service layer; src/flow/attempts.test.ts."
+    },
+    "AC9": {
+      "at": "2026-08-29T10:30:20.614Z",
+      "note": "attempts.test.ts reloads the package from disk and asserts the persisted count, not an in-process value."
+    },
+    "AC10": {
+      "at": "2026-08-29T10:30:20.784Z",
+      "note": "flow-orchestrator/SKILL.md Phase 0 gains a State Resumption Check; Phase 4 reads attempts.count from flow.json rather than from context. Both mirrors updated."
+    },
+    "AC11": {
+      "at": "2026-08-29T10:30:20.950Z"
+    },
+    "AC12": {
+      "at": "2026-08-29T10:30:21.121Z",
+      "note": "diff over both skill trees reports no differences for every file touched."
+    },
+    "AC13": {
+      "at": "2026-08-29T10:30:21.292Z",
+      "note": "typecheck clean; bun test 5423 pass / 18 skip / 0 fail against a 5398/18/0 baseline; test:guards 161/0; check:doc-links 1128 links 0 broken."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Baseline: record current bun test counts and the 34 affected historical flows",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Wire taskGateStatus() into complete() as a fifth gate, opt-in by schemaVersion",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Decide and implement the skipped-disposition rule; record the decision in journal.md",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Test: open task fails complete; a pre-existing package is unaffected",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Remove the false task-gate claim from flow-orchestrator SKILL.md in the same commit",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Structured findings array: findings.json conforming to review-finding.schema.json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Consume the structured array; keep Markdown parsing for legacy reports only",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Test: construct a round-2 reviewer-input from a round-1 artifact and validate it",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Test: a legacy Markdown review report still parses without error",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "keryx flow task attempt CLI verb writing to the existing attempts field",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Test: attempt count survives a simulated session restart",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Port job-orchestrator 0.0 State Resumption Check into flow-orchestrator Phase 0",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Delete dead surface: --greptile, frontend-conventions misroute, FAILED, legacy-profile prompt",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Verify both skill copies agree (src/gdskills/bundled and .metaproject/skills/gdskills)",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Quality gate: typecheck, full suite against the baseline, doc-links",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "review-orchestrator emits the keryx:findings block (producer side of T10/T11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-29T09:30:41.636Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-29T09:32:32.668Z",
+      "event": "task-added",
+      "detail": "T5: Baseline: record current bun test counts and the 34 affected historical flows"
+    },
+    {
+      "at": "2026-08-29T09:32:32.856Z",
+      "event": "task-added",
+      "detail": "T6: Wire taskGateStatus() into complete() as a fifth gate, opt-in by schemaVersion"
+    },
+    {
+      "at": "2026-08-29T09:32:33.046Z",
+      "event": "task-added",
+      "detail": "T7: Decide and implement the skipped-disposition rule; record the decision in journal.md"
+    },
+    {
+      "at": "2026-08-29T09:32:33.232Z",
+      "event": "task-added",
+      "detail": "T8: Test: open task fails complete; a pre-existing package is unaffected"
+    },
+    {
+      "at": "2026-08-29T09:32:33.431Z",
+      "event": "task-added",
+      "detail": "T9: Remove the false task-gate claim from flow-orchestrator SKILL.md in the same commit"
+    },
+    {
+      "at": "2026-08-29T09:32:33.620Z",
+      "event": "task-added",
+      "detail": "T10: Structured findings array: findings.json conforming to review-finding.schema.json"
+    },
+    {
+      "at": "2026-08-29T09:32:33.826Z",
+      "event": "task-added",
+      "detail": "T11: Consume the structured array; keep Markdown parsing for legacy reports only"
+    },
+    {
+      "at": "2026-08-29T09:32:34.043Z",
+      "event": "task-added",
+      "detail": "T12: Test: construct a round-2 reviewer-input from a round-1 artifact and validate it"
+    },
+    {
+      "at": "2026-08-29T09:32:34.266Z",
+      "event": "task-added",
+      "detail": "T13: Test: a legacy Markdown review report still parses without error"
+    },
+    {
+      "at": "2026-08-29T09:32:34.479Z",
+      "event": "task-added",
+      "detail": "T14: keryx flow task attempt CLI verb writing to the existing attempts field"
+    },
+    {
+      "at": "2026-08-29T09:32:34.686Z",
+      "event": "task-added",
+      "detail": "T15: Test: attempt count survives a simulated session restart"
+    },
+    {
+      "at": "2026-08-29T09:32:34.888Z",
+      "event": "task-added",
+      "detail": "T16: Port job-orchestrator 0.0 State Resumption Check into flow-orchestrator Phase 0"
+    },
+    {
+      "at": "2026-08-29T09:32:35.093Z",
+      "event": "task-added",
+      "detail": "T17: Delete dead surface: --greptile, frontend-conventions misroute, FAILED, legacy-profile prompt"
+    },
+    {
+      "at": "2026-08-29T09:32:35.293Z",
+      "event": "task-added",
+      "detail": "T18: Verify both skill copies agree (src/gdskills/bundled and .metaproject/skills/gdskills)"
+    },
+    {
+      "at": "2026-08-29T09:32:35.485Z",
+      "event": "task-added",
+      "detail": "T19: Quality gate: typecheck, full suite against the baseline, doc-links"
+    },
+    {
+      "at": "2026-08-29T09:32:53.124Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-29T09:32:53.314Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-29T10:00:32.108Z",
+      "event": "ac-updated",
+      "detail": "Corrected a measurement error in AC2: the leak is 34 unfinished TASKS across 24 flows, not 34 flows. Recomputed directly from .metaproject/flows/*/flow.json (184 done flows; task statuses: 1155 done, 34 todo). No criterion was added, removed or weakened."
+    },
+    {
+      "at": "2026-08-29T10:01:14.065Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-29T10:01:14.261Z",
+      "event": "task-done",
+      "detail": "T5: Baseline: record current bun test counts and the 34 affected historical flows"
+    },
+    {
+      "at": "2026-08-29T10:10:54.900Z",
+      "event": "ac-updated",
+      "detail": "AC11 corrected: the premise that FAILED is unreachable is false. src/harness/child/contract.ts parses STATUS: FAILED from external child workers, wired at src/harness/extension/execute.ts:167, and spawn.test.ts:505 asserts a FAILED disposition maps to a failed completion 'never a false completed'. Removing it would delete a tested completion-safety path. The real defect is documentation: the protocol doc says four statuses, the schema carries five. AC11 now requires correcting the doc instead of deleting the enum value; the other three deletions are unchanged."
+    },
+    {
+      "at": "2026-08-29T10:23:05.839Z",
+      "event": "task-added",
+      "detail": "T20: review-orchestrator emits the keryx:findings block (producer side of T10/T11)"
+    },
+    {
+      "at": "2026-08-29T10:29:50.044Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-29T10:29:50.135Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-29T10:29:50.225Z",
+      "event": "task-done",
+      "detail": "T6: Wire taskGateStatus() into complete() as a fifth gate, opt-in by schemaVersion"
+    },
+    {
+      "at": "2026-08-29T10:29:50.316Z",
+      "event": "task-done",
+      "detail": "T7: Decide and implement the skipped-disposition rule; record the decision in journal.md"
+    },
+    {
+      "at": "2026-08-29T10:29:50.408Z",
+      "event": "task-done",
+      "detail": "T8: Test: open task fails complete; a pre-existing package is unaffected"
+    },
+    {
+      "at": "2026-08-29T10:29:50.501Z",
+      "event": "task-done",
+      "detail": "T9: Remove the false task-gate claim from flow-orchestrator SKILL.md in the same commit"
+    },
+    {
+      "at": "2026-08-29T10:29:50.593Z",
+      "event": "task-done",
+      "detail": "T10: Structured findings array: findings.json conforming to review-finding.schema.json"
+    },
+    {
+      "at": "2026-08-29T10:29:50.686Z",
+      "event": "task-done",
+      "detail": "T11: Consume the structured array; keep Markdown parsing for legacy reports only"
+    },
+    {
+      "at": "2026-08-29T10:29:50.776Z",
+      "event": "task-done",
+      "detail": "T12: Test: construct a round-2 reviewer-input from a round-1 artifact and validate it"
+    },
+    {
+      "at": "2026-08-29T10:29:50.865Z",
+      "event": "task-done",
+      "detail": "T13: Test: a legacy Markdown review report still parses without error"
+    },
+    {
+      "at": "2026-08-29T10:29:50.957Z",
+      "event": "task-done",
+      "detail": "T14: keryx flow task attempt CLI verb writing to the existing attempts field"
+    },
+    {
+      "at": "2026-08-29T10:29:51.049Z",
+      "event": "task-done",
+      "detail": "T15: Test: attempt count survives a simulated session restart"
+    },
+    {
+      "at": "2026-08-29T10:29:51.139Z",
+      "event": "task-done",
+      "detail": "T16: Port job-orchestrator 0.0 State Resumption Check into flow-orchestrator Phase 0"
+    },
+    {
+      "at": "2026-08-29T10:29:51.230Z",
+      "event": "task-done",
+      "detail": "T17: Delete dead surface: --greptile, frontend-conventions misroute, FAILED, legacy-profile prompt"
+    },
+    {
+      "at": "2026-08-29T10:29:51.322Z",
+      "event": "task-done",
+      "detail": "T18: Verify both skill copies agree (src/gdskills/bundled and .metaproject/skills/gdskills)"
+    },
+    {
+      "at": "2026-08-29T10:29:51.412Z",
+      "event": "task-done",
+      "detail": "T19: Quality gate: typecheck, full suite against the baseline, doc-links"
+    },
+    {
+      "at": "2026-08-29T10:29:51.503Z",
+      "event": "task-done",
+      "detail": "T20: review-orchestrator emits the keryx:findings block (producer side of T10/T11)"
+    },
+    {
+      "at": "2026-08-29T10:30:19.242Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/flow/task-gate.test.ts drives a flow to completion with an open task and asserts the fifth gate fails; taskGateStatus() wired into service.ts complete()."
+    },
+    {
+      "at": "2026-08-29T10:30:19.410Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Opt-in via FlowState.gates.tasks written by flow init, not schemaVersion (195/197 packages are already v2, so it cannot discriminate). Pre-existing packages report tasks: skipped; covered by task-gate.test.ts."
+    },
+    {
+      "at": "2026-08-29T10:30:19.579Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: skipped passes only with a recorded dispositionReason; enforced in evaluateTaskGate so harness-written state is caught too. Decision and reasoning recorded in journal.md."
+    },
+    {
+      "at": "2026-08-29T10:30:19.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Commit cfb4c3b5 touches both src/flow/service.ts and flow-orchestrator/SKILL.md - the gate and the claim removal land together, verifiable on that commit."
+    },
+    {
+      "at": "2026-08-29T10:30:19.918Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: findings.json is now an array of pure contract objects validating against review-finding.schema.json and carrying the real reviewer; asserted in round-trip.test.ts."
+    },
+    {
+      "at": "2026-08-29T10:30:20.086Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: round-trip.test.ts builds a round-2 reviewer-input with is_fix_round true from a round-1 findings.json alone and validates it; green from both structured and legacy rounds. Non-vacuity pinned by asserting the old shape is still rejected."
+    },
+    {
+      "at": "2026-08-29T10:30:20.271Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Legacy Markdown path retained and exercised over the 11 real packages under .metaproject/reviews/; covered in round-trip.test.ts."
+    },
+    {
+      "at": "2026-08-29T10:30:20.448Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: flow task attempt with --outcome started|failed|blocked increments attempts.count and appends to attempts.log through the service layer; src/flow/attempts.test.ts."
+    },
+    {
+      "at": "2026-08-29T10:30:20.614Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: attempts.test.ts reloads the package from disk and asserts the persisted count, not an in-process value."
+    },
+    {
+      "at": "2026-08-29T10:30:20.784Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: flow-orchestrator/SKILL.md Phase 0 gains a State Resumption Check; Phase 4 reads attempts.count from flow.json rather than from context. Both mirrors updated."
+    },
+    {
+      "at": "2026-08-29T10:30:20.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-08-29T10:30:21.121Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: diff over both skill trees reports no differences for every file touched."
+    },
+    {
+      "at": "2026-08-29T10:30:21.292Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: typecheck clean; bun test 5423 pass / 18 skip / 0 fail against a 5398/18/0 baseline; test:guards 161/0; check:doc-links 1128 links 0 broken."
+    }
+  ]
+}
