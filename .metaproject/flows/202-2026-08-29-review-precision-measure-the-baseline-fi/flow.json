@@ -6,9 +6,9 @@
   "id": "202",
   "slug": "review-precision-measure-the-baseline-fi",
   "title": "Review precision: measure the baseline first, then the deterministic pre-filter and a verifier that can only delete",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-29T15:08:10.698Z",
-  "updatedAt": "2026-08-29T20:56:28.017Z",
+  "updatedAt": "2026-08-29T21:00:48.370Z",
   "source": {
     "type": "description",
     "ref": null
@@ -77,7 +77,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/410"
   },
   "tasks": [
     {
@@ -129,7 +129,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -137,7 +137,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two review rounds: the first returned not-safe-to-merge with three blockers including a pre-filter that swallowed an authorization bypass; all fixed with tests that fail without them. PR 410 merged."
     },
     {
       "id": "T5",
@@ -648,6 +650,25 @@
       "at": "2026-08-29T20:56:28.017Z",
       "event": "ac-confirmed",
       "detail": "AC15: The flow's claims are stated as stage counts. AC1 records the precision figure as refused and forbids citing it as a baseline."
+    },
+    {
+      "at": "2026-08-29T21:00:42.490Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/410 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-29T21:00:42.586Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-29T21:00:46.633Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-29T21:00:48.370Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

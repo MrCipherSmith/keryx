@@ -697,3 +697,7 @@ operator forgets `--scope`.
 - 2026-08-29T20:56:27.834Z - ac-confirmed: AC13: typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5595 pass / 18 skip / 1 fail, the one being src/sac/fwk-service.test.ts which reproduces on unmodified origin/main in a fresh worktree.
 - 2026-08-29T20:56:27.925Z - ac-confirmed: AC14: disposition {state, evidence} with six states pinned by test to the measurement's buckets; evidence-less disposition refused rather than downgraded; global_id minted only when absent, constrained by schema pattern; a round records what it refuted into the same findings.json. CLI surface added so the mechanism is reachable.
 - 2026-08-29T20:56:28.017Z - ac-confirmed: AC15: The flow's claims are stated as stage counts. AC1 records the precision figure as refused and forbids citing it as a baseline.
+- 2026-08-29T21:00:42.490Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/410 (warning: PR is not a draft)
+- 2026-08-29T21:00:42.586Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-29T21:00:46.633Z - completing
+- 2026-08-29T21:00:48.370Z - done: all gates passed
