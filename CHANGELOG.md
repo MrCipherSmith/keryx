@@ -3,6 +3,83 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.70] — 2026-08-29
+
+### Fixed
+
+- **`keryx flow complete` now gates on tasks — it never did, despite saying so.**
+  `flow-orchestrator/SKILL.md` told readers that an unrun verification step
+  keeps a flow open "instead of being quietly dropped". `complete()` ran four
+  gates and the task gate was not among them: `taskGateStatus()` was written,
+  tested, and carried a comment saying it was deliberately unwired. Measured
+  across 184 completed packages, **34 unfinished tasks in 24 flows shipped
+  behind that sentence, 24 of them the review step itself.**
+
+  The gate is **opt-in by creation** (`gates.tasks`, written by `flow init`), so
+  historical packages are not retroactively invalidated; a package without the
+  field reports the gate as `skipped` rather than silently passing it. A
+  `skipped` task passes only with a recorded reason, a `blocked` task does not
+  pass at all, and an unrecognised disposition fails rather than falling through
+  — `--disposition` is now parsed instead of cast, so a typo can no longer reach
+  disk and close a task.
+
+- **A review round can now seed the next one.** A fix round requires
+  `prior_findings[].finding` to conform to a schema with five required fields
+  and `additionalProperties: false`; the artifact a round wrote had none of them
+  and carried four forbidden ones, so round 2 could not be constructed from
+  round 1's own output. Findings now travel as structured data rather than being
+  re-parsed out of prose, with the Markdown path kept for existing reports.
+
+- **Attempt counts persist.** `attempts.count` was declared and never
+  incremented. New `keryx flow task attempt <id> <Tn> --outcome
+  started|failed|blocked` records it, and the orchestrator reads it from flow
+  state instead of from its own context — which matters because 27% of flows run
+  longer than eight hours and cross session boundaries.
+
+- **`--greptile` is gone** (it routed to a skill that exists nowhere), the
+  frontend-conventions reviewer no longer fires on every `.ts` file in a
+  repository with no frontend, and the review orchestrator no longer prompts
+  about legacy profiles on every run.
+
+- **The subagent status protocol documented four statuses while the schema
+  carried five.** That made `FAILED` look unreachable; it is reachable from the
+  harness child layer and load-bearing there. The protocol now documents all
+  five and names which worker family emits the fifth. A guard test asserts every
+  bundled rule stays byte-identical to its installed copy — this correction was
+  first written to the generated copy alone, where the next `keryx update` would
+  have reverted it.
+
+### Added
+
+- **`keryx sandbox status`** — the OS sandbox launcher's availability and a
+  per-capability containment matrix, distinguishing "requires a launcher you
+  have not installed" from "not implemented on this platform at all". A report,
+  not a gate: it always exits 0.
+
+- **`keryx flow task attempt`** — see above.
+
+- **`docs/requirements/keryx-orchestrator-hardening/`** — the benchmark that
+  produced the fixes above, and the plan for what follows: review precision, one
+  canonical severity rubric, deep review rounds bounded by a computed blast
+  radius, completion gated on a clean final round, external PR comments answered
+  once at the end, and adaptive model selection by tier.
+
+- **A dynamic import is no longer counted as a load-order edge in gdgraph**, so a
+  module that lazily imports something which statically imports it back is no
+  longer reported as a cycle.
+
+- **The approval menu no longer offers a prefix grant the grant itself would
+  refuse.** It validated the derived pattern rather than the command, so "always
+  allow" could be offered for a command a stored grant would then decline.
+
+### Changed
+
+- **Brevity in the agent's system instruction governs prose length only.** It
+  was paired with "be economical with output tokens", which reads as a budget on
+  tool calls too — and a benchmark caught the agent reporting a result from one
+  call because verifying it felt like spending. A tool result that is itself the
+  deliverable is now checked against source before being presented as fact.
+
 ## [0.2.69] — 2026-08-28
 
 ### Fixed
