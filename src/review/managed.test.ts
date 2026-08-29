@@ -1,24 +1,27 @@
 import { afterEach, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { loadSchema, validateJson } from "../gdskills/contracts";
 import { createFlowService } from "../flow/service";
 import type { FlowServiceDeps, TrackerAdapter } from "../flow/types";
 import {
   completeManagedReview,
   createManagedReviewPackage,
+  findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
 } from "./managed";
 import {
+  FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
 } from "./types";
-import type { ManagedReviewManifest } from "./types";
+import type { ManagedReviewInput, ManagedReviewManifest, StructuredReviewFinding } from "./types";
 
 let ROOT = "";
 const ORIGINAL_CWD = process.cwd();
@@ -568,6 +571,278 @@ test("validation is driven by the committed JSON Schema (accepts valid, rejects 
   expect((await validateManagedReviewManifest(ROOT, badCoverage)).valid).toBe(false);
 });
 
+// ---------------------------------------------------------------------------
+// AC14: the instrumentation that makes precision measurable later
+//
+// The baseline measurement of this pipeline returned 53 / (53 + 0) = 100%. Not
+// because the reviewers were right — because nothing in a review package could
+// record a finding as WRONG. Three defects produced that, and each has a test
+// below:
+//
+//   1. no disposition field           -> `disposition`, defaulting to unknown
+//   2. ids collide across packages    -> `global_id`, `<reviewId>#<id>`
+//   3. refutations were never written -> the `refuted` channel
+// ---------------------------------------------------------------------------
+
+const FULL_FINDING: StructuredReviewFinding = {
+  id: "F-001",
+  reviewer: "review-security-code",
+  severity: "minor",
+  problem: "the guard asserts on a synthetic context",
+  impact: "the guard passes when the production path is unwired",
+  suggested_fix: "drive the writer the CLI drives",
+  evidence: "deleted the guarded line; the test stayed green",
+  confidence: "high",
+};
+
+async function ingestFindings(
+  reviewId: string,
+  over: Partial<ManagedReviewInput> = {},
+): Promise<{ path: string; findings: StructuredReviewFinding[] }> {
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId,
+    target: { kind: "report", ref: "review.md" },
+    reportText: "# Round\n\nno machine-readable block here\n",
+    findings: [FULL_FINDING],
+    now: new Date("2026-08-29T11:00:00Z"),
+    ...over,
+  });
+  return {
+    path: result.path,
+    findings: JSON.parse(
+      await readFile(path.join(ROOT, result.path, "findings.json"), "utf8"),
+    ) as StructuredReviewFinding[],
+  };
+}
+
+test("a finding with no disposition reads as unknown — the 83 records on disk are not stranded", async () => {
+  await fresh();
+  const { findings } = await ingestFindings("2026-08-29-no-disposition");
+
+  // Nothing is written. `{state: "unknown"}` on every finding would imply a
+  // decision nobody made, which is precisely what `classification:
+  // valid_followup` on 82 of 83 records already does.
+  expect(findings[0]).not.toHaveProperty("disposition");
+  expect(findingDispositionState(findings[0] as StructuredReviewFinding)).toBe("unknown");
+  // And the pre-contract shape, read straight off disk, reads the same way.
+  expect(findingDispositionState({} as StructuredReviewFinding)).toBe("unknown");
+});
+
+test("closing a round records what became of each finding, with its evidence", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-write");
+
+  const manifest = await completeManagedReview(ROOT, pkg, {
+    dispositions: [
+      { finding: "F-001", state: "acted-on", evidence: "closed by 380bf3b0; config-dir.writers.test.ts" },
+    ],
+  });
+  expect(manifest.status).toBe("closed");
+
+  const findings = JSON.parse(
+    await readFile(path.join(ROOT, pkg, "findings.json"), "utf8"),
+  ) as StructuredReviewFinding[];
+  expect(findings[0]?.disposition).toEqual({
+    state: "acted-on",
+    evidence: "closed by 380bf3b0; config-dir.writers.test.ts",
+  });
+  expect(findingDispositionState(findings[0] as StructuredReviewFinding)).toBe("acted-on");
+});
+
+test("closing with no dispositions leaves findings.json byte-identical", async () => {
+  // Backward compatibility is the constraint, not a nicety: `keryx review
+  // complete <ref>` is called with two arguments everywhere today.
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-absent");
+  const before = await readFile(path.join(ROOT, pkg, "findings.json"), "utf8");
+  await completeManagedReview(ROOT, pkg);
+  expect(await readFile(path.join(ROOT, pkg, "findings.json"), "utf8")).toBe(before);
+});
+
+test("a disposition with no evidence is REFUSED, not silently downgraded to unknown", async () => {
+  // The choice, stated as a test: reject. Recording it as `unknown` would turn a
+  // reviewer verdict somebody actually reached into "nobody decided" — a silent
+  // loss of exactly the signal this field exists to capture, and the same
+  // silent-degradation shape as the keryx:findings block falling through to the
+  // prose parser.
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-unevidenced");
+  const before = await readFile(path.join(ROOT, pkg, "findings.json"), "utf8");
+
+  await expect(
+    completeManagedReview(ROOT, pkg, {
+      dispositions: [{ finding: "F-001", state: "dismissed-incorrect" }],
+    }),
+  ).rejects.toThrow(/must cite where the outcome is written down/);
+  // And nothing was written: not the disposition, not the closed status.
+  expect(await readFile(path.join(ROOT, pkg, "findings.json"), "utf8")).toBe(before);
+  const manifest = JSON.parse(
+    await readFile(path.join(ROOT, pkg, "manifest.json"), "utf8"),
+  ) as ManagedReviewManifest;
+  expect(manifest.status).toBe("draft");
+});
+
+test("a disposition naming a finding this package does not hold is refused", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-unknown-id");
+  await expect(
+    completeManagedReview(ROOT, pkg, {
+      dispositions: [{ finding: "F-404", state: "acted-on", evidence: "a commit" }],
+    }),
+  ).rejects.toThrow(/this package holds no such finding. It holds 2026-08-29-disposition-unknown-id#F-001/);
+});
+
+test("a recorded verdict cannot be silently reversed", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-reversal");
+  await completeManagedReview(ROOT, pkg, {
+    dispositions: [{ finding: "F-001", state: "acted-on", evidence: "closed by 380bf3b0" }],
+  });
+  await expect(
+    completeManagedReview(ROOT, pkg, {
+      dispositions: [{ finding: "F-001", state: "dismissed-incorrect", evidence: "on reflection, wrong" }],
+    }),
+  ).rejects.toThrow(/already recorded as "acted-on".*refusing to overwrite/s);
+});
+
+test("every disposition state the baseline script counts is accepted by the writer", () => {
+  // The categories in `scripts/review-precision-baseline.ts` and the states here
+  // must be the same set, or the measurement counts a bucket nothing can be
+  // written into — which is how `dismissed-incorrect` came to be structurally
+  // unreachable in the first place.
+  expect([...FINDING_DISPOSITION_STATES]).toEqual([
+    "unknown",
+    "acted-on",
+    "dismissed-incorrect",
+    "dismissed-wont-fix",
+    "dismissed-out-of-scope",
+    "dismissed-deprioritised",
+  ]);
+});
+
+test("finding ids are globally unique while F-001 stays F-001", async () => {
+  // 15 of 43 distinct ids in the recorded corpus appear in more than one
+  // package; `F-001` denotes six different findings. The display form is kept
+  // because it is what the markdown parser reads, what decisions.md prints and
+  // what humans write in commit messages — so the key is added ALONGSIDE it.
+  await fresh();
+  const first = await ingestFindings("2026-08-29-package-one");
+  const second = await ingestFindings("2026-08-29-package-two");
+
+  expect(first.findings[0]?.id).toBe("F-001");
+  expect(second.findings[0]?.id).toBe("F-001");
+  expect(first.findings[0]?.global_id).toBe("2026-08-29-package-one#F-001");
+  expect(second.findings[0]?.global_id).toBe("2026-08-29-package-two#F-001");
+  expect(first.findings[0]?.global_id).not.toBe(second.findings[0]?.global_id);
+});
+
+test("a finding carried into a later round keeps the key it was minted under", async () => {
+  // Stability. Round N+1 hands round N's finding back through
+  // `prior_findings[].finding`; re-minting under the new reviewId would give one
+  // finding two keys and break the only join the field exists to provide.
+  await fresh();
+  const round1 = await ingestFindings("2026-08-29-round-1");
+  const round2 = await ingestFindings("2026-08-29-round-2", {
+    findings: [round1.findings[0] as StructuredReviewFinding],
+  });
+
+  expect(round2.findings[0]?.global_id).toBe("2026-08-29-round-1#F-001");
+});
+
+test("the legacy markdown path mints a key too", async () => {
+  await fresh();
+  const { findings } = await ingestFindings("2026-08-29-legacy-key", {
+    reportText: "- [F-007] minor: a small observation.\n",
+    findings: undefined,
+  });
+  expect(findings[0]?.global_id).toBe("2026-08-29-legacy-key#F-007");
+});
+
+test("two findings sharing a display id in one package are refused", async () => {
+  // They would share a key, and a key that denotes two findings is the defect
+  // this field removes. Before, the duplicate was written and every consumer
+  // silently kept whichever it saw last.
+  await fresh();
+  await expect(
+    ingestFindings("2026-08-29-duplicate-id", {
+      findings: [FULL_FINDING, { ...FULL_FINDING, problem: "a different finding, same id" }],
+    }),
+  ).rejects.toThrow(/2026-08-29-duplicate-id#F-001 claimed by 2 findings/);
+  expect(existsSync(path.join(ROOT, ".metaproject", "reviews", "2026-08-29-duplicate-id"))).toBe(false);
+});
+
+test("a round records what it REFUTED, alongside what it reported", async () => {
+  // The one that unpins the number. Rounds 3 and 5 of PR #220 each describe
+  // findings they judged wrong, in a section headed "Where a reviewer was
+  // wrong", and neither became a record. What reached disk was the survivors of
+  // an unlogged triage — which is why the numerator equalled the denominator.
+  await fresh();
+  const { path: pkg, findings } = await ingestFindings("2026-08-29-refuted", {
+    refuted: [
+      {
+        ...FULL_FINDING,
+        id: "F-002",
+        problem: "claimed the writer is group-writable",
+        disposition: {
+          state: "dismissed-incorrect",
+          evidence: "ran the writer under umask 002; the mode is 0700, the finding read the wrong call site",
+        },
+      },
+    ] as unknown as ManagedReviewInput["refuted"],
+  });
+
+  expect(findings.map((finding) => finding.id)).toEqual(["F-001", "F-002"]);
+  expect(findingDispositionState(findings[0] as StructuredReviewFinding)).toBe("unknown");
+  expect(findings[1]?.disposition?.state).toBe("dismissed-incorrect");
+  expect(findings[1]?.disposition?.evidence).toContain("the mode is 0700");
+  expect(findings[1]?.global_id).toBe("2026-08-29-refuted#F-002");
+
+  // And decisions.md stops being the same sentence for every finding.
+  const decisions = await readFile(path.join(ROOT, pkg, "decisions.md"), "utf8");
+  expect(decisions).toContain("F-002: dismissed-incorrect — ran the writer under umask 002");
+  expect(decisions).toContain("F-001: create follow-up task or learning proposal");
+});
+
+test("a refutation that cites nothing is refused", async () => {
+  await fresh();
+  await expect(
+    ingestFindings("2026-08-29-refuted-unevidenced", {
+      refuted: [{ ...FULL_FINDING, id: "F-002" }] as unknown as ManagedReviewInput["refuted"],
+    }),
+  ).rejects.toThrow(/Refusing to record a disposition with no evidence: 2026-08-29-refuted-unevidenced#F-002 \(dismissed-incorrect\)/);
+  expect(existsSync(path.join(ROOT, ".metaproject", "reviews", "2026-08-29-refuted-unevidenced"))).toBe(
+    false,
+  );
+});
+
+test("an out-of-scope dismissal is recordable, and acted-on is not, on the refuted channel", async () => {
+  // `dismissed-out-of-scope = 0` in the corpus means "not written down", not
+  // "did not happen": flow 133 declared the whole minor/info set out of scope in
+  // prose. Giving it nowhere to go is how it got there.
+  await fresh();
+  const { findings } = await ingestFindings("2026-08-29-refuted-scope", {
+    refuted: [
+      {
+        ...FULL_FINDING,
+        id: "F-002",
+        disposition: { state: "dismissed-out-of-scope", evidence: "flow 133 description: R4d work of any kind" },
+      },
+    ] as unknown as ManagedReviewInput["refuted"],
+  });
+  expect(findings[1]?.disposition?.state).toBe("dismissed-out-of-scope");
+
+  await fresh();
+  await expect(
+    ingestFindings("2026-08-29-refuted-acted-on", {
+      refuted: [
+        { ...FULL_FINDING, id: "F-002", disposition: { state: "acted-on", evidence: "a commit" } },
+      ] as unknown as ManagedReviewInput["refuted"],
+    }),
+  ).rejects.toThrow(/as refuted with disposition "acted-on"/);
+});
+
 test("committed JSON Schema and code constants stay consistent (drift guard)", async () => {
   const schema = JSON.parse(await readFile(REAL_SCHEMA_PATH, "utf8")) as {
     required: string[];
@@ -591,4 +866,98 @@ test("committed JSON Schema and code constants stay consistent (drift guard)", a
   expect(schema.properties.status.enum).toEqual([...REVIEW_PACKAGE_STATUSES]);
   expect(schema.properties.target.properties.kind.enum).toEqual([...REVIEW_TARGET_KINDS]);
   expect(schema.properties.coverage.items.properties.status.enum).toEqual([...REVIEW_COVERAGE_STATUSES]);
+});
+
+// ---------------------------------------------------------------------------
+// The two finding schemas, and the one place they are deliberately NOT twins
+// ---------------------------------------------------------------------------
+
+const STRICT_FINDING_SCHEMA = JSON.parse(
+  readFileSync(path.join(ORIGINAL_CWD, "src", "gdskills", "contracts", "review-finding.schema.json"), "utf8"),
+) as Record<string, any>;
+
+const BUNDLED_FINDING_SCHEMA = JSON.parse(
+  readFileSync(
+    path.join(
+      ORIGINAL_CWD,
+      "src",
+      "gdskills",
+      "bundled",
+      "skills",
+      "review",
+      "review-orchestrator",
+      "reviewer-finding.schema.json",
+    ),
+    "utf8",
+  ),
+) as Record<string, any>;
+
+function contractFinding(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return { ...FULL_FINDING, ...over };
+}
+
+test("review-finding.schema.json accepts a disposition and pins its vocabulary", async () => {
+  const schema = await loadSchema("review-finding");
+  // The half that catches `additionalProperties: false`: a writer emitting a
+  // field the contract does not declare makes every conforming finding invalid.
+  expect(await validateJson(contractFinding({ global_id: "r#F-001" }), schema)).toEqual([]);
+  for (const state of FINDING_DISPOSITION_STATES) {
+    const disposition = state === "unknown" ? { state } : { state, evidence: "closed by 380bf3b0" };
+    expect(await validateJson(contractFinding({ disposition }), schema)).toEqual([]);
+  }
+
+  const badState = await validateJson(contractFinding({ disposition: { state: "dismissed" } }), schema);
+  expect(badState.map((error) => error.path)).toContain("$.disposition.state");
+
+  const badExtra = await validateJson(
+    contractFinding({ disposition: { state: "unknown", note: "why" } }),
+    schema,
+  );
+  expect(badExtra.map((error) => error.path)).toContain("$.disposition.note");
+});
+
+test("the schema itself refuses a disposition that asserts an outcome and cites nothing", async () => {
+  // Not only the writer in managed.ts. `prior_findings[].finding` $refs this
+  // schema, so a disposition smuggled in from outside the CLI is refused at the
+  // same gate — a rule that lives in one code path is matched against nothing
+  // the moment a second path appears.
+  const schema = await loadSchema("review-finding");
+  for (const state of ["acted-on", "dismissed-incorrect", "dismissed-out-of-scope"]) {
+    const errors = await validateJson(contractFinding({ disposition: { state } }), schema);
+    expect(errors.map((error) => `${error.path} ${error.message}`).join("\n")).toContain(
+      "$.disposition.evidence",
+    );
+  }
+  // And `unknown` needs none, which is what makes absence a legal reading.
+  expect(await validateJson(contractFinding({ disposition: { state: "unknown" } }), schema)).toEqual([]);
+  // An empty string is not evidence.
+  const empty = await validateJson(
+    contractFinding({ disposition: { state: "acted-on", evidence: "" } }),
+    schema,
+  );
+  expect(empty.map((error) => error.path)).toContain("$.disposition.evidence");
+});
+
+test("global_id is declared identically in both finding schemas", () => {
+  const bundledFinding = BUNDLED_FINDING_SCHEMA.properties.findings.items as Record<string, any>;
+  const shape = (s: Record<string, any>) => ({ type: s.type, minLength: s.minLength });
+  expect(shape(bundledFinding.properties.global_id)).toEqual(
+    shape(STRICT_FINDING_SCHEMA.properties.global_id),
+  );
+});
+
+test("disposition is declared in the strict contract and DELIBERATELY not in the reviewer's", () => {
+  // Said loudly, and pinned, so the asymmetry reads as a decision rather than as
+  // drift. A reviewer states what is WRONG; it never states what BECAME of a
+  // finding. `classification` blurred exactly that line — it looked like a
+  // validity verdict and was assigned from the ingest mode — and the blur is why
+  // 82 of 83 records claim `valid_followup` while saying nothing.
+  expect(STRICT_FINDING_SCHEMA.properties.disposition).toBeDefined();
+  expect(BUNDLED_FINDING_SCHEMA.properties.findings.items.properties.disposition).toBeUndefined();
+  // The bundled schema is `additionalProperties: true`, so this is a statement
+  // of intent rather than a wall — which is why the intent is written down.
+  expect(BUNDLED_FINDING_SCHEMA.properties.findings.items.additionalProperties).toBe(true);
+  expect(JSON.stringify(BUNDLED_FINDING_SCHEMA.properties.findings.items.properties.global_id)).toContain(
+    "asymmetry",
+  );
 });

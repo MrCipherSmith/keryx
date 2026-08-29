@@ -27,10 +27,16 @@
 //
 // WHERE THE DISPOSITIONS COME FROM
 //
-// `review-finding.schema.json` has no disposition property, so nothing in a
-// review package records what became of a finding. Two sources are used, in
+// `review-finding.schema.json` gained a `disposition` property in flow 202, but
+// no finding written before that carries one. Three sources are used, in
 // descending strength, and every classified finding carries which one answered:
 //
+//   0. `record` — the finding's own `disposition` field, written by an
+//      instrumented review. Outranks everything below, because it is the only
+//      source that is a decision rather than an inference. Nothing on disk
+//      carries it yet — all 83 findings predate the field — but without this
+//      branch an instrumented review would still classify as `unknown` and the
+//      number could never move.
 //   1. `report-closed-by` — AUTOMATIC. The report block for a finding, or a row
 //      of a `# Disposition` table in the same report, carries a
 //      `closed by \`<sha>\`` marker. The sha is resolved against git, so a
@@ -97,7 +103,7 @@ type Classified = {
   severity: string;
   category: Category;
   evidence: string;
-  source: "report-closed-by" | "ledger" | "none";
+  source: "record" | "report-closed-by" | "ledger" | "none";
 };
 
 type LedgerRow = {
@@ -279,6 +285,26 @@ function classify(
     for (const finding of pkg.findings) {
       const key = `${pkg.reviewId}#${finding.id}`;
       seen.add(key);
+
+      // The record itself, when it has one, outranks both heuristics below.
+      // Nothing on disk carries this today — all 83 findings predate the field —
+      // but an instrumented review writes it, and without this branch such a
+      // review would still classify as `unknown` and the number could never
+      // move. Absent reads as `unknown` and falls through, so the pre-contract
+      // corpus is unaffected.
+      const recorded = (finding as { disposition?: { state?: string; evidence?: string } }).disposition;
+      if (recorded?.state !== undefined && recorded.state !== "unknown") {
+        rows.push({
+          reviewId: pkg.reviewId,
+          findingId: finding.id,
+          severity: finding.severity,
+          category: recorded.state as DispositionCategory,
+          evidence: recorded.evidence ?? `${pkg.dir}/findings.json: disposition recorded without evidence`,
+          source: "record",
+        });
+        continue;
+      }
+
       const sha = auto.get(finding.id.toUpperCase());
       if (sha !== undefined && commitExists(root, sha)) {
         rows.push({
