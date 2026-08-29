@@ -1105,6 +1105,7 @@ keryx review ingest --report <path> [--flow <id>] --ref <ref>
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
 keryx review lightweight
+keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
 ```
 
 | Subcommand | Description |
@@ -1115,10 +1116,49 @@ keryx review lightweight
 | `status` | Print mode, status, target, flow link, and coverage count. |
 | `complete` | Validate the package and mark it complete only when required artifacts exist. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
+| `scope` | Build the bounded review scope deterministically. See below. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
 by the review service.
+
+### `review scope`
+
+The scope a review is dispatched over, computed rather than eyeballed. Dropping
+a lockfile from a review needs no judgement, so it is not left to a model: this
+is a pure function of the diff and its configuration, with no model call, no
+network, and no filesystem access beyond reading the diff.
+
+It drops generated, lockfile, snapshot, minified, binary and vendored paths;
+drops whitespace-only and comment-only hunks; and narrows what remains to the
+changed hunks plus a context window (default 20 lines, configurable). Hunk-level
+scope is the point rather than a nicety — review comments anchored to a hunk are
+acted on several times more often than comments anchored to a whole file.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` | Diff against this base instead of the default merge-base. |
+| `--diff <file\|->` | Read a unified diff from a file or stdin instead of running git. |
+| `--path a,b` | Path mode: scope these paths rather than a diff. |
+| `--context <n>` | Context lines kept around each retained hunk. |
+| `--json` | Machine-readable scope, including `.files` for reviewer auto-detection. |
+| `--scoped-diff` | Emit the retained diff itself, ready to hand to a reviewer. |
+| `--append <file>` | Append the scope **and the drop list** to a review package's `scope.md`. |
+
+**Every drop is recorded with its reason**, its granularity, and the lines it
+covered. A scope that silently truncated would read as "we reviewed everything"
+when it did not, which is the failure this command exists to make impossible.
+
+Deliberately not detected, so the omission is stated rather than implied:
+`build/` is reviewed (it is as often hand-written tooling as output), `*.d.ts`
+is reviewed, and `package.json` / `go.mod` / `Cargo.toml` are reviewed — those
+are dependency *decisions*, which is exactly what a reviewer wants beside the
+lockfile churn that is dropped. Comment-only detection covers a fixed set of
+extensions; an unrecognised extension is always reviewed, detection switches off
+entirely for hunks containing a template literal, triple-quoted string or
+heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
+`eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
+it changes behaviour.
 
 ---
 
