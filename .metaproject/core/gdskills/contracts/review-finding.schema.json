@@ -55,6 +55,43 @@
       },
       "else": { "required": ["evidence"] }
     },
+    "verification": {
+      "title": "What an independent check found when it went looking for this finding",
+      "description": "Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json, on the same basis as `disposition`: a reviewer states what is wrong, and whether someone else could reproduce it is not something the reviewer knows. The rule is sharper for this field than for `disposition`, because the reviewer that raised a finding is the ONE actor forbidden to answer it (AC9) — declaring the property in the shape reviewers emit would put the forbidden field next to `severity` in every reviewer's output. This replaces `review-strict`, which re-read findings and adjusted severity with no new evidence: intrinsic self-correction is measured to degrade accuracy (GPT-4 on GSM8K 95.5 -> 91.5 -> 89.0 across rounds; GPT-3.5 on CommonSenseQA 75.8 -> 38.1; Huang et al., ICLR 2024, arXiv:2310.01798). An ABSENT verification means nobody checked — which is true of all 83 pre-contract findings on disk — and is never a reason to drop a finding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "method", "evidence"],
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["confirmed", "refuted", "unverifiable"],
+          "description": "`unverifiable` is not a failure state; it is the honest majority answer when nothing could be run. Only `refuted` removes anything, and only under verification_mode: filter."
+        },
+        "method": {
+          "type": "string",
+          "enum": ["execution", "site-check", "reasoning"],
+          "description": "Strongest first. `execution` ran a command or test that FAILS IF THE FINDING IS REAL — verification that executes rejects 85-96% of false reports against 4-15% unaided while finding 30-44% more true bugs (AnyPoC, arXiv:2604.11950). `site-check` confirmed the class_scope sites exist. `reasoning` is the residual, and it is capped: see the conditional below."
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The command that ran and what it returned, or the search that enumerated the sites. A verdict with nothing behind it is the operation this replaces."
+        },
+        "verifier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who checked. Beyond the three properties AC7 names, and present because AC9 is otherwise untraceable after the fact: the merge refuses a claim whose verifier equals the finding's `reviewer`, but a record that does not say who verified cannot be audited for that rule — the same defect as `reviewer` being hardcoded to `review-orchestrator` on all 83 recorded findings."
+        }
+      },
+      "if": {
+        "required": ["method"],
+        "properties": { "method": { "const": "reasoning" } }
+      },
+      "then": {
+        "properties": { "verdict": { "const": "unverifiable" } },
+        "description": "Reasoning alone produces no new evidence, so it can never reach `confirmed` (AC7). It cannot reach `refuted` either, and that extension is deliberate: `refuted` is the only verdict with a destructive consequence, so granting it to the weakest method would reinstate review-strict with the sign flipped. Anything checkable is `site-check` or `execution`; `reasoning` is what is left when nothing was run."
+      }
+    },
     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
     "file": { "type": ["string", "null"] },
     "line": { "type": ["integer", "null"], "minimum": 1 },

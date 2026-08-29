@@ -13,7 +13,18 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
-import { MANAGED_REVIEW_MODES, REVIEW_TARGET_KINDS, type ManagedReviewMode, type ReviewTargetKind } from "../review/types";
+import { isVerificationMode, verificationClaims } from "../review/verification";
+import {
+  DEFAULT_VERIFICATION_MODE,
+  MANAGED_REVIEW_MODES,
+  REVIEW_TARGET_KINDS,
+  VERIFICATION_MODES,
+  type ManagedReviewInput,
+  type ManagedReviewMode,
+  type ReviewScopeCountsLike,
+  type ReviewTargetKind,
+  type VerificationSource,
+} from "../review/types";
 
 export async function reviewCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -67,7 +78,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
-  const input = {
+  const input: ManagedReviewInput = {
     cwd: process.cwd(),
     mode,
     target: { kind: targetKind, ref: targetRef },
@@ -75,6 +86,9 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     reviewId: optionValue(args, "--review-id"),
     reviewers,
     reportPath: optionValue(args, "--report"),
+    verifications: await readVerifications(optionValue(args, "--verifications")),
+    verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
+    scopeCounts: await readScopeCounts(optionValue(args, "--scope")),
   };
   const result = await createManagedReviewPackage(input);
   console.log(`# managed review: ${result.reviewId}`);
@@ -83,6 +97,74 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  // AC11/AC15: the stage counts are the only thing this pipeline's claims may be
+  // stated in, so they are printed on every run rather than hidden in scope.md.
+  const counts = result.verification;
+  console.log("");
+  console.log(`verification_mode: ${counts.mode}`);
+  console.log(
+    `verdicts: confirmed=${counts.confirmed} refuted=${counts.refuted} unverifiable=${counts.unverifiable} unverified=${counts.unverified}`,
+  );
+  console.log(
+    `findings: in=${counts.findingsIn} removed_by_verifier=${counts.findingsRefuted} retained=${counts.findingsRetained}`,
+  );
+  if (counts.rejected > 0) {
+    console.log(`verification claims discarded: ${counts.rejected} (see scope.md; every one leaves its finding in place)`);
+  }
+  if (counts.capped > 0) {
+    console.log(`verdicts capped to unverifiable: ${counts.capped} (reasoning alone is not evidence)`);
+  }
+  console.log(
+    input.scopeCounts === undefined
+      ? "pre-filter: not recorded (no --scope supplied; this is not `dropped 0`)"
+      : `pre-filter: files_dropped=${input.scopeCounts.filesDropped} blocks_dropped=${input.scopeCounts.blocksDropped} changed_lines_dropped=${input.scopeCounts.changedLinesDropped}`,
+  );
+}
+
+/**
+ * The verifier's own output, read from a file rather than transcribed.
+ *
+ * Same reason `--report` takes a path: an orchestrator that retypes a structured
+ * payload loses fields, and the loss is what made the recorded corpus
+ * unmeasurable.
+ */
+async function readVerifications(source: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
+    );
+  }
+  return verificationClaims(parsed as VerificationSource);
+}
+
+/** The pre-filter half of the stage counts, from `keryx review scope --json`. */
+async function readScopeCounts(source: string | undefined): Promise<ReviewScopeCountsLike | undefined> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  const parsed = JSON.parse(raw) as { counts?: ReviewScopeCountsLike };
+  if (parsed.counts === undefined) {
+    throw new Error(`--scope ${source} carries no \`counts\`. Pass the output of \`keryx review scope --json\`.`);
+  }
+  return parsed.counts;
+}
+
+function parseVerificationMode(raw: string | undefined): ManagedReviewInput["verificationMode"] {
+  if (raw === undefined) {
+    return DEFAULT_VERIFICATION_MODE;
+  }
+  if (!isVerificationMode(raw)) {
+    throw new Error(`Invalid --verification-mode: ${raw}. Expected one of ${VERIFICATION_MODES.join(", ")}.`);
+  }
+  return raw;
 }
 
 /**
@@ -206,6 +288,8 @@ Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref>
+                      [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--scope <scope.json>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
   keryx review status <review-id-or-path>
@@ -221,5 +305,18 @@ scope:
   blocks, and bounds each retained change to +/-${DEFAULT_CONTEXT_LINES} lines of context by default.
   Prints the retained scope AND every drop with its reason; --append writes the
   same record into the review package's scope.md.
+
+verification (attach/start/ingest):
+  --verifications takes what review-verifier returned. The merge is DELETE-ONLY:
+  it cannot raise a severity, add a finding, or change a finding's text, and a
+  claim carrying any of those is discarded whole with the attempt recorded. A
+  finding is never verified by the reviewer that raised it. A verdict reached by
+  reasoning alone is capped at unverifiable.
+  --verification-mode defaults to \`${DEFAULT_VERIFICATION_MODE}\`: verdicts are recorded and
+  NOTHING is removed, so the drop rate is measured before it bites. Only
+  \`filter\` removes a refuted finding.
+  --scope takes \`keryx review scope --json\` so the package records what the
+  pre-filter dropped as well. Omitted, that stage reads \`not recorded\` — which is
+  not the same fact as \`dropped 0\`.
 `);
 }

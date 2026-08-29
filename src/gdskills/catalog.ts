@@ -184,11 +184,18 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check whether tests are meaningful, stable, and scoped.",
     "Flag brittle waits, over-mocking, missing negative cases, and weak assertions.",
   ], ["test review", "testing practices", "coverage quality"]),
-  skill("review-strict", "review", ["recommended", "full"], "Perform a strict meta-review over findings, weak assumptions, and residual risk.", [
-    "Re-check high-impact assumptions.",
-    "Drop weak findings and elevate concrete risks.",
-    "Ensure final output is actionable and severity-ranked.",
-  ], ["strict review", "meta review", "boss review"]),
+  // Replaced `review-strict`, which re-read findings and adjusted severity with
+  // no new evidence. Intrinsic self-correction is measured to degrade accuracy
+  // (GPT-4 on GSM8K 95.5 -> 91.5 -> 89.0 across rounds; GPT-3.5 on CommonSenseQA
+  // 75.8 -> 38.1; Huang et al., ICLR 2024, arXiv:2310.01798), so the pass was
+  // removed rather than improved. The replacement verifies by RUNNING something
+  // and can only delete.
+  skill("review-verifier", "review", ["recommended", "full"], "Verify reported findings by executing a check that fails if the finding is real; delete-only.", [
+    "Never verify a finding raised by yourself.",
+    "Run a command or test that fails if the finding is real; record the command and its output.",
+    "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
+    "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
+  ], ["verify findings", "review --verify", "verification pass"]),
   skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
     "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",
     "Check component, state, styling, i18n, error, and Storybook conventions.",

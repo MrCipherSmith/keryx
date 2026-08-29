@@ -1102,6 +1102,8 @@ optional flow relationship instead of leaving review state only in chat output.
 keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
 keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
+                    [--verifications <file|->] [--verification-mode off|annotate|filter]
+                    [--scope <scope.json>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
 keryx review lightweight
@@ -1159,6 +1161,58 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### Verification — `--verifications`, `--verification-mode`
+
+`attach`, `start` and `ingest` accept the output of the `review-verifier` skill
+and merge it into the package. **The merge can only delete.** It cannot raise a
+severity, add a finding, or change a finding's text: the merged record is built
+from the finding as reported, and only the verdict is taken from the claim. A
+claim that carries anything else is discarded whole and the attempt is recorded
+in `scope.md`.
+
+This replaced `review-strict`, which re-read consolidated findings and adjusted
+their severity with no new evidence. That operation is measured to make accuracy
+worse — GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across self-correction rounds and
+GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al., ICLR 2024,
+arXiv:2310.01798) — so it was removed rather than improved.
+
+| Flag | Description |
+|---|---|
+| `--verifications <file\|->` | The verifier's result: an array of claims, or `{verifier, verifications}`. |
+| `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
+| `--scope <scope.json>` | The `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped too. |
+
+Each claim is `{finding, verdict, method, evidence, verifier}` and nothing else.
+`verdict` is `confirmed`, `refuted` or `unverifiable`; `method` is `execution`,
+`site-check` or `reasoning`. Rules enforced in code, not by instruction:
+
+- **A verdict reached by reasoning alone is capped at `unverifiable`.** It can
+  never be `confirmed`, and it can never be `refuted` either — `refuted` is the
+  only verdict that removes a finding, and giving it to the method that produces
+  no new evidence would reinstate the pass that was just removed.
+- **A finding is never verified by the reviewer that raised it.** A claim whose
+  `verifier` equals the finding's `reviewer` is discarded.
+- **Every rejection retains the finding.** A malformed, anonymous, duplicated or
+  mutation-carrying claim can cost a verdict, never a finding.
+
+Modes:
+
+| Mode | Effect |
+|---|---|
+| `off` | Nothing is verified. Supplied claims are refused rather than silently ignored. |
+| `annotate` | **Default.** Verdicts are recorded on the findings; nothing is removed. A refuted finding is still reported, marked refuted. |
+| `filter` | An applied `refuted` verdict removes the finding from the reported set and records it as `dismissed-incorrect`, carrying the verification evidence. |
+
+`annotate` is the default so the drop rate is measured for a release before it
+costs a real finding.
+
+Every package's `scope.md` carries the **stage counts** — dropped by the
+pre-filter, refuted by the verifier, retained — and the same numbers are printed
+on creation. Without `--scope`, the pre-filter half reads `not recorded` rather
+than `0`: "dropped nothing" and "never ran" are different facts. State results as
+these counts and never as a precision improvement; the pipeline has no precision
+baseline to improve on.
 
 ---
 

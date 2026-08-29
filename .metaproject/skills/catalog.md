@@ -64,9 +64,9 @@ Resolution order:
 | review-orchestrator | review | Route review requests to specialized reviewers and consolidate findings. | gdskills/review/review-orchestrator/SKILL.md |
 | review-performance | review | Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk. | gdskills/review/review-performance/SKILL.md |
 | review-security-code | review | Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure. | gdskills/review/review-security-code/SKILL.md |
-| review-strict | review | Perform a strict meta-review over findings, weak assumptions, and residual risk. | gdskills/review/review-strict/SKILL.md |
 | review-style | review | Review naming, readability, duplication, dead code, and maintainability. | gdskills/review/review-style/SKILL.md |
 | review-testing-practices | review | Review test structure, coverage quality, determinism, and repository test conventions. | gdskills/review/review-testing-practices/SKILL.md |
+| review-verifier | review | Verify reported findings by executing a check that fails if the finding is real; delete-only. | gdskills/review/review-verifier/SKILL.md |
 
 <!-- gdskills:project-skills:start -->
 ## Project Skills

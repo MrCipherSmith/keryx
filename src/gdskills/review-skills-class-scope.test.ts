@@ -30,6 +30,8 @@ const EXEMPT: Record<string, string> = {
   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "review-pr-feedback":
     "classifies INCOMING human PR comments by severity; it reports on other people's findings and produces none of its own, so there is no class for it to enumerate",
+  "review-verifier":
+    "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so it produces no finding whose class it could enumerate; it READS class_scope to check that the named sites exist",
 };
 
 /** Markers the contract section must carry. Both, so a passing mention does not count. */
@@ -79,6 +81,62 @@ describe("the orchestrator collects context and records rounds", () => {
     expect(skill).toContain("keryx review start");
     expect(skill).toContain("keryx review ingest");
     expect(skill).toMatch(/fix round is managed, not optional/i);
+  });
+});
+
+describe("Wave C verifies by executing; it does not re-score by re-reading (AC6)", () => {
+  // `review-strict` re-read the consolidated findings and adjusted their severity
+  // with no new evidence, under an elevation table biased 3:1 toward escalation.
+  // That operation is MEASURED to degrade accuracy, so it was removed rather than
+  // improved — and the numbers are pinned here so nobody restores it as an
+  // obvious-looking idea. It looked obvious the first time too.
+  const orchestrator = readFileSync(path.join(REVIEW_ROOT, "review-orchestrator", "SKILL.md"), "utf8");
+
+  test("review-strict is gone from the bundle and from the catalog", () => {
+    expect(existsSync(path.join(REVIEW_ROOT, "review-strict"))).toBe(false);
+    expect(reviewerSkills()).not.toContain("review-strict");
+    const catalog = readFileSync(path.join(import.meta.dir, "catalog.ts"), "utf8");
+    expect(catalog).not.toContain('skill("review-strict"');
+    // Removed from the bundle is not enough: a bundled directory with no catalog
+    // entry is never installed, and a catalog entry with no directory installs a
+    // generated stub. Both halves have to move together.
+    expect(catalog).toContain('skill("review-verifier"');
+  });
+
+  test("review-verifier replaced it", () => {
+    expect(reviewerSkills()).toContain("review-verifier");
+    expect(orchestrator).toContain("review-verifier");
+  });
+
+  test("the removal is justified IN THE SKILL, with the measurements", () => {
+    // Prose, and weaker than a schema guard — but the alternative is a deletion
+    // whose reason lives only in a flow journal nobody reads before re-adding it.
+    expect(orchestrator).toMatch(/95\.5\s*→\s*91\.5\s*→\s*89\.0/);
+    expect(orchestrator).toMatch(/75\.8\s*→\s*38\.1/);
+    expect(orchestrator).toContain("arXiv:2310.01798");
+    // Wrapped across a line in the skill, so the whitespace is not pinned.
+    expect(orchestrator).toMatch(/\+49\.2 on dialogue[\s\S]{0,60}\+0\.2\s+on maths/);
+    expect(orchestrator).toMatch(/no new evidence/i);
+    expect(orchestrator).toMatch(/removed, not improved|removed rather than improved/i);
+  });
+
+  test("the verifier skill states what it cannot do, and why reasoning is capped", () => {
+    const verifier = readFileSync(path.join(REVIEW_ROOT, "review-verifier", "SKILL.md"), "utf8");
+    expect(verifier).toMatch(/can only delete/i);
+    expect(verifier).toMatch(/never verify your own finding/i);
+    expect(verifier).toMatch(/capped at `unverifiable`/i);
+    // The counter-example that kills anything vote-shaped.
+    expect(verifier).toContain("padding-oracle");
+    expect(verifier).toMatch(/never votes|never poll, never vote/i);
+    // And the evidence that execution is the method that works.
+    expect(verifier).toContain("arXiv:2604.11950");
+    expect(verifier).toContain("arXiv:2402.09171");
+  });
+
+  test("the orchestrator records the stage counts and forbids a precision claim (AC11/AC15)", () => {
+    expect(orchestrator).toContain("## Stage counts");
+    expect(orchestrator).toContain("verification_mode");
+    expect(orchestrator).toMatch(/no precision baseline exists to improve on/i);
   });
 });
 

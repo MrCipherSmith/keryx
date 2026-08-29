@@ -1,3 +1,9 @@
+// Type-only, and therefore erased: `review/verification` imports runtime values
+// from this module, so a value import back would be a real cycle. The merge
+// result types live there because they describe what the merge does, not what a
+// finding is.
+import type { VerificationCap, VerificationCounts, VerificationRejection } from "./verification";
+
 export const MANAGED_REVIEW_MODES = ["attach-review", "review-flow", "ingest"] as const;
 export type ManagedReviewMode = (typeof MANAGED_REVIEW_MODES)[number];
 
@@ -113,6 +119,101 @@ export type ReviewFindingDisposition = {
   evidence?: string | undefined;
 };
 
+// ---------------------------------------------------------------------------
+// Verification (flow 202, AC7-AC11)
+// ---------------------------------------------------------------------------
+
+/**
+ * What an independent check found when it went looking for the finding.
+ *
+ * Three verdicts and no fourth. `confirmed` says something was executed or
+ * inspected and the finding held; `refuted` says the same procedure showed it
+ * does not; `unverifiable` says no procedure was available. The third is not a
+ * failure state — it is the honest majority answer, and giving it a name is what
+ * stops "I thought about it and it seems right" from being recorded as
+ * `confirmed`.
+ */
+export const VERIFICATION_VERDICTS = ["confirmed", "refuted", "unverifiable"] as const;
+export type VerificationVerdict = (typeof VERIFICATION_VERDICTS)[number];
+
+/**
+ * How the verdict was reached, strongest first. The order is the contract, not a
+ * preference: {@link module:review/verification.mergeVerifications} caps what the
+ * weakest one may conclude.
+ *
+ * - `execution` — a command or test was run that FAILS IF THE FINDING IS REAL.
+ *   Verification that executes rejects 85-96% of false reports against 4-15%
+ *   unaided while finding 30-44% more true bugs (AnyPoC, arXiv:2604.11950), and
+ *   TestGen-LLM's build -> pass -> improves-coverage funnel (75% -> 57% -> 25%)
+ *   is what makes the surviving quarter reach 73% human acceptance
+ *   (arXiv:2402.09171). keryx is a Bun project; running something is cheap.
+ * - `site-check` — the sites named in `class_scope` were looked for and either
+ *   exist or do not. Weaker than execution: it establishes that the code the
+ *   finding describes is there, not that the behaviour it claims occurs.
+ * - `reasoning` — neither of the above was possible. By construction this
+ *   produces NO new evidence, which is why it is capped: see
+ *   `REASONING_CAPPED_VERDICT`.
+ */
+export const VERIFICATION_METHODS = ["execution", "site-check", "reasoning"] as const;
+export type VerificationMethod = (typeof VERIFICATION_METHODS)[number];
+
+/**
+ * The only verdict a reasoning-only check may carry.
+ *
+ * AC7 requires that reasoning alone can never reach `confirmed`. The cap is
+ * applied to `refuted` as well, and that is a deliberate extension of the
+ * criterion in the one direction that is safe to extend it: `refuted` is the
+ * ONLY verdict with a destructive consequence — in `filter` mode it removes the
+ * finding — so allowing the weakest method to reach it would reinstate
+ * `review-strict` with the sign flipped. Re-reading a finding and changing what
+ * happens to it with no new evidence is the operation this whole phase removes;
+ * it does not become safe by pointing downward.
+ *
+ * Nothing checkable is lost. "The line this finding cites does not exist" is not
+ * reasoning — it is `site-check`, and it is available. `reasoning` is the
+ * residual: the cases where nothing was run and nothing was looked up. The
+ * honest thing for that residual to say is "I could not verify this."
+ */
+export const REASONING_CAPPED_VERDICT: VerificationVerdict = "unverifiable";
+
+/**
+ * One verification, as it is recorded on the finding.
+ *
+ * `verifier` is beyond the three properties AC7 names, and it is here because
+ * without it AC9 leaves no trace: the merge refuses a self-verification at write
+ * time, but a record that does not say who verified cannot be audited for the
+ * rule afterwards — which is the same defect as `reviewer` being hardcoded to
+ * `review-orchestrator` on all 83 recorded findings. It is optional only so a
+ * hand-written record is not rejected for lacking it; the writer always fills it.
+ */
+export type ReviewFindingVerification = {
+  verdict: VerificationVerdict;
+  method: VerificationMethod;
+  evidence: string;
+  verifier?: string | undefined;
+};
+
+/**
+ * Whether the verifier's verdicts are recorded, or acted on.
+ *
+ * `annotate` is the default and stays the default for one release. The verifier
+ * records `refuted` without removing anything, so the drop rate is a measured
+ * number before it costs a real finding. The risk is named rather than assumed
+ * away: SWE-agent keeps its equivalent opt-in because it sometimes rejects
+ * correct patches, and a filter that silently removes a true blocker is worse
+ * than the noise it removes.
+ *
+ * - `off` — no verification at all. Claims are refused rather than ignored.
+ * - `annotate` — verdicts are recorded on every finding; nothing is removed.
+ * - `filter` — a `refuted` finding is removed from the reported set and recorded
+ *   as `dismissed-incorrect`, with the verification evidence as its evidence.
+ */
+export const VERIFICATION_MODES = ["off", "annotate", "filter"] as const;
+export type VerificationMode = (typeof VERIFICATION_MODES)[number];
+
+/** The default, asserted by a test rather than by this comment. */
+export const DEFAULT_VERIFICATION_MODE: VerificationMode = "annotate";
+
 /**
  * One finding, in exactly the shape `review-finding.schema.json` accepts.
  *
@@ -175,6 +276,22 @@ export type StructuredReviewFinding = {
    * was ever written down. A field on the record is the thing that ends that.
    */
   disposition?: ReviewFindingDisposition | undefined;
+  /**
+   * What an independent check found. Absent means nobody checked.
+   *
+   * Absent is NOT "unverified and therefore droppable": the 83 pre-contract
+   * findings on disk have none, and neither does any finding produced with
+   * `verification_mode: off`. Only an applied `refuted` verdict removes
+   * anything, and only in `filter` mode.
+   *
+   * Declared here and NOT in the bundled `reviewer-finding.schema.json`, on the
+   * same basis as `disposition` — see that field. A reviewer states what is
+   * wrong; whether someone else could reproduce it is not something the reviewer
+   * knows, and AC9 says the reviewer that raised the finding is precisely the one
+   * that may never answer it. Declaring the property in the shape reviewers emit
+   * would be an invitation to fill in the one field they are forbidden to fill.
+   */
+  verification?: ReviewFindingVerification | undefined;
 };
 
 /**
@@ -247,7 +364,66 @@ export type ManagedReviewInput = {
    * each one must carry `disposition.evidence`. Refusal becomes a write.
    */
   refuted?: ReviewFindingsSource | undefined;
+  /**
+   * What `review-verifier` returned: one claim per finding it checked.
+   *
+   * Typed loosely on purpose. The merge is delete-only and enforces that by
+   * reading ONLY the verdict out of a claim, so it has to be able to receive —
+   * and visibly reject — a claim that tried to carry a severity. A narrow type
+   * here would move that rejection to compile time for callers inside this
+   * repository and leave it absent for every caller outside it.
+   */
+  verifications?: readonly VerificationClaimInput[] | undefined;
+  /** Defaults to {@link DEFAULT_VERIFICATION_MODE}. */
+  verificationMode?: VerificationMode | undefined;
+  /**
+   * What the pre-filter removed, from `keryx review scope --json`.
+   *
+   * Optional, and its absence is recorded as "not recorded" rather than as
+   * zero: "the pre-filter dropped nothing" and "no pre-filter ran" are different
+   * facts, and a stage count that cannot tell them apart is the same defect as
+   * `dismissed-out-of-scope = 0` meaning "not written down".
+   */
+  scopeCounts?: ReviewScopeCountsLike | undefined;
   now?: Date | undefined;
+};
+
+/**
+ * A verification claim as it arrives, before anything is checked.
+ *
+ * The index signature is what lets an attempted escalation reach the merge and
+ * be rejected by name instead of being silently dropped by the type system.
+ */
+export type VerificationClaimInput = {
+  finding?: string | undefined;
+  verdict?: string | undefined;
+  method?: string | undefined;
+  evidence?: string | undefined;
+  verifier?: string | undefined;
+  [key: string]: unknown;
+};
+
+/** The shape a verifier result arrives in: a bare array or the wrapper. */
+export type VerificationSource =
+  | readonly VerificationClaimInput[]
+  | { verifier?: string | undefined; verifications: readonly VerificationClaimInput[] };
+
+/**
+ * The pre-filter counts this module needs, structurally.
+ *
+ * Declared here rather than imported from `review/scope` so `review/types` keeps
+ * no dependency on the pre-filter: the two stages are independent and a review
+ * record can carry either half alone.
+ */
+export type ReviewScopeCountsLike = {
+  filesSeen: number;
+  filesRetained: number;
+  filesDropped: number;
+  blocksSeen: number;
+  blocksRetained: number;
+  blocksDropped: number;
+  changedLinesRetained: number;
+  changedLinesDropped: number;
 };
 
 /**
@@ -272,6 +448,10 @@ export type ManagedReviewPackageResult = {
   reviewId: string;
   path: string;
   manifest: ManagedReviewManifest;
+  /** AC11. Present on every package, whether or not a verifier ran. */
+  verification: VerificationCounts;
+  verificationRejections: readonly VerificationRejection[];
+  verificationCaps: readonly VerificationCap[];
 };
 
 export type FlowMatchResult = {

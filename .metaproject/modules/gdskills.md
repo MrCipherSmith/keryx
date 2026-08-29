@@ -69,9 +69,9 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.
 - `review-performance`: Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.
 - `review-security-code`: Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.
-- `review-strict`: Perform a strict meta-review over findings, weak assumptions, and residual risk.
 - `review-style`: Review naming, readability, duplication, dead code, and maintainability.
 - `review-testing-practices`: Review test structure, coverage quality, determinism, and repository test conventions.
+- `review-verifier`: Verify reported findings by executing a check that fails if the finding is real; delete-only.
 
 ## Commands
 
