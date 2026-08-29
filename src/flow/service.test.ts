@@ -157,7 +157,13 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
   const result = await service.complete({ cwd: ROOT, id: "001", comment: true });
   expect(result.passed).toBe(true);
   expect(result.flow.status).toBe("done");
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass"]);
+  expect(result.gates.map((gate) => gate.name)).toEqual([
+    "acceptance-criteria",
+    "pull-request",
+    "tasks",
+    "health",
+  ]);
+  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass"]);
   expect(result.commented).toBe(true);
   expect(tracker.commented[0]).toContain("Flow 001");
   expect(tracker.commented[0]).toContain("pull/43");
@@ -184,7 +190,9 @@ test("failed gates return the flow to in-progress with fix notes", async () => {
   expect(result.passed).toBe(false);
   expect(result.flow.status).toBe("in-progress");
   const failedNames = result.gates.filter((gate) => gate.status === "fail").map((gate) => gate.name);
-  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "health"]);
+  // The scaffolded T1-T4 are still `todo`, so the task gate fails alongside
+  // the other three.
+  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "tasks", "health"]);
   expect(result.flow.history.some((event) => event.event === "completion-failed")).toBe(true);
 });
 
@@ -205,6 +213,9 @@ test("merged completion closes a flow without a PR when main contains the commit
   await writeAc(dir, ["Implementation is present on main"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
   await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
 
   const result = await service.complete({ cwd: ROOT, id: flow.id, mergedCommit: "7b78ff14" });
@@ -213,7 +224,13 @@ test("merged completion closes a flow without a PR when main contains the commit
   expect(result.flow.status).toBe("done");
   expect(result.flow.merged?.commit).toBe("7b78ff14");
   expect(result.flow.merged?.ref).toBe("origin/main");
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass"]);
+  expect(result.gates.map((gate) => gate.name)).toEqual([
+    "acceptance-criteria",
+    "main-merge",
+    "tasks",
+    "health",
+  ]);
+  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass"]);
 });
 
 test("block stores the previous status and unblock restores it", async () => {

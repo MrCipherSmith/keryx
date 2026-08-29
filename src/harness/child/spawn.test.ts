@@ -391,6 +391,7 @@ function makeSpyFlowService(
     start: notImplemented("start", calls),
     taskAdd: notImplemented("taskAdd", calls),
     taskDone,
+    taskAttempt: notImplemented("taskAttempt", calls),
     acConfirm: notImplemented("acConfirm", calls),
     acUpdate: notImplemented("acUpdate", calls),
     implemented: notImplemented("implemented", calls),

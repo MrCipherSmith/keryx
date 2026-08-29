@@ -32,6 +32,12 @@ export type TaskAttempts = {
 // Explicit terminal state distinct from `status` (applies once status is "done").
 export type TaskDisposition = "completed" | "blocked" | "failed" | "skipped";
 
+// Outcomes the `keryx flow task attempt` verb may record. A subset of
+// AttemptOutcome: `completed` is owned by `flow task done` and `paused` is only
+// ever written by the v1 -> v2 migration, so neither is user-recordable.
+export const ATTEMPT_CLI_OUTCOMES = ["started", "failed", "blocked"] as const;
+export type AttemptCliOutcome = (typeof ATTEMPT_CLI_OUTCOMES)[number];
+
 // Per-task execution budget. All fields optional; absence = no per-task override.
 export type TaskBudget = {
   maxSeconds?: number | undefined;
@@ -58,6 +64,14 @@ export type FlowTask = {
   dependsOn?: string[] | undefined;
   attempts?: TaskAttempts | undefined;
   disposition?: TaskDisposition | undefined;
+  /**
+   * Why the task ended the way it did. Required in practice only for
+   * `disposition: "skipped"`: the task gate (see `service.complete`) refuses a
+   * skip that carries no recorded reason, so "skipped" can never become a
+   * silent way past the gate. Free text, written by
+   * `keryx flow task done <id> <Tn> --disposition skipped --reason "<why>"`.
+   */
+  dispositionReason?: string | undefined;
   acRefs?: string[] | undefined;
   evidenceRefs?: string[] | undefined;
   budget?: TaskBudget | undefined;
@@ -75,8 +89,30 @@ export type FlowHistoryEvent = {
   detail?: string | undefined;
 };
 
+/**
+ * Per-package opt-in for completion gates that did not exist when older flow
+ * packages were written.
+ *
+ * Why this is not keyed on `schemaVersion`: `readFlow` migrates every v1
+ * package to v2 in memory and the next mutation persists it, so 195 of the 197
+ * packages in this repository — including all 24 that completed with an open
+ * task — are already `schemaVersion: 2`. A version number cannot separate "was
+ * written under the new rules" from "was written before them"; a field set at
+ * `init` can. See flow 201 `journal.md` for the full argument.
+ */
+export type FlowGates = {
+  /**
+   * Run the task gate in `complete()`. Set to `true` by `flow init` for every
+   * package created after the gate landed. ABSENT on pre-existing packages,
+   * where the gate reports `skipped` and never fails a completion.
+   */
+  tasks?: boolean | undefined;
+};
+
 export type FlowState = {
   schemaVersion: 1 | 2;
+  /** Per-package gate opt-ins. Absent = pre-existing package (see FlowGates). */
+  gates?: FlowGates | undefined;
   id: string; // "001"
   slug: string;
   title: string;
@@ -124,7 +160,7 @@ export interface TrackerAdapter {
 // --- Gates (D6) ---
 
 export type GateOutcome = {
-  name: "acceptance-criteria" | "pull-request" | "main-merge" | "health" | "security";
+  name: "acceptance-criteria" | "pull-request" | "main-merge" | "tasks" | "health" | "security";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -214,11 +250,26 @@ export interface FlowService {
     id: string;
     taskId: string;
     disposition?: TaskDisposition | undefined;
+    /** Why the task ended this way; the task gate requires it for "skipped". */
+    reason?: string | undefined;
     // v2 additive (backward-compatible): when provided, the harness's mapped
     // evidence refs / run link are set on the task. Existing callers that omit
     // these are unaffected. Only Task Manager writes these to flow.json (D-02).
     evidenceRefs?: string[] | undefined;
     runLink?: TaskRunLink | undefined;
+  }): Promise<FlowState>;
+  /**
+   * Record one execution attempt against a task: increments `attempts.count`
+   * and appends to the append-only `attempts.log`. The counter lives in
+   * flow.json precisely so a loop bound survives a session restart — an
+   * in-memory count is the bug this exists to fix.
+   */
+  taskAttempt(input: {
+    cwd: string;
+    id: string;
+    taskId: string;
+    outcome: AttemptCliOutcome;
+    detail?: string | undefined;
   }): Promise<FlowState>;
   acConfirm(input: {
     cwd: string;
