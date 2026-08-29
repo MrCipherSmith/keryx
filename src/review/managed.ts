@@ -6,7 +6,6 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
-  FINDING_CLASSIFICATIONS,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
   REVIEW_FINDING_CONFIDENCES,
@@ -66,6 +65,7 @@ export async function createManagedReviewPackage(
   const report = await readReport(input);
   const findings = await normalizeFindings({
     report,
+    reportLabel: reportLabel(input),
     mode: input.mode,
     attachedToFlow: flowMatch !== null,
     source: input.findings,
@@ -93,6 +93,23 @@ export async function createManagedReviewPackage(
       `Refusing to record findings that do not enumerate their class: ${violations
         .map((finding) => `${finding.id} (${finding.severity})`)
         .join(", ")}. A blocker or major must carry class_scope with sites and enumeration_method — every site holding the shape, and how the set was derived.`,
+    );
+  }
+
+  // The contract gate, applied to the projection that is about to be written and
+  // applied the SAME WAY whichever source produced it. It used to live inside
+  // `fromStructuredSource`, which meant the legacy parser wrote unvalidated
+  // records: `class_scope_present` was a shape check over prose while
+  // `class_scope` came from a separate extraction, so a `major` whose block
+  // named class_scope in sentences passed the guard and was persisted without
+  // the property the schema requires — and the round-2 input built from it was
+  // rejected by the same schema. One gate, one place, both paths.
+  const contractErrors = await schemaErrors(findings);
+  if (contractErrors.length > 0) {
+    throw new Error(
+      `Refusing to record findings that do not satisfy review-finding.schema.json: ${contractErrors
+        .map((error) => `${error.path} ${error.message}`)
+        .join("; ")}`,
     );
   }
 
@@ -296,8 +313,16 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
   return `# Managed Review Report\n\nNo reviewer findings recorded yet.\n`;
 }
 
+/** How to name the report in an error, so a refusal says which file to open. */
+function reportLabel(input: ManagedReviewInput): string {
+  return input.reportPath
+    ? path.resolve(input.cwd, input.reportPath)
+    : "the report text passed to keryx review";
+}
+
 type NormalizeFindingsArgs = {
   report: string;
+  reportLabel: string;
   mode: ManagedReviewMode;
   attachedToFlow: boolean;
   source: ReviewFindingsSource | undefined;
@@ -323,9 +348,16 @@ type NormalizeFindingsArgs = {
  * the producer and the parser is demoted to reading what is already on disk.
  */
 async function normalizeFindings(args: NormalizeFindingsArgs): Promise<NormalizedReviewFinding[]> {
-  const structured = args.source ?? parseEmbeddedFindings(args.report);
-  if (structured !== null && structured !== undefined) {
-    return triage(await fromStructuredSource(structured, args.reviewers), args);
+  if (args.source !== undefined) {
+    return triage(fromStructuredSource(args.source, args.reviewers), args);
+  }
+  // PRESENCE, not the parsed value. Branching on the value cannot tell "no
+  // block" from "a block holding null", and both then fell through to the prose
+  // parser without a word — the silent degradation the fenced block exists to
+  // prevent. `parseEmbeddedFindings` returns null only when no fence is there.
+  const structured = parseEmbeddedFindings(args.report, args.reportLabel);
+  if (structured !== null) {
+    return triage(fromStructuredSource(structured, args.reviewers), args);
   }
   return triage(parseLegacyReport(args.report, args.reviewers), args);
 }
@@ -404,25 +436,76 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
  * the two halves to be separated in transit. A legacy report simply has no such
  * block, which is what makes the fallback automatic rather than a mode switch
  * someone has to remember to set.
+ *
+ * The OPENING FENCE is what is matched, and presence is decided by it alone.
+ * Up to three leading spaces are allowed because CommonMark allows a fence to be
+ * indented that far; the previous column-0 anchor made an indented block — the
+ * ordinary result of nesting one under a list item — invisible, and an invisible
+ * block is a silent fall-through to the prose parser rather than an error.
  */
-const EMBEDDED_FINDINGS_BLOCK = /^```[^\n]*\bkeryx:findings\b[^\n]*\n([\s\S]*?)\n^```\s*$/m;
+const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\n]*$/gm;
 
-function parseEmbeddedFindings(report: string): ReviewFindingsSource | null {
-  const match = report.match(EMBEDDED_FINDINGS_BLOCK);
-  if (!match?.[1]) {
+/**
+ * The one `keryx:findings` block in a report, or null when there is none.
+ *
+ * Every other outcome throws. A block that is present but does not yield a
+ * findings payload is a producer bug, and the one thing that must never happen
+ * is what used to: falling back to the prose parser while the report visibly
+ * carries the structured array its author expected to be read.
+ */
+function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindingsSource | null {
+  const fences = [...report.matchAll(EMBEDDED_FINDINGS_FENCE)];
+  if (fences.length === 0) {
     return null;
   }
+  if (fences.length > 1) {
+    // An orchestrator that concatenates one block per reviewer produces exactly
+    // this, and the non-global match silently kept the first and dropped the
+    // rest — a report visibly holding findings ingested as zero.
+    throw new Error(
+      `${reportLabel} carries ${fences.length} keryx:findings blocks (at character ${fences
+        .map((fence) => String(fence.index ?? 0))
+        .join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
+    );
+  }
+  const fence = fences[0] as RegExpExecArray;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(match[1]) as unknown;
+    parsed = JSON.parse(embeddedBlockBody(report, fence)) as unknown;
   } catch (error) {
     throw new Error(
-      `The report carries a keryx:findings block that is not valid JSON: ${
+      `${reportLabel} carries a keryx:findings block that is not valid JSON: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
+  if (!Array.isArray(parsed) && !isReviewerResult(parsed)) {
+    // Named for what it is. Passing a non-array through produced a schema
+    // failure about missing `id`/`impact`/`evidence`, which sends the reader
+    // looking for fields in a block that was never a finding.
+    throw new Error(
+      `${reportLabel} carries a keryx:findings block that is ${describeJson(
+        parsed,
+      )}, not an array of findings or a { reviewer, findings } result.`,
+    );
+  }
   return parsed as ReviewFindingsSource;
+}
+
+/** The text between an opening fence and its closing fence of the same marker. */
+function embeddedBlockBody(report: string, fence: RegExpExecArray): string {
+  const marker = fence[1] ?? "```";
+  const char = marker.startsWith("~") ? "~" : "`";
+  const afterOpen = report.slice((fence.index ?? 0) + fence[0].length).replace(/^\r?\n/, "");
+  const closing = afterOpen.match(new RegExp(`^ {0,3}\\${char}{${marker.length},}\\s*$`, "m"));
+  return closing?.index === undefined ? afterOpen : afterOpen.slice(0, closing.index);
+}
+
+function describeJson(value: unknown): string {
+  if (value === null) {
+    return "JSON null";
+  }
+  return `a JSON ${typeof value}`;
 }
 
 /**
@@ -435,10 +518,10 @@ function parseEmbeddedFindings(report: string): ReviewFindingsSource | null {
  * hardcoded to `review-orchestrator` for every finding this pipeline ever wrote,
  * which made every record claim the consolidator found it.
  */
-async function fromStructuredSource(
+function fromStructuredSource(
   source: ReviewFindingsSource,
   reviewers: string[],
-): Promise<Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean }>> {
+): Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean }> {
   const flattened: Array<Partial<StructuredReviewFinding>> = [];
   for (const entry of Array.isArray(source) ? source : [source]) {
     if (isReviewerResult(entry)) {
@@ -454,22 +537,12 @@ async function fromStructuredSource(
     flattened.push(entry as Partial<StructuredReviewFinding>);
   }
 
-  const findings = flattened.map((finding) => coerceStructured(finding, reviewers));
-  const errors = await schemaErrors(findings);
-  if (errors.length > 0) {
-    // Fail closed, and before anything is written: a structured payload is a
-    // claim that the fields exist, so an incomplete one is a bug in the producer
-    // and not something to paper over with the placeholders the legacy path
-    // uses. Recording it would put a finding into `prior_findings` that the next
-    // round's dispatch then rejects — the failure this whole change removes,
-    // reintroduced one layer down.
-    throw new Error(
-      `Refusing to record structured findings that do not satisfy review-finding.schema.json: ${errors
-        .map((error) => `${error.path} ${error.message}`)
-        .join("; ")}`,
-    );
-  }
-  return findings;
+  // Nothing is filled in and nothing is validated here: the shared contract gate
+  // in `createManagedReviewPackage` fails closed on whatever this returns, and
+  // fails closed the same way for the legacy parser. A structured payload is a
+  // claim that the fields exist, so an incomplete one is a producer bug — not
+  // something to paper over with the placeholders the legacy path uses.
+  return flattened.map((finding) => coerceStructured(finding, reviewers));
 }
 
 function isReviewerResult(value: unknown): value is ReviewerResultLike {
@@ -574,6 +647,7 @@ function parseLegacyReport(
     // severity depend on whether the word happened to appear in the title.
     const block = findingBlock(lines, index);
     const location = parseLocation(labelledField(block, ["file", "location"]));
+    const classScope = parseClassScope(block);
     const finding: StructuredReviewFinding & { summary: string; class_scope_present: boolean } = {
       id,
       severity: severityFor(line, block),
@@ -585,14 +659,19 @@ function parseLegacyReport(
       suggested_fix:
         labelledField(block, ["suggested fix", "suggested_fix", "fix", "recommendation"]) ??
         NOT_RECORDED("suggested_fix"),
-      evidence:
-        labelledField(block, ["evidence", "proof", "found by", "found independently by"]) ??
-        NOT_RECORDED("evidence"),
+      // Attribution is not evidence. `Found independently by` also feeds
+      // `legacyReviewer`, so reading it here made `evidence` a copy of the
+      // reviewer list — a value that LOOKS recorded, which is precisely the
+      // property this path exists to preserve: a reader can tell a recovered
+      // field from one the report never carried.
+      evidence: labelledField(block, ["evidence", "proof"]) ?? NOT_RECORDED("evidence"),
       confidence: legacyConfidence(block),
       summary,
-      class_scope_present: hasClassScope(block),
+      // The extracted value, not a separate shape check over the prose. When
+      // these were two different tests they could disagree, and on a `major`
+      // that disagreement wrote a record `review-finding.schema.json` rejects.
+      class_scope_present: classScope !== null,
     };
-    const classScope = parseClassScope(block);
     if (classScope !== null) {
       finding.class_scope = classScope;
     }
@@ -688,11 +767,13 @@ function legacyConfidence(block: string): ReviewFindingConfidence {
 /**
  * `sites` and `enumeration_method`, pulled out of a markdown class_scope block.
  *
- * Best effort, and deliberately NOT the guard: {@link classScopeViolations}
- * stays on {@link hasClassScope}, the shape check, so a report is refused for
- * exactly the reasons it was refused before this change. Extraction failing
- * where the shape check passes costs a `class_scope` in the persisted record and
- * nothing else.
+ * This IS the guard. It used to be best effort behind a separate shape check
+ * over the prose, and the two could disagree: a block naming `class_scope`,
+ * `sites` and `enumeration_method` in sentences satisfied the shape check while
+ * extraction returned null, so a `major` was accepted and persisted without the
+ * property `review-finding.schema.json` requires — and the round-2 input built
+ * from that record was rejected by the same schema. The guard now keys off the
+ * value that is written, so the two cannot disagree.
  */
 function parseClassScope(block: string): ReviewFindingClassScope | null {
   const lines = block.split("\n");
@@ -827,25 +908,6 @@ function findingBlock(lines: string[], headingIndex: number): string {
     out.push(lines[i] ?? "");
   }
   return out.join("\n");
-}
-
-/**
- * Does this finding enumerate its class?
- *
- * A SHAPE check over markdown, not schema validation — stated rather than
- * implied. It requires the block to name `class_scope` and to supply both
- * halves, because either alone is the thing it was added to prevent: a list of
- * sites with no method is unverifiable, and a method with no sites enumerates
- * nothing. `review-finding.schema.json` is the strict form and is what
- * `keryx skills contracts validate` applies to a JSON finding.
- */
-function hasClassScope(block: string): boolean {
-  const lower = block.toLowerCase();
-  return (
-    (lower.includes("class_scope") || lower.includes("class scope")) &&
-    lower.includes("sites") &&
-    lower.includes("enumeration_method")
-  );
 }
 
 /**
@@ -1070,6 +1132,3 @@ async function loadDocpackSchema(cwd: string): Promise<Record<string, unknown> |
     : null;
 }
 
-export function isFindingClassification(value: string): boolean {
-  return FINDING_CLASSIFICATIONS.includes(value as (typeof FINDING_CLASSIFICATIONS)[number]);
-}

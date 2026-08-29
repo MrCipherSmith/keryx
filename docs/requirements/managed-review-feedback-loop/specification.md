@@ -108,20 +108,39 @@ Contains the consolidated human-readable review report sorted by severity.
 
 ### `findings.json`
 
-Contains normalized findings compatible with existing review-finding concepts:
+An array of objects in exactly the shape
+`src/gdskills/contracts/review-finding.schema.json` accepts — the same contract
+`prior_findings[].finding` is validated against in `reviewer-input.schema.json`,
+which is what makes a recorded round usable as the input to the next one:
 
 ```json
-{
-  "id": "F-001",
-  "severity": "minor",
-  "reviewer": "review-testing-practices",
-  "file": "src/example.test.ts",
-  "line": 42,
-  "summary": "Missing regression test",
-  "classification": "skill_learning_candidate",
-  "flow_relevance": "post_flow_feedback"
-}
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "file": "src/example.test.ts",
+    "line": 42,
+    "problem": "the fix has no regression test",
+    "impact": "the bug can return without any guard failing",
+    "suggested_fix": "assert the repaired behaviour in example.test.ts",
+    "evidence": "reverted the fix; the suite stayed green",
+    "confidence": "high",
+    "learning_candidate": true
+  }
+]
 ```
+
+The schema is `additionalProperties: false`, and a `blocker` or `major` must
+also carry `class_scope` (`sites` plus `enumeration_method`). Ingest validates
+every record against it before writing anything, on both the structured and the
+legacy-markdown path, and refuses the whole package on any error.
+
+`summary`, `classification` and `flow_relevance` are **not** properties of a
+finding: the reviewer states what is wrong, the pipeline states what it intends
+to do about it. The pipeline's judgement is recorded in `decisions.md` (see
+below); the one exception is `learning_candidate`, which the finding contract
+does model.
 
 ### `learning.md`
 
@@ -202,7 +221,9 @@ must not claim checks are green unless health or CI evidence exists.
   context-starved reviewer with a reason.
 - AC4: The learning document is always present and includes either candidates
   or `none`.
-- AC5: Post-flow findings are classified before the review package is completed.
+- AC5: Post-flow findings are classified before the review package is completed,
+  and the classification is recorded in `decisions.md` — not in `findings.json`,
+  which carries the `review-finding.schema.json` shape and only that.
 - AC6: Lightweight review mode remains available without writing flow artifacts.
 - AC7: Documentation and runtime tests prove managed review does not mutate
   `flow.json` directly.

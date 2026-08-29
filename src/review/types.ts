@@ -117,15 +117,15 @@ export type NormalizedReviewFinding = StructuredReviewFinding & {
   classification: FindingClassification;
   flow_relevance: "active_flow_feedback" | "post_flow_feedback" | "standalone_review";
   /**
-   * Whether the finding's block carried a `class_scope` — every site of the
-   * shape, and how the set was enumerated.
+   * Whether the finding carried a `class_scope` — every site of the shape, and
+   * how the set was enumerated.
    *
-   * A shape check, not schema validation, and said plainly: a legacy report is
-   * markdown, so what is observable there is that the block names `class_scope`
-   * and supplies both `sites` and `enumeration_method`. Extraction of the two
-   * halves into {@link StructuredReviewFinding.class_scope} is best-effort and
-   * can fail on a block this check passes; the guard stays on the shape check so
-   * a legacy report is refused for the same reasons it always was.
+   * Always the same answer as `class_scope !== undefined` on the record about to
+   * be written, on both the structured and the legacy path. It was once a
+   * separate shape check over the markdown prose, which could pass on a block
+   * whose `class_scope` extraction returned null; a `major` in that state was
+   * accepted by the guard and persisted without the property
+   * `review-finding.schema.json` requires.
    */
   class_scope_present?: boolean | undefined;
 };
