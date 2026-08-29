@@ -27,9 +27,16 @@
  *   lines, not file headers, so the marker is usually not in the input at all.
  *   Detecting it would need the working tree, which would end the purity that
  *   makes this testable offline.
- * - **`build/` as a generated directory.** `dist`, `out` and `coverage` are
- *   never source; `build/` is as often hand-written build tooling. gdgraph's
- *   index can afford that false skip, a review cannot.
+ * - **Build-output directory names below a source root.** `build/`, and equally
+ *   `dist`, `out`, `target`, `generated` and `coverage`, are ordinary words:
+ *   `src/target/resolve.ts` is a resolver and `app/components/out/Button.tsx`
+ *   is a component. The ambiguous names are only treated as build output when
+ *   no source root (`src`, `lib`, `app`, `test`, …) precedes them, and `build/`
+ *   is not on the list at all. gdgraph's index can afford that false skip, a
+ *   review cannot. Residual gap: the source-root list is a word list, so a
+ *   source directory under a parent it does not know — `web/out/Button.tsx` —
+ *   is still dropped, and there is no per-repository opt-out for that
+ *   direction (`additionalGeneratedDirectories` only adds drops).
  * - **`*.d.ts`, `go.mod`, `package.json`, `Cargo.toml`, `requirements.txt`.**
  *   Declaration files are frequently hand-written, and the manifest files are
  *   dependency *decisions* — the thing a reviewer most wants to see next to the
@@ -42,9 +49,24 @@
  *   string.** A template literal, a Python triple-quote or a shell heredoc can
  *   hold lines that begin with `//` or `#` and are not comments, so the presence
  *   of a delimiter anywhere in the hunk disables the check for that hunk.
+ * - **Comment-only detection in a hunk whose own change touches a block-comment
+ *   delimiter.** Adding a `/*` above live code, or deleting the `*\/` below it,
+ *   comments that code out while every *changed* line is a comment — the whole
+ *   file's behaviour changes and the diff looks like a docstring edit. The hunk
+ *   is reviewed instead. The same refusal covers a delimiter sitting next to a
+ *   quote, because `const marker = "*\/";` would otherwise convince the scanner
+ *   that the hunk opened inside a block comment and flag the real code above it.
  * - **Line joins and splits are never whitespace-only.** Removing a newline is
  *   semantic under ASI and under Python's grammar, so the whitespace comparison
  *   is per line and a change in line count is a real change.
+ * - **Whitespace inside a multi-line string that is not quote-delimited.**
+ *   Whitespace inside a string literal is content, not formatting, so complete
+ *   single-line literals are compared verbatim and a hunk carrying an
+ *   unterminated quote is never called whitespace-only. A shell heredoc body or
+ *   a Python docstring carries no quote on its content lines, so a spacing edit
+ *   inside one is still invisible — and for whitespace-sensitive file types,
+ *   where only trailing whitespace is normalised, trailing whitespace inside a
+ *   multi-line string is still dropped.
  * - **Semantic indentation.** For whitespace-sensitive file types only trailing
  *   whitespace is normalised, so a re-indent of a Python block is a real change.
  * - **Move detection, rename-only diffs, mode changes, and submodule bumps.**
@@ -173,9 +195,11 @@ export type ReviewScopeConfig = {
   detectCommentOnly: boolean;
   /**
    * Project-local directory names to treat as generated, on top of the built-in
-   * list. Matched as a whole path segment at any depth, exactly like the
-   * built-ins, so a project can name its own output directory without a code
-   * change — and without this module's default list growing risky entries.
+   * list. Matched as a whole path segment at any depth and unconditionally: a
+   * configured name is an explicit statement about *this* repository, so unlike
+   * the ambiguous built-ins (`dist`, `out`, …) it is not second-guessed by the
+   * source-root rule. This is also the escape hatch for a project that really
+   * does generate into `src/generated/`.
    */
   additionalGeneratedDirectories: readonly string[];
 };
@@ -223,16 +247,15 @@ const LOCKFILE_BASENAMES = new Set([
 const VENDOR_DIRECTORIES = new Set(["node_modules", "vendor", "third_party", "thirdparty", "bower_components", "Pods"]);
 
 /**
- * Build output and code generators' output, matched as a whole path segment at
- * any depth. Derived from `IGNORE_DIRS` in `src/gdgraph/build.ts`, which is this
+ * Build output whose directory name is unambiguous — matched as a whole path
+ * segment at any depth. Nothing names a hand-written source directory
+ * `__pycache__` or `.next`, so depth carries no information here.
+ *
+ * Derived from `IGNORE_DIRS` in `src/gdgraph/build.ts`, which is this
  * repository's existing answer to the same question, minus `build` (see the
  * module header) and minus the agent-scratch entries that are not build output.
  */
 const GENERATED_DIRECTORIES = new Set([
-  "dist",
-  "out",
-  "coverage",
-  "generated",
   "__generated__",
   "__pycache__",
   ".venv",
@@ -240,7 +263,45 @@ const GENERATED_DIRECTORIES = new Set([
   ".turbo",
   ".docusaurus",
   "storybook-static",
-  "target",
+]);
+
+/**
+ * Build-output names that are also ordinary words a source directory can be
+ * called: `src/target/resolve.ts` is a resolver, not a Rust build directory,
+ * and `app/components/out/Button.tsx` is a component.
+ *
+ * These match only when no source root precedes them, which keeps the case that
+ * matters — `dist/`, `packages/core/dist/`, `apps/web/out/` — and gives up the
+ * case that cannot be told apart from source. The author already removed
+ * `build` from the list above for exactly this reason; this is the same
+ * judgement applied to the rest of the ambiguous names, and `keryx` ships as a
+ * general CLI where the source-directory reading is a real repository shape.
+ */
+const AMBIGUOUS_GENERATED_DIRECTORIES = new Set(["dist", "out", "coverage", "generated", "target"]);
+
+/**
+ * Directory names that mean "hand-written code lives under here".
+ *
+ * A heuristic word list, and only ever the cause of a false *retain*: an
+ * ambiguous build directory below one of these is reviewed rather than dropped.
+ * Workspace containers (`packages`, `apps`) are deliberately absent — they hold
+ * projects, not sources, so `packages/core/dist/` stays build output.
+ */
+const SOURCE_ROOT_SEGMENTS = new Set([
+  "src",
+  "source",
+  "sources",
+  "lib",
+  "app",
+  "components",
+  "internal",
+  "pkg",
+  "cmd",
+  "test",
+  "tests",
+  "spec",
+  "specs",
+  "__tests__",
 ]);
 
 /** Generator output identified by filename rather than directory. */
@@ -285,12 +346,19 @@ export function classifyPath(path: string, config: ReviewScopeConfig = DEFAULT_R
     }
   }
   const extraGenerated = new Set(config.additionalGeneratedDirectories);
+  let sawSourceRoot = false;
   for (const segment of directories) {
     if (GENERATED_DIRECTORIES.has(segment)) {
       return { reason: "generated", detail: `generated: build-output directory "${segment}/"` };
     }
     if (extraGenerated.has(segment)) {
       return { reason: "generated", detail: `generated: project-configured directory "${segment}/"` };
+    }
+    if (AMBIGUOUS_GENERATED_DIRECTORIES.has(segment) && !sawSourceRoot) {
+      return { reason: "generated", detail: `generated: build-output directory "${segment}/" with no source root above it` };
+    }
+    if (SOURCE_ROOT_SEGMENTS.has(segment)) {
+      sawSourceRoot = true;
     }
   }
   for (const segment of directories) {
@@ -520,8 +588,52 @@ function extensionOf(path: string): string {
   return dot <= 0 ? "" : basename.slice(dot).toLowerCase();
 }
 
+/**
+ * A string literal that opens and closes on the same line, escapes honoured.
+ *
+ * Not a lexer, and not trying to be: it exists so that whitespace *inside* a
+ * literal is compared verbatim while whitespace between tokens is normalised.
+ * Without it `parts.join(" ")` and `parts.join("")` normalise to the same text
+ * and a separator change is dropped as formatting.
+ */
+const STRING_LITERAL = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
+
+/**
+ * True when a quote is left over after every complete literal is removed, i.e.
+ * the line opens a string it does not close — a template literal, a PHP or Ruby
+ * multi-line string — and the lines after it are string content, where leading
+ * whitespace is data rather than formatting.
+ *
+ * Over-matches: an apostrophe in prose ("don't") reads as an unterminated
+ * literal, and so does a quote inside a regex literal. Both cost a retained
+ * hunk, which is the direction this module is required to fail in.
+ */
+function hasUnterminatedQuote(text: string): boolean {
+  return /["'`]/.test(text.replace(STRING_LITERAL, ""));
+}
+
+/**
+ * Collapse whitespace that is formatting; leave whitespace that is data.
+ *
+ * Runs of whitespace *between* tokens become a single space rather than
+ * vanishing, because "a space was removed" is a change — `join(" ")` to
+ * `join("")` is the case that reached review as nothing at all. Complete string
+ * literals are copied through untouched, so a spacing edit inside a SQL string
+ * or a prompt template is a difference.
+ */
 function normalizeForWhitespace(text: string, indentSignificant: boolean): string {
-  return indentSignificant ? text.replace(/\s+$/, "") : text.replace(/\s+/g, "");
+  if (indentSignificant) {
+    return text.replace(/\s+$/, "");
+  }
+  let normalized = "";
+  let cursor = 0;
+  for (const match of text.matchAll(STRING_LITERAL)) {
+    const index = match.index ?? 0;
+    normalized += text.slice(cursor, index).replace(/\s+/g, " ") + match[0];
+    cursor = index + match[0].length;
+  }
+  normalized += text.slice(cursor).replace(/\s+/g, " ");
+  return normalized.trim();
 }
 
 /**
@@ -532,8 +644,16 @@ function normalizeForWhitespace(text: string, indentSignificant: boolean): strin
  * semantic under ASI and under Python's grammar. Lines that normalise to nothing
  * are dropped from both sides first, so adding or removing blank lines counts as
  * whitespace-only.
+ *
+ * The whole hunk is refused when any of its lines opens a string it does not
+ * close: the changed lines may then be string *content*, and the check is per
+ * hunk rather than per changed line because the opening quote is usually a
+ * context line above the edit.
  */
-function isWhitespaceOnly(block: ChangeBlock, indentSignificant: boolean): boolean {
+function isWhitespaceOnly(hunk: ParsedHunk, block: ChangeBlock, indentSignificant: boolean): boolean {
+  if (!indentSignificant && hunk.lines.some((line) => hasUnterminatedQuote(line.text))) {
+    return false;
+  }
   const removed: string[] = [];
   const added: string[] = [];
   for (const line of block.lines) {
@@ -703,10 +823,33 @@ function commentFlags(lines: readonly ParsedLine[], style: CommentStyle): boolea
   });
 }
 
+const BLOCK_COMMENT_DELIMITER = /\/\*|\*\//;
+
+/** A block-comment delimiter sitting inside what looks like a string literal. */
+const QUOTED_BLOCK_DELIMITER = /["'`][^"'`]*(?:\/\*|\*\/)/;
+
 /**
  * True when every added and removed line in the block is a comment, no changed
  * comment is a directive, and the hunk carries no multi-line string delimiter
  * that could be hiding a comment marker inside a string.
+ *
+ * The two block-comment guards are what stop the most dangerous drop this
+ * module can make. `commentFlags` walks one line sequence, but a hunk holds
+ * *two* files interleaved; that single walk is only valid when the old and the
+ * new file agree on where the block comments are.
+ *
+ * - A changed line carrying `/*` or `*\/` breaks that agreement by definition,
+ *   and it is exactly the edit that comments live code out (`+  /*` above an
+ *   authorization check) or swallows it (`-   *\/` below one). The added line is
+ *   then the only changed line, the code it disabled is untouched context, and
+ *   the block reads as a pure comment edit. Refusing the whole hunk — not just
+ *   the block — is deliberate: one delimiter shifts the comment state of every
+ *   other block in the hunk too.
+ * - A delimiter inside a string (`const marker = "*\/";`) makes the pre-scan
+ *   below conclude the hunk opened inside a block comment, which flags the real
+ *   code above it as comment. Detected by proximity to a quote rather than by
+ *   lexing, so it over-matches onto a hunk that merely has a quote and a
+ *   delimiter near each other, and over-matching here only retains a hunk.
  */
 function isCommentOnly(hunk: ParsedHunk, block: ChangeBlock, path: string): boolean {
   const style = COMMENT_STYLES.get(extensionOf(path));
@@ -715,6 +858,12 @@ function isCommentOnly(hunk: ParsedHunk, block: ChangeBlock, path: string): bool
   }
   if (style.multilineStringMarkers.some((marker) => hunk.lines.some((line) => line.text.includes(marker)))) {
     return false;
+  }
+  if (style.block) {
+    const changedDelimiter = hunk.lines.some((line) => line.kind !== "context" && BLOCK_COMMENT_DELIMITER.test(line.text));
+    if (changedDelimiter || hunk.lines.some((line) => QUOTED_BLOCK_DELIMITER.test(line.text))) {
+      return false;
+    }
   }
   const flags = commentFlags(hunk.lines, style);
   let sawComment = false;
@@ -855,7 +1004,7 @@ export function buildReviewScope(diff: string, config?: Partial<ReviewScopeConfi
           endLine: Math.max(...block.lines.map((line) => line.anchor)),
         };
 
-        if (resolved.detectWhitespaceOnly && isWhitespaceOnly(block, indentSignificant)) {
+        if (resolved.detectWhitespaceOnly && isWhitespaceOnly(hunk, block, indentSignificant)) {
           counts.blocksDropped += 1;
           counts.changedLinesDropped += changedLines;
           counts.droppedByReason["whitespace-only"] += 1;

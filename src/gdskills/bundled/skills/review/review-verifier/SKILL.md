@@ -121,7 +121,9 @@ bun run typecheck
 ```
 
 Record the command and the relevant output. "I ran the tests and they passed" is
-not evidence; `bun test src/review/scope.test.ts → 26 pass, 0 fail` is.
+not evidence; the command you ran and its output is — `bun test <file>` with
+the counts it actually printed, not a count quoted from somewhere else. (This
+sentence used to quote a fixed number, which went stale twice in one day.)
 
 A finding is `confirmed` when the procedure **reproduced the defect**, and
 `refuted` when the procedure **that would have shown the defect did not**. If the

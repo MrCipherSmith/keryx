@@ -52,6 +52,7 @@ import {
   VERIFICATION_VERDICTS,
   type ReviewFindingVerification,
   type ReviewScopeCountsLike,
+  type ReviewScopeDropLike,
   type StructuredReviewFinding,
   type VerificationClaimInput,
   type VerificationMethod,
@@ -110,6 +111,7 @@ export type VerificationCounts = {
   mode: VerificationMode;
   /** Claims received, including the ones discarded. */
   claims: number;
+  /** Claims whose verdict reached a finding. `claims = applied + rejected`. */
   applied: number;
   rejected: number;
   capped: number;
@@ -187,7 +189,7 @@ export function mergeVerifications<T extends StructuredReviewFinding>(
         detail: "verification_mode is `off`; no verdict was read. Set `annotate` to record it.",
       });
     }
-    return finish(findings, new Map(), mode, claims.length, rejections, caps);
+    return finish(findings, new Map(), mode, claims.length, 0, rejections, caps);
   }
 
   // Pass 1: resolve and validate. Nothing is applied yet, because a conflict is
@@ -257,9 +259,11 @@ export function mergeVerifications<T extends StructuredReviewFinding>(
       });
       continue;
     }
-    if (typeof claim.verifier !== "string" || claim.verifier.trim() === "") {
+    if (typeof claim.verifier !== "string" || actorKey(claim.verifier) === "") {
       // Not pedantry: AC9 is unenforceable against an anonymous claim, and a
       // record that does not say who verified cannot be audited for it later.
+      // Keyed rather than trimmed, so a name that is only punctuation — `"()"`
+      // normalises away to nothing — is anonymous rather than a distinct actor.
       rejections.push({
         finding: name,
         reason: "no-verifier",
@@ -267,13 +271,13 @@ export function mergeVerifications<T extends StructuredReviewFinding>(
       });
       continue;
     }
-    if (claim.verifier === target.reviewer) {
+    if (actorKey(claim.verifier) === actorKey(target.reviewer)) {
       // AC9. The reviewer that raised a finding is the one actor whose agreement
       // carries no information about it.
       rejections.push({
         finding: name,
         reason: "self-verification",
-        detail: `${claim.verifier} raised this finding and cannot verify it. Dispatch a different reviewer.`,
+        detail: `${claim.verifier} raised this finding (recorded as ${target.reviewer}) and cannot verify it. Dispatch a different reviewer.`,
       });
       continue;
     }
@@ -300,26 +304,52 @@ export function mergeVerifications<T extends StructuredReviewFinding>(
     accepted.set(key, [...(accepted.get(key) ?? []), { finding: target, verification }]);
   }
 
-  // Pass 2: a finding claimed twice keeps NEITHER verdict. Taking the first
-  // would let claim order decide whether a finding survives, and the safe
-  // resolution of a conflict is the one that cannot delete.
+  // Pass 2: a finding claimed twice keeps neither verdict WHEN THE CLAIMS
+  // DISAGREE. Taking the first would let claim order decide whether a finding
+  // survives, and the safe resolution of a conflict is the one that cannot
+  // delete.
+  //
+  // Agreement is not a conflict, and treating it as one discarded the strongest
+  // evidence the pipeline can produce: two verifiers independently reaching
+  // `confirmed`, each having run something, cancelled each other and the finding
+  // was recorded as unverified with a rejection row calling it a conflict. The
+  // safe-direction argument is about ORDER deciding an outcome; when every claim
+  // says the same thing there is no order to decide anything. Note this is not
+  // consensus voting — the module header's counter-example stands. A unanimous
+  // group still had to survive every per-claim gate: each verdict was reached by
+  // a named non-author with evidence, and a `reasoning` claim was already capped
+  // before it got here, so agreement adds no authority it did not each have.
   const applied = new Map<string, ReviewFindingVerification>();
+  // Claims, not findings: a unanimous pair applies TWO claims to one finding, and
+  // `claims_received = claims_applied + claims_rejected` has to keep holding or
+  // the record's arithmetic silently stops adding up.
+  let appliedClaims = 0;
   for (const [key, group] of accepted) {
     const first = group[0];
-    if (group.length === 1 && first !== undefined) {
-      applied.set(key, first.verification);
+    if (first === undefined) {
       continue;
     }
-    rejections.push({
-      finding: key,
-      reason: "conflicting-claims",
-      detail: `${group.length} claims for one finding (${group
-        .map((entry) => `${entry.verification.verifier}: ${entry.verification.verdict}`)
-        .join(", ")}). None is applied; the finding stays unverified.`,
-    });
+    if (group.length === 1) {
+      applied.set(key, first.verification);
+      appliedClaims += 1;
+      continue;
+    }
+    const verdicts = new Set(group.map((entry) => entry.verification.verdict));
+    if (verdicts.size > 1) {
+      rejections.push({
+        finding: key,
+        reason: "conflicting-claims",
+        detail: `${group.length} claims for one finding disagree (${group
+          .map((entry) => `${entry.verification.verifier}: ${entry.verification.verdict}`)
+          .join(", ")}). None is applied; the finding stays unverified.`,
+      });
+      continue;
+    }
+    applied.set(key, unanimous(group.map((entry) => entry.verification)));
+    appliedClaims += group.length;
   }
 
-  return finish(findings, applied, mode, claims.length, rejections, caps);
+  return finish(findings, applied, mode, claims.length, appliedClaims, rejections, caps);
 }
 
 function finish<T extends StructuredReviewFinding>(
@@ -327,6 +357,7 @@ function finish<T extends StructuredReviewFinding>(
   applied: ReadonlyMap<string, ReviewFindingVerification>,
   mode: VerificationMode,
   claimCount: number,
+  appliedClaims: number,
   rejections: VerificationRejection[],
   caps: VerificationCap[],
 ): VerificationMergeResult<T> {
@@ -335,7 +366,7 @@ function finish<T extends StructuredReviewFinding>(
   const counts: VerificationCounts = {
     mode,
     claims: claimCount,
-    applied: applied.size,
+    applied: appliedClaims,
     rejected: rejections.length,
     capped: caps.length,
     confirmed: 0,
@@ -370,8 +401,69 @@ function finish<T extends StructuredReviewFinding>(
   return { retained, refuted, rejections, caps, counts };
 }
 
+/**
+ * One verification standing for several that reached the same verdict.
+ *
+ * Every verifier and every piece of evidence is carried, because the record has
+ * to say who checked — AC9 is audited off this field afterwards, and collapsing
+ * two checks into one name would hide the second actor exactly as `reviewer`
+ * hardcoded to `review-orchestrator` hid the first. The STRONGEST method is the
+ * one recorded, since the group's verdict is at least as well supported as its
+ * best-supported member.
+ */
+function unanimous(verifications: readonly ReviewFindingVerification[]): ReviewFindingVerification {
+  const head = verifications[0] as ReviewFindingVerification;
+  if (verifications.length === 1) {
+    return head;
+  }
+  const verifiers: string[] = [];
+  for (const verification of verifications) {
+    const named = verification.verifier ?? "<unnamed>";
+    if (!verifiers.includes(named)) {
+      verifiers.push(named);
+    }
+  }
+  const strongest = [...verifications].sort(
+    (left, right) => VERIFICATION_METHODS.indexOf(left.method) - VERIFICATION_METHODS.indexOf(right.method),
+  )[0] as ReviewFindingVerification;
+  return {
+    verdict: head.verdict,
+    method: strongest.method,
+    evidence: verifications
+      .map((verification) => `${verification.verifier ?? "<unnamed>"} (${verification.method}): ${verification.evidence}`)
+      .join("; "),
+    verifier: verifiers.join(", "),
+  };
+}
+
 function claimName(claim: VerificationClaimInput): string {
   return typeof claim.finding === "string" && claim.finding !== "" ? claim.finding : "<unnamed>";
+}
+
+/**
+ * An actor name reduced to what identifies it, for the AC9 comparison only.
+ *
+ * `verifier` and `reviewer` are free text a model fills in. Comparing them with
+ * `===` made AC9 a formatting coincidence: `"review-logic "`, `" review-logic"`,
+ * `"Review-Logic"` and `"review-logic(sonnet)"` all walked past the guard, and
+ * in `filter` mode that is a blocker deleted by its own author with no rejection
+ * row to show it happened.
+ *
+ * Deliberately OVER-matching, because the two directions cost different things.
+ * A false self-verification costs a verdict and the finding is retained — every
+ * rejection path in this module retains the finding. A missed one costs the
+ * finding itself. So a trailing model annotation is stripped and separators are
+ * folded, and `review-logician` still reads as a different actor because nothing
+ * here does prefix matching.
+ */
+function actorKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function unknownProperties(claim: VerificationClaimInput): string[] {
@@ -395,6 +487,21 @@ function isMethod(value: unknown): value is VerificationMethod {
 export type ReviewStageCountsInput = {
   /** From `keryx review scope --json`. Absent means no pre-filter ran. */
   preFilter?: ReviewScopeCountsLike | undefined;
+  /**
+   * One row per drop, with its reason. This is the AC5 half: eight integers say
+   * how much vanished and never why, and "files_dropped: 2" is indistinguishable
+   * from two source files dropped by mistake.
+   */
+  preFilterDrops?: readonly ReviewScopeDropLike[] | undefined;
+  /**
+   * True when a `## Pre-filter scope` block already present in the package's
+   * `scope.md` is being carried forward verbatim rather than overwritten.
+   *
+   * It changes one sentence, and the sentence is the point: with a block carried
+   * forward, "no pre-filter scope was supplied to this package" is FALSE, and
+   * writing a false statement over a true record is worse than writing nothing.
+   */
+  preFilterCarried?: boolean | undefined;
   verification: VerificationCounts;
   rejections?: readonly VerificationRejection[] | undefined;
   caps?: readonly VerificationCap[] | undefined;
@@ -424,8 +531,14 @@ export function renderStageCountsMarkdown(input: ReviewStageCountsInput): string
   lines.push("### Dropped by the pre-filter");
   lines.push("");
   if (input.preFilter === undefined) {
-    lines.push("not recorded — no pre-filter scope was supplied to this package.");
-    lines.push("This is NOT `dropped 0`: nothing ran, so nothing is known.");
+    if (input.preFilterCarried === true) {
+      lines.push("no `--scope` was passed to this ingest, but this package already");
+      lines.push("carried a `## Pre-filter scope` block written by `keryx review scope");
+      lines.push("--append`. It is reproduced verbatim below rather than overwritten.");
+    } else {
+      lines.push("not recorded — no pre-filter scope was supplied to this package.");
+      lines.push("This is NOT `dropped 0`: nothing ran, so nothing is known.");
+    }
   } else {
     const counts = input.preFilter;
     lines.push(`files_seen: ${counts.filesSeen}`);
@@ -436,6 +549,29 @@ export function renderStageCountsMarkdown(input: ReviewStageCountsInput): string
     lines.push(`blocks_dropped: ${counts.blocksDropped}`);
     lines.push(`changed_lines_retained: ${counts.changedLinesRetained}`);
     lines.push(`changed_lines_dropped: ${counts.changedLinesDropped}`);
+    lines.push("");
+    // AC5, verbatim: "with a reason per drop". The counts above answer how much,
+    // and only these rows answer what and why.
+    const drops = input.preFilterDrops;
+    if (drops === undefined && input.preFilterCarried === true) {
+      lines.push("per-drop rows: in the `## Pre-filter scope` block carried forward below,");
+      lines.push("written by `keryx review scope --append` and not overwritten by this ingest.");
+    } else if (drops === undefined) {
+      lines.push("per-drop rows: not supplied — only the counts reached this package.");
+      lines.push("Pass the whole `keryx review scope --json` document, not just its `counts`.");
+    } else if (drops.length === 0) {
+      lines.push("_the pre-filter ran and dropped nothing_");
+    } else {
+      lines.push("| path | where | reason | why |");
+      lines.push("|---|---|---|---|");
+      for (const drop of drops) {
+        const where =
+          drop.granularity === "file"
+            ? "whole file"
+            : `lines ${drop.startLine ?? "?"}-${drop.endLine ?? "?"} (${drop.changedLines})`;
+        lines.push(`| ${escapePipes(drop.path)} | ${where} | ${escapePipes(drop.reason)} | ${escapePipes(drop.detail)} |`);
+      }
+    }
   }
   lines.push("");
 

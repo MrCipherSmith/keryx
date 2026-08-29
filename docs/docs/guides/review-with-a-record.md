@@ -27,12 +27,15 @@ Usage:
   keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref>
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
-                      [--scope <scope.json>]
+                      [--scope <scope.json>] [--refuted <file|->]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
+                        [--finding <id> --disposition <state> --evidence <text>]...
   keryx review lightweight
+
+An unrecognised option is REFUSED, not ignored.
 
 Modes:
   attach-review, review-flow, ingest
@@ -44,7 +47,7 @@ the [CLI reference](../cli-reference.md#review).)
 ## Narrow the scope before anyone reads it
 
 ```bash
-keryx review scope --ref "$(git merge-base HEAD main)" --append <package>/scope.md
+keryx review scope --ref "$(git merge-base HEAD main)" --json > scope.json
 ```
 
 Deterministic, no model call: lockfiles, generated and vendored paths, binaries,
@@ -52,6 +55,12 @@ whitespace-only and comment-only hunks are dropped, and what remains is bounded
 to the changed hunks plus 20 lines of context. **Every drop is recorded with its
 reason** — a scope that shrank silently reads afterwards as "we reviewed
 everything".
+
+Keep `scope.json` and pass it to `review ingest --scope` (below). That is how the
+drop list reaches the review record. `--append <package>/scope.md` writes the
+same block directly and now replaces an existing one rather than appending a
+second, but `--scope` is the supported route because it does not depend on two
+commands hitting the same file in the right order.
 
 ## Verify the findings before you report them
 
@@ -110,15 +119,38 @@ flow: none
 coverage: 1
 ```
 
-## Complete it
+## Complete it — and say what became of each finding
 
 ```bash
-keryx review complete <review-id-or-path>
+keryx review complete <review-id-or-path> \
+  --finding F-001 --disposition acted-on --evidence "closed by 380bf3b0" \
+  --finding F-002 --disposition dismissed-incorrect \
+    --evidence "ran the writer under umask 002; the mode is 0700"
 ```
 
 Completion validates the package structurally — coverage, findings and
 decisions have to be present and consistent, so "reviewed" is a state something
 had to earn.
+
+The disposition triples are the half that was missing, and the cost of missing
+it is measurable: computed over every review package in this repository,
+precision came out at **53 / (53 + 0) = 100%** — not because the reviewers were
+right, but because nothing on disk could record a finding as *wrong*. Only
+`acted-on` and `dismissed-incorrect` say anything about accuracy; the other
+dismissals (`dismissed-wont-fix`, `dismissed-out-of-scope`,
+`dismissed-deprioritised`) say the finding was correct and not worth doing now.
+Everything except `unknown` must cite where the outcome is written down, and a
+recorded state and its citation cannot be overwritten by a later close.
+
+The same applies to what a round raised and then threw away — pass it at ingest
+rather than describing it in prose nobody can count:
+
+```bash
+keryx review ingest --report round7.md --ref round7 --refuted refuted.json
+```
+
+Closing with no dispositions is allowed. It leaves every finding reading
+`unknown`, which means "nobody wrote down what happened".
 
 ## Feed what you learned back
 

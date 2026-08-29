@@ -1103,12 +1103,16 @@ keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [-
 keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
-                    [--scope <scope.json>]
+                    [--scope <scope.json>] [--refuted <file|->]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
+                      [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
 ```
+
+**An unrecognised option is refused, not ignored**, and the command exits 1. A
+flag that is silently dropped writes nothing and still reports success.
 
 | Subcommand | Description |
 |---|---|
@@ -1116,7 +1120,7 @@ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
 | `start` | Create a standalone managed review package. |
 | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
 | `status` | Print mode, status, target, flow link, and coverage count. |
-| `complete` | Validate the package and mark it complete only when required artifacts exist. |
+| `complete` | Validate the package, record what became of its findings, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
 
@@ -1145,11 +1149,15 @@ acted on several times more often than comments anchored to a whole file.
 | `--context <n>` | Context lines kept around each retained hunk. |
 | `--json` | Machine-readable scope, including `.files` for reviewer auto-detection. |
 | `--scoped-diff` | Emit the retained diff itself, ready to hand to a reviewer. |
-| `--append <file>` | Append the scope **and the drop list** to a review package's `scope.md`. |
+| `--append <file>` | Write the scope **and the drop list** into a review package's `scope.md`, replacing a `## Pre-filter scope` block already there rather than adding a second. |
 
 **Every drop is recorded with its reason**, its granularity, and the lines it
 covered. A scope that silently truncated would read as "we reviewed everything"
 when it did not, which is the failure this command exists to make impossible.
+
+Keep the `--json` output and hand it to `review ingest --scope`: that is the
+supported route from the pre-filter to the review record, and unlike `--append`
+it does not depend on two commands hitting the same file in the right order.
 
 Deliberately not detected, so the omission is stated rather than implied:
 `build/` is reviewed (it is as often hand-written tooling as output), `*.d.ts`
@@ -1181,7 +1189,7 @@ arXiv:2310.01798) — so it was removed rather than improved.
 |---|---|
 | `--verifications <file\|->` | The verifier's result: an array of claims, or `{verifier, verifications}`. |
 | `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
-| `--scope <scope.json>` | The `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped too. |
+| `--scope <scope.json>` | The **whole** `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped and why. Handing over only its `counts` object is refused: eight integers carry no reason for any individual drop. |
 
 Each claim is `{finding, verdict, method, evidence, verifier}` and nothing else.
 `verdict` is `confirmed`, `refuted` or `unverifiable`; `method` is `execution`,
@@ -1192,8 +1200,17 @@ Each claim is `{finding, verdict, method, evidence, verifier}` and nothing else.
   only verdict that removes a finding, and giving it to the method that produces
   no new evidence would reinstate the pass that was just removed.
 - **A finding is never verified by the reviewer that raised it.** A claim whose
-  `verifier` equals the finding's `reviewer` is discarded.
-- **Every rejection retains the finding.** A malformed, anonymous, duplicated or
+  `verifier` names the finding's `reviewer` is discarded. The two names are
+  compared after normalising case, surrounding whitespace, `_`/`-` and a trailing
+  `(model)` annotation, so `review-logic `, `Review-Logic` and
+  `review-logic (sonnet)` are all the same actor. The comparison deliberately
+  over-matches: a refused claim costs a verdict, a missed self-verification costs
+  the finding.
+- **Two claims for one finding cancel only when they disagree**, because there
+  the outcome would otherwise be decided by claim order. Two verifiers reaching
+  the same verdict record it, naming both and carrying both pieces of evidence —
+  each claim was already admitted on its own evidence, so this is not voting.
+- **Every rejection retains the finding.** A malformed, anonymous, disagreeing or
   mutation-carrying claim can cost a verdict, never a finding.
 
 Modes:
@@ -1209,10 +1226,37 @@ costs a real finding.
 
 Every package's `scope.md` carries the **stage counts** — dropped by the
 pre-filter, refuted by the verifier, retained — and the same numbers are printed
-on creation. Without `--scope`, the pre-filter half reads `not recorded` rather
-than `0`: "dropped nothing" and "never ran" are different facts. State results as
-these counts and never as a precision improvement; the pipeline has no precision
-baseline to improve on.
+on creation. Without `--scope`, a `## Pre-filter scope` block already in the
+package is carried forward verbatim; with neither, the pre-filter half reads
+`not recorded` rather than `0`, because "dropped nothing" and "never ran" are
+different facts. State results as these counts and never as a precision
+improvement; the pipeline has no precision baseline to improve on.
+
+### Recording what became of a finding — `--refuted`, `review complete`
+
+A review package that records only what a round *reported* keeps the survivors
+of an unlogged triage, and precision measured over survivors is 100% whatever the
+reviewers actually got right. Two commands write the other half.
+
+| Flag | Command | Description |
+|---|---|---|
+| `--refuted <file\|->` | `ingest` | Findings this round **raised and then dismissed**, in the same finding shape, each carrying `disposition: {state, evidence}` with a `dismissed-*` state. `acted-on` and `unknown` are refused on this channel. |
+| `--finding <id>` | `complete` | The finding a disposition is about, by `global_id` or display `id`. Repeatable: each `--finding` opens a new record. |
+| `--disposition <state>` | `complete` | `unknown`, `acted-on`, `dismissed-incorrect`, `dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`. |
+| `--evidence <ref>` | `complete` | Where the outcome is written down: the commit, the test, the decision. Required for every state except `unknown`. |
+
+Only `acted-on` and `dismissed-incorrect` say anything about whether a reviewer
+was **right**; the three other dismissals say the finding was correct and not
+worth doing now. They are separate states rather than one `dismissed` bucket
+because collapsing them makes a dismissal rate unreadable.
+
+A recorded state **and its citation** cannot be overwritten by a later close —
+record a correction as a new round. Closing with no disposition flags is allowed
+and leaves every finding reading `unknown`, which means "nobody wrote down what
+happened", never "the finding was correct".
+
+`bun run baseline:review-precision` recomputes the figure from the packages on
+disk, joining on `global_id`.
 
 ---
 

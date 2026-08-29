@@ -940,10 +940,183 @@ test("the schema itself refuses a disposition that asserts an outcome and cites 
 
 test("global_id is declared identically in both finding schemas", () => {
   const bundledFinding = BUNDLED_FINDING_SCHEMA.properties.findings.items as Record<string, any>;
-  const shape = (s: Record<string, any>) => ({ type: s.type, minLength: s.minLength });
+  const shape = (s: Record<string, any>) => ({ type: s.type, minLength: s.minLength, pattern: s.pattern });
   expect(shape(bundledFinding.properties.global_id)).toEqual(
     shape(STRICT_FINDING_SCHEMA.properties.global_id),
   );
+});
+
+test("the contract pins global_id's SHAPE, not merely its type", async () => {
+  // `<reviewId>#<id>` is the whole content of the key: the measurement joins on
+  // it, and `mintGlobalFindingId` is the only writer inside this repository. A
+  // producer outside it can supply any string, and a `global_id` that is not the
+  // minted shape joins to nothing while looking like a key.
+  const schema = await loadSchema("review-finding");
+  expect(await validateJson(contractFinding({ global_id: "2026-08-29-round-1#F-001" }), schema)).toEqual([]);
+  for (const bad of ["F-001", "", "a#b#c", "#F-001", "round#"]) {
+    const errors = await validateJson(contractFinding({ global_id: bad }), schema);
+    expect({ bad, paths: [...new Set(errors.map((error) => error.path))] }).toEqual({
+      bad,
+      paths: ["$.global_id"],
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// AC5: the drop record reaches the review package and SURVIVES ingest
+// ---------------------------------------------------------------------------
+
+/** The block `keryx review scope --append` writes, as it appears on disk. */
+const APPENDED_SCOPE_BLOCK = `## Pre-filter scope
+
+mode: diff
+context_lines: 20
+files_seen: 3
+files_retained: 1
+files_dropped: 2
+blocks_seen: 4
+blocks_retained: 3
+blocks_dropped: 1
+changed_lines_retained: 40
+changed_lines_dropped: 3216
+
+### Dropped by the pre-filter
+
+| path | where | reason | why |
+|---|---|---|---|
+| bun.lock | whole file | lockfile | lockfile: dependency-manager output "bun.lock" |
+| src/a.ts | lines 41-42 (2) | whitespace-only | whitespace-only: identical once whitespace is removed |
+
+Counts by reason: lockfile=1, generated=0, vendored=0, snapshot=0, minified=0, binary=0, whitespace-only=1, comment-only=0
+`;
+
+const SCOPE_RECORD: NonNullable<ManagedReviewInput["scope"]> = {
+  mode: "diff",
+  contextLines: 20,
+  files: ["src/a.ts"],
+  drops: [
+    {
+      path: "bun.lock",
+      reason: "lockfile",
+      detail: 'lockfile: dependency-manager output "bun.lock"',
+      granularity: "file",
+      changedLines: 3214,
+    },
+  ],
+  counts: {
+    filesSeen: 3,
+    filesRetained: 1,
+    filesDropped: 2,
+    blocksSeen: 4,
+    blocksRetained: 3,
+    blocksDropped: 1,
+    changedLinesRetained: 40,
+    changedLinesDropped: 3216,
+  },
+};
+
+test("ingest does not replace a recorded drop table with a claim that nothing ran", async () => {
+  // The pipeline's OWN prescribed order: review-orchestrator Step 3 runs
+  // `keryx review scope --append <package>/scope.md`, and `review ingest` runs
+  // after Step 12 and rewrites scope.md unconditionally. What replaced the drop
+  // table was not a blank — it was the sentence "no pre-filter scope was
+  // supplied to this package", which is the same class of false positive
+  // statement as `dismissed-out-of-scope: 0`.
+  await fresh();
+  const packageDir = path.join(ROOT, ".metaproject", "reviews", "2026-08-29-scope-clobber");
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(path.join(packageDir, "scope.md"), APPENDED_SCOPE_BLOCK, "utf8");
+
+  await ingestFindings("2026-08-29-scope-clobber");
+
+  const scope = await readFile(path.join(packageDir, "scope.md"), "utf8");
+  expect(scope).toContain("bun.lock");
+  expect(scope).toContain("lockfile: dependency-manager output");
+  expect(scope).not.toContain("no pre-filter scope was supplied");
+  // And the stage counts are still there: carrying the block forward must not
+  // cost the AC11 half of the record.
+  expect(scope).toContain("## Stage counts");
+  expect(scope).toContain("### Refuted by the verifier");
+});
+
+test("the drop rows reach the record through the supported input, with their reasons", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-scope-supplied", { scope: SCOPE_RECORD });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+  expect(scope).toContain("files_dropped: 2");
+  expect(scope).toContain("| bun.lock | whole file | lockfile |");
+  expect(scope).not.toContain("not recorded");
+});
+
+test("a supplied scope wins over a stale block already in the package", async () => {
+  // Precedence, stated: the JSON handed to this ingest describes THIS round. A
+  // block left in scope.md by an earlier run is the fallback, not the source of
+  // truth, or a re-ingest would resurrect a superseded record.
+  await fresh();
+  const packageDir = path.join(ROOT, ".metaproject", "reviews", "2026-08-29-scope-precedence");
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(path.join(packageDir, "scope.md"), APPENDED_SCOPE_BLOCK, "utf8");
+
+  await ingestFindings("2026-08-29-scope-precedence", {
+    scope: {
+      ...SCOPE_RECORD,
+      drops: [
+        {
+          path: "vendor/thing.js",
+          reason: "vendored",
+          detail: 'vendored: path segment "vendor/"',
+          granularity: "file",
+          changedLines: 12,
+        },
+      ],
+    },
+  });
+
+  const scope = await readFile(path.join(packageDir, "scope.md"), "utf8");
+  expect(scope).toContain("vendor/thing.js");
+  expect(scope).not.toContain("bun.lock");
+});
+
+test("no scope anywhere still reads `not recorded`, never `dropped 0`", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-scope-absent");
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+  expect(scope).toContain("no pre-filter scope was supplied");
+  expect(scope).toContain("This is NOT `dropped 0`");
+});
+
+test("re-recording the same state may not silently replace the citation", async () => {
+  // The refusal to reverse a verdict is defensible. Guarding the state and not
+  // the evidence is not: the original citation is gone with no trace, and the
+  // evidence is the whole reason a disposition is more than an assertion.
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-evidence");
+  await completeManagedReview(ROOT, pkg, {
+    dispositions: [{ finding: "F-001", state: "acted-on", evidence: "closed by 380bf3b0" }],
+  });
+
+  await expect(
+    completeManagedReview(ROOT, pkg, {
+      dispositions: [{ finding: "F-001", state: "acted-on", evidence: "closed by deadbeef" }],
+    }),
+  ).rejects.toThrow(/already cites "closed by 380bf3b0"/);
+
+  const findings = JSON.parse(
+    await readFile(path.join(ROOT, pkg, "findings.json"), "utf8"),
+  ) as StructuredReviewFinding[];
+  expect(findings[0]?.disposition?.evidence).toBe("closed by 380bf3b0");
+});
+
+test("re-recording the identical disposition is a no-op, not a refusal", async () => {
+  // Idempotence is what makes a retried `review complete` safe. Only a CHANGED
+  // citation is refused.
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-29-disposition-idempotent");
+  const record = { finding: "F-001", state: "acted-on" as const, evidence: "closed by 380bf3b0" };
+  await completeManagedReview(ROOT, pkg, { dispositions: [record] });
+  const before = await readFile(path.join(ROOT, pkg, "findings.json"), "utf8");
+  await completeManagedReview(ROOT, pkg, { dispositions: [record] });
+  expect(await readFile(path.join(ROOT, pkg, "findings.json"), "utf8")).toBe(before);
 });
 
 test("disposition is declared in the strict contract and DELIBERATELY not in the reviewer's", () => {

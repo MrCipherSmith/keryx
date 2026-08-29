@@ -169,16 +169,40 @@ keryx review attach --flow <id> --target <kind> --ref <ref>
 keryx review start --target <kind> --ref <ref>
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
                     [--verifications <file>] [--verification-mode off|annotate|filter]
-                    [--scope <scope.json>]
+                    [--scope <scope.json>] [--refuted <file>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
+                      [--finding <id> --disposition <state> --evidence <ref>]...
 ```
 
-`--verifications` takes what `review-verifier` returned; `--scope` takes the
-`--json` output of `keryx review scope`, so the package records what the
-pre-filter dropped as well as what the verifier refuted. Without `--scope` the
-record says **`not recorded`** for that stage rather than `0` — "dropped nothing"
-and "never ran" are different facts.
+**An unrecognised option is refused, not ignored.** A misspelling used to be
+accepted with exit 0, so `review complete --disposition ...` printed
+`status: closed` and wrote nothing at all.
+
+`--verifications` takes what `review-verifier` returned. `--scope` takes the
+whole `--json` output of `keryx review scope`, so the package records what the
+pre-filter dropped, **with a reason per drop**, as well as what the verifier
+refuted. Without it — and with no `## Pre-filter scope` block already in the
+package — the record says **`not recorded`** for that stage rather than `0`;
+"dropped nothing" and "never ran" are different facts.
+
+`--refuted` takes the findings this round **raised and then dismissed**, in the
+same finding shape, each carrying `disposition: {state, evidence}` with one of
+the `dismissed-*` states. Without it a package keeps only the survivors of an
+unlogged triage — which is why precision measured over the recorded corpus
+returns 100% whatever the reviewers actually got right.
+
+`review complete --finding <id> --disposition <state> --evidence <ref>` records
+what became of a finding when the fix round closes; the triple is repeatable, one
+group per finding. States: `unknown`, `acted-on`, `dismissed-incorrect`,
+`dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`.
+Everything except `unknown` must cite where the outcome is written down — the
+commit, the test, the decision. A recorded state and its citation cannot be
+overwritten by a later close; record a correction as a new round.
+
+**Closing a fix round without dispositions leaves every finding reading
+`unknown`.** That is not "the reviewers were right"; it is "nobody wrote down
+what happened", and it is the single reason the precision figure cannot be read.
 
 Managed modes:
 
@@ -365,10 +389,18 @@ See shared script: `skills/shared/git-merge-base.md`
 Run the script to determine `BASE_SHA`, then let the pre-filter build the scope:
 
 ```bash
-keryx review scope --ref "${BASE_SHA}" --append "<review-package>/scope.md"   # the record
-keryx review scope --ref "${BASE_SHA}" --scoped-diff                          # what reviewers get
-keryx review scope --ref "${BASE_SHA}" --json                                 # .files for auto-detection
+keryx review scope --ref "${BASE_SHA}" --json > scope.json   # KEEP THIS FILE
+keryx review scope --ref "${BASE_SHA}" --scoped-diff         # what reviewers get
 ```
+
+**Keep `scope.json` until the round is ingested, and pass it as `--scope`.** That
+file is how the drop list reaches the review record. `--append
+"<review-package>/scope.md"` also writes it and is still supported — it now
+REPLACES an existing `## Pre-filter scope` block rather than adding a second, and
+`review ingest` carries any block it finds forward verbatim rather than
+overwriting it — but `--scope scope.json` is the supported path, because it is
+the one that does not depend on running two commands against the same file in the
+right order.
 
 **Do not run `git diff` yourself, and do not decide what to leave out.** The
 pre-filter is deterministic code with no model call: it drops generated,
@@ -377,11 +409,13 @@ comment-only change blocks, and bounds every retained change to ±20 lines of
 context (`--context <n>`) instead of the whole file. Dropping a lockfile needs no
 judgement, so it does not get one.
 
-`--append` writes the retained scope **and every drop with its reason** into the
-review record. Both halves are required: a scope that shrank without saying so
-reads afterwards as "we reviewed everything".
+The record carries the retained scope **and every drop with its reason**. Both
+halves are required: a scope that shrank without saying so reads afterwards as
+"we reviewed everything". Note that `--scope` takes the WHOLE `--json` document —
+handing over only its `counts` object is refused, because eight integers carry no
+reason for any individual drop.
 
-Use `.files` from `--json` for the auto-detection table below. A dropped path
+Use `.files` from `scope.json` for the auto-detection table below. A dropped path
 must not select a reviewer.
 
 Scope is limited to **changes introduced in the current branch since merge-base**.
@@ -404,7 +438,7 @@ find . -type f -name "*<name>*" \( -name "*.ts" -o -name "*.tsx" \)
 Then put the list through the same exclusions before reading anything:
 
 ```bash
-keryx review scope --path "src/a.ts,src/b.ts" --append "<review-package>/scope.md"
+keryx review scope --path "src/a.ts,src/b.ts" --json > scope.json
 ```
 
 Pass the full **file contents** of the paths it **retained** to sub-reviewers, and
@@ -591,6 +625,14 @@ vulnerability that did not exist, and a single empirical test killed it: consens
 cannot detect a hallucination its members share, so agreement between reviewers is
 not evidence and must never be recorded as verification.
 
+That rule is about agreement *standing in for* evidence. It is not a rule that
+two verifiers may not both check the same finding: each claim is admitted on its
+own — a named non-author, a real method, real evidence, with `reasoning` already
+capped — and when two such claims reach the **same** verdict the merge records it,
+naming both verifiers and carrying both pieces of evidence. Claims that
+**disagree** still cancel, because there the only thing deciding the outcome
+would be claim order.
+
 Dispatch rules:
 
 - Pass the consolidated findings, each carrying `global_id` and the **real**
@@ -600,7 +642,12 @@ Dispatch rules:
   findings and is fixed only from 0.2.70 onward.
 - **A finding is never verified by the reviewer that raised it.** When only one
   reviewer ran, its findings are simply left unverified; verifying them yourself
-  is worse than not verifying them.
+  is worse than not verifying them. The merge compares the two names after
+  normalising case, surrounding whitespace, `_`/`-`, and a trailing `(model)`
+  annotation, so `review-logic `, `Review-Logic` and `review-logic (sonnet)` are
+  all the same actor. Do not try to route around it by respelling the name — the
+  comparison deliberately over-matches, because a refused claim only ever costs a
+  verdict while a missed self-verification costs the finding.
 - The verifier returns `verification-claim.schema.json`. Merge it with
   `keryx review ingest --verifications <file>`; do not apply verdicts by hand.
 - **The verifier can only delete.** If it returns a severity, a new finding, or a

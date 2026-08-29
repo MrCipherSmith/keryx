@@ -377,13 +377,20 @@ export type ManagedReviewInput = {
   /** Defaults to {@link DEFAULT_VERIFICATION_MODE}. */
   verificationMode?: VerificationMode | undefined;
   /**
-   * What the pre-filter removed, from `keryx review scope --json`.
+   * What the pre-filter removed, from `keryx review scope --json`: the counts
+   * AND the reason for every individual drop.
+   *
+   * This is the supported channel. {@link ManagedReviewInput.scopeCounts} is the
+   * counts-only form kept for callers that hold nothing else; when both are
+   * present this one wins, because it is the only one that satisfies AC5.
    *
    * Optional, and its absence is recorded as "not recorded" rather than as
    * zero: "the pre-filter dropped nothing" and "no pre-filter ran" are different
    * facts, and a stage count that cannot tell them apart is the same defect as
    * `dismissed-out-of-scope = 0` meaning "not written down".
    */
+  scope?: ReviewScopeRecordLike | undefined;
+  /** The counts half of {@link ManagedReviewInput.scope}, when that is all the caller has. */
   scopeCounts?: ReviewScopeCountsLike | undefined;
   now?: Date | undefined;
 };
@@ -424,6 +431,44 @@ export type ReviewScopeCountsLike = {
   blocksDropped: number;
   changedLinesRetained: number;
   changedLinesDropped: number;
+};
+
+/**
+ * One thing the pre-filter removed, structurally — the row AC5 asks for.
+ *
+ * `reason` is a bare `string` rather than `ScopeDropReason` for the same reason
+ * the counts are declared here rather than imported: this module keeps no
+ * dependency on `review/scope`. The value written is whatever the pre-filter
+ * produced, verbatim, so a new reason added there reaches the record without a
+ * change here — and a hand-written record is not rejected for using a word this
+ * file has not heard of.
+ */
+export type ReviewScopeDropLike = {
+  path: string;
+  reason: string;
+  detail: string;
+  granularity: "file" | "block";
+  startLine?: number | undefined;
+  endLine?: number | undefined;
+  changedLines: number;
+};
+
+/**
+ * The WHOLE pre-filter result, counts and per-drop reasons together.
+ *
+ * The counts alone were the only thing that could reach a review package, and
+ * that was the defect: AC5 asks for "a reason per drop", and eight integers
+ * carry no reason. The drop rows travelled by a different route — `keryx review
+ * scope --append` writing straight into `scope.md` — which `review ingest` then
+ * overwrote, replacing a recorded drop table with the sentence "no pre-filter
+ * scope was supplied". One input, one writer, one file.
+ */
+export type ReviewScopeRecordLike = {
+  mode?: string | undefined;
+  contextLines?: number | undefined;
+  files?: readonly string[] | undefined;
+  drops: readonly ReviewScopeDropLike[];
+  counts: ReviewScopeCountsLike;
 };
 
 /**

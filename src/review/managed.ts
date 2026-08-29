@@ -33,6 +33,8 @@ import {
   type ReviewFindingDisposition,
   type ReviewFindingsSource,
   type ReviewerResultLike,
+  type ReviewScopeCountsLike,
+  type ReviewScopeDropLike,
   type StructuredReviewFinding,
 } from "./types";
 
@@ -166,9 +168,22 @@ export async function createManagedReviewPackage(
     );
   }
 
+  // Read BEFORE the write, because the write is what used to destroy it. The
+  // orchestrator is told to run `keryx review scope --append <package>/scope.md`
+  // at Step 3 and `review ingest` after Step 12; ingest rewrote scope.md
+  // unconditionally, and what replaced the drop table was not a blank — it was
+  // "no pre-filter scope was supplied to this package", a false statement of the
+  // same class as `dismissed-out-of-scope: 0`. When this ingest was handed its
+  // own scope the carried block is superseded and dropped; when it was not, the
+  // block is the only record of the drops and is carried forward verbatim.
+  const carried = input.scope === undefined ? await readPreFilterScopeBlock(packageDir) : undefined;
+
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at, verification));
+  await writeFileAtomic(
+    path.join(packageDir, "scope.md"),
+    renderScope(input, flowMatch, at, verification, carried),
+  );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
   await writeFileAtomic(
@@ -742,12 +757,31 @@ async function recordDispositions(
       );
     }
     const existing = finding.disposition;
-    if (existing !== undefined && existing.state !== "unknown" && existing.state !== disposition.state) {
-      throw new Error(
-        `${finding.global_id ?? finding.id} is already recorded as "${existing.state}" (${
-          existing.evidence ?? "no evidence"
-        }); refusing to overwrite it with "${disposition.state}". Reversing a recorded verdict silently is the same erasure this field exists to stop — record the reversal as a new round.`,
-      );
+    if (existing !== undefined && existing.state !== "unknown") {
+      if (existing.state !== disposition.state) {
+        throw new Error(
+          `${finding.global_id ?? finding.id} is already recorded as "${existing.state}" (${
+            existing.evidence ?? "no evidence"
+          }); refusing to overwrite it with "${disposition.state}". Reversing a recorded verdict silently is the same erasure this field exists to stop — record the reversal as a new round.`,
+        );
+      }
+      // The state and the citation are one record, so guarding one and not the
+      // other leaves half of it silently replaceable: re-recording `acted-on`
+      // with a different commit swapped the evidence and the original citation
+      // was gone without trace. The evidence is the whole reason a disposition
+      // is more than an assertion, and a corpus of assertions is what measured
+      // 100% precision while recording zero wrong findings. Re-recording the
+      // IDENTICAL disposition stays a no-op, so a retried `review complete` is
+      // safe.
+      if ((existing.evidence ?? "") !== (disposition.evidence ?? "")) {
+        throw new Error(
+          `${finding.global_id ?? finding.id} is already recorded as "${existing.state}" and already cites "${
+            existing.evidence ?? "no evidence"
+          }"; refusing to replace that citation with "${
+            disposition.evidence ?? "no evidence"
+          }". The state and its evidence are one record — record the correction as a new round rather than overwriting where the outcome is written down.`,
+        );
+      }
     }
     pending.push({ finding, disposition });
   }
@@ -1308,21 +1342,87 @@ function severityFromLine(line: string): NormalizedReviewFinding["severity"] {
   return "minor";
 }
 
+// ---------------------------------------------------------------------------
+// The pre-filter block inside scope.md
+// ---------------------------------------------------------------------------
+
 /**
- * `scope.md`: what this review looked at, and what each stage removed (AC11).
+ * The heading `keryx review scope --append` writes and this module reads.
+ *
+ * One constant, because two writers agreeing on a heading by coincidence is how
+ * the block came to be appended three times by one command and then destroyed by
+ * another.
+ */
+export const PRE_FILTER_SCOPE_HEADING = "## Pre-filter scope";
+
+/**
+ * The block: its heading, and everything up to the next `## ` heading or the end
+ * of the file. `###` subheadings inside it are not a boundary, which is what lets
+ * the block keep its own `### Retained` / `### Dropped by the pre-filter` halves.
+ */
+const PRE_FILTER_SCOPE_BLOCK = /^## Pre-filter scope[^\n]*\n[\s\S]*?(?=^## (?!#)|$(?![\s\S]))/m;
+
+/** The `## Pre-filter scope` block of a scope.md, or null when there is none. */
+export function extractPreFilterScopeBlock(text: string): string | null {
+  const match = text.match(PRE_FILTER_SCOPE_BLOCK);
+  return match === null ? null : match[0].trimEnd();
+}
+
+/**
+ * Put `block` into `text`, REPLACING a pre-existing one rather than adding a
+ * second.
+ *
+ * `--append` did what its name said, and three runs of one command — an ordinary
+ * thing to do after amending a commit — left three contradictory `## Pre-filter
+ * scope` blocks in one record with no rule for which to read.
+ */
+export function upsertPreFilterScopeBlock(text: string, block: string): string {
+  const body = `${block.trimEnd()}\n`;
+  if (PRE_FILTER_SCOPE_BLOCK.test(text)) {
+    // A function replacement, not a string: `$&` and `$1` are live in a
+    // replacement string, and a drop `detail` is arbitrary text from a diff.
+    return `${text.replace(PRE_FILTER_SCOPE_BLOCK, () => `${body}\n`).trimEnd()}\n`;
+  }
+  return text.trimEnd() === "" ? body : `${text.trimEnd()}\n\n${body}`;
+}
+
+async function readPreFilterScopeBlock(packageDir: string): Promise<string | undefined> {
+  const scopePath = path.join(packageDir, "scope.md");
+  if (!(await pathExists(scopePath))) {
+    return undefined;
+  }
+  return extractPreFilterScopeBlock(await readFile(scopePath, "utf8")) ?? undefined;
+}
+
+/**
+ * `scope.md`: what this review looked at, and what each stage removed (AC5/AC11).
  *
  * The stage counts go here rather than into a new artifact because `scope.md` is
  * already where the pre-filter writes its drop list (`keryx review scope
  * --append`), and adding a seventh required artifact would strand every package
  * on disk against `missingArtifacts`.
+ *
+ * Two ways the pre-filter's record gets here, in precedence order:
+ *
+ * 1. `input.scope` — the whole `keryx review scope --json` document, counts and
+ *    per-drop reasons together, rendered by this writer. This is the supported
+ *    path and the only one that can satisfy AC5, because the counts-only form
+ *    carries no reason for any individual drop.
+ * 2. A `## Pre-filter scope` block already in the package's scope.md, carried
+ *    forward verbatim. This exists so the ORDER the orchestrator is told to run
+ *    things in cannot destroy the record: it appends the block at Step 3 and
+ *    ingests after Step 12.
  */
 function renderScope(
   input: ManagedReviewInput,
   flowMatch: FlowMatchResult | null,
   at: string,
   verification: VerificationMergeResult<NormalizedReviewFinding>,
+  carriedPreFilter: string | undefined,
 ): string {
-  return `# Review Scope
+  const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
+  const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
+  const head = `# Review Scope
 
 target: ${input.target.kind}
 ref: ${input.target.ref}
@@ -1332,11 +1432,14 @@ created_at: ${at}
 context_mode: light
 
 ${renderStageCountsMarkdown({
-  preFilter: input.scopeCounts,
+  preFilter,
+  preFilterDrops: drops,
+  preFilterCarried: carriedPreFilter !== undefined,
   verification: verification.counts,
   rejections: verification.rejections,
   caps: verification.caps,
 })}`;
+  return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {
