@@ -60,23 +60,72 @@ export type ManagedReviewManifest = {
   updatedAt?: string | undefined;
 };
 
-export type NormalizedReviewFinding = {
+export const REVIEW_FINDING_SEVERITIES = ["blocker", "major", "minor", "info"] as const;
+export type ReviewFindingSeverity = (typeof REVIEW_FINDING_SEVERITIES)[number];
+
+export const REVIEW_FINDING_CONFIDENCES = ["high", "medium", "low"] as const;
+export type ReviewFindingConfidence = (typeof REVIEW_FINDING_CONFIDENCES)[number];
+
+export type ReviewFindingClassScope = {
+  sites: string[];
+  enumeration_method: string;
+};
+
+/**
+ * One finding, in exactly the shape `review-finding.schema.json` accepts.
+ *
+ * This type is the persisted record: `findings.json` is an array of these and
+ * nothing else, because the schema is `additionalProperties: false` and a round
+ * that cannot be fed back into `prior_findings[].finding` is a round that ends
+ * the conversation. Every keryx-local judgement about a finding — how it was
+ * classified, how it relates to a flow — lives on {@link NormalizedReviewFinding}
+ * and is rendered into `decisions.md`, NOT smuggled into this object.
+ *
+ * `confidence` is a string enum because that is what the committed schema says
+ * today. The roadmap moves it to a number in [0,1] in a later phase; carrying
+ * the current shape is deliberate so the two changes do not collide.
+ */
+export type StructuredReviewFinding = {
   id: string;
-  severity: "blocker" | "major" | "minor" | "info";
   reviewer: string;
+  severity: ReviewFindingSeverity;
+  problem: string;
+  impact: string;
+  suggested_fix: string;
+  evidence: string;
+  confidence: ReviewFindingConfidence;
+  file?: string | null | undefined;
+  line?: number | null | undefined;
+  symbol?: string | null | undefined;
+  dedupe_key?: string | null | undefined;
+  blocking_merge?: boolean | undefined;
+  related_skill?: string | null | undefined;
+  learning_candidate?: boolean | undefined;
+  class_scope?: ReviewFindingClassScope | undefined;
+};
+
+/**
+ * A finding plus the triage the managed-review pipeline assigns to it.
+ *
+ * The split matters: the reviewer states the finding, the pipeline states what
+ * it intends to do about it. Merging the two is what produced a `findings.json`
+ * that no contract accepted.
+ */
+export type NormalizedReviewFinding = StructuredReviewFinding & {
+  /** The heading text; kept for rendering. `problem` is the contract field. */
   summary: string;
   classification: FindingClassification;
   flow_relevance: "active_flow_feedback" | "post_flow_feedback" | "standalone_review";
-  file?: string | undefined;
-  line?: number | undefined;
   /**
    * Whether the finding's block carried a `class_scope` — every site of the
    * shape, and how the set was enumerated.
    *
-   * A shape check, not schema validation, and said plainly: the report is
-   * markdown, so what is observable here is that the block names `class_scope`
-   * and supplies both `sites` and `enumeration_method`. Required for `blocker`
-   * and `major`; see `review-finding.schema.json`, which is the strict form.
+   * A shape check, not schema validation, and said plainly: a legacy report is
+   * markdown, so what is observable there is that the block names `class_scope`
+   * and supplies both `sites` and `enumeration_method`. Extraction of the two
+   * halves into {@link StructuredReviewFinding.class_scope} is best-effort and
+   * can fail on a block this check passes; the guard stays on the shape check so
+   * a legacy report is refused for the same reasons it always was.
    */
   class_scope_present?: boolean | undefined;
 };
@@ -91,7 +140,38 @@ export type ManagedReviewInput = {
   coverage?: ReviewCoverageEntry[] | undefined;
   reportPath?: string | undefined;
   reportText?: string | undefined;
+  /**
+   * The structured findings the reviewers produced, when the caller still has
+   * them.
+   *
+   * The markdown report is lossy by construction — no reviewer report format in
+   * this repository carries `impact`, `suggested_fix`, `evidence` or
+   * `confidence` under a label a parser can rely on — so re-deriving these from
+   * prose is not a parsing problem to be solved but a fact that has already been
+   * destroyed. When a caller has the reviewer payloads it passes them here and
+   * nothing is re-derived. See `parseEmbeddedFindings` for the same array
+   * travelling inside the report itself.
+   */
+  findings?: ReviewFindingsSource | undefined;
   now?: Date | undefined;
+};
+
+/**
+ * The shapes a structured findings payload arrives in.
+ *
+ * A bare array is the normalized contract. The wrapper forms are what a reviewer
+ * actually returns (`reviewer-finding.schema.json`: `{ reviewer, findings }`),
+ * accepted so an orchestrator can hand over what it already holds instead of
+ * transcribing it — transcription being the step that lost the fields.
+ */
+export type ReviewFindingsSource =
+  | ReadonlyArray<Partial<StructuredReviewFinding>>
+  | ReviewerResultLike
+  | ReadonlyArray<ReviewerResultLike>;
+
+export type ReviewerResultLike = {
+  reviewer?: string | undefined;
+  findings: ReadonlyArray<Partial<StructuredReviewFinding>>;
 };
 
 export type ManagedReviewPackageResult = {

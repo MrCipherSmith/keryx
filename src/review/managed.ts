@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
+import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
@@ -8,6 +9,7 @@ import {
   FINDING_CLASSIFICATIONS,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
+  REVIEW_FINDING_CONFIDENCES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
   type FlowMatchResult,
@@ -18,6 +20,11 @@ import {
   type ManagedReviewValidationResult,
   type NormalizedReviewFinding,
   type ReviewCoverageEntry,
+  type ReviewFindingClassScope,
+  type ReviewFindingConfidence,
+  type ReviewFindingsSource,
+  type ReviewerResultLike,
+  type StructuredReviewFinding,
 } from "./types";
 
 const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning", "decisions"] as const;
@@ -57,7 +64,13 @@ export async function createManagedReviewPackage(
   const packageDir = packagePath(input.cwd, input.mode, reviewId, flowMatch);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
-  const findings = normalizeFindings(report, input.mode, flowMatch !== null);
+  const findings = await normalizeFindings({
+    report,
+    mode: input.mode,
+    attachedToFlow: flowMatch !== null,
+    source: input.findings,
+    reviewers: coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer),
+  });
   const manifest = buildManifest({
     input,
     reviewId,
@@ -88,7 +101,10 @@ export async function createManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at));
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
-  await writeFileAtomic(path.join(packageDir, "findings.json"), `${JSON.stringify(findings, null, 2)}\n`);
+  await writeFileAtomic(
+    path.join(packageDir, "findings.json"),
+    `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
+  );
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
 
@@ -280,12 +296,270 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
   return `# Managed Review Report\n\nNo reviewer findings recorded yet.\n`;
 }
 
-function normalizeFindings(
-  report: string,
-  mode: ManagedReviewMode,
-  attachedToFlow: boolean,
+type NormalizeFindingsArgs = {
+  report: string;
+  mode: ManagedReviewMode;
+  attachedToFlow: boolean;
+  source: ReviewFindingsSource | undefined;
+  reviewers: string[];
+};
+
+/**
+ * The findings of one review round, in order of decreasing fidelity.
+ *
+ * 1. `input.findings` — what the caller still holds.
+ * 2. A `keryx:findings` block inside the report — the same array, travelling in
+ *    the one artifact the CLI already moves.
+ * 3. The markdown parser — legacy only.
+ *
+ * The ordering is the whole design and is worth stating rather than inferring.
+ * A reviewer produces `reviewer-finding.schema.json`: id, severity, problem,
+ * impact, suggested_fix, evidence, confidence, reviewer, class_scope. The
+ * orchestrator then renders that to prose, and prose is where four of those
+ * fields stop existing — not "become hard to parse", stop existing: read the
+ * consolidated report in `fixtures/`, which carries no confidence anywhere and
+ * no evidence field under any label. Re-parsing therefore cannot be made
+ * lossless by a better regex, which is why the structured array is taken from
+ * the producer and the parser is demoted to reading what is already on disk.
+ */
+async function normalizeFindings(args: NormalizeFindingsArgs): Promise<NormalizedReviewFinding[]> {
+  const structured = args.source ?? parseEmbeddedFindings(args.report);
+  if (structured !== null && structured !== undefined) {
+    return triage(await fromStructuredSource(structured, args.reviewers), args);
+  }
+  return triage(parseLegacyReport(args.report, args.reviewers), args);
+}
+
+function triage(
+  findings: Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean | undefined }>,
+  args: NormalizeFindingsArgs,
 ): NormalizedReviewFinding[] {
-  const findings: NormalizedReviewFinding[] = [];
+  const classification = args.mode === "ingest" ? "valid_followup" : "skill_learning_candidate";
+  return findings.map((finding) => {
+    const triaged: NormalizedReviewFinding = {
+      ...finding,
+      classification,
+      flow_relevance: args.attachedToFlow ? "post_flow_feedback" : "standalone_review",
+    };
+    // `learning_candidate` is the one triage judgement the finding contract has
+    // a slot for, so it is the one that survives into `findings.json`. Set only
+    // when true: the schema defaults it to false, and writing the default onto
+    // every finding says nothing while implying a decision was recorded.
+    if (finding.learning_candidate === undefined && classification === "skill_learning_candidate") {
+      triaged.learning_candidate = true;
+    }
+    return triaged;
+  });
+}
+
+/** The persisted record: exactly the properties `review-finding.schema.json` allows. */
+function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFinding {
+  const record: StructuredReviewFinding = {
+    id: finding.id,
+    reviewer: finding.reviewer,
+    severity: finding.severity,
+    problem: finding.problem,
+    impact: finding.impact,
+    suggested_fix: finding.suggested_fix,
+    evidence: finding.evidence,
+    confidence: finding.confidence,
+  };
+  if (finding.file !== undefined) {
+    record.file = finding.file;
+  }
+  if (finding.line !== undefined) {
+    record.line = finding.line;
+  }
+  if (finding.symbol !== undefined) {
+    record.symbol = finding.symbol;
+  }
+  if (finding.dedupe_key !== undefined) {
+    record.dedupe_key = finding.dedupe_key;
+  }
+  if (finding.blocking_merge !== undefined) {
+    record.blocking_merge = finding.blocking_merge;
+  }
+  if (finding.related_skill !== undefined) {
+    record.related_skill = finding.related_skill;
+  }
+  if (finding.learning_candidate !== undefined) {
+    record.learning_candidate = finding.learning_candidate;
+  }
+  if (finding.class_scope !== undefined) {
+    record.class_scope = finding.class_scope;
+  }
+  return record;
+}
+
+// ---------------------------------------------------------------------------
+// Structured source
+// ---------------------------------------------------------------------------
+
+/**
+ * The `keryx:findings` block: the structured array carried inside the report.
+ *
+ * The report is the artifact the pipeline already moves — `keryx review ingest
+ * --report <path>` takes one file and nothing else — so a fenced block inside it
+ * needs no new flag, no new convention for where a sidecar lives, and no way for
+ * the two halves to be separated in transit. A legacy report simply has no such
+ * block, which is what makes the fallback automatic rather than a mode switch
+ * someone has to remember to set.
+ */
+const EMBEDDED_FINDINGS_BLOCK = /^```[^\n]*\bkeryx:findings\b[^\n]*\n([\s\S]*?)\n^```\s*$/m;
+
+function parseEmbeddedFindings(report: string): ReviewFindingsSource | null {
+  const match = report.match(EMBEDDED_FINDINGS_BLOCK);
+  if (!match?.[1]) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[1]) as unknown;
+  } catch (error) {
+    throw new Error(
+      `The report carries a keryx:findings block that is not valid JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  return parsed as ReviewFindingsSource;
+}
+
+/**
+ * Flatten whatever the producer handed over into one array of findings.
+ *
+ * Both the normalized array and the reviewer's own `{ reviewer, findings }`
+ * result are accepted, because an orchestrator holding five reviewer payloads
+ * should be able to pass the five rather than merge them by hand — and because
+ * the wrapper is where the ORIGINATING reviewer is recorded. That name was
+ * hardcoded to `review-orchestrator` for every finding this pipeline ever wrote,
+ * which made every record claim the consolidator found it.
+ */
+async function fromStructuredSource(
+  source: ReviewFindingsSource,
+  reviewers: string[],
+): Promise<Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean }>> {
+  const flattened: Array<Partial<StructuredReviewFinding>> = [];
+  for (const entry of Array.isArray(source) ? source : [source]) {
+    if (isReviewerResult(entry)) {
+      for (const finding of entry.findings) {
+        if (finding.reviewer || entry.reviewer === undefined) {
+          flattened.push(finding);
+          continue;
+        }
+        flattened.push({ ...finding, reviewer: entry.reviewer });
+      }
+      continue;
+    }
+    flattened.push(entry as Partial<StructuredReviewFinding>);
+  }
+
+  const findings = flattened.map((finding) => coerceStructured(finding, reviewers));
+  const errors = await schemaErrors(findings);
+  if (errors.length > 0) {
+    // Fail closed, and before anything is written: a structured payload is a
+    // claim that the fields exist, so an incomplete one is a bug in the producer
+    // and not something to paper over with the placeholders the legacy path
+    // uses. Recording it would put a finding into `prior_findings` that the next
+    // round's dispatch then rejects — the failure this whole change removes,
+    // reintroduced one layer down.
+    throw new Error(
+      `Refusing to record structured findings that do not satisfy review-finding.schema.json: ${errors
+        .map((error) => `${error.path} ${error.message}`)
+        .join("; ")}`,
+    );
+  }
+  return findings;
+}
+
+function isReviewerResult(value: unknown): value is ReviewerResultLike {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Array.isArray((value as { findings?: unknown }).findings)
+  );
+}
+
+async function schemaErrors(
+  findings: readonly StructuredReviewFinding[],
+): Promise<Array<{ path: string; message: string }>> {
+  const schema = await loadSchema("review-finding");
+  const errors: Array<{ path: string; message: string }> = [];
+  for (const [index, finding] of findings.entries()) {
+    // The PROJECTION is what gets written and what a later round reads, so it is
+    // what the contract has to accept. Validating the in-memory object instead
+    // would fail on the triage fields this function's whole purpose is to keep
+    // out of the record.
+    for (const error of await validateJson(toContractFinding(finding), schema)) {
+      errors.push({ path: error.path.replace(/^\$/, `$[${index}]`), message: error.message });
+    }
+  }
+  return errors;
+}
+
+/**
+ * Carry a structured finding across, filling in NOTHING that the contract
+ * requires.
+ *
+ * The one supplied value is `reviewer`, and only because the reviewer's own
+ * result records it on the wrapper rather than on each finding. Everything else
+ * is passed through as given, so an absent `impact` stays absent and
+ * {@link schemaErrors} refuses the payload. Defaulting a required field here
+ * would produce a record that validates and says nothing — which is how
+ * `findings.json` came to be full of `review-orchestrator`.
+ */
+function coerceStructured(
+  finding: Partial<StructuredReviewFinding>,
+  reviewers: string[],
+): StructuredReviewFinding & { summary: string; class_scope_present?: boolean } {
+  const record = { ...finding } as StructuredReviewFinding & {
+    summary: string;
+    class_scope_present?: boolean;
+  };
+  if (typeof record.reviewer !== "string" || record.reviewer === "") {
+    record.reviewer = defaultReviewer(reviewers);
+  }
+  record.summary = typeof finding.problem === "string" ? finding.problem : "";
+  record.class_scope_present = finding.class_scope !== undefined;
+  return record;
+}
+
+/**
+ * Which reviewer a finding belongs to when the producer did not say.
+ *
+ * A single running reviewer is an unambiguous answer. Several is not, and
+ * naming one of them would be a fabrication of exactly the kind the hardcoded
+ * `review-orchestrator` was — so the consolidator is named, honestly, as the
+ * only thing known to have handled it.
+ */
+function defaultReviewer(reviewers: string[]): string {
+  return reviewers.length === 1 && reviewers[0] ? reviewers[0] : "review-orchestrator";
+}
+
+// ---------------------------------------------------------------------------
+// Legacy markdown source
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a pre-existing markdown review report.
+ *
+ * Kept, not deleted: every review package already on disk is a markdown report,
+ * and a pipeline that can only read what it wrote after today strands them all.
+ *
+ * What it produces is written in the structured shape, so a legacy round is
+ * still round-trippable — but the four fields markdown does not carry are filled
+ * with a stated provenance rather than an invention. A reader of
+ * `findings.json` can tell a recorded `impact` from an absent one, which is the
+ * property that matters: `confidence` in particular is `low` on this path
+ * because a regex over prose is a low-confidence derivation, whatever the
+ * reviewer's own confidence was.
+ */
+function parseLegacyReport(
+  report: string,
+  reviewers: string[],
+): Array<StructuredReviewFinding & { summary: string; class_scope_present: boolean }> {
+  const findings: Array<StructuredReviewFinding & { summary: string; class_scope_present: boolean }> = [];
   const lines = report.split("\n");
   for (const [index, line] of lines.entries()) {
     const heading = findingHeading(line);
@@ -299,17 +573,169 @@ function normalizeFindings(
     // reviewer skills emit. Reading only the heading line, as this did, made
     // severity depend on whether the word happened to appear in the title.
     const block = findingBlock(lines, index);
-    findings.push({
+    const location = parseLocation(labelledField(block, ["file", "location"]));
+    const finding: StructuredReviewFinding & { summary: string; class_scope_present: boolean } = {
       id,
       severity: severityFor(line, block),
-      reviewer: "review-orchestrator",
+      reviewer: legacyReviewer(block, reviewers),
+      // `- [F-001] major: the summary` puts the severity in the title, so the
+      // heading text is not the problem statement until that prefix comes off.
+      problem: labelledField(block, ["problem", "issue"]) ?? summary.replace(SEVERITY_PREFIX, ""),
+      impact: labelledField(block, ["impact", "why it matters"]) ?? NOT_RECORDED("impact"),
+      suggested_fix:
+        labelledField(block, ["suggested fix", "suggested_fix", "fix", "recommendation"]) ??
+        NOT_RECORDED("suggested_fix"),
+      evidence:
+        labelledField(block, ["evidence", "proof", "found by", "found independently by"]) ??
+        NOT_RECORDED("evidence"),
+      confidence: legacyConfidence(block),
       summary,
-      classification: mode === "ingest" ? "valid_followup" : "skill_learning_candidate",
-      flow_relevance: attachedToFlow ? "post_flow_feedback" : "standalone_review",
       class_scope_present: hasClassScope(block),
-    });
+    };
+    const classScope = parseClassScope(block);
+    if (classScope !== null) {
+      finding.class_scope = classScope;
+    }
+    if (location.file !== undefined) {
+      finding.file = location.file;
+    }
+    if (location.line !== undefined) {
+      finding.line = location.line;
+    }
+    findings.push(finding);
   }
   return findings;
+}
+
+const SEVERITY_PREFIX = /^\s*(?:\*\*|__)?(?:blocker|major|minor|info)(?:\*\*|__)?\s*[:—–-]\s*/i;
+
+const NOT_RECORDED = (field: string): string =>
+  `not recorded: derived from a markdown review report, which carried no ${field} field`;
+
+/** `- **Label**: value`, continued onto following lines until a blank or a new label. */
+function labelledField(block: string, labels: readonly string[]): string | undefined {
+  const lines = block.split("\n");
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(LABEL_LINE);
+    const label = match?.[1]?.trim().toLowerCase().replace(/\*\*|__|`/g, "");
+    if (label === undefined || !labels.includes(label)) {
+      continue;
+    }
+    const parts = [(match?.[2] ?? "").trim()];
+    for (let i = index + 1; i < lines.length; i += 1) {
+      const next = lines[i] ?? "";
+      if (next.trim() === "" || /^\s*[-*+]\s/.test(next) || /^\s*(?:\*\*|__)/.test(next)) {
+        break;
+      }
+      parts.push(next.trim());
+    }
+    const value = parts.join(" ").trim().replace(/^[`*_]+|[`*_]+$/g, "").trim();
+    if (value !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/** The label half and the value half of a `- **Label**: value` line. */
+const LABEL_LINE = /^[\s>]*(?:[-*+]\s+)?((?:\*\*|__)?[A-Za-z][A-Za-z _-]*(?:\*\*|__)?)\s*[:=]\s*(.*)$/;
+
+/** `src/lib/serve-server.ts:739` — with or without backticks, with or without a line. */
+function parseLocation(value: string | undefined): { file?: string; line?: number } {
+  if (value === undefined) {
+    return {};
+  }
+  const match = value.replace(/`/g, "").trim().match(/^([^\s:]+?\.[A-Za-z0-9]+)(?::(\d+))?\b/);
+  if (!match?.[1]) {
+    return {};
+  }
+  const line = match[2] === undefined ? undefined : Number(match[2]);
+  return line === undefined || Number.isNaN(line) ? { file: match[1] } : { file: match[1], line };
+}
+
+/**
+ * The originating reviewer, read out of the report rather than assumed.
+ *
+ * Consolidated reports name it — `**Found independently by**: review-logic
+ * (blocker), review-architecture (major)` — and the first name in that list is
+ * the one that found it. When the report says nothing, {@link defaultReviewer}
+ * answers, which is the same honest fallback the structured path uses.
+ */
+function legacyReviewer(block: string, reviewers: string[]): string {
+  const attribution = labelledField(block, ["reviewer", "found by", "found independently by", "reviewers"]);
+  const named = attribution?.match(/\breview-[a-z0-9-]+\b/i);
+  if (named?.[0]) {
+    return named[0].toLowerCase();
+  }
+  return defaultReviewer(reviewers);
+}
+
+function legacyConfidence(block: string): ReviewFindingConfidence {
+  const declared = labelledField(block, ["confidence"])?.toLowerCase();
+  if (declared !== undefined) {
+    for (const value of REVIEW_FINDING_CONFIDENCES) {
+      if (declared.startsWith(value)) {
+        return value;
+      }
+    }
+  }
+  // Not "medium". A field recovered by keyword-scanning prose is a low-confidence
+  // derivation whatever the reviewer believed, and saying otherwise would let a
+  // fix round treat a guess as the reviewer's own judgement.
+  return "low";
+}
+
+/**
+ * `sites` and `enumeration_method`, pulled out of a markdown class_scope block.
+ *
+ * Best effort, and deliberately NOT the guard: {@link classScopeViolations}
+ * stays on {@link hasClassScope}, the shape check, so a report is refused for
+ * exactly the reasons it was refused before this change. Extraction failing
+ * where the shape check passes costs a `class_scope` in the persisted record and
+ * nothing else.
+ */
+function parseClassScope(block: string): ReviewFindingClassScope | null {
+  const lines = block.split("\n");
+  const start = lines.findIndex((line) => /class[_ ]scope/i.test(line));
+  if (start === -1) {
+    return null;
+  }
+  const rest = lines.slice(start).join("\n");
+  const sitesMatch = rest.match(/\bsites\b\s*[:=]\s*([\s\S]*?)(?=\benumeration_method\b|$)/i);
+  const methodMatch = rest.match(/\benumeration_method\b\s*[:=]\s*([\s\S]*?)(?=\n\s*\n|$)/i);
+  const sites = sitesMatch?.[1] === undefined ? [] : parseSites(sitesMatch[1]);
+  const method = unquote(methodMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "");
+  if (sites.length === 0 || method === "") {
+    return null;
+  }
+  return { sites, enumeration_method: method };
+}
+
+function unquote(value: string): string {
+  const trimmed = value.trim().replace(/[.;,]$/, "").trim();
+  return /^(["'`])[\s\S]*\1$/.test(trimmed) ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
+function parseSites(raw: string): string[] {
+  const text = raw.replace(/\s+/g, " ").trim().replace(/[;,]\s*$/, "");
+  if (text === "") {
+    return [];
+  }
+  if (text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text.slice(0, text.lastIndexOf("]") + 1)) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item)).filter((item) => item !== "");
+      }
+    } catch {
+      // Not JSON after all; fall through to the separator forms below.
+    }
+  }
+  const separator = text.includes(";") ? ";" : ",";
+  return text
+    .split(separator)
+    .map((item) => item.replace(/^[-*+\s`"]+|[\s`",]+$/g, "").trim())
+    .filter((item) => item !== "");
 }
 
 /** A markdown heading or list marker — the two markers a finding heading carries. */
@@ -526,7 +952,7 @@ function renderLearning(findings: NormalizedReviewFinding[]): string {
 
 ## Skill Learning
 
-${candidates.map((finding) => `- \`review-orchestrator\` <- ${finding.id}: ${finding.summary}`).join("\n")}
+${candidates.map((finding) => `- \`${finding.reviewer}\` <- ${finding.id}: ${finding.summary}`).join("\n")}
 `;
 }
 
@@ -537,9 +963,20 @@ function renderDecisions(findings: NormalizedReviewFinding[]): string {
 - none
 `;
   }
+  // `classification` and `flow_relevance` are recorded HERE and not in
+  // `findings.json`, because `review-finding.schema.json` is
+  // `additionalProperties: false` and neither is a property of the finding: the
+  // reviewer states what is wrong, the pipeline states what it intends to do
+  // about it. Carrying the pipeline's judgement inside the reviewer's record is
+  // what made `findings.json` unusable as `prior_findings[].finding`.
   return `# Decisions
 
-${findings.map((finding) => `- ${finding.id}: create follow-up task or learning proposal (${finding.classification}).`).join("\n")}
+${findings
+  .map(
+    (finding) =>
+      `- ${finding.id}: create follow-up task or learning proposal (${finding.classification}, ${finding.flow_relevance}).`,
+  )
+  .join("\n")}
 `;
 }
 
