@@ -8,13 +8,74 @@
   "title": "Review precision: measure the baseline first, then the deterministic pre-filter and a verifier that can only delete",
   "status": "in-progress",
   "createdAt": "2026-08-29T15:08:10.698Z",
-  "updatedAt": "2026-08-29T18:48:44.850Z",
+  "updatedAt": "2026-08-29T20:56:28.017Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ab3f728cb4b2bfb389405717bc78b13939b21b8aef04ca0023e38652712a3cd4",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-29T20:56:26.720Z",
+      "note": "Measured before any pipeline change: 53/(53+0)=100% over 83 findings in 17 packages, 30 unknown. Recorded in baseline.md with sample, method and four demonstrated reasons why it is refused as a baseline."
+    },
+    "AC2": {
+      "at": "2026-08-29T20:56:26.813Z",
+      "note": "scripts/review-precision-baseline.ts; two runs give byte-identical --json; exits 1 when the ledger and packages disagree, verified with a planted stale row."
+    },
+    "AC3": {
+      "at": "2026-08-29T20:56:26.907Z",
+      "note": "src/review/scope.ts drops generated/lockfile/snapshot/minified/vendored/binary paths and whitespace- and comment-only hunks, scoping to changed hunks plus a 20-line window. Pure function of (diff, config); no model call."
+    },
+    "AC4": {
+      "at": "2026-08-29T20:56:27.000Z",
+      "note": "Implemented in src/review/scope.ts and reached via keryx review scope, not as a SKILL.md instruction. scope.test.ts runs a diff with a lockfile, a whitespace-only hunk and a real change and asserts only the real change survives."
+    },
+    "AC5": {
+      "at": "2026-08-29T20:56:27.094Z",
+      "note": "Every drop carries path, granularity, reason, human detail and changedLines. --scope renders the drop table into scope.md through one writer; an existing block is carried forward when no scope is passed; --append replaces rather than appends."
+    },
+    "AC6": {
+      "at": "2026-08-29T20:56:27.188Z",
+      "note": "review-strict deleted from Wave C and from both mirrors, catalog and module manifest. The degradation numbers (GSM8K 95.5 to 89.0; CommonSenseQA 75.8 to 38.1; Self-Refine +49.2 dialogue vs +0.2 maths) are written into four places and a test asserts they remain."
+    },
+    "AC7": {
+      "at": "2026-08-29T20:56:27.278Z",
+      "note": "verification {verdict, method, evidence, verifier}. Reasoning-only is capped at unverifiable and can reach neither confirmed nor refuted - refuted was added to the cap because it is the verdict with a destructive consequence. Enforced in the merge and in the schema."
+    },
+    "AC8": {
+      "at": "2026-08-29T20:56:27.369Z",
+      "note": "Merged record is {...original, verification} and nothing else is read from a claim, so no code path can apply an escalation. Claim schema is additionalProperties false over five fields. A claim carrying severity is discarded whole and named; the finding is retained on every rejection path."
+    },
+    "AC9": {
+      "at": "2026-08-29T20:56:27.462Z",
+      "note": "Self-verification refused by name, with both sides normalised (lowercase, trim, trailing model annotation stripped, underscores folded) after the review proved a trailing space bypassed exact equality and deleted a blocker in filter mode."
+    },
+    "AC10": {
+      "at": "2026-08-29T20:56:27.554Z",
+      "note": "verification_mode off|annotate|filter defaults to annotate, asserted twice - the constant and the behaviour of an unspecified mode. off refuses claims rather than ignoring them."
+    },
+    "AC11": {
+      "at": "2026-08-29T20:56:27.648Z",
+      "note": "Stage counts render into scope.md: dropped by pre-filter, refuted by verifier, retained. Prints 'not recorded' rather than zero when no scope was supplied, because 'dropped nothing' and 'never ran' are different facts."
+    },
+    "AC12": {
+      "at": "2026-08-29T20:56:27.741Z",
+      "note": "diff -r over both skill trees and both schema mirrors: identical for everything this flow touched. The bundled-rule guard test still passes."
+    },
+    "AC13": {
+      "at": "2026-08-29T20:56:27.834Z",
+      "note": "typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5595 pass / 18 skip / 1 fail, the one being src/sac/fwk-service.test.ts which reproduces on unmodified origin/main in a fresh worktree."
+    },
+    "AC14": {
+      "at": "2026-08-29T20:56:27.925Z",
+      "note": "disposition {state, evidence} with six states pinned by test to the measurement's buckets; evidence-less disposition refused rather than downgraded; global_id minted only when absent, constrained by schema pattern; a round records what it refuted into the same findings.json. CLI surface added so the mechanism is reachable."
+    },
+    "AC15": {
+      "at": "2026-08-29T20:56:28.017Z",
+      "note": "The flow's claims are stated as stage counts. AC1 records the precision figure as refused and forbids citing it as a baseline."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -38,7 +99,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +107,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -170,7 +233,7 @@
       "id": "T11",
       "title": "review-verifier skill: verdict/method/evidence, reasoning-only capped at unverifiable",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -178,13 +241,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Verifier merge is delete-only: escalations and additions discarded in code",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -192,13 +256,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Test: an attempted escalation from the verifier is discarded",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -206,13 +271,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "Verifier never verifies a finding from the reviewer that raised it",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -220,13 +286,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
       "title": "Remove review-strict from Wave C with the degradation evidence stated in the skill",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -234,13 +301,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
       "title": "verification_mode off|annotate|filter, defaulting to annotate; test the default",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -248,13 +316,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T17",
       "title": "Stage counts in the review record: dropped, refuted, retained",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -262,13 +331,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T18",
       "title": "Verify both mirrors agree; bundled-rule guard still passes",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -276,13 +346,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T19",
       "title": "Quality gate: typecheck, full suite against baseline, guards, doc-links",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -290,7 +361,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T20",
@@ -446,6 +518,136 @@
       "at": "2026-08-29T18:48:44.850Z",
       "event": "task-done",
       "detail": "T10: Record every pre-filter drop with a reason in the review record"
+    },
+    {
+      "at": "2026-08-29T20:56:05.233Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-29T20:56:05.328Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-29T20:56:05.420Z",
+      "event": "task-done",
+      "detail": "T11: review-verifier skill: verdict/method/evidence, reasoning-only capped at unverifiable"
+    },
+    {
+      "at": "2026-08-29T20:56:05.519Z",
+      "event": "task-done",
+      "detail": "T12: Verifier merge is delete-only: escalations and additions discarded in code"
+    },
+    {
+      "at": "2026-08-29T20:56:05.613Z",
+      "event": "task-done",
+      "detail": "T13: Test: an attempted escalation from the verifier is discarded"
+    },
+    {
+      "at": "2026-08-29T20:56:05.704Z",
+      "event": "task-done",
+      "detail": "T14: Verifier never verifies a finding from the reviewer that raised it"
+    },
+    {
+      "at": "2026-08-29T20:56:05.797Z",
+      "event": "task-done",
+      "detail": "T15: Remove review-strict from Wave C with the degradation evidence stated in the skill"
+    },
+    {
+      "at": "2026-08-29T20:56:05.887Z",
+      "event": "task-done",
+      "detail": "T16: verification_mode off|annotate|filter, defaulting to annotate; test the default"
+    },
+    {
+      "at": "2026-08-29T20:56:05.981Z",
+      "event": "task-done",
+      "detail": "T17: Stage counts in the review record: dropped, refuted, retained"
+    },
+    {
+      "at": "2026-08-29T20:56:06.074Z",
+      "event": "task-done",
+      "detail": "T18: Verify both mirrors agree; bundled-rule guard still passes"
+    },
+    {
+      "at": "2026-08-29T20:56:06.168Z",
+      "event": "task-done",
+      "detail": "T19: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-29T20:56:26.720Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Measured before any pipeline change: 53/(53+0)=100% over 83 findings in 17 packages, 30 unknown. Recorded in baseline.md with sample, method and four demonstrated reasons why it is refused as a baseline."
+    },
+    {
+      "at": "2026-08-29T20:56:26.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: scripts/review-precision-baseline.ts; two runs give byte-identical --json; exits 1 when the ledger and packages disagree, verified with a planted stale row."
+    },
+    {
+      "at": "2026-08-29T20:56:26.907Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/review/scope.ts drops generated/lockfile/snapshot/minified/vendored/binary paths and whitespace- and comment-only hunks, scoping to changed hunks plus a 20-line window. Pure function of (diff, config); no model call."
+    },
+    {
+      "at": "2026-08-29T20:56:27.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Implemented in src/review/scope.ts and reached via keryx review scope, not as a SKILL.md instruction. scope.test.ts runs a diff with a lockfile, a whitespace-only hunk and a real change and asserts only the real change survives."
+    },
+    {
+      "at": "2026-08-29T20:56:27.094Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Every drop carries path, granularity, reason, human detail and changedLines. --scope renders the drop table into scope.md through one writer; an existing block is carried forward when no scope is passed; --append replaces rather than appends."
+    },
+    {
+      "at": "2026-08-29T20:56:27.188Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: review-strict deleted from Wave C and from both mirrors, catalog and module manifest. The degradation numbers (GSM8K 95.5 to 89.0; CommonSenseQA 75.8 to 38.1; Self-Refine +49.2 dialogue vs +0.2 maths) are written into four places and a test asserts they remain."
+    },
+    {
+      "at": "2026-08-29T20:56:27.278Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verification {verdict, method, evidence, verifier}. Reasoning-only is capped at unverifiable and can reach neither confirmed nor refuted - refuted was added to the cap because it is the verdict with a destructive consequence. Enforced in the merge and in the schema."
+    },
+    {
+      "at": "2026-08-29T20:56:27.369Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Merged record is {...original, verification} and nothing else is read from a claim, so no code path can apply an escalation. Claim schema is additionalProperties false over five fields. A claim carrying severity is discarded whole and named; the finding is retained on every rejection path."
+    },
+    {
+      "at": "2026-08-29T20:56:27.462Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Self-verification refused by name, with both sides normalised (lowercase, trim, trailing model annotation stripped, underscores folded) after the review proved a trailing space bypassed exact equality and deleted a blocker in filter mode."
+    },
+    {
+      "at": "2026-08-29T20:56:27.554Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: verification_mode off|annotate|filter defaults to annotate, asserted twice - the constant and the behaviour of an unspecified mode. off refuses claims rather than ignoring them."
+    },
+    {
+      "at": "2026-08-29T20:56:27.648Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Stage counts render into scope.md: dropped by pre-filter, refuted by verifier, retained. Prints 'not recorded' rather than zero when no scope was supplied, because 'dropped nothing' and 'never ran' are different facts."
+    },
+    {
+      "at": "2026-08-29T20:56:27.741Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: diff -r over both skill trees and both schema mirrors: identical for everything this flow touched. The bundled-rule guard test still passes."
+    },
+    {
+      "at": "2026-08-29T20:56:27.834Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5595 pass / 18 skip / 1 fail, the one being src/sac/fwk-service.test.ts which reproduces on unmodified origin/main in a fresh worktree."
+    },
+    {
+      "at": "2026-08-29T20:56:27.925Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: disposition {state, evidence} with six states pinned by test to the measurement's buckets; evidence-less disposition refused rather than downgraded; global_id minted only when absent, constrained by schema pattern; a round records what it refuted into the same findings.json. CLI surface added so the mechanism is reachable."
+    },
+    {
+      "at": "2026-08-29T20:56:28.017Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: The flow's claims are stated as stage counts. AC1 records the precision figure as refused and forbids citing it as a baseline."
     }
   ]
 }
