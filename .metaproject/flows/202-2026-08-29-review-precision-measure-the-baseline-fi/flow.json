@@ -8,7 +8,7 @@
   "title": "Review precision: measure the baseline first, then the deterministic pre-filter and a verifier that can only delete",
   "status": "in-progress",
   "createdAt": "2026-08-29T15:08:10.698Z",
-  "updatedAt": "2026-08-29T15:23:07.565Z",
+  "updatedAt": "2026-08-29T18:48:44.850Z",
   "source": {
     "type": "description",
     "ref": null
@@ -125,7 +125,7 @@
       "id": "T8",
       "title": "Deterministic pre-filter in the scope-building code, not in SKILL.md",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -133,13 +133,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Test: lockfile + whitespace-only + real change; only the real change survives",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -147,13 +148,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Record every pre-filter drop with a reason in the review record",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -161,7 +163,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -293,7 +296,7 @@
       "id": "T20",
       "title": "Instrumentation: disposition field, globally unique finding ids, record what a round refuted",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -301,7 +304,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -422,6 +426,26 @@
       "at": "2026-08-29T15:23:07.565Z",
       "event": "task-done",
       "detail": "T7: Reproducible baseline command; record the precision figure and sample size"
+    },
+    {
+      "at": "2026-08-29T18:48:44.576Z",
+      "event": "task-done",
+      "detail": "T20: Instrumentation: disposition field, globally unique finding ids, record what a round refuted"
+    },
+    {
+      "at": "2026-08-29T18:48:44.667Z",
+      "event": "task-done",
+      "detail": "T8: Deterministic pre-filter in the scope-building code, not in SKILL.md"
+    },
+    {
+      "at": "2026-08-29T18:48:44.757Z",
+      "event": "task-done",
+      "detail": "T9: Test: lockfile + whitespace-only + real change; only the real change survives"
+    },
+    {
+      "at": "2026-08-29T18:48:44.850Z",
+      "event": "task-done",
+      "detail": "T10: Record every pre-filter drop with a reason in the review record"
     }
   ]
 }
