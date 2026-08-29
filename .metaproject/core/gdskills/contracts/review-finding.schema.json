@@ -18,9 +18,10 @@
     "id": { "type": "string" },
     "global_id": {
       "title": "The finding's identity, unique across every review package",
-      "description": "`id` is the DISPLAY form (`F-001`) and is per-report: 15 of 43 distinct ids in the recorded corpus appear in more than one package, and `F-001` denotes six different findings, so joining a finding to a commit, a ledger row or a flow journal by `id` is unsafe for two thirds of it. `global_id` is the join key: `<reviewId>#<id>`, minted once when the finding is first recorded and CARRIED VERBATIM thereafter, so a finding re-reported in round N+1 keeps the key it was minted under in round N. Uniqueness comes from `reviewId` being a package directory name rather than from a registry, which is what makes the key recomputable from disk with no new state. Optional because 83 findings predate it and read back without one; a record written by the current pipeline always carries it.",
+      "description": "`id` is the DISPLAY form (`F-001`) and is per-report: 15 of 43 distinct ids in the recorded corpus appear in more than one package, and `F-001` denotes six different findings, so joining a finding to a commit, a ledger row or a flow journal by `id` is unsafe for two thirds of it. `global_id` is the join key: `<reviewId>#<id>`, minted once when the finding is first recorded and CARRIED VERBATIM thereafter, so a finding re-reported in round N+1 keeps the key it was minted under in round N. Uniqueness comes from `reviewId` being a package directory name rather than from a registry, which is what makes the key recomputable from disk with no new state. Optional because 83 findings predate it and read back without one; a record written by the current pipeline always carries it. The `pattern` is not decoration: `mintGlobalFindingId` is the only writer inside this repository, but a producer outside it may supply any string, and a `global_id` that is not `<reviewId>#<id>` joins to nothing while looking like a key — the measurement in scripts/review-precision-baseline.ts splits on the separator to reach the package.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^[^#]+#[^#]+$"
     },
     "reviewer": { "type": "string" },
     "disposition": {

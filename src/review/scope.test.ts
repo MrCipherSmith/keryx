@@ -160,9 +160,37 @@ test("classifyPath keeps the paths this module deliberately does NOT treat as ge
   expect(classifyPath("src/lib/dist-utils.ts")).toBeNull();
 });
 
+test("classifyPath keeps a source directory that happens to be named after build output", () => {
+  expect(classifyPath("src/target/resolve.ts")).toBeNull();
+  expect(classifyPath("app/components/out/Button.tsx")).toBeNull();
+  expect(classifyPath("packages/core/src/out/index.ts")).toBeNull();
+  expect(classifyPath("lib/generated/reader.ts")).toBeNull();
+  expect(classifyPath("test/coverage/report.test.ts")).toBeNull();
+});
+
+test("classifyPath still drops build output where no source root precedes it", () => {
+  expect(classifyPath("dist/app.js")?.reason).toBe("generated");
+  expect(classifyPath("out/index.html")?.reason).toBe("generated");
+  expect(classifyPath("target/debug/keryx")?.reason).toBe("generated");
+  expect(classifyPath("coverage/lcov.info")?.reason).toBe("generated");
+  // The common monorepo shape still works: the workspace container is not a
+  // source root, so `packages/*/dist` is still build output.
+  expect(classifyPath("packages/core/dist/index.js")?.reason).toBe("generated");
+  expect(classifyPath("apps/web/.next/server/page.js")?.reason).toBe("generated");
+  // Unambiguous names keep matching at any depth — nothing names a source
+  // directory `__generated__` or `__pycache__`.
+  expect(classifyPath("src/__generated__/schema.ts")?.reason).toBe("generated");
+  expect(classifyPath("src/api/__pycache__/client.pyc")?.reason).toBe("generated");
+});
+
 test("additionalGeneratedDirectories extends the list without a code change", () => {
   expect(classifyPath("gen/api/client.ts")).toBeNull();
   expect(classifyPath("gen/api/client.ts", { ...requiredConfig(), additionalGeneratedDirectories: ["gen"] })?.reason).toBe(
+    "generated",
+  );
+  // A project-configured name is an explicit statement about this repository,
+  // so it keeps matching at any depth, source root above it or not.
+  expect(classifyPath("src/gen/client.ts", { ...requiredConfig(), additionalGeneratedDirectories: ["gen"] })?.reason).toBe(
     "generated",
   );
 });
@@ -229,6 +257,65 @@ test("whitespace-only: re-indenting Python is a real change, re-indenting TypeSc
 });
 
 // ---------------------------------------------------------------------------
+// Whitespace-only — false drops inside string literals (regression guards)
+// ---------------------------------------------------------------------------
+
+test("whitespace-only: removing a space from inside a string literal is a real change", () => {
+  const diff = [
+    ...fileHeader("src/a.ts"),
+    ...hunk(
+      "@@ -1,3 +1,3 @@",
+      " export function render(parts: string[]): string {",
+      '-  return parts.join(" ");',
+      '+  return parts.join("");',
+      " }",
+    ),
+    "",
+  ].join("\n");
+  const scope = buildReviewScope(diff);
+
+  expect(scope.drops).toHaveLength(0);
+  expect(scope.regions).toHaveLength(1);
+  expect(scope.regions[0]!.text).toContain('+  return parts.join("");');
+});
+
+test("whitespace-only: a spacing edit inside a SQL string literal is a real change", () => {
+  const diff = [
+    ...fileHeader("src/db.ts"),
+    ...hunk(
+      "@@ -1,3 +1,3 @@",
+      " function query(): string {",
+      '-  return "SELECT a FROM t WHERE x = 1";',
+      '+  return "SELECT a  FROM t WHERE x = 1";',
+      " }",
+    ),
+    "",
+  ].join("\n");
+  expect(buildReviewScope(diff).drops).toHaveLength(0);
+});
+
+test("whitespace-only: a hunk carrying an unterminated quote is never whitespace-only", () => {
+  // The re-indent sits inside a multi-line template literal, where leading
+  // whitespace is content. The opening backtick is on a context line, so the
+  // guard has to be per hunk, not per changed line.
+  const diff = [
+    ...fileHeader("src/db.ts"),
+    ...hunk("@@ -1,4 +1,4 @@", " const query = `", "-    SELECT a", "+  SELECT a", " `;"),
+    "",
+  ].join("\n");
+  expect(buildReviewScope(diff).drops).toHaveLength(0);
+});
+
+test("whitespace-only: a plain re-indent with a balanced string literal is still dropped", () => {
+  const diff = [
+    ...fileHeader("src/a.ts"),
+    ...hunk("@@ -1,3 +1,3 @@", " function f() {", '-    return "x";', '+  return "x";', " }"),
+    "",
+  ].join("\n");
+  expect(buildReviewScope(diff).drops[0]!.reason).toBe("whitespace-only");
+});
+
+// ---------------------------------------------------------------------------
 // AC3 — comment-only
 // ---------------------------------------------------------------------------
 
@@ -280,6 +367,79 @@ test("comment-only: an unknown extension is never classified as comment-only", (
     "",
   ].join("\n");
   expect(buildReviewScope(diff).drops).toHaveLength(0);
+});
+
+// ---------------------------------------------------------------------------
+// Comment-only — false drops that hide live code (regression guards)
+//
+// Every case below was a real drop before the fix: `files_retained: 0`, reason
+// `comment-only`, and an empty scoped diff handed to the reviewers. The module's
+// invariant is that a false retain beats a false drop; these are the false
+// drops.
+// ---------------------------------------------------------------------------
+
+test("comment-only: an added `/*` that comments out live code is NOT comment-only", () => {
+  const diff = [
+    ...fileHeader("src/auth.ts"),
+    ...hunk(
+      "@@ -10,4 +10,5 @@ export function check(user: User): void {",
+      "   const role = user.role;",
+      "+  /*",
+      "   if (!user.isAdmin) {",
+      '     throw new Error("denied");',
+      "   }",
+    ),
+    "",
+  ].join("\n");
+  const scope = buildReviewScope(diff);
+
+  expect(scope.drops).toHaveLength(0);
+  expect(scope.files).toEqual(["src/auth.ts"]);
+  expect(scope.regions).toHaveLength(1);
+  expect(scope.regions[0]!.text).toContain("+  /*");
+});
+
+test("comment-only: a deleted `*/` that swallows live code is NOT comment-only", () => {
+  const diff = [
+    ...fileHeader("src/auth.ts"),
+    ...hunk(
+      "@@ -20,5 +20,4 @@",
+      "   /* legacy check",
+      "    * removed in v2",
+      "-   */",
+      "   grantAccess(user);",
+    ),
+    "",
+  ].join("\n");
+  const scope = buildReviewScope(diff);
+
+  expect(scope.drops).toHaveLength(0);
+  expect(scope.regions).toHaveLength(1);
+  expect(scope.regions[0]!.text).toContain("-   */");
+});
+
+test("comment-only: a `*/` inside a string literal does not turn live code into a comment", () => {
+  const diff = [
+    ...fileHeader("src/a.ts"),
+    ...hunk("@@ -1,3 +1,3 @@", "-const limit = 1;", "+const limit = 2;", '   const marker = "*/";'),
+    "",
+  ].join("\n");
+  const scope = buildReviewScope(diff);
+
+  expect(scope.drops).toHaveLength(0);
+  expect(scope.regions).toHaveLength(1);
+  expect(scope.regions[0]!.text).toContain("+const limit = 2;");
+});
+
+test("comment-only: a plain comment reword next to a block delimiter it did not touch is still dropped", () => {
+  // The guard is on *changed* lines: an untouched `/**` … `*/` around the edit
+  // must not disable the check, or JSDoc edits would never be dropped again.
+  const diff = [
+    ...fileHeader("src/a.ts"),
+    ...hunk("@@ -1,5 +1,5 @@", " /**", "-  * old text", "+  * new text", "  */", " export const a = 1;"),
+    "",
+  ].join("\n");
+  expect(buildReviewScope(diff).drops[0]!.reason).toBe("comment-only");
 });
 
 test("comment-only detection can be switched off", () => {

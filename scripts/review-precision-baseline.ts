@@ -32,11 +32,12 @@
 // descending strength, and every classified finding carries which one answered:
 //
 //   0. `record` — the finding's own `disposition` field, written by an
-//      instrumented review. Outranks everything below, because it is the only
-//      source that is a decision rather than an inference. Nothing on disk
-//      carries it yet — all 83 findings predate the field — but without this
-//      branch an instrumented review would still classify as `unknown` and the
-//      number could never move.
+//      instrumented review (`keryx review complete --finding <id> --disposition
+//      <state> --evidence <ref>`, or the `--refuted` ingest channel). Outranks
+//      everything below, because it is the only source that is a decision
+//      rather than an inference. Nothing on disk carries it yet — all 83
+//      findings predate the field — but without this branch an instrumented
+//      review would still classify as `unknown` and the number could never move.
 //   1. `report-closed-by` — AUTOMATIC. The report block for a finding, or a row
 //      of a `# Disposition` table in the same report, carries a
 //      `closed by \`<sha>\`` marker. The sha is resolved against git, so a
@@ -78,10 +79,29 @@ type Category = (typeof CATEGORIES)[number];
 
 type OnDiskFinding = {
   id: string;
+  /**
+   * The join key, when the record carries one: `<mintingReviewId>#<id>`.
+   *
+   * READ, not recomputed. `assignGlobalIds` mints only when the key is absent,
+   * so a finding carried into round 2 through `prior_findings` keeps
+   * `rev-round1#F-001` — and recomputing `${reviewId}#${id}` here would look for
+   * `rev-round2#F-001`, classify a dispositioned finding as `unknown` AND
+   * report the ledger row as stale. That case is exactly what the field exists
+   * to serve, so the measurement has to key on it.
+   */
+  global_id?: string;
   severity: string;
   reviewer: string;
   summary?: string;
+  disposition?: { state?: string; evidence?: string };
 };
+
+/** The key this measurement joins on, agreeing with `mintGlobalFindingId`. */
+function findingKey(reviewId: string, finding: OnDiskFinding): string {
+  return typeof finding.global_id === "string" && finding.global_id !== ""
+    ? finding.global_id
+    : `${reviewId}#${finding.id}`;
+}
 
 type PackageRecord = {
   reviewId: string;
@@ -97,13 +117,23 @@ type PackageRecord = {
   reportBytes: number;
 };
 
+/**
+ * Where a classification came from, strongest first.
+ *
+ * One list, read by both the classifier and the report. When the report kept its
+ * own hand-written copy the two drifted the moment `record` was added, and the
+ * printed totals stopped adding up to the findings counted.
+ */
+const EVIDENCE_SOURCES = ["record", "report-closed-by", "ledger", "none"] as const;
+type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
+
 type Classified = {
   reviewId: string;
   findingId: string;
   severity: string;
   category: Category;
   evidence: string;
-  source: "record" | "report-closed-by" | "ledger" | "none";
+  source: EvidenceSource;
 };
 
 type LedgerRow = {
@@ -283,7 +313,11 @@ function classify(
     const report = existsSync(reportPath) ? readFileSync(reportPath, "utf8") : "";
     const auto = reportDispositions(report);
     for (const finding of pkg.findings) {
-      const key = `${pkg.reviewId}#${finding.id}`;
+      // The record's OWN key when it has one — see `findingKey`. A ledger row
+      // therefore names the package the finding was MINTED in, not the round
+      // that re-reported it, which is the only join that stays stable across
+      // rounds.
+      const key = findingKey(pkg.reviewId, finding);
       seen.add(key);
 
       // The record itself, when it has one, outranks both heuristics below.
@@ -292,13 +326,17 @@ function classify(
       // review would still classify as `unknown` and the number could never
       // move. Absent reads as `unknown` and falls through, so the pre-contract
       // corpus is unaffected.
-      const recorded = (finding as { disposition?: { state?: string; evidence?: string } }).disposition;
+      const recorded = finding.disposition;
       if (recorded?.state !== undefined && recorded.state !== "unknown") {
+        if (!CATEGORIES.includes(recorded.state as Category)) {
+          problems.push(`${key}: findings.json records disposition state "${recorded.state}", which is not a category`);
+          continue;
+        }
         rows.push({
           reviewId: pkg.reviewId,
           findingId: finding.id,
           severity: finding.severity,
-          category: recorded.state as DispositionCategory,
+          category: recorded.state as Category,
           evidence: recorded.evidence ?? `${pkg.dir}/findings.json: disposition recorded without evidence`,
           source: "record",
         });
@@ -421,7 +459,12 @@ function main(): void {
       console.log(`${category.padEnd(24)} ${String(c[category]).padStart(4)}`);
     }
     console.log("\n## By evidence source\n");
-    for (const source of ["report-closed-by", "ledger", "none"] as const) {
+    // Every source the type declares, derived from it rather than listed again.
+    // `record` was added to `Classified.source` and to the classifier and not to
+    // this loop, so a run with one recorded disposition printed a classification
+    // totalling 3 against a source table totalling 1 — a report whose two halves
+    // disagree can be used to check nothing.
+    for (const source of EVIDENCE_SOURCES) {
       console.log(`${source.padEnd(24)} ${String(rows.filter((r) => r.source === source).length).padStart(4)}`);
     }
     console.log("\n## Figure\n");
@@ -431,14 +474,22 @@ function main(): void {
       console.log(`precision = acted-on / (acted-on + dismissed-incorrect)`);
       console.log(`          = ${c["acted-on"]} / ${summary.denominator} = ${(p * 100).toFixed(1)}%`);
       if (c["dismissed-incorrect"] === 0) {
+        // The refusal, argued from what is true NOW. The original wording cited
+        // three defects — no `disposition` property, a template `decisions.md`,
+        // `classification` set from the ingest mode — and flow 202 fixed the
+        // first two on this branch. A refusal that argues from facts that have
+        // stopped being true reads as an unmaintained artifact, and AC1 is
+        // satisfied by this refusal rather than by the figure above it.
         console.log(
           "\nNOT A BASELINE. `dismissed-incorrect` is 0, so the denominator equals\n" +
             "the numerator and this ratio is 100% whatever the reviewers actually got\n" +
-            "right. Nothing in a review package can record a finding as wrong:\n" +
-            "review-finding.schema.json has no disposition property, decisions.md is a\n" +
-            "template that says the same sentence for every finding, and `classification`\n" +
-            "is set from the ingest MODE rather than from any judgement. See the flow 202\n" +
-            "journal for what has to be collected instead.",
+            "right. The instrumentation that can record a wrong finding now exists —\n" +
+            "`disposition` on the finding record, the `--refuted` ingest channel, and\n" +
+            "`keryx review complete --finding <id> --disposition <state> --evidence <ref>`\n" +
+            "— but nothing has been written through it for this corpus, and an\n" +
+            "unwritten outcome reads as `unknown`, never as correct. The figure becomes\n" +
+            "a baseline when rounds start closing with their dispositions recorded, not\n" +
+            "before. See the flow 202 journal.",
         );
       }
     }

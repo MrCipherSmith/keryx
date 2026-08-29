@@ -46,9 +46,10 @@
           },
           "global_id": {
             "title": "The finding's identity, unique across every review package",
-            "description": "`id` is per-report and collides across packages; `global_id` (`<reviewId>#<id>`) is the join key. A reviewer MINTS nothing: it emits this only when re-reporting a finding it was handed in `prior_findings`, and then it must be carried verbatim, because a re-minted key breaks the round-to-round join it exists to provide. Kept identical to src/gdskills/contracts/review-finding.schema.json. NOTE the deliberate asymmetry: that schema also declares `disposition` and this one does not, because a reviewer states what is wrong and never states what became of it — the same separation that keeps the pipeline's `classification` out of the finding record.",
+            "description": "`id` is per-report and collides across packages; `global_id` (`<reviewId>#<id>`) is the join key. A reviewer MINTS nothing: it emits this only when re-reporting a finding it was handed in `prior_findings`, and then it must be carried verbatim, because a re-minted key breaks the round-to-round join it exists to provide. The `pattern` enforces the shape a carried key must still have: anything else joins to nothing while looking like a key. Kept identical to src/gdskills/contracts/review-finding.schema.json. NOTE the deliberate asymmetry: that schema also declares `disposition` and this one does not, because a reviewer states what is wrong and never states what became of it — the same separation that keeps the pipeline's `classification` out of the finding record.",
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "^[^#]+#[^#]+$"
           },
           "severity": {
             "type": "string",

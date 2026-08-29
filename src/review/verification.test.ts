@@ -724,4 +724,208 @@ describe("the verdict reaches the review record", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("the per-drop REASONS reach the record, not only the eight counts (AC5)", async () => {
+    // AC5 asks for "a reason per drop". Eight integers carry no reason: a record
+    // saying `files_dropped: 2` is indistinguishable from one that dropped two
+    // source files by mistake. Before, the rows travelled by a different route —
+    // `keryx review scope --append` writing straight into scope.md — which this
+    // very call then overwrote.
+    const { root, scope } = await ingest({
+      scope: {
+        mode: "diff",
+        contextLines: 20,
+        files: ["src/review/managed.ts"],
+        drops: [
+          {
+            path: "bun.lock",
+            reason: "lockfile",
+            detail: 'lockfile: dependency-manager output "bun.lock"',
+            granularity: "file",
+            changedLines: 3214,
+          },
+          {
+            path: "src/review/managed.ts",
+            reason: "whitespace-only",
+            detail: "whitespace-only: identical once whitespace is removed, with no change in line count",
+            granularity: "block",
+            startLine: 41,
+            endLine: 42,
+            changedLines: 2,
+          },
+        ],
+        counts: {
+          filesSeen: 3,
+          filesRetained: 1,
+          filesDropped: 2,
+          blocksSeen: 4,
+          blocksRetained: 3,
+          blocksDropped: 1,
+          changedLinesRetained: 40,
+          changedLinesDropped: 3216,
+        },
+      },
+    });
+    try {
+      expect(scope).toContain("files_dropped: 2");
+      expect(scope).toContain("| bun.lock | whole file | lockfile |");
+      expect(scope).toContain("| src/review/managed.ts | lines 41-42 (2) | whitespace-only |");
+      expect(scope).toContain('lockfile: dependency-manager output "bun.lock"');
+      expect(scope).not.toContain("no pre-filter scope was supplied");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC9, against the field a model actually fills in
+// ---------------------------------------------------------------------------
+
+describe("AC9 survives the spellings of a free-text actor name", () => {
+  // `verifier` and `reviewer` are prose a model writes. Exact `===` on them made
+  // the guard a formatting coincidence: one trailing space and the reviewer that
+  // raised a finding could delete it. Not exploitable on the shipped default
+  // (`annotate` removes nothing), which is why this is fixed BEFORE `filter` is
+  // ever enabled rather than after.
+  const SPELLINGS = [
+    "review-logic ",
+    " review-logic",
+    "Review-Logic",
+    "REVIEW-LOGIC",
+    "review-logic(sonnet)",
+    "review-logic (sonnet)",
+    "review_logic",
+  ];
+
+  test("every spelling of the raising reviewer is still a self-verification", () => {
+    for (const verifier of SPELLINGS) {
+      const result = mergeVerifications([finding({ reviewer: "review-logic" })], [claim({ verifier })]);
+      expect({ verifier, reasons: reasons(result) }).toEqual({ verifier, reasons: ["self-verification"] });
+      expect(result.retained[0]).not.toHaveProperty("verification");
+    }
+  });
+
+  test("in `filter` mode no spelling lets an author delete its own blocker", () => {
+    // The consequence, stated as its own test: this is a finding being destroyed
+    // by the actor AC9 names as the one that may never touch it, with no
+    // rejection row to show it happened.
+    for (const verifier of SPELLINGS) {
+      const result = mergeVerifications(
+        [finding({ reviewer: "review-logic", severity: "blocker" })],
+        [claim({ verifier, verdict: "refuted" })],
+        { mode: "filter" },
+      );
+      expect({ verifier, refuted: result.refuted.length }).toEqual({ verifier, refuted: 0 });
+      expect(result.retained).toHaveLength(1);
+      expect(reasons(result)).toEqual(["self-verification"]);
+    }
+  });
+
+  test("a genuinely different reviewer is still allowed to verify", () => {
+    // Non-vacuity: the normalisation must not swallow every claim.
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-logic" })],
+      [claim({ verifier: "review-logician" })],
+    );
+    expect(result.rejections).toEqual([]);
+    expect(result.retained[0]?.verification?.verifier).toBe("review-logician");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two verifiers that AGREE
+// ---------------------------------------------------------------------------
+
+describe("agreement is not a conflict", () => {
+  test("two independent verifiers reaching the same verdict produce that verdict", () => {
+    // The safe-direction argument for cancelling holds for DISAGREEING claims:
+    // taking the first would let claim order decide whether a finding survives.
+    // It does not hold for two verifiers reaching `confirmed` independently —
+    // the strongest evidence state available — which was being discarded and
+    // labelled a conflict.
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" })],
+      [
+        claim({ verifier: "review-logic", evidence: "bun test -t umask -> 1 fail" }),
+        claim({ verifier: "review-architecture", evidence: "reproduced on a fresh install: 0775" }),
+      ],
+    );
+    expect(reasons(result)).toEqual([]);
+    expect(result.retained[0]?.verification?.verdict).toBe("confirmed");
+    expect(result.retained[0]?.verification?.verifier).toBe("review-logic, review-architecture");
+    expect(result.retained[0]?.verification?.evidence).toContain("bun test -t umask -> 1 fail");
+    expect(result.retained[0]?.verification?.evidence).toContain("reproduced on a fresh install");
+    expect(result.counts.confirmed).toBe(1);
+  });
+
+  test("a unanimous `refuted` removes the finding under filter, once", () => {
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" })],
+      [
+        claim({ verifier: "review-logic", verdict: "refuted", evidence: "measured 0700" }),
+        claim({ verifier: "review-architecture", verdict: "refuted", evidence: "the call site is unreachable; grep -n" }),
+      ],
+      { mode: "filter" },
+    );
+    expect(result.refuted).toHaveLength(1);
+    expect(result.retained).toHaveLength(0);
+    expect(result.counts.findingsRefuted).toBe(1);
+  });
+
+  test("the strongest method is the one recorded when methods differ but verdicts agree", () => {
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" })],
+      [
+        claim({ verifier: "review-logic", verdict: "unverifiable", method: "reasoning", evidence: "nothing to run" }),
+        claim({ verifier: "review-architecture", verdict: "unverifiable", method: "site-check", evidence: "the sites exist" }),
+      ],
+    );
+    expect(reasons(result)).toEqual([]);
+    expect(result.retained[0]?.verification?.method).toBe("site-check");
+  });
+
+  test("disagreement still cancels — the original safe direction is unchanged", () => {
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" })],
+      [
+        claim({ verifier: "review-logic", verdict: "refuted" }),
+        claim({ verifier: "review-architecture", verdict: "confirmed" }),
+      ],
+      { mode: "filter" },
+    );
+    expect(result.refuted).toEqual([]);
+    expect(reasons(result)).toEqual(["conflicting-claims"]);
+    expect(result.retained[0]).not.toHaveProperty("verification");
+  });
+
+  test("claims_received still equals claims_applied + claims_rejected", () => {
+    // A unanimous pair applies TWO claims to ONE finding. Counting findings here
+    // would make the record's own arithmetic stop adding up, and the stage
+    // counts are the only thing any claim in this flow may be stated in.
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" }), finding({ global_id: "r#F-002", id: "F-002" })],
+      [
+        claim({ verifier: "review-logic" }),
+        claim({ verifier: "review-architecture" }),
+        claim({ finding: "r#F-404", verifier: "review-logic" }),
+      ],
+    );
+    expect(result.counts.claims).toBe(3);
+    expect(result.counts.applied).toBe(2);
+    expect(result.counts.rejected).toBe(1);
+    expect(result.counts.applied + result.counts.rejected).toBe(result.counts.claims);
+  });
+
+  test("a merged verdict still satisfies the finding contract", async () => {
+    // `verifier` and `evidence` are joined strings; the schema has to accept what
+    // the merge actually writes, or a package with two agreeing verifiers becomes
+    // unwritable.
+    const schema = await loadSchema("review-finding");
+    const result = mergeVerifications(
+      [finding({ reviewer: "review-security-code" })],
+      [claim({ verifier: "review-logic" }), claim({ verifier: "review-architecture" })],
+    );
+    expect(await validateJson(result.retained[0], schema)).toEqual([]);
+  });
 });
