@@ -22,7 +22,6 @@ triggers:
   - "review --all"
   - "review --clean-code"
   - "review --highload"
-  - "review --greptile"
   - "review --project-conventions"
   - "review --frontend-conventions"
   - "review --testing-practices"
@@ -57,14 +56,54 @@ Review Orchestrator Progress:
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
 - [ ] Step 3: Collect bounded scope - git diff OR file list from path
 - [ ] Step 4: Parse flags / auto-detect domain from scope
-- [ ] Step 5: Ask user to confirm optional convention and legacy/profile reviewers
+- [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
 - [ ] Step 6: Plan sub-agent dispatch, token budgets, and model strategy
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
 - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
 - [ ] Step 10: Run strict synthesis when blockers/majors exist or --strict is set
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
+- [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
 ```
+
+---
+
+## Step 12 — the `keryx:findings` block
+
+The prose report is for a human. **`keryx review ingest` reads the fenced block,
+not the prose**, and a round that emits only prose cannot be used to build the
+next round's input — the reviewer's `confidence`, `evidence`, `impact` and
+`suggested_fix` do not survive rendering, and no regex recovers what was never
+written down.
+
+So every report ends with one fenced block whose info string carries
+`keryx:findings`:
+
+````text
+```json keryx:findings
+[ { …one object per finding, conforming to review-finding.schema.json… } ]
+```
+````
+
+Rules:
+
+- **Exactly one block per report.** It is the array the reviewers returned,
+  carried through — not re-derived from the prose above it.
+- Each object conforms to `reviewer-finding.schema.json`, which is
+  `additionalProperties: false`. Pipeline triage fields (`classification`,
+  `flow_relevance`) do **not** belong here; they are the orchestrator's, not the
+  reviewer's, and they are recorded in `decisions.md`.
+- `reviewer` is the reviewer that actually produced the finding. Never the
+  orchestrator's own name — that is the field whose loss made round 2
+  unconstructible.
+- **Malformed JSON fails loudly.** Ingest refuses a block it cannot parse rather
+  than silently falling back to parsing the prose; a silent fallback would
+  reintroduce exactly the lossy path this replaces.
+
+A report without the block is still readable by a human and still ingestible by
+the legacy Markdown path — but it is a **legacy** report, its findings are
+marked low-confidence on the way in, and the round it belongs to cannot seed a
+fix round.
 
 ---
 
@@ -238,7 +277,7 @@ If the platform supports assigning models to sub-agents and the user/automation 
 |---|---|---|
 | simple | cheaper/faster coding model | `review-style`, `review-clean-code`, docs-only convention checks, legacy/profile checks |
 | normal | current/default model | `review-frontend`, `review-backend`, `review-testing-practices`, convention reviewers |
-| complex | strongest available coding/reasoning model | `review-logic`, `review-architecture`, `review-security-code`, `review-highload`, `review-greptile`, strict synthesis |
+| complex | strongest available coding/reasoning model | `review-logic`, `review-architecture`, `review-security-code`, `review-highload`, strict synthesis |
 
 Rules:
 - Do not silently change model class when `model_strategy` is `current`.
@@ -351,7 +390,7 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 
 | File pattern | Reviewers appended |
 |---|---|
-| `src/**/*.ts`, `src/**/*.tsx`, `*.stories.tsx` | `review-frontend-conventions` |
+| `src/**/*.tsx`, `*.stories.tsx`, or a `.ts`/`.js` change in a repo where `package.json` declares `react`/`react-dom`/`mobx`/`mobx-react`/`mobx-react-lite` as a dependency | `review-frontend-conventions` |
 | `**/*.test.*`, `**/*.spec.*`, `**/*.integration.test.*`, `**/*.msw.ts`, `src/test/**`, `test/**`, `e2e/**` | `review-testing-practices` |
 | `src/core/**`, `core/**`, `shared/**`, `foundation/**` | `review-core-boundaries` |
 | `src/core/flow/**`, `src/graph/**`, `src/shared/flow/**` | `review-flow-graph` |
@@ -399,25 +438,15 @@ Legacy/profile reviewers are specialized review profiles that predate the review
 | `--mobx-store` | `code-mobx-store-review` |
 | `*.store.ts`, `makeObservable`, `observable`, `computed`, `action.bound` | suggest `code-mobx-store-review` as optional profile reviewer |
 
-When any legacy/profile reviewer is available and the user did not explicitly pass its flag, ask after convention prompts:
-
-```text
-This question controls only optional legacy/profile reviewers. Generic and convention reviewer choices listed above are unchanged.
-
-Include legacy/profile reviewers?
-
-  A) Include all applicable profile reviewers
-  B) Choose individually
-  C) Skip legacy/profile reviewers (recommended unless you need these profiles)
-
-Available:
-  - code-ai-review: strict AI review profile
-  - code-b091-review: b091-style strict logic profile
-  - code-style-review: legacy style/architecture profile
-  - code-mobx-store-review: MobX store/state profile (only if MobX/store files are present)
-```
-
-If the user chooses B, list only applicable reviewers and ask for exact names. If the review is part of `job-orchestrator`, use `reviewers` and `conditional_reviewers` automation settings when provided.
+Legacy/profile reviewers are never auto-included and never prompted for — do not ask the user
+about them. They are exempt from the finding contract (for example `code-ai-review` emits
+free-prose Russian with no per-finding severity field, so its output cannot be normalised into
+the unified report), which is why inclusion must be a deliberate, explicit act rather than a
+default the user has to opt out of on every review. Dispatch them ONLY when the user passes one
+of the flags in the Trigger table above, or when `job-orchestrator` provides `reviewers` /
+`conditional_reviewers` automation settings that name them. The `code-mobx-store-review`
+auto-suggestion (MobX/store files present) is informational only — list it in the Review Plan
+Preview below, but do not dispatch it and do not ask about it without an explicit flag.
 
 Review Plan Preview must include an `Optional legacy/profile reviewers` group and a `Skipped reviewers` group with reasons such as:
 
@@ -447,13 +476,12 @@ Skipped reviewers:
 | `--style` | `review-style` |
 | `--clean-code` | `review-clean-code` |
 | `--highload` | `review-highload` |
-| `--greptile` | `review-greptile` (codebase-aware; requires PR number) |
 | `--project-conventions` | all generic convention reviewers: `review-frontend-conventions` + `review-testing-practices` + `review-core-boundaries` + `review-flow-graph` |
 | `--frontend-conventions` | `review-frontend-conventions` |
 | `--testing-practices` | `review-testing-practices` |
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
-| `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, project convention reviewers when local convention docs exist, and `review-greptile` when PR number is present) |
+| `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, and project convention reviewers when local convention docs exist) |
 | `--strict` | runs AFTER all others; adds a strict commentary pass on consolidated findings |
 | (auto) | detected from diff file extensions — see Auto-detection table |
 
@@ -523,24 +551,6 @@ file_contents: <bounded file contents relevant to this reviewer>
 Each reviewer must return a `REVIEW_RESULT` object matching `skills/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
 
 **Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
-
-### Greptile Reviewer
-
-`review-greptile` runs in parallel with the other reviewers **when a PR number is available** (diff mode with a PR). It is excluded in path mode (no PR) unless `--greptile` is explicitly specified.
-
-When dispatching `review-greptile`, pass additionally:
-
-```
-PR_NUMBER:    <pr number>
-REPO:         <owner/repo>
-REMOTE:       github | gitlab
-```
-
-Greptile findings use `G-` prefixed IDs and are merged into the consolidated report under a dedicated section **"## Greptile (Codebase-Aware Findings)"** placed before the Blockers section. If Greptile identified cross-file impact not caught by other reviewers, those appear as additional blockers/majors.
-
-**Auto-include Greptile when:** `--all` flag is used AND a PR number is resolvable from the current branch (`gh pr view` succeeds).
-
----
 
 ## Scope Boundaries
 

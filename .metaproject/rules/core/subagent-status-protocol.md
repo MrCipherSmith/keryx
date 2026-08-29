@@ -32,7 +32,11 @@ If the first line is not `STATUS: <STATUS>`, the orchestrator MUST treat the res
 
 ---
 
-## The Four Statuses
+## The Five Statuses
+
+Four of them are for **skill workers** — the subagents an orchestrator dispatches
+from `.metaproject/skills/`. The fifth, `FAILED`, belongs to a different worker
+family and is documented at the end of this section.
 
 ### `DONE`
 Task fully complete. All acceptance criteria met. Orchestrator can continue the pipeline.
@@ -65,6 +69,28 @@ Use when:
 - Module patterns, library docs, or API signatures are needed but weren't provided
 - The task references files or components that don't exist and no context explains them
 - Acceptance criteria use terms not defined anywhere in the provided context
+
+### `FAILED` — harness child workers only
+
+**Do not emit `FAILED` as a skill worker.** A skill worker that cannot finish
+reports `BLOCKED`; `task-implementer` maps its own internal `failed` to
+`STATUS: BLOCKED` for exactly this reason.
+
+`FAILED` exists in `subagent-result.schema.json` because a **different** worker
+family uses it: external child processes launched through the harness. Their
+`STATUS:` line is parsed by `parseChildResult` in `src/harness/child/contract.ts`
+— which mirrors this enum as `CanonicalSubagentStatus` — and is wired into
+production at `src/harness/extension/execute.ts`. `spawn.test.ts` pins the
+behaviour it guarantees: a `FAILED` child disposition must reach the parent's
+gate as a *failed* completion, **never as a false `completed`**.
+
+So the enum has five values and this document previously described four, which
+made `FAILED` look unreachable. It is not. It is unreachable *from a skill
+worker*, and load-bearing for the child-process layer.
+
+Orchestrators dispatching skill workers may therefore treat a `FAILED` reply as
+a protocol violation and re-request. Orchestrators reading harness child results
+must handle it as a real terminal failure.
 
 ---
 
