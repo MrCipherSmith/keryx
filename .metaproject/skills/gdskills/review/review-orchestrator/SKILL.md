@@ -88,22 +88,38 @@ So every report ends with one fenced block whose info string carries
 Rules:
 
 - **Exactly one block per report.** It is the array the reviewers returned,
-  carried through — not re-derived from the prose above it.
-- Each object conforms to `reviewer-finding.schema.json`, which is
-  `additionalProperties: false`. Pipeline triage fields (`classification`,
-  `flow_relevance`) do **not** belong here; they are the orchestrator's, not the
-  reviewer's, and they are recorded in `decisions.md`.
+  carried through — not re-derived from the prose above it. A second block is a
+  hard error naming both offsets: reviewers are consolidated by merging their
+  findings into one array, never by concatenating one block each.
+- The fence may be indented up to three spaces (CommonMark), which is what
+  happens when the block is nested under a list item. Beyond that it is not a
+  fence and ingest will not see it.
+- Each object conforms to **`review-finding.schema.json`** — the same contract
+  `prior_findings[].finding` is validated against, which is why the block
+  round-trips. Unknown per-finding properties are **dropped, not rejected**:
+  ingest writes exactly the properties that contract names, so anything else you
+  put on a finding is silently discarded rather than flagged. Pipeline triage
+  fields (`classification`, `flow_relevance`) are not finding properties at all;
+  they are the orchestrator's judgement, not the reviewer's, and are recorded in
+  `decisions.md`.
 - `reviewer` is the reviewer that actually produced the finding. Never the
   orchestrator's own name — that is the field whose loss made round 2
   unconstructible.
-- **Malformed JSON fails loudly.** Ingest refuses a block it cannot parse rather
-  than silently falling back to parsing the prose; a silent fallback would
-  reintroduce exactly the lossy path this replaces.
+- **A block that is present but unusable fails loudly.** Ingest refuses a block
+  it cannot parse, and equally refuses one that parses to something other than
+  an array of findings (or a single `{ reviewer, findings }` result) — `null`
+  included. It never falls back to parsing the prose, because a silent fallback
+  would reintroduce exactly the lossy path this replaces while the report still
+  visibly carries the structured array.
 
 A report without the block is still readable by a human and still ingestible by
-the legacy Markdown path — but it is a **legacy** report, its findings are
-marked low-confidence on the way in, and the round it belongs to cannot seed a
-fix round.
+the legacy Markdown path — but it is a **legacy** report. Four fields the prose
+does not carry (`impact`, `suggested_fix`, `evidence`, `confidence`) are written
+with an explicit `not recorded:` provenance where the report supplies nothing,
+and `confidence` is stamped `low` because a regex over prose is a low-confidence
+derivation whatever the reviewer believed. Such a round **can** still seed a fix
+round — that is the point of keeping the parser — but it seeds one that knows
+which of its inputs were recovered and which were never written down.
 
 ---
 

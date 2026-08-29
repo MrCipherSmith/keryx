@@ -331,12 +331,80 @@ describe("legacy markdown reports are not stranded", () => {
       // `confidence` is not, anywhere in the report, so it is recorded as the
       // low-confidence derivation it is rather than invented.
       expect(findings[0]?.confidence).toBe("low");
+      // Neither is `evidence`: the report carries no Evidence or Proof label
+      // anywhere. It carries `**Found independently by**`, which is ATTRIBUTION
+      // and already feeds `reviewer` — reading it as evidence too made this
+      // field a copy of the reviewer list on 2 of the 15 findings, a value that
+      // looks recorded and says nothing. Asserted here because the four fields
+      // above were asserted and this one was not, which is why nothing caught it.
+      expect(findings[0]?.evidence).toBe(
+        "not recorded: derived from a markdown review report, which carried no evidence field",
+      );
+      const attributionAsEvidence = findings.filter((finding) =>
+        /^review-[a-z-]+ \(/.test(finding.evidence ?? ""),
+      );
+      expect(attributionAsEvidence.map((finding) => finding.id)).toEqual([]);
 
       const schema = await loadSchema("review-finding");
       for (const finding of findings) {
         expect(await validateJson(finding, schema)).toEqual([]);
       }
       expect(await validateJson(round2Input(findings), REVIEWER_INPUT_SCHEMA)).toEqual([]);
+    });
+  });
+});
+
+describe("the legacy parser is held to the same contract as the structured one", () => {
+  // `fromStructuredSource` validated against `review-finding.schema.json` and
+  // the markdown parser did not, so the legacy path could write a `findings.json`
+  // the contract rejects — and the round-2 input built from it was rejected by
+  // the same schema. The gate now runs over the projection that is about to be
+  // written, once, whichever source produced it.
+
+  test("a major whose class_scope is prose rather than sites/enumeration_method is refused", async () => {
+    // The shape check passed here — the block names class_scope, sites and
+    // enumeration_method — while `parseClassScope` returned null, so the record
+    // was persisted without the property the schema requires for a major.
+    await withTempRoot(async (root) => {
+      const report = [
+        "### [F-001] the writer is group-writable",
+        "- **Severity**: major",
+        "- **class_scope**: I checked all the sites; the enumeration_method was reading them.",
+        "",
+      ].join("\n");
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-prose-class-scope",
+          target: { kind: "report", ref: "review.md" },
+          reportText: report,
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(/do not enumerate their class: F-001 \(major\)/);
+      expect(existsSync(path.join(root, ".metaproject", "reviews", "2026-08-29-prose-class-scope"))).toBe(
+        false,
+      );
+    });
+  });
+
+  test("a legacy finding that violates the contract in any other field is refused too", async () => {
+    // Not only class_scope: `line` is `minimum: 1`, and a location parsed out of
+    // prose can carry a 0. The guard is the schema, not a list of fields
+    // somebody remembered.
+    await withTempRoot(async (root) => {
+      const report = ["- [F-001] minor: a small observation.", "  - **File**: src/example.ts:0", ""].join("\n");
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-bad-line",
+          target: { kind: "report", ref: "review.md" },
+          reportText: report,
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(/review-finding\.schema\.json.*\$\[0\]\.line/s);
+      expect(existsSync(path.join(root, ".metaproject", "reviews", "2026-08-29-bad-line"))).toBe(false);
     });
   });
 });
@@ -376,6 +444,121 @@ describe("the machine-readable block", () => {
       ) as StructuredReviewFinding[];
       expect(findings.map((finding) => finding.id)).toEqual(["F-007"]);
       expect(findings[0]?.problem).toBe("a small observation.");
+    });
+  });
+
+  // The three inputs below all used to put a block in the report and then take
+  // the prose path anyway, writing one lossy finding and reporting success. The
+  // cause was that presence was inferred from the PARSED VALUE, which cannot
+  // distinguish "no block" from "a block holding null", and that the fence was
+  // anchored at column 0.
+
+  test("a block holding JSON null is an error, not a fall-through to prose", async () => {
+    await withTempRoot(async (root) => {
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-null-block",
+          target: { kind: "report", ref: "review.md" },
+          reportText: "- [F-009] minor: prose finding.\n\n```json keryx:findings\nnull\n```\n",
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(/keryx:findings block that is JSON null, not an array of findings/);
+    });
+  });
+
+  test("a block that is neither an array nor a reviewer result says so", async () => {
+    // It used to be flattened into one finding and refused for missing `id`,
+    // `impact` and `evidence` — a reason that sends the reader looking for
+    // fields in a block that was never a finding.
+    await withTempRoot(async (root) => {
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-object-block",
+          target: { kind: "report", ref: "review.md" },
+          reportText: '# Round 1\n\n```json keryx:findings\n{ "note": "not findings" }\n```\n',
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(/keryx:findings block that is a JSON object, not an array of findings/);
+    });
+  });
+
+  test("an indented fence is a block, not invisible", async () => {
+    // CommonMark allows up to three leading spaces, and nesting the block under
+    // a list item is the ordinary way it acquires them.
+    await withTempRoot(async (root) => {
+      const findings = await round1Findings(root, {
+        reviewId: "2026-08-29-indented",
+        reportText: [
+          "- [F-009] minor: prose finding that must NOT be what gets recorded.",
+          "",
+          "  ```json keryx:findings",
+          `  ${JSON.stringify(REVIEWER_RESULTS)}`,
+          "  ```",
+          "",
+        ].join("\n"),
+      });
+      expect(findings.map((finding) => finding.id)).toEqual(["F-001", "F-002"]);
+      expect(findings[0]?.confidence).toBe("high");
+    });
+  });
+
+  test("a second block is an error rather than silently dropped", async () => {
+    // An orchestrator concatenating one block per reviewer produced exactly
+    // this. `String.match` with a non-global regex returned the first, so a
+    // report visibly holding a finding ingested as zero findings.
+    await withTempRoot(async (root) => {
+      const second = [
+        {
+          id: "F-100",
+          reviewer: "review-logic",
+          severity: "minor",
+          problem: "the second reviewer's finding",
+          impact: "lost entirely",
+          suggested_fix: "count the fences",
+          evidence: "ingested this report and got an empty findings.json",
+          confidence: "high",
+        },
+      ];
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-two-blocks",
+          target: { kind: "report", ref: "review.md" },
+          reportText: [
+            "```json keryx:findings",
+            "[]",
+            "```",
+            "",
+            "```json keryx:findings",
+            JSON.stringify(second),
+            "```",
+            "",
+          ].join("\n"),
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(/carries 2 keryx:findings blocks \(at character 0 and 31\)/);
+    });
+  });
+
+  test("the refusal names the report file", async () => {
+    await withTempRoot(async (root) => {
+      const reportPath = path.join(root, "review.md");
+      await writeFile(reportPath, "# Round 1\n\n```json keryx:findings\n[{ not json }]\n```\n", "utf8");
+      await expect(
+        createManagedReviewPackage({
+          cwd: root,
+          mode: "ingest",
+          reviewId: "2026-08-29-named-path",
+          target: { kind: "report", ref: "review.md" },
+          reportPath: "review.md",
+          now: new Date("2026-08-29T10:00:00Z"),
+        }),
+      ).rejects.toThrow(reportPath);
     });
   });
 });

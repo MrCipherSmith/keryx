@@ -531,7 +531,7 @@ Run task-1 (which creates pipeline.ts) before re-dispatching this task, or provi
 - (nothing — blocked before implementation could start)
 ```
 
-See `rules/core/subagent-status-protocol.md` for full format specification and all four status types.
+See `rules/core/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
 
 ---
 

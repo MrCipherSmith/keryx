@@ -84,6 +84,40 @@ test("bundled gdskills do not embed developer-specific absolute paths", async ()
   expect(violations).toEqual([]);
 });
 
+// `.metaproject/rules/core/` is a generated install target: `installBundledRules`
+// copies `src/gdskills/bundled/rules/core/` over it with `force: true` on every
+// `keryx init`, `keryx update` and `keryx skills install`.
+//
+// So an edit made to the installed copy alone ships nowhere and is reverted by
+// the next update — silently, because nothing compared the two. That happened:
+// the fix correcting this protocol from four statuses to five was written to the
+// install target only, and an `installGdskills` run put the stale text back.
+//
+// The equivalent drift for skills is caught by review discipline; this makes it
+// caught by the build.
+test("every bundled rule is byte-identical to its installed copy in this repo", async () => {
+  const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+  const source = path.join(repoRoot, "src", "gdskills", "bundled", "rules", "core");
+  const installed = path.join(repoRoot, ".metaproject", "rules", "core");
+
+  const drifted: string[] = [];
+  for (const file of await listFiles(source)) {
+    const relative = path.relative(source, file);
+    const target = path.join(installed, relative);
+    let targetText: string;
+    try {
+      targetText = await readFile(target, "utf8");
+    } catch {
+      drifted.push(`${relative}: missing from .metaproject/rules/core`);
+      continue;
+    }
+    if (await readFile(file, "utf8") !== targetText) {
+      drifted.push(`${relative}: bundled source and installed copy differ`);
+    }
+  }
+  expect(drifted).toEqual([]);
+});
+
 async function listFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const files: string[] = [];
