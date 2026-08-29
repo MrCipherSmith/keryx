@@ -231,8 +231,13 @@ did not exist and 24 completed flows shipped with an open task:
   `flow.json`, which `keryx flow init` writes for every flow it creates. A
   package created before the gate landed does not carry the flag, and for it
   the gate reports `skipped` and blocks nothing;
-- a task fails the gate when its status is not `done`, when its disposition is
-  `failed`, or when its disposition is `skipped` with no recorded reason;
+- a task fails the gate when its status is not `done`; when its disposition is
+  `failed`; when its disposition is `blocked` (terminal, but the work did not
+  happen — and the harness emits this disposition on its own for a run that
+  ended blocked); when its disposition is `skipped` with no recorded reason; or
+  when its disposition is a value this build does not recognise. An
+  unrecognised disposition FAILS rather than falling through: a gate whose
+  default for the unknown case is "pass" is not a gate;
 - to close a task as deliberately not needed, record why:
 
   ```bash
