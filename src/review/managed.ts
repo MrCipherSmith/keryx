@@ -6,6 +6,12 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
+  mergeVerifications,
+  renderStageCountsMarkdown,
+  type VerificationMergeResult,
+} from "./verification";
+import {
+  DEFAULT_VERIFICATION_MODE,
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
@@ -76,16 +82,29 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
-  // What the round reported, then what it refuted — one array, one file, one
-  // gate. A separate `refuted.json` would be a second thing every consumer has
-  // to remember to read, and the consumer that forgets keeps counting zero
-  // wrong findings, which is the state this exists to leave.
+  // Minted BEFORE the verifier runs, because a claim names a finding by
+  // `global_id` and the key has to exist for it to be resolvable. Round N+1
+  // carries round N's key verbatim; only a finding without one is minted here.
+  assignGlobalIds(reported, reviewId);
+
+  // The verifier, which can only delete. In `annotate` — the default for one
+  // release — nothing is removed and a `refuted` verdict is recorded on a finding
+  // that is still reported, so the drop rate is a measured number before it costs
+  // a real finding.
+  const verification = mergeVerifications(reported, input.verifications ?? [], {
+    mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
+  });
+
+  // What the round reported, then what the verifier removed, then what the round
+  // itself refuted — one array, one file, one gate. A separate `refuted.json`
+  // would be a second thing every consumer has to remember to read, and the
+  // consumer that forgets keeps counting zero wrong findings, which is the state
+  // this exists to leave.
   const findings = [
-    ...reported,
+    ...verification.retained,
+    ...fromVerifierRefutations(verification.refuted),
     ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
   ];
-  // Minted here rather than in the parsers because `reviewId` is the half of the
-  // key that makes it unique, and the parsers do not know it.
   assignGlobalIds(findings, reviewId);
   const manifest = buildManifest({
     input,
@@ -149,7 +168,7 @@ export async function createManagedReviewPackage(
 
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at));
+  await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at, verification));
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
   await writeFileAtomic(
@@ -163,7 +182,48 @@ export async function createManagedReviewPackage(
     reviewId,
     path: path.relative(input.cwd, packageDir),
     manifest,
+    verification: verification.counts,
+    verificationRejections: verification.rejections,
+    verificationCaps: verification.caps,
   };
+}
+
+/**
+ * The findings a `refuted` verdict removed from the reported set, on their way to
+ * `findings.json`.
+ *
+ * This is the ONE place `verification` and `disposition` meet, and the direction
+ * is one-way. They answer different questions: `verification` is an OBSERVATION
+ * about whether the finding is real, made during the round by someone other than
+ * its author; `disposition` is a DECISION about what the project did, recorded
+ * when the round closes. `refuted` and `dismissed-incorrect` are therefore not
+ * synonyms — a refutation can itself be wrong (the command did not exercise the
+ * path), and a `dismissed-incorrect` can be reached with no verification at all,
+ * which is what the `refuted` input channel already does.
+ *
+ * The composition rule, stated so neither field silently becomes the other:
+ *
+ * - `annotate` writes NO disposition. That is the whole content of the mode:
+ *   the verdict is measured for a release without acting on it.
+ * - `filter` writes `dismissed-incorrect` for an applied `refuted` verdict ONLY,
+ *   carrying the verification evidence forward so the decision is traceable to
+ *   the command that produced it.
+ * - A `confirmed` verdict is never a disposition. Verification says the finding
+ *   is real; it says nothing about whether anyone fixed it.
+ * - Nothing reads in the other direction: a disposition never implies a
+ *   verification.
+ */
+function fromVerifierRefutations(findings: readonly NormalizedReviewFinding[]): NormalizedReviewFinding[] {
+  return findings.map((finding) => ({
+    ...finding,
+    classification: "false_positive" as FindingClassification,
+    disposition: {
+      state: "dismissed-incorrect" as FindingDispositionState,
+      evidence: `refuted by ${finding.verification?.verifier ?? "the verifier"} (${
+        finding.verification?.method ?? "unknown method"
+      }): ${finding.verification?.evidence ?? "no evidence recorded"}`,
+    },
+  }));
 }
 
 export async function getManagedReviewStatus(cwd: string, ref: string): Promise<ManagedReviewManifest> {
@@ -507,6 +567,13 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.disposition !== undefined) {
     record.disposition = finding.disposition;
+  }
+  // Same rule, same reason: written only when an independent check actually
+  // happened. A finding with no `verification` is one nobody checked, which is
+  // every one of the 83 records on disk — and is NOT the same as "unverified and
+  // therefore droppable".
+  if (finding.verification !== undefined) {
+    record.verification = finding.verification;
   }
   return record;
 }
@@ -1241,10 +1308,19 @@ function severityFromLine(line: string): NormalizedReviewFinding["severity"] {
   return "minor";
 }
 
+/**
+ * `scope.md`: what this review looked at, and what each stage removed (AC11).
+ *
+ * The stage counts go here rather than into a new artifact because `scope.md` is
+ * already where the pre-filter writes its drop list (`keryx review scope
+ * --append`), and adding a seventh required artifact would strand every package
+ * on disk against `missingArtifacts`.
+ */
 function renderScope(
   input: ManagedReviewInput,
   flowMatch: FlowMatchResult | null,
   at: string,
+  verification: VerificationMergeResult<NormalizedReviewFinding>,
 ): string {
   return `# Review Scope
 
@@ -1254,7 +1330,13 @@ mode: ${input.mode}
 flow: ${flowMatch ? `${flowMatch.id} (${flowMatch.reason})` : "none"}
 created_at: ${at}
 context_mode: light
-`;
+
+${renderStageCountsMarkdown({
+  preFilter: input.scopeCounts,
+  verification: verification.counts,
+  rejections: verification.rejections,
+  caps: verification.caps,
+})}`;
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {

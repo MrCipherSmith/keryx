@@ -4,10 +4,10 @@ description: |
   Use when: a code review is requested and the user does not explicitly name a specialized reviewer.
   Handles "review", "code review", "review PR", "review --frontend", "review --backend",
   "review --architecture", "review --security", "review --performance", "review --style",
-  "review --strict", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
+  "review --verify", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
   consolidates findings into one unified report.
   NOT for: running a single specialized reviewer — invoke it directly by name instead.
-version: "1.7.0"
+version: "1.8.0"
 triggers:
   - "review"
   - "code review"
@@ -18,7 +18,7 @@ triggers:
   - "review --security"
   - "review --performance"
   - "review --style"
-  - "review --strict"
+  - "review --verify"
   - "review --all"
   - "review --clean-code"
   - "review --highload"
@@ -34,7 +34,7 @@ triggers:
   - "review --mobx-store"
 metadata:
   author: "MrCipherSmith"
-  version: "1.7.0"
+  version: "1.8.0"
   category: "review"
 license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
@@ -61,9 +61,10 @@ Review Orchestrator Progress:
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
 - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
-- [ ] Step 10: Run strict synthesis when blockers/majors exist or --strict is set
+- [ ] Step 10: Wave C — dispatch `review-verifier` over the consolidated findings
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
+- [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, retained
 ```
 
 ---
@@ -127,7 +128,7 @@ which of its inputs were recovered and which were never written down.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `flags` | string[] | no | One or more of: `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--b091`, `--code-style`, `--mobx-store`, `--strict`, `--all` |
+| `flags` | string[] | no | One or more of: `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--b091`, `--code-style`, `--mobx-store`, `--verify`, `--all` |
 | `path` | string | no | File or directory path to review (e.g., `src/stores/`, `src/components/UserCard.tsx`). Activates **path mode** — reviews the files at this path directly, not a git diff. |
 | `commit_range` | string | no | Explicit commit hash or range (e.g., `abc123..HEAD`). Overrides merge-base detection. Ignored in path mode. |
 | `issue_url` | string | no | GitHub issue or task URL. If provided, Stage 1 gate checks spec compliance before dispatching reviewers. |
@@ -136,6 +137,7 @@ which of its inputs were recovered and which were never written down.
 | `token_budget` | object | no | Optional budget controls: `{total, per_reviewer, diff_max_chars, file_max_chars}`. |
 | `model_strategy` | string | no | `current`, `ask`, or `adaptive`. Default: `current`; do not switch models unless user or automation allows it. |
 | `managed_review` | object | no | Optional managed review mode: `{mode, target, target_ref, flow_id, reviewers}` where mode is `lightweight`, `attach-review`, `review-flow`, or `ingest`. |
+| `verification_mode` | string | no | `off`, `annotate`, or `filter`. Default `annotate` — verdicts are recorded and nothing is removed. See Wave C. |
 
 ---
 
@@ -166,9 +168,17 @@ Runtime CLI surface:
 keryx review attach --flow <id> --target <kind> --ref <ref>
 keryx review start --target <kind> --ref <ref>
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
+                    [--verifications <file>] [--verification-mode off|annotate|filter]
+                    [--scope <scope.json>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
 ```
+
+`--verifications` takes what `review-verifier` returned; `--scope` takes the
+`--json` output of `keryx review scope`, so the package records what the
+pre-filter dropped as well as what the verifier refuted. Without `--scope` the
+record says **`not recorded`** for that stage rather than `0` — "dropped nothing"
+and "never ran" are different facts.
 
 Managed modes:
 
@@ -518,7 +528,7 @@ Skipped reviewers:
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
 | `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, and project convention reviewers when local convention docs exist) |
-| `--strict` | runs AFTER all others; adds a strict commentary pass on consolidated findings |
+| `--verify` | `review-verifier`, AFTER all others; checks the consolidated findings by running something. Delete-only. |
 | (auto) | detected from diff file extensions — see Auto-detection table |
 
 Multiple flags may be combined. Example: `review --backend --security` dispatches
@@ -546,7 +556,72 @@ Dispatch selected reviewers in parallel when independent. Use waves when token b
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
 2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files.
-3. Wave C - synthesis: strict pass when blockers/majors exist, `--strict` is set, or PR is high-risk.
+3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
+   exist, `--verify` is set, or the PR is high-risk. See below.
+
+### Wave C — verification, and what it replaced
+
+Wave C used to run `review-strict`: a meta-pass that re-read the consolidated
+findings and **adjusted their severity with no new evidence**, under an elevation
+table biased 3:1 toward escalation. It was **removed, not improved**, and the
+reason is measured rather than stylistic:
+
+- **GPT-4 on GSM8K across self-correction rounds: 95.5 → 91.5 → 89.0.**
+  **GPT-3.5 on CommonSenseQA: 75.8 → 38.1.** Among the answers that changed,
+  correct → incorrect exceeded incorrect → correct (Huang et al., *Large Language
+  Models Cannot Self-Correct Reasoning Yet*, ICLR 2024, arXiv:2310.01798).
+- **Self-Refine (arXiv:2303.17651): +49.2 on dialogue response generation, +0.2
+  on maths.** Self-refinement gains are on subjective tasks and vanish on
+  verifiable reasoning. Judging whether a null-guard is missing is verifiable
+  reasoning.
+
+Re-scoring a finding by re-reading it is therefore not a rigour pass; it is a
+coin flip weighted toward more findings. **Do not restore it because it looks
+obviously useful — it looked obviously useful the first time.**
+
+`review-verifier` occupies the slot and differs in exactly one way that matters:
+**it runs something.** Verification that executes rejects 85–96% of false reports
+against 4–15% unaided while finding 30–44% more true bugs (AnyPoC,
+arXiv:2604.11950); Meta's TestGen-LLM funnel discards 75% of its own output
+(75% build → 57% build and pass → 25% improve coverage) and the surviving quarter
+reaches 73% human acceptance (arXiv:2402.09171).
+
+It also **never votes.** 80+ agents unanimously endorsed a padding-oracle
+vulnerability that did not exist, and a single empirical test killed it: consensus
+cannot detect a hallucination its members share, so agreement between reviewers is
+not evidence and must never be recorded as verification.
+
+Dispatch rules:
+
+- Pass the consolidated findings, each carrying `global_id` and the **real**
+  originating `reviewer`. A finding whose `reviewer` is the orchestrator cannot be
+  routed away from its author, so the never-self-verify rule silently stops
+  applying — that field was hardcoded to `review-orchestrator` on all 83 recorded
+  findings and is fixed only from 0.2.70 onward.
+- **A finding is never verified by the reviewer that raised it.** When only one
+  reviewer ran, its findings are simply left unverified; verifying them yourself
+  is worse than not verifying them.
+- The verifier returns `verification-claim.schema.json`. Merge it with
+  `keryx review ingest --verifications <file>`; do not apply verdicts by hand.
+- **The verifier can only delete.** If it returns a severity, a new finding, or a
+  rewritten finding, the merge discards that whole claim and records the attempt.
+  Do not "help" by applying it.
+
+### `verification_mode`
+
+`off` | `annotate` | `filter`. **Default `annotate`, and it stays `annotate` for
+one release.**
+
+| Mode | What happens |
+|---|---|
+| `off` | No verification. Claims are refused rather than silently ignored. |
+| `annotate` | Verdicts are recorded on the findings. **Nothing is removed.** A `refuted` finding is still reported, marked refuted. |
+| `filter` | An applied `refuted` verdict removes the finding from the reported set and records it as `dismissed-incorrect`, with the verification evidence. |
+
+`annotate` is the default so the drop rate is a **measured number** before it
+costs a real finding. The risk is named rather than assumed away: SWE-agent keeps
+its equivalent step opt-in because it sometimes rejects correct patches. Do not
+switch a project to `filter` on the strength of one round.
 
 ### Agent Runtime Compatibility
 
@@ -599,6 +674,7 @@ Each reviewer must return a `REVIEW_RESULT` object matching `skills/review-orche
 | Security vulnerabilities | NO | `review-security-code` |
 | Performance anti-patterns | NO | `review-performance` |
 | Style / naming / import order | NO | `review-style` |
+| Checking whether a reported finding is real | NO | `review-verifier` |
 | Clean Code principles + SOLID at code level | NO | `review-clean-code` |
 | Concurrency, resource pools, caching, queues, idempotency | NO | `review-highload` |
 | Frontend repository conventions | NO | `review-frontend-conventions` |
@@ -721,6 +797,18 @@ STATUS: DONE | DONE_WITH_CONCERNS
 - major: N
 - minor: N
 - info: N
+
+## Stage counts
+<!-- Required. State what each stage REMOVED, and never state it as a precision
+     improvement: no precision baseline exists to improve on. The one measured
+     from the review packages on disk was 53/53 = 100% — pinned there by
+     construction, because nothing in that corpus could record a finding as
+     wrong. Copy these from `scope.md`; do not re-count by hand. -->
+- dropped by pre-filter: <files>, <blocks>, <changed lines> (or `not recorded` if no scope was built)
+- verification mode: `<off | annotate | filter>`
+- verdicts: confirmed N, refuted N, unverifiable N, unverified N
+- refuted by the verifier: N (removed: N — always 0 outside `filter`)
+- retained: N
 
 ## Blockers (must fix before merge)
 <[F-NNN] findings with severity=blocker, sorted by file>
@@ -968,6 +1056,11 @@ If absent, proceed normally — context is optional and non-blocking.
 | "Spec compliance can wait until after quality review" | Stage 1 gate exists because unimplemented requirements invalidate quality work |
 | "I'll deduplicate findings manually in my head" | Always normalize to [F-NNN] format before consolidation to avoid losing findings |
 | "Minor findings from one reviewer cancel out the major from another" | Each finding stands independently; severity is per-finding, not averaged |
+| "A strict re-read of the findings will sharpen them" | That pass existed and was removed: self-correction without new evidence measured 95.5 → 91.5 → 89.0 on GSM8K and 75.8 → 38.1 on CommonSenseQA. Run something instead |
+| "Three reviewers agree, so the finding is verified" | Consensus is not evidence. 80+ agents unanimously endorsed a vulnerability that did not exist; one empirical test killed it |
+| "The verifier suggested a higher severity, I'll apply it" | It cannot suggest one. A claim carrying a severity is discarded whole and the attempt is recorded |
+| "This finding has no `verification`, so it can be dropped" | Absent means nobody checked. All 83 recorded findings are in that state; none of them is thereby wrong |
+| "Precision went up after the verifier landed" | There is no precision baseline to have gone up from. State stage counts: dropped, refuted, retained |
 | "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |

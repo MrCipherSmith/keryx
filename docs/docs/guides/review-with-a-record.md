@@ -26,6 +26,10 @@ Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref>
+                      [--verifications <file|->] [--verification-mode off|annotate|filter]
+                      [--scope <scope.json>]
+  keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                     [--json | --scoped-diff] [--append <file>]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
   keryx review lightweight
@@ -33,6 +37,45 @@ Usage:
 Modes:
   attach-review, review-flow, ingest
 ```
+
+(The help also prints a paragraph on `scope` and one on verification; both are in
+the [CLI reference](../cli-reference.md#review).)
+
+## Narrow the scope before anyone reads it
+
+```bash
+keryx review scope --ref "$(git merge-base HEAD main)" --append <package>/scope.md
+```
+
+Deterministic, no model call: lockfiles, generated and vendored paths, binaries,
+whitespace-only and comment-only hunks are dropped, and what remains is bounded
+to the changed hunks plus 20 lines of context. **Every drop is recorded with its
+reason** — a scope that shrank silently reads afterwards as "we reviewed
+everything".
+
+## Verify the findings before you report them
+
+Wave C of a review used to be `review-strict`, which re-read the findings and
+adjusted their severity with no new evidence. It is gone, because that operation
+is measured to make accuracy worse: GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across
+self-correction rounds, GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al.,
+ICLR 2024, arXiv:2310.01798).
+
+`review-verifier` replaced it and **can only delete**. It checks a finding by
+running something that fails if the finding is real, and merges through:
+
+```bash
+keryx review ingest --report round7.md --ref round7 \
+  --verifications verifier-result.json \
+  --scope scope.json
+```
+
+The merge cannot raise a severity, add a finding, or rewrite one; a finding is
+never verified by the reviewer that raised it; and a verdict reached by reasoning
+alone is capped at `unverifiable`. The default mode is `annotate` — verdicts are
+recorded and **nothing is removed** — so the drop rate is a measured number before
+it costs a real finding. Every package's `scope.md` carries the stage counts:
+dropped by the pre-filter, refuted by the verifier, retained.
 
 ## Ingest a report someone already wrote
 
