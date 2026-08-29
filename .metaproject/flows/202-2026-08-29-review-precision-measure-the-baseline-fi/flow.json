@@ -8,12 +8,12 @@
   "title": "Review precision: measure the baseline first, then the deterministic pre-filter and a verifier that can only delete",
   "status": "in-progress",
   "createdAt": "2026-08-29T15:08:10.698Z",
-  "updatedAt": "2026-08-29T15:09:01.731Z",
+  "updatedAt": "2026-08-29T15:23:07.565Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:8c5ff74cb69b274ecd05edef55978c4a187fd561f47f5174a930a0f4cb211ea0",
+  "acChecksum": "sha256:ab3f728cb4b2bfb389405717bc78b13939b21b8aef04ca0023e38652712a3cd4",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -23,7 +23,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -31,7 +31,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
@@ -79,7 +80,7 @@
       "id": "T5",
       "title": "Baseline: inventory every review package on disk and record test/typecheck baseline",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -87,13 +88,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Classify existing findings into acted-on / dismissed / unknown; record the method",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -101,13 +103,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Reproducible baseline command; record the precision figure and sample size",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -115,7 +118,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -284,6 +288,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T20",
+      "title": "Instrumentation: disposition field, globally unique finding ids, record what a round refuted",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -374,6 +392,36 @@
     {
       "at": "2026-08-29T15:09:01.731Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-29T15:23:00.869Z",
+      "event": "ac-updated",
+      "detail": "Measurement performed first, per the ordering constraint, and it returned a reasoned refusal rather than a usable number: precision is 53/53 = 100% because nothing in the corpus can record a finding as wrong. Demonstrated, not inferred - rounds 3 and 5 carry 'Where a reviewer was wrong' sections whose refutations never became finding records, and PR 220's review abridged 13 minor observations that are absent from disk. AC1 now records that outcome and forbids citing the figure as a baseline. AC14 adds the instrumentation that would make measurement possible; AC15 constrains this flow's own claims to stage counts."
+    },
+    {
+      "at": "2026-08-29T15:23:07.199Z",
+      "event": "task-added",
+      "detail": "T20: Instrumentation: disposition field, globally unique finding ids, record what a round refuted"
+    },
+    {
+      "at": "2026-08-29T15:23:07.289Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-29T15:23:07.381Z",
+      "event": "task-done",
+      "detail": "T5: Baseline: inventory every review package on disk and record test/typecheck baseline"
+    },
+    {
+      "at": "2026-08-29T15:23:07.472Z",
+      "event": "task-done",
+      "detail": "T6: Classify existing findings into acted-on / dismissed / unknown; record the method"
+    },
+    {
+      "at": "2026-08-29T15:23:07.565Z",
+      "event": "task-done",
+      "detail": "T7: Reproducible baseline command; record the precision figure and sample size"
     }
   ]
 }
