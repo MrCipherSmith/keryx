@@ -20,6 +20,36 @@ Every phase below is an application of that sentence. When a rule matters,
 it goes in code and gets a test. When it cannot go in code, it does not get to
 claim it is enforced.
 
+### The refinement that came out of doing it
+
+"Put it in code" is not a universal instruction, and treating it as one produces
+a worse skill, not a better one. What we are actually carrying is two different
+kinds of prose, and the value of separating them is the largest single idea in
+this package:
+
+**Prose that is judgement, and must stay prose.** "Choose a materially different
+fix strategy after the loop cap." "Decide whether this is a blocker or a major."
+"State the problem." These are the model's work. Encoding them would be
+encoding a guess.
+
+**Prose that is mechanical, and is simply in the wrong place.** Deduplicating
+findings. Sorting by severity. Capping the finding count. Dropping generated
+files and whitespace-only hunks before dispatch. **None of these needs a model
+at all** — yet each is currently an instruction we pay tokens to deliver and
+then hope is followed.
+
+So the operative rule is sharper than "write it in TypeScript":
+
+> **Anything mechanical moves out of the skill and into the code that consumes
+> the skill's output.** Not "word the instruction more firmly" — take the
+> operation away from the model entirely.
+
+The task gate is the worked example. It was an instruction; making it a function
+took the same guarantee from 24 failures in 184 to zero. Every item below is
+scored on which of the two piles it belongs to, and items in the mechanical pile
+rank higher, because they are the ones where the change is not a matter of
+degree.
+
 ---
 
 ## Phase 0 — Stop asserting things that are false
@@ -382,6 +412,61 @@ If a second provider is configured, review with a different model family than
 authored the code. Greptile's 1,000-PR study reports **~8–10 recall points**
 for free: Claude→Claude 53.7% vs GPT→Claude 62.0%; GPT→GPT 50.5% vs
 Claude→GPT 60.0%. We already have `llm-providers.json`.
+
+---
+
+## Phase 6 — the gap that is in no plan: do we know whether we helped?
+
+Everything above improves the orchestrators. **Nothing above tells us whether
+the improvement happened**, and that is the deepest hole in the whole package.
+
+No orchestrator records whether a finding turned out to be real, whether it was
+acted on or dismissed, or whether a round saved time or burned it. We spent this
+research establishing that the industry sees **30–42% valid comments** and that
+the one independent field study measured **~12.5% useful**. We have no number of
+our own at all — not a bad one, none.
+
+The consequence is concrete: every item in Phase 2 is justified by someone
+else's measurement, and after we ship it we will still be unable to say whether
+it worked here. That makes this package's own claims unfalsifiable, which is the
+same failure as a gate written in Markdown, one level up.
+
+### 6.1 Outcome, not just output
+
+For every finding, record what became of it: `acted-on`, `dismissed-incorrect`,
+`dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`. Only
+the first two say anything about the reviewer's accuracy; conflating the four is
+what makes a dismissal rate meaningless.
+
+### 6.2 A number per round, written down
+
+`filter_stats` (roadmap §5.1) counts what the pipeline dropped. This is the
+other half: of what survived, how much was real. One number per round, in the
+review record, so a change to the pipeline can be compared against the rounds
+before it.
+
+### 6.3 The honest baseline first
+
+Measure the current pipeline **before** changing it. A precision figure taken
+after the pre-filter and the verifier land proves nothing without a before.
+This is the one item in the entire roadmap with an ordering constraint against
+Phase 2 rather than after it.
+
+---
+
+## Phase 7 — audit `job-orchestrator`
+
+65KB, the oldest of the four, and **it has not been read**. This research opened
+it once, to copy the State Resumption Check out of it.
+
+Both orchestrators that *were* audited turned out to document mechanisms that
+do not exist. Stating that `job-orchestrator` is fine would be exactly the kind
+of unverified claim this package exists to remove. It is not known to be fine;
+it is unexamined.
+
+Apply the same two questions asked of the others: which of its documented
+guarantees are enforced by code, and does any sentence in it promise a property
+that is not there.
 
 ---
 
