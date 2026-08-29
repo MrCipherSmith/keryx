@@ -35,7 +35,18 @@ alongside them:
 
 ## Status
 
-**Requirements package. Nothing here is implemented.**
+**Phases 0 and 1 delivered** in 0.2.70 (flow 201, PR #408). Phases 2 through 7
+are specified and not started.
+
+What landed: the task gate is code rather than a sentence, the review record can
+seed the next round, attempt counts persist, and the dead surface is gone.
+
+What that work taught, and what now governs the rest of this package: **"put it
+in code" is too blunt.** The prose we carry is two different things — judgement,
+which must stay prose, and mechanical operations that are simply in the wrong
+place. The rule is to move the mechanical ones out of the skill and into the
+code that consumes its output, rather than to word the instruction more firmly.
+See [roadmap.md](roadmap.md) §The refinement that came out of doing it.
 
 The orchestrators it modifies *are* implemented
 (`src/gdskills/bundled/skills/orchestration/`, `.../review/`, `src/flow/`,
@@ -91,7 +102,7 @@ silently.
 
 | Document | Purpose |
 |---|---|
-| [Roadmap](roadmap.md) | Phased plan: what changes, in what order, why, at what cost, with the evidence for each. |
+| [Roadmap](roadmap.md) | Phased plan: what changes, in what order, why, at what cost, with the evidence for each. Eight phases; 0 and 1 are delivered. |
 | [Specification](specification.md) | The three new capabilities in implementable detail — deep rounds, the completion gate, and external PR comment handling. |
 
 ## Related
