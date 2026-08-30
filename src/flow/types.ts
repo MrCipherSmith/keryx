@@ -107,6 +107,13 @@ export type FlowGates = {
    * where the gate reports `skipped` and never fails a completion.
    */
   tasks?: boolean | undefined;
+  /**
+   * Run the review gate in `complete()` (flow 204, AC5-AC7). Set to `true` by
+   * `flow init` for every package created after the gate landed. ABSENT on
+   * pre-existing packages, where the gate reports `skipped` and never fails a
+   * completion — the same opt-in shape as `tasks`, for the same reason.
+   */
+  review?: boolean | undefined;
 };
 
 export type FlowState = {
@@ -153,6 +160,13 @@ export interface TrackerAdapter {
     exists: boolean;
     isDraft: boolean;
     checksGreen: boolean | null; // null = unknown/pending
+    /**
+     * The PR's head commit. Optional so an adapter written before the review
+     * gate still satisfies the interface; `undefined`/`null` means the head is
+     * UNKNOWN, which the review gate reports as unobserved rather than as a
+     * match (flow 204, §2.2 condition 3).
+     */
+    headSha?: string | null | undefined;
   }>;
   comment(ref: TrackerRef, body: string): Promise<boolean>;
 }
@@ -160,7 +174,14 @@ export interface TrackerAdapter {
 // --- Gates (D6) ---
 
 export type GateOutcome = {
-  name: "acceptance-criteria" | "pull-request" | "main-merge" | "tasks" | "health" | "security";
+  name:
+    | "acceptance-criteria"
+    | "pull-request"
+    | "main-merge"
+    | "tasks"
+    | "health"
+    | "security"
+    | "review";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -179,6 +200,17 @@ export type FlowServiceDeps = {
     cwd: string,
     commit: string,
   ) => Promise<{ status: "pass" | "fail"; detail: string }>;
+  /**
+   * The external-comment collection (specification §3), when it is wired in.
+   *
+   * The review gate needs one fact from it — is any collected comment
+   * unanswered — and this is the seam through which it asks. Left unwired, the
+   * gate falls back to what the round record itself says (external findings, or
+   * a coverage entry naming the collection) and, failing both, reports the
+   * condition as UNOBSERVED and fails. It never reports "no comments" on the
+   * strength of having nothing to ask.
+   */
+  externalCommentsGate?: import("./review-gate").ExternalCommentsGate | undefined;
   now: () => Date;
 };
 

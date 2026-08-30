@@ -1,5 +1,6 @@
 ---
 name: code-verifier
+model_tier: light
 description: "Use when running a full quality gate after implementation — lint, type-check, tests, and import validation. Mandatory step in job-orchestrator after task-implementer and after fix iterations. Use standalone when you need a structured verification report."
 triggers:
   - "Run verification"

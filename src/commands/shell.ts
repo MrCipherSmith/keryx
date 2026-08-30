@@ -1842,12 +1842,22 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
           tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl),
+        // The allowlist AND the candidate set for tier resolution. `models` is
+        // carried through rather than mapped away: `buildTierMap`
+        // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
+        // child's `model_tier` relative to this session's own model, so
+        // flattening a `DetectedProvider` to `{ name }` here starved discovery
+        // at the source and made every tier resolve to the session model.
+        // Keyed by name so the session's provider is always present (it is the
+        // one a child inherits) and a detected entry replaces the placeholder
+        // in place, keeping detection order.
         getDetectedProviders: () => {
-          const names = new Set<string>([sel.provider]);
+          const byName = new Map<string, { name: string; models: readonly string[] }>();
+          byName.set(sel.provider, { name: sel.provider, models: [] });
           for (const d of tuiDetected) {
-            names.add(d.name);
+            byName.set(d.name, { name: d.name, models: d.models ?? [] });
           }
-          return [...names].map((name) => ({ name }));
+          return [...byName.values()];
         },
         // Finding 1 fix: thread the LIVE getter through so a dispatched
         // subagent's Seeds/Anchors actually fold into this TUI session's

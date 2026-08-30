@@ -1,5 +1,6 @@
 ---
 name: review-security-code
+model_tier: standard
 description: "Use when a code-level security review is requested, checking for injection vulnerabilities, auth gaps, insecure cryptography, secrets, and OWASP Top 10 patterns in changed code. NOT for infrastructure, deployment, or dependency audits."
 triggers:
   - "review security"

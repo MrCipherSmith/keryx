@@ -1,0 +1,838 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true
+  },
+  "id": "204",
+  "slug": "deep-review-rounds-after-the-draft-pr-co",
+  "title": "Deep review rounds after the draft PR, completion gated on a clean final round, external PR comments answered once at the end, adaptive model tiers, and brevity outward",
+  "status": "done",
+  "createdAt": "2026-08-30T05:31:30.403Z",
+  "updatedAt": "2026-08-30T09:57:38.968Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7c86179f9404145aba7d62878ed16bd2bf6b4bfbb2058b63f1853a3307fa809f",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-30T07:13:30.611Z",
+      "note": "src/review/blast-radius.ts computeBlastRadius + ReviewRoundManifest scope_b in src/review/types.ts record the set, the depth and every capped drop; src/review/blast-radius.test.ts asserts the drop list is non-empty when the cap bites."
+    },
+    "AC2": {
+      "at": "2026-08-30T07:13:30.885Z",
+      "note": "computeBlastRadius walks keryx gdgraph affected from the changed files, ranks by edge distance, bounds by depth 2 / 40 files (both measured over 80 commits); no code path takes a model-chosen file list."
+    },
+    "AC3": {
+      "at": "2026-08-30T07:13:31.165Z",
+      "note": "screenBlastRadiusFindings in src/review/blast-radius.ts rejects outside-set findings, findings under the severity floor and findings with no link to the change, in code; the reviewer deny-list was removed because it screened by author, not content."
+    },
+    "AC4": {
+      "at": "2026-08-30T07:13:31.447Z",
+      "note": "blastRadiusRecomputePlan (src/review/blast-radius.ts:552) forces a recompute when the changed-file set differs and unconditionally on the final round; covered in blast-radius.test.ts."
+    },
+    "AC5": {
+      "at": "2026-08-30T07:13:31.765Z",
+      "note": "src/flow/review-gate.ts implements the five conditions and is wired as the review gate in src/flow/service.ts; src/flow/review-gate.e2e.test.ts drives flow init/freeze/start + review ingest + flow complete through the real CLI."
+    },
+    "AC6": {
+      "at": "2026-08-30T07:13:32.090Z",
+      "note": "reviewFindingsGate requires a terminal disposition per finding: fixed needs a commit SHA and a verifier verdict against it, refuted needs method and evidence, the three wont-fix dismissals need a recorded human decision, answered-disagree needs a reply URL. Absence never clears a finding — the check runs over the latest state of every finding ever raised."
+    },
+    "AC7": {
+      "at": "2026-08-30T07:13:32.391Z",
+      "note": "flow complete refuses while the review gate is unsatisfied; the round cap is reported as the blocker and the flow stays in-progress. Covered in src/flow/review-gate.test.ts and end to end in review-gate.e2e.test.ts."
+    },
+    "AC8": {
+      "at": "2026-08-30T07:13:32.667Z",
+      "note": "collectPrComments reads pulls/comments, pulls/reviews and issues/comments; bot authors take the same path as humans — only our own identity is excluded. src/review/pr-comments.test.ts covers all three sources."
+    },
+    "AC9": {
+      "at": "2026-08-30T07:13:32.938Z",
+      "note": "externalFindingsFromComments sets source: external and external_ref, and classifies severity from the review state (CHANGES_REQUESTED -> major, otherwise minor). Lowering requires a terminal disposition with a reason."
+    },
+    "AC10": {
+      "at": "2026-08-30T07:13:33.163Z",
+      "note": "The verifier cannot terminate an external finding: an external finding capped at refuted is rejected by the review gate, which requires answered-disagree plus a reply URL."
+    },
+    "AC11": {
+      "at": "2026-08-30T07:13:33.466Z",
+      "note": "postReplyPass refuses without --final; enforceReplyBrevity cuts to two sentences AND 600 characters, whole sentences first, then a word-boundary cut with the link. --max-sentences/--max-chars expose both from the CLI (src/commands/review-comments-cli.test.ts)."
+    },
+    "AC12": {
+      "at": "2026-08-30T07:13:33.730Z",
+      "note": "The GitHub port rejects every resolve/hide/minimise/edit/delete path including the GraphQL resolveReviewThread endpoint (src/review/pr-comments.ts guardGitHubRequest); a resolve attempt fails at the port."
+    },
+    "AC13": {
+      "at": "2026-08-30T07:13:34.109Z",
+      "note": "Reply state is durable in .metaproject/reviews/pr-comments/<repo>__<n>.json; recordSeenComments plus the in-flight marker and findPostedReply make a restart mid-pass reply exactly once. Every collected comment carries one disposition or the gate fails."
+    },
+    "AC14": {
+      "at": "2026-08-30T07:13:34.387Z",
+      "note": "concreteModelDeclarations (src/gdskills/model-tier.ts:758) is the executable half; src/gdskills/model-tier.test.ts walks every real SKILL.md and fails on a model declared instead of a tier."
+    },
+    "AC15": {
+      "at": "2026-08-30T07:13:34.629Z",
+      "note": "rankDiscoveredModels ranks whatever the provider reports at runtime; when nothing is discoverable, tier_resolution falls back to session-fallback and every tier resolves to the session model — never a downgrade, never a dispatch failure."
+    },
+    "AC16": {
+      "at": "2026-08-30T07:13:34.887Z",
+      "note": "assignModelTier derives the tier from scope, attempt count, verifier method and severity, and the result plus tier_resolution is written into the dispatch (contracts/subagent-dispatch.schema.json). No model is asked to rate its own difficulty."
+    },
+    "AC17": {
+      "at": "2026-08-30T07:13:35.141Z",
+      "note": "src/gdskills/bundled/rules/core/model-selection.mdc rewritten: no provider model names, size words only, and the ask-before-changing-a-model mandate that made adaptive selection impossible is gone. Mirrored to .metaproject/rules/core/."
+    },
+    "AC18": {
+      "at": "2026-08-30T07:13:35.397Z",
+      "note": "review-orchestrator SKILL.md section 'One rule, applied to every outward surface' governs PR bodies, comments and replies; enforced in code for replies by enforceReplyBrevity, with the detail linked from the flow package."
+    },
+    "AC19": {
+      "at": "2026-08-30T07:13:35.657Z",
+      "note": "Both trees carry every skill and rule edit; diff -q on review-orchestrator SKILL.md is identical, the bundled-rule guard and the review-mirror guard pass in bun run test:guards (161 pass / 0 fail)."
+    },
+    "AC20": {
+      "at": "2026-08-30T07:13:35.980Z",
+      "note": "bun run typecheck clean; bun test 5937 pass / 18 skip / 0 fail; bun run test:guards 161 pass / 0 fail; bun run check:doc-links 1130 links / 0 broken."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/413"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Baseline: record test/typecheck state",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Blast radius computed from gdgraph affected, ranked, capped, drops recorded",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Regression scope rejects non-regression findings in code",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Recompute the blast radius on changed-file set change and always on the final round",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Test: blast radius is computed and every capped drop is recorded",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "review gate in flow complete, five conditions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Clean defined positively per finding; dismissal needs a recorded human decision",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Test: round cap with unsatisfied gate leaves the flow in-progress",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Collect PR comments from all three sources, bots as humans",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "External findings: source, external_ref, classified severity, never silently dropped",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Verifier cannot refute an external finding alone; answered-disagree still replies",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Reply once at the end, two sentences, threaded, enforced in code",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Never resolve a thread we did not open",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Test: one reply and one disposition per comment; idempotent across restart",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Model tiers in skills; a concrete model name fails a test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Tier resolution per provider; unknown provider inherits the session model",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Deterministic tier assignment recorded in the dispatch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Rewrite model-selection.mdc; it forbids adaptive selection today",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Brevity rule for every outward GitHub artifact, enforced not advised",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Verify both mirrors; bundled-rule and review-mirror guards pass",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Quality gate: typecheck, full suite against baseline, guards, doc-links",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-30T05:31:30.403Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-30T05:32:26.447Z",
+      "event": "task-added",
+      "detail": "T5: Baseline: record test/typecheck state"
+    },
+    {
+      "at": "2026-08-30T05:32:26.542Z",
+      "event": "task-added",
+      "detail": "T6: Blast radius computed from gdgraph affected, ranked, capped, drops recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:26.634Z",
+      "event": "task-added",
+      "detail": "T7: Regression scope rejects non-regression findings in code"
+    },
+    {
+      "at": "2026-08-30T05:32:26.727Z",
+      "event": "task-added",
+      "detail": "T8: Recompute the blast radius on changed-file set change and always on the final round"
+    },
+    {
+      "at": "2026-08-30T05:32:26.820Z",
+      "event": "task-added",
+      "detail": "T9: Test: blast radius is computed and every capped drop is recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:26.913Z",
+      "event": "task-added",
+      "detail": "T10: review gate in flow complete, five conditions"
+    },
+    {
+      "at": "2026-08-30T05:32:27.005Z",
+      "event": "task-added",
+      "detail": "T11: Clean defined positively per finding; dismissal needs a recorded human decision"
+    },
+    {
+      "at": "2026-08-30T05:32:27.098Z",
+      "event": "task-added",
+      "detail": "T12: Test: round cap with unsatisfied gate leaves the flow in-progress"
+    },
+    {
+      "at": "2026-08-30T05:32:27.189Z",
+      "event": "task-added",
+      "detail": "T13: Collect PR comments from all three sources, bots as humans"
+    },
+    {
+      "at": "2026-08-30T05:32:27.282Z",
+      "event": "task-added",
+      "detail": "T14: External findings: source, external_ref, classified severity, never silently dropped"
+    },
+    {
+      "at": "2026-08-30T05:32:27.375Z",
+      "event": "task-added",
+      "detail": "T15: Verifier cannot refute an external finding alone; answered-disagree still replies"
+    },
+    {
+      "at": "2026-08-30T05:32:27.469Z",
+      "event": "task-added",
+      "detail": "T16: Reply once at the end, two sentences, threaded, enforced in code"
+    },
+    {
+      "at": "2026-08-30T05:32:27.565Z",
+      "event": "task-added",
+      "detail": "T17: Never resolve a thread we did not open"
+    },
+    {
+      "at": "2026-08-30T05:32:27.659Z",
+      "event": "task-added",
+      "detail": "T18: Test: one reply and one disposition per comment; idempotent across restart"
+    },
+    {
+      "at": "2026-08-30T05:32:27.750Z",
+      "event": "task-added",
+      "detail": "T19: Model tiers in skills; a concrete model name fails a test"
+    },
+    {
+      "at": "2026-08-30T05:32:27.843Z",
+      "event": "task-added",
+      "detail": "T20: Tier resolution per provider; unknown provider inherits the session model"
+    },
+    {
+      "at": "2026-08-30T05:32:27.936Z",
+      "event": "task-added",
+      "detail": "T21: Deterministic tier assignment recorded in the dispatch"
+    },
+    {
+      "at": "2026-08-30T05:32:28.029Z",
+      "event": "task-added",
+      "detail": "T22: Rewrite model-selection.mdc; it forbids adaptive selection today"
+    },
+    {
+      "at": "2026-08-30T05:32:28.120Z",
+      "event": "task-added",
+      "detail": "T23: Brevity rule for every outward GitHub artifact, enforced not advised"
+    },
+    {
+      "at": "2026-08-30T05:32:28.212Z",
+      "event": "task-added",
+      "detail": "T24: Verify both mirrors; bundled-rule and review-mirror guards pass"
+    },
+    {
+      "at": "2026-08-30T05:32:28.307Z",
+      "event": "task-added",
+      "detail": "T25: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-30T05:32:28.399Z",
+      "event": "frozen",
+      "detail": "20 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:28.490Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-30T07:11:54.752Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-30T07:11:55.036Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-30T07:11:55.320Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-30T07:11:55.606Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-30T07:11:55.894Z",
+      "event": "task-done",
+      "detail": "T5: Baseline: record test/typecheck state"
+    },
+    {
+      "at": "2026-08-30T07:11:56.178Z",
+      "event": "task-done",
+      "detail": "T6: Blast radius computed from gdgraph affected, ranked, capped, drops recorded"
+    },
+    {
+      "at": "2026-08-30T07:11:56.442Z",
+      "event": "task-done",
+      "detail": "T7: Regression scope rejects non-regression findings in code"
+    },
+    {
+      "at": "2026-08-30T07:11:56.750Z",
+      "event": "task-done",
+      "detail": "T8: Recompute the blast radius on changed-file set change and always on the final round"
+    },
+    {
+      "at": "2026-08-30T07:11:57.027Z",
+      "event": "task-done",
+      "detail": "T9: Test: blast radius is computed and every capped drop is recorded"
+    },
+    {
+      "at": "2026-08-30T07:11:57.304Z",
+      "event": "task-done",
+      "detail": "T10: review gate in flow complete, five conditions"
+    },
+    {
+      "at": "2026-08-30T07:11:57.597Z",
+      "event": "task-done",
+      "detail": "T11: Clean defined positively per finding; dismissal needs a recorded human decision"
+    },
+    {
+      "at": "2026-08-30T07:11:57.897Z",
+      "event": "task-done",
+      "detail": "T12: Test: round cap with unsatisfied gate leaves the flow in-progress"
+    },
+    {
+      "at": "2026-08-30T07:11:58.183Z",
+      "event": "task-done",
+      "detail": "T13: Collect PR comments from all three sources, bots as humans"
+    },
+    {
+      "at": "2026-08-30T07:11:58.466Z",
+      "event": "task-done",
+      "detail": "T14: External findings: source, external_ref, classified severity, never silently dropped"
+    },
+    {
+      "at": "2026-08-30T07:11:58.748Z",
+      "event": "task-done",
+      "detail": "T15: Verifier cannot refute an external finding alone; answered-disagree still replies"
+    },
+    {
+      "at": "2026-08-30T07:11:59.026Z",
+      "event": "task-done",
+      "detail": "T16: Reply once at the end, two sentences, threaded, enforced in code"
+    },
+    {
+      "at": "2026-08-30T07:11:59.315Z",
+      "event": "task-done",
+      "detail": "T17: Never resolve a thread we did not open"
+    },
+    {
+      "at": "2026-08-30T07:11:59.613Z",
+      "event": "task-done",
+      "detail": "T18: Test: one reply and one disposition per comment; idempotent across restart"
+    },
+    {
+      "at": "2026-08-30T07:11:59.903Z",
+      "event": "task-done",
+      "detail": "T19: Model tiers in skills; a concrete model name fails a test"
+    },
+    {
+      "at": "2026-08-30T07:12:00.203Z",
+      "event": "task-done",
+      "detail": "T20: Tier resolution per provider; unknown provider inherits the session model"
+    },
+    {
+      "at": "2026-08-30T07:12:00.481Z",
+      "event": "task-done",
+      "detail": "T21: Deterministic tier assignment recorded in the dispatch"
+    },
+    {
+      "at": "2026-08-30T07:12:00.776Z",
+      "event": "task-done",
+      "detail": "T22: Rewrite model-selection.mdc; it forbids adaptive selection today"
+    },
+    {
+      "at": "2026-08-30T07:12:01.062Z",
+      "event": "task-done",
+      "detail": "T23: Brevity rule for every outward GitHub artifact, enforced not advised"
+    },
+    {
+      "at": "2026-08-30T07:12:01.331Z",
+      "event": "task-done",
+      "detail": "T24: Verify both mirrors; bundled-rule and review-mirror guards pass"
+    },
+    {
+      "at": "2026-08-30T07:12:01.630Z",
+      "event": "task-done",
+      "detail": "T25: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-30T07:13:30.611Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/blast-radius.ts computeBlastRadius + ReviewRoundManifest scope_b in src/review/types.ts record the set, the depth and every capped drop; src/review/blast-radius.test.ts asserts the drop list is non-empty when the cap bites."
+    },
+    {
+      "at": "2026-08-30T07:13:30.886Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: computeBlastRadius walks keryx gdgraph affected from the changed files, ranks by edge distance, bounds by depth 2 / 40 files (both measured over 80 commits); no code path takes a model-chosen file list."
+    },
+    {
+      "at": "2026-08-30T07:13:31.166Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: screenBlastRadiusFindings in src/review/blast-radius.ts rejects outside-set findings, findings under the severity floor and findings with no link to the change, in code; the reviewer deny-list was removed because it screened by author, not content."
+    },
+    {
+      "at": "2026-08-30T07:13:31.447Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: blastRadiusRecomputePlan (src/review/blast-radius.ts:552) forces a recompute when the changed-file set differs and unconditionally on the final round; covered in blast-radius.test.ts."
+    },
+    {
+      "at": "2026-08-30T07:13:31.765Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/flow/review-gate.ts implements the five conditions and is wired as the review gate in src/flow/service.ts; src/flow/review-gate.e2e.test.ts drives flow init/freeze/start + review ingest + flow complete through the real CLI."
+    },
+    {
+      "at": "2026-08-30T07:13:32.090Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: reviewFindingsGate requires a terminal disposition per finding: fixed needs a commit SHA and a verifier verdict against it, refuted needs method and evidence, the three wont-fix dismissals need a recorded human decision, answered-disagree needs a reply URL. Absence never clears a finding — the check runs over the latest state of every finding ever raised."
+    },
+    {
+      "at": "2026-08-30T07:13:32.392Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: flow complete refuses while the review gate is unsatisfied; the round cap is reported as the blocker and the flow stays in-progress. Covered in src/flow/review-gate.test.ts and end to end in review-gate.e2e.test.ts."
+    },
+    {
+      "at": "2026-08-30T07:13:32.667Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: collectPrComments reads pulls/comments, pulls/reviews and issues/comments; bot authors take the same path as humans — only our own identity is excluded. src/review/pr-comments.test.ts covers all three sources."
+    },
+    {
+      "at": "2026-08-30T07:13:32.938Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: externalFindingsFromComments sets source: external and external_ref, and classifies severity from the review state (CHANGES_REQUESTED -> major, otherwise minor). Lowering requires a terminal disposition with a reason."
+    },
+    {
+      "at": "2026-08-30T07:13:33.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: The verifier cannot terminate an external finding: an external finding capped at refuted is rejected by the review gate, which requires answered-disagree plus a reply URL."
+    },
+    {
+      "at": "2026-08-30T07:13:33.466Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: postReplyPass refuses without --final; enforceReplyBrevity cuts to two sentences AND 600 characters, whole sentences first, then a word-boundary cut with the link. --max-sentences/--max-chars expose both from the CLI (src/commands/review-comments-cli.test.ts)."
+    },
+    {
+      "at": "2026-08-30T07:13:33.730Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: The GitHub port rejects every resolve/hide/minimise/edit/delete path including the GraphQL resolveReviewThread endpoint (src/review/pr-comments.ts guardGitHubRequest); a resolve attempt fails at the port."
+    },
+    {
+      "at": "2026-08-30T07:13:34.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Reply state is durable in .metaproject/reviews/pr-comments/<repo>__<n>.json; recordSeenComments plus the in-flight marker and findPostedReply make a restart mid-pass reply exactly once. Every collected comment carries one disposition or the gate fails."
+    },
+    {
+      "at": "2026-08-30T07:13:34.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: concreteModelDeclarations (src/gdskills/model-tier.ts:758) is the executable half; src/gdskills/model-tier.test.ts walks every real SKILL.md and fails on a model declared instead of a tier."
+    },
+    {
+      "at": "2026-08-30T07:13:34.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: rankDiscoveredModels ranks whatever the provider reports at runtime; when nothing is discoverable, tier_resolution falls back to session-fallback and every tier resolves to the session model — never a downgrade, never a dispatch failure."
+    },
+    {
+      "at": "2026-08-30T07:13:34.888Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: assignModelTier derives the tier from scope, attempt count, verifier method and severity, and the result plus tier_resolution is written into the dispatch (contracts/subagent-dispatch.schema.json). No model is asked to rate its own difficulty."
+    },
+    {
+      "at": "2026-08-30T07:13:35.141Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: src/gdskills/bundled/rules/core/model-selection.mdc rewritten: no provider model names, size words only, and the ask-before-changing-a-model mandate that made adaptive selection impossible is gone. Mirrored to .metaproject/rules/core/."
+    },
+    {
+      "at": "2026-08-30T07:13:35.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: review-orchestrator SKILL.md section 'One rule, applied to every outward surface' governs PR bodies, comments and replies; enforced in code for replies by enforceReplyBrevity, with the detail linked from the flow package."
+    },
+    {
+      "at": "2026-08-30T07:13:35.658Z",
+      "event": "ac-confirmed",
+      "detail": "AC19: Both trees carry every skill and rule edit; diff -q on review-orchestrator SKILL.md is identical, the bundled-rule guard and the review-mirror guard pass in bun run test:guards (161 pass / 0 fail)."
+    },
+    {
+      "at": "2026-08-30T07:13:35.981Z",
+      "event": "ac-confirmed",
+      "detail": "AC20: bun run typecheck clean; bun test 5937 pass / 18 skip / 0 fail; bun run test:guards 161 pass / 0 fail; bun run check:doc-links 1130 links / 0 broken."
+    },
+    {
+      "at": "2026-08-30T07:14:27.771Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/413"
+    },
+    {
+      "at": "2026-08-30T09:57:36.883Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T09:57:38.968Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

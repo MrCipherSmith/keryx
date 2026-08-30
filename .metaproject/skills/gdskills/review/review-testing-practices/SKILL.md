@@ -1,5 +1,6 @@
 ---
 name: review-testing-practices
+model_tier: standard
 description: |
   Use when reviewing unit, integration, Storybook, component, or e2e tests
   against repository-local testing conventions: co-location, network mocking,

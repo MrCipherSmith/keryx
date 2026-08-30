@@ -12,9 +12,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
 import { evaluateTaskGate } from "./machine";
+import { writeCleanReviewPackage } from "./review-fixtures";
 import type { FlowService, FlowServiceDeps, FlowState, TrackerAdapter } from "./types";
 
 let ROOT = "";
+
+// The PR head the fake tracker reports; a review round has to have run against
+// it for the review gate (flow 204) to pass.
+const HEAD = "beef1beef2beef3beef4beef5beef6beef7beef8";
 
 function fakeTracker(): TrackerAdapter {
   return {
@@ -22,7 +27,7 @@ function fakeTracker(): TrackerAdapter {
     detect: async () => true,
     parseRef: () => null,
     fetchIssue: async () => ({ title: "Issue title", body: "body" }),
-    prStatus: async () => ({ exists: true, isDraft: true, checksGreen: true }),
+    prStatus: async () => ({ exists: true, isDraft: true, checksGreen: true, headSha: HEAD }),
     comment: async () => true,
   };
 }
@@ -83,6 +88,9 @@ async function driveToGates(
   await service.start({ cwd: ROOT, id: flow.id });
   await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/1" });
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  // A satisfied review gate (flow 204), so these tests keep failing for exactly
+  // one reason — the task gate — rather than for two.
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/1" });
   return { id: flow.id, dir };
 }
 

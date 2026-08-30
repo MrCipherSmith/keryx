@@ -6,9 +6,12 @@ import {
   completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
+  resolveGitHead,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
+  type ManagedReviewIngestInput,
 } from "../review/managed";
+import { githubAdapter } from "../flow/tracker/github";
 import {
   buildPathScope,
   buildReviewScope,
@@ -17,7 +20,47 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
+import {
+  blastRadiusRecomputeDecision,
+  computeBlastRadius,
+  DEFAULT_BLAST_RADIUS_DEPTH,
+  DEFAULT_BLAST_RADIUS_MAX_FILES,
+  renderBlastRadiusDispatchBrief,
+  renderBlastRadiusMarkdown,
+  upsertBlastRadiusBlock,
+  type BlastRadius,
+  type BlastRadiusScreenInput,
+} from "../review/blast-radius";
+import { loadGraph } from "../gdgraph/query";
+import { detectProviders } from "./select";
+import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import {
+  decideDispatchModel,
+  type DiscoveredProvider,
+  type DispatchModelDecision,
+  type SessionModelContext,
+  type TierSignals,
+} from "../gdskills/model-tier";
+import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
+import {
+  buildReplyPass,
+  collectPrComments,
+  createFixturePort,
+  createGhPort,
+  externalFindingsFromComments,
+  postReplyPass,
+  readPrCommentState,
+  recordSeenComments,
+  renderPrCommentsMarkdown,
+  unansweredComments,
+  writePrCommentState,
+  DEFAULT_MAX_REPLIES_TOTAL,
+  DEFAULT_MAX_REPLY_CHARS,
+  DEFAULT_MAX_SENTENCES_PER_REPLY,
+  type CommentOutcome,
+  type GitHubPort,
+} from "../review/pr-comments";
 import {
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
   DEFAULT_MAX_PARALLEL_REVIEWERS,
@@ -45,6 +88,7 @@ import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_TARGET_KINDS,
+  VERIFICATION_METHODS,
   VERIFICATION_MODES,
   type FindingDispositionState,
   type ManagedReviewInput,
@@ -77,6 +121,7 @@ const CREATE_FLAGS = [
   "--target",
   "--ref",
   "--target-ref",
+  "--head",
   "--flow",
   "--review-id",
   "--reviewers",
@@ -84,6 +129,7 @@ const CREATE_FLAGS = [
   "--verifications",
   "--verification-mode",
   "--scope",
+  "--blast-radius",
   "--refuted",
   "--max-findings",
   "--spent",
@@ -93,6 +139,40 @@ const CREATE_FLAGS = [
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
+
+const COMMENTS_COLLECT_FLAGS = [
+  "--repo",
+  "--pr",
+  "--self",
+  // The head this pass READ, recorded on the durable state so the completion
+  // gate can tell a current collection from one that ran before the comments
+  // arrived. Required, exactly as it is for `reply`: a collection that cannot
+  // say which commit it was true of is one the gate must refuse.
+  "--sha",
+  "--round",
+  "--fixtures",
+  "--out",
+  "--json",
+] as const;
+
+const COMMENTS_REPLY_FLAGS = [
+  "--repo",
+  "--pr",
+  // Accepted here only as the fallback for a record that carries no identity yet
+  // — the recorded one wins, so a reply pass cannot run under a different login
+  // from the collection it is answering.
+  "--self",
+  "--outcomes",
+  "--sha",
+  "--round",
+  "--final",
+  "--dry-run",
+  "--max-replies",
+  "--max-sentences",
+  "--max-chars",
+  "--flow-link",
+  "--fixtures",
+] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
 
@@ -105,6 +185,34 @@ const SCOPE_FLAGS = [
   "--json",
   "--scoped-diff",
   "--append",
+] as const;
+
+const BLAST_RADIUS_FLAGS = [
+  "--ref",
+  "--base",
+  "--changed",
+  "--depth",
+  "--max-files",
+  "--no-related-tests",
+  "--final",
+  "--previous",
+  "--json",
+  "--brief",
+  "--out",
+] as const;
+
+const TIER_FLAGS = [
+  "--scope",
+  "--fix-attempt",
+  "--forced-strategy-change",
+  "--findings",
+  "--diff-lines",
+  "--verifier",
+  "--security",
+  "--session-provider",
+  "--session-model",
+  "--catalog",
+  "--json",
 ] as const;
 
 const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
@@ -178,8 +286,20 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runScope(args.slice(1));
       return;
     }
+    if (command === "blast-radius") {
+      await runBlastRadius(args.slice(1));
+      return;
+    }
     if (command === "budget") {
       await runBudget(args.slice(1));
+      return;
+    }
+    if (command === "tier") {
+      await runTier(args.slice(1));
+      return;
+    }
+    if (command === "comments") {
+      await runComments(args.slice(1));
       return;
     }
     if (command === "loop") {
@@ -219,10 +339,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
-  const input: ManagedReviewInput = {
-    cwd: process.cwd(),
+  const cwd = process.cwd();
+  const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  const input: ManagedReviewIngestInput = {
+    cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef },
+    target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     reviewers,
@@ -231,6 +353,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     verifications: await readVerifications(optionValue(args, "--verifications")),
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
+    blastRadius: await readBlastRadiusRecord(optionValue(args, "--blast-radius")),
     maxFindingsPerReviewer: parseNonNegativeInteger(optionValue(args, "--max-findings"), "--max-findings"),
     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
@@ -243,6 +366,16 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  // Printed on every run, and printed as an absence when it is one: the review
+  // completion gate compares this against the pull request's head, and a round
+  // that recorded none fails that comparison as `unobserved`. An operator who
+  // has to open manifest.json to find out reads silence as a match.
+  console.log(
+    `head: ${
+      result.manifest.target.head ??
+      "not recorded (no git checkout to ask, and no --head given; `flow complete` will refuse this round)"
+    }`,
+  );
   // AC11/AC15: the stage counts are the only thing this pipeline's claims may be
   // stated in, so they are printed on every run rather than hidden in scope.md.
   const counts = result.verification;
@@ -280,6 +413,42 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       console.log(`  truncated ${drop.truncated} from ${drop.reviewer}: ${drop.truncatedIds.join(", ")}`);
     }
   }
+
+  // AC3, on the same rule as the cap above: a screen that removes findings owes
+  // the terminal the same record. `not recorded` and `rejected 0` are different
+  // facts, and only one of them means the screen ran.
+  const scopeB = result.scopeBScreen;
+  if (scopeB.screen === undefined) {
+    // An ASSERTION, not a report. `screenScopeBFindings` is total on this pair:
+    // with no radius it either THROWS (any scope-B finding) or returns
+    // `{source: "none", scopeBFindings: 0}`, so an unrecorded screen implies no
+    // scope-B findings and `not recorded (N went through unscreened)` could
+    // never print. A console line that cannot appear is not a safety net — it
+    // reads as one while proving nothing, which is the exact shape of every
+    // defect this pipeline exists to end. If the writer ever gains a fourth
+    // outcome, this fails loudly on the first round that reaches it instead of
+    // printing a line nobody configured a test to look for.
+    if (scopeB.scopeBFindings > 0) {
+      throw new Error(
+        `Invariant violated: ${scopeB.scopeBFindings} scope-B finding(s) reached the package with no screen recorded. \`screenScopeBFindings\` must either run the screen or refuse the round; it did neither. The package was written and is the record of the violation.`,
+      );
+    }
+  } else {
+    console.log(
+      `scope-B screen: source=${scopeB.source} scope_b_findings=${scopeB.scopeBFindings} accepted=${scopeB.screen.accepted.length} rejected=${scopeB.screen.rejected.length} exempted=${scopeB.screen.exempted.length} min_severity=${scopeB.screen.minSeverity}`,
+    );
+    for (const rejection of scopeB.screen.rejected) {
+      console.log(`  rejected ${rejection.finding.id ?? "<unidentified>"} [${rejection.rule}]: ${rejection.detail}`);
+    }
+    // An acceptance a rule never judged is a fact about the round, on the same
+    // rule as a rejection: `accepted=N` alone reads as "all three rules passed"
+    // and for these it did not.
+    for (const exemption of scopeB.screen.exempted) {
+      console.log(
+        `  exempted ${exemption.finding.id ?? "<unidentified>"} [${exemption.rule} not applied]: ${exemption.detail}`,
+      );
+    }
+  }
   const concurrency = caps.concurrency;
   if (concurrency !== undefined) {
     console.log(
@@ -303,6 +472,48 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       process.exitCode = 1;
     }
   }
+}
+
+/**
+ * What `--head` says, or what can be worked out without asking a model.
+ *
+ * `undefined` here does not mean "no head": it means this layer has nothing to
+ * add and {@link module:review/managed.resolveTargetHead} should read the local
+ * checkout. The one thing this layer can do that the writer deliberately will
+ * not is reach the network, and it does so in exactly one case — a `pr` target
+ * with no checkout to ask, i.e. a pull request being reviewed from outside a
+ * clone. When a checkout IS present its commit wins, because that is the tree
+ * the reviewers read; see `resolveTargetHead` for why recording the pull
+ * request's head instead would defeat the completion gate rather than satisfy
+ * it.
+ */
+async function resolveCreateHead(
+  args: string[],
+  kind: ReviewTargetKind,
+  ref: string,
+  cwd: string,
+): Promise<string | undefined> {
+  const explicit = optionValue(args, "--head");
+  if (explicit !== undefined) {
+    const value = explicit.trim();
+    if (!/^[0-9a-f]{7,40}$/i.test(value)) {
+      throw new Error(
+        `--head "${explicit}" is not a commit SHA. Give the commit this round ran against (\`git rev-parse HEAD\`), 7-40 hex characters.`,
+      );
+    }
+    return value.toLowerCase();
+  }
+  if (kind !== "pr") {
+    return undefined;
+  }
+  if ((await resolveGitHead(cwd)) !== null) {
+    return undefined;
+  }
+  if (!(await githubAdapter.detect())) {
+    return undefined;
+  }
+  const status = await githubAdapter.prStatus(ref);
+  return status.exists && status.headSha !== null ? status.headSha : undefined;
 }
 
 /**
@@ -360,6 +571,417 @@ async function runBudget(args: string[]): Promise<void> {
     );
     process.exitCode = 1;
   }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review tier` — which model this dispatch is worth, computed
+// ---------------------------------------------------------------------------
+
+/**
+ * `keryx review tier` — the `model` block a dispatch document carries, RUN
+ * rather than reasoned about (flow 204, §4.4).
+ *
+ * `assignTier` and `decideDispatchModel` were reachable only from TypeScript,
+ * and the rule that named their caller named "an orchestrator authoring a
+ * dispatch document" — an LLM agent following prose. An agent cannot call a
+ * TypeScript function, so the tier was in practice assigned by a model reading a
+ * table and doing the arithmetic in its head, which is exactly the mechanical
+ * work this programme moves out of skills and into code. This command is the
+ * entry point that closes that gap: the orchestrator runs one command with the
+ * signals it already holds and pastes the block it prints.
+ *
+ * It sits beside `review scope`, `review blast-radius` and `review budget` for
+ * the same reason those exist: all four are "compute this mechanically, before
+ * dispatching, instead of eyeballing it".
+ *
+ * NO MODEL NAME IS WRITTEN HERE, and none is written anywhere this command
+ * reads. The session's provider/model come from the persisted shell selection
+ * (or from `--session-provider`/`--session-model` for a caller that already
+ * holds them), the candidate set comes from live provider detection (or from
+ * `--catalog`), and `src/gdskills/model-tier.ts` places the tier relative to the
+ * session's own model. When the environment cannot be worked out, the answer is
+ * the caller's OWN model — never a downgrade, never a non-zero exit.
+ */
+async function runTier(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, TIER_FLAGS, "tier");
+  const signals = tierSignalsFromArgs(args);
+  const session = sessionModelFromArgs(args);
+  const catalog = await tierCatalog(args, session);
+  const decision = decideDispatchModel(session, signals, catalog);
+  const block = dispatchModelBlock(decision);
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ model: block }, null, 2));
+    return;
+  }
+
+  const discovery = decision.model_discovery;
+  console.log("# review tier");
+  console.log("");
+  console.log(`tier: ${decision.tier}`);
+  console.log(`tier_reasons: ${decision.tier_reasons.join(", ")}`);
+  console.log(
+    `provider: ${decision.provider === "" ? "not resolved (no --session-provider, and none persisted by `keryx shell`)" : decision.provider}`,
+  );
+  // The operator's standing instruction, printed rather than assumed: an
+  // unresolvable tier inherits the caller's own model. Saying "not resolved" and
+  // stopping there would read as a failure, and the next thing a reader does
+  // with a failure is pick a model by hand.
+  console.log(
+    `model: ${decision.model === "" ? "not resolved — run this dispatch on YOUR OWN model (never a downgrade)" : decision.model}`,
+  );
+  console.log(`tier_resolution: ${decision.tier_resolution}`);
+  console.log(
+    `model_discovery: provider=${discovery.provider === "" ? "none" : discovery.provider} candidates=${discovery.candidates.length} ranked=${discovery.ranked.length} session_rank=${discovery.session_rank ?? "none"}`,
+  );
+  console.log(`fallback_reason: ${discovery.fallback_reason ?? "none (ranking was not refused)"}`);
+  console.log("");
+  console.log("## model block");
+  console.log("");
+  console.log("Paste this verbatim as the dispatch document's `model` field.");
+  console.log("");
+  console.log("```json");
+  console.log(JSON.stringify({ model: block }, null, 2));
+  console.log("```");
+}
+
+/** The §4.4 signals, read from flags an orchestrator already has the answers to. */
+function tierSignalsFromArgs(args: string[]): TierSignals {
+  const scope = optionValue(args, "--scope");
+  const verifier = optionValue(args, "--verifier");
+  if (verifier !== undefined && !(VERIFICATION_METHODS as readonly string[]).includes(verifier)) {
+    // Refused rather than passed through. An unrecognised method changes nothing
+    // in `assignTier`, so a typo would silently produce `standard` and read as a
+    // considered answer — the same failure shape as a silently dropped flag.
+    throw new Error(
+      `Invalid --verifier: ${verifier}. Expected one of ${VERIFICATION_METHODS.join(", ")}. Refused rather than ignored: an unrecognised method would silently leave the tier at its default and read as a decision.`,
+    );
+  }
+  return {
+    ...(scope === undefined ? {} : { scope }),
+    ...(verifier === undefined ? {} : { verifierMethod: verifier }),
+    fixAttempt: parseNonNegativeInteger(optionValue(args, "--fix-attempt"), "--fix-attempt"),
+    findingCount: parseNonNegativeInteger(optionValue(args, "--findings"), "--findings"),
+    diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
+    forcedStrategyChange: args.includes("--forced-strategy-change"),
+    hasSecurityFinding: args.includes("--security"),
+  };
+}
+
+/**
+ * The session's provider/model: the flags when given, otherwise the selection
+ * `keryx shell` persisted.
+ *
+ * Discovered at runtime by construction — there is no default model id in this
+ * file and there must not be. Empty strings when neither source knows, which
+ * `rankDiscoveredModels` reads as "no anchor" and answers with a fallback.
+ */
+function sessionModelFromArgs(args: string[]): SessionModelContext {
+  const config = loadShellConfig();
+  return {
+    providerId: (optionValue(args, "--session-provider") ?? config.provider ?? "").trim(),
+    modelId: (optionValue(args, "--session-model") ?? config.model ?? "").trim(),
+  };
+}
+
+/**
+ * The candidate set, discovered at runtime — or supplied by a caller that
+ * already holds a `detectProviders()` result.
+ *
+ * Detection is skipped when the session names no provider AND model, on the same
+ * rule `runBlastRadius` follows for the graph: ranking is refused without an
+ * anchor whatever the catalogue contains, so a round that cannot use the answer
+ * should not pay for the probe.
+ */
+async function tierCatalog(args: string[], session: SessionModelContext): Promise<readonly DiscoveredProvider[]> {
+  const file = optionValue(args, "--catalog");
+  if (file !== undefined) {
+    // The two guards below name the flag, the file and the shape. These two
+    // reads are the likelier operator mistakes — a typo'd path and a file that
+    // is not JSON — and unguarded they surfaced as `ENOENT: no such file or
+    // directory` and `JSON Parse error: Unexpected identifier`, neither of which
+    // mentions `--catalog`. Exiting non-zero on bad caller input is right; doing
+    // it without naming what the caller passed is not.
+    let raw: string;
+    try {
+      raw = file === "-" ? await Bun.stdin.text() : await Bun.file(file).text();
+    } catch (error) {
+      throw new Error(
+        `--catalog ${file} could not be read: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Pass a readable file containing \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns — or \`--catalog -\` to read it from stdin.`,
+      );
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch (error) {
+      throw new Error(
+        `--catalog ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Expected \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,
+      );
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error(
+        `--catalog ${file} is not an array of detected providers. Pass \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,
+      );
+    }
+    for (const entry of parsed) {
+      const provider = entry as Partial<DiscoveredProvider>;
+      if (typeof provider?.name !== "string" || !Array.isArray(provider.models)) {
+        throw new Error(
+          `--catalog ${file} carries an entry with no \`name\` string and \`models\` array. A half-read catalogue would starve discovery and report the fallback as if the environment had been consulted.`,
+        );
+      }
+    }
+    return parsed as DiscoveredProvider[];
+  }
+  if (session.providerId === "" || session.modelId === "") {
+    return [];
+  }
+  return await detectProviders({ fetch, env: envWithSavedApiKeys() });
+}
+
+/**
+ * The dispatch document's `model` object, exactly as
+ * `contracts/subagent-dispatch.schema.json` defines it.
+ *
+ * `provider`/`model` are written only when both were resolved; otherwise the
+ * block carries `inherit: true`, which is the schema's way of saying what the
+ * operator's instruction says — the caller runs the dispatch on its own model.
+ * Writing an empty string into either field would produce a schema-invalid
+ * dispatch that still looks like an answer.
+ */
+function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
+  const named = decision.provider !== "" && decision.model !== "";
+  return {
+    tier: decision.tier,
+    tier_reasons: decision.tier_reasons,
+    ...(named ? { provider: decision.provider, model: decision.model } : { inherit: true }),
+    tier_resolution: decision.tier_resolution,
+    model_discovery: decision.model_discovery,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review comments` — collect every round, reply once at the end
+// ---------------------------------------------------------------------------
+
+/**
+ * The two halves of the external-comment loop, deliberately two commands.
+ *
+ * `collect` is safe, idempotent and runs every round. `reply` posts, runs once,
+ * and refuses without `--final`. Fusing them into one command is how a mechanism
+ * that must happen once ends up happening six times: the caller that already runs
+ * collection per round would carry the posting along with it.
+ *
+ * `--fixtures <dir>` answers every read from JSON on disk and records writes
+ * without sending them, so the whole loop can be rehearsed with no token, no
+ * network and no pull request. It is not a test-only affordance — it is the
+ * supported way to see what a reply pass would say before it says it.
+ */
+async function runComments(args: string[]): Promise<void> {
+  const sub = args[0];
+  if (sub === "collect") {
+    await runCommentsCollect(args.slice(1));
+    return;
+  }
+  if (sub === "reply") {
+    await runCommentsReply(args.slice(1));
+    return;
+  }
+  throw new Error("Usage: keryx review comments <collect|reply> --repo <owner/repo> --pr <n> ...");
+}
+
+async function runCommentsCollect(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_COLLECT_FLAGS, "comments collect");
+  const repo = requiredOption(args, "--repo", "comments collect");
+  const number = requiredInteger(args, "--pr");
+  const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+  // Required, and refused when it is not a SHA — the same rule `--head` follows
+  // on `review ingest`. The completion gate reads this value as "the commit this
+  // collection was true of"; a free-text one would satisfy the field and prove
+  // nothing, which is the failure mode the field exists to close.
+  const sha = requiredSha(args, "--sha", "comments collect");
+  const port = await resolvePort(args);
+  const self = optionValue(args, "--self") ?? (await resolveSelfLogin(args));
+  const cwd = process.cwd();
+
+  const state = await readPrCommentState(cwd, repo, number);
+  const result = await collectPrComments({
+    port,
+    repo,
+    number,
+    self,
+    handled: state.handled_comments,
+  });
+  const findings = externalFindingsFromComments(result.comments);
+  const recorded = recordSeenComments(state, result.comments, round, { self, collectedSha: sha });
+  await writePrCommentState(cwd, recorded);
+
+  const out = optionValue(args, "--out");
+  if (out !== undefined) {
+    await writeFileAtomic(out, `${JSON.stringify(findings, null, 2)}\n`);
+  }
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ ...result, findings, state: recorded }, null, 2));
+    return;
+  }
+  console.log(renderPrCommentsMarkdown({ repo, number, round, result }));
+  console.log(`findings: ${findings.length}${out === undefined ? "" : ` (written to ${out})`}`);
+  console.log(`collected against: ${sha} (round ${round})`);
+  console.log(
+    `unanswered so far: ${unansweredComments(recorded).length} — replies are posted ONCE, after the final round.`,
+  );
+}
+
+async function runCommentsReply(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  const repo = requiredOption(args, "--repo", "comments reply");
+  const number = requiredInteger(args, "--pr");
+  const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+  const isFinal = args.includes("--final");
+  const dryRun = args.includes("--dry-run");
+  const cwd = process.cwd();
+  const port = await resolvePort(args);
+  const state = await readPrCommentState(cwd, repo, number);
+  const collected = await collectPrComments({
+    port,
+    repo,
+    number,
+    // The identity recorded when this pull request was first collected. Resolving
+    // it afresh here would let a reply pass run under a different login from the
+    // collection it is answering, and filter the wrong person's comments.
+    self: state.self ?? (await resolveSelfLogin(args)),
+    handled: state.handled_comments,
+  });
+
+  const outcomes = await readOutcomes(optionValue(args, "--outcomes"));
+  const pass = buildReplyPass({
+    repo,
+    number,
+    comments: collected.comments,
+    outcomes,
+    maxReplies: parseNonNegativeInteger(optionValue(args, "--max-replies"), "--max-replies"),
+    maxSentences: parseNonNegativeInteger(optionValue(args, "--max-sentences"), "--max-sentences"),
+    maxChars: parseNonNegativeInteger(optionValue(args, "--max-chars"), "--max-chars"),
+    flowLink: optionValue(args, "--flow-link"),
+  });
+
+  const result = await postReplyPass({
+    port,
+    cwd,
+    repo,
+    number,
+    pass,
+    sha: requiredOption(args, "--sha", "comments reply"),
+    round: { index: round, isFinal },
+    state,
+    dryRun,
+  });
+
+  console.log(`# review comments reply (${dryRun ? "dry run" : "posted"})`);
+  console.log("");
+  for (const request of result.requests) {
+    console.log(`${request.method} ${request.path}`);
+    console.log(`  ${(request.body as { body: string }).body}`);
+  }
+  console.log("");
+  console.log(`posted: ${result.posted.length}`);
+  console.log(`already answered (skipped): ${result.skipped.length}`);
+  console.log(`backlog beyond the reply cap: ${result.backlog.length}${result.backlog.length === 0 ? "" : ` — ${result.backlog.join(", ")}`}`);
+  if (result.escalated.length > 0) {
+    console.error(
+      `ESCALATE: ${result.escalated.length} comment(s) block progress rather than report a problem and were NOT replied to: ${result.escalated.join(
+        ", ",
+      )}. Ask the operator now; answering these at the end would answer the wrong question late.`,
+    );
+    process.exitCode = 1;
+  }
+}
+
+/** `--fixtures <dir>` for an offline rehearsal, otherwise the live `gh` adapter. */
+async function resolvePort(args: string[]): Promise<GitHubPort> {
+  const fixtures = optionValue(args, "--fixtures");
+  if (fixtures === undefined) {
+    return createGhPort();
+  }
+  const files: Record<string, unknown> = {};
+  for (const key of ["pull-comments", "pull-reviews", "issue-comments"]) {
+    const file = join(fixtures, `${key}.json`);
+    try {
+      files[key] = JSON.parse(await readFile(file, "utf8")) as unknown;
+    } catch {
+      files[key] = [];
+    }
+  }
+  return createFixturePort(files);
+}
+
+/**
+ * The login we are acting as, resolved once.
+ *
+ * With `--fixtures` there is no `gh` to ask, so the flag is required; without an
+ * identity the collector refuses rather than filtering nothing, which is the
+ * behaviour that would make a reply pass answer its own replies.
+ */
+async function resolveSelfLogin(args: string[]): Promise<string> {
+  const explicit = optionValue(args, "--self");
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (optionValue(args, "--fixtures") !== undefined) {
+    throw new Error("`--self <login>` is required with `--fixtures`: there is no `gh` to ask who we are.");
+  }
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], { stdout: "pipe", stderr: "pipe" });
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const login = stdout.trim();
+  if (exitCode !== 0 || login === "") {
+    throw new Error(
+      "Could not resolve the acting GitHub login (`gh api user --jq .login`). Pass `--self <login>`. Collecting without it would treat our own replies as a reviewer's and answer them every round.",
+    );
+  }
+  return login;
+}
+
+async function readOutcomes(source: string | undefined): Promise<CommentOutcome[]> {
+  if (source === undefined) {
+    throw new Error(
+      "`--outcomes <file|->` is required: it carries one disposition and one reply sentence per collected comment. The judgement is the model's; this command only enforces the budget, the threading and the once-at-the-end rule.",
+    );
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Expected an array of outcomes in ${source}, got ${typeof parsed}.`);
+  }
+  return parsed as CommentOutcome[];
+}
+
+function requiredOption(args: string[], name: string, usage: string): string {
+  const value = optionValue(args, name);
+  if (value === undefined || value === "") {
+    throw new Error(`\`${name}\` is required for \`keryx review ${usage}\`.`);
+  }
+  return value;
+}
+
+/** A required flag that must carry a commit SHA, checked the way `--head` is. */
+function requiredSha(args: string[], name: string, usage: string): string {
+  const value = requiredOption(args, name, usage);
+  if (!/^[0-9a-f]{7,40}$/i.test(value.trim())) {
+    throw new Error(
+      `\`${name} "${value}"\` is not a commit SHA. Give the head this pass ran against (\`git rev-parse HEAD\`), 7-40 hex characters.`,
+    );
+  }
+  return value.trim().toLowerCase();
+}
+
+function requiredInteger(args: string[], name: string): number {
+  const parsed = parseNonNegativeInteger(optionValue(args, name), name);
+  if (parsed === undefined) {
+    throw new Error(`\`${name} <n>\` is required.`);
+  }
+  return parsed;
 }
 
 /**
@@ -565,6 +1187,30 @@ async function readScope(source: string | undefined): Promise<ReviewScopeRecordL
   return { ...parsed, counts: parsed.counts, drops: parsed.drops };
 }
 
+/**
+ * The blast-radius record, from `keryx review blast-radius --json` — the set the
+ * scope-B screen holds findings against.
+ *
+ * Refused rather than defaulted when either half is missing, on the same rule
+ * `readScope` follows: an empty `files` list is the positive claim "the radius is
+ * empty", and a document that simply lacks the property is not making it. A screen
+ * run against an invented empty set would reject every scope-B finding as
+ * `outside-set` and report that as enforcement working.
+ */
+async function readBlastRadiusRecord(source: string | undefined): Promise<BlastRadiusScreenInput | undefined> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  const parsed = JSON.parse(raw) as Partial<BlastRadiusScreenInput>;
+  if (!Array.isArray(parsed.files) || !Array.isArray(parsed.changedFiles)) {
+    throw new Error(
+      `--blast-radius ${source} carries no \`files\`/\`changedFiles\` arrays. Pass the output of \`keryx review blast-radius --json\`: an empty set means "the radius is empty", and a missing one means it was never computed.`,
+    );
+  }
+  return { ...parsed, files: parsed.files, changedFiles: parsed.changedFiles };
+}
+
 function parseVerificationMode(raw: string | undefined): ManagedReviewInput["verificationMode"] {
   if (raw === undefined) {
     return DEFAULT_VERIFICATION_MODE;
@@ -624,6 +1270,141 @@ async function runScope(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * `keryx review blast-radius` — scope B, computed (flow 204, AC1–AC4).
+ *
+ * Scope A asks whether the change is correct. This asks whether it broke
+ * something that was working, over a set derived from `gdgraph affected` rather
+ * than from a model's choice of files to open. Everything it decides is decided
+ * in `review/blast-radius.ts`, which is pure; the only work done here is loading
+ * the graph, resolving the changed-file list, and choosing where the record goes.
+ *
+ * `--previous` + `--final` make AC4 mechanical: the recompute decision is
+ * printed and acted on rather than left to whoever remembers the rule.
+ */
+async function runBlastRadius(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, BLAST_RADIUS_FLAGS, "blast-radius");
+  const cwd = process.cwd();
+  const depth = parseNonNegativeInteger(optionValue(args, "--depth"), "--depth");
+  const maxFiles = parseNonNegativeInteger(optionValue(args, "--max-files"), "--max-files");
+  const includeRelatedTests = !args.includes("--no-related-tests");
+  const isFinalRound = args.includes("--final");
+
+  const explicit = optionValue(args, "--changed");
+  const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const changedFiles =
+    explicit !== undefined
+      ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
+      : await gitChangedFiles(ref);
+
+  // AC4 first: a round that must not recompute should not pay for a graph load.
+  const previousPath = optionValue(args, "--previous");
+  const previous = previousPath === undefined ? undefined : await readPreviousRadius(previousPath);
+  const decision = blastRadiusRecomputeDecision({
+    changedFiles,
+    isFinalRound,
+    previous:
+      previous === undefined
+        ? undefined
+        : { changedFiles: previous.changedFiles, depth: previous.depth, maxFiles: previous.maxFiles },
+    depth,
+    maxFiles,
+  });
+  console.error(`recompute: ${decision.recompute ? "yes" : "no"} — ${decision.reason}`);
+  if (!decision.recompute && previous !== undefined) {
+    await emitBlastRadius(previous, args);
+    return;
+  }
+
+  const graph = await loadGraph(cwd);
+  if (graph.nodes.length === 0) {
+    // An empty graph would produce an empty radius, which reads as "nothing
+    // depends on this change". Refuse instead: a scope that shrank to nothing
+    // because a prerequisite did not run is the failure shape this flow exists
+    // to end.
+    throw new Error(
+      "The code graph is empty or absent, so no blast radius can be computed. Run `keryx gdgraph build` first. " +
+        "An empty radius would read as `nothing depends on the change`, which is a different fact.",
+    );
+  }
+  const testFiles = includeRelatedTests ? await gitTestFiles() : [];
+  const radius = computeBlastRadius({
+    graph,
+    changedFiles,
+    testFiles,
+    config: { depth, maxFiles, includeRelatedTests },
+  });
+  await emitBlastRadius(radius, args);
+
+  if (radius.counts.droppedByCap > 0) {
+    console.error(
+      `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record.`,
+    );
+  }
+  if (radius.counts.changedFilesUnresolved > 0) {
+    console.error(
+      `unresolved: ${radius.counts.changedFilesUnresolved} changed file(s) are absent from the code graph; their blast radius is unknown, not empty.`,
+    );
+  }
+}
+
+async function emitBlastRadius(radius: BlastRadius, args: string[]): Promise<void> {
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(radius, null, 2));
+  } else if (args.includes("--brief")) {
+    console.log(renderBlastRadiusDispatchBrief(radius));
+  } else {
+    console.log(renderBlastRadiusMarkdown(radius));
+  }
+  const out = optionValue(args, "--out");
+  if (out === undefined) {
+    return;
+  }
+  if (out.endsWith(".json")) {
+    await writeFileAtomic(out, `${JSON.stringify(radius, null, 2)}\n`);
+    return;
+  }
+  const existing = await readFile(out, "utf8").catch(() => "");
+  await writeFileAtomic(out, upsertBlastRadiusBlock(existing, renderBlastRadiusMarkdown(radius)));
+}
+
+async function readPreviousRadius(source: string): Promise<BlastRadius> {
+  const text = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  const parsed = JSON.parse(text) as unknown;
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray((parsed as BlastRadius).changedFiles)) {
+    throw new Error(
+      `--previous ${source} is not a blast-radius record (expected the \`--json\` output of \`keryx review blast-radius\`).`,
+    );
+  }
+  return parsed as BlastRadius;
+}
+
+/** The changed-file list scope B is seeded from. Deleted paths are excluded. */
+async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
+  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : [ref])];
+  return (await gitLines(command)).filter(Boolean);
+}
+
+async function gitTestFiles(): Promise<string[]> {
+  return (await gitLines(["git", "ls-files"])).filter((file) => TEST_FILE_RE.test(file));
+}
+
+async function gitLines(command: readonly string[]): Promise<string[]> {
+  const proc = Bun.spawn([...command], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`${command.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
+  }
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 function parseContextLines(raw: string | undefined): number {
   if (raw === undefined) {
     return DEFAULT_CONTEXT_LINES;
@@ -676,6 +1457,7 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`mode: ${manifest.mode}`);
   console.log(`status: ${manifest.status}`);
   console.log(`target: ${manifest.target.kind} ${manifest.target.ref}`);
+  console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
 }
@@ -779,17 +1561,34 @@ function printHelp(): void {
   console.log(`keryx review
 
 Usage:
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review ingest --report <path> [--flow <id>] --ref <ref>
+  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                      [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
-                      [--scope <scope.json>] [--refuted <file|->]
+                      [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                    [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                            [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                            [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                    [--findings <n>] [--diff-lines <n>]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--session-provider <id>] [--session-model <id>]
+                    [--catalog <file|->] [--json]
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--round <n>] [--dry-run]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                              [--flow-link <url>] [--fixtures <dir>]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review status <review-id-or-path>
@@ -804,6 +1603,14 @@ zero dispositions and still print \`status: closed\`.
 Modes:
   ${MANAGED_REVIEW_MODES.join(", ")}
 
+--head:
+  The commit the round ran against, written to \`manifest.target.head\` and read
+  by the \`review\` completion gate, which refuses to complete a flow whose last
+  round cannot say which tree it read. Omitted, it is \`git rev-parse HEAD\` —
+  the tree the reviewers actually read, which is deliberately preferred over a
+  \`pr\` target's own head so that a round run against something other than what
+  will merge FAILS the gate instead of passing it.
+
 scope:
   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
   vendored and minified paths, drops whitespace-only and comment-only change
@@ -811,6 +1618,17 @@ scope:
   Prints the retained scope AND every drop with its reason; --append writes the
   same record into the review package's scope.md, REPLACING a
   \`## Pre-filter scope\` block already there rather than adding a second.
+
+blast-radius:
+  Scope B: what the change can BREAK, as opposed to whether the change is
+  correct. Computed from \`gdgraph affected\` over the changed files, ranked by
+  edge distance, cut at depth ${DEFAULT_BLAST_RADIUS_DEPTH} and ${DEFAULT_BLAST_RADIUS_MAX_FILES} files. Prints the set, the depth, and
+  EVERY file the cap removed — a silent truncation reads as "we checked
+  everything". \`--brief\` renders the dispatch text for a scope-B reviewer.
+  \`--previous <json> [--final]\` decides whether this round must recompute:
+  the final round always does, whatever the changed-file set did.
+  Requires a built graph (\`keryx gdgraph build\`); an absent graph is refused
+  rather than reported as an empty radius.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and
@@ -851,6 +1669,34 @@ caps (attach/start/ingest):
   --parallel/--outstanding record the dispatch plan. Every cap that is not given
   reads \`not recorded\`, never \`0\`.
 
+comments:
+  External PR comments, collected EVERY round and answered ONCE at the end.
+  \`collect\` reads all three sources — inline review comments, review submissions
+  and PR-level discussion — excludes only our own identity and comments already
+  answered, and keeps bot reviewers on exactly the same path as humans. A comment
+  already answered comes back if someone else replied in its thread since.
+  Severity is CLASSIFIED, never invented: CHANGES_REQUESTED starts at \`major\`,
+  everything else at \`minor\`, and a comment whose parent review was never seen
+  stays at the floor marked \`unclassified\` rather than being dropped or guessed.
+  \`collect --sha <head-sha>\` is REQUIRED and records which commit the pass read.
+  The completion gate compares it with the pull request's head: a state file
+  written before the comments arrived is a stale collection, and \`rounds_collected\`
+  — a count that a default \`--round 1\` pins at 1 however often collection runs —
+  could never tell the two apart. A record with no recorded head reads as
+  UNOBSERVED, on the same rule as no record at all.
+  \`reply\` refuses without --final: replying per round turns one review thread
+  into six, and a reply written mid-flow states an intention rather than an
+  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
+  (--max-chars) — CUT to both in code, with the remainder replaced by a link,
+  because a sentence budget alone lets one 4,000-character sentence through —
+  threaded where GitHub gives a thread, and capped
+  at ${DEFAULT_MAX_REPLIES_TOTAL} (--max-replies) with one summary comment and a reported backlog
+  beyond it. --max-sentences and --max-chars refuse a value below 1: a reply of
+  zero sentences or zero characters is silence with extra steps. --max-replies 0
+  is legal and means "one summary comment stands for everybody". Nothing
+  here can resolve, hide or dismiss a thread: those endpoints are unreachable
+  through the port. --dry-run and --fixtures rehearse the whole pass offline.
+
 budget:
   The gate to run BEFORE dispatching, where stopping is still possible. Exits
   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
@@ -861,6 +1707,22 @@ budget:
   another process, so it does NOT bind the total across job-orchestrator ->
   flow-orchestrator -> review-orchestrator, and it says so rather than implying
   otherwise.
+
+tier:
+  The \`model\` block a dispatch document carries, COMPUTED — run this instead of
+  working the tier out by hand. The signals are ones the orchestrator already
+  holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
+  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
+  that produced it, the resolved provider/model, \`tier_resolution\`, and what was
+  on the table when it resolved; --json prints the block alone.
+  NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from
+  the selection \`keryx shell\` persisted (override with --session-provider /
+  --session-model), and the candidate set comes from live provider detection
+  (override with --catalog, the \`detectProviders()\` shape). When the environment
+  cannot be worked out, the block says \`inherit\` and the dispatch runs on YOUR
+  OWN model: never a downgrade, never a non-zero exit. Detection is skipped
+  entirely when the session names no provider and model, because ranking is
+  refused without an anchor whatever the catalogue holds.
 
 loop:
   Loop DETECTION, not counting. Escalates (exit non-zero) when the same finding

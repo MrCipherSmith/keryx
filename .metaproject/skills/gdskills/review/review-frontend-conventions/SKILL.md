@@ -1,5 +1,6 @@
 ---
 name: review-frontend-conventions
+model_tier: standard
 description: |
   Use when reviewing frontend code against repository-local conventions commonly
   captured in CLAUDE.md or similar project guides: React/MobX boundaries,

@@ -117,6 +117,92 @@ test("AC9: a finding repeated WITHIN one round is a deduplication problem, not a
 });
 
 // ---------------------------------------------------------------------------
+// AC8/AC11 — an external comment is not a reviewer in a loop (flow 204)
+//
+// Comments are collected EVERY round and answered ONCE, after the final one, so
+// an unanswered comment is re-collected and re-persisted every round by design.
+// `dedupe_key: external:<comment id>` is stable across rounds on purpose, and it
+// is the detector's first identity key — so before this was fixed, one
+// outstanding comment made `keryx review loop` exit non-zero from round 2 of
+// every flow and name the COMMENTER as the reviewer stuck in a loop.
+// ---------------------------------------------------------------------------
+
+/** One collected comment, in the shape `externalFindingsFromComments` produces. */
+function externalFinding(overrides: Partial<StructuredReviewFinding> = {}): Partial<StructuredReviewFinding> {
+  return {
+    id: "EXT-001",
+    reviewer: "coderabbitai[bot]",
+    severity: "major",
+    problem: "this helper is called before the guard runs",
+    file: "src/loop.ts",
+    source: "external",
+    external_ref: {
+      id: "prc-991",
+      author: "coderabbitai[bot]",
+      url: "https://github.com/x/y/pull/1#r991",
+      submitted_at: "2026-08-30T09:00:00.000Z",
+    },
+    // Stable across rounds BY DESIGN — this is the key that used to escalate.
+    dedupe_key: "external:prc-991",
+    ...overrides,
+  };
+}
+
+test("an unanswered PR comment collected in two rounds does NOT escalate", () => {
+  const detection = detectReviewLoop({
+    rounds: [round("r1", [externalFinding()]), round("r2", [externalFinding({ id: "EXT-004" })])],
+  });
+
+  expect(detection.escalate).toBe(false);
+  expect(detection.signals).toHaveLength(0);
+  expect(detection.externalFindingsExcluded).toBe(2);
+  expect(detection.externalFindingsRecurring).toBe(1);
+});
+
+test("a reviewer repeating itself still escalates, alongside a recurring comment", () => {
+  // Both directions in one round pair: the external one is held out, the
+  // internal one is not, and the signal names the internal finding.
+  const detection = detectReviewLoop({
+    rounds: [
+      round("r1", [externalFinding(), finding()]),
+      round("r2", [externalFinding(), finding({ id: "F-007" })]),
+    ],
+  });
+
+  expect(detection.escalate).toBe(true);
+  expect(detection.signals).toHaveLength(1);
+  expect(detection.signals[0]?.kind).toBe("repeated-finding");
+  expect(detection.signals[0]?.key).not.toContain("external:");
+  expect(detection.signals[0]?.detail).toContain("review-logic");
+});
+
+test("an external finding does not link a reviewer finding's identity to itself", () => {
+  // Same file and line as the reviewer's finding, and a `global_id` shared with
+  // nothing. Excluding it must happen BEFORE the identity union, or its keys
+  // would merge into the reviewer group and take the reviewer's finding with it.
+  const shared = { file: "src/loop.ts", problem: "unbounded loop in the fix round", reviewer: "review-logic" };
+  const detection = detectReviewLoop({
+    rounds: [
+      round("r1", [externalFinding(shared), finding()]),
+      round("r2", [externalFinding({ ...shared, id: "EXT-004" }), finding({ id: "F-007" })]),
+    ],
+  });
+
+  expect(detection.signals).toHaveLength(1);
+  expect(detection.signals[0]?.rounds).toEqual(["r1", "r2"]);
+});
+
+test("the record says the comments were held out rather than staying silent", () => {
+  const markdown = renderLoopDetectionMarkdown(
+    detectReviewLoop({ rounds: [round("r1", [externalFinding()]), round("r2", [externalFinding()])] }),
+  );
+
+  expect(markdown).toContain("external_findings_excluded: 2 (recurring across rounds: 1)");
+  expect(markdown).toContain("collection");
+  expect(markdown).toContain("escalate: no");
+});
+
+// ---------------------------------------------------------------------------
 // Finding identity
 // ---------------------------------------------------------------------------
 
@@ -218,7 +304,7 @@ test("AC10: two clean rounds are reported as observed, not as unobserved", () =>
     }),
   );
 
-  expect(markdown).toContain("no repeated finding, and no identical consecutive output");
+  expect(markdown).toContain("no repeated reviewer finding, and no identical consecutive output");
   expect(markdown).toContain("output_pairs_compared: 1 of 1");
 });
 

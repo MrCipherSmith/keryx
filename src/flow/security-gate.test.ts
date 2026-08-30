@@ -5,6 +5,11 @@ import path from "node:path";
 import { createFlowService } from "./service";
 import type { FlowServiceDeps, TrackerAdapter } from "./types";
 import { uniqueTestRoot } from "../lib/test-tmp";
+import { writeCleanReviewPackage } from "./review-fixtures";
+
+// The PR head the fake tracker reports, and therefore the commit a review round
+// has to have run against for the review gate (flow 204) to pass.
+const HEAD = "c0ffee1c0ffee2c0ffee3c0ffee4c0ffee5c0ffe";
 
 // Unique per run (concurrent bun-test isolation) AND rooted in the OS tmpdir,
 // deliberately outside the git checkout: a fixture inside the repo would share
@@ -21,7 +26,7 @@ function fakeTracker(): TrackerAdapter & { commented: string[] } {
     detect: async () => true,
     parseRef: () => null,
     fetchIssue: async () => ({ title: "Issue title", body: "Issue body text" }),
-    prStatus: async () => ({ exists: true, isDraft: true, checksGreen: true }),
+    prStatus: async () => ({ exists: true, isDraft: true, checksGreen: true, headSha: HEAD }),
     comment: async (_ref, body) => {
       commented.push(body);
       return true;
@@ -66,6 +71,15 @@ async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<Return
   }
   await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/1" });
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  // Likewise the review gate (gates.review): satisfied here with a real clean
+  // round rather than switched off, so these tests keep running the whole
+  // completion path they are about.
+  await writeCleanReviewPackage({
+    cwd: ROOT,
+    flowDir: path.basename(created),
+    head: HEAD,
+    prUrl: "https://github.com/acme/app/pull/1",
+  });
   return service.complete({ cwd: ROOT, id: flow.id });
 }
 
@@ -76,6 +90,7 @@ test("no securityGate dep: no security gate runs (no regression)", async () => {
     "acceptance-criteria",
     "pull-request",
     "tasks",
+    "review",
     "health",
   ]);
   expect(result.passed).toBe(true);

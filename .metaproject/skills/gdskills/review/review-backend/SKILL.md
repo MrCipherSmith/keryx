@@ -1,5 +1,6 @@
 ---
 name: review-backend
+model_tier: standard
 description: |
   Use when: reviewing NestJS backend changes — API design, service layer, DTO validation,
   database patterns, and TypeScript correctness. Covers "review backend", "backend review",

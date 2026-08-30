@@ -35,6 +35,13 @@ import {
 import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycle";
 import { emitSubagentFleet } from "../../../tui/subagent-bridge";
 import { withFileLock } from "../../../lib/fs";
+import {
+  buildTierMap,
+  MODEL_TIERS,
+  parseModelTier,
+  resolveTierModel,
+  type DiscoveredProvider,
+} from "../../../gdskills/model-tier";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -184,8 +191,19 @@ export interface SpawnSubagentToolDeps {
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
   /** Build a ProviderPort for a resolved provider/model. */
   makeProvider: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
-  /** Credentialed providers the child may use (detection allowlist). */
-  getDetectedProviders: () => readonly { name: string }[];
+  /**
+   * Credentialed providers the child may use (detection allowlist) AND the
+   * candidate set tier resolution ranks.
+   *
+   * `models` is optional because it is genuinely absent at one call site (the
+   * readline REPL knows only the provider it was launched with), not because it
+   * is decorative: `buildTierMap` ranks exactly these ids, so a caller that
+   * reports names only starves discovery and every tier resolves to the session
+   * model. That is a safe outcome — never a downgrade — but it is the degraded
+   * one, so a caller holding a `detectProviders()` result must pass its `models`
+   * through rather than mapping it down to bare names.
+   */
+  getDetectedProviders: () => readonly { name: string; models?: readonly string[] }[];
   idSeq?: () => string;
   clock?: () => string;
   /** Parent run/session ids for MAE linkage (defaults generated once). */
@@ -332,8 +350,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
         "label?: string, max_tool_calls?: number }. Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself). Optionally accepts a 'runtime' block to " +
-        "delegate the child to an external vendor coding CLI instead of running it in-process.",
+        "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
+        "(light|standard|deep) to size the child's model against your own, and a 'runtime' " +
+        "block to delegate the child to an external vendor coding CLI instead of running it " +
+        "in-process.",
       inputSchema: {
         type: "object",
         properties: {
@@ -341,6 +361,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
           max_tool_calls: { type: "number" },
+          /**
+           * Flow 204 — how much model this child's work is worth.
+           *
+           * A TIER, never a model name: the concrete model is resolved at
+           * dispatch time by `buildTierMap` below, from the models runtime
+           * detection reported for THIS session's provider, placed relative to
+           * this session's own model. An enum is the enforcement — a caller
+           * cannot write a model id into this field, and the tool holds no list
+           * of what exists.
+           *
+           * OPTIONAL, and an omitted value inherits the parent verbatim, exactly
+           * as before this field existed. A tier that cannot be resolved (nothing
+           * discovered, an unrankable catalogue, an unrankable session model) also
+           * lands on the session model: never a downgrade and never a dispatch
+           * failure.
+           */
+          model_tier: {
+            type: "string",
+            enum: [...MODEL_TIERS],
+            description:
+              "Size the child's model against your own: 'light' for mechanical, verifiable work, " +
+              "'standard' for ordinary work (same as omitting it), 'deep' for genuinely hard " +
+              "reasoning. Resolved against the models this session's provider actually reports; " +
+              "when they cannot be ranked the child keeps your model.",
+          },
           /**
            * Flow 176 — the external runtime request
            * (docs/requirements/keryx-external-agent-runtime §6.1, §8.3).
@@ -414,18 +459,48 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
 
       const parent = deps.getParentModel();
       const detected = deps.getDetectedProviders();
+      const session = { providerId: parent.providerId, modelId: parent.modelId };
+      // The candidate set for tier resolution: whatever runtime detection
+      // reported, passed through verbatim. No table of model ids exists on this
+      // path — a provider that reported no models simply contributes none, and
+      // its tiers resolve to the session model.
+      const catalog: readonly DiscoveredProvider[] = detected.map((p) => ({
+        name: p.name,
+        models: p.models ?? [],
+      }));
+      // The model's requested tier, or `undefined` for "inherit the parent",
+      // which is what every dispatch authored before this field means. A value
+      // `parseModelTier` cannot read (including a model NAME, which is the point)
+      // is `undefined` too: an unreadable tier inherits rather than guessing.
+      const requestedTier = parseModelTier(typeof input.model_tier === "string" ? input.model_tier : undefined);
       const ctx: SubagentContext = {
         parentRunId,
         parentSessionId,
         parentProvenance,
         contextManifestHash: sha256(`${parentRunId}:${parentSessionId}`),
         canonicalContractVersion: "1.0.0",
-        parentModel: { providerId: parent.providerId, modelId: parent.modelId },
+        parentModel: session,
         parentPolicy: parentShellPolicy(),
         ledger,
         detected: detected.length > 0 ? detected : [{ name: parent.providerId }],
-        config: { maxTreeDepth: 2, maxChildren: DEFAULT_MAX_CHILDREN },
+        config: {
+          maxTreeDepth: 2,
+          maxChildren: DEFAULT_MAX_CHILDREN,
+          // The producer `resolveChildModel` has always consumed and nothing
+          // built. Total over the tier vocabulary by construction, so a
+          // `{kind:"tier"}` request can never hit that resolver's fail-closed
+          // `unknown model tier` denial.
+          tiers: buildTierMap(session, catalog),
+        },
       };
+      // The recording half of the same decision (dispatch schema
+      // `model.tier_resolution` / `model.model_discovery`): WHICH of the three
+      // outcomes produced the child's model, and what was on the table when it
+      // did. Derived from the same pure, deterministic resolution the map above
+      // is built from — same session, same catalogue, same answer — so the record
+      // cannot drift from the map that is actually applied.
+      const tierResolution =
+        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog);
 
       const attemptId = idSeq();
       const branchId = idSeq();
@@ -445,6 +520,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             kind: "final-report",
             hash: artifactHash,
           },
+          // Omitted when no tier was asked for, so the child inherits the parent
+          // through `resolveChildModel`'s terminal rung — unchanged behaviour for
+          // every dispatch that does not use the field.
+          ...(requestedTier !== undefined
+            ? { modelRequest: { kind: "tier" as const, tier: requestedTier } }
+            : {}),
         },
         ctx,
         { idSeq, clock },
@@ -470,6 +551,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
+      /**
+       * One line naming the outcome the dispatch schema's `tier_resolution`
+       * enumerates — `discovered`, `session-ranked` or `session-fallback` — plus
+       * the sentence that explains it. Undefined when no tier was asked for, in
+       * which case there is no resolution to record and the child simply
+       * inherited.
+       *
+       * This is what makes a finished run explainable: without it a dispatch says
+       * which model it ran on and never why, and a fallback is indistinguishable
+       * from an assignment that happened to land on the session's model.
+       */
+      const tierRecord =
+        tierResolution === undefined
+          ? undefined
+          : `model tier ${tierResolution.tier} → ${runModel.provider}/${runModel.model} ` +
+            `[${tierResolution.source}] ${tierResolution.reason}`;
       // --- External runtime seam (flow 176) ---------------------------------
       // Reached only when the dispatch asks for it AND the host wired the hook,
       // so every existing call site falls straight through. Read BEFORE the
@@ -496,6 +593,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         task,
         ...externalMark,
       });
+      if (tierRecord !== undefined) {
+        // The run trace is where this is read back from afterwards; it goes out
+        // on the same diagnostics channel every other per-dispatch fact uses.
+        emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
+      }
 
       // Placed here because `spawnSubagent` above has already applied admission,
       // the ledger and the depth/child caps: an external child is gated
@@ -1067,6 +1169,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
             `MAE reservation: rounds≤${maxRounds} ` +
             `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
+            (tierRecord === undefined ? "" : `${tierRecord}\n`) +
             `--- summary ---\n${boundSummary(folded.text)}`,
           ...(status !== "Completed" ? { partial: boundSummary(folded.text) } : {}),
         };

@@ -23,18 +23,30 @@ The full surface:
 ```console
 $ keryx review
 Usage:
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review ingest --report <path> [--flow <id>] --ref <ref>
+  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                      [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                            [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                            [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--round <n>] [--dry-run]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                              [--flow-link <url>] [--fixtures <dir>]
   keryx review loop --flow <flow-id> [--task <Tn>]
+  keryx review stack [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
@@ -86,6 +98,218 @@ drop list reaches the review record. `--append <package>/scope.md` writes the
 same block directly and now replaces an existing one rather than appending a
 second, but `--scope` is the supported route because it does not depend on two
 commands hitting the same file in the right order.
+
+### And the second scope: what the change can break
+
+```bash
+keryx review blast-radius --ref "$(git merge-base HEAD main)" --json > blast-radius.json
+keryx review blast-radius --ref "$(git merge-base HEAD main)" --brief
+```
+
+A review of the diff answers *is this change correct?* It does not answer *did
+this change break something that was working*. The second scope is computed —
+`gdgraph affected` walked outward from each changed file, ranked by edge
+distance, kept to depth 2, cut at 40 files closest first — and it is bounded on
+purpose: reviewing everything each round is unaffordable, and review quality
+decays as context grows, so an unbounded second scope makes the later rounds
+worse rather than safer.
+
+The set is under **regression check, not under review**. A finding about style,
+naming or architecture in code the change did not touch is refused in code, not
+discouraged in prose. Every file the cap removed is in the record with its hop
+and its path back to the change, and a changed file the graph cannot answer for —
+any Markdown, JSON or shell file — is reported as unresolved rather than as an
+empty radius.
+
+Three rules do the refusing, and all three judge the claim: it must be anchored
+inside the computed set, it must be `major` or above, and it must name what the
+change did. **None of them reads the reviewer's name.** One used to: a
+reviewer-dimension deny-list that, sitting after the severity floor, could only
+ever fire on `major` and `blocker` findings — and duly refused a `blocker` that
+said the change introduced an import cycle and the CLI no longer boots, because
+`review-architecture` raised it. A false negative at blocker severity is the
+failure this scope exists to prevent, so the rule is gone and the other three
+carry it.
+
+Recompute when the changed-file set moves, and always on the final round:
+
+```bash
+keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
+```
+
+## Answer the humans — once, at the end
+
+```bash
+keryx review comments collect --repo acme/app --pr 7 --self "$(gh api user --jq .login)" \
+  --sha "$(git rev-parse HEAD)" --round 3 --out external-findings.json
+keryx review comments reply --repo acme/app --pr 7 --outcomes outcomes.json \
+  --sha "$(git rev-parse HEAD)" --final --dry-run
+```
+
+Comments left on the pull request by other people — and by other bots — are
+collected **every round** and answered **once**, after the final round. Replying
+per round turns one thread into six and every reply states an intention rather
+than an outcome. All three sources are read (inline comments, review submissions,
+PR-level discussion), a bot reviewer is treated exactly like a human, and only
+our own identity is filtered out — the collector refuses to run without knowing
+it, because otherwise the reply pass answers itself.
+
+`--sha` is required on **both** halves, and on `collect` it is what makes the
+record datable: it is written as `collected_sha`, and the completion gate
+compares it with the pull request's head before believing "nothing outstanding".
+`rounds_collected` cannot do that job — it is a count, `--round` defaults to `1`,
+and a file written before anyone commented reads exactly like one written after
+the last round.
+
+### The precondition this puts on `flow complete`
+
+Dating the record means resolving the pull request's head, and that is done with
+`gh pr view`. So **once a flow has a PR recorded, completing it needs a `gh` that
+can authenticate** — `gh` on `PATH` and `gh auth status` exiting `0`. On a CI
+runner or a machine that is logged out, the gate reports:
+
+```text
+✗ review (1 of 5 conditions failed — external-comments (unobserved): acme/app#7 has a
+  comment record collected against a1b2c3d… (round 2), and this run could not resolve
+  the pull request's own head to compare it with: the tracker could not be reached, so
+  the pull request was never asked about — `gh` is not on `PATH`, or `gh auth status`
+  exits non-zero. So the record is neither shown to be current nor shown to be stale —
+  nobody looked. Install `gh` and run `gh auth login` …)
+```
+
+The condition distinguishes three states, and the message says which one you are
+in, because the fix for each is different:
+
+| What happened | Status | What to do |
+|---|---|---|
+| The head resolved and the collection is against it | `pass` | nothing |
+| The head resolved and the collection is against another commit, or names none | `violated` | re-run `keryx review comments collect --sha <pr-head>` |
+| The head could not be resolved at all | `unobserved` | fix the tracker — the message names how it failed |
+
+The third one used to be reported as the second, so a logged-out `gh` read as
+*your comment record is stale* and sent you to re-collect a record that was
+already current.
+
+**`--merged <sha>` does not lift it.** The merged commit stands in for the PR
+head in the head-commit condition, because "was the reviewed tree the one that
+merged" is a question the local object database answers on its own — see *What
+`--merged <sha>` proves about the round*, below. It cannot stand in here:
+"has anyone commented since the record was written" is a question about the pull
+request, and a comment posted after the last round and before the merge is
+invisible to every fact in the local repository. Substituting the merged commit
+would not relax the check, it would answer a different question and call the
+answer clean.
+
+If an environment will never reach the tracker, the way past is
+`completion.require_clean_round: false` in `.metaproject/tasks.config.json`,
+which reports the whole review gate as `skipped` in the gate list. That is the
+point of it: the waiver is on the record, rather than hidden inside a green tick.
+
+Each reply is at most **two sentences and 600 characters** — `--max-sentences`
+and `--max-chars`, both refusing a value below one — cut rather than warned
+about, with the detail living in the flow package that the link points at. Both
+bounds are load-bearing: one 4,000-character sentence is one sentence, and a
+sentence budget alone posts it verbatim. Beyond `--max-replies` (default 30) one
+summary comment stands for the backlog.
+
+Nothing here can resolve or hide a thread. The port holds an allow-list of five
+endpoints — three reads and two writes — and everything else, GraphQL included,
+is refused by the port itself. Replying is ours; resolving is the reviewer's call.
+
+`--dry-run` prints the exact requests and writes nothing, and `--fixtures <dir>`
+answers every read from JSON on disk, so the whole loop can be rehearsed with no
+token, no network and no pull request.
+
+### What survives a kill
+
+The record for a pull request lives in
+`.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json` and is written
+*around* each POST, not after it: a marker before the request leaves, the settled
+entry when it returns. Kill the process in that window and the next run finds the
+marker, looks for that exact reply on the pull request, and either adopts it —
+GitHub is the record — or sends it. Writing only after the post bounds the loss
+to one comment; it does not close the window, and a rerun that answers a reviewer
+twice is as bad as never answering.
+
+A row with no `reply_url` means **nobody answered that comment**, and all three
+readers agree: the collector re-offers it, the completion gate counts it
+unanswered, and the reply pass sends it. The pass used to skip on the row merely
+existing, which is how a comment became simultaneously unanswerable and
+unclearable — offered every round, posted never. A row reaching the pass with no
+reply is resolved against the pull request first, so repairing it cannot answer
+the reviewer twice. Beyond the reply cap one summary
+comment stands for the backlog — which changes how those comments are answered,
+never what was decided about them: each keeps the disposition the orchestrator
+reached for it. Inventing `dismissed-deprioritised` there would be a dismissal on
+the orchestrator's own authority, and a dismissal needs a human decision.
+
+## What `--merged <sha>` proves about the round
+
+`flow complete --merged <sha>` has no pull request to ask for a head, so the
+head-commit condition compares the round's recorded commit with the merged one
+instead. The question it is asking is **"is the content the reviewers read the
+content that merged?"** — and there are two ways to answer it yes, both decided
+locally, with no network and no `gh`:
+
+| Route | What it proves | Merge strategy it covers |
+|---|---|---|
+| **Commit containment** — `git merge-base --is-ancestor` | the reviewed commit is reachable from the merge | `--no-ff`, fast-forward |
+| **Tree equality** — `git rev-parse <sha>^{tree}` on both | the reviewed bytes *are* the merged bytes | **squash**, rebase |
+
+Containment is tried first; tree equality only when it fails. **The passing
+detail names which route was used and both SHAs**, so a green tick says what was
+actually proved rather than merely that something was:
+
+```text
+round `round-1` ran against 77811f5…, which is NOT contained in the merged commit
+c056793… — but both commits have the identical tree 188e5b2… (accepted by TREE
+EQUALITY). That is what a clean squash or rebase of the reviewed branch produces,
+and it is a stronger claim than ancestry: the content the reviewers read is
+byte-for-byte the content that merged.
+```
+
+This is why a **squash merge completes**. It did not use to: the condition was
+first an equality test and then a containment test, and a squash commit has no
+ancestry relation to the branch commits at all, so containment is false for it by
+construction. Tree equality is not a weaker fallback — ancestry proves a commit is
+*reachable*, tree equality proves the *bytes are the same*.
+
+### When it fails, and which failure it is
+
+Four outcomes, and the last two are deliberately not the same status:
+
+| What happened | Status | What to do |
+|---|---|---|
+| The round's commit is contained in the merge | `pass` | nothing |
+| It is not contained, and the two trees are identical | `pass` | nothing — this is a clean squash or rebase |
+| It is not contained, and the two trees **differ** | `violated` | ingest a round against the merged commit: `keryx review ingest … --head <merged-sha>` |
+| A tree could not be **read** at all | `unobserved` | fetch the missing object, or ingest a round against the merged commit |
+
+**A moved base legitimately fails.** If something else landed on `main` between
+the round and the squash, the squash carries it and the trees differ. That is
+`violated`, and it is not rescued by a three-way comparison, because it is a true
+statement about the review: the reviewers did not read what merged. The message
+prints both tree ids so the claim is checkable rather than asserted.
+
+**A tree that could not be read is never a pass, and never a `violated` either.**
+A commit missing from this clone, a shallow clone, a directory that is not a
+repository, no `git` on `PATH` — none of those is evidence that the trees differ,
+and none of them is evidence that they match. The condition reports `unobserved`,
+quotes git's own first line of complaint, and names which of the two objects it
+could not read:
+
+```text
+head-commit (unobserved): round `round-1` ran against 77811f5… and the completion
+names merged commit 1234567… . 77811f5… is not contained in it, and the trees could
+not be compared: the merged commit 1234567… — `git rev-parse 1234567…^{tree}` exited
+128: fatal: ambiguous argument … unknown revision or path not in the working tree.
+So nothing here shows either that the reviewed content is what merged or that it is
+not — the check could not run, which is not the same as running and failing.
+```
+
+Both `violated` and `unobserved` fail the gate. They are separate because the
+fixes are different, and because a gate that passed when its check could not run
+is the exact failure this gate exists to end.
 
 ## Check the bounds before you dispatch
 

@@ -2,6 +2,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { createFlowService } from "../flow/service";
+import { durableExternalCommentsGate } from "../flow/review-gate";
 import { flowStateSchema } from "../flow/schema";
 import { duplicateFlowIds } from "../flow/store";
 import { githubAdapter } from "../flow/tracker/github";
@@ -22,6 +23,7 @@ import { ATTEMPT_CLI_OUTCOMES } from "../flow/types";
 import type {
   AttemptCliOutcome,
   FlowService,
+  FlowServiceDeps,
   FlowStatus,
   TaskDisposition,
   TaskKind,
@@ -100,16 +102,38 @@ function flowStatusLabel(status: FlowStatus): string {
 
 let service: FlowService | null = null;
 
-function getService(): FlowService {
-  service ??= createFlowService({
+/**
+ * The composition root: every dependency `flow complete` runs its gates with.
+ *
+ * Exported so a test can assert what the CLI is actually built from. That is
+ * not ceremony — `externalCommentsGate` was declared on `FlowServiceDeps`, read
+ * by `service.ts`, and supplied by two test cases and by nothing else, so the
+ * seam existed everywhere except on the path an operator runs. A dependency
+ * that only tests provide is a dependency that is not wired.
+ */
+export function flowServiceDeps(): FlowServiceDeps {
+  return {
     tracker: githubAdapter,
     healthGate: async (cwd) => {
       const result = await createCodeHealthService().gate({ cwd });
       return { status: result.status, reasons: result.reasons };
     },
     securityGate: (cwd) => securityFlowGate(cwd),
+    // The review gate's condition 4 (AC5), bound to the record
+    // `keryx review comments collect|reply` writes. The seam was declared, read
+    // by `service.ts`, and provided only by two test cases — so on the path an
+    // operator actually runs it was never supplied, and the condition fell back
+    // to a coverage name that any `--reviewers` value could produce.
+    // `runReviewGate` also defaults to this collector, so forgetting the wiring
+    // here cannot weaken the gate again; it is passed explicitly because the
+    // dependency being visible at the composition root is the point of having it.
+    externalCommentsGate: durableExternalCommentsGate,
     now: () => new Date(),
-  });
+  };
+}
+
+function getService(): FlowService {
+  service ??= createFlowService(flowServiceDeps());
   return service;
 }
 
@@ -448,7 +472,14 @@ async function runComplete(args: string[]): Promise<void> {
         : gate.status === "skipped"
           ? style.gray(symbols.off)
           : style.red(symbols.cross);
-    console.log(`  ${mark} ${gate.name} ${style.dim(`(${gate.detail})`)}`);
+    // A failing gate has to say WHICH condition failed and for which findings —
+    // one line per condition rather than one line per gate, because the review
+    // gate reports five and a single wrapped line hides four of them.
+    const [first = "", ...rest] = gate.detail.split(" | ");
+    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
+    for (const [index, line] of rest.entries()) {
+      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
+    }
   }
   if (result.passed && result.issueComment) {
     if (result.flow.source.type === "github-issue") {

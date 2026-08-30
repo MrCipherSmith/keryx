@@ -1,5 +1,6 @@
 ---
 name: job-documenter
+model_tier: light
 description: "Use when a job folder needs to be initialized, or analysis/report/review documents need to be created or updated in jobs/."
 triggers:
   - "Document job"

@@ -63,6 +63,29 @@
  * and assert on what came back off disk. Hand-built round fixtures are what let
  * the ranked identity ship green — `loop.test.ts` passed 18/18 while the
  * detector was inert in production, because no fixture carried a `global_id`.
+ *
+ * # What is NOT a loop: an external comment (flow 204)
+ *
+ * `repeated-finding` reads `findings.json`, and since flow 204 that file also
+ * holds the PR's external comments — `source: "external"`, one per collected
+ * comment, carrying `dedupe_key: external:<comment id>` which is *deliberately*
+ * stable across rounds. Collection runs every round (AC8) while replies are
+ * posted once after the final round (AC11), so an unanswered comment is
+ * re-collected and re-persisted every round BY DESIGN.
+ *
+ * Fed to a detector that treats `dedupe:<key>` as an identity, that design makes
+ * every flow with one outstanding comment escalate from round 2 — naming the
+ * human or bot who left the comment as the reviewer stuck in a loop, and telling
+ * the orchestrator to change strategy over a comment nobody has answered yet.
+ * The signal means "a fix round left its finding standing"; a comment awaiting
+ * its deferred reply is not that, and no threshold makes it that.
+ *
+ * So external findings are excluded from `repeated-finding` — and counted, not
+ * dropped in silence: see {@link LoopDetection.externalFindingsExcluded} and
+ * {@link LoopDetection.externalFindingsRecurring}, both rendered into the record.
+ * Whether an outstanding comment was answered is the completion gate's question
+ * (AC5/AC13), which is where it can be asked without accusing the commenter of
+ * looping.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -107,6 +130,24 @@ export type LoopDetection = {
   outputPairsCompared: number;
   /** Consecutive round pairs that existed at all: `max(roundsSeen - 1, 0)`. */
   outputPairsPossible: number;
+  /**
+   * External findings (`source: "external"`) held out of the repeated-finding
+   * pass, counted across every round.
+   *
+   * Reported rather than assumed, on the same rule as
+   * {@link LoopDetection.outputPairsCompared}: a detector that quietly ignores
+   * part of its input is indistinguishable from one that examined it and found
+   * nothing.
+   */
+  externalFindingsExcluded: number;
+  /**
+   * Distinct external findings seen in two or more rounds — the ones that WOULD
+   * have escalated before flow 204 fixed this.
+   *
+   * It is a count of collected comments still awaiting their end-of-flow reply,
+   * not a defect signal, and it never touches `escalate`.
+   */
+  externalFindingsRecurring: number;
   /**
    * `tasks[].attempts.count` from `flow.json`, when a task was named.
    * `undefined` means nobody looked it up — NOT zero attempts.
@@ -237,41 +278,18 @@ export function detectReviewLoop(input: {
 
   // 1. The same finding in two or more distinct rounds.
   //
-  // Two passes, because identity is a SET of keys and "the same finding" is
-  // therefore an intersection rather than an equality. Pass one unions every
-  // key a finding carries into one group, so a `global_id` carried forward and a
-  // content key that matches independently name the SAME finding rather than two.
-  // Pass two buckets the findings by that group.
-  const groups = new KeyGroups();
-  for (const round of rounds) {
-    for (const finding of round.findings) {
-      groups.link(findingIdentities(finding));
-    }
-  }
-  const seen = new Map<string, { rounds: string[]; sample: Partial<StructuredReviewFinding> }>();
-  for (const round of rounds) {
-    const inThisRound = new Set<string>();
-    for (const finding of round.findings) {
-      const keys = findingIdentities(finding);
-      const identity = groups.representative(keys);
-      if (identity === undefined) {
-        // Nothing to compare it by. Silence here is honest: the alternative is a
-        // shared placeholder key that makes every such finding a repeat.
-        continue;
-      }
-      if (inThisRound.has(identity)) {
-        // A repeat WITHIN one round is a deduplication problem, not a loop.
-        continue;
-      }
-      inThisRound.add(identity);
-      const entry = seen.get(identity);
-      if (entry === undefined) {
-        seen.set(identity, { rounds: [round.label], sample: finding });
-      } else {
-        entry.rounds.push(round.label);
-      }
-    }
-  }
+  // Reviewer findings only. An external comment is re-collected every round
+  // while its reply is deferred to the last one, so it repeats by design — see
+  // the module header. It is counted below and never signalled.
+  const externalFindingsExcluded = rounds.reduce(
+    (total, round) => total + round.findings.filter(isExternalFinding).length,
+    0,
+  );
+  const externalFindingsRecurring = [
+    ...repeatedIdentities(rounds, (finding) => isExternalFinding(finding)).values(),
+  ].filter((entry) => entry.rounds.length >= 2).length;
+
+  const seen = repeatedIdentities(rounds, (finding) => !isExternalFinding(finding));
   for (const [identity, entry] of seen) {
     if (entry.rounds.length < 2) {
       continue;
@@ -326,8 +344,77 @@ export function detectReviewLoop(input: {
     roundsSeen: rounds.length,
     outputPairsCompared: comparedPairs,
     outputPairsPossible: Math.max(rounds.length - 1, 0),
+    externalFindingsExcluded,
+    externalFindingsRecurring,
     attempts: input.attempts,
   };
+}
+
+/**
+ * A finding that came off the pull request rather than out of a reviewer.
+ *
+ * The one property that decides it is `source`, which `toContractFinding`
+ * preserves precisely so the three behaviours AC5/AC9/AC10 attach to an external
+ * comment cannot be lost by a projection. This is the fourth.
+ */
+function isExternalFinding(finding: Partial<StructuredReviewFinding>): boolean {
+  return finding.source === "external";
+}
+
+/**
+ * Which rounds each finding identity appears in, over the findings `select`
+ * admits.
+ *
+ * Two passes, because identity is a SET of keys and "the same finding" is
+ * therefore an intersection rather than an equality. Pass one unions every key a
+ * finding carries into one group, so a `global_id` carried forward and a content
+ * key that matches independently name the SAME finding rather than two. Pass two
+ * buckets the findings by that group.
+ *
+ * `select` runs BEFORE the union, not after: an excluded finding must not link
+ * two keys together either, or an external comment sharing a file and a line
+ * with a reviewer finding would merge the two identities and make the reviewer's
+ * one unresolvable.
+ */
+function repeatedIdentities(
+  rounds: readonly ReviewRound[],
+  select: (finding: Partial<StructuredReviewFinding>) => boolean,
+): Map<string, { rounds: string[]; sample: Partial<StructuredReviewFinding> }> {
+  const groups = new KeyGroups();
+  for (const round of rounds) {
+    for (const finding of round.findings) {
+      if (select(finding)) {
+        groups.link(findingIdentities(finding));
+      }
+    }
+  }
+  const seen = new Map<string, { rounds: string[]; sample: Partial<StructuredReviewFinding> }>();
+  for (const round of rounds) {
+    const inThisRound = new Set<string>();
+    for (const finding of round.findings) {
+      if (!select(finding)) {
+        continue;
+      }
+      const identity = groups.representative(findingIdentities(finding));
+      if (identity === undefined) {
+        // Nothing to compare it by. Silence here is honest: the alternative is a
+        // shared placeholder key that makes every such finding a repeat.
+        continue;
+      }
+      if (inThisRound.has(identity)) {
+        // A repeat WITHIN one round is a deduplication problem, not a loop.
+        continue;
+      }
+      inThisRound.add(identity);
+      const entry = seen.get(identity);
+      if (entry === undefined) {
+        seen.set(identity, { rounds: [round.label], sample: finding });
+      } else {
+        entry.rounds.push(round.label);
+      }
+    }
+  }
+  return seen;
 }
 
 /**
@@ -467,8 +554,20 @@ export function renderLoopDetectionMarkdown(detection: LoopDetection): string {
   lines.push(`rounds_seen: ${detection.roundsSeen}`);
   lines.push(`attempts_recorded: ${detection.attempts === undefined ? "not recorded" : detection.attempts}`);
   lines.push(`output_pairs_compared: ${detection.outputPairsCompared} of ${detection.outputPairsPossible}`);
+  lines.push(
+    `external_findings_excluded: ${detection.externalFindingsExcluded} (recurring across rounds: ${detection.externalFindingsRecurring})`,
+  );
   lines.push(`escalate: ${detection.escalate ? "yes" : "no"}`);
   lines.push("");
+  if (detection.externalFindingsRecurring > 0) {
+    lines.push(
+      `${detection.externalFindingsRecurring} collected PR comment(s) appear in more than one round. That is collection`,
+    );
+    lines.push("working as specified — comments are collected every round and answered once, after the");
+    lines.push("final one — and not a reviewer repeating itself, so it does not escalate here. Whether");
+    lines.push("each one was answered is the completion gate's question.");
+    lines.push("");
+  }
   if (detection.signals.length === 0) {
     lines.push(negativeFinding(detection));
     lines.push("");
@@ -501,7 +600,7 @@ function negativeFinding(detection: LoopDetection): string {
   }
   if (detection.outputPairsCompared === 0) {
     return (
-      `_no repeated finding across the ${detection.roundsSeen} rounds on disk. ` +
+      `_no repeated reviewer finding across the ${detection.roundsSeen} rounds on disk. ` +
       `The output check did NOT run: no round pair could be compared, because all ` +
       `${detection.outputPairsPossible} pair(s) were missing a report on one or both sides. ` +
       "That half is unobserved, not clean._"
@@ -511,7 +610,7 @@ function negativeFinding(detection: LoopDetection): string {
     detection.outputPairsCompared < detection.outputPairsPossible
       ? ` (${detection.outputPairsPossible - detection.outputPairsCompared} pair(s) could not be compared and are unobserved)`
       : "";
-  return `_no repeated finding, and no identical consecutive output, across the ${detection.roundsSeen} rounds on disk${partial}._`;
+  return `_no repeated reviewer finding, and no identical consecutive output, across the ${detection.roundsSeen} rounds on disk${partial}._`;
 }
 
 function escapePipes(value: string): string {

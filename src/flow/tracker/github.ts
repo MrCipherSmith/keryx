@@ -61,22 +61,30 @@ export const githubAdapter: TrackerAdapter = {
     exists: boolean;
     isDraft: boolean;
     checksGreen: boolean | null;
+    headSha: string | null;
   }> {
     try {
-      const view = await gh(["pr", "view", url, "--json", "isDraft,state"]);
+      // `headRefOid` is the head COMMIT of the PR branch, which is what the
+      // review gate compares a round's SHA against — not `headRefName`, which is
+      // a branch name and moves under the round.
+      const view = await gh(["pr", "view", url, "--json", "isDraft,state,headRefOid"]);
       if (view.exitCode !== 0) {
-        return { exists: false, isDraft: false, checksGreen: null };
+        return { exists: false, isDraft: false, checksGreen: null, headSha: null };
       }
-      const parsed = JSON.parse(view.stdout) as { isDraft?: boolean };
+      const parsed = JSON.parse(view.stdout) as { isDraft?: boolean; headRefOid?: string };
       // `gh pr checks` exits 0 when all checks pass, non-zero otherwise.
       const checks = await gh(["pr", "checks", url]);
       return {
         exists: true,
         isDraft: parsed.isDraft === true,
         checksGreen: checks.exitCode === 0,
+        // `null`, never `""`: an older `gh` that does not know the field leaves
+        // the head UNKNOWN, and the gate must report that rather than compare
+        // against an empty string and call it a mismatch.
+        headSha: typeof parsed.headRefOid === "string" && parsed.headRefOid !== "" ? parsed.headRefOid : null,
       };
     } catch {
-      return { exists: false, isDraft: false, checksGreen: null };
+      return { exists: false, isDraft: false, checksGreen: null, headSha: null };
     }
   },
 

@@ -1,5 +1,6 @@
 ---
 name: review-core-boundaries
+model_tier: deep
 description: |
   Use when reviewing shared core/infrastructure module changes for dependency
   direction, feature-boundary leakage, abstraction stability, composition,

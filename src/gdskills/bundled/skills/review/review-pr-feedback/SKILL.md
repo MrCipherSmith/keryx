@@ -1,5 +1,6 @@
 ---
 name: review-pr-feedback
+model_tier: light
 description: |
   Use when: a developer has received PR review comments and wants to understand them,
   act on them, or extract patterns from them. Covers "analyze PR comments",

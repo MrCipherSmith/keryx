@@ -3,10 +3,15 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
+import { writeCleanReviewPackage } from "./review-fixtures";
 import type { FlowServiceDeps, TrackerAdapter } from "./types";
 
 // Each test gets its own OS temp dir (no shared path -> no cross-test/CI flakes).
 let ROOT = "";
+
+// The PR head the fake tracker reports; a review round has to have run against
+// it for the review gate (flow 204) to pass.
+const HEAD = "d00d1d00d2d00d3d00d4d00d5d00d6d00d7d00d8";
 
 function fakeTracker(over: Partial<{
   checksGreen: boolean;
@@ -28,6 +33,7 @@ function fakeTracker(over: Partial<{
       exists: over.exists ?? true,
       isDraft: over.isDraft ?? true,
       checksGreen: over.checksGreen ?? true,
+      headSha: HEAD,
     }),
     comment: async (_ref, body) => {
       commented.push(body);
@@ -153,6 +159,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
 
   await service.acConfirm({ cwd: ROOT, id: "001", criterion: "AC1", note: "verified manually" });
   await service.acConfirm({ cwd: ROOT, id: "001", criterion: "AC2" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/43" });
 
   const result = await service.complete({ cwd: ROOT, id: "001", comment: true });
   expect(result.passed).toBe(true);
@@ -161,9 +168,10 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "acceptance-criteria",
     "pull-request",
     "tasks",
+    "review",
     "health",
   ]);
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass"]);
+  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
   expect(result.commented).toBe(true);
   expect(tracker.commented[0]).toContain("Flow 001");
   expect(tracker.commented[0]).toContain("pull/43");
@@ -191,8 +199,9 @@ test("failed gates return the flow to in-progress with fix notes", async () => {
   expect(result.flow.status).toBe("in-progress");
   const failedNames = result.gates.filter((gate) => gate.status === "fail").map((gate) => gate.name);
   // The scaffolded T1-T4 are still `todo`, so the task gate fails alongside
-  // the other three.
-  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "tasks", "health"]);
+  // the other three — and no review round was ever recorded, so the review gate
+  // fails too rather than passing on the absence of one.
+  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "tasks", "review", "health"]);
   expect(result.flow.history.some((event) => event.event === "completion-failed")).toBe(true);
 });
 
@@ -217,6 +226,10 @@ test("merged completion closes a flow without a PR when main contains the commit
     await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
   }
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  // No PR on this path, so the review gate compares the round against the
+  // merged commit instead, and the external-comment condition is satisfied by
+  // there being no PR anybody could have commented on.
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: "7b78ff14", prUrl: null });
 
   const result = await service.complete({ cwd: ROOT, id: flow.id, mergedCommit: "7b78ff14" });
 
@@ -228,9 +241,10 @@ test("merged completion closes a flow without a PR when main contains the commit
     "acceptance-criteria",
     "main-merge",
     "tasks",
+    "review",
     "health",
   ]);
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass"]);
+  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
 });
 
 test("block stores the previous status and unblock restores it", async () => {

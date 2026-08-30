@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413",
+  "mode": "attach-review",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/413",
+    "head": "dfb9ca4a07f0d9ef9685a0122487f30f94c059cf"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/scope.md",
+    "coverage": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/coverage.md",
+    "report": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/report.md",
+    "findings": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/findings.json",
+    "learning": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/learning.md",
+    "decisions": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-core-boundaries",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-30T07:14:52.649Z",
+  "updatedAt": "2026-08-30T07:14:52.649Z",
+  "flow": {
+    "id": "204",
+    "path": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co"
+  }
+}

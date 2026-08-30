@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -10,6 +10,19 @@ import {
   renderStageCountsMarkdown,
   type VerificationMergeResult,
 } from "./verification";
+import {
+  applyExternalVerdictRule,
+  partitionExternalFindings,
+  type ExternalReclaim,
+} from "./pr-comments";
+import {
+  BLAST_RADIUS_SCOPE_REVIEWER,
+  isBlastRadiusScopedFinding,
+  renderBlastRadiusScreenMarkdown,
+  screenBlastRadiusFindings,
+  type BlastRadiusScreenInput,
+  type BlastRadiusScreenResult,
+} from "./blast-radius";
 import {
   applyFindingsCap,
   evaluateSpendCap,
@@ -39,6 +52,7 @@ import {
   type ReviewFindingClassScope,
   type ReviewFindingConfidence,
   type ReviewFindingDisposition,
+  type ManagedReviewTarget,
   type ReviewFindingsSource,
   type ReviewerResultLike,
   type ReviewScopeCountsLike,
@@ -50,6 +64,71 @@ const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning
 
 export function reviewsRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "reviews");
+}
+
+/**
+ * `git rev-parse HEAD` in `cwd`, or `null` when there is no checkout to ask.
+ *
+ * `null` rather than a throw, and `null` rather than `""`: the caller has to be
+ * able to tell "this round ran against no recorded commit" from "this round ran
+ * against the empty string", and only the first of those is an honest record.
+ * The output is checked against the shape git prints, so a `git` that answers
+ * with a warning, a prompt, or a symbolic name cannot become a SHA.
+ */
+export async function resolveGitHead(cwd: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    if (exitCode !== 0) {
+      return null;
+    }
+    const sha = stdout.trim().toLowerCase();
+    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The commit this round ran against, recorded on the manifest.
+ *
+ * Precedence, and the reasoning for it:
+ *
+ * 1. **What the caller said.** `keryx review start|attach|ingest --head <sha>`,
+ *    or a library caller that already knows. Nothing here second-guesses it.
+ * 2. **The local checkout.** The reviewers read a working tree; the commit that
+ *    tree is at is what they reviewed. For a `pr` target this is deliberately
+ *    preferred over the pull request's own head: if the two differ, the round
+ *    ran on something other than what will merge, and recording the PR head
+ *    would make the completion gate PASS on exactly that discrepancy. The gate
+ *    compares the two, so the honest value is the one that lets it.
+ * 3. **Nothing.** `null`, left off the manifest, and the gate reports
+ *    `head-commit (unobserved)` — which is a failure, not a pass.
+ *
+ * The pull request's own head is resolved one layer up, in `keryx review`, and
+ * only when there is no checkout to ask (reviewing a PR from outside a clone).
+ * Keeping the network call out of here is what lets this function run in every
+ * test without one.
+ */
+export async function resolveTargetHead(input: ManagedReviewInput): Promise<string | null> {
+  const declared = input.target.head;
+  if (typeof declared === "string" && declared.trim() !== "") {
+    return declared.trim();
+  }
+  return (input.resolveHead ?? ((args) => resolveGitHead(args.cwd)))({
+    cwd: input.cwd,
+    target: input.target,
+  });
+}
+
+/** {@link ManagedReviewTarget} with the resolved head folded in. */
+function targetWithHead(target: ManagedReviewTarget, head: string | null): ManagedReviewTarget {
+  return head === null ? target : { ...target, head };
 }
 
 export async function findRelatedFlow(input: {
@@ -74,9 +153,54 @@ export async function findRelatedFlow(input: {
   return null;
 }
 
+/**
+ * {@link ManagedReviewInput} plus the computed scope-B set, when the round ran
+ * one.
+ *
+ * The set is an ARGUMENT to the screen and not part of the package contract
+ * `types.ts` describes — nothing in the manifest, the finding record or either
+ * schema carries it — so it is declared where it is used and consumed. A caller
+ * that ran `keryx review blast-radius` passes the record it already holds; a
+ * caller that did not passes nothing, and {@link resolveScreenRadius} looks for
+ * the record on disk — see {@link handoffBlastRadiusPath} for where, and why it
+ * is NOT inside the package.
+ */
+export type ManagedReviewIngestInput = ManagedReviewInput & {
+  /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
+  blastRadius?: BlastRadiusScreenInput | undefined;
+};
+
+/**
+ * What the scope-B screen did to this round's findings (AC3).
+ *
+ * Shaped after {@link module:review/caps.FindingsCapResult}, deliberately: a
+ * screen that removes findings owes the same record a cap does — how many it saw,
+ * how many it kept, and every single one it removed WITH the rule that removed
+ * it. `screen: undefined` is the cap's `not recorded`: the screen did not run,
+ * which is not the same fact as "it ran and rejected nothing".
+ */
+export type ScopeBScreenRecord = {
+  /**
+   * Where the blast-radius record came from.
+   *
+   * - `input` — the caller passed it (`--blast-radius <file>`).
+   * - `handoff` — read from the reviews root, the between-commands channel.
+   * - `package` — read from this package's own copy, which a previous ingest of
+   *   the same `--review-id` wrote there. This is the retry path.
+   * - `none` — no screen ran.
+   */
+  source: "input" | "handoff" | "package" | "none";
+  /** Findings attributed to a scope-B reviewer, before the screen. */
+  scopeBFindings: number;
+  screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
+};
+
+/** The file name every copy of the blast-radius record is read from and written to. */
+const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
+
 export async function createManagedReviewPackage(
-  input: ManagedReviewInput,
-): Promise<ManagedReviewPackageResult> {
+  input: ManagedReviewIngestInput,
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord }> {
   const at = (input.now ?? new Date()).toISOString();
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
@@ -100,9 +224,16 @@ export async function createManagedReviewPackage(
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
   // that is still reported, so the drop rate is a measured number before it costs
   // a real finding.
-  const verification = mergeVerifications(reported, input.verifications ?? [], {
+  const merged = mergeVerifications(reported, input.verifications ?? [], {
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
+
+  // AC10. A `refuted` verdict on an EXTERNAL finding does not remove it and does
+  // not dismiss it — it becomes `answered-disagree`, which still owes a reply. A
+  // human asked a question; a machine deciding the question was invalid is not an
+  // answer, and in `filter` mode the finding would otherwise have left the
+  // package entirely with nobody speaking to the person who raised it.
+  const { result: verification, reclaimed: externalReclaims } = applyExternalVerdictRule(merged);
 
   // The findings cap (AC5): 10 per reviewer, blockers exempt, default in code.
   //
@@ -116,7 +247,26 @@ export async function createManagedReviewPackage(
   //
   // Whatever it removes is named, by reviewer and by id, in `scope.md`. A cap
   // that truncated silently would read as "there was nothing more".
-  const findingsCap = applyFindingsCap(verification.retained, {
+  //
+  // External findings do NOT enter the cap. AC9 says an external comment may
+  // never be silently dropped, and this cap drops silently by design — it is a
+  // READING cap over what one reviewer reported. `reviewer` on an external
+  // finding is the commenter's login, so thirty CodeRabbit comments would
+  // truncate to ten and twenty people would go unanswered, with the truncation
+  // recorded under a heading nobody opens. Externals are bounded instead by
+  // `max_replies_total`, which reports its backlog out loud and still answers it.
+  const scoped = partitionExternalFindings(verification.retained);
+
+  // AC3, enforced here rather than asked for in `review-regression/SKILL.md`.
+  // The skill has said "this is enforced, not requested" since the day the
+  // screen was written, and nothing called it: a scope-B `major` about the style
+  // of an untouched hop-2 file was ingested unscreened and then blocked
+  // completion at the review gate — the opposite of the promise. It runs BEFORE
+  // the findings cap so a rejected finding cannot spend a reviewer's reading
+  // budget on its way out.
+  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
+
+  const findingsCap = applyFindingsCap(scopeB.retained, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -127,12 +277,20 @@ export async function createManagedReviewPackage(
   // this exists to leave.
   const findings = [
     ...findingsCap.retained,
+    ...scoped.external,
     ...fromVerifierRefutations(verification.refuted),
     ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
   ];
   assignGlobalIds(findings, reviewId);
+  // The commit this round ran against. Resolved HERE rather than left to the
+  // caller because leaving it to the caller is what produced a repository full
+  // of packages with no head at all: `ManagedReviewTarget.head` existed, the
+  // schema accepted it, the completion gate compared against it, and nothing on
+  // the writing side ever set it. See {@link resolveTargetHead}.
+  const head = await resolveTargetHead(input);
   const manifest = buildManifest({
     input,
+    target: targetWithHead(input.target, head),
     reviewId,
     packageDir,
     flowMatch,
@@ -223,7 +381,7 @@ export async function createManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -233,6 +391,8 @@ export async function createManagedReviewPackage(
   );
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
+  // Last, and only once the package is complete. See {@link persistScreenRadius}.
+  await persistScreenRadius(packageDir, scopeB.resolved);
 
   return {
     reviewId,
@@ -242,7 +402,188 @@ export async function createManagedReviewPackage(
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
     caps,
+    // Returned as well as written into `scope.md`, on the same rule the caps
+    // record follows: a removal an operator has to open a file to discover reads,
+    // on the terminal they were already looking at, as "there was nothing more".
+    scopeBScreen: scopeB.record,
   };
+}
+
+/**
+ * Run the AC3 screen over the findings scope B raised, or refuse to record them.
+ *
+ * Three outcomes, and the third is the point:
+ *
+ * 1. **A blast-radius record and scope-B findings** — the screen runs.
+ *    {@link screenBlastRadiusFindings} keeps the regression claims and returns
+ *    the rest with the rule that refused each one; the rejected findings do not
+ *    reach `findings.json`, and every one of them is named in `scope.md`.
+ * 2. **A blast-radius record and no scope-B findings** — the screen runs over an
+ *    empty set and says so. `accepted: 0, rejected: 0` after a screen that ran is
+ *    a different fact from a screen that did not, and the record keeps them apart.
+ * 3. **Scope-B findings and no blast-radius record** — refused. The alternative
+ *    is the defect this repairs: the enforcement silently not running while the
+ *    skill tells the reviewer it did. A screen cannot be applied without the set
+ *    the round was dispatched over, so the round is not recordable until the set
+ *    is supplied. The refusal names both channels that work — `--blast-radius
+ *    <file>` and the handoff slot in the reviews root — and names the one that
+ *    does not, because the message used to point at the package directory and
+ *    following it made the ingest allocate a different one. See
+ *    {@link handoffBlastRadiusPath}.
+ *
+ * Findings that are not scope B pass through untouched. Scope A asks a different
+ * question and its `minor` on a changed file is legitimate.
+ */
+async function screenScopeBFindings(
+  input: ManagedReviewIngestInput,
+  packageDir: string,
+  findings: readonly NormalizedReviewFinding[],
+): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord; resolved: ResolvedScreenRadius | undefined }> {
+  const resolved = await resolveScreenRadius(input, packageDir);
+  const reviewers = resolved?.radius.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
+  const scopeB = findings.filter((finding) => isBlastRadiusScopedFinding(finding, reviewers));
+
+  if (resolved === undefined) {
+    if (scopeB.length > 0) {
+      throw new Error(
+        `Refusing to record ${scopeB.length} finding(s) raised under scope B (${scopeB
+          .map((finding) => `${finding.id} by ${finding.reviewer}`)
+          .join(
+            ", ",
+          )}) with no blast-radius record: AC3 is enforced in code, and the screen cannot be applied without the computed set the round was dispatched over. Two ways out, and the first is the one that always works: (1) compute the set with \`keryx review blast-radius --json > <file>\` and pass \`--blast-radius <file>\` to this ingest; (2) write that record to \`${path.relative(
+          input.cwd,
+          handoffBlastRadiusPath(packageDir),
+        )}\` and ingest again — the ingest reads it from there and consumes it. Do NOT write it to \`${path.relative(
+          input.cwd,
+          path.join(packageDir, BLAST_RADIUS_ARTIFACT),
+        )}\`: a round that names no --review-id has not allocated that directory yet, so creating it makes the next ingest take the NEXT free name and find nothing there either.`,
+      );
+    }
+    return { retained: [...findings], record: { source: "none", scopeBFindings: 0 }, resolved: undefined };
+  }
+
+  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity });
+  const rejected = new Set(screen.rejected.map((rejection) => rejection.finding));
+  // The rejected findings do NOT go on to `findings.json`, and that is the
+  // decision rather than an oversight. `findings.json` is what this round is
+  // ASSERTING and what the completion gate must act on; a scope-B finding the
+  // screen refused is a claim the round has explicitly declined to make, and
+  // recording it there would hand the gate the exact thing AC3 exists to stop
+  // blocking completion on — an opinion about untouched code wearing scope B's
+  // badge. What it may not be is invisible, so every rejection is named three
+  // times: in `scope.md` under "## Scope B rejections" with the rule and the
+  // detail, in the `ScopeBScreenRecord` this returns, and on the terminal the
+  // operator was already looking at (`keryx review ingest` prints one line per
+  // rejection). "Rejected 0" and "the screen did not run" stay distinguishable
+  // in all three.
+  return {
+    retained: findings.filter((finding) => !rejected.has(finding)),
+    record: {
+      source: resolved.source,
+      scopeBFindings: scopeB.length,
+      screen,
+    },
+    resolved,
+  };
+}
+
+type ResolvedScreenRadius = {
+  radius: BlastRadiusScreenInput;
+  source: "input" | "handoff" | "package";
+  /** The file it was read from, when it came off disk. Consumed after the write. */
+  file?: string | undefined;
+};
+
+/**
+ * Where the between-commands blast-radius record lives: the REVIEWS ROOT, not
+ * the package.
+ *
+ * It used to be the package, and that was a trap. {@link allocatePackage}
+ * returns a directory that does not exist yet for every round that names no
+ * `--review-id` — which is every round the orchestrator runs — so the read
+ * always missed, the refusal always fired, and the refusal told the operator to
+ * create exactly the directory whose existence makes the next ingest allocate
+ * `<base>-r02` instead. Following the advice moved the target. Reproduced end to
+ * end: throw, write, throw, up to `MAX_SAME_DAY_ROUNDS`.
+ *
+ * The reviews root has the property the package dir lacks: writing a file into
+ * it cannot change which package name gets allocated, because allocation probes
+ * `<root>/<reviewId>` DIRECTORIES only. So the record can be written before the
+ * round and read after it without either command knowing the id.
+ *
+ * The record is consumed by the ingest that reads it (see
+ * {@link persistScreenRadius}) and copied into the package it screened. Both
+ * halves matter: the copy is what makes a re-ingest under the same
+ * `--review-id` screen against the same set without re-passing the flag, and
+ * the removal is what stops the NEXT round — a different change, a different
+ * radius — from silently screening against a set nobody recomputed. A stale set
+ * that still screens is the same class of failure as a screen that never ran.
+ */
+function handoffBlastRadiusPath(packageDir: string): string {
+  return path.join(path.dirname(packageDir), BLAST_RADIUS_ARTIFACT);
+}
+
+async function resolveScreenRadius(
+  input: ManagedReviewIngestInput,
+  packageDir: string,
+): Promise<ResolvedScreenRadius | undefined> {
+  if (input.blastRadius !== undefined) {
+    return { radius: input.blastRadius, source: "input" };
+  }
+  // The package's own copy first, so a retry under an explicit `--review-id`
+  // re-screens against the set the first attempt used rather than whatever the
+  // handoff slot happens to hold now.
+  const inPackage = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+  const fromPackage = await readBlastRadiusRecordFile(inPackage);
+  if (fromPackage !== undefined) {
+    return { radius: fromPackage, source: "package", file: inPackage };
+  }
+  const handoff = handoffBlastRadiusPath(packageDir);
+  const fromHandoff = await readBlastRadiusRecordFile(handoff);
+  if (fromHandoff !== undefined) {
+    return { radius: fromHandoff, source: "handoff", file: handoff };
+  }
+  return undefined;
+}
+
+/**
+ * One blast-radius record off disk, or `undefined` when the file is absent.
+ *
+ * A malformed file throws rather than falling back to "no record" — an
+ * unreadable artifact silently disabling the screen is precisely the failure
+ * being repaired here.
+ */
+async function readBlastRadiusRecordFile(file: string): Promise<BlastRadiusScreenInput | undefined> {
+  if (!(await pathExists(file))) {
+    return undefined;
+  }
+  const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<BlastRadiusScreenInput>;
+  if (!Array.isArray(parsed?.files) || !Array.isArray(parsed?.changedFiles)) {
+    throw new Error(
+      `${file} is not a blast-radius record: it carries no \`files\` and \`changedFiles\` arrays. It is the \`--json\` output of \`keryx review blast-radius\`, and scope B cannot be screened against anything else.`,
+    );
+  }
+  return parsed as BlastRadiusScreenInput;
+}
+
+/**
+ * Leave the package holding the set it was screened against, and empty the
+ * handoff slot.
+ *
+ * Runs AFTER every other artifact is on disk, so an ingest refused by a later
+ * gate leaves the operator's handoff file exactly where they put it.
+ */
+async function persistScreenRadius(packageDir: string, resolved: ResolvedScreenRadius | undefined): Promise<void> {
+  if (resolved === undefined) {
+    return;
+  }
+  const inPackage = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+  if (resolved.source !== "package") {
+    await writeFileAtomic(inPackage, `${JSON.stringify(resolved.radius, null, 2)}\n`);
+  }
+  if (resolved.source === "handoff" && resolved.file !== undefined) {
+    await rm(resolved.file, { force: true });
+  }
 }
 
 /**
@@ -470,6 +811,8 @@ function packagePath(
 
 function buildManifest(args: {
   input: ManagedReviewInput;
+  /** {@link ManagedReviewInput.target} with the resolved `head` folded in. */
+  target: ManagedReviewTarget;
   reviewId: string;
   packageDir: string;
   flowMatch: FlowMatchResult | null;
@@ -482,7 +825,7 @@ function buildManifest(args: {
     reviewId: args.reviewId,
     mode: args.input.mode,
     status: "draft",
-    target: args.input.target,
+    target: args.target,
     artifacts: {
       scope: artifactPath("scope.md"),
       coverage: artifactPath("coverage.md"),
@@ -657,6 +1000,17 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   // therefore droppable".
   if (finding.verification !== undefined) {
     record.verification = finding.verification;
+  }
+  // Same rule again, and this one is not cosmetic: `source` is what makes the
+  // verifier unable to refute a comment (AC10), keeps the findings cap off it
+  // (AC9), and keeps the completion gate closed while it is unanswered (AC5). A
+  // projection that dropped it would leave a finding that looks internal and
+  // silently acquires all three of the behaviours those criteria forbid.
+  if (finding.source !== undefined) {
+    record.source = finding.source;
+  }
+  if (finding.external_ref !== undefined) {
+    record.external_ref = finding.external_ref;
   }
   return record;
 }
@@ -1488,6 +1842,8 @@ function renderScope(
   verification: VerificationMergeResult<NormalizedReviewFinding>,
   carriedPreFilter: string | undefined,
   caps: ReviewCapsRecord,
+  externalReclaims: readonly ExternalReclaim[] = [],
+  scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -1509,8 +1865,78 @@ ${renderStageCountsMarkdown({
   caps: verification.caps,
 })}
 
-${renderCapsMarkdown(caps)}`;
+${renderCapsMarkdown(caps)}
+${renderScopeBScreenMarkdown(scopeBScreen)}${renderExternalReclaimsMarkdown(externalReclaims)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
+}
+
+/**
+ * The AC3 screen, on the record next to the caps that removed findings beside it.
+ *
+ * A screen that drops findings silently is the failure mode this whole programme
+ * exists to end, so the block is written on every ingest — including the one
+ * where the screen did not run, which says so in those words rather than
+ * printing `rejected: 0`.
+ */
+const BLAST_RADIUS_RECORD_SOURCE: Record<ScopeBScreenRecord["source"], string> = {
+  input: "supplied by the caller (--blast-radius)",
+  handoff: `read from ${BLAST_RADIUS_ARTIFACT} in the reviews root, and consumed`,
+  package: `read from ${BLAST_RADIUS_ARTIFACT} in this package`,
+  none: "none",
+};
+
+function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
+  const screen = record.screen;
+  if (screen === undefined) {
+    return [
+      "## Scope B rejections",
+      "",
+      "not recorded — no blast-radius record reached this ingest, so the scope-B screen",
+      "did not run. No finding in this package was raised under scope B; had one been,",
+      "the ingest would have been refused rather than recorded unscreened.",
+      "",
+    ].join("\n");
+  }
+  // `scope_b_exempted` is repeated here rather than left to the shared renderer
+  // alone because this block is the one a completion gate reader opens: a
+  // finding admitted without `no-link-to-change` being applied reaches
+  // `findings.json` and blocks completion until dispositioned, and the reader
+  // is owed the reason next to the count of what the screen saw.
+  return `${renderBlastRadiusScreenMarkdown(screen)}scope_b_findings: ${record.scopeBFindings}\nscope_b_exempted: ${
+    screen.exempted.length
+  }\nblast_radius_record: ${BLAST_RADIUS_RECORD_SOURCE[record.source]}\n`;
+}
+
+/**
+ * The AC10 reclaims, on the record.
+ *
+ * Silent would be the failure shape this whole programme removes: the verifier
+ * refuted a human's comment, the finding survived anyway, and nothing said so —
+ * leaving a reader to conclude the verifier agreed. The block is written only
+ * when at least one reclaim happened, on the same rule as every other stage
+ * count: a heading that always says `0` is noise, and this one's absence is not
+ * a claim, because the stage counts above already say how many verdicts landed.
+ */
+function renderExternalReclaimsMarkdown(reclaims: readonly ExternalReclaim[]): string {
+  if (reclaims.length === 0) {
+    return "";
+  }
+  const rows = reclaims
+    .map(
+      (reclaim) =>
+        `- ${reclaim.finding} — ${reclaim.removed ? "removed by the verifier and put back" : "annotated"}: ${reclaim.detail}`,
+    )
+    .join("\n");
+  return `
+
+## External findings the verifier could not refute
+
+A \`refuted\` verdict on an external comment becomes \`answered-disagree\`, never
+\`dismissed-incorrect\`, and never a removal. The finding stays and the reply is
+still owed.
+
+${rows}
+`;
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {

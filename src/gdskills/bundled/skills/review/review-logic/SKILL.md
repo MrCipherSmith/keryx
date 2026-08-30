@@ -1,5 +1,6 @@
 ---
 name: review-logic
+model_tier: standard
 description: |
   Use when: reviewing code for logic correctness, algorithmic bugs, missing error handling,
   async/await mistakes, null/undefined risks, race conditions, type contract violations,

@@ -1,5 +1,6 @@
 ---
 name: review-clean-code
+model_tier: standard
 description: |
   Use when: reviewing code against Clean Code principles (Uncle Bob) and SOLID at the
   function/class level — meaningful names, small functions, single level of abstraction,

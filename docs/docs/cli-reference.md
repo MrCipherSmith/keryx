@@ -922,6 +922,89 @@ gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci` mode can fail the gate and hold the flow in `in-progress`. The gate
 is omitted entirely when the module is disabled.
 
+### The `review` completion gate
+
+`complete` also runs a `review` gate over the flow's managed review packages
+(`.metaproject/flows/<flow>/reviews/`). It passes only when all five of these
+hold, and the failure names which one did not:
+
+1. **A managed review record exists, and every round in it is readable.** A round
+   whose `manifest.json` or `findings.json` is missing cannot be cited — nothing
+   durable records what it found — and a round that cannot be read is not a
+   round that found nothing: it fails this condition rather than being skipped
+   over. Whatever of it *can* be read still counts towards condition 2.
+2. **No finding is left without a terminal disposition**, at or above the
+   severity floor. "Terminal" is defined positively, per finding: `acted-on`
+   needs a commit SHA *and* a verifier `refuted` verdict citing that SHA;
+   `dismissed-incorrect` needs a verifier `refuted` verdict with a method and
+   evidence; the three "correct, but not now" dismissals need a recorded human
+   decision; `answered-disagree` needs a reply (`external_ref.reply_url`, or one
+   named in the evidence) — refuting somebody else's comment is not answering
+   it. A finding that simply stops appearing in later rounds is **not** cleared —
+   the check runs over the latest state of every finding ever raised, so absence
+   never reads as a fix.
+3. **The latest round ran against the PR head commit.** A clean round against a
+   stale SHA proves nothing about what will merge. The round records this as
+   `manifest.target.head`, written by `review start|attach|ingest` from
+   `git rev-parse HEAD` (or from `--head`); a round that recorded none is
+   *unobserved*, which fails.
+
+   On `flow complete --merged <sha>` there is no PR head, and the merged commit
+   stands in for it. The test there is **containment, not equality**: the round
+   passes when its head is an ancestor of (or the same commit as) the merged
+   commit, which is what a merge commit gives you. A **squash or rebase** merge
+   rewrites the branch commit, so the reviewed SHA can never appear in the merged
+   history and this condition cannot be satisfied by re-running the round — the
+   failure says so and names the two things that do work: ingest a round with
+   `--head <merged-sha>`, or record the pull request on the flow so the round is
+   compared against the PR head instead.
+4. **No external PR comment is unanswered, and the collection that says so is
+   current.** Answered from the durable record `keryx review comments
+   collect|reply` writes
+   (`.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json`), not from a
+   reviewer name in `manifest.coverage` — that is written straight from
+   `--reviewers` and collects nothing. A flow with a PR and no such record is
+   *unobserved*: "nobody commented" and "nobody looked" are different facts.
+
+   A record that exists is not enough. It carries `collected_sha` — the head
+   `comments collect --sha` read — and the gate compares it with the PR head the
+   same way it compares the round's. A collection made before the comments
+   arrived is *unobserved*, as is a record with no `collected_sha` at all
+   (written by a keryx older than the field): a count of rounds is not a date,
+   and an undated collection cannot be shown to be current.
+5. **The verifier ran and its stats are on the record** (`verification_mode` in
+   the round's `scope.md`). `off` fails; so does a mode with
+   `claims_received: 0` when the round retained a finding at or above the
+   severity floor — the mode names an intention, the claim count is what was
+   actually read, and `annotate` is the default while `--verifications` is
+   optional. A round with no `claims_received:` line is *unobserved*. A round
+   that retained nothing blocking passes on zero claims: there was nothing to
+   verify.
+
+A condition that could not be *observed* fails the gate just as a violated one
+does — the two are reported differently because the fixes differ, but neither
+passes. Reaching the review round cap with the gate unsatisfied leaves the flow
+`in-progress` and reports the blocker; it never force-completes.
+
+Like the `tasks` gate, `review` is **opt-in per package** (`gates.review`,
+written by `flow init`), so packages created before it existed report `skipped`
+rather than being retroactively invalidated.
+
+Optional per-project configuration, in `.metaproject/tasks.config.json`:
+
+```json
+{
+  "completion": {
+    "severity_floor": "minor",
+    "require_clean_round": true
+  }
+}
+```
+
+`severity_floor` is `blocker`, `major` or `minor` (default `minor`); `info`
+never blocks and is clamped to `minor` with a note. `require_clean_round: false`
+turns the gate off, and says so in the gate list rather than disappearing.
+
 ---
 
 ## rules
@@ -1099,25 +1182,51 @@ identity, reviewer coverage, findings, decisions, learning candidates, and an
 optional flow relationship instead of leaving review state only in chat output.
 
 ```text
-keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-keryx review ingest --report <path> [--flow <id>] --ref <ref>
+keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                    [--reviewers a,b] [--report <path>]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
-                    [--scope <scope.json>] [--refuted <file|->]
+                    [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                    [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--parallel <n>] [--outstanding <n>]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                  [--findings <n>] [--diff-lines <n>]
+                  [--verifier execution|site-check|reasoning] [--security]
+                  [--session-provider <id>] [--session-model <id>]
+                  [--catalog <file|->] [--json]
+keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                              [--self <login>] [--round <n>]
+                              [--out <findings.json>] [--json] [--fixtures <dir>]
+keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                            --sha <head-sha> --final [--round <n>] [--dry-run]
+                            [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                            [--flow-link <url>] [--fixtures <dir>]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                          [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                          [--json|--brief] [--out <file>]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
 flag that is silently dropped writes nothing and still reports success.
+
+`--head <sha>` is the commit the round ran against, written to
+`manifest.target.head` and read by the `review` completion gate — which refuses
+to complete a flow whose last round cannot say which tree it read. Omitted, it
+is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+`pr` target's own head so that a round run against something other than what
+will merge *fails* the gate instead of passing it. With no checkout to ask and a
+`pr` target, the pull request's head is used instead; with neither, the head is
+left off and the gate reports it as unobserved.
 
 | Subcommand | Description |
 |---|---|
@@ -1128,12 +1237,116 @@ flag that is silently dropped writes nothing and still reports success.
 | `complete` | Validate the package, record what became of its findings, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
+| `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
+| `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
+| `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
+| `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
 by the review service.
+
+### `review comments`
+
+Comments left on the pull request by other people — and by other bots — are
+collected every round and **answered once, at the end**. Not per round: a bot
+that replies on every round turns one review thread into six, and the reviewer
+reads the noise before the answer. The work happens continuously; the speaking
+happens once, after the final round and before the completion gate, so every
+reply states a settled outcome rather than an intention.
+
+All three sources are read: inline review comments, review submissions, and
+PR-level discussion. **Bot authors are handled identically to humans** — a bot
+reviewer is a reviewer. Only our own identity is excluded, and the collector
+refuses to run without knowing it, because a set that includes our own replies
+would have the reply pass answering itself every round.
+
+Each comment becomes a finding with `source: "external"`. Severity is
+**classified, never invented**: a comment on a `CHANGES_REQUESTED` review starts
+at `major`, everything else at `minor`, and a comment that cannot be classified
+takes the `minor` floor with the reason recorded rather than a guess.
+
+Two rules that are not conveniences:
+
+- **The verifier cannot refute an external finding on its own.** A human asked a
+  question; a machine deciding the question was invalid is not an answer. The
+  disposition becomes `answered-disagree`, and it still owes a reply.
+- **A thread we did not open is never resolved or hidden.** Replying is ours;
+  resolving belongs to whoever wrote the comment. Auto-resolving is how a bot
+  silences a person.
+
+| Flag | Sub | Description |
+|---|---|---|
+| `--repo <owner/repo>`, `--pr <n>` | both | The pull request. Required. |
+| `--sha <head-sha>` | both | **Required.** On `collect` it is the head the pass READ, written to the record as `collected_sha`; on `reply` it is the head the answers are true of, recorded on every handled comment. 7–40 hex characters — a value that is not a commit SHA is refused. |
+| `--self <login>` | both | The identity we are acting as. Resolved from `gh api user` when omitted, and **required** with `--fixtures`. On `reply` the login recorded at collection time wins. |
+| `--round <n>` | both | The review round. Default `1`. |
+| `--out <file>` | collect | Write the external findings (`source: "external"`) as JSON. |
+| `--json` | collect | Machine-readable result, including the state that was written. |
+| `--outcomes <file\|->` | reply | One disposition and one reply sentence per collected comment. Required — the judgement is the model's; this command enforces the budget, the threading and the once-at-the-end rule. |
+| `--final` | reply | Required. Without it the pass refuses: replying per round turns one thread into six. |
+| `--dry-run` | reply | Print the exact requests; post nothing, write nothing. |
+| `--max-replies <n>` | reply | Individual replies before the overflow summary. Default **30**. `0` is legal and means one summary stands for everybody. |
+| `--max-sentences <n>` | reply | Sentence budget per reply. Default **2**. Below `1` is refused. |
+| `--max-chars <n>` | reply | Character ceiling per reply. Default **600**. Below `1` is refused. |
+| `--flow-link <url>` | reply | The flow artifact the overflow summary points at. |
+| `--fixtures <dir>` | both | Answer every read from JSON on disk and record writes without sending them. |
+
+`collect --sha` is what makes the record **datable**, and the review gate depends
+on it: `rounds_collected` is a count, `--round` defaults to `1`, and nothing else
+in the record carries a timestamp, so a state file written at the start of round
+1 against a pull request nobody had commented on was indistinguishable from one
+written after the last round. Comments posted in between were invisible and the
+gate completed the flow over them. The gate now compares `collected_sha` with the
+PR head and reads a mismatch — or a record with no `collected_sha` — as
+*unobserved*.
+
+Replies are **at most two sentences and at most 600 characters**, enforced rather
+than advised: the over-long version is not reachable from the function that
+produces the reply, and a truncation with no link to point at is refused
+outright. Both bounds are needed — a 4,000-character reply with one full stop is
+one sentence, and a sentence budget alone waves it through. Whole sentences are
+dropped first; a lone sentence over the ceiling is cut at a word boundary, with
+an ellipsis and the link. The `Re <url>:` anchor on a top-level reply sits
+outside both bounds, because it is an address rather than an explanation.
+
+The sentence counter masks URLs, inline code, markdown link targets and
+abbreviations before splitting — but only an abbreviation that is **not
+sentence-final**, i.e. one followed by a lowercase word. `etc. Also updated the
+docs.` is two sentences; `etc. and the docs.` is one. Masking a sentence-final
+abbreviation under-counted, and under-counting is the direction that posts the
+wall of text: over-counting only costs a truncation, which is recorded and
+carries a link.
+
+Every collected comment ends with exactly one reply and one disposition — silence
+is not an acceptable outcome, and neither is answering twice.
+
+**Idempotent across a kill, not just across a clean restart.** The durable record
+is written *around* each POST rather than after it: a marker goes down before the
+request leaves, and is replaced by the settled entry when it returns. A process
+killed in that window leaves a marker saying which reply was in the air, and the
+next run resolves it against the pull request itself — the reply is either
+visible in the thread, in which case GitHub is the record and the entry is
+completed from it, or it is not, in which case it is sent. Writing only after the
+post bounds the loss to one comment; it does not close the window.
+
+A record with no `reply_url` is a comment **nobody answered**, and all three
+readers agree on that: the collector re-offers it, the completion gate counts it
+unanswered, and the reply pass posts it. The pass used to skip on row existence
+instead, which put a settled row with no `reply_url` into a state nothing could
+clear — offered for ever, never answered, gate violated for good. A row reaching
+the pass with no reply is now resolved against the pull request itself before
+anything is sent, so the repair cannot answer a reviewer twice. Being past the reply cap
+changes how a comment is answered — one summary comment stands for the backlog —
+never what was decided about it: each backlogged comment keeps the disposition
+the orchestrator reached for it.
+
+The trade-off, stated: a reviewer who comments early waits until the end. That
+is deliberate — answering with a work-in-progress state that later changes is
+worse. A comment that *blocks* progress rather than reporting a problem is
+escalated to the operator immediately instead.
 
 ### `review scope`
 
@@ -1176,6 +1389,67 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### `review blast-radius`
+
+`review scope` bounds **the change**, and a review of it answers *is this change
+correct?* It does not answer *did this change break something that was working*.
+That is a second scope, and it is computed rather than browsed: `gdgraph
+affected` walked outward from every changed file, ranked by edge distance, cut at
+a depth and a file cap, closest first.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` | Take the changed-file list from `git diff --name-only` against this base. |
+| `--changed a,b` | Use this changed-file list instead of asking git. |
+| `--depth <n>` | Edge distance kept. Default **2**. |
+| `--max-files <n>` | File cap, closest first. Default **40**. |
+| `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
+| `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
+| `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
+| `--brief` | The dispatch text a scope-B reviewer is given. |
+| `--out <file>` | Write the record. A `.json` path writes the JSON; anything else upserts a `## Blast radius` block. |
+
+The bounds are not a guess. Measured over 80 commits of this repository against a
+1,041-node graph: the depth-2 dependent set is a median of 19 files (p90 65),
+depth 3 adds eight in the median and doubles the p90, and depth 4 is
+indistinguishable from depth 3 because the graph saturates. The 40-file cap fires
+on 25% of those commits and removes only hop-2 entries on all but two of them, so
+it almost never costs a direct dependent.
+
+**Bounded on purpose.** Reviewing the whole repository every round is
+unaffordable *and* harmful — review quality decays as context grows, and an
+unbounded second scope makes later rounds worse than earlier ones.
+
+**The set is under regression check, not under review**, and that is refused in
+code rather than discouraged in prose. Three rules, and every one of them is a
+fact about the claim rather than about who made it: `outside-set` (the file is in
+neither the computed set nor the changed set), `non-regression-severity` (below
+the `major` floor — under the canonical rubric `minor` states that the code
+behaves correctly and `info` names neither a trigger nor an outcome), and
+`no-link-to-change` (nothing in the finding, its anchor included, names a changed
+file, module or symbol). There is deliberately **no rule that reads the
+reviewer's name**: one existed, and because it ran after the severity floor it
+could only ever refuse `major` and `blocker` findings — including a genuine
+broken-build regression, on the grounds that the reviewer who spotted it usually
+asks a different question. Rejections are recorded with their reason, never
+deleted.
+
+**Every file the cap removed is recorded**, with its hop and its dependency path
+back to the change. A truncation nobody can see reads afterwards as "we checked
+everything".
+
+**An empty radius is not a clean one.** The graph indexes code, so a changed
+Markdown, JSON or shell file has no dependents to walk; those are reported under
+`unresolved` with the reason, because "the graph could not answer" and "nothing
+depends on this" are different facts. Runtime edges — a spawned process, a file
+one module writes and another reads, a string-keyed registry — are invisible to
+it, and so is the reverse direction: `affected` walks dependents, not
+dependencies.
+
+Requires a built graph; run `keryx gdgraph build` first. An absent graph is
+refused rather than reported as an empty radius.
 
 ### Caps — findings, spend, concurrency
 
@@ -1244,6 +1518,56 @@ concurrency cap holds across the nesting.
 | `--reviewers a,b` | The reviewer set to plan into waves. |
 | `--parallel <n>` | Override the wave size (default 4). |
 | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+
+### `review tier`
+
+Which model a dispatch is worth, **computed** — the `model` block the subagent
+dispatch contract expects, printed ready to paste.
+
+```bash
+keryx review tier --scope blast-radius --findings 12 --diff-lines 340 --json
+```
+
+It sits beside `review scope`, `review blast-radius` and `review budget` for the
+same reason those exist: all four are *compute this mechanically, before
+dispatching, instead of eyeballing it*. The rule used to say an orchestrator
+"calls `decideDispatchModel`" — but an orchestrator is an agent following prose
+and cannot call a TypeScript function, so what actually happened was a model
+reading a table of signals and doing the arithmetic in its head. This is the
+entry point that removes that step.
+
+| Flag | Description |
+|---|---|
+| `--scope <scope>` | The round's scope. `blast-radius` floors the tier at `deep`. |
+| `--fix-attempt <n>` | 1-based attempt at the **same** finding. `>= 2` raises one tier. |
+| `--forced-strategy-change` | A strategy change forced by hitting the loop cap. Floors at `deep`. |
+| `--findings <n>` | Findings in scope for this dispatch. |
+| `--diff-lines <n>` | Changed lines in the diff under review. `<= 3` findings **and** `<= 50` lines allow `light`. |
+| `--verifier <method>` | `execution`, `site-check` or `reasoning`. The first two allow `light`: the evidence comes from running something. An unrecognised method is refused, not ignored. |
+| `--security` | Any security finding in scope. Never below `standard`. |
+| `--session-provider <id>`, `--session-model <id>` | The session's own provider/model, for a caller that already holds them. Omitted, they come from the selection `keryx shell` persisted. |
+| `--catalog <file\|->` | The candidate set, in the `detectProviders()` shape `[{"name": …, "models": [ … ]}]`. Omitted, providers are detected live. |
+| `--json` | Print the `{"model": …}` block alone. |
+
+Floors are applied after downgrades, so *at least `deep`* means at least: a
+blast-radius round over a twelve-line diff is still a blast-radius round. The
+output carries the ordered rule ids that produced the tier, so the answer can be
+explained afterwards rather than re-derived.
+
+**No model name exists in this command, and there is no `--tier` flag.** The
+session's provider/model and the candidate set are both discovered at runtime;
+`src/gdskills/model-tier.ts` places the tier relative to the session's own model
+using size words in model names (`mini`, `haiku`, `pro`, `opus`, …), never a list
+of models that exist. Accepting a hand-written tier would put the arithmetic
+back in the caller's head, which is the defect.
+
+**An unresolvable environment inherits, and exits 0.** With no persisted session,
+an unrankable catalogue, or a session model carrying no size marker, the block
+carries `inherit: true` instead of `provider`/`model` and the dispatch runs on
+the caller's **own** model. Never a downgrade, never a failure — degrading
+capability because discovery failed is the worst of the three outcomes. Detection
+is skipped entirely when the session names neither provider nor model, because
+ranking is refused without an anchor whatever the catalogue holds.
 
 ### `review loop`
 

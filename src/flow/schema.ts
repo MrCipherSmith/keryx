@@ -83,6 +83,11 @@ export function flowStateSchema(): Record<string, unknown> {
             type: "boolean",
             description: "Written by `flow init`. When true, `flow complete` fails while any task is non-terminal.",
           },
+          review: {
+            type: "boolean",
+            description:
+              "Written by `flow init`. When true, `flow complete` fails unless the flow's latest ingested review round is clean: every finding at or above the severity floor carries a terminal disposition with the evidence that disposition requires, the round ran against the PR head, no external PR comment is unanswered, and the verifier's stats are recorded.",
+          },
         },
       },
       acConfirmed: {

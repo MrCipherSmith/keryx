@@ -1,5 +1,6 @@
 ---
 name: review-architecture
+model_tier: deep
 description: |
   Use when: reviewing code for architectural violations — layer violations, dependency direction
   mistakes, module boundary coupling, SOLID principle breaches, NestJS module/provider structure,
