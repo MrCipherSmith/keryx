@@ -854,3 +854,9 @@ its window ends at the next heading instead of running into unrelated prose.
 - 2026-08-30T05:05:43.521Z - ac-confirmed: AC13: keryx review stack reads the manifest deterministically. Failure mode is to include: missing, corrupt, workspaces-declaring, empty-dependency-set and explicitly-empty manifests all resolve uncertain, and uncertain runs everything. Exactly one code path excludes.
 - 2026-08-30T05:05:43.619Z - ac-confirmed: AC14: diff over both skill trees, both schema mirrors and the contracts directory: identical for everything this flow touched. The bundled-rule guard passes, and a new test asserts the installed review mirror matches its bundled source.
 - 2026-08-30T05:05:43.717Z - ac-confirmed: AC15: typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5708 pass / 18 skip / 0 fail against a 5595 baseline.
+- 2026-08-30T05:10:41.575Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/411 (warning: PR is not a draft)
+- 2026-08-30T05:10:41.666Z - task-done: T2: Implement per plan
+- 2026-08-30T05:10:41.759Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-30T05:10:41.851Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-30T05:10:41.950Z - completing
+- 2026-08-30T05:10:43.659Z - done: all gates passed
