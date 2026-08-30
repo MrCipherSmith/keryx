@@ -391,6 +391,7 @@ describe("legacy markdown reports are not stranded", () => {
     }
 
     let total = 0;
+    let dispositioned = 0;
     for (const root of roots) {
       for (const entry of readdirSync(root, { withFileTypes: true })) {
         const file = path.join(root, entry.name, "findings.json");
@@ -398,15 +399,30 @@ describe("legacy markdown reports are not stranded", () => {
           continue;
         }
         for (const finding of JSON.parse(readFileSync(file, "utf8")) as StructuredReviewFinding[]) {
-          total += 1;
-          expect(finding.disposition).toBeUndefined();
-          expect(findingDispositionState(finding)).toBe("unknown");
+          if (finding.disposition === undefined) {
+            total += 1;
+            expect(findingDispositionState(finding)).toBe("unknown");
+          } else {
+            // The other half of the same reading rule, and it only became
+            // reachable when a round first recorded dispositions (flow 204's own
+            // final round). A finding that HAS one must read as the one it has —
+            // if this fell back to `unknown` the corpus would look uniformly
+            // undispositioned and the instrumentation would report nothing.
+            dispositioned += 1;
+            expect(findingDispositionState(finding)).toBe(finding.disposition.state);
+            expect(findingDispositionState(finding)).not.toBe("unknown");
+          }
         }
       }
     }
     // Non-vacuous: the assertion above holds trivially for an empty corpus, and
-    // the recorded corpus is 83 findings.
+    // the pre-contract corpus is 83 findings. This counts only the findings that
+    // carry NO disposition — it deliberately does not assert that none on disk
+    // has one, because that stopped being true the moment the pipeline could
+    // record them, and a guard that forbids the feature it guards is a guard
+    // that will be deleted rather than understood.
     expect(total).toBeGreaterThan(80);
+    expect(dispositioned).toBeGreaterThan(0);
   });
 
   test("every recorded review package still ingests", async () => {
