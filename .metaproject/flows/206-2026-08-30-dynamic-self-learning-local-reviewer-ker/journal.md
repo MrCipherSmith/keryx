@@ -3,3 +3,22 @@
 - 2026-08-30T16:44:26.150Z - flow created
 - 2026-08-30T16:45:17.770Z - frozen: 12 criteria; checksum recorded
 - 2026-08-30T16:45:18.254Z - started
+- 2026-08-30T17:45:18.270Z - task-done: T1: Collect remaining context
+- 2026-08-30T17:45:18.517Z - task-done: T2: Implement per plan
+- 2026-08-30T17:45:18.763Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-30T17:45:19.008Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-30T17:45:49.367Z - ac-confirmed: AC1: src/gdskills/bundled-no-persona.test.ts enumerates the bundled tree and fails on the persona word or a home-directory path. It caught a surviving --boss flag in CI that a skill-name search missed.
+- 2026-08-30T17:45:49.498Z - ac-confirmed: AC2: Skill and rule rewritten from scratch describing the mechanism; renamed to code-learned-review rather than keeping a persona name for a de-personalised mechanism.
+- 2026-08-30T17:45:49.630Z - ac-confirmed: AC3: .metaproject/review-learning.config.json names skill, repo and authors; lives in the project, never in bundled. Absent config returns null and prints one plain line, exit 0.
+- 2026-08-30T17:45:49.759Z - ac-confirmed: AC4: keryx review learn --pr <n> reads the durable pr-comments record and calls the existing learnProjectSkill. No re-fetch, no second learning path.
+- 2026-08-30T17:45:49.889Z - ac-confirmed: AC5: Two-author test with one configured; the unconfigured author's text appears in no proposal. Disabling the filter turns 5 tests red.
+- 2026-08-30T17:45:50.029Z - ac-confirmed: AC6: learn still writes only a proposal; apply remains the only writer. This flow added a producer, not a second applier.
+- 2026-08-30T17:45:50.179Z - ac-confirmed: AC7: learn.ts already refused targets outside .metaproject/project-skills. The new tests pin that behaviour with src/gdskills/bundled as the named target; removing the check turns 2 red.
+- 2026-08-30T17:45:50.321Z - ac-confirmed: AC8: cli-reference.md documents seeding from conventions the operator already holds, stating plainly the source is their own copy outside this repository and that keryx keeps nothing.
+- 2026-08-30T17:45:50.456Z - ac-confirmed: AC9: End-to-end test runs collect-from-fixtures -> filter -> propose -> apply and asserts the lesson in the local SKILL.md with the version bumped.
+- 2026-08-30T17:45:50.589Z - ac-confirmed: AC10: No enforcement claim was made without a wire. The record lacked comment bodies, so rather than claim a join that could not work, SeenComment gained a bounded body and older records report as bodyless.
+- 2026-08-30T17:45:50.720Z - ac-confirmed: AC11: Both trees carry every edit; 171 mirrored files compared byte-for-byte with 0 diffs; mirror and build-parity guards pass.
+- 2026-08-30T17:45:50.853Z - ac-confirmed: AC12: typecheck clean; bun test 6113 pass / 18 skip; test:guards 161/0; check:doc-links 1131 links / 0 broken. The single failure is the known nondeterministic SAC test, present in the baseline.
+- 2026-08-30T17:45:58.705Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/415 (warning: PR is not a draft)
+- 2026-08-30T17:48:22.569Z - completing
+- 2026-08-30T17:48:26.071Z - done: all gates passed

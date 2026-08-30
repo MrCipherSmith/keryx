@@ -7,24 +7,73 @@
   "id": "206",
   "slug": "dynamic-self-learning-local-reviewer-ker",
   "title": "Dynamic self-learning local reviewer: keryx ships the mechanism, the project owns the people",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-30T16:44:26.150Z",
-  "updatedAt": "2026-08-30T16:45:18.254Z",
+  "updatedAt": "2026-08-30T17:48:26.071Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:6800c90b68d1af6e852bf8f8c26f830acfa95fab3e319a0452783a685f86a12b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-30T17:45:49.367Z",
+      "note": "src/gdskills/bundled-no-persona.test.ts enumerates the bundled tree and fails on the persona word or a home-directory path. It caught a surviving --boss flag in CI that a skill-name search missed."
+    },
+    "AC2": {
+      "at": "2026-08-30T17:45:49.498Z",
+      "note": "Skill and rule rewritten from scratch describing the mechanism; renamed to code-learned-review rather than keeping a persona name for a de-personalised mechanism."
+    },
+    "AC3": {
+      "at": "2026-08-30T17:45:49.630Z",
+      "note": ".metaproject/review-learning.config.json names skill, repo and authors; lives in the project, never in bundled. Absent config returns null and prints one plain line, exit 0."
+    },
+    "AC4": {
+      "at": "2026-08-30T17:45:49.759Z",
+      "note": "keryx review learn --pr <n> reads the durable pr-comments record and calls the existing learnProjectSkill. No re-fetch, no second learning path."
+    },
+    "AC5": {
+      "at": "2026-08-30T17:45:49.889Z",
+      "note": "Two-author test with one configured; the unconfigured author's text appears in no proposal. Disabling the filter turns 5 tests red."
+    },
+    "AC6": {
+      "at": "2026-08-30T17:45:50.029Z",
+      "note": "learn still writes only a proposal; apply remains the only writer. This flow added a producer, not a second applier."
+    },
+    "AC7": {
+      "at": "2026-08-30T17:45:50.179Z",
+      "note": "learn.ts already refused targets outside .metaproject/project-skills. The new tests pin that behaviour with src/gdskills/bundled as the named target; removing the check turns 2 red."
+    },
+    "AC8": {
+      "at": "2026-08-30T17:45:50.321Z",
+      "note": "cli-reference.md documents seeding from conventions the operator already holds, stating plainly the source is their own copy outside this repository and that keryx keeps nothing."
+    },
+    "AC9": {
+      "at": "2026-08-30T17:45:50.456Z",
+      "note": "End-to-end test runs collect-from-fixtures -> filter -> propose -> apply and asserts the lesson in the local SKILL.md with the version bumped."
+    },
+    "AC10": {
+      "at": "2026-08-30T17:45:50.589Z",
+      "note": "No enforcement claim was made without a wire. The record lacked comment bodies, so rather than claim a join that could not work, SeenComment gained a bounded body and older records report as bodyless."
+    },
+    "AC11": {
+      "at": "2026-08-30T17:45:50.720Z",
+      "note": "Both trees carry every edit; 171 mirrored files compared byte-for-byte with 0 diffs; mirror and build-parity guards pass."
+    },
+    "AC12": {
+      "at": "2026-08-30T17:45:50.853Z",
+      "note": "typecheck clean; bun test 6113 pass / 18 skip; test:guards 161/0; check:doc-links 1131 links / 0 broken. The single failure is the known nondeterministic SAC test, present in the baseline."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/415"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -32,13 +81,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +96,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,13 +111,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +126,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -90,6 +143,100 @@
     {
       "at": "2026-08-30T16:45:18.254Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-30T17:45:18.270Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-30T17:45:18.517Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-30T17:45:18.763Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-30T17:45:19.008Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-30T17:45:49.367Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/gdskills/bundled-no-persona.test.ts enumerates the bundled tree and fails on the persona word or a home-directory path. It caught a surviving --boss flag in CI that a skill-name search missed."
+    },
+    {
+      "at": "2026-08-30T17:45:49.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Skill and rule rewritten from scratch describing the mechanism; renamed to code-learned-review rather than keeping a persona name for a de-personalised mechanism."
+    },
+    {
+      "at": "2026-08-30T17:45:49.630Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: .metaproject/review-learning.config.json names skill, repo and authors; lives in the project, never in bundled. Absent config returns null and prints one plain line, exit 0."
+    },
+    {
+      "at": "2026-08-30T17:45:49.759Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: keryx review learn --pr <n> reads the durable pr-comments record and calls the existing learnProjectSkill. No re-fetch, no second learning path."
+    },
+    {
+      "at": "2026-08-30T17:45:49.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Two-author test with one configured; the unconfigured author's text appears in no proposal. Disabling the filter turns 5 tests red."
+    },
+    {
+      "at": "2026-08-30T17:45:50.029Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: learn still writes only a proposal; apply remains the only writer. This flow added a producer, not a second applier."
+    },
+    {
+      "at": "2026-08-30T17:45:50.179Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: learn.ts already refused targets outside .metaproject/project-skills. The new tests pin that behaviour with src/gdskills/bundled as the named target; removing the check turns 2 red."
+    },
+    {
+      "at": "2026-08-30T17:45:50.321Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: cli-reference.md documents seeding from conventions the operator already holds, stating plainly the source is their own copy outside this repository and that keryx keeps nothing."
+    },
+    {
+      "at": "2026-08-30T17:45:50.456Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: End-to-end test runs collect-from-fixtures -> filter -> propose -> apply and asserts the lesson in the local SKILL.md with the version bumped."
+    },
+    {
+      "at": "2026-08-30T17:45:50.589Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: No enforcement claim was made without a wire. The record lacked comment bodies, so rather than claim a join that could not work, SeenComment gained a bounded body and older records report as bodyless."
+    },
+    {
+      "at": "2026-08-30T17:45:50.720Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Both trees carry every edit; 171 mirrored files compared byte-for-byte with 0 diffs; mirror and build-parity guards pass."
+    },
+    {
+      "at": "2026-08-30T17:45:50.853Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: typecheck clean; bun test 6113 pass / 18 skip; test:guards 161/0; check:doc-links 1131 links / 0 broken. The single failure is the known nondeterministic SAC test, present in the baseline."
+    },
+    {
+      "at": "2026-08-30T17:45:58.705Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/415 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-30T17:48:22.569Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T17:48:26.071Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

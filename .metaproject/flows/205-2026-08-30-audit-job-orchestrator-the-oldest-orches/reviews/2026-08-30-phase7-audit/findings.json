@@ -1,0 +1,384 @@
+[
+  {
+    "id": "audit-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "blocker",
+    "problem": "Sections 2.4.1-2.8 — the entire implement/review/fix/verify core — contained zero mechanisms reachable from a production code path.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 609,
+    "class_scope": {
+      "sites": [
+        "sections 2.4.1 through 2.8"
+      ],
+      "enumeration_method": "Five auditors classified all 217 mechanisms; this range returned zero wired."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-02",
+    "reviewer": "review-core-boundaries",
+    "severity": "blocker",
+    "problem": "code-boss-review was a DEFAULT reviewer in the input contract and existed nowhere in the repository, so every default job run dispatched a missing agent.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/input-contract.schema.json",
+    "line": 114,
+    "class_scope": {
+      "sites": [
+        "input-contract.schema.json:114",
+        "task-implementer/input-contract.schema.json",
+        "jobs-documentation.mdc",
+        "review-logic/SKILL.md",
+        "git-merge-base.md",
+        "5 job-orchestrator builds",
+        "orchestrator-prompt.md"
+      ],
+      "enumeration_method": "keryx ctx rg -l over src/ returned 16 referencing files and no skill directory."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-03",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Every implementation wave was dispatched as agent `wave-executor`, which is not a skill or an agent type.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 627,
+    "class_scope": {
+      "sites": [
+        "SKILL.md:627"
+      ],
+      "enumeration_method": "find over bundled/skills lists 8 orchestration skills; wave-executor is not among them."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-04",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "subagent_type: \"general\" appeared 41 times; no dispatcher accepts that value.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 649,
+    "class_scope": {
+      "sites": [
+        "41 occurrences across the 5 builds"
+      ],
+      "enumeration_method": "keryx ctx rg 'subagent_type' returned 41 hits, all markdown."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-05",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The whole job-documentation layer — state.json, job-documenter, per-step status, the resumption promise — was prose. `.metaproject/jobs/` was an empty directory created by install.ts and written by nothing.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 73,
+    "class_scope": {
+      "sites": [
+        "SKILL.md:73",
+        "1.2",
+        "2.1.4",
+        "2.1.5",
+        "2.1.6"
+      ],
+      "enumeration_method": "keryx ctx rg 'JOBS_ROOT' over *.ts returned 0; ls -A .metaproject/jobs returned empty."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-06",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "Sections 2.6/2.7 described a review pipeline two releases stale: a PR driven by this orchestrator failed all five conditions of the completion gate shipped in 0.2.71.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 828,
+    "class_scope": {
+      "sites": [
+        "2.6.0",
+        "2.6.1",
+        "2.6.2",
+        "2.6.3",
+        "2.7"
+      ],
+      "enumeration_method": "Each of the five gate conditions traced to the command that satisfies it and found absent from these sections."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-07",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "code-review was the default review_mode and is not bundled or catalogued.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 1504,
+    "class_scope": {
+      "sites": [
+        "SKILL.md:792",
+        "SKILL.md:1504"
+      ],
+      "enumeration_method": "ls bundled/skills/review lists code-ai, code-b091, code-mobx-store, code-style; no code-review."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-08",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A step defaulted 'if no response in 60s'. No timer exists and a model cannot observe wall-clock passing while a user does not answer, so the default could never fire.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 741,
+    "global_id": "2026-08-30-phase7-audit#audit-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-09",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Statuses `paused` and `timeout` were claimed as persisted; state.schema.json has no status property and additionalProperties: false. Five further fields were claimed as recorded and equally illegal.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 744,
+    "global_id": "2026-08-30-phase7-audit#audit-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-10",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Two consecutive sections were both numbered 2.8.1, and 2.5 did not exist while 2.5.1 and 2.5.5 did.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 1074,
+    "global_id": "2026-08-30-phase7-audit#audit-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-11",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": ".metaproject/scripts/detect-models.sh was named as the model-detection mechanism and has never existed in git history.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 1115,
+    "class_scope": {
+      "sites": [
+        "SKILL.md:1115",
+        "flow-orchestrator/SKILL.md:388"
+      ],
+      "enumeration_method": "keryx ctx rg 'detect-models' returned 2 hits, both prose; ls .metaproject/scripts does not exist."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-12",
+    "reviewer": "review-core-boundaries",
+    "severity": "major",
+    "problem": "SKILL.md carried three hunks the four sibling builds lacked since the bootstrap commit, while all five declared the same version and compatible_harnesses; no guard compared build against build.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 42,
+    "class_scope": {
+      "sites": [
+        "SKILL.md vs SKILL.{codex,cursor,opencode,zed}.md"
+      ],
+      "enumeration_method": "diff of all five builds; git blame traced the divergence to fd43d35a."
+    },
+    "global_id": "2026-08-30-phase7-audit#audit-12",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "audit-13",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Three sub-agent prompts loaded from skills/<name>/SKILL.md, a path that stopped resolving when the tree was namespaced; one was hedged '(if it exists)' so the miss was silent.",
+    "impact": "Documented as behaviour while nothing implemented it; read by agents as a guarantee.",
+    "suggested_fix": "Wire the mechanism or delete the claim. Softening the verb was explicitly not permitted.",
+    "evidence": "Enumerated in inventory.md with the search that established it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 671,
+    "global_id": "2026-08-30-phase7-audit#audit-13",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 6a9d611c (PR #414). Verified by re-running the enumeration at that commit."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original enumeration at 6a9d611c; the claim no longer reproduces. Guards added in the same commit turn red when the fix is reverted.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

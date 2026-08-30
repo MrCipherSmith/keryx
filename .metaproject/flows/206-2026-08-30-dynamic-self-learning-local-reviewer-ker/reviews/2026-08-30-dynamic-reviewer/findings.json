@@ -1,0 +1,170 @@
+[
+  {
+    "id": "dyn-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "blocker",
+    "problem": "The shipped reviewer and its profile carried one specific person's review style — team conventions and that reviewer's own speech markers — in a public repository.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/code-learned-review/SKILL.md",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/code-learned-review/SKILL.md"
+      ],
+      "enumeration_method": "bundled-no-persona.test.ts sweeps the whole bundled tree for the persona word and home-directory paths, with a non-vacuity assertion."
+    },
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "dyn-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The durable comment record stored author, url and timestamps but not comment bodies, so the configured join had nothing to learn from and would have had to re-fetch.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/review/pr-comments.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/review/pr-comments.ts"
+      ],
+      "enumeration_method": "bundled-no-persona.test.ts sweeps the whole bundled tree for the persona word and home-directory paths, with a non-vacuity assertion."
+    },
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "dyn-03",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "A second orphaned copy of the same persona shipped in review-strict-profile.mdc.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-strict-profile.mdc",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-strict-profile.mdc"
+      ],
+      "enumeration_method": "bundled-no-persona.test.ts sweeps the whole bundled tree for the persona word and home-directory paths, with a non-vacuity assertion."
+    },
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "dyn-04",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Nothing named src/gdskills/bundled as a rejected target, so containment of learned content was enforced but unproven.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/learn.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/learn.ts"
+      ],
+      "enumeration_method": "bundled-no-persona.test.ts sweeps the whole bundled tree for the persona word and home-directory paths, with a non-vacuity assertion."
+    },
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "dyn-05",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Step 7 told agents to identify a senior reviewer by judgement and hand-edit a rule file — a path applyLearningProposal refuses.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "line": 1,
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "dyn-06",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The flag selecting the reviewer kept the persona name after the skill lost it; caught by this flow's own AC1 guard in CI, not by a skill-name search.",
+    "impact": "Published user-specific knowledge, or a mechanism claimed without a wire.",
+    "suggested_fix": "Ship the mechanism, not the person; wire or delete.",
+    "evidence": "Established by enumeration over the bundled tree and by running the loop end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 822,
+    "global_id": "2026-08-30-dynamic-reviewer#dyn-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in ff9dd071 / 1014f292 (PR #415), each pinned by a test proved to bite."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at ff9dd071: the persona guard passes 6/6 and the end-to-end learn loop applies a lesson to a local skill. Reverting either turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

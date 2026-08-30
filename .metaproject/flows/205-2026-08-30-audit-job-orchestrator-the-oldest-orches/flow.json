@@ -7,24 +7,77 @@
   "id": "205",
   "slug": "audit-job-orchestrator-the-oldest-orches",
   "title": "Audit job-orchestrator: the oldest orchestrator, never read, ~20 documented steps unverified against code",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-30T15:33:28.073Z",
-  "updatedAt": "2026-08-30T15:34:17.745Z",
+  "updatedAt": "2026-08-30T17:47:48.326Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e64b8cc6ecba40f04d6d61d9329520ad18e28104ca8c87931c2546a7a1470c95",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-30T17:45:34.502Z",
+      "note": "inventory.md enumerates 217 mechanisms with section, quoted claim and the search establishing each; five auditors over disjoint ranges."
+    },
+    "AC2": {
+      "at": "2026-08-30T17:45:34.629Z",
+      "note": "Each row classified wired/prose-only/advisory with the keryx ctx rg search that established it. Totals: 6 wired, 132 prose-only, 79 advisory."
+    },
+    "AC3": {
+      "at": "2026-08-30T17:45:34.750Z",
+      "note": "Wired required a production file:line plus the entry point reaching it; a call site found only in a test counted as prose-only. That rule is why sections 2.4.1-2.8 scored zero wired."
+    },
+    "AC4": {
+      "at": "2026-08-30T17:45:34.873Z",
+      "note": "~90 claims wired to real commands, ~45 deleted. No verb softened — the agent's report states this explicitly and the diff bears it out."
+    },
+    "AC5": {
+      "at": "2026-08-30T17:45:34.999Z",
+      "note": "keryx job: 12 mutations, each applied, observed red, restored. One initially failed to bite and the agent added the missing assertion rather than reporting green."
+    },
+    "AC6": {
+      "at": "2026-08-30T17:45:35.126Z",
+      "note": "Duplicate 2.8.1 resolved (VERIFY-POST-FIX keeps it; PERF-CHECK and SKILL LEARNING renumbered); missing 2.5 fixed by promoting 2.4.1; six internal cross-references followed through."
+    },
+    "AC7": {
+      "at": "2026-08-30T17:45:35.249Z",
+      "note": "All five builds compared. The three drifted hunks — SKILL LEARNING, Skill Updates, execution-metrics opt-in — are now in every build; none was harness-specific. The 1.7K gap is accounted for exactly by those hunks."
+    },
+    "AC8": {
+      "at": "2026-08-30T17:45:35.376Z",
+      "note": "src/gdskills/build-parity.test.ts enforces build equality against an allow-list that is empty for this skill, with non-vacuity assertions on the denominator."
+    },
+    "AC9": {
+      "at": "2026-08-30T17:45:35.500Z",
+      "note": "state.schema.json registered as contract job-orchestrator-state and mirrored; installContracts now derives from the registry instead of a duplicate name list, which was why it was in neither."
+    },
+    "AC10": {
+      "at": "2026-08-30T17:45:35.621Z",
+      "note": "Both trees byte-identical; verified by diff -rq and by round-bound.test.ts's mirror assertion plus the new parity guard."
+    },
+    "AC11": {
+      "at": "2026-08-30T17:45:35.743Z",
+      "note": "Findings recorded as the inventory plus per-item resolution in the commit; every fix carries the commit that made it."
+    },
+    "AC12": {
+      "at": "2026-08-30T17:45:35.865Z",
+      "note": "No mechanism was dismissed on the orchestrator's own authority. The one decision requiring the operator — the reviewer persona — was put to them and answered."
+    },
+    "AC13": {
+      "at": "2026-08-30T17:45:35.990Z",
+      "note": "typecheck clean; bun test 6088 pass / 18 skip / 0 fail; test:guards 161/0; check:doc-links 1130 links / 0 broken."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/414"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -32,13 +85,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +100,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -90,6 +147,133 @@
     {
       "at": "2026-08-30T15:34:17.745Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-30T17:45:18.141Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-30T17:45:18.397Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-30T17:45:18.640Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-30T17:45:18.884Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-30T17:45:34.502Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: inventory.md enumerates 217 mechanisms with section, quoted claim and the search establishing each; five auditors over disjoint ranges."
+    },
+    {
+      "at": "2026-08-30T17:45:34.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Each row classified wired/prose-only/advisory with the keryx ctx rg search that established it. Totals: 6 wired, 132 prose-only, 79 advisory."
+    },
+    {
+      "at": "2026-08-30T17:45:34.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Wired required a production file:line plus the entry point reaching it; a call site found only in a test counted as prose-only. That rule is why sections 2.4.1-2.8 scored zero wired."
+    },
+    {
+      "at": "2026-08-30T17:45:34.873Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: ~90 claims wired to real commands, ~45 deleted. No verb softened — the agent's report states this explicitly and the diff bears it out."
+    },
+    {
+      "at": "2026-08-30T17:45:34.999Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: keryx job: 12 mutations, each applied, observed red, restored. One initially failed to bite and the agent added the missing assertion rather than reporting green."
+    },
+    {
+      "at": "2026-08-30T17:45:35.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Duplicate 2.8.1 resolved (VERIFY-POST-FIX keeps it; PERF-CHECK and SKILL LEARNING renumbered); missing 2.5 fixed by promoting 2.4.1; six internal cross-references followed through."
+    },
+    {
+      "at": "2026-08-30T17:45:35.249Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: All five builds compared. The three drifted hunks — SKILL LEARNING, Skill Updates, execution-metrics opt-in — are now in every build; none was harness-specific. The 1.7K gap is accounted for exactly by those hunks."
+    },
+    {
+      "at": "2026-08-30T17:45:35.376Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/gdskills/build-parity.test.ts enforces build equality against an allow-list that is empty for this skill, with non-vacuity assertions on the denominator."
+    },
+    {
+      "at": "2026-08-30T17:45:35.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: state.schema.json registered as contract job-orchestrator-state and mirrored; installContracts now derives from the registry instead of a duplicate name list, which was why it was in neither."
+    },
+    {
+      "at": "2026-08-30T17:45:35.622Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Both trees byte-identical; verified by diff -rq and by round-bound.test.ts's mirror assertion plus the new parity guard."
+    },
+    {
+      "at": "2026-08-30T17:45:35.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Findings recorded as the inventory plus per-item resolution in the commit; every fix carries the commit that made it."
+    },
+    {
+      "at": "2026-08-30T17:45:35.865Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: No mechanism was dismissed on the orchestrator's own authority. The one decision requiring the operator — the reviewer persona — was put to them and answered."
+    },
+    {
+      "at": "2026-08-30T17:45:35.990Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: typecheck clean; bun test 6088 pass / 18 skip / 0 fail; test:guards 161/0; check:doc-links 1130 links / 0 broken."
+    },
+    {
+      "at": "2026-08-30T17:45:56.977Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-30T17:46:03.021Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T17:46:06.382Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#414 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__414.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 414 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-08-30T17:47:20.373Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-30T17:47:20.638Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T17:47:24.100Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against ff9dd0715e3e79189da7d56ec08dbb8851fd844e, but the PR head is 254402c6c1a5e38b8ce7e175bc5183c39d3420c7. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#414 was last collected against ff9dd0715e3e79189da7d56ec08dbb8851fd844e (round 1), but the PR head is 254402c6c1a5e38b8ce7e175bc5183c39d3420c7. Everything anyone said after ff9dd0715e3e79189da7d56ec08dbb8851fd844e is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 414 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-08-30T17:47:44.657Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-30T17:47:44.894Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T17:47:48.326Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

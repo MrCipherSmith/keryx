@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-30-dynamic-reviewer",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/415",
+    "head": "1014f29259b3c835661a7cf1c6ee21673a884cb0"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/scope.md",
+    "coverage": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/coverage.md",
+    "report": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/report.md",
+    "findings": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/findings.json",
+    "learning": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/learning.md",
+    "decisions": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-core-boundaries",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-verifier",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-30T17:48:17.954Z",
+  "updatedAt": "2026-08-30T17:48:17.954Z",
+  "flow": {
+    "id": "206",
+    "path": ".metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker"
+  }
+}

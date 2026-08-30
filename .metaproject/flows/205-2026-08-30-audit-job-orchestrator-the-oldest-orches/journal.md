@@ -3,3 +3,29 @@
 - 2026-08-30T15:33:28.073Z - flow created
 - 2026-08-30T15:34:17.218Z - frozen: 13 criteria; checksum recorded
 - 2026-08-30T15:34:17.745Z - started
+- 2026-08-30T17:45:18.141Z - task-done: T1: Collect remaining context
+- 2026-08-30T17:45:18.397Z - task-done: T2: Implement per plan
+- 2026-08-30T17:45:18.640Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-30T17:45:18.884Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-30T17:45:34.502Z - ac-confirmed: AC1: inventory.md enumerates 217 mechanisms with section, quoted claim and the search establishing each; five auditors over disjoint ranges.
+- 2026-08-30T17:45:34.629Z - ac-confirmed: AC2: Each row classified wired/prose-only/advisory with the keryx ctx rg search that established it. Totals: 6 wired, 132 prose-only, 79 advisory.
+- 2026-08-30T17:45:34.750Z - ac-confirmed: AC3: Wired required a production file:line plus the entry point reaching it; a call site found only in a test counted as prose-only. That rule is why sections 2.4.1-2.8 scored zero wired.
+- 2026-08-30T17:45:34.873Z - ac-confirmed: AC4: ~90 claims wired to real commands, ~45 deleted. No verb softened — the agent's report states this explicitly and the diff bears it out.
+- 2026-08-30T17:45:34.999Z - ac-confirmed: AC5: keryx job: 12 mutations, each applied, observed red, restored. One initially failed to bite and the agent added the missing assertion rather than reporting green.
+- 2026-08-30T17:45:35.126Z - ac-confirmed: AC6: Duplicate 2.8.1 resolved (VERIFY-POST-FIX keeps it; PERF-CHECK and SKILL LEARNING renumbered); missing 2.5 fixed by promoting 2.4.1; six internal cross-references followed through.
+- 2026-08-30T17:45:35.249Z - ac-confirmed: AC7: All five builds compared. The three drifted hunks — SKILL LEARNING, Skill Updates, execution-metrics opt-in — are now in every build; none was harness-specific. The 1.7K gap is accounted for exactly by those hunks.
+- 2026-08-30T17:45:35.376Z - ac-confirmed: AC8: src/gdskills/build-parity.test.ts enforces build equality against an allow-list that is empty for this skill, with non-vacuity assertions on the denominator.
+- 2026-08-30T17:45:35.500Z - ac-confirmed: AC9: state.schema.json registered as contract job-orchestrator-state and mirrored; installContracts now derives from the registry instead of a duplicate name list, which was why it was in neither.
+- 2026-08-30T17:45:35.622Z - ac-confirmed: AC10: Both trees byte-identical; verified by diff -rq and by round-bound.test.ts's mirror assertion plus the new parity guard.
+- 2026-08-30T17:45:35.744Z - ac-confirmed: AC11: Findings recorded as the inventory plus per-item resolution in the commit; every fix carries the commit that made it.
+- 2026-08-30T17:45:35.865Z - ac-confirmed: AC12: No mechanism was dismissed on the orchestrator's own authority. The one decision requiring the operator — the reviewer persona — was put to them and answered.
+- 2026-08-30T17:45:35.990Z - ac-confirmed: AC13: typecheck clean; bun test 6088 pass / 18 skip / 0 fail; test:guards 161/0; check:doc-links 1130 links / 0 broken.
+- 2026-08-30T17:45:56.977Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)
+- 2026-08-30T17:46:03.021Z - completing
+- 2026-08-30T17:46:06.382Z - completion-failed: review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#414 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__414.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 414 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from
+- 2026-08-30T17:47:20.373Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)
+- 2026-08-30T17:47:20.638Z - completing
+- 2026-08-30T17:47:24.100Z - completion-failed: review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against ff9dd0715e3e79189da7d56ec08dbb8851fd844e, but the PR head is 254402c6c1a5e38b8ce7e175bc5183c39d3420c7. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#414 was last collected against ff9dd0715e3e79189da7d56ec08dbb8851fd844e (round 1), but the PR head is 254402c6c1a5e38b8ce7e175bc5183c39d3420c7. Everything anyone said after ff9dd0715e3e79189da7d56ec08dbb8851fd844e is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 414 --sha <pr-head>`.
+- 2026-08-30T17:47:44.657Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/414 (warning: PR is not a draft)
+- 2026-08-30T17:47:44.894Z - completing
+- 2026-08-30T17:47:48.326Z - done: all gates passed

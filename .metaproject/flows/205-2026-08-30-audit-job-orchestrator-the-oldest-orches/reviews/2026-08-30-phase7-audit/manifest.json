@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-30-phase7-audit",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/414",
+    "head": "254402c6c1a5e38b8ce7e175bc5183c39d3420c7"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/scope.md",
+    "coverage": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/coverage.md",
+    "report": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/report.md",
+    "findings": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/findings.json",
+    "learning": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/learning.md",
+    "decisions": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches/reviews/2026-08-30-phase7-audit/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-core-boundaries",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-verifier",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-30T17:47:38.348Z",
+  "updatedAt": "2026-08-30T17:47:38.348Z",
+  "flow": {
+    "id": "205",
+    "path": ".metaproject/flows/205-2026-08-30-audit-job-orchestrator-the-oldest-orches"
+  }
+}
