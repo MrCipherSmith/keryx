@@ -322,9 +322,9 @@ Check `AGENTS.md` for available tools (`playwright-testing.mdc`, `storybook-guid
 ## Step 8: Integration with Other Skills
 
 Before finalizing, consider running:
-- `skills/code-style-review` — if architecture changes detected
-- `skills/code-ai-review` — for self-validation of findings
-- `skills/code-mobx-store-review` — if store changes found
+- `skills/review/code-style-review` — if architecture changes detected
+- `skills/review/code-ai-review` — for self-validation of findings
+- `skills/review/code-mobx-store-review` — if store changes found
 
 ---
 

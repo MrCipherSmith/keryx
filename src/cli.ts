@@ -32,6 +32,7 @@ import { agentsCommand } from "./commands/agents";
 import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
+import { providersCommand } from "./commands/providers";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -57,6 +58,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
+  providers: providersCommand,
   serve: serveCommand,
   update: updateCommand,
   dashboard: dashboardCommand,

@@ -22,6 +22,7 @@ import {
   type FindingDispositionRecord,
   type ManagedReviewIngestInput,
 } from "../review/managed";
+import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { githubAdapter } from "../flow/tracker/github";
 import {
   buildPathScope,
@@ -428,6 +429,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       : `pre-filter: files_dropped=${preFilter.counts.filesDropped} blocks_dropped=${preFilter.counts.blocksDropped} changed_lines_dropped=${preFilter.counts.changedLinesDropped} drop_rows=${preFilter.drops.length}`,
   );
 
+  // Flow 207 AC1/AC3. The structured record is in `manifest.json`; this line is
+  // the same object rendered, so the terminal and the file cannot disagree.
+  // `not-measured` is printed where a count is absent, never `0`.
+  console.log(renderFilterStatsLine(result.filterStats));
+  reportFilterStatsProblems(result.filterStats, `${result.path}/manifest.json`);
+
   // AC10: every cap says what it dropped, on the terminal as well as in
   // scope.md. A truncation an operator has to open a file to discover reads, on
   // the terminal they were already looking at, as "there was nothing more".
@@ -485,6 +492,17 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       }`,
     );
   }
+  // Flow 207 AC5/AC6. Both halves, because the second is the interesting one: a
+  // dismissal that reached no note means a finding was filed as model error with
+  // nobody standing behind the decision, and a learning loop that quietly
+  // declined to learn is the silence this whole flow exists to end.
+  for (const note of result.reviewNotes.written) {
+    console.log(`review-note: ${note.finding} -> ${note.path} (attested by ${note.attestation})`);
+  }
+  for (const skip of result.reviewNotes.skipped) {
+    console.log(`review-note NOT written for ${skip.finding}: ${skip.reason}`);
+  }
+
   const spend = caps.spend;
   if (spend !== undefined) {
     console.log(
@@ -1614,6 +1632,58 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
+
+  // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
+  // manifest on disk, by a different invocation from the one that wrote it — and
+  // then checked, and then refused on.
+  //
+  // Reporting alone would not have been enough. `attempts.count` and
+  // `metrics.steps[].retries` were declared and never written for a whole
+  // release, and the reason nobody noticed is that nothing read them: a field
+  // with no reader has no way of being found wrong. So this prints every stage,
+  // saying `not-measured` where the record says `null`, and exits 1 when the
+  // arithmetic does not hold or when a `null` count has no stated reason.
+  //
+  // A package written before this existed carries no `filter_stats` at all. That
+  // is reported and exits 0: it is a fact about old packages, not a
+  // contradiction inside a new one, and failing on it would make the check
+  // impossible to adopt.
+  const stats = manifest.filter_stats;
+  if (stats === undefined) {
+    console.log("filter_stats: not recorded — this package predates it. Re-ingest the round to record what it filtered.");
+    return;
+  }
+  console.log(renderFilterStatsLine(stats));
+  for (const row of stats.not_measured) {
+    console.log(`  ${row.stage}: not measured — ${row.reason}`);
+  }
+  for (const [key, value] of Object.entries(stats.by_reason).sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  by_reason ${key}: ${value}`);
+  }
+  reportFilterStatsProblems(stats, `${ref}/manifest.json`);
+}
+
+/**
+ * Print whatever is wrong with a `filter_stats`, and fail the command if
+ * anything is.
+ *
+ * Shared by `ingest` and `status` so the producer and the reader hold the record
+ * to the same standard — a check that only ran on read would let a broken
+ * producer write for weeks before anyone looked.
+ *
+ * The exit code is set rather than thrown for `ingest`, where the package is
+ * already on disk: a refusal that deleted the record of its own failure is the
+ * shape this whole pipeline exists to remove.
+ */
+function reportFilterStatsProblems(stats: unknown, where: string): void {
+  const problems = checkFilterStats(stats).filter((problem) => problem.code !== "not-recorded");
+  if (problems.length === 0) {
+    return;
+  }
+  for (const problem of problems) {
+    console.error(`filter_stats [${problem.code}] in ${where}: ${problem.message}`);
+  }
+  process.exitCode = 1;
 }
 
 async function runComplete(args: string[]): Promise<void> {
@@ -1623,10 +1693,19 @@ async function runComplete(args: string[]): Promise<void> {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
-  const manifest = await completeManagedReview(process.cwd(), ref, { dispositions });
+  const { manifest, reviewNotes } = await completeManagedReview(process.cwd(), ref, { dispositions });
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
+  // Flow 207 AC5/AC6, on the attended path. A `dismissed-incorrect` whose
+  // evidence names nobody writes no note and says so here, rather than reaching
+  // the learning loop as an unattributed claim that our own reviewer was wrong.
+  for (const note of reviewNotes.written) {
+    console.log(`review-note: ${note.finding} -> ${note.path} (attested by ${note.attestation})`);
+  }
+  for (const skip of reviewNotes.skipped) {
+    console.log(`review-note NOT written for ${skip.finding}: ${skip.reason}`);
+  }
   if (dispositions.length === 0) {
     // Said out loud, because the silence is the failure mode. A round that
     // closes with nothing recorded leaves 100% of its findings reading

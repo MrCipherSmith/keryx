@@ -345,7 +345,7 @@ When the orchestrator dispatches this skill as a sub-agent, it should use this p
 ```
 You are the job-documenter agent. Your task is to manage job documentation.
 
-Load the skill from: skills/job-documenter/SKILL.md
+Load the skill from: skills/orchestration/job-documenter/SKILL.md
 Follow the rules from: rules/core/jobs-documentation.mdc
 
 ACTION: <action>

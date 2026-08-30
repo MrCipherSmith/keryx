@@ -13,7 +13,15 @@
 // are versioned `…/paas/v4` and answer at `/chat/completions` + `/models`
 // (no `/v1`), hence the per-provider `chatPath`/`modelsPath` overrides.
 
-import { loadCustomCompatProviders } from "../lib/provider-config";
+import {
+  type ConfiguredProvider,
+  type CrossFamilyReviewDecision,
+  decideCrossFamilyReview,
+  familyOf,
+  loadCustomCompatProviders,
+} from "../lib/provider-config";
+import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { optionValue } from "../lib/args";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
 export interface OpenAiCompatProvider {
@@ -479,4 +487,198 @@ export function providerApiKey(
   }
   const raw = env[envKey];
   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// `keryx providers` — what is configured, and whether review can cross families
+// ---------------------------------------------------------------------------
+
+/**
+ * The providers the operator has actually CONFIGURED (flow 207, AC9).
+ *
+ * "Configured" is not "listed". `OPENAI_COMPAT_PROVIDERS` is a picker menu — a
+ * built-in with no credential is an offer, not a capability, and counting it
+ * would let `keryx providers cross-family` report a second family that cannot be
+ * reached. So a built-in qualifies only when a key resolves (env, or one
+ * `keryx shell` persisted) or when it needs none; a custom entry in
+ * `llm-providers.json` always qualifies, because writing it there IS the
+ * operator's act.
+ *
+ * There is no second registry here: `allOpenAiCompatProviders` already merges
+ * the built-ins with this project's `llm-providers.json` loader, and this
+ * function only filters it.
+ */
+export function configuredProviders(
+  env: Record<string, string | undefined> = process.env,
+  dir?: string,
+): ConfiguredProvider[] {
+  const customNames = new Set(customCompatProviders(dir).map((provider) => provider.name));
+  return allOpenAiCompatProviders(dir)
+    .filter((provider) => {
+      if (customNames.has(provider.name)) return true;
+      if (provider.requiresApiKey === false) return true;
+      return providerApiKey(provider, env) !== undefined || provider.apiKey !== undefined;
+    })
+    .filter((provider) => isProviderPlatformSupported(provider))
+    .map((provider) => ({ name: provider.name, models: provider.models }));
+}
+
+/**
+ * `keryx providers` — read-only reporting over the provider configuration.
+ *
+ * Read-only and network-free on purpose. `keryx review tier` already probes live
+ * `/models` when it needs a capability ordering; this command answers a question
+ * about CONFIGURATION, so it reads files and exits. That is also what lets it
+ * carry a `read: true` command descriptor with no side effects.
+ */
+export function providersCommand(args: string[]): void {
+  const command = args[0];
+  if (!command || command === "--help" || command === "-h") {
+    printProvidersHelp();
+    return;
+  }
+  if (command === "list") {
+    runProvidersList(args.slice(1));
+    return;
+  }
+  if (command === "cross-family") {
+    runCrossFamily(args.slice(1));
+    return;
+  }
+  console.error(`Unknown providers command: ${command}`);
+  printProvidersHelp();
+  process.exitCode = 1;
+}
+
+function runProvidersList(args: string[]): void {
+  const env = envWithSavedApiKeys();
+  const configured = configuredProviders(env).map((provider) => ({
+    provider: provider.name,
+    family: familyOf(provider.name),
+  }));
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ configured }, null, 2));
+    return;
+  }
+
+  console.log("# configured providers");
+  console.log("");
+  if (configured.length === 0) {
+    console.log("none — no built-in provider has a credential and llm-providers.json defines nothing.");
+    return;
+  }
+  for (const entry of configured) {
+    console.log(
+      `- ${entry.provider}: family ${entry.family ?? "not classified (a gateway or local runner fronts many families; its individual models are classified instead)"}`,
+    );
+  }
+}
+
+/**
+ * `keryx providers cross-family` — the §5.4 decision, run rather than reasoned
+ * about.
+ *
+ * ALWAYS EXITS 0 (AC11). Absence of a second provider is a normal state, and the
+ * only thing that changes is the `mode` and the recorded reason. A non-zero exit
+ * here would make "you have one vendor" indistinguishable from "the command
+ * broke", and would turn a normal configuration into a failing gate for every
+ * operator who has not signed up with two vendors.
+ *
+ * `--opt-in` is off by default (AC10). Running the command without it reports
+ * what WOULD happen; it never enrols anybody.
+ */
+function runCrossFamily(args: string[]): void {
+  const decision = crossFamilyReviewForSession(args.includes("--opt-in"), {
+    providerId: optionValue(args, "--session-provider"),
+    modelId: optionValue(args, "--session-model"),
+  });
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ cross_family_review: decision }, null, 2));
+    return;
+  }
+  console.log(renderCrossFamilyDecision(decision));
+}
+
+/**
+ * THE SEAM. One call, for anything that needs the §5.4 decision.
+ *
+ * This is what the review pipeline (`src/commands/review.ts`, `src/review/**`)
+ * calls to obtain the `cross_family_review` block for a round. It is defined
+ * here rather than there so that the provider configuration keeps exactly one
+ * reader (AC9): a caller supplies only the two things it already holds — whether
+ * the operator opted in, and the session it is running on — and never enumerates
+ * providers itself.
+ *
+ * `session` fields are optional and fall back to the selection `keryx shell`
+ * persisted, matching what `sessionModelFromArgs` in `review.ts` already does
+ * for `keryx review tier`. So the two model-selection seams compose: `review
+ * tier` answers "how capable a model", this answers "whose model", and both read
+ * the same session.
+ *
+ * Never throws, never makes a network call, and returns a decision with a stated
+ * reason on every path.
+ */
+export function crossFamilyReviewForSession(
+  optIn: boolean,
+  session: { providerId?: string | undefined; modelId?: string | undefined } = {},
+): CrossFamilyReviewDecision {
+  const config = loadShellConfig();
+  return decideCrossFamilyReview({
+    optIn,
+    session: {
+      providerId: (session.providerId ?? config.provider ?? "").trim(),
+      modelId: (session.modelId ?? config.model ?? "").trim(),
+    },
+    configured: configuredProviders(envWithSavedApiKeys()),
+  });
+}
+
+/** The human form of the decision. The reason is never omitted. */
+export function renderCrossFamilyDecision(decision: CrossFamilyReviewDecision): string {
+  const lines: string[] = [];
+  lines.push("# cross-family review");
+  lines.push("");
+  lines.push(`mode: ${decision.mode}`);
+  lines.push(`requested: ${decision.requested ? "yes (--opt-in)" : "no"}`);
+  lines.push(`author_family: ${decision.author_family ?? "not classified"}`);
+  lines.push(`reviewer_family: ${decision.reviewer_family ?? "none (single-family review)"}`);
+  lines.push(`reviewer_provider: ${decision.reviewer_provider ?? "none"}`);
+  lines.push(`reviewer_model: ${decision.reviewer_model ?? "none"}`);
+  lines.push(`candidates: ${decision.candidates.length}`);
+  for (const candidate of decision.candidates) {
+    lines.push(`  - ${candidate.family} via ${candidate.provider}${candidate.model === null ? "" : ` (${candidate.model})`}`);
+  }
+  lines.push("");
+  lines.push(`reason: ${decision.reason}`);
+  lines.push("");
+  lines.push("## record");
+  lines.push("");
+  lines.push("Embed this block in the round's structured output so a later recall comparison can group rounds by the family that reviewed them.");
+  lines.push("");
+  lines.push("```json");
+  lines.push(JSON.stringify({ cross_family_review: decision }, null, 2));
+  lines.push("```");
+  return lines.join("\n");
+}
+
+function printProvidersHelp(): void {
+  console.log(`keryx providers
+
+Usage:
+  keryx providers list [--json]
+  keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--json]
+
+Commands:
+  list          Providers this operator has configured, and the family of each
+  cross-family  Whether review can run on a different model family than authored
+                the change, and the record the round should carry
+
+cross-family is OPT-IN: without --opt-in it reports what would happen and
+chooses single-family review. Dispatching to another provider spends tokens and
+sends the change to a second vendor, which is a decision rather than an
+optimisation. With no second family configured it reports single-family review
+with a stated reason and exits 0 — that is a normal configuration, not an error.
+`);
 }

@@ -97,7 +97,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 Run `code-verifier` on the full diff:
 
 ```
-Invoke: skills/code-verifier/SKILL.md
+Invoke: skills/orchestration/code-verifier/SKILL.md
 Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
 ```
 
@@ -107,7 +107,7 @@ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
 
 ### Phase 7: REVIEW (Self)
 
-1. Launch `code-review` skill on own changes (if available)
+1. Launch the `review-orchestrator` skill on own changes
 2. Or run a focused self-review:
    - `git diff main...HEAD` — review the full diff
    - Check for: TODOs left behind, console.logs, hardcoded values

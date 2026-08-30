@@ -996,9 +996,9 @@ For UI changes, use Playwright/Storybook (see AGENTS.md for available tools):
 **Leverage other skills via AGENTS.md catalog:**
 
 Before finalizing analysis, consider running:
-- `skills/code-style-review` - if architecture changes detected
-- `skills/code-ai-review` - for self-validation of findings
-- `skills/code-mobx-store-review` - if store changes found
+- `skills/review/code-style-review` - if architecture changes detected
+- `skills/review/code-ai-review` - for self-validation of findings
+- `skills/review/code-mobx-store-review` - if store changes found
 
 **How to invoke:**
 1. Reference `AGENTS.md` Skills Catalog
