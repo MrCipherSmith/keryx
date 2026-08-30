@@ -1,10 +1,10 @@
 ---
-name: code-b091-review
-description: "Performs strict b091-style code review following code-review-b091-profile.mdc. Reviews current branch changes from merge-base. Direct, no-fluff feedback focused on logic correctness. Use when: b091 review requested, strict validation needed."
+name: code-boss-review
+description: "Performs strict boss-style code review following code-review-boss-profile.mdc. Reviews current branch changes from merge-base. Direct, no-fluff feedback focused on logic correctness. Use when: boss review requested, strict validation needed."
 triggers:
-  - "Review as b091"
-  - "b091 style review"
-  - "b091 review"
+  - "Review as boss"
+  - "boss style review"
+  - "boss review"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
@@ -14,17 +14,17 @@ license: "MIT"
 ---
 
 
-# Code Review as b091 (только текущая ветка)
+# Code Review as boss (только текущая ветка)
 
 ## Workflow
 
 Copy this checklist and track progress:
 
 ```
-b091 Review Progress:
+boss Review Progress:
 - [ ] Step 1: Determine parent branch and calculate merge-base
 - [ ] Step 2: Collect git diff (committed + local changes)
-- [ ] Step 3: Apply b091 principles (logic in correct layer, no ducttape)
+- [ ] Step 3: Apply boss principles (logic in correct layer, no ducttape)
 - [ ] Step 4: Check types (no any, typed mocks)
 - [ ] Step 5: Verify conventions (currentState, I prefix, etc.)
 - [ ] Step 6: Challenge all assumptions
@@ -37,7 +37,7 @@ b091 Review Progress:
    - закоммиченные (`BASE_SHA..HEAD`)
    - локальные незакоммиченные (staged/unstaged/untracked)
 2) **Скоуп при явном commit hash/range**: если пользователь явно передал hash или диапазон, ревьюй только запрошенный диапазон; локальные незакоммиченные изменения не добавляй, если это отдельно не попросили.
-3) **Стиль/принципы b091**: ревью строго по `.metaproject/rules/core/code-review-b091-profile.mdc` (разделы правил и промпт).
+3) **Стиль/принципы boss**: ревью строго по `.metaproject/rules/core/code-review-boss-profile.mdc` (разделы правил и промпт).
 4) **Результат**: подробный отчёт по проблемам с объяснением и предложением исправлений (минимальные патчи там, где это просто).
 
 ## Определение parent ref (детерминированно, именно родитель ветки)
@@ -108,9 +108,9 @@ git diff --name-status <FROM_SHA>..<TO_SHA>
 git diff <FROM_SHA>..<TO_SHA>
 ```
 
-## Как ревьюить (по b091)
+## Как ревьюить (по boss)
 
-Применяй чек-лист и промпт из `.metaproject/rules/core/code-review-b091-profile.mdc`. Ключевые акценты b091:
+Применяй чек-лист и промпт из `.metaproject/rules/core/code-review-boss-profile.mdc`. Ключевые акценты boss:
 
 - Логика должна жить в правильном слое (часто — в store), чтобы её можно было нормально тестировать.
 - Против “patch/glue/ducttape”: требуй чинить причину, а не маскировать симптомы.
@@ -123,14 +123,14 @@ git diff <FROM_SHA>..<TO_SHA>
 - Предложения должны проходить линт; не нитпикать автоформатирование.
 - Не раздувать scope: большие рефакторы “not today”, если вне задачи.
 
-## Формат вывода (подробный отчёт + тон b091)
+## Формат вывода (подробный отчёт + тон boss)
 
-Пиши по-русски, но допускай короткие b091-маркеры (например, `not today ;P`, “ducttape”, “broken thinking”) только по делу и без перехода на личности.
+Пиши по-русски, но допускай короткие boss-маркеры (например, `not today ;P`, “ducttape”, “broken thinking”) только по делу и без перехода на личности.
 
 Используй структуру:
 
 ```markdown
-## Вердикт (b091)
+## Вердикт (boss)
 <OK / needs work / fundamentally wrong> + 1–3 самых важных тезиса.
 
 ## Скоуп ревью (только текущая ветка)

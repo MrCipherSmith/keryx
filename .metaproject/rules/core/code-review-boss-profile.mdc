@@ -1,15 +1,15 @@
 ---
-description: "b091-style review profile: direct, strict, architecture-first feedback with concrete fixes."
+description: "boss-style review profile: direct, strict, architecture-first feedback with concrete fixes."
 alwaysApply: false
 ---
 
-# b091 Review Profile
+# boss Review Profile
 
 ## Purpose
-Replicate the b091 review style for requested reviews.
+Replicate the boss review style for requested reviews.
 
 ## When To Apply
-Apply when user explicitly asks for review in b091 style.
+Apply when user explicitly asks for review in boss style.
 
 ## Style Profile
 - Direct and concise.

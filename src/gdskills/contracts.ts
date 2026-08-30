@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export type ContractName =
   | "agent-event"
+  | "job-orchestrator-state"
   | "orchestrator-state"
   | "review-finding"
   | "subagent-dispatch"
@@ -12,8 +13,20 @@ export type ContractName =
 
 export type ContractInfo = {
   name: ContractName;
+  /** Name this contract is written under in `.metaproject/core/gdskills/contracts/`. */
   fileName: string;
   description: string;
+  /**
+   * Repo-relative location of the AUTHORITATIVE file, when it does not live in
+   * `src/gdskills/contracts/`.
+   *
+   * `job-orchestrator-state` is the case this exists for. Its schema has always
+   * shipped inside the skill that owns it, and copying it into the contracts
+   * directory would create a second copy to keep in step — which is how a schema
+   * ends up describing a shape nothing writes. The registry points at the one
+   * file instead.
+   */
+  sourcePath?: string;
 };
 
 type JsonSchema = {
@@ -61,6 +74,13 @@ export const CONTRACTS: ContractInfo[] = [
     name: "agent-event",
     fileName: "agent-event.schema.json",
     description: "Append-only lifecycle event emitted by orchestrators and subagents.",
+  },
+  {
+    name: "job-orchestrator-state",
+    fileName: "job-orchestrator-state.schema.json",
+    description:
+      "Persisted job package state (.metaproject/jobs/<name>/state.json), written by `keryx job`.",
+    sourcePath: "src/gdskills/bundled/skills/orchestration/job-orchestrator/state.schema.json",
   },
   {
     name: "orchestrator-state",
@@ -128,24 +148,35 @@ export async function loadSchema(name: ContractName): Promise<JsonSchema> {
     throw new Error(`Unknown contract schema: ${name}`);
   }
 
-  const raw = await readFile(contractPath(contract.fileName), "utf8");
+  const raw = await readFile(contractPath(contract), "utf8");
   return JSON.parse(raw) as JsonSchema;
 }
 
-function contractPath(fileName: string): string {
-  const directPath = fileURLToPath(new URL(`./contracts/${fileName}`, import.meta.url));
+/**
+ * Absolute path of a contract's authoritative schema file.
+ *
+ * A contract that declares `sourcePath` is resolved there first, from whichever
+ * root this module happens to be running under (checked out source, or the
+ * packaged build where `src/` sits one level up). Everything else keeps the
+ * original `contracts/<fileName>` lookup.
+ */
+export function contractPath(contract: ContractInfo): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  if (contract.sourcePath) {
+    for (const root of [path.join(here, "..", ".."), path.join(here, ".."), here]) {
+      const candidate = path.resolve(root, contract.sourcePath);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  const directPath = fileURLToPath(new URL(`./contracts/${contract.fileName}`, import.meta.url));
   if (existsSync(directPath)) {
     return directPath;
   }
 
-  const packagedSourcePath = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "src",
-    "gdskills",
-    "contracts",
-    fileName,
-  );
+  const packagedSourcePath = path.join(here, "..", "src", "gdskills", "contracts", contract.fileName);
   if (existsSync(packagedSourcePath)) {
     return packagedSourcePath;
   }
@@ -370,6 +401,7 @@ function describeValue(value: unknown): string {
   return typeof value;
 }
 
-export function relativeContractPath(fileName: string): string {
-  return path.join("src", "gdskills", "contracts", fileName);
+/** Repo-relative path of a contract's authoritative schema file, for listings. */
+export function relativeContractPath(contract: ContractInfo): string {
+  return contract.sourcePath ?? path.join("src", "gdskills", "contracts", contract.fileName);
 }

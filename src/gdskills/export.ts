@@ -6,7 +6,68 @@ import type { ProjectSkillRegistryEntry } from "./project-skills";
 import { resolveProjectSkill } from "./resolve";
 import { exportPluginSkill } from "./export-plugin";
 
-export type SkillRuntime = "codex" | "claude" | "plugin";
+/**
+ * Every runtime a skill can be exported for.
+ *
+ * `claude` reads the canonical `SKILL.md`. The other four harnesses each ship
+ * their own build next to it (`SKILL.codex.md`, `SKILL.cursor.md`,
+ * `SKILL.zed.md`, `SKILL.opencode.md`) — before flow 205 nothing read them and
+ * `exportProjectSkill` copied `SKILL.md` for every runtime, so a `--runtime
+ * codex` export silently shipped the Claude build with the Codex build sitting
+ * unread beside it. `plugin` is not a harness: it is the marketplace package
+ * layout handled by `exportPluginSkill`, and it has no build of its own.
+ */
+export const HARNESS_SKILL_RUNTIMES = ["claude", "codex", "cursor", "zed", "opencode"] as const;
+
+export type HarnessSkillRuntime = (typeof HARNESS_SKILL_RUNTIMES)[number];
+
+export const SKILL_RUNTIMES = [...HARNESS_SKILL_RUNTIMES, "plugin"] as const;
+
+export type SkillRuntime = (typeof SKILL_RUNTIMES)[number];
+
+export function isHarnessSkillRuntime(value: SkillRuntime): value is HarnessSkillRuntime {
+  return (HARNESS_SKILL_RUNTIMES as readonly string[]).includes(value);
+}
+
+/**
+ * The build file a runtime owns. `claude` owns the canonical `SKILL.md`;
+ * every other harness owns `SKILL.<runtime>.md`.
+ */
+export function skillBuildFileName(runtime: HarnessSkillRuntime): string {
+  return runtime === "claude" ? "SKILL.md" : `SKILL.${runtime}.md`;
+}
+
+export type ResolvedSkillBuild = {
+  /** Basename of the build actually chosen, e.g. `SKILL.codex.md`. */
+  build: string;
+  /** Absolute path of the chosen build. */
+  path: string;
+  /** True when the runtime's own build was absent and `SKILL.md` was used. */
+  fallback: boolean;
+};
+
+/**
+ * Pick the build a runtime should receive: its own when present, `SKILL.md`
+ * otherwise. The fallback is reported, never silent — silently copying the
+ * wrong file is the defect this exists to remove.
+ */
+export async function resolveSkillBuild(
+  packageRoot: string,
+  runtime: HarnessSkillRuntime,
+): Promise<ResolvedSkillBuild> {
+  const own = skillBuildFileName(runtime);
+  const ownPath = path.join(packageRoot, own);
+  if (await pathExists(ownPath)) {
+    return { build: own, path: ownPath, fallback: false };
+  }
+
+  const canonicalPath = path.join(packageRoot, "SKILL.md");
+  if (!(await pathExists(canonicalPath))) {
+    throw new Error(`Skill package has no SKILL.md: ${packageRoot}`);
+  }
+
+  return { build: "SKILL.md", path: canonicalPath, fallback: true };
+}
 
 export type ExportProjectSkillOptions = {
   input: string;
@@ -20,6 +81,10 @@ export type ExportProjectSkillResult = {
   name: string;
   sourcePath: string;
   outputPath: string;
+  /** Basename of the build copied, e.g. `SKILL.codex.md`. `null` for `plugin`. */
+  sourceBuild: string | null;
+  /** True when the runtime has no build of its own and `SKILL.md` was used. */
+  usedFallbackBuild: boolean;
   files: string[];
   dryRun: boolean;
 };
@@ -33,11 +98,9 @@ type MetaprojectManifest = {
 };
 
 export function normalizeSkillRuntime(value: string | undefined): SkillRuntime | undefined {
-  if (value === "codex" || value === "claude" || value === "plugin") {
-    return value;
-  }
-
-  return undefined;
+  return (SKILL_RUNTIMES as readonly string[]).includes(value ?? "")
+    ? (value as SkillRuntime)
+    : undefined;
 }
 
 export async function exportProjectSkill(
@@ -76,16 +139,23 @@ export async function exportProjectSkill(
       name: skillName,
       sourcePath: toPosix(path.relative(projectRoot, resolved.packageRoot)),
       outputPath: toPosix(path.relative(projectRoot, outputRoot)),
+      sourceBuild: null,
+      usedFallbackBuild: false,
       files: plugin.files,
       dryRun: options.dryRun === true,
     };
   }
 
+  // Every non-plugin runtime is a harness with a build of its own.
+  const build = await resolveSkillBuild(resolved.packageRoot, options.runtime);
   const files = await plannedExportFiles(projectRoot, resolved.packageRoot, outputRoot);
 
   if (!options.dryRun) {
     await mkdir(outputRoot, { recursive: true });
-    await copyFile(path.join(resolved.packageRoot, "SKILL.md"), path.join(outputRoot, "SKILL.md"));
+    // The export target is always named SKILL.md: harnesses read a single
+    // SKILL.md per installed skill directory. Which build filled it is
+    // recorded in the manifest and the result, never left to guesswork.
+    await copyFile(build.path, path.join(outputRoot, "SKILL.md"));
     for (const safeDir of ["references", "templates", "assets", "scripts"]) {
       await copyDirectoryIfExists(path.join(resolved.packageRoot, safeDir), path.join(outputRoot, safeDir));
     }
@@ -98,6 +168,8 @@ export async function exportProjectSkill(
         name: skillName,
         sourcePath: toPosix(path.relative(projectRoot, resolved.packageRoot)),
         outputPath: toPosix(path.relative(projectRoot, outputRoot)),
+        sourceBuild: build.build,
+        usedFallbackBuild: build.fallback,
         exportedAt: new Date().toISOString(),
         excluded: ["skill-changelog.md", "verification.md", "reports", "proposals", "audit"],
       }, null, 2)}\n`,
@@ -111,6 +183,8 @@ export async function exportProjectSkill(
     name: skillName,
     sourcePath: toPosix(path.relative(projectRoot, resolved.packageRoot)),
     outputPath: toPosix(path.relative(projectRoot, outputRoot)),
+    sourceBuild: build.build,
+    usedFallbackBuild: build.fallback,
     files,
     dryRun: options.dryRun === true,
   };

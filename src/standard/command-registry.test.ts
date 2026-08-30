@@ -15,7 +15,8 @@ describe("command-registry", () => {
       if (descriptor.module === "core") {
         expect(CORE_COMMANDS).toContain(descriptor.command);
       } else {
-        expect(descriptor.command.startsWith(moduleStem(descriptor.module))).toBe(true);
+        const stems = moduleStems(descriptor.module);
+        expect(stems.some((stem) => descriptor.command.startsWith(stem))).toBe(true);
       }
       expect(descriptor.summary.length).toBeGreaterThan(0);
       expect(descriptor.intent.length).toBeGreaterThan(0);
@@ -100,20 +101,30 @@ describe("command-registry", () => {
   });
 });
 
-function moduleStem(module: string): string {
+/**
+ * The CLI verbs a module's descriptors may be prefixed with.
+ *
+ * A LIST rather than a single stem, because one module can own more than one
+ * verb: `gdskills` owns both the skill lifecycle and `job` (job packages live in
+ * `.metaproject/jobs/` and their state schema ships inside the gdskills bundle).
+ * Collapsing that to one stem would have forced a job command to claim a module
+ * it does not belong to, which is a worse answer than widening the invariant.
+ */
+function moduleStems(module: string): string[] {
   // Command stems use the CLI verb, which differs from the module key for a few
   // modules (gdwiki -> wiki, gdctx -> ctx, tasks -> flow, memory -> memory).
-  const map: Record<string, string> = {
-    gdwiki: "wiki",
-    gdctx: "ctx",
-    tasks: "flow",
-    gdgraph: "gdgraph",
-    memory: "memory",
-    health: "health",
-    testing: "test",
-    security: "security",
+  const map: Record<string, string[]> = {
+    gdwiki: ["wiki"],
+    gdctx: ["ctx"],
+    tasks: ["flow"],
+    gdgraph: ["gdgraph"],
+    gdskills: ["skills", "skill-verify-skill", "job"],
+    memory: ["memory"],
+    health: ["health"],
+    testing: ["test"],
+    security: ["security"],
   };
-  return map[module] ?? module;
+  return map[module] ?? [module];
 }
 
 /**
