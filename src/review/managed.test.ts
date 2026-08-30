@@ -1414,6 +1414,43 @@ test("AC3: every rejection is named in scope.md with the rule that refused it", 
   expect(scope).toContain("non-regression-severity");
 });
 
+test("AC3: a blocker admitted by the exemption is named in scope.md, not silently accepted", async () => {
+  await fresh();
+  // The exemption's own failure mode. This finding is a style observation on an
+  // in-set file naming nothing the change did — the `major` form of it is
+  // rejected two tests above — and it reaches `findings.json`, where the review
+  // gate blocks completion until it is dispositioned. That is defensible only
+  // while the record SAYS the screen did not judge it. `accepted: 1` alone, plus
+  // "every scope-B finding was a regression claim inside the computed set", is a
+  // record asserting something the screen never established.
+  const { findings, path: pkg, scopeBScreen } = await ingestFindings("2026-08-30-scope-b-exempt", {
+    findings: [
+      scopeBFinding({
+        id: "F-103",
+        severity: "blocker",
+        problem: "this file's naming is inconsistent and the helper is hard to read",
+        impact: "future maintenance",
+        suggested_fix: "rename the helper",
+        evidence: "src/a.ts:12",
+        // A blocker must enumerate its class, and this one does — at a site in
+        // the computed set, naming nothing the change did. That is precisely the
+        // finding rule 3 is not allowed to judge.
+        class_scope: { sites: ["src/a.ts:12"], enumeration_method: "read the file" },
+      }),
+    ],
+    blastRadius: RADIUS,
+  });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(findings.map((finding) => finding.id)).toContain("F-103");
+  expect(scopeBScreen.screen?.exempted).toHaveLength(1);
+  expect(scopeBScreen.screen?.exempted[0]?.rule).toBe("no-link-to-change");
+  expect(scope).toContain("accepted: 1 (1 admitted by the blocker exemption without naming the change)");
+  expect(scope).toContain("scope_b_exempted: 1");
+  expect(scope).toContain("F-103");
+  expect(scope).not.toContain("every scope-B finding was a regression claim inside the computed set");
+});
+
 test("AC3: a scope-B finding with no blast-radius record is refused, not recorded unscreened", async () => {
   await fresh();
   // The silent no-op is the defect. Without the set the round was dispatched

@@ -53,6 +53,11 @@ three shapes outright:
   enough, because every finding the first rule admits is anchored, most of them
   at code the change never touched.
 
+The exemption is not a free pass, it is a recorded one. A `blocker` admitted
+without naming the change is listed in `scope.md` under **Admitted without being
+judged**, counted next to `accepted:`, and printed on the terminal — so the
+record never claims that rule 3 passed on a finding rule 3 never read.
+
 A refused finding does not reach `findings.json`. It is listed by id in the
 package's `scope.md` under `## Scope B rejections`, with the rule that refused it
 and why, and printed on the terminal by `keryx review ingest` — so a round spent

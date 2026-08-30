@@ -747,6 +747,40 @@ test("`review tier` refuses a hand-written tier", async () => {
   expect(errors.join("\n")).toContain("--tier");
 });
 
+test("`review tier` names --catalog when the file is not JSON", async () => {
+  // The two guards below this one — "not an array" and "an entry with no name" —
+  // were written; the read and the parse were not. So the two likeliest operator
+  // mistakes came out as a bare `JSON Parse error: Unexpected identifier "not"`,
+  // which names neither the flag nor the file that carries it.
+  await writeFile(path.join(ROOT, "bad.json"), "not json", "utf8");
+  await reviewCommand(["tier", "--session-provider", "demo", "--session-model", "demo-medium", "--catalog", "bad.json"]);
+
+  expect(process.exitCode).toBe(1);
+  const out = errors.join("\n");
+  expect(out).toContain("--catalog");
+  expect(out).toContain("bad.json");
+  expect(out).toContain("not valid JSON");
+  expect(out).toContain('[{"name": "<provider>", "models": ["<id>", …]}]');
+});
+
+test("`review tier` names --catalog when the file is not there", async () => {
+  await reviewCommand([
+    "tier",
+    "--session-provider",
+    "demo",
+    "--session-model",
+    "demo-medium",
+    "--catalog",
+    "nope.json",
+  ]);
+
+  expect(process.exitCode).toBe(1);
+  const out = errors.join("\n");
+  expect(out).toContain("--catalog");
+  expect(out).toContain("nope.json");
+  expect(out).toContain("could not be read");
+});
+
 test("a --blast-radius record missing its arrays is refused, not defaulted to an empty set", async () => {
   // An invented empty set rejects every scope-B finding as `outside-set` and
   // reports that as the screen working.

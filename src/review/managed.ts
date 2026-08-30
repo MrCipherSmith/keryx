@@ -1897,9 +1897,14 @@ function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
       "",
     ].join("\n");
   }
-  return `${renderBlastRadiusScreenMarkdown(screen)}scope_b_findings: ${record.scopeBFindings}\nblast_radius_record: ${
-    BLAST_RADIUS_RECORD_SOURCE[record.source]
-  }\n`;
+  // `scope_b_exempted` is repeated here rather than left to the shared renderer
+  // alone because this block is the one a completion gate reader opens: a
+  // finding admitted without `no-link-to-change` being applied reaches
+  // `findings.json` and blocks completion until dispositioned, and the reader
+  // is owed the reason next to the count of what the screen saw.
+  return `${renderBlastRadiusScreenMarkdown(screen)}scope_b_findings: ${record.scopeBFindings}\nscope_b_exempted: ${
+    screen.exempted.length
+  }\nblast_radius_record: ${BLAST_RADIUS_RECORD_SOURCE[record.source]}\n`;
 }
 
 /**

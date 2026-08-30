@@ -484,6 +484,77 @@ describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", (
     expect(markdown).toContain("severity_floor: major");
     expect(markdown).toContain("accepted: 1");
     expect(markdown).toContain("rejected: 0");
+    expect(markdown).toContain("exempted: 0");
+    // Rule 3 DID judge this one, so the blanket sentence is a true claim here.
+    expect(markdown).toContain("every scope-B finding was a regression claim inside the computed set");
+  });
+
+  test("the blocker exemption is recorded, and the record does not claim rule 3 passed", () => {
+    // ONE finding, twice, changing only the severity — the exact pair that
+    // exposed the hole. A pure style observation on an in-set hop-2 file, naming
+    // nothing the change did: rule 3 refuses the `major` and does not judge the
+    // `blocker`. Before this, the `blocker` landed in `accepted` looking exactly
+    // like a claim that passed all three rules, and the renderer then asserted
+    // "every scope-B finding was a regression claim inside the computed set" —
+    // false for a finding rule 3 never read. Reachable for any in-set file by
+    // self-labelling `blocker`, and the finding then blocks completion at the
+    // review gate: the state AC3 exists to prevent.
+    const styleNit = {
+      file: "src/a.ts",
+      problem: "this file's naming is inconsistent and the helper is hard to read",
+      impact: "future maintenance",
+      evidence: "src/a.ts:12",
+      suggested_fix: "rename the helper",
+    };
+
+    const major = screenBlastRadiusFindings([finding({ ...styleNit, severity: "major" })], set);
+    expect(major.accepted).toHaveLength(0);
+    expect(major.rejected[0]?.rule).toBe("no-link-to-change");
+    expect(major.exempted).toHaveLength(0);
+
+    const blocked = finding({ ...styleNit, severity: "blocker" });
+    const blocker = screenBlastRadiusFindings([blocked], set);
+    expect(blocker.accepted).toHaveLength(1);
+    expect(blocker.rejected).toHaveLength(0);
+    expect(blocker.exempted).toHaveLength(1);
+    expect(blocker.exempted[0]?.rule).toBe("no-link-to-change");
+    expect(blocker.exempted[0]?.finding).toBe(blocked);
+
+    const markdown = renderBlastRadiusScreenMarkdown(blocker);
+    expect(markdown).toContain("accepted: 1 (1 admitted by the blocker exemption without naming the change)");
+    expect(markdown).toContain("exempted: 1");
+    expect(markdown).toContain("Admitted without being judged");
+    expect(markdown).toContain("F-001");
+    expect(markdown).not.toContain("every scope-B finding was a regression claim inside the computed set");
+  });
+
+  test("a blocker that DOES name the change is not exempt — it passed rule 3", () => {
+    // The exemption records what the screen did not establish. A blocker that
+    // links to the change was judged and passed, and calling that an exemption
+    // would put a claim on the record about a rule that ran.
+    const result = screenBlastRadiusFindings([finding({ severity: "blocker" })], set);
+    expect(result.accepted).toHaveLength(1);
+    expect(result.exempted).toHaveLength(0);
+  });
+
+  test("the refusal does not advertise its own bypass", () => {
+    // The standard is set in `review-regression/SKILL.md`, BEFORE the round. A
+    // runtime refusal that tells the refused reviewer which severity would have
+    // got through is an instruction to relabel.
+    const result = screenBlastRadiusFindings(
+      [
+        finding({
+          problem: "this function is long and hard to follow",
+          impact: "future maintenance",
+          evidence: "src/a.ts:12",
+          suggested_fix: "extract a helper",
+        }),
+      ],
+      set,
+    );
+    expect(result.rejected[0]?.rule).toBe("no-link-to-change");
+    expect(result.rejected[0]?.detail).not.toContain("exempt");
+    expect(result.rejected[0]?.detail).toContain("Name the changed file, module or symbol whose behaviour moved.");
   });
 });
 

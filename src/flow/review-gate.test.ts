@@ -650,6 +650,31 @@ test("AC-C2 — a tracker that reports no head SHA is unobserved, not a pass", a
   expect(gate.detail).toContain("did not report a head SHA");
 });
 
+test("AC-C2 — with no tracker, condition 3 offers a remedy IT can act on", async () => {
+  // The two conditions share `prHeadResolutionRemedy` so they cannot tell
+  // different stories about the same `null`, and that is right for five of the
+  // six states. `no-tracker` is the exception: condition 3 asks a question the
+  // LOCAL object database answers, so `--merged <sha>` is its way out and it
+  // never reads `FlowServiceDeps.externalCommentsGate`. Sending its reader to
+  // that seam is advice about a mechanism this condition does not consult.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+
+  // Same flow on disk, same recorded PR — but nothing wired to ask about it.
+  const untracked = createFlowService(makeDeps({ tracker: null }));
+  const gate = reviewOf((await untracked.complete({ cwd: ROOT, id })).gates);
+
+  const head = conditionDetail(gate, "head-commit");
+  expect(head).toContain("head-commit (unobserved)");
+  expect(head).toContain("no tracker is configured");
+  expect(head).toContain("complete with `--merged <sha>`");
+  expect(head).not.toContain("externalCommentsGate");
+  // And condition 4 keeps the seam, because no local commit answers ITS question.
+  expect(conditionDetail(gate, "external-comments")).toContain("externalCommentsGate");
+});
+
 // --- AC5 condition 4: external comments -------------------------------------
 
 test("AC5/4 — a PR with nothing recorded about comments is unobserved, not clean", async () => {

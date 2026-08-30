@@ -656,9 +656,34 @@ export type BlastRadiusRejection = {
   detail: string;
 };
 
+/**
+ * A finding a rule would have refused, admitted because its severity exempts it.
+ *
+ * Today there is exactly one: `no-link-to-change` does not judge a `blocker`
+ * (see {@link screenBlastRadiusFindings}). The exemption is not a silent pass —
+ * it is a fact about the round, and it is recorded for the same reason every
+ * rejection is. An accepted finding the screen never judged is not the same fact
+ * as an accepted finding that passed all three rules, and a record that cannot
+ * tell them apart lets `renderBlastRadiusScreenMarkdown` assert "every scope-B
+ * finding was a regression claim inside the computed set" about a finding rule 3
+ * never read.
+ */
+export type BlastRadiusExemption<T> = {
+  finding: T;
+  /** The rule that did NOT run. */
+  rule: BlastRadiusRejectionRule;
+  /** Why it did not run, in words. Rendered verbatim beside the accepted count. */
+  detail: string;
+};
+
 export type BlastRadiusScreenResult<T> = {
   accepted: T[];
   rejected: BlastRadiusRejection[];
+  /**
+   * The subset of {@link accepted} that a rule was not applied to. Always
+   * present, empty when every acceptance was judged by all three rules.
+   */
+  exempted: BlastRadiusExemption<T>[];
   /** The floor applied, so a record says what standard it held findings to. */
   minSeverity: ReviewFindingSeverity;
 };
@@ -836,6 +861,15 @@ function findingText(finding: Partial<StructuredReviewFinding>): string {
  * refused `blocker` is a shipped break nobody is told about. A prose heuristic
  * may not be the thing that decides that.
  *
+ * The exemption is RECORDED, in {@link BlastRadiusScreenResult.exempted}. An
+ * unrecorded exemption is the other half of the same defect: the finding lands
+ * in `accepted` indistinguishable from one that passed all three rules, and
+ * `renderBlastRadiusScreenMarkdown` then writes "every scope-B finding was a
+ * regression claim inside the computed set" into `scope.md` about a claim rule 3
+ * never read. AC3's first test is named *a screen that did not run says so,
+ * rather than reporting `rejected: 0`* — a rule that did not run owes the record
+ * the same sentence.
+ *
  * ### The two wider repairs that were considered and rejected
  *
  * Both were proposed, both delete rule 3 outright, and neither was obvious until
@@ -876,6 +910,7 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
 
   const accepted: T[] = [];
   const rejected: BlastRadiusRejection[] = [];
+  const exempted: BlastRadiusExemption<T>[] = [];
 
   for (const finding of findings) {
     const file = typeof finding.file === "string" ? normalizeFile(finding.file) : undefined;
@@ -904,21 +939,34 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
       continue;
     }
     const text = findingText(finding);
-    if (severity !== "blocker" && tokens.length > 0 && !tokens.some((token) => text.includes(token))) {
-      rejected.push({
+    if (tokens.length > 0 && !tokens.some((token) => text.includes(token))) {
+      if (severity !== "blocker") {
+        rejected.push({
+          finding,
+          rule: "no-link-to-change",
+          detail:
+            "nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this " +
+            "site; one that never mentions the change is a review of code the change did not touch. " +
+            "Name the changed file, module or symbol whose behaviour moved.",
+        });
+        continue;
+      }
+      // Admitted, and SAID SO. The exemption is the deliberate asymmetry
+      // documented above; what it may not be is invisible, because the record
+      // otherwise reads as "rule 3 passed" about a finding rule 3 never judged.
+      exempted.push({
         finding,
         rule: "no-link-to-change",
         detail:
-          "nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this " +
-          "site; one that never mentions the change is a review of code the change did not touch. " +
-          "Name the changed file, module or symbol whose behaviour moved — a `blocker` is exempt from this rule, a `major` is not.",
+          "nothing in the finding names a changed file, module or symbol, and `no-link-to-change` was NOT applied: " +
+          "the rule is a substring match over prose and a wrongly refused `blocker` is a shipped break, so the rule " +
+          "does not decide that. This finding is accepted WITHOUT the screen establishing that it names the change.",
       });
-      continue;
     }
     accepted.push(finding);
   }
 
-  return { accepted, rejected, minSeverity };
+  return { accepted, rejected, exempted, minSeverity };
 }
 
 // ---------------------------------------------------------------------------
@@ -1043,17 +1091,52 @@ export function renderBlastRadiusMarkdown(radius: BlastRadius): string {
  * Written whether or not anything was rejected. AC3 is enforced by deleting
  * findings from a round's output, and a deletion nobody can see is the failure
  * shape this whole programme exists to remove.
+ *
+ * The exemptions are here for the mirror-image reason. The blanket sentence
+ * below — *every scope-B finding was a regression claim inside the computed set*
+ * — is a claim about rule 3 having passed, and it is FALSE for a `blocker` rule
+ * 3 was never applied to. So it is emitted only when nothing was exempt, and the
+ * accepted count carries the exempt count wherever there is one. `accepted: 1`
+ * standing alone for a finding the screen did not judge is precisely the shape
+ * AC3's own first test refuses: *a screen that did not run says so, rather than
+ * reporting `rejected: 0`.*
  */
 export function renderBlastRadiusScreenMarkdown(result: BlastRadiusScreenResult<Partial<StructuredReviewFinding>>): string {
   const lines: string[] = [];
+  const exempted = result.exempted;
   lines.push("## Scope B rejections");
   lines.push("");
   lines.push(`severity_floor: ${result.minSeverity}`);
-  lines.push(`accepted: ${result.accepted.length}`);
+  lines.push(
+    `accepted: ${result.accepted.length}${
+      exempted.length === 0
+        ? ""
+        : ` (${exempted.length} admitted by the blocker exemption without naming the change)`
+    }`,
+  );
   lines.push(`rejected: ${result.rejected.length}`);
+  lines.push(`exempted: ${exempted.length}`);
   lines.push("");
+  if (exempted.length > 0) {
+    lines.push("### Admitted without being judged");
+    lines.push("");
+    lines.push("| finding | reviewer | rule not applied | why |");
+    lines.push("|---|---|---|---|");
+    for (const exemption of exempted) {
+      lines.push(
+        `| ${escapePipes(exemption.finding.id ?? "(no id)")} | ${escapePipes(exemption.finding.reviewer ?? "(unknown)")} | ${
+          exemption.rule
+        } | ${escapePipes(exemption.detail)} |`,
+      );
+    }
+    lines.push("");
+  }
   if (result.rejected.length === 0) {
-    lines.push("_every scope-B finding was a regression claim inside the computed set._");
+    lines.push(
+      exempted.length === 0
+        ? "_every scope-B finding was a regression claim inside the computed set._"
+        : "_nothing was rejected. The finding(s) above were admitted by the blocker exemption, so this record does NOT say they named the change — `no-link-to-change` was not applied to them._",
+    );
     lines.push("");
     return lines.join("\n");
   }

@@ -435,10 +435,18 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     }
   } else {
     console.log(
-      `scope-B screen: source=${scopeB.source} scope_b_findings=${scopeB.scopeBFindings} accepted=${scopeB.screen.accepted.length} rejected=${scopeB.screen.rejected.length} min_severity=${scopeB.screen.minSeverity}`,
+      `scope-B screen: source=${scopeB.source} scope_b_findings=${scopeB.scopeBFindings} accepted=${scopeB.screen.accepted.length} rejected=${scopeB.screen.rejected.length} exempted=${scopeB.screen.exempted.length} min_severity=${scopeB.screen.minSeverity}`,
     );
     for (const rejection of scopeB.screen.rejected) {
       console.log(`  rejected ${rejection.finding.id ?? "<unidentified>"} [${rejection.rule}]: ${rejection.detail}`);
+    }
+    // An acceptance a rule never judged is a fact about the round, on the same
+    // rule as a rejection: `accepted=N` alone reads as "all three rules passed"
+    // and for these it did not.
+    for (const exemption of scopeB.screen.exempted) {
+      console.log(
+        `  exempted ${exemption.finding.id ?? "<unidentified>"} [${exemption.rule} not applied]: ${exemption.detail}`,
+      );
     }
   }
   const concurrency = caps.concurrency;
@@ -688,8 +696,30 @@ function sessionModelFromArgs(args: string[]): SessionModelContext {
 async function tierCatalog(args: string[], session: SessionModelContext): Promise<readonly DiscoveredProvider[]> {
   const file = optionValue(args, "--catalog");
   if (file !== undefined) {
-    const raw = file === "-" ? await Bun.stdin.text() : await Bun.file(file).text();
-    const parsed = JSON.parse(raw) as unknown;
+    // The two guards below name the flag, the file and the shape. These two
+    // reads are the likelier operator mistakes — a typo'd path and a file that
+    // is not JSON — and unguarded they surfaced as `ENOENT: no such file or
+    // directory` and `JSON Parse error: Unexpected identifier`, neither of which
+    // mentions `--catalog`. Exiting non-zero on bad caller input is right; doing
+    // it without naming what the caller passed is not.
+    let raw: string;
+    try {
+      raw = file === "-" ? await Bun.stdin.text() : await Bun.file(file).text();
+    } catch (error) {
+      throw new Error(
+        `--catalog ${file} could not be read: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Pass a readable file containing \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns — or \`--catalog -\` to read it from stdin.`,
+      );
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch (error) {
+      throw new Error(
+        `--catalog ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Expected \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,
+      );
+    }
     if (!Array.isArray(parsed)) {
       throw new Error(
         `--catalog ${file} is not an array of detected providers. Pass \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,

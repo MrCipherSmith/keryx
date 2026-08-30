@@ -787,15 +787,37 @@ export function prHeadResolutionSummary(resolution: PrHeadResolution): string {
   }
 }
 
+/**
+ * Which condition is asking. Four of the six states have one remedy; `no-tracker`
+ * does not.
+ *
+ * Sharing this helper is what stopped the two conditions telling different
+ * stories about the same `null`, and it is right for five states out of six.
+ * `no-tracker` is the exception, because the two conditions have different ways
+ * out of it: condition 3 asks *was the reviewed tree the one that merged*, which
+ * `--merged <sha>` answers locally with no tracker at all, and it does not read
+ * `FlowServiceDeps.externalCommentsGate`. Condition 4 asks *has anyone spoken
+ * since*, which no local commit answers, so the gate seam is its only substitute.
+ * Advice a condition cannot act on is worse than no advice: it sends the reader
+ * to a seam that would not have changed the outcome.
+ */
+export type PrHeadRemedyCaller = "head-commit" | "external-comments";
+
 /** What to actually do about it. One remedy per state, none of them "inject a dependency". */
-export function prHeadResolutionRemedy(resolution: PrHeadResolution, prUrl: string | null): string {
+export function prHeadResolutionRemedy(
+  resolution: PrHeadResolution,
+  prUrl: string | null,
+  caller: PrHeadRemedyCaller,
+): string {
   switch (resolution.state) {
     case "resolved":
       return "";
     case "no-pr":
       return "Record the pull request with `keryx flow implemented <id> --pr <url>`, or complete with `--merged <sha>`.";
     case "no-tracker":
-      return "Wire a tracker into the flow service, or inject `FlowServiceDeps.externalCommentsGate`.";
+      return caller === "head-commit"
+        ? "Wire a tracker into the flow service, or complete with `--merged <sha>`."
+        : "Wire a tracker into the flow service, or inject `FlowServiceDeps.externalCommentsGate`.";
     case "tracker-unavailable":
       return (
         "Install `gh` and run `gh auth login` — the head is read with `gh pr view`, and `gh auth status` is " +
@@ -1042,7 +1064,7 @@ export const durableExternalCommentsGate: ExternalCommentsGate = async (input) =
         `${state.collected_round ?? "?"}), and this run could not resolve the pull request's own head to compare ` +
         `it with: ${prHeadResolutionSummary(input.prHead)}. So the record is neither shown to be current nor shown ` +
         "to be stale — nobody looked. " +
-        `${prHeadResolutionRemedy(input.prHead, url)} ` +
+        `${prHeadResolutionRemedy(input.prHead, url, "external-comments")} ` +
         "If this environment will never reach the tracker, the way past this gate is " +
         `\`completion.require_clean_round: false\` in \`${REVIEW_GATE_CONFIG_PATH}\`, which reports the review gate ` +
         "as `skipped` rather than passing it.",
@@ -1361,7 +1383,7 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
       detail:
         `the PR head commit could not be determined (${prHeadResolutionSummary(input.prHead)})` +
         `; round \`${latestRound.reviewId}\` ran against ${latestRound.head}. ` +
-        prHeadResolutionRemedy(input.prHead, input.flow.pr.url),
+        prHeadResolutionRemedy(input.prHead, input.flow.pr.url, "head-commit"),
     });
   } else if (!shaMatches(latestRound.head, prHead) && onMergedPath) {
     conditions.push(
