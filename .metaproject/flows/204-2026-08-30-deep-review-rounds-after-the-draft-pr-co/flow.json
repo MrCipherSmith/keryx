@@ -1,0 +1,493 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true
+  },
+  "id": "204",
+  "slug": "deep-review-rounds-after-the-draft-pr-co",
+  "title": "Deep review rounds after the draft PR, completion gated on a clean final round, external PR comments answered once at the end, adaptive model tiers, and brevity outward",
+  "status": "in-progress",
+  "createdAt": "2026-08-30T05:31:30.403Z",
+  "updatedAt": "2026-08-30T05:32:28.490Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7c86179f9404145aba7d62878ed16bd2bf6b4bfbb2058b63f1853a3307fa809f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Baseline: record test/typecheck state",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Blast radius computed from gdgraph affected, ranked, capped, drops recorded",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Regression scope rejects non-regression findings in code",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Recompute the blast radius on changed-file set change and always on the final round",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Test: blast radius is computed and every capped drop is recorded",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "review gate in flow complete, five conditions",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Clean defined positively per finding; dismissal needs a recorded human decision",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Test: round cap with unsatisfied gate leaves the flow in-progress",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Collect PR comments from all three sources, bots as humans",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "External findings: source, external_ref, classified severity, never silently dropped",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Verifier cannot refute an external finding alone; answered-disagree still replies",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Reply once at the end, two sentences, threaded, enforced in code",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Never resolve a thread we did not open",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Test: one reply and one disposition per comment; idempotent across restart",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Model tiers in skills; a concrete model name fails a test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T20",
+      "title": "Tier resolution per provider; unknown provider inherits the session model",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T21",
+      "title": "Deterministic tier assignment recorded in the dispatch",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T22",
+      "title": "Rewrite model-selection.mdc; it forbids adaptive selection today",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T23",
+      "title": "Brevity rule for every outward GitHub artifact, enforced not advised",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T24",
+      "title": "Verify both mirrors; bundled-rule and review-mirror guards pass",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T25",
+      "title": "Quality gate: typecheck, full suite against baseline, guards, doc-links",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-30T05:31:30.403Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-30T05:32:26.447Z",
+      "event": "task-added",
+      "detail": "T5: Baseline: record test/typecheck state"
+    },
+    {
+      "at": "2026-08-30T05:32:26.542Z",
+      "event": "task-added",
+      "detail": "T6: Blast radius computed from gdgraph affected, ranked, capped, drops recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:26.634Z",
+      "event": "task-added",
+      "detail": "T7: Regression scope rejects non-regression findings in code"
+    },
+    {
+      "at": "2026-08-30T05:32:26.727Z",
+      "event": "task-added",
+      "detail": "T8: Recompute the blast radius on changed-file set change and always on the final round"
+    },
+    {
+      "at": "2026-08-30T05:32:26.820Z",
+      "event": "task-added",
+      "detail": "T9: Test: blast radius is computed and every capped drop is recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:26.913Z",
+      "event": "task-added",
+      "detail": "T10: review gate in flow complete, five conditions"
+    },
+    {
+      "at": "2026-08-30T05:32:27.005Z",
+      "event": "task-added",
+      "detail": "T11: Clean defined positively per finding; dismissal needs a recorded human decision"
+    },
+    {
+      "at": "2026-08-30T05:32:27.098Z",
+      "event": "task-added",
+      "detail": "T12: Test: round cap with unsatisfied gate leaves the flow in-progress"
+    },
+    {
+      "at": "2026-08-30T05:32:27.189Z",
+      "event": "task-added",
+      "detail": "T13: Collect PR comments from all three sources, bots as humans"
+    },
+    {
+      "at": "2026-08-30T05:32:27.282Z",
+      "event": "task-added",
+      "detail": "T14: External findings: source, external_ref, classified severity, never silently dropped"
+    },
+    {
+      "at": "2026-08-30T05:32:27.375Z",
+      "event": "task-added",
+      "detail": "T15: Verifier cannot refute an external finding alone; answered-disagree still replies"
+    },
+    {
+      "at": "2026-08-30T05:32:27.469Z",
+      "event": "task-added",
+      "detail": "T16: Reply once at the end, two sentences, threaded, enforced in code"
+    },
+    {
+      "at": "2026-08-30T05:32:27.565Z",
+      "event": "task-added",
+      "detail": "T17: Never resolve a thread we did not open"
+    },
+    {
+      "at": "2026-08-30T05:32:27.659Z",
+      "event": "task-added",
+      "detail": "T18: Test: one reply and one disposition per comment; idempotent across restart"
+    },
+    {
+      "at": "2026-08-30T05:32:27.750Z",
+      "event": "task-added",
+      "detail": "T19: Model tiers in skills; a concrete model name fails a test"
+    },
+    {
+      "at": "2026-08-30T05:32:27.843Z",
+      "event": "task-added",
+      "detail": "T20: Tier resolution per provider; unknown provider inherits the session model"
+    },
+    {
+      "at": "2026-08-30T05:32:27.936Z",
+      "event": "task-added",
+      "detail": "T21: Deterministic tier assignment recorded in the dispatch"
+    },
+    {
+      "at": "2026-08-30T05:32:28.029Z",
+      "event": "task-added",
+      "detail": "T22: Rewrite model-selection.mdc; it forbids adaptive selection today"
+    },
+    {
+      "at": "2026-08-30T05:32:28.120Z",
+      "event": "task-added",
+      "detail": "T23: Brevity rule for every outward GitHub artifact, enforced not advised"
+    },
+    {
+      "at": "2026-08-30T05:32:28.212Z",
+      "event": "task-added",
+      "detail": "T24: Verify both mirrors; bundled-rule and review-mirror guards pass"
+    },
+    {
+      "at": "2026-08-30T05:32:28.307Z",
+      "event": "task-added",
+      "detail": "T25: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-30T05:32:28.399Z",
+      "event": "frozen",
+      "detail": "20 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-30T05:32:28.490Z",
+      "event": "started"
+    }
+  ]
+}

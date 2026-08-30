@@ -619,29 +619,31 @@ export function blastRadiusRecomputeDecision(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * Reviewers whose whole question is something other than "did this break".
+ * ## Why there is no reviewer deny-list here any more
  *
- * AC3 names style, naming and architecture in untouched code as the shapes to
- * reject, and these are the dimensions that produce them by construction. An
- * unknown reviewer name is NOT on the list and is not rejected by this rule:
- * the list is a statement about reviewers this repository ships, not a licence
- * to drop a finding from a reviewer we have not heard of.
+ * There was one: a finding from `review-style`, `review-clean-code`,
+ * `review-architecture` or a conventions reviewer was rejected on the reviewer's
+ * NAME, whatever the finding said. Two things were wrong with it, and both were
+ * demonstrated rather than argued.
+ *
+ * It could only ever fire on findings the other rules had already let through —
+ * the severity floor is `major`, so by the time the dimension rule was reached
+ * the finding was `major` or `blocker`, inside the computed set, and linked to
+ * the change. A `review-architecture` blocker reading "blast-radius.ts now
+ * imports from src/commands, so the module graph has a cycle and the CLI fails to
+ * boot", evidenced by `bun src/cli.ts --help` failing, was refused as a
+ * non-regression dimension. That is a regression, and refusing it is a false
+ * negative in the direction that hides defects — the exact failure this screen
+ * exists to prevent, appearing inside the mechanism meant to prevent it.
+ *
+ * And the reviewer's name is not a fact about the claim. A reviewer whose usual
+ * question is "is this code good" can still notice that the change broke
+ * something, and the three surviving rules judge that on its merits: the set
+ * bounds where it may be raised, the floor bounds what it may claim, and the link
+ * rule requires it to say what the change did. Judge the claim, not the claimant.
  */
-export const NON_REGRESSION_DIMENSIONS = [
-  "review-style",
-  "review-clean-code",
-  "review-architecture",
-  "review-frontend-conventions",
-  "review-testing-practices",
-  "review-core-boundaries",
-  "review-flow-graph",
-  "code-style-review",
-  "code-mobx-store-review",
-] as const;
-
 export const BLAST_RADIUS_REJECTION_RULES = [
   "outside-set",
-  "non-regression-dimension",
   "non-regression-severity",
   "no-link-to-change",
 ] as const;
@@ -660,25 +662,6 @@ export type BlastRadiusScreenResult<T> = {
   /** The floor applied, so a record says what standard it held findings to. */
   minSeverity: ReviewFindingSeverity;
 };
-
-/**
- * An actor name reduced to what identifies it.
- *
- * Mirrors `actorKey` in `review/verification.ts`, which is private to that
- * module. Kept deliberately over-matching for the same reason it is there: a
- * trailing model annotation and separator noise are formatting, and `review-style
- * (sonnet)` is `review-style`. It does not prefix-match, so `review-styles` is a
- * different actor and is not rejected by the dimension rule.
- */
-function actorKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 function severityRank(severity: ReviewFindingSeverity): number {
   return REVIEW_FINDING_SEVERITIES.indexOf(severity);
@@ -709,8 +692,22 @@ function changeTokens(changedFiles: readonly string[]): string[] {
   return [...tokens].filter((token) => token.length > 2);
 }
 
+/**
+ * Everything the finding says, INCLUDING where it says it.
+ *
+ * `file` was deliberately excluded once, on the reasoning that a finding should
+ * have to name the change in prose. The effect was the opposite of the intent: a
+ * finding anchored to a changed file by rule 1 was then rejected for not
+ * repeating its own filename in a sentence. `src/commands/review.ts` reporting
+ * "the caller now passes an unbounded depth, so the command allocates until the
+ * process is killed" — evidenced by an OOM at 4.1 GB — is a regression claim
+ * about a changed file, and the anchor is the strongest link to the change there
+ * is. A rule that reads every field except the one that locates the finding is
+ * measuring prose style.
+ */
 function findingText(finding: Partial<StructuredReviewFinding>): string {
   return [
+    finding.file,
     finding.problem,
     finding.impact,
     finding.evidence,
@@ -736,7 +733,11 @@ function findingText(finding: Partial<StructuredReviewFinding>): string {
  * them, and the refusal is a value the caller has to handle rather than a
  * paragraph a model can reinterpret.
  *
- * Four rules, in order of how strong the fact behind them is:
+ * Three rules, in order of how strong the fact behind them is. Every one of them
+ * is a fact about the CLAIM; none is a fact about who made it. A fourth rule that
+ * rejected on the reviewer's name was removed — see
+ * {@link BLAST_RADIUS_REJECTION_RULES} for the two blocker-severity regressions
+ * it refused.
  *
  * 1. `outside-set` — the finding is about a file that is neither in the
  *    blast-radius set nor in the changed set. The reviewer went browsing; there
@@ -744,16 +745,14 @@ function findingText(finding: Partial<StructuredReviewFinding>): string {
  *    when its `class_scope.sites` name something in the set, because a
  *    repository-wide regression claim is legitimate and a repository-wide
  *    *opinion* is exactly what the bound exists to exclude.
- * 2. `non-regression-dimension` — raised by a reviewer whose question is style,
- *    naming or architecture. See {@link NON_REGRESSION_DIMENSIONS}.
- * 3. `non-regression-severity` — below the floor. This is not an arbitrary
+ * 2. `non-regression-severity` — below the floor. This is not an arbitrary
  *    threshold: under the canonical rubric `minor` means "the code behaves
  *    correctly; the cost lands on whoever reads it next" and `info` names
  *    neither a trigger nor an outcome. Both are self-contradictory as regression
  *    claims — a break in existing behaviour names a trigger and an outcome and is
  *    therefore `major` or above. The floor is configurable because the rubric is
  *    the repository's, not this function's.
- * 4. `no-link-to-change` — nothing in the finding names any changed file, module
+ * 3. `no-link-to-change` — nothing in the finding names any changed file, module
  *    or symbol. A regression claim asserts that THE CHANGE broke this site; one
  *    that never mentions the change is a review of untouched code wearing scope
  *    B's badge.
@@ -770,7 +769,6 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
   const minSeverity = options?.minSeverity ?? "major";
   const floor = severityRank(minSeverity);
   const inScope = new Set<string>([...radius.files.map((entry) => entry.file), ...radius.changedFiles.map(normalizeFile)]);
-  const denied = new Set(NON_REGRESSION_DIMENSIONS.map((name) => actorKey(name)));
   const tokens = changeTokens(radius.changedFiles);
 
   const accepted: T[] = [];
@@ -787,17 +785,6 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
         detail:
           `${file ?? "(no file)"} is neither in the blast-radius set nor in the changed set. ` +
           "Scope B is bounded to the computed set; a finding outside it was not in scope for this round.",
-      });
-      continue;
-    }
-    const reviewer = typeof finding.reviewer === "string" ? actorKey(finding.reviewer) : "";
-    if (denied.has(reviewer)) {
-      rejected.push({
-        finding,
-        rule: "non-regression-dimension",
-        detail:
-          `\`${finding.reviewer}\` asks whether this code is good, not whether the change broke it. ` +
-          "The blast-radius set is under regression check, not under review — raise this under scope A or as a separate review.",
       });
       continue;
     }
@@ -1012,7 +999,16 @@ export function renderBlastRadiusDispatchBrief(radius: BlastRadius): string {
   lines.push("");
   lines.push(`CHANGED (${radius.changedFiles.length}): ${radius.changedFiles.join(", ") || "none"}`);
   lines.push("");
-  lines.push(`UNDER REGRESSION CHECK (${radius.files.length}, closest first, depth <= ${radius.depth}):`);
+  // The header states the bound the entries actually obey. Related tests are
+  // ranked one hop beyond the graph depth so the cap reaches them first, so a
+  // flat `depth <= 2` printed above a hop-3 row is a line that contradicts the
+  // rows under it — and this is the text a model is asked to trust.
+  const hasRelatedTests = radius.files.some((entry) => entry.source === "related-test");
+  lines.push(
+    `UNDER REGRESSION CHECK (${radius.files.length}, closest first, graph depth <= ${radius.depth}${
+      hasRelatedTests ? `; naming-related tests of the changed files are ranked last, at hop ${radius.depth + 1}` : ""
+    }):`,
+  );
   for (const entry of radius.files) {
     lines.push(`  - ${entry.file}  [hop ${entry.hop}]  ${entry.path.join(" -> ")}`);
   }

@@ -72,6 +72,19 @@ export const DEFAULT_MAX_REPLIES_TOTAL = 30;
 /** `pr_comments.max_sentences_per_reply`. Enforced by {@link enforceReplyBrevity}, not advised. */
 export const DEFAULT_MAX_SENTENCES_PER_REPLY = 2;
 
+/**
+ * `pr_comments.max_chars_per_reply`. The second half of the budget, and the half
+ * that was missing.
+ *
+ * A sentence budget bounds sentences, not bytes: one 4,000-character sentence is
+ * one sentence, and the sentence budget passed it through verbatim while the
+ * documentation said the over-long version "is not reachable". Literally true,
+ * untrue in effect. 600 characters is roughly two dense sentences plus a link —
+ * about what a reviewer reads without scrolling — and, like the sentence budget,
+ * it CUTS rather than warns.
+ */
+export const DEFAULT_MAX_REPLY_CHARS = 600;
+
 /** The disposition an AC10 reclaim stamps. Not a `dismissed-*` state — a reply is still owed. */
 export const EXTERNAL_REFUTATION_DISPOSITION: FindingDispositionState = "answered-disagree";
 
@@ -432,7 +445,11 @@ export async function collectPrComments(input: CollectPrCommentsInput): Promise<
   const comments: CollectedComment[] = [];
   for (const comment of others) {
     const prior = handledById.get(comment.id);
-    if (prior === undefined) {
+    // A record with no `reply_url` is a comment nobody actually answered — an
+    // in-flight marker, or a summary that never posted. {@link unansweredComments}
+    // reads it as unanswered, so collection must re-offer it: the two functions
+    // disagreeing is a comment that can never be answered and never be cleared.
+    if (prior === undefined || prior.reply_url === null) {
       comments.push(comment);
       continue;
     }
@@ -925,10 +942,13 @@ export type BrevityResult = {
   truncated: boolean;
   /** The sentences that did not fit. They live in the flow package, which the link points at. */
   dropped: string[];
+  /** True when the character ceiling, rather than the sentence budget, did the cutting. */
+  truncatedByChars: boolean;
 };
 
 /**
- * The two-sentence budget, applied rather than requested.
+ * The two-sentence budget, applied rather than requested — and a character
+ * ceiling beside it, because sentences are not bytes.
  *
  * "Keep it short" in a skill file is a request, and a model under pressure to be
  * helpful writes five sentences and an apology. This function is the difference:
@@ -936,18 +956,43 @@ export type BrevityResult = {
  * replaced by a link. Nothing downstream can post the long version, because the
  * long version is not what this returns.
  *
+ * **Two bounds, because one of them was gameable.** A 4,000-character reply with
+ * a single full stop is one sentence, and the sentence budget passed it through
+ * verbatim while the reference said the over-long version was not reachable —
+ * literally true, untrue in effect. So the budget is now sentences AND
+ * characters: whole sentences are dropped first, because a cut at a sentence
+ * boundary still reads as a reply, and only a lone sentence that breaks the
+ * ceiling by itself is cut mid-way — at a word boundary, with an ellipsis and the
+ * link.
+ *
  * The one hard refusal is a truncation with nowhere to point. Dropping three
  * sentences of explanation and offering the reviewer no way to read them is worse
- * than either posting the long reply or posting nothing, so it throws.
+ * than either posting the long reply or posting nothing, so it throws — and that
+ * holds for the ceiling exactly as it holds for the sentence budget.
+ *
+ * The `Re <url>:` anchor {@link renderReplyBody} prefixes onto a top-level reply
+ * sits outside both bounds on purpose: it is an address rather than an
+ * explanation, and it is the thing that makes the reply readable at all.
  */
 export function enforceReplyBrevity(
   text: string,
-  options: { maxSentences?: number | undefined; link?: string | null | undefined; what?: string | undefined } = {},
+  options: {
+    maxSentences?: number | undefined;
+    maxChars?: number | undefined;
+    link?: string | null | undefined;
+    what?: string | undefined;
+  } = {},
 ): BrevityResult {
   const max = options.maxSentences ?? DEFAULT_MAX_SENTENCES_PER_REPLY;
+  const maxChars = options.maxChars ?? DEFAULT_MAX_REPLY_CHARS;
   const what = options.what ?? "reply";
   if (max < 1) {
     throw new Error(`Refusing a ${what} budget of ${max} sentences: a reply of zero sentences is silence with extra steps.`);
+  }
+  if (maxChars < 1) {
+    throw new Error(
+      `Refusing a ${what} ceiling of ${maxChars} characters: a reply of zero characters is silence with extra steps.`,
+    );
   }
   if (text.includes("```")) {
     throw new Error(
@@ -958,23 +1003,62 @@ export function enforceReplyBrevity(
   if (sentences.length === 0) {
     throw new Error(`Refusing an empty ${what}: silence is not an acceptable outcome for a comment.`);
   }
+
   const link = options.link ?? null;
-  if (sentences.length <= max) {
-    const body = link !== null && link !== "" && !text.includes(link) ? `${text.trim()} ${link}` : text.trim();
-    return { body, sentences: sentences.length, truncated: false, dropped: [] };
-  }
-  if (link === null || link === "") {
+  const hasLink = link !== null && link !== "";
+  // A truncated body always carries the link; an untruncated one carries it only
+  // when the text does not already contain it.
+  const render = (candidate: string, cut: boolean): string =>
+    hasLink && (cut || !candidate.includes(link)) ? `${candidate} ${link}` : candidate;
+
+  const kept = sentences.slice(0, max);
+  const dropped = sentences.slice(max);
+  let truncated = dropped.length > 0;
+  if (truncated && !hasLink) {
     throw new Error(
       `Refusing to truncate a ${what} of ${sentences.length} sentences to ${max} with no link: the conclusion would be posted and the explanation would exist nowhere the reviewer can reach. Record the detail in the flow package and pass its link.`,
     );
   }
-  const kept = sentences.slice(0, max).join(" ");
-  return {
-    body: `${kept} ${link}`,
-    sentences: max,
-    truncated: true,
-    dropped: sentences.slice(max),
-  };
+  let body = truncated ? kept.join(" ") : text.trim();
+  let truncatedByChars = false;
+
+  if (render(body, truncated).length > maxChars && !hasLink) {
+    throw new Error(
+      `Refusing to cut a ${what} of ${render(body, truncated).length} characters down to ${maxChars} with no link: it is inside the ${max}-sentence budget, so the ceiling is the only thing between the reviewer and a wall of text. Record the detail in the flow package and pass its link.`,
+    );
+  }
+
+  // Whole sentences first: a cut at a sentence boundary still reads as a reply.
+  while (render(body, truncated).length > maxChars && kept.length > 1) {
+    dropped.unshift(kept.pop() as string);
+    truncated = true;
+    truncatedByChars = true;
+    body = kept.join(" ");
+  }
+
+  // One sentence, still over the ceiling. This is the case a sentence budget can
+  // never see, and the reason the ceiling exists.
+  if (render(body, truncated).length > maxChars) {
+    const target = link as string;
+    const room = maxChars - target.length - 2;
+    if (room < 1) {
+      throw new Error(
+        `Refusing a ${what} ceiling of ${maxChars} characters with a ${target.length}-character link: nothing is left to say anything in. Raise the ceiling or shorten the link.`,
+      );
+    }
+    const whole = body;
+    const cut = whole.slice(0, room);
+    const boundary = cut.lastIndexOf(" ");
+    // A word boundary is honoured only in the back half: one at character 3 of
+    // 500 would post three words and call it an answer.
+    body = `${(boundary > room / 2 ? cut.slice(0, boundary) : cut).trimEnd()}…`;
+    truncated = true;
+    truncatedByChars = true;
+    // The whole sentence is what the link now has to be able to show.
+    dropped.unshift(whole);
+  }
+
+  return { body: render(body, truncated), sentences: kept.length, truncated, dropped, truncatedByChars };
 }
 
 /**
@@ -1041,10 +1125,24 @@ export type PlannedReply = {
   modeReason: string;
 };
 
+/**
+ * A comment answered by the overflow summary rather than individually.
+ *
+ * The disposition travels WITH the comment. It used to be dropped here and
+ * re-invented as `dismissed-deprioritised` when the record was written, which
+ * overwrote the outcome the orchestrator actually reached — a dismissal on the
+ * orchestrator's own authority, which AC6 forbids outright. Being past the reply
+ * cap changes how a comment is answered, never what was decided about it.
+ */
+export type BackloggedComment = {
+  comment: CollectedComment;
+  disposition: FindingDispositionState;
+};
+
 export type ReplyPass = {
   replies: PlannedReply[];
   /** Comments beyond `max_replies_total`. Answered collectively by `summary`. */
-  backlog: CollectedComment[];
+  backlog: BackloggedComment[];
   /** The one overflow comment, or null when nothing overflowed. */
   summary: PlannedReply | null;
   /** Comments the orchestrator flagged as blocking. Never queued; reported to the operator. */
@@ -1058,6 +1156,7 @@ export type BuildReplyPassInput = {
   outcomes: readonly CommentOutcome[];
   maxReplies?: number | undefined;
   maxSentences?: number | undefined;
+  maxChars?: number | undefined;
   /** The flow package link the overflow summary points at. */
   flowLink?: string | undefined;
 };
@@ -1115,6 +1214,7 @@ export function buildReplyPass(input: BuildReplyPassInput): ReplyPass {
   const replies = within.map(({ comment, outcome }) => {
     const brevity = enforceReplyBrevity(outcome.text, {
       maxSentences,
+      maxChars: input.maxChars,
       link: outcome.link ?? null,
       what: `reply to ${comment.id}`,
     });
@@ -1130,12 +1230,13 @@ export function buildReplyPass(input: BuildReplyPassInput): ReplyPass {
     };
   });
 
-  const summary =
-    overflow.length === 0
-      ? null
-      : buildOverflowSummary(input, overflow.map((entry) => entry.comment), maxReplies, maxSentences);
+  const backlog: BackloggedComment[] = overflow.map(({ comment, outcome }) => ({
+    comment,
+    disposition: outcome.disposition,
+  }));
+  const summary = backlog.length === 0 ? null : buildOverflowSummary(input, backlog, maxReplies, maxSentences);
 
-  return { replies, backlog: overflow.map((entry) => entry.comment), summary, escalations };
+  return { replies, backlog, summary, escalations };
 }
 
 function assertTerminalDisposition(outcome: CommentOutcome): void {
@@ -1180,7 +1281,7 @@ export function routeReply(
 
 function buildOverflowSummary(
   input: BuildReplyPassInput,
-  backlog: readonly CollectedComment[],
+  backlog: readonly BackloggedComment[],
   maxReplies: number,
   maxSentences: number,
 ): PlannedReply {
@@ -1190,13 +1291,17 @@ function buildOverflowSummary(
   } were handled but not replied to individually, because the reply cap of ${maxReplies} was reached. Each one's outcome is recorded in the flow package.`;
   const brevity = enforceReplyBrevity(text, {
     maxSentences,
+    maxChars: input.maxChars,
     link,
     what: "overflow summary",
   });
   assertOutwardBrevity(brevity.body, { maxSentences, what: "overflow summary" });
-  const first = backlog[0] as CollectedComment;
+  const first = backlog[0] as BackloggedComment;
   return {
-    comment: first,
+    comment: first.comment,
+    // The summary's own record, under the `overflow-summary:` key — not any
+    // comment's disposition. Each backlogged comment keeps the outcome the
+    // orchestrator reached for it; see {@link BackloggedComment}.
     disposition: "dismissed-deprioritised",
     mode: "overflow-summary",
     endpoint: `repos/${input.repo}/issues/${input.number}/comments`,
@@ -1224,6 +1329,16 @@ export type HandledComment = {
   disposition: FindingDispositionState;
   reply_url: string | null;
   via: ReplyMode;
+  /**
+   * Written BEFORE the POST and removed after it, so a process killed in that
+   * window leaves a record saying which reply was in the air.
+   *
+   * Absent on every settled entry — an entry carrying it is a question, not an
+   * answer, and {@link postReplyPass} resolves it against GitHub rather than
+   * guessing. See the doc comment there for why the after-every-post write alone
+   * was not enough.
+   */
+  in_flight?: true;
 };
 
 export type SeenComment = {
@@ -1353,9 +1468,18 @@ export function recordSeenComments(
  * The completion gate's question, answered from the durable record rather than
  * from the session — a resumed session starts with an empty memory and the real
  * backlog does not.
+ *
+ * **Answered means a reply exists**, not that a row exists. Membership alone was
+ * the test, and it let two shapes through the gate: an in-flight marker written
+ * before a POST that never landed, and a backlogged comment whose overflow
+ * summary failed to post. Both are rows with `reply_url: null` — the record's own
+ * way of saying nobody spoke — and both used to read as answered. A comment
+ * nobody replied to is unanswered whatever else is written beside it.
  */
 export function unansweredComments(state: PrCommentState): SeenComment[] {
-  const answered = new Set(state.handled_comments.map((entry) => entry.id));
+  const answered = new Set(
+    state.handled_comments.filter((entry) => entry.reply_url !== null).map((entry) => entry.id),
+  );
   return state.seen.filter((entry) => !answered.has(entry.id));
 }
 
@@ -1403,9 +1527,17 @@ export type PostReplyPassResult = {
  * the file on disk, so it holds across a session restart — which is the case that
  * actually happens, because a long flow gets resumed.
  *
- * **State is written after EVERY post, not once at the end.** A crash halfway
- * through a thirty-reply pass would otherwise leave thirty posted replies and an
- * empty record, and the next run would post them all again.
+ * **The write brackets the POST; it does not follow it.** Writing after every
+ * post bounds the loss to one comment, which is not the same as closing the
+ * window, and the difference was reproducible: kill the process after the second
+ * POST returns and the second run posts that reply again, because the record only
+ * ever learns about a reply that was survived. So a marker is written BEFORE the
+ * request goes out and replaced by the settled record after it, and a marker
+ * found on the next run is resolved against the pull request itself — the reply
+ * is either visible in the thread, in which case GitHub is the record and the
+ * entry is completed from it, or it is not, in which case the POST never landed
+ * and it is sent. Neither branch guesses, and neither branch can produce a second
+ * reply saying the same thing.
  */
 export async function postReplyPass(input: PostReplyPassInput): Promise<PostReplyPassResult> {
   if (!input.round.isFinal) {
@@ -1425,58 +1557,73 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
   if (input.pass.summary !== null) {
     queue.push(input.pass.summary);
   }
-  let summaryReplyUrl: string | null = null;
+  const summaryKey = `overflow-summary:${input.repo}#${input.number}`;
+  let summaryReplyUrl: string | null =
+    input.state.handled_comments.find((entry) => entry.id === summaryKey)?.reply_url ?? null;
 
   for (const reply of queue) {
     const isSummary = reply.mode === "overflow-summary";
-    const key = isSummary ? `overflow-summary:${input.repo}#${input.number}` : reply.comment.id;
+    const key = isSummary ? summaryKey : reply.comment.id;
     const prior = alreadyAnswered.get(key);
-    if (prior !== undefined) {
+    if (prior !== undefined && prior.in_flight !== true) {
       skipped.push({ id: key, reply_url: prior.reply_url });
       continue;
     }
-    const request: GitHubRequest = {
-      method: "POST",
-      path: reply.endpoint,
-      body: { body: renderReplyBody(reply) },
-    };
+    const body = renderReplyBody(reply);
+    const request: GitHubRequest = { method: "POST", path: reply.endpoint, body: { body } };
     guardGitHubRequest(request);
     requests.push(request);
     if (input.dryRun === true) {
       continue;
     }
+
+    const settled: HandledComment = {
+      id: key,
+      // The summary is not in any thread; saying it is would put a reader on
+      // a conversation it never touched.
+      thread_id: isSummary ? null : reply.comment.threadId,
+      author: isSummary ? "" : reply.comment.author,
+      url: isSummary ? "" : reply.comment.url,
+      first_seen_round: firstSeenRound(state, reply.comment.id, input.round.index),
+      handled_at: now,
+      sha: input.sha,
+      disposition: reply.disposition,
+      reply_url: null,
+      via: reply.mode,
+    };
+
+    if (prior?.in_flight === true) {
+      // A previous run died with this request in the air. Ask the pull request
+      // what actually happened rather than choosing between answering twice and
+      // never answering.
+      const found = await findPostedReply(input.port, input.repo, input.number, reply, body);
+      if (found !== null) {
+        state = upsertHandled(state, { ...settled, handled_at: prior.handled_at, reply_url: found.url });
+        await writePrCommentState(input.cwd, state);
+        alreadyAnswered.set(key, { ...settled, reply_url: found.url });
+        if (isSummary) {
+          summaryReplyUrl = found.url;
+        }
+        skipped.push({ id: key, reply_url: found.url });
+        continue;
+      }
+    } else {
+      // Before the POST, not after it. This is the whole fix.
+      state = upsertHandled(state, { ...settled, in_flight: true });
+      await writePrCommentState(input.cwd, state);
+    }
+
     const response = await input.port.request(request);
     const replyUrl = stringProperty(response, "html_url");
     posted.push(reply);
     if (isSummary) {
       summaryReplyUrl = replyUrl;
     }
-    state = {
-      ...state,
-      handled_comments: [
-        ...state.handled_comments,
-        {
-          id: key,
-          // The summary is not in any thread; saying it is would put a reader on
-          // a conversation it never touched.
-          thread_id: isSummary ? null : reply.comment.threadId,
-          author: isSummary ? "" : reply.comment.author,
-          url: isSummary ? "" : reply.comment.url,
-          first_seen_round: firstSeenRound(state, reply.comment.id, input.round.index),
-          handled_at: now,
-          sha: input.sha,
-          disposition: reply.disposition,
-          reply_url: replyUrl ?? null,
-          via: reply.mode,
-        },
-      ],
-    };
-    // After every post. See the doc comment: a crash between post and write is
-    // what makes a second run answer twice.
+    state = upsertHandled(state, { ...settled, reply_url: replyUrl ?? null });
     await writePrCommentState(input.cwd, state);
   }
 
-  const backlog = input.pass.backlog.map((comment) => comment.id);
+  const backlog = input.pass.backlog.map((entry) => entry.comment.id);
   const escalated = input.pass.escalations.map((comment) => comment.id);
   if (input.dryRun !== true) {
     // The backlog is recorded whether or not the summary posted: a comment
@@ -1490,16 +1637,20 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
       handled_comments: [
         ...state.handled_comments,
         ...input.pass.backlog
-          .filter((comment) => !state.handled_comments.some((entry) => entry.id === comment.id))
-          .map((comment) => ({
-            id: comment.id,
-            thread_id: comment.threadId,
-            author: comment.author,
-            url: comment.url,
-            first_seen_round: firstSeenRound(state, comment.id, input.round.index),
+          .filter((entry) => !state.handled_comments.some((handled) => handled.id === entry.comment.id))
+          .map((entry) => ({
+            id: entry.comment.id,
+            thread_id: entry.comment.threadId,
+            author: entry.comment.author,
+            url: entry.comment.url,
+            first_seen_round: firstSeenRound(state, entry.comment.id, input.round.index),
             handled_at: now,
             sha: input.sha,
-            disposition: "dismissed-deprioritised" as FindingDispositionState,
+            // The outcome the orchestrator reached, carried through the cap.
+            // Overwriting it with `dismissed-deprioritised` invented a dismissal
+            // on the orchestrator's own authority — which AC6 forbids — and threw
+            // away the decision somebody actually made.
+            disposition: entry.disposition,
             // The summary comment IS the reply for a backlogged comment, so the
             // record points at it. Null only when the summary itself did not
             // post — and then the comment reads as collected and unanswered,
@@ -1513,6 +1664,62 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
   }
 
   return { posted, skipped, backlog, escalated, state, requests };
+}
+
+/** Replace the entry with this id, or append it. One row per key, always. */
+function upsertHandled(state: PrCommentState, entry: HandledComment): PrCommentState {
+  const index = state.handled_comments.findIndex((existing) => existing.id === entry.id);
+  if (index === -1) {
+    return { ...state, handled_comments: [...state.handled_comments, entry] };
+  }
+  const handled = [...state.handled_comments];
+  handled[index] = entry;
+  return { ...state, handled_comments: handled };
+}
+
+/**
+ * Is this exact reply already on the pull request?
+ *
+ * Matched on the rendered body — the bytes {@link renderReplyBody} produces are
+ * deterministic — and, for a threaded reply, on the thread it sits in. Identity
+ * deliberately plays no part: `self` can be absent from a resumed state, and a
+ * recovery path that refuses to run without it would fail in exactly the case it
+ * exists for. Body plus thread is the stronger signal anyway, because it answers
+ * "did THIS reply land", not "have we ever spoken here".
+ *
+ * Both reads are on the allow-list, so the recovery cannot reach anything the
+ * rest of the module cannot.
+ *
+ * The assumption it rests on, stated: the retry renders the same bytes. That is
+ * true of this pipeline — the reply text comes from the recorded outcome and
+ * {@link enforceReplyBrevity} is a pure function of it — and a retry that
+ * rewrote the reply would post a second, different one. Which is the honest
+ * outcome for a different answer, but it is worth knowing that is the seam.
+ */
+async function findPostedReply(
+  port: GitHubPort,
+  repo: string,
+  number: number,
+  reply: PlannedReply,
+  body: string,
+): Promise<{ url: string | null } | null> {
+  const wanted = body.trim();
+  if (reply.mode === "thread-reply") {
+    const raw = await callGitHub(port, { method: "GET", path: `repos/${repo}/pulls/${number}/comments` });
+    for (const candidate of asArray(raw)) {
+      const inReplyTo = numberProperty(candidate, "in_reply_to_id");
+      if (inReplyTo === null || String(inReplyTo) !== reply.comment.threadId) continue;
+      if ((stringProperty(candidate, "body") ?? "").trim() !== wanted) continue;
+      return { url: stringProperty(candidate, "html_url") };
+    }
+    return null;
+  }
+  const raw = await callGitHub(port, { method: "GET", path: `repos/${repo}/issues/${number}/comments` });
+  for (const candidate of asArray(raw)) {
+    if ((stringProperty(candidate, "body") ?? "").trim() !== wanted) continue;
+    return { url: stringProperty(candidate, "html_url") };
+  }
+  return null;
 }
 
 function firstSeenRound(state: PrCommentState, id: string, fallback: number): number {

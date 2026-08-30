@@ -23,9 +23,10 @@ The full surface:
 ```console
 $ keryx review
 Usage:
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review ingest --report <path> [--flow <id>] --ref <ref>
+  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                      [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
@@ -37,7 +38,15 @@ Usage:
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
+                                [--round <n>] [--out <findings.json>] [--json]
+                                [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--round <n>] [--dry-run]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                              [--flow-link <url>] [--fixtures <dir>]
   keryx review loop --flow <flow-id> [--task <Tn>]
+  keryx review stack [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
@@ -112,11 +121,70 @@ and its path back to the change, and a changed file the graph cannot answer for 
 any Markdown, JSON or shell file — is reported as unresolved rather than as an
 empty radius.
 
+Three rules do the refusing, and all three judge the claim: it must be anchored
+inside the computed set, it must be `major` or above, and it must name what the
+change did. **None of them reads the reviewer's name.** One used to: a
+reviewer-dimension deny-list that, sitting after the severity floor, could only
+ever fire on `major` and `blocker` findings — and duly refused a `blocker` that
+said the change introduced an import cycle and the CLI no longer boots, because
+`review-architecture` raised it. A false negative at blocker severity is the
+failure this scope exists to prevent, so the rule is gone and the other three
+carry it.
+
 Recompute when the changed-file set moves, and always on the final round:
 
 ```bash
 keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 ```
+
+## Answer the humans — once, at the end
+
+```bash
+keryx review comments collect --repo acme/app --pr 7 --self "$(gh api user --jq .login)" \
+  --round 3 --out external-findings.json
+keryx review comments reply --repo acme/app --pr 7 --outcomes outcomes.json \
+  --sha "$(git rev-parse HEAD)" --final --dry-run
+```
+
+Comments left on the pull request by other people — and by other bots — are
+collected **every round** and answered **once**, after the final round. Replying
+per round turns one thread into six and every reply states an intention rather
+than an outcome. All three sources are read (inline comments, review submissions,
+PR-level discussion), a bot reviewer is treated exactly like a human, and only
+our own identity is filtered out — the collector refuses to run without knowing
+it, because otherwise the reply pass answers itself.
+
+Each reply is at most **two sentences and 600 characters**, cut rather than
+warned about, with the detail living in the flow package that the link points at.
+Both bounds are load-bearing: one 4,000-character sentence is one sentence, and a
+sentence budget alone posts it verbatim.
+
+Nothing here can resolve or hide a thread. The port holds an allow-list of five
+endpoints — three reads and two writes — and everything else, GraphQL included,
+is refused by the port itself. Replying is ours; resolving is the reviewer's call.
+
+`--dry-run` prints the exact requests and writes nothing, and `--fixtures <dir>`
+answers every read from JSON on disk, so the whole loop can be rehearsed with no
+token, no network and no pull request.
+
+### What survives a kill
+
+The record for a pull request lives in
+`.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json` and is written
+*around* each POST, not after it: a marker before the request leaves, the settled
+entry when it returns. Kill the process in that window and the next run finds the
+marker, looks for that exact reply on the pull request, and either adopts it —
+GitHub is the record — or sends it. Writing only after the post bounds the loss
+to one comment; it does not close the window, and a rerun that answers a reviewer
+twice is as bad as never answering.
+
+A row with no `reply_url` means **nobody answered that comment**, and the
+collector and the completion gate both read it that way, so a comment cannot be
+simultaneously unanswerable and unclearable. Beyond the reply cap one summary
+comment stands for the backlog — which changes how those comments are answered,
+never what was decided about them: each keeps the disposition the orchestrator
+reached for it. Inventing `dismissed-deprioritised` there would be a dismissal on
+the orchestrator's own authority, and a dismissal needs a human decision.
 
 ## Check the bounds before you dispatch
 

@@ -14,6 +14,23 @@
  * hand, and a fixture that can only produce today's exact output cannot express
  * a package with a missing artifact or a stale head, which is most of what these
  * tests are about.
+ *
+ * # What this file is NOT evidence of, and what it once concealed
+ *
+ * **A fixture proves the READER. It can never prove the WRITER.** This one wrote
+ * `manifest.target.head` from its `head` option, so 35 tests of the review gate
+ * passed against packages carrying a head — while `createManagedReviewPackage`,
+ * the only thing that writes a real package, set that property NOWHERE. Every
+ * flow the shipping CLI created was therefore un-completable
+ * (`head-commit (unobserved)`) and the whole suite was green. The producer was
+ * missing and no test over hand-built input could see it.
+ *
+ * The standing rule that follows: any criterion about what a package CONTAINS
+ * needs at least one test that drives the real CLI end to end —
+ * `flow init` -> `review ingest` -> `flow complete` — and that test lives in
+ * `src/flow/review-gate.e2e.test.ts`. Fixtures stay for the cases a real run
+ * cannot produce (a truncated manifest, a stale SHA, a package from an older
+ * keryx), which is what they are good at and all they are good for.
  */
 
 import { mkdir } from "node:fs/promises";
@@ -139,18 +156,93 @@ export async function writeReviewPackage(options: ReviewFixtureOptions): Promise
 }
 
 /**
+ * The durable external-comment record, as `keryx review comments collect|reply`
+ * writes it.
+ *
+ * Condition 4 reads THIS, and no longer reads `manifest.coverage`: a coverage
+ * entry is written straight from `--reviewers`, so naming a collector there
+ * satisfied the condition without collecting anything. A test that wants "the
+ * collection ran and nothing is outstanding" has to say so where the collector
+ * says it.
+ *
+ * `unanswered` names comments that were seen and never handled — the state the
+ * gate must refuse.
+ */
+export async function writePrCommentFixtureState(input: {
+  cwd: string;
+  prUrl: string;
+  roundsCollected?: number;
+  answered?: Array<{ id: string; author?: string; url?: string }>;
+  unanswered?: Array<{ id: string; author?: string; url?: string }>;
+}): Promise<string> {
+  const match = /github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/.exec(input.prUrl);
+  if (!match?.[1] || !match[2]) {
+    throw new Error(`writePrCommentFixtureState needs a GitHub pull request URL, got: ${input.prUrl}`);
+  }
+  const repo = match[1];
+  const number = Number(match[2]);
+  const answered = input.answered ?? [];
+  const unanswered = input.unanswered ?? [];
+  const seen = [...answered, ...unanswered].map((comment) => ({
+    id: comment.id,
+    thread_id: null,
+    author: comment.author ?? "someone",
+    url: comment.url ?? `${input.prUrl}#discussion_r${comment.id}`,
+    first_seen_round: 1,
+    last_seen_round: 1,
+    submitted_at: "2026-08-29T09:00:00.000Z",
+  }));
+  const state = {
+    schemaVersion: 1,
+    repo,
+    number,
+    self: "keryx-bot",
+    rounds_collected: input.roundsCollected ?? 1,
+    replies_posted_at: answered.length === 0 ? null : "2026-08-29T13:00:00.000Z",
+    seen,
+    handled_comments: answered.map((comment) => ({
+      id: comment.id,
+      thread_id: null,
+      author: comment.author ?? "someone",
+      url: comment.url ?? `${input.prUrl}#discussion_r${comment.id}`,
+      first_seen_round: 1,
+      handled_at: "2026-08-29T13:00:00.000Z",
+      sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      disposition: "answered-disagree",
+      reply_url: `${input.prUrl}#issuecomment-${comment.id}`,
+      via: "inline",
+    })),
+    backlog: [],
+    escalated: [],
+  };
+  const file = path.join(input.cwd, ".metaproject", "reviews", "pr-comments", `${repo.replace(/\//g, "__")}__${number}.json`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFileAtomic(file, `${JSON.stringify(state, null, 2)}\n`);
+  return file;
+}
+
+/**
  * The shortest package that satisfies all five conditions.
  *
  * Used by the suites whose subject is a DIFFERENT gate and which merely need the
  * review gate out of the way — stated as a satisfied gate rather than as a
- * disabled one, so those suites keep exercising the real path.
+ * disabled one, so those suites keep exercising the real path. That includes the
+ * external-comment record: `prUrl` is required — `null` for a flow that has no
+ * pull request — rather than defaulted, because a flow with a PR and no comment
+ * record is a FAILING gate and a helper that silently produced one would be
+ * hiding the same defect again.
  */
 export async function writeCleanReviewPackage(input: {
   cwd: string;
   flowDir: string;
   head: string;
+  /** The flow's PR, or `null` when it has none (the merged-commit path). */
+  prUrl: string | null;
   reviewId?: string;
 }): Promise<string> {
+  if (input.prUrl !== null) {
+    await writePrCommentFixtureState({ cwd: input.cwd, prUrl: input.prUrl });
+  }
   return writeReviewPackage({
     cwd: input.cwd,
     flowDir: input.flowDir,
@@ -158,9 +250,6 @@ export async function writeCleanReviewPackage(input: {
     head: input.head,
     findings: [],
     verificationMode: "filter",
-    coverage: [
-      { reviewer: "review-logic", status: "run", reason: "dispatched" },
-      { reviewer: "external-comments", status: "run", reason: "collected; nothing outstanding" },
-    ],
+    coverage: [{ reviewer: "review-logic", status: "run", reason: "dispatched" }],
   });
 }

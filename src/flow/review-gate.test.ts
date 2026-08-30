@@ -29,7 +29,12 @@ import {
   shaMatches,
   type GateFinding,
 } from "./review-gate";
-import { writeCleanReviewPackage, writeReviewPackage, type ReviewFixtureFinding } from "./review-fixtures";
+import {
+  writeCleanReviewPackage,
+  writePrCommentFixtureState,
+  writeReviewPackage,
+  type ReviewFixtureFinding,
+} from "./review-fixtures";
 import type { FlowService, FlowServiceDeps, FlowState, GateOutcome, TrackerAdapter } from "./types";
 
 const PR_URL = "https://github.com/acme/app/pull/7";
@@ -86,8 +91,18 @@ async function writeAc(dir: string, criteria: string[]): Promise<void> {
   );
 }
 
-/** A flow standing at the point where `complete()` runs its gates. */
-async function driveToGates(service: FlowService): Promise<{ id: string; dir: string }> {
+/**
+ * A flow standing at the point where `complete()` runs its gates.
+ *
+ * The external-comment record is written by default because condition 4 reads
+ * the DURABLE record (`.metaproject/reviews/pr-comments/…`) rather than a
+ * reviewer name in `manifest.coverage`, which any `--reviewers` value produced.
+ * `collectComments: false` is the case where nobody ran the collector at all.
+ */
+async function driveToGates(
+  service: FlowService,
+  options: { collectComments?: boolean } = {},
+): Promise<{ id: string; dir: string }> {
   const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Review gate subject" });
   const dir = path.basename(created);
   await writeAc(dir, ["Only criterion"]);
@@ -97,6 +112,9 @@ async function driveToGates(service: FlowService): Promise<{ id: string; dir: st
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
   for (const taskId of ["T1", "T2", "T3", "T4"]) {
     await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  if (options.collectComments !== false) {
+    await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL });
   }
   return { id: flow.id, dir };
 }
@@ -159,7 +177,7 @@ test("AC5/1 — the same flow passes once a clean round is ingested", async () =
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
 
   const result = await service.complete({ cwd: ROOT, id });
 
@@ -179,7 +197,6 @@ test("AC-C1 — a major finding with no disposition fails, and is named", async 
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [{ id: "F-001", severity: "major", problem: "unchecked index" }],
   });
 
@@ -202,7 +219,6 @@ test("AC5/2 — an `info` finding never blocks, whatever its disposition", async
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [{ id: "F-001", severity: "info", problem: "a naming nit" }],
   });
 
@@ -223,7 +239,6 @@ test("AC5/2 — the floor is configurable: `major` lets an undispositioned minor
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [{ id: "F-001", severity: "minor", problem: "a minor thing" }],
   });
 
@@ -243,7 +258,6 @@ test("AC6 — a finding vanishing from round 2 is NOT evidence it was fixed", as
     reviewId: "round-1",
     createdAt: "2026-08-29T10:00:00.000Z",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [
       { id: "F-001", severity: "blocker", problem: "off-by-one in the cap", file: "src/a.ts", dedupe_key: "cap-off-by-one" },
     ],
@@ -254,7 +268,6 @@ test("AC6 — a finding vanishing from round 2 is NOT evidence it was fixed", as
     reviewId: "round-2",
     createdAt: "2026-08-29T12:00:00.000Z",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [],
   });
 
@@ -275,7 +288,6 @@ test("AC6 — the same finding clears once round 2 records a disposition with it
     reviewId: "round-1",
     createdAt: "2026-08-29T10:00:00.000Z",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [
       { id: "F-001", severity: "blocker", problem: "off-by-one in the cap", file: "src/a.ts", dedupe_key: "cap-off-by-one" },
     ],
@@ -286,7 +298,6 @@ test("AC6 — the same finding clears once round 2 records a disposition with it
     reviewId: "round-2",
     createdAt: "2026-08-29T12:00:00.000Z",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [
       {
         ...fixedFinding("F-001"),
@@ -387,6 +398,102 @@ test("AC-C4 — the orchestrator cannot dismiss on its own authority", () => {
   expect(findingVerdict(humanDismissal)).toEqual({ terminal: true, kind: "dismissed" });
 });
 
+test("AC10 — `answered-disagree` is terminal once a reply exists, and never before", () => {
+  // The state AC10 REQUIRES: our verifier refuted somebody else's comment, and
+  // we still owe them an answer. `findingVerdict` did not know the word, so it
+  // fell through to "not a state this build recognises" — permanently
+  // non-terminal, failing conditions 2 AND 4 forever. The pipeline writes this
+  // state on exactly the path AC10 describes, so the gate refused every flow
+  // whose review worked as designed.
+  const noReply: GateFinding = {
+    id: "F-1",
+    severity: "major",
+    source: "external",
+    disposition: { state: "answered-disagree", evidence: "the verifier could not reproduce it" },
+    externalRef: { id: "1", url: `${PR_URL}#discussion_r1` },
+    round: "round-1",
+  };
+  expect(findingVerdict(noReply).terminal).toBe(false);
+  expect((findingVerdict(noReply) as { reason: string }).reason).toContain("no reply on the record");
+
+  const replied: GateFinding = {
+    ...noReply,
+    externalRef: { id: "1", url: `${PR_URL}#discussion_r1`, reply_url: `${PR_URL}#issuecomment-9` },
+  };
+  expect(findingVerdict(replied)).toEqual({ terminal: true, kind: "answered" });
+
+  // A hand-written record whose evidence names the reply, for packages older
+  // than `reply_url`.
+  const describedReply: GateFinding = {
+    ...noReply,
+    disposition: {
+      state: "answered-disagree",
+      evidence: `replied at ${PR_URL}#issuecomment-9; the verifier could not reproduce it`,
+    },
+  };
+  expect(findingVerdict(describedReply)).toEqual({ terminal: true, kind: "answered" });
+});
+
+test("AC10 — an `answered-disagree` external finding with a reply completes the flow", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    findings: [
+      {
+        id: "F-001",
+        severity: "major",
+        source: "external",
+        disposition: {
+          state: "answered-disagree",
+          evidence: "our verifier could not reproduce it; said so on the thread",
+        },
+        verification: { verdict: "refuted", method: "execution", evidence: "the cited test passes" },
+        external_ref: {
+          id: "1",
+          author: "someone",
+          url: `${PR_URL}#discussion_r1`,
+          reply_url: `${PR_URL}#issuecomment-9`,
+        },
+      },
+    ],
+  });
+
+  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+});
+
+test("MINOR — an English word is not a commit SHA", () => {
+  // `\b[0-9a-f]{7,40}\b` matches `effaced`, `defaced`, `facade`, `deadbeef`.
+  // A disposition reading "the debug banner was effaced" and a verification
+  // citing the same word therefore satisfied "a commit SHA AND a verifier
+  // verdict citing that SHA".
+  for (const word of ["effaced", "defaced", "deadbeef", "facade"]) {
+    const wordAsSha: GateFinding = {
+      id: "F-1",
+      severity: "major",
+      disposition: { state: "acted-on", evidence: `the debug banner was ${word}` },
+      verification: { verdict: "refuted", method: "execution", evidence: `re-ran after it was ${word}` },
+      round: "round-1",
+    };
+    expect(findingVerdict(wordAsSha).terminal).toBe(false);
+    expect((findingVerdict(wordAsSha) as { reason: string }).reason).toContain("names no commit SHA");
+  }
+
+  // A real abbreviated SHA still works.
+  const realSha: GateFinding = {
+    id: "F-2",
+    severity: "major",
+    disposition: { state: "acted-on", evidence: `fixed in ${HEAD.slice(0, 8)}` },
+    verification: { verdict: "refuted", method: "execution", evidence: `re-ran at ${HEAD}: gone` },
+    round: "round-1",
+  };
+  expect(findingVerdict(realSha)).toEqual({ terminal: true, kind: "fixed" });
+});
+
 test("AC6 — an unrecognised disposition never passes, and neither does an unevidenced one", () => {
   expect(
     findingVerdict({ id: "F", severity: "major", disposition: { state: "resolved", evidence: "x" }, round: "r" })
@@ -400,13 +507,79 @@ test("AC6 — an unrecognised disposition never passes, and neither does an unev
   );
 });
 
+test("a round that stops being readable does not take its open findings with it", async () => {
+  // MAJOR: this used to PASS, and the passing detail NAMED the round it had
+  // lost — `1 of 2 round(s) ingested; latest is round-2 (not ingested: round-1)`.
+  // `latestFindingStates` filtered to ingested rounds, so truncating round 1's
+  // manifest deleted its blocker from the evaluation while `findings.json` sat
+  // right there still saying it was open. Absence reading as clean, relocated
+  // one level up from the rule this module was built to enforce.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    createdAt: "2026-08-29T10:00:00.000Z",
+    head: HEAD,
+    findings: [{ id: "F-001", severity: "blocker", problem: "off-by-one", dedupe_key: "off-by-one" }],
+  });
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-2",
+    createdAt: "2026-08-29T12:00:00.000Z",
+    head: HEAD,
+    findings: [],
+  });
+
+  const intact = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+  expect(intact.status).toBe("fail");
+  expect(intact.detail).toContain("F-001");
+
+  await rm(path.join(ROOT, ".metaproject", "flows", dir, "reviews", "round-1", "manifest.json"));
+
+  // A failed completion returns the flow to `in-progress`, so it has to be
+  // walked back up to `implemented` before the gates run again.
+  await service.implemented({ cwd: ROOT, id, prUrl: PR_URL });
+  const truncated = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+  expect(truncated.status).toBe("fail");
+  // Both: the lost round is reported as lost, AND its finding still blocks.
+  expect(truncated.detail).toContain("ingested-round (unobserved)");
+  expect(truncated.detail).toContain("cannot be read");
+  expect(truncated.detail).toContain("F-001");
+});
+
+test("an unreadable round fails condition 1 even when everything readable is clean", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-0-abandoned",
+    createdAt: "2026-08-29T08:00:00.000Z",
+    head: HEAD,
+    omitManifest: true,
+  });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("ingested-round (unobserved)");
+  expect(gate.detail).toContain("round-0-abandoned");
+  expect(gate.detail).toContain("do not complete over it");
+});
+
 // --- AC5 condition 3 / AC-C2: the round ran against the PR head -------------
 
 test("AC-C2 — a clean round against a stale SHA fails, and both SHAs are reported", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: STALE });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: STALE, prUrl: PR_URL });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -427,7 +600,6 @@ test("AC-C2 — a round that records NO head is unobserved, not a match", async 
     reviewId: "round-1",
     head: null,
     findings: [],
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
   });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
@@ -441,7 +613,7 @@ test("AC-C2 — a tracker that reports no head SHA is unobserved, not a pass", a
   await fresh();
   const service = createFlowService(makeDeps({ tracker: fakeTracker({ headSha: null }) }));
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -455,7 +627,7 @@ test("AC-C2 — a tracker that reports no head SHA is unobserved, not a pass", a
 test("AC5/4 — a PR with nothing recorded about comments is unobserved, not clean", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
-  const { id, dir } = await driveToGates(service);
+  const { id, dir } = await driveToGates(service, { collectComments: false });
   await writeReviewPackage({
     cwd: ROOT,
     flowDir: dir,
@@ -472,9 +644,72 @@ test("AC5/4 — a PR with nothing recorded about comments is unobserved, not cle
   expect(gate.detail).toContain("different facts");
   // The failure names both ways out, so the operator is not left guessing.
   expect(gate.detail).toContain("externalCommentsGate");
-  for (const reviewer of EXTERNAL_COMMENT_COVERAGE_REVIEWERS) {
-    expect(gate.detail).toContain(reviewer);
-  }
+  expect(gate.detail).toContain("keryx review comments collect");
+});
+
+test("AC5/4 — naming a collector in `manifest.coverage` is NOT a collection", async () => {
+  // MAJOR: this used to PASS. `manifest.coverage` is written by
+  // `normalizeCoverage` straight from `keryx review ingest --reviewers …`, with
+  // status `run` and the reason "selected for managed review package". So
+  // `--reviewers pr-comments` completed a flow whose pull request could carry
+  // thirty unanswered comments, and the gate said the collection "ran and found
+  // nothing". Nothing had run.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    findings: [],
+    coverage: EXTERNAL_COMMENT_COVERAGE_REVIEWERS.map((reviewer) => ({
+      reviewer,
+      status: "run",
+      reason: "selected for managed review package",
+    })),
+  });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("external-comments (unobserved)");
+});
+
+test("AC5/4 — the durable record is what answers the condition, and it can say `unanswered`", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({
+    cwd: ROOT,
+    prUrl: PR_URL,
+    answered: [{ id: "1", author: "alice" }],
+    unanswered: [{ id: "2", author: "coderabbitai" }],
+  });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("external-comments (violated)");
+  expect(gate.detail).toContain("coderabbitai");
+  // A bot's comment is a comment: the record does not distinguish, and neither
+  // does this (AC8).
+  expect(gate.detail).not.toContain("alice");
+});
+
+test("AC5/4 — a record that exists but collected nothing is unobserved, not clean", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, roundsCollected: 0 });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("external-comments (unobserved)");
+  expect(gate.detail).toContain("no collection round has run yet");
 });
 
 test("AC5/4 — an injected collector reporting an unanswered comment fails the gate", async () => {
@@ -489,7 +724,7 @@ test("AC5/4 — an injected collector reporting an unanswered comment fails the 
     }),
   );
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -506,7 +741,7 @@ test("AC5/4 — a collector that did not run is unobserved even when it reports 
     }),
   );
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -524,7 +759,6 @@ test("AC5/4 — an external finding that was dispositioned but never replied to 
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [
       {
         ...fixedFinding("F-001"),
@@ -550,7 +784,6 @@ test("AC5/4 — the same external finding passes once a reply url is recorded", 
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [
       {
         ...fixedFinding("F-001"),
@@ -575,7 +808,6 @@ test("AC5/5 — a round with no verification stats is unobserved", async () => {
     reviewId: "round-1",
     head: HEAD,
     findings: [],
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     verificationMode: null,
   });
 
@@ -596,7 +828,6 @@ test("AC5/5 — `verification_mode: off` is a violation, not an absence", async 
     reviewId: "round-1",
     head: HEAD,
     findings: [],
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     verificationMode: "off",
   });
 
@@ -617,7 +848,6 @@ test("AC5/5 — `annotate` satisfies the condition; the verifier ran and said so
     reviewId: "round-1",
     head: HEAD,
     findings: [],
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     verificationMode: "annotate",
   });
 
@@ -637,8 +867,7 @@ test("AC7 — reaching the round cap with the gate unsatisfied never completes",
       reviewId: `round-${round}`,
       createdAt: `2026-08-29T1${round}:00:00.000Z`,
       head: HEAD,
-      coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
-      findings: [{ id: "F-001", severity: "blocker", problem: "still open", dedupe_key: "still-open" }],
+        findings: [{ id: "F-001", severity: "blocker", problem: "still open", dedupe_key: "still-open" }],
     });
   }
 
@@ -661,7 +890,6 @@ test("AC7 — below the cap the failure is reported without the cap note", async
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    coverage: [{ reviewer: "external-comments", status: "run", reason: "collected" }],
     findings: [{ id: "F-001", severity: "blocker", problem: "still open" }],
   });
 
@@ -702,7 +930,7 @@ test("the gate runs where the specification puts it: sixth, after tasks", async 
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
 
   const result = await service.complete({ cwd: ROOT, id });
 

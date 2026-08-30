@@ -74,7 +74,12 @@ async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<Return
   // Likewise the review gate (gates.review): satisfied here with a real clean
   // round rather than switched off, so these tests keep running the whole
   // completion path they are about.
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: path.basename(created), head: HEAD });
+  await writeCleanReviewPackage({
+    cwd: ROOT,
+    flowDir: path.basename(created),
+    head: HEAD,
+    prUrl: "https://github.com/acme/app/pull/1",
+  });
   return service.complete({ cwd: ROOT, id: flow.id });
 }
 

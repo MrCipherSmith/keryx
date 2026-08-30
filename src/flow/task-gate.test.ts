@@ -90,7 +90,7 @@ async function driveToGates(
   await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
   // A satisfied review gate (flow 204), so these tests keep failing for exactly
   // one reason — the task gate — rather than for two.
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/1" });
   return { id: flow.id, dir };
 }
 

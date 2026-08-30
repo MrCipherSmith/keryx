@@ -159,7 +159,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
 
   await service.acConfirm({ cwd: ROOT, id: "001", criterion: "AC1", note: "verified manually" });
   await service.acConfirm({ cwd: ROOT, id: "001", criterion: "AC2" });
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/43" });
 
   const result = await service.complete({ cwd: ROOT, id: "001", comment: true });
   expect(result.passed).toBe(true);
@@ -229,7 +229,7 @@ test("merged completion closes a flow without a PR when main contains the commit
   // No PR on this path, so the review gate compares the round against the
   // merged commit instead, and the external-comment condition is satisfied by
   // there being no PR anybody could have commented on.
-  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: "7b78ff14" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: "7b78ff14", prUrl: null });
 
   const result = await service.complete({ cwd: ROOT, id: flow.id, mergedCommit: "7b78ff14" });
 

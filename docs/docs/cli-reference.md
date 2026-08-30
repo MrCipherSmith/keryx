@@ -928,20 +928,32 @@ is omitted entirely when the module is disabled.
 (`.metaproject/flows/<flow>/reviews/`). It passes only when all five of these
 hold, and the failure names which one did not:
 
-1. **A managed review record exists with at least one ingested round.** A round
+1. **A managed review record exists, and every round in it is readable.** A round
    whose `manifest.json` or `findings.json` is missing cannot be cited — nothing
-   durable records what it found.
+   durable records what it found — and a round that cannot be read is not a
+   round that found nothing: it fails this condition rather than being skipped
+   over. Whatever of it *can* be read still counts towards condition 2.
 2. **No finding is left without a terminal disposition**, at or above the
    severity floor. "Terminal" is defined positively, per finding: `acted-on`
    needs a commit SHA *and* a verifier `refuted` verdict citing that SHA;
    `dismissed-incorrect` needs a verifier `refuted` verdict with a method and
-   evidence; the other dismissals need a recorded human decision. A finding that
-   simply stops appearing in later rounds is **not** cleared — the check runs
-   over the latest state of every finding ever raised, so absence never reads as
-   a fix.
+   evidence; the three "correct, but not now" dismissals need a recorded human
+   decision; `answered-disagree` needs a reply (`external_ref.reply_url`, or one
+   named in the evidence) — refuting somebody else's comment is not answering
+   it. A finding that simply stops appearing in later rounds is **not** cleared —
+   the check runs over the latest state of every finding ever raised, so absence
+   never reads as a fix.
 3. **The latest round ran against the PR head commit.** A clean round against a
-   stale SHA proves nothing about what will merge.
-4. **No external PR comment is unanswered.**
+   stale SHA proves nothing about what will merge. The round records this as
+   `manifest.target.head`, written by `review start|attach|ingest` from
+   `git rev-parse HEAD` (or from `--head`); a round that recorded none is
+   *unobserved*, which fails.
+4. **No external PR comment is unanswered.** Answered from the durable record
+   `keryx review comments collect|reply` writes
+   (`.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json`), not from a
+   reviewer name in `manifest.coverage` — that is written straight from
+   `--reviewers` and collects nothing. A flow with a PR and no such record is
+   *unobserved*: "nobody commented" and "nobody looked" are different facts.
 5. **The verifier ran and its stats are on the record** (`verification_mode` in
    the round's `scope.md`; `off` fails).
 
@@ -1146,9 +1158,10 @@ identity, reviewer coverage, findings, decisions, learning candidates, and an
 optional flow relationship instead of leaving review state only in chat output.
 
 ```text
-keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-keryx review ingest --report <path> [--flow <id>] --ref <ref>
+keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                    [--reviewers a,b] [--report <path>]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
@@ -1168,6 +1181,15 @@ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-fi
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
 flag that is silently dropped writes nothing and still reports success.
+
+`--head <sha>` is the commit the round ran against, written to
+`manifest.target.head` and read by the `review` completion gate — which refuses
+to complete a flow whose last round cannot say which tree it read. Omitted, it
+is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+`pr` target's own head so that a round run against something other than what
+will merge *fails* the gate instead of passing it. With no checkout to ask and a
+`pr` target, the pull request's head is used instead; with neither, the head is
+left off and the gate reports it as unobserved.
 
 | Subcommand | Description |
 |---|---|
@@ -1217,12 +1239,32 @@ Two rules that are not conveniences:
   resolving belongs to whoever wrote the comment. Auto-resolving is how a bot
   silences a person.
 
-Replies are **at most two sentences**, enforced rather than advised: the
-over-long version is not reachable from the function that produces the reply,
-and a truncation with no link to point at is refused outright. Every collected
-comment ends with exactly one reply and one disposition — silence is not an
-acceptable outcome, and neither is answering twice. State is durable per pull
-request and survives a session restart.
+Replies are **at most two sentences and at most 600 characters**, enforced rather
+than advised: the over-long version is not reachable from the function that
+produces the reply, and a truncation with no link to point at is refused
+outright. Both bounds are needed — a 4,000-character reply with one full stop is
+one sentence, and a sentence budget alone waves it through. Whole sentences are
+dropped first; a lone sentence over the ceiling is cut at a word boundary, with
+an ellipsis and the link. The `Re <url>:` anchor on a top-level reply sits
+outside both bounds, because it is an address rather than an explanation.
+
+Every collected comment ends with exactly one reply and one disposition — silence
+is not an acceptable outcome, and neither is answering twice.
+
+**Idempotent across a kill, not just across a clean restart.** The durable record
+is written *around* each POST rather than after it: a marker goes down before the
+request leaves, and is replaced by the settled entry when it returns. A process
+killed in that window leaves a marker saying which reply was in the air, and the
+next run resolves it against the pull request itself — the reply is either
+visible in the thread, in which case GitHub is the record and the entry is
+completed from it, or it is not, in which case it is sent. Writing only after the
+post bounds the loss to one comment; it does not close the window.
+
+A record with no `reply_url` is a comment **nobody answered**, and both the
+collector and the completion gate read it that way. Being past the reply cap
+changes how a comment is answered — one summary comment stands for the backlog —
+never what was decided about it: each backlogged comment keeps the disposition
+the orchestrator reached for it.
 
 The trade-off, stated: a reviewer who comments early waits until the end. That
 is deliberate — answering with a work-in-progress state that later changes is
@@ -1302,6 +1344,20 @@ it almost never costs a direct dependent.
 **Bounded on purpose.** Reviewing the whole repository every round is
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
+
+**The set is under regression check, not under review**, and that is refused in
+code rather than discouraged in prose. Three rules, and every one of them is a
+fact about the claim rather than about who made it: `outside-set` (the file is in
+neither the computed set nor the changed set), `non-regression-severity` (below
+the `major` floor — under the canonical rubric `minor` states that the code
+behaves correctly and `info` names neither a trigger nor an outcome), and
+`no-link-to-change` (nothing in the finding, its anchor included, names a changed
+file, module or symbol). There is deliberately **no rule that reads the
+reviewer's name**: one existed, and because it ran after the severity floor it
+could only ever refuse `major` and `blocker` findings — including a genuine
+broken-build regression, on the grounds that the reviewer who spotted it usually
+asks a different question. Rejections are recorded with their reason, never
+deleted.
 
 **Every file the cap removed is recorded**, with its hop and its dependency path
 back to the change. A truncation nobody can see reads afterwards as "we checked

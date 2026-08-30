@@ -6,9 +6,11 @@ import {
   completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
+  resolveGitHead,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
 } from "../review/managed";
+import { githubAdapter } from "../flow/tracker/github";
 import {
   buildPathScope,
   buildReviewScope,
@@ -43,6 +45,7 @@ import {
   unansweredComments,
   writePrCommentState,
   DEFAULT_MAX_REPLIES_TOTAL,
+  DEFAULT_MAX_REPLY_CHARS,
   DEFAULT_MAX_SENTENCES_PER_REPLY,
   type CommentOutcome,
   type GitHubPort,
@@ -106,6 +109,7 @@ const CREATE_FLAGS = [
   "--target",
   "--ref",
   "--target-ref",
+  "--head",
   "--flow",
   "--review-id",
   "--reviewers",
@@ -139,6 +143,7 @@ const COMMENTS_REPLY_FLAGS = [
   "--dry-run",
   "--max-replies",
   "--max-sentences",
+  "--max-chars",
   "--flow-link",
   "--fixtures",
 ] as const;
@@ -290,10 +295,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
+  const cwd = process.cwd();
+  const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewInput = {
-    cwd: process.cwd(),
+    cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef },
+    target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     reviewers,
@@ -314,6 +321,16 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  // Printed on every run, and printed as an absence when it is one: the review
+  // completion gate compares this against the pull request's head, and a round
+  // that recorded none fails that comparison as `unobserved`. An operator who
+  // has to open manifest.json to find out reads silence as a match.
+  console.log(
+    `head: ${
+      result.manifest.target.head ??
+      "not recorded (no git checkout to ask, and no --head given; `flow complete` will refuse this round)"
+    }`,
+  );
   // AC11/AC15: the stage counts are the only thing this pipeline's claims may be
   // stated in, so they are printed on every run rather than hidden in scope.md.
   const counts = result.verification;
@@ -374,6 +391,48 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       process.exitCode = 1;
     }
   }
+}
+
+/**
+ * What `--head` says, or what can be worked out without asking a model.
+ *
+ * `undefined` here does not mean "no head": it means this layer has nothing to
+ * add and {@link module:review/managed.resolveTargetHead} should read the local
+ * checkout. The one thing this layer can do that the writer deliberately will
+ * not is reach the network, and it does so in exactly one case — a `pr` target
+ * with no checkout to ask, i.e. a pull request being reviewed from outside a
+ * clone. When a checkout IS present its commit wins, because that is the tree
+ * the reviewers read; see `resolveTargetHead` for why recording the pull
+ * request's head instead would defeat the completion gate rather than satisfy
+ * it.
+ */
+async function resolveCreateHead(
+  args: string[],
+  kind: ReviewTargetKind,
+  ref: string,
+  cwd: string,
+): Promise<string | undefined> {
+  const explicit = optionValue(args, "--head");
+  if (explicit !== undefined) {
+    const value = explicit.trim();
+    if (!/^[0-9a-f]{7,40}$/i.test(value)) {
+      throw new Error(
+        `--head "${explicit}" is not a commit SHA. Give the commit this round ran against (\`git rev-parse HEAD\`), 7-40 hex characters.`,
+      );
+    }
+    return value.toLowerCase();
+  }
+  if (kind !== "pr") {
+    return undefined;
+  }
+  if ((await resolveGitHead(cwd)) !== null) {
+    return undefined;
+  }
+  if (!(await githubAdapter.detect())) {
+    return undefined;
+  }
+  const status = await githubAdapter.prStatus(ref);
+  return status.exists && status.headSha !== null ? status.headSha : undefined;
 }
 
 /**
@@ -527,6 +586,7 @@ async function runCommentsReply(args: string[]): Promise<void> {
     outcomes,
     maxReplies: parseNonNegativeInteger(optionValue(args, "--max-replies"), "--max-replies"),
     maxSentences: parseNonNegativeInteger(optionValue(args, "--max-sentences"), "--max-sentences"),
+    maxChars: parseNonNegativeInteger(optionValue(args, "--max-chars"), "--max-chars"),
     flowLink: optionValue(args, "--flow-link"),
   });
 
@@ -1085,6 +1145,7 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`mode: ${manifest.mode}`);
   console.log(`status: ${manifest.status}`);
   console.log(`target: ${manifest.target.kind} ${manifest.target.ref}`);
+  console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
 }
@@ -1188,9 +1249,10 @@ function printHelp(): void {
   console.log(`keryx review
 
 Usage:
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
-  keryx review ingest --report <path> [--flow <id>] --ref <ref>
+  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                      [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
@@ -1207,7 +1269,7 @@ Usage:
                                 [--fixtures <dir>]
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                               --sha <head-sha> --final [--round <n>] [--dry-run]
-                              [--max-replies <n>] [--max-sentences <n>]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>] [--fixtures <dir>]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
@@ -1222,6 +1284,14 @@ zero dispositions and still print \`status: closed\`.
 
 Modes:
   ${MANAGED_REVIEW_MODES.join(", ")}
+
+--head:
+  The commit the round ran against, written to \`manifest.target.head\` and read
+  by the \`review\` completion gate, which refuses to complete a flow whose last
+  round cannot say which tree it read. Omitted, it is \`git rev-parse HEAD\` —
+  the tree the reviewers actually read, which is deliberately preferred over a
+  \`pr\` target's own head so that a round run against something other than what
+  will merge FAILS the gate instead of passing it.
 
 scope:
   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
@@ -1292,8 +1362,10 @@ comments:
   stays at the floor marked \`unclassified\` rather than being dropped or guessed.
   \`reply\` refuses without --final: replying per round turns one review thread
   into six, and a reply written mid-flow states an intention rather than an
-  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences — CUT to that in code, with the
-  remainder replaced by a link — threaded where GitHub gives a thread, and capped
+  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences AND ${DEFAULT_MAX_REPLY_CHARS} characters — CUT to
+  both in code, with the remainder replaced by a link, because a sentence budget
+  alone lets one 4,000-character sentence through — threaded where GitHub gives
+  a thread, and capped
   at ${DEFAULT_MAX_REPLIES_TOTAL} with one summary comment and a reported backlog beyond it. Nothing
   here can resolve, hide or dismiss a thread: those endpoints are unreachable
   through the port. --dry-run and --fixtures rehearse the whole pass offline.

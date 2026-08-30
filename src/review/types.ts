@@ -34,6 +34,19 @@ export type ManagedReviewTarget = {
   ref: string;
   repository?: string | undefined;
   base?: string | undefined;
+  /**
+   * The commit the round ran against.
+   *
+   * Optional in the type and NOT optional in practice: the review completion gate
+   * (`src/flow/review-gate.ts`, condition 3) compares this against the pull
+   * request's head, and a round whose SHA is unknown proves nothing about what
+   * will merge. It stayed `undefined` on every package this repository has ever
+   * written — the property existed, the schema accepted it, and no producer set
+   * it — so the gate reported `head-commit (unobserved)` for every flow and
+   * `flow complete` could not pass. {@link ManagedReviewInput.resolveHead} is the
+   * producer that ends that; `undefined` now means only "there was no git
+   * checkout to ask", which the gate still refuses.
+   */
   head?: string | undefined;
 };
 
@@ -498,6 +511,20 @@ export type ManagedReviewInput = {
         reviewers?: readonly string[] | undefined;
       }
     | undefined;
+  /**
+   * How `target.head` is filled in when the caller supplied none.
+   *
+   * Injectable for one reason and not for configurability: the default reads the
+   * real git checkout, and a test that hands the resolver a literal SHA is
+   * testing its own fixture rather than the producer. Every test that wants to
+   * prove the producer WORKS therefore leaves this alone and runs against a real
+   * repository; this seam exists so a caller with a different source of truth
+   * (a remote checkout, a worktree, a replayed round) can say so.
+   *
+   * Returning `null` means "there was nothing to ask", and the head is left
+   * absent rather than invented.
+   */
+  resolveHead?: ((input: { cwd: string; target: ManagedReviewTarget }) => Promise<string | null>) | undefined;
   now?: Date | undefined;
 };
 

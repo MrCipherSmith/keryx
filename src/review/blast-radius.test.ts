@@ -336,21 +336,48 @@ describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", (
     expect(result.rejected).toHaveLength(0);
   });
 
-  test("a style finding is rejected on the reviewer's dimension alone", () => {
-    const result = screenBlastRadiusFindings([finding({ reviewer: "review-style" })], set);
-    expect(result.accepted).toHaveLength(0);
-    expect(result.rejected[0]?.rule).toBe("non-regression-dimension");
-    expect(result.rejected[0]?.detail).toContain("regression check, not under review");
-  });
-
-  test("the dimension check sees through formatting and a model annotation", () => {
-    const result = screenBlastRadiusFindings([finding({ reviewer: " Review_Architecture (sonnet) " })], set);
-    expect(result.rejected[0]?.rule).toBe("non-regression-dimension");
-  });
-
-  test("it does not prefix-match a reviewer it has not heard of", () => {
-    const result = screenBlastRadiusFindings([finding({ reviewer: "review-styles-of-life" })], set);
+  test("a blocker regression is judged on the claim, not on who raised it", () => {
+    // The reviewer deny-list rejected this on the name `review-architecture`
+    // while the finding in front of it named a changed file, claimed a broken
+    // build, and cited the command that fails. A false negative at `blocker` is
+    // the exact failure the screen exists to prevent.
+    const result = screenBlastRadiusFindings(
+      [
+        finding({
+          reviewer: "review-architecture",
+          severity: "blocker",
+          file: "src/a.ts",
+          problem: "src/a.ts now imports from src/core/util.ts in the other direction, so the module graph has a cycle and the CLI fails to boot",
+          impact: "the CLI does not start",
+          evidence: "bun src/cli.ts --help fails",
+          suggested_fix: "break the cycle",
+        }),
+      ],
+      set,
+    );
+    expect(result.rejected).toHaveLength(0);
     expect(result.accepted).toHaveLength(1);
+  });
+
+  test("a style nit is still refused — by the severity floor, which is a fact about the claim", () => {
+    const result = screenBlastRadiusFindings([finding({ reviewer: "review-style", severity: "minor" })], set);
+    expect(result.accepted).toHaveLength(0);
+    expect(result.rejected[0]?.rule).toBe("non-regression-severity");
+  });
+
+  test("no rule reads the reviewer's name: the same claim is judged the same whoever signs it", () => {
+    const claim = {
+      severity: "major" as const,
+      file: "src/a.ts",
+      problem: "the changed util contract returns undefined, so this call site throws",
+      impact: "the render throws",
+      evidence: "src/a.ts:12",
+      suggested_fix: "restore the guard",
+    };
+    for (const reviewer of ["review-regression", "review-style", " Review_Architecture (sonnet) ", "review-clean-code"]) {
+      const result = screenBlastRadiusFindings([finding({ ...claim, reviewer })], set);
+      expect(result.accepted).toHaveLength(1);
+    }
   });
 
   test("a finding about a file outside the computed set is rejected", () => {
@@ -403,6 +430,28 @@ describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", (
     expect(result.rejected[0]?.rule).toBe("no-link-to-change");
   });
 
+  test("a finding anchored to a changed file is linked by the anchor, not by repeating it in prose", () => {
+    // `file` was excluded from the text the link rule reads, so a finding already
+    // anchored to a changed file by rule 1 was then refused for not naming that
+    // same file again in a sentence. Nothing below mentions `util`.
+    const result = screenBlastRadiusFindings(
+      [
+        finding({
+          reviewer: "review-logic",
+          severity: "blocker",
+          file: "src/core/util.ts",
+          problem: "the caller now passes an unbounded depth, so the command allocates until the process is killed",
+          impact: "the process is OOM-killed",
+          evidence: "OOM at 4.1 GB",
+          suggested_fix: "bound the depth",
+        }),
+      ],
+      set,
+    );
+    expect(result.rejected).toHaveLength(0);
+    expect(result.accepted).toHaveLength(1);
+  });
+
   test("naming the changed module rather than the changed path still links", () => {
     const result = screenBlastRadiusFindings(
       [
@@ -419,12 +468,12 @@ describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", (
   });
 
   test("a rejected finding is returned, never dropped", () => {
-    const rejectedFinding = finding({ reviewer: "review-style", id: "F-042" });
+    const rejectedFinding = finding({ reviewer: "review-style", severity: "minor", id: "F-042" });
     const result = screenBlastRadiusFindings([rejectedFinding], set);
     expect(result.rejected[0]?.finding).toBe(rejectedFinding);
     const markdown = renderBlastRadiusScreenMarkdown(result);
     expect(markdown).toContain("F-042");
-    expect(markdown).toContain("non-regression-dimension");
+    expect(markdown).toContain("non-regression-severity");
     expect(markdown).toContain("Rejected findings are recorded, not deleted");
   });
 
@@ -448,6 +497,31 @@ describe("renderBlastRadiusDispatchBrief", () => {
     expect(brief).toContain("UNDER REGRESSION CHECK (2");
     expect(brief).toContain("NOT CHECKED");
     expect(brief).toContain("src/a.ts  [hop 1]");
+  });
+
+  test("the header does not contradict the rows under it", () => {
+    // Related tests are ranked at `depth + 1` so the cap reaches them first, so a
+    // flat `depth <= 2` sat above a hop-3 row. Cosmetic, but it is the text a
+    // model is asked to trust.
+    const withTest = computeBlastRadius({
+      graph: GRAPH,
+      changedFiles: ["src/a.ts"],
+      testFiles: ["src/a.other.test.ts"],
+    });
+    const beyond = withTest.files.filter((entry) => entry.hop > withTest.depth);
+    expect(beyond.length).toBeGreaterThan(0);
+    const brief = renderBlastRadiusDispatchBrief(withTest);
+    expect(brief).toContain(`graph depth <= ${withTest.depth}`);
+    expect(brief).toContain(`ranked last, at hop ${withTest.depth + 1}`);
+    for (const entry of beyond) {
+      expect(brief).toContain(`[hop ${entry.hop}]`);
+    }
+    // And nothing claims a flat bound the rows break.
+    expect(brief).not.toContain(`closest first, depth <= ${withTest.depth})`);
+  });
+
+  test("the related-test note is absent when no related test is in the set", () => {
+    expect(renderBlastRadiusDispatchBrief(radius())).not.toContain("ranked last, at hop");
   });
 
   test("an empty radius is reported as unanswerable, not as clean", () => {

@@ -253,7 +253,7 @@ keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
                               [--round <n>] [--out <findings.json>] [--json]
 keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
                               --sha <head-sha> --final [--dry-run]
-                              [--max-replies <n>] [--max-sentences <n>]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>]
 ```
 
@@ -610,12 +610,12 @@ radius at all and that is a different fact from "nothing depends on it".
 Nothing else. The blast-radius set is **under regression check, not under
 review**. A finding about style, naming or architecture in code the change did
 not touch is refused **by the orchestrator in code** — not discouraged here —
-under four rules:
+under three rules, every one of them a fact about the claim rather than about who
+made it:
 
 | Rule | Refused because |
 |---|---|
 | `outside-set` | the file is neither in the computed set nor in the changed set; the reviewer went browsing |
-| `non-regression-dimension` | raised by `review-style`, `review-clean-code`, `review-architecture` or a conventions reviewer — those ask whether the code is good |
 | `non-regression-severity` | below `major`. Under the canonical rubric `minor` states the code behaves correctly and `info` names neither trigger nor outcome; neither can be a claim that something broke |
 | `no-link-to-change` | nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this site |
 
@@ -1463,7 +1463,7 @@ If absent, proceed normally — context is optional and non-blocking.
 | "I'll widen the blast radius, this change looks risky" | It is bounded because review quality decays with context: F1 0.65 at round 2 → 0.29 at round 10. Widening makes the later rounds worse, not safer |
 | "The blast radius came back empty, so nothing can break" | Empty and unresolved are different facts. The graph indexes code — a Markdown or JSON change has no radius at all, and the record says which one you got |
 | "The changed files are the same as last round, so scope B can be skipped on the final round" | The final round always recomputes. A fix landed in round 3 is the change; skipping means the certifying round checked the least |
-| "This scope-B file has an obvious naming problem, I'll report it" | Rejected in code as `non-regression-dimension`. The set is under regression check, not under review — raise it under scope A |
+| "This scope-B file has an obvious naming problem, I'll report it" | Rejected in code: a naming problem is `minor` at best, and the floor is `major`. The set is under regression check, not under review — raise it under scope A |
 | "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |

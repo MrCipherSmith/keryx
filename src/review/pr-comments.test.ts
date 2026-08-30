@@ -30,9 +30,11 @@ import {
   collectPrComments,
   createFixturePort,
   DEFAULT_MAX_REPLIES_TOTAL,
+  DEFAULT_MAX_REPLY_CHARS,
   emptyPrCommentState,
   enforceReplyBrevity,
   externalFindingsFromComments,
+  fixtureKey,
   guardGitHubRequest,
   parseGhJson,
   partitionExternalFindings,
@@ -48,6 +50,7 @@ import {
   type CollectedComment,
   type CommentOutcome,
   type FixturePort,
+  type GitHubRequest,
   type PrCommentState,
 } from "./pr-comments";
 
@@ -700,6 +703,91 @@ describe("AC11/AC18 brevity", () => {
   });
 });
 
+describe("AC11/AC18 the character ceiling", () => {
+  const LINK = "https://x.test/flow/journal.md";
+
+  test("a single enormous sentence is one sentence — and is cut anyway", () => {
+    // The gap the sentence budget could not see. 3,999 characters, one full stop,
+    // and the reference said the over-long version "is not reachable".
+    const long = `${"x".repeat(3998)}.`;
+    expect(splitSentences(long)).toHaveLength(1);
+    const result = enforceReplyBrevity(long, { link: LINK });
+    expect(result.truncated).toBe(true);
+    expect(result.truncatedByChars).toBe(true);
+    expect(result.body.length).toBeLessThanOrEqual(DEFAULT_MAX_REPLY_CHARS);
+    expect(result.body).toEndWith(LINK);
+    // Nothing is lost: the whole sentence is what the link has to be able to show.
+    expect(result.dropped[0]).toBe(long);
+    // And the output passes its own check, both ways.
+    expect(splitSentences(result.body).length).toBeLessThanOrEqual(2);
+    expect(enforceReplyBrevity(result.body, { link: LINK }).truncated).toBe(false);
+  });
+
+  test("whole sentences go first: a cut at a boundary still reads as a reply", () => {
+    const text = `${"a".repeat(400)}. ${"b".repeat(400)}.`;
+    const result = enforceReplyBrevity(text, { link: LINK });
+    expect(result.sentences).toBe(1);
+    expect(result.truncatedByChars).toBe(true);
+    expect(result.body).not.toContain("…");
+    expect(result.body).toStartWith("aaa");
+    expect(result.dropped[0]).toStartWith("bbb");
+    expect(result.body.length).toBeLessThanOrEqual(DEFAULT_MAX_REPLY_CHARS);
+  });
+
+  test("a mid-sentence cut lands on a word boundary, not mid-word", () => {
+    const text = `${"word ".repeat(300)}end.`;
+    const result = enforceReplyBrevity(text, { link: LINK });
+    expect(result.body).toContain("word…");
+    expect(result.body.length).toBeLessThanOrEqual(DEFAULT_MAX_REPLY_CHARS);
+  });
+
+  test("over the ceiling with nowhere to point is refused, exactly as over the sentence budget is", () => {
+    expect(() => enforceReplyBrevity(`${"x".repeat(900)}.`)).toThrow(/no link/);
+  });
+
+  test("a ceiling with no room left for anything to say is refused rather than posted empty", () => {
+    expect(() => enforceReplyBrevity(`${"x".repeat(80)}.`, { link: LINK, maxChars: 31 })).toThrow(
+      /nothing is left to say anything in/,
+    );
+  });
+
+  test("the ceiling is configurable, and a reply inside both bounds is untouched", () => {
+    const text = `${"x".repeat(200)}.`;
+    expect(enforceReplyBrevity(text).body).toBe(text);
+    expect(enforceReplyBrevity(text).truncatedByChars).toBe(false);
+    expect(enforceReplyBrevity(text, { link: LINK, maxChars: 100 }).truncatedByChars).toBe(true);
+  });
+
+  test("a zero ceiling is refused, like a zero sentence budget", () => {
+    expect(() => enforceReplyBrevity("Fixed.", { maxChars: 0 })).toThrow(/silence with extra steps/);
+  });
+
+  test("the ceiling reaches the bytes that go to GitHub, not just the helper", async () => {
+    const root = await fresh();
+    const one = comment();
+    const port = createFixturePort(fixtures());
+    const pass = buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments: [one],
+      outcomes: [{ comment: one.id, disposition: "acted-on", text: `${"x".repeat(3998)}.`, link: LINK }],
+    });
+    await postReplyPass({
+      port,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha: "abc123",
+      round: { index: 1, isFinal: true },
+      state: emptyPrCommentState(REPO, PR),
+    });
+    const body = (port.posts[0]?.body as { body: string }).body;
+    expect(body.length).toBeLessThanOrEqual(DEFAULT_MAX_REPLY_CHARS);
+    expect(body).toEndWith(LINK);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // AC12 — never resolve or hide a thread we did not open
 // ---------------------------------------------------------------------------
@@ -775,6 +863,91 @@ describe("AC12 the port cannot resolve anything", () => {
     }
   });
 });
+
+/**
+ * A pull request that REMEMBERS what was posted to it.
+ *
+ * `createFixturePort` records writes in memory and never serves them back, so a
+ * reply posted in one run is invisible to the next one's reads — which is fine
+ * for every test that asks "what did we send", and useless for the one that asks
+ * "what is already there". This world appends each POST into the read fixtures
+ * exactly as GitHub would, so a rerun can find our own reply in the thread.
+ *
+ * `dieAfterPost` is the failure the old idempotency test could not express: the
+ * request is served, the comment exists on the pull request, and only then does
+ * the process stop. `failBeforePost` is the other half — the request never left.
+ */
+function githubWorld() {
+  const files = fixtures() as Record<string, unknown[]>;
+  const posts: GitHubRequest[] = [];
+  let nextId = 500;
+  return {
+    get posts() {
+      return posts;
+    },
+    /** The html_urls of our replies sitting under this thread root. */
+    repliesTo(threadRoot: number): string[] {
+      return (files["pull-comments"] as Array<Record<string, unknown>>)
+        .filter((entry) => entry["in_reply_to_id"] === threadRoot)
+        .map((entry) => String(entry["html_url"]));
+    },
+    port(options: { dieAfterPost?: number; failBeforePost?: number } = {}): FixturePort {
+      const calls: GitHubRequest[] = [];
+      const mine: GitHubRequest[] = [];
+      let posted = 0;
+      return {
+        get calls() {
+          return calls;
+        },
+        get posts() {
+          return mine;
+        },
+        async request(request: GitHubRequest): Promise<unknown> {
+          calls.push(request);
+          guardGitHubRequest(request);
+          if (request.method === "GET") {
+            return files[fixtureKey(request.path)] ?? [];
+          }
+          posted += 1;
+          if (options.failBeforePost === posted) {
+            throw new Error("the request never left the process");
+          }
+          const id = (nextId += 1);
+          const body = (request.body as { body: string }).body;
+          const html_url = `https://github.com/acme/app/pull/7#reply-${id}`;
+          const thread = /\/pulls\/\d+\/comments\/(\d+)\/replies$/.exec(request.path);
+          if (thread === null) {
+            (files["issue-comments"] as unknown[]).push({
+              id,
+              user: user("keryx-bot"),
+              body,
+              html_url,
+              created_at: "2026-08-02T10:00:00Z",
+            });
+          } else {
+            (files["pull-comments"] as unknown[]).push({
+              id,
+              in_reply_to_id: Number(thread[1]),
+              pull_request_review_id: 900,
+              user: user("keryx-bot"),
+              body,
+              path: "src/a.ts",
+              line: 42,
+              html_url,
+              created_at: "2026-08-02T10:00:00Z",
+            });
+          }
+          posts.push(request);
+          mine.push(request);
+          if (options.dieAfterPost === posted) {
+            throw new Error("SIGKILL: the process died after the POST landed");
+          }
+          return { id, html_url };
+        },
+      };
+    },
+  };
+}
 
 function everyCommentAnswered(comments: readonly CollectedComment[]): CommentOutcome[] {
   return comments.map((entry) => ({
@@ -1007,7 +1180,7 @@ describe("AC13 exactly one reply per comment", () => {
     expect(port.posts).toHaveLength(postedFirstRun);
   });
 
-  test("a crash mid-pass leaves the posted replies recorded, and the rerun finishes the rest", async () => {
+  test("a crash BEFORE the post lands leaves the posted replies recorded, and the rerun finishes the rest", async () => {
     const root = await fresh();
     const readPort = createFixturePort(fixtures());
     const collected = await collect(readPort);
@@ -1045,10 +1218,17 @@ describe("AC13 exactly one reply per comment", () => {
       }),
     ).rejects.toThrow("network died");
 
-    // Written after EVERY post, not once at the end: the first reply is on disk.
-    // Remove that write and this reads 0 — and the rerun answers everyone twice.
+    // Written around EVERY post, not once at the end: the first reply is settled
+    // on disk and the second is on disk as a marker. Remove those writes and this
+    // reads 0 — and the rerun answers everyone twice.
     const afterCrash = await readPrCommentState(root, REPO, PR);
-    expect(afterCrash.handled_comments).toHaveLength(1);
+    expect(afterCrash.handled_comments).toHaveLength(2);
+    expect(afterCrash.handled_comments[0]?.reply_url).toBe("https://x.test/reply/1");
+    expect(afterCrash.handled_comments[0]?.in_flight).toBeUndefined();
+    // The request that never returned. The marker says "we do not know", which is
+    // the only true thing to say about it.
+    expect(afterCrash.handled_comments[1]?.in_flight).toBe(true);
+    expect(afterCrash.handled_comments[1]?.reply_url).toBeNull();
 
     const finishing = createFixturePort(fixtures());
     const second = await postReplyPass({
@@ -1063,6 +1243,134 @@ describe("AC13 exactly one reply per comment", () => {
     });
     expect(second.posted).toHaveLength(collected.comments.length - 1);
     expect(second.skipped).toHaveLength(1);
+  });
+
+  test("a process killed AFTER the post lands does not answer that comment twice", async () => {
+    // The window the after-every-post write did not close. The old test crashed by
+    // throwing from the port BEFORE the request was served, so the reply never
+    // existed; here the reply IS on the pull request and only this process dies.
+    // Without the marker-before-POST and the reconciliation that follows it, run 2
+    // posts a second reply into the same thread.
+    const root = await fresh();
+    const world = githubWorld();
+    const dying = world.port({ dieAfterPost: 2 });
+    const collected = await collect(dying);
+    const pass = buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments: collected.comments,
+      outcomes: everyCommentAnswered(collected.comments),
+    });
+    await expect(
+      postReplyPass({
+        port: dying,
+        cwd: root,
+        repo: REPO,
+        number: PR,
+        pass,
+        sha: "abc123",
+        round: { index: 3, isFinal: true },
+        state: emptyPrCommentState(REPO, PR),
+      }),
+    ).rejects.toThrow(/died after the POST landed/);
+
+    // Two replies are on GitHub. The record settled one and marked the other.
+    expect(dying.posts).toHaveLength(2);
+    const afterCrash = await readPrCommentState(root, REPO, PR);
+    expect(afterCrash.handled_comments.map((entry) => entry.id)).toEqual([
+      "review-comment:11",
+      "review-comment:12",
+    ]);
+    expect(afterCrash.handled_comments[1]?.in_flight).toBe(true);
+
+    // Run 2, as a resumed session does it: re-read the state, re-collect, re-plan.
+    const resumed = world.port();
+    const recollected = await collectPrComments({
+      port: resumed,
+      repo: REPO,
+      number: PR,
+      self: "keryx-bot",
+      handled: afterCrash.handled_comments,
+    });
+    // The comment whose reply may or may not have landed is offered again rather
+    // than assumed either way.
+    expect(recollected.comments.map((entry) => entry.id)).toContain("review-comment:12");
+    const second = await postReplyPass({
+      port: resumed,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass: buildReplyPass({
+        repo: REPO,
+        number: PR,
+        comments: recollected.comments,
+        outcomes: everyCommentAnswered(recollected.comments),
+      }),
+      sha: "abc123",
+      round: { index: 3, isFinal: true },
+      state: afterCrash,
+    });
+
+    // GitHub is the record: the reply from run 1 is found in the thread, adopted
+    // into the state with its real url, and NOT sent again.
+    expect(second.skipped.map((entry) => entry.id)).toEqual(["review-comment:12"]);
+    expect(second.posted.map((entry) => entry.comment.id)).toEqual([
+      "review-comment:13",
+      "review:900",
+      "issue-comment:21",
+    ]);
+    expect(world.repliesTo(12)).toHaveLength(1);
+    expect(second.state.handled_comments.find((entry) => entry.id === "review-comment:12")?.reply_url).toBe(
+      world.repliesTo(12)[0],
+    );
+    // Every comment ends with exactly one reply, across both runs.
+    expect(world.posts).toHaveLength(collected.comments.length);
+    expect(unansweredComments(recordSeenComments(second.state, collected.comments, 1))).toEqual([]);
+  });
+
+  test("a reply that did NOT land is sent on the rerun: an unknown marker is resolved, not assumed", async () => {
+    const root = await fresh();
+    const world = githubWorld();
+    const collected = await collect(world.port());
+    const first = collected.comments[0] as CollectedComment;
+    const pass = buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments: [first],
+      outcomes: [{ comment: first.id, disposition: "acted-on", text: "Fixed in abc123." }],
+    });
+    // Dies on the way OUT: the marker is on disk, the reply is not on GitHub.
+    const dying = world.port({ failBeforePost: 1 });
+    await expect(
+      postReplyPass({
+        port: dying,
+        cwd: root,
+        repo: REPO,
+        number: PR,
+        pass,
+        sha: "abc123",
+        round: { index: 1, isFinal: true },
+        state: emptyPrCommentState(REPO, PR),
+      }),
+    ).rejects.toThrow(/the request never left/);
+    const afterCrash = await readPrCommentState(root, REPO, PR);
+    expect(afterCrash.handled_comments[0]?.in_flight).toBe(true);
+
+    const resumed = world.port();
+    const second = await postReplyPass({
+      port: resumed,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha: "abc123",
+      round: { index: 1, isFinal: true },
+      state: afterCrash,
+    });
+    expect(second.posted).toHaveLength(1);
+    expect(second.skipped).toHaveLength(0);
+    expect(world.repliesTo(11)).toHaveLength(1);
+    expect(second.state.handled_comments[0]?.in_flight).toBeUndefined();
   });
 
   test("the durable record carries every property the criterion names", async () => {
@@ -1130,6 +1438,54 @@ describe("AC13 exactly one reply per comment", () => {
     };
     expect(unansweredComments(state)).toEqual([]);
   });
+
+  test("a row with no reply_url is a comment nobody answered, not an answered one", () => {
+    // Membership alone was the test, and the code comment beside it claimed a null
+    // `reply_url` would "read as collected and unanswered, which is what the
+    // completion gate must see". It read as answered, and a comment nobody replied
+    // to passed the gate.
+    const one = comment();
+    const base = recordSeenComments(emptyPrCommentState(REPO, PR), [one], 1);
+    const row = {
+      id: one.id,
+      thread_id: one.threadId,
+      author: one.author,
+      url: one.url,
+      first_seen_round: 1,
+      handled_at: "2026-08-30T12:00:00Z",
+      sha: "abc",
+      disposition: "acted-on" as const,
+      via: "thread-reply" as const,
+    };
+    expect(unansweredComments({ ...base, handled_comments: [{ ...row, reply_url: null }] })).toHaveLength(1);
+    expect(
+      unansweredComments({ ...base, handled_comments: [{ ...row, reply_url: null, in_flight: true }] }),
+    ).toHaveLength(1);
+    expect(unansweredComments({ ...base, handled_comments: [{ ...row, reply_url: "https://x/1" }] })).toEqual([]);
+  });
+
+  test("collection re-offers a comment whose record shows no reply, so the two never disagree", async () => {
+    const collected = await collect(createFixturePort(fixtures()));
+    const target = collected.comments[0] as CollectedComment;
+    const handled = [
+      {
+        id: target.id,
+        thread_id: target.threadId,
+        author: target.author,
+        url: target.url,
+        first_seen_round: 1,
+        handled_at: "2026-08-01T12:00:00Z",
+        sha: "abc123",
+        disposition: "acted-on" as const,
+        reply_url: null,
+        via: "thread-reply" as const,
+      },
+    ];
+    const again = await collect(createFixturePort(fixtures()), { handled });
+    // A comment the gate calls unanswered must still be reachable by the reply
+    // pass; otherwise it can never be answered and never be cleared.
+    expect(again.comments.map((entry) => entry.id)).toContain(target.id);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1187,6 +1543,43 @@ describe("AC11 the reply cap reports its backlog", () => {
     expect(unansweredComments(recordSeenComments(result.state, comments, 1))).toEqual([]);
     const backlogged = result.state.handled_comments.find((entry) => entry.id === "review-comment:202");
     expect(backlogged?.reply_url).toBe(pass.summary === null ? null : "https://github.com/fixture/pull/1#issuecomment-3");
+  });
+
+  test("a backlogged comment keeps the outcome the orchestrator reached", async () => {
+    // The cap changes how a comment is answered, never what was decided about it.
+    // Rewriting the disposition to `dismissed-deprioritised` invented a dismissal
+    // on the orchestrator's own authority, which AC6 forbids outright.
+    const root = await fresh();
+    const comments = many(3);
+    const pass = buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments,
+      outcomes: [
+        { comment: comments[0]?.id ?? "", disposition: "acted-on", text: "Fixed." },
+        { comment: comments[1]?.id ?? "", disposition: "acted-on", text: "Fixed." },
+        { comment: comments[2]?.id ?? "", disposition: "answered-disagree", text: "Not a defect here." },
+      ],
+      maxReplies: 1,
+      flowLink: "https://x.test/flow/journal.md",
+    });
+    expect(pass.backlog.map((entry) => entry.disposition)).toEqual(["acted-on", "answered-disagree"]);
+
+    const result = await postReplyPass({
+      port: createFixturePort(fixtures()),
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha: "abc123",
+      round: { index: 1, isFinal: true },
+      state: emptyPrCommentState(REPO, PR),
+    });
+    const backlogged = result.state.handled_comments.filter((entry) => entry.via === "overflow-summary" && entry.id.startsWith("review-comment:"));
+    expect(backlogged.map((entry) => `${entry.id}=${entry.disposition}`)).toEqual([
+      `${comments[1]?.id ?? ""}=acted-on`,
+      `${comments[2]?.id ?? ""}=answered-disagree`,
+    ]);
   });
 
   test("an escalated comment leaves the reply queue and is reported", async () => {

@@ -52,6 +52,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { findingIdentities } from "../review/loop";
+import { prCommentsStatePath, readPrCommentState, unansweredComments } from "../review/pr-comments";
 import { flowsRoot } from "./store";
 import type { FlowState, TrackerAdapter } from "./types";
 
@@ -424,10 +425,28 @@ async function readJson(file: string): Promise<unknown> {
 /**
  * A hexadecimal Git object id, standing alone.
  *
- * Seven is the shortest abbreviation git will print; the word boundaries stop a
- * longer hex-ish token (or the tail of a URL path) from being read as a SHA.
+ * Two constraints beyond "hex characters", both learned from what the loose
+ * version accepted. `\b[0-9a-f]{7,40}\b` matches ENGLISH WORDS: `effaced`,
+ * `defaced`, `deface`, `decade`, `facade`, `deadbeef`. A disposition whose
+ * evidence read "the debug banner was effaced" and a verification citing the
+ * same word therefore satisfied "a commit SHA **and** a verifier verdict citing
+ * that SHA", and the gate passed on a finding nobody had fixed.
+ *
+ * So: at least eight characters (git's own default abbreviation is seven, but
+ * seven is exactly the length of the words above, and nothing writes a
+ * seven-character SHA by hand into evidence that could not write eight), and at
+ * least one DIGIT. A digit is what no English word has. The residue — a real
+ * SHA that happens to be all letters — is one in roughly 10^6 for eight
+ * characters, and the cost of the miss is a gate that refuses and asks for a
+ * longer SHA, which is the safe direction.
+ *
+ * The alternative considered and not taken was `git cat-file -e <sha>`, which
+ * proves existence rather than shape. It was rejected here because this
+ * function is pure and is applied to packages written on other machines, in
+ * other clones, and to commits that may not have been fetched — a gate that
+ * fails because the object is not local would fail honest records.
  */
-const SHA_PATTERN = /\b[0-9a-f]{7,40}\b/gi;
+const SHA_PATTERN = /\b(?=[0-9a-f]{8,40}\b)[0-9a-f]*\d[0-9a-f]*\b/gi;
 
 /**
  * What a recorded human decision looks like.
@@ -449,8 +468,20 @@ const CORRECT_BUT_DISMISSED = new Set([
   "dismissed-deprioritised",
 ]);
 
+/**
+ * What counts as "a reply was written" inside a disposition's evidence.
+ *
+ * The `external_ref.reply_url` is the durable proof and is checked first; this
+ * is the fallback for a record whose reply is described rather than linked — a
+ * hand-written disposition, or a package written before `reply_url` existed. It
+ * requires the evidence to NAME the reply (a URL, or the word) rather than
+ * merely to disagree, because "the reviewer is wrong" with no reply is exactly
+ * the silence AC10 forbids.
+ */
+const REPLY_EVIDENCE_PATTERN = /(https?:\/\/\S+|#(issue|discussion)comment[-_]?\d+|\breplied\b|\breply\b|\banswered\b)/i;
+
 export type FindingVerdict =
-  | { terminal: true; kind: "fixed" | "refuted" | "dismissed" }
+  | { terminal: true; kind: "fixed" | "refuted" | "dismissed" | "answered" }
   | { terminal: false; reason: string };
 
 function shasIn(text: string | undefined): string[] {
@@ -468,7 +499,18 @@ function shasIn(text: string | undefined): string[] {
  * | `acted-on` | `fixed` | a commit SHA in the disposition evidence AND a verifier `refuted` verdict whose own evidence cites that SHA |
  * | `dismissed-incorrect` | `refuted` | a verifier `refuted` verdict with a method and evidence |
  * | `dismissed-wont-fix` / `-out-of-scope` / `-deprioritised` | `dismissed` | evidence naming a human decision |
+ * | `answered-disagree` | (AC10) | a reply: `external_ref.reply_url`, or evidence naming one |
  * | `unknown`, absent, anything else | — | not terminal |
+ *
+ * `answered-disagree` was missing from this table and from the code, and the
+ * omission was not cosmetic: it is the state AC10 REQUIRES the pipeline to
+ * produce when the verifier refutes an external comment, `managed.ts` writes it
+ * on exactly that path, and eight other files know it. Reaching it therefore
+ * left the finding permanently non-terminal, failing conditions 2 and 4 forever
+ * — the gate refused every flow whose review worked as designed. What makes it
+ * terminal is the reply, not the disagreement: a machine deciding a human's
+ * question was invalid is not an answer to the human, so the obligation this
+ * state carries is discharged by having spoken, not by having been right.
  *
  * The `fixed` rule is the strict one and it is strict on purpose: AC-C3 says a
  * finding marked `fixed` without a verifier verdict against the fixing commit is
@@ -541,6 +583,19 @@ export function findingVerdict(finding: GateFinding): FindingVerdict {
       };
     }
     return { terminal: true, kind: "refuted" };
+  }
+
+  if (state === "answered-disagree") {
+    if (externalReplyUrl(finding) !== undefined || REPLY_EVIDENCE_PATTERN.test(evidence)) {
+      return { terminal: true, kind: "answered" };
+    }
+    return {
+      terminal: false,
+      reason:
+        "`answered-disagree` with no reply on the record — this state exists precisely because our verifier " +
+        "refuted somebody else's comment, and refuting it is not answering it. Record the reply " +
+        "(`external_ref.reply_url`) or say in the evidence where it was posted.",
+    };
   }
 
   if (CORRECT_BUT_DISMISSED.has(state)) {
@@ -616,18 +671,28 @@ class KeyGroups {
  * all (no dedupe key, no global id, no problem/file/symbol) is kept under a
  * per-round synthetic key rather than dropped: an unidentifiable finding is
  * still a finding, and dropping it here would be absence-as-clean again.
+ *
+ * # Every round, not only the ingested ones
+ *
+ * This used to filter to `round.ingested`, and that filter was the same defect
+ * one level up. A round is "not ingested" when its `manifest.json` or its
+ * `findings.json` could not be read — and when it is the MANIFEST that is
+ * unreadable, `findings.json` is still right there and still says a blocker was
+ * raised. Filtering the round out deleted that blocker from the evaluation, so
+ * truncating a manifest turned a failing gate into a passing one. A round that
+ * cannot be read is not a round that found nothing; whatever of it CAN be read
+ * still counts, and condition 1 fails separately on the part that could not.
  */
 export function latestFindingStates(rounds: readonly ReviewRoundRecord[]): GateFinding[] {
-  const ingested = rounds.filter((round) => round.ingested);
   const groups = new KeyGroups();
-  for (const round of ingested) {
+  for (const round of rounds) {
     for (const finding of round.findings) {
       groups.link(identityKeys(finding));
     }
   }
   const latest = new Map<string, GateFinding>();
   const order: string[] = [];
-  for (const round of ingested) {
+  for (const round of rounds) {
     for (const [index, finding] of round.findings.entries()) {
       const keys = identityKeys(finding);
       const identity = groups.representative(keys) ?? `unidentified:${round.reviewId}:${index}`;
@@ -684,19 +749,90 @@ export type ExternalCommentsGate = (input: {
 }) => Promise<ExternalCommentsReport | null>;
 
 /**
- * Coverage reviewer names that count as "the external-comment collection ran".
+ * Coverage reviewer names that DESCRIBE an external-comment collection.
  *
- * The second seam, and the one that needs no code change on this side: a
- * collector that writes a coverage entry into the round manifest satisfies the
- * condition without anything being injected. `ReviewCoverageEntry` already
- * exists to record "did this reviewer run, and if not why not", which is exactly
- * the question.
+ * Kept for the failure message and for `keryx review status`, and deliberately
+ * NOT a way to satisfy condition 4 any more. It was one, and it was a one-flag
+ * bypass: `manifest.coverage` is written by `normalizeCoverage` straight from
+ * `keryx review ingest --reviewers …`, with `status: "run"` and the reason
+ * "selected for managed review package". Nothing collected anything.
+ * `--reviewers pr-comments` therefore completed a flow with thirty unanswered
+ * comments on its pull request, and the gate said so in the passing detail.
+ *
+ * What replaced it is {@link durableExternalCommentsGate}, which reads the
+ * record the collector actually writes.
  */
 export const EXTERNAL_COMMENT_COVERAGE_REVIEWERS: readonly string[] = [
   "external-comments",
   "pr-comments",
   "review-comment-collector",
 ];
+
+/** `https://github.com/<owner>/<repo>/pull/<n>` -> the key the collector files under. */
+export function parsePrRef(url: string): { repo: string; number: number } | null {
+  const match = /github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/.exec(url);
+  const repo = match?.[1];
+  const number = match?.[2];
+  return repo === undefined || number === undefined ? null : { repo, number: Number(number) };
+}
+
+/**
+ * Condition 4, answered from the record the collector writes.
+ *
+ * `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json` is written after
+ * EVERY post (`src/review/pr-comments.ts`), which is what makes it the right
+ * thing to ask: it survives a session restart, it is keyed by the pull request
+ * rather than by the flow or the round, and `unansweredComments` is the exact
+ * question this condition asks. Both functions were exported for this and had
+ * no caller.
+ *
+ * Absence is reported as `collected: false`, never as "nothing unanswered". A
+ * pull request nobody has run the collector against and a pull request nobody
+ * has commented on produce the same empty set and are different facts.
+ */
+export const durableExternalCommentsGate: ExternalCommentsGate = async (input) => {
+  const url = input.flow.pr.url;
+  if (url === null) {
+    return null;
+  }
+  const ref = parsePrRef(url);
+  if (ref === null) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail: `the recorded PR (${url}) is not a GitHub pull request URL, so no comment record can be located`,
+    };
+  }
+  const file = prCommentsStatePath(input.cwd, ref.repo, ref.number);
+  if (!(await pathExists(file))) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail:
+        `nothing records whether anyone commented on ${ref.repo}#${ref.number} ` +
+        `(\`${path.relative(input.cwd, file)}\` does not exist). Zero collected comments and no collection at ` +
+        "all are different facts, and only one of them is clean. Run " +
+        `\`keryx review comments collect --repo ${ref.repo} --pr ${ref.number}\`, or inject ` +
+        "`FlowServiceDeps.externalCommentsGate` with a collector of your own.",
+    };
+  }
+  const state = await readPrCommentState(input.cwd, ref.repo, ref.number);
+  if (state.rounds_collected === 0) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail: `${ref.repo}#${ref.number} has a comment record, but it says no collection round has run yet`,
+    };
+  }
+  const unanswered = unansweredComments(state);
+  return {
+    collected: true,
+    unanswered: unanswered.map((comment) => `${comment.author} ${comment.url}`),
+    detail:
+      `${ref.repo}#${ref.number}: ${state.seen.length} comment(s) collected over ${state.rounds_collected} round(s), ` +
+      `${state.handled_comments.length} answered, ${unanswered.length} outstanding`,
+  };
+};
 
 /** A finding that came from somebody else's comment on the PR. */
 export function isExternalFinding(finding: GateFinding): boolean {
@@ -799,16 +935,32 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
         ". A round that was never ingested cannot be cited — nothing durable records what it found.",
     });
   } else {
-    const skipped = rounds.filter((round) => !round.ingested);
-    conditions.push({
-      id: "ingested-round",
-      status: "pass",
-      detail:
-        `${ingested.length} of ${rounds.length} round(s) ingested; latest is \`${latestRound.reviewId}\`` +
-        (skipped.length === 0
-          ? ""
-          : ` (not ingested: ${skipped.map((round) => round.reviewId).join(", ")})`),
-    });
+    // A round that is present and unreadable is NOT a round that can be passed
+    // over. This branch used to report `pass` while naming the lost round in the
+    // detail — `1 of 2 round(s) ingested; latest is r2 (not ingested: r1)` — so
+    // deleting round 1's manifest took its open blocker with it and the gate
+    // went green. The unreadable round's findings are still evaluated by
+    // condition 2 (see `latestFindingStates`); what this condition reports is
+    // that part of the review history cannot be cited at all, which is exactly
+    // the "absence reads as clean" shape this module exists to refuse.
+    const unreadable = rounds.filter((round) => !round.ingested);
+    conditions.push(
+      unreadable.length === 0
+        ? {
+            id: "ingested-round",
+            status: "pass",
+            detail: `${ingested.length} of ${rounds.length} round(s) ingested; latest is \`${latestRound.reviewId}\``,
+          }
+        : {
+            id: "ingested-round",
+            status: "unobserved",
+            detail:
+              `${ingested.length} of ${rounds.length} round(s) ingested; ${unreadable.length} cannot be read: ` +
+              unreadable.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ") +
+              ". A round that cannot be read is not a round that found nothing — repair or remove the package, " +
+              "but do not complete over it.",
+          },
+    );
   }
 
   // 2. No finding without a terminal disposition, at or above the floor.
@@ -897,7 +1049,7 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   }
 
   // 4. No unanswered external comments (§3).
-  conditions.push(externalCommentsCondition(input, latestRound));
+  conditions.push(externalCommentsCondition(input));
 
   // 5. The verifier ran, and its stats are on the record.
   if (latestRound === undefined) {
@@ -972,10 +1124,7 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   };
 }
 
-function externalCommentsCondition(
-  input: ReviewGateInput,
-  latestRound: ReviewRoundRecord | undefined,
-): ReviewGateCondition {
+function externalCommentsCondition(input: ReviewGateInput): ReviewGateCondition {
   // A flow with no PR has no comments anybody could have left on it. This is the
   // one place absence is a genuine answer rather than an unasked question.
   if (input.flow.pr.url === null) {
@@ -986,33 +1135,13 @@ function externalCommentsCondition(
     };
   }
 
-  const report = input.externalComments;
-  if (report !== undefined && report !== null) {
-    if (!report.collected) {
-      return {
-        id: "external-comments",
-        status: "unobserved",
-        detail: `the external-comment collection did not run${report.detail === undefined ? "" : `: ${report.detail}`}`,
-      };
-    }
-    return report.unanswered.length === 0
-      ? {
-          id: "external-comments",
-          status: "pass",
-          detail: report.detail ?? "collection ran; nothing unanswered",
-        }
-      : {
-          id: "external-comments",
-          status: "violated",
-          detail:
-            `${report.unanswered.length} collected comment(s) have no reply and/or no disposition: ` +
-            report.unanswered.join(", "),
-        };
-  }
-
-  // No injected collector. Fall back to what the round itself recorded.
-  const externals = latestRound === undefined ? [] : latestFindingStates(input.rounds).filter(isExternalFinding);
-  const unanswered = externals.flatMap((finding) => {
+  // What the ROUNDS say, which is an independent source of "unanswered" and is
+  // checked whatever the collector reports: a finding carrying `source:
+  // external` is a comment somebody left, and AC13 wants exactly one reply and
+  // one disposition per comment. This runs first so a collector that answers
+  // "nothing outstanding" cannot cover for a package that says otherwise.
+  const externals = latestFindingStates(input.rounds).filter(isExternalFinding);
+  const fromRounds = externals.flatMap((finding) => {
     const verdict = findingVerdict(finding);
     const reply = externalReplyUrl(finding);
     if (!verdict.terminal) {
@@ -1023,42 +1152,49 @@ function externalCommentsCondition(
     }
     return [];
   });
+
+  const report = input.externalComments;
+  if (report === undefined || report === null) {
+    // Nothing answered the question at all. Note what this is NOT: it is not
+    // "the round manifest named a collector in its coverage", which is written
+    // from a CLI flag and collects nothing. See
+    // {@link EXTERNAL_COMMENT_COVERAGE_REVIEWERS}.
+    return {
+      id: "external-comments",
+      status: "unobserved",
+      detail:
+        `this flow has a PR (${input.flow.pr.url}) and nothing records whether anyone commented on it. ` +
+        "Zero collected comments and no collection at all are different facts, and only one of them is clean. " +
+        "Run `keryx review comments collect` so the durable record exists, or inject " +
+        "`FlowServiceDeps.externalCommentsGate`." +
+        (fromRounds.length === 0 ? "" : ` Separately, the rounds carry ${fromRounds.length} unanswered comment(s): ${fromRounds.join(" | ")}`),
+    };
+  }
+  if (!report.collected) {
+    return {
+      id: "external-comments",
+      status: "unobserved",
+      detail:
+        `the external-comment collection did not run${report.detail === undefined ? "" : `: ${report.detail}`}` +
+        (fromRounds.length === 0 ? "" : `; the rounds separately carry ${fromRounds.length} unanswered comment(s): ${fromRounds.join(" | ")}`),
+    };
+  }
+
+  const unanswered = [...report.unanswered, ...fromRounds];
   if (unanswered.length > 0) {
     return {
       id: "external-comments",
       status: "violated",
-      detail: `${unanswered.length} external comment(s) unanswered: ${unanswered.join(" | ")}`,
-    };
-  }
-  if (externals.length > 0) {
-    return {
-      id: "external-comments",
-      status: "pass",
-      detail: `${externals.length} external comment(s), each dispositioned and replied to`,
-    };
-  }
-
-  const collectionRan =
-    latestRound !== undefined &&
-    latestRound.coverage.some(
-      (entry) =>
-        EXTERNAL_COMMENT_COVERAGE_REVIEWERS.includes(entry.reviewer) && entry.status === "run",
-    );
-  if (collectionRan) {
-    return {
-      id: "external-comments",
-      status: "pass",
-      detail: `round \`${latestRound?.reviewId}\` records an external-comment collection that ran and found nothing`,
+      detail:
+        `${unanswered.length} collected comment(s) have no reply and/or no disposition: ` + unanswered.join(" | "),
     };
   }
   return {
     id: "external-comments",
-    status: "unobserved",
+    status: "pass",
     detail:
-      `this flow has a PR (${input.flow.pr.url}) and nothing records whether anyone commented on it. ` +
-      "Zero collected comments and no collection at all are different facts, and only one of them is clean. " +
-      "Satisfy this by wiring `FlowServiceDeps.externalCommentsGate`, or by recording the collection in the " +
-      `round manifest as a coverage entry named one of: ${EXTERNAL_COMMENT_COVERAGE_REVIEWERS.join(", ")}.`,
+      (report.detail ?? "collection ran; nothing unanswered") +
+      (externals.length === 0 ? "" : `; ${externals.length} external finding(s) in the rounds, each dispositioned and replied to`),
   };
 }
 
@@ -1109,14 +1245,17 @@ export async function runReviewGate(input: {
     prHead = status.exists ? (status.headSha ?? null) : null;
   }
 
-  const externalComments = input.externalCommentsGate
-    ? await input.externalCommentsGate({
-        cwd: input.cwd,
-        flowDir: input.flowDir,
-        flow: input.flow,
-        rounds,
-      })
-    : undefined;
+  // Defaulted, not merely injectable. The seam existed and was provided by two
+  // test cases and by nothing else, so in the shipping CLI condition 4 had no
+  // collector at all and fell through to the coverage-name check that any
+  // `--reviewers` value satisfied. A caller that forgets to wire the dependency
+  // must not get a weaker gate than one that remembers.
+  const externalComments = await (input.externalCommentsGate ?? durableExternalCommentsGate)({
+    cwd: input.cwd,
+    flowDir: input.flowDir,
+    flow: input.flow,
+    rounds,
+  });
 
   return evaluateReviewGate({
     cwd: input.cwd,

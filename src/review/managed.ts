@@ -44,6 +44,7 @@ import {
   type ReviewFindingClassScope,
   type ReviewFindingConfidence,
   type ReviewFindingDisposition,
+  type ManagedReviewTarget,
   type ReviewFindingsSource,
   type ReviewerResultLike,
   type ReviewScopeCountsLike,
@@ -55,6 +56,71 @@ const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning
 
 export function reviewsRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "reviews");
+}
+
+/**
+ * `git rev-parse HEAD` in `cwd`, or `null` when there is no checkout to ask.
+ *
+ * `null` rather than a throw, and `null` rather than `""`: the caller has to be
+ * able to tell "this round ran against no recorded commit" from "this round ran
+ * against the empty string", and only the first of those is an honest record.
+ * The output is checked against the shape git prints, so a `git` that answers
+ * with a warning, a prompt, or a symbolic name cannot become a SHA.
+ */
+export async function resolveGitHead(cwd: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    if (exitCode !== 0) {
+      return null;
+    }
+    const sha = stdout.trim().toLowerCase();
+    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The commit this round ran against, recorded on the manifest.
+ *
+ * Precedence, and the reasoning for it:
+ *
+ * 1. **What the caller said.** `keryx review start|attach|ingest --head <sha>`,
+ *    or a library caller that already knows. Nothing here second-guesses it.
+ * 2. **The local checkout.** The reviewers read a working tree; the commit that
+ *    tree is at is what they reviewed. For a `pr` target this is deliberately
+ *    preferred over the pull request's own head: if the two differ, the round
+ *    ran on something other than what will merge, and recording the PR head
+ *    would make the completion gate PASS on exactly that discrepancy. The gate
+ *    compares the two, so the honest value is the one that lets it.
+ * 3. **Nothing.** `null`, left off the manifest, and the gate reports
+ *    `head-commit (unobserved)` — which is a failure, not a pass.
+ *
+ * The pull request's own head is resolved one layer up, in `keryx review`, and
+ * only when there is no checkout to ask (reviewing a PR from outside a clone).
+ * Keeping the network call out of here is what lets this function run in every
+ * test without one.
+ */
+export async function resolveTargetHead(input: ManagedReviewInput): Promise<string | null> {
+  const declared = input.target.head;
+  if (typeof declared === "string" && declared.trim() !== "") {
+    return declared.trim();
+  }
+  return (input.resolveHead ?? ((args) => resolveGitHead(args.cwd)))({
+    cwd: input.cwd,
+    target: input.target,
+  });
+}
+
+/** {@link ManagedReviewTarget} with the resolved head folded in. */
+function targetWithHead(target: ManagedReviewTarget, head: string | null): ManagedReviewTarget {
+  return head === null ? target : { ...target, head };
 }
 
 export async function findRelatedFlow(input: {
@@ -153,8 +219,15 @@ export async function createManagedReviewPackage(
     ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
   ];
   assignGlobalIds(findings, reviewId);
+  // The commit this round ran against. Resolved HERE rather than left to the
+  // caller because leaving it to the caller is what produced a repository full
+  // of packages with no head at all: `ManagedReviewTarget.head` existed, the
+  // schema accepted it, the completion gate compared against it, and nothing on
+  // the writing side ever set it. See {@link resolveTargetHead}.
+  const head = await resolveTargetHead(input);
   const manifest = buildManifest({
     input,
+    target: targetWithHead(input.target, head),
     reviewId,
     packageDir,
     flowMatch,
@@ -492,6 +565,8 @@ function packagePath(
 
 function buildManifest(args: {
   input: ManagedReviewInput;
+  /** {@link ManagedReviewInput.target} with the resolved `head` folded in. */
+  target: ManagedReviewTarget;
   reviewId: string;
   packageDir: string;
   flowMatch: FlowMatchResult | null;
@@ -504,7 +579,7 @@ function buildManifest(args: {
     reviewId: args.reviewId,
     mode: args.input.mode,
     status: "draft",
-    target: args.input.target,
+    target: args.target,
     artifacts: {
       scope: artifactPath("scope.md"),
       coverage: artifactPath("coverage.md"),
