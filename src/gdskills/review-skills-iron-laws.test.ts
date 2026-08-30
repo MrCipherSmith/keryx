@@ -269,4 +269,55 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
       /API\/IO call in a component[\s\S]{0,200}\| `major` \|/,
     );
   });
+
+  test("no reviewer exempts itself from a law it also carries", () => {
+    // The presence check is `includes(law)`, so a reviewer can carry all three
+    // laws verbatim and then negate one in the next paragraph. A review proved
+    // it: appending "Exception for this reviewer: law 1 does not apply to style
+    // findings" to `review-style` left the whole suite green. That reintroduces
+    // exactly the defect these laws removed — two rulings on one rule in one
+    // tree — so an override is refused by shape rather than by wording.
+    // The first version of this guard matched the bare word "exception" and fired
+    // on three lines in `review-frontend` that AFFIRM the laws — "No exception for
+    // small stores", "unless it violates an Iron Law. It never overrides…". A check
+    // that fires on the text it exists to protect is worse than no check, so the
+    // negation must be tied to a law by name, and the window ends at the next
+    // heading rather than running 2000 characters into unrelated prose.
+    const OVERRIDE =
+      /\b(law\s*\d|these laws|this law|the shared laws)\b[^.]{0,120}\b(do(?:es)? not apply|is waived|are waived|may be ignored|exempt)\b|\b(exception|exempt)\b[^.]{0,120}\b(law\s*\d|these laws|this law|the shared laws)\b/i;
+    const offenders: string[] = [];
+    for (const name of reviewerSkills()) {
+      if (name in EXEMPT) continue;
+      const text = read(name);
+      const at = text.indexOf(SHARED_HEADING);
+      if (at === -1) continue;
+      const rest = text.slice(at + SHARED_HEADING.length);
+      const nextHeading = rest.search(/\n#{2,3} /);
+      const window = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+      if (OVERRIDE.test(window)) {
+        offenders.push(`${name}: a law is exempted inside the shared-laws block`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("the installed mirror carries the same laws as the bundled source", () => {
+    // REVIEW_ROOT is the bundled tree only. `.metaproject/skills/gdskills/review/`
+    // is what an agent actually reads, and nothing tested it — so the laws could
+    // be correct at the source and absent where they are used. No live
+    // divergence today; this makes that a build failure rather than a discovery.
+    const mirrorRoot = path.join(import.meta.dir, "..", "..", ".metaproject", "skills", "gdskills", "review");
+    if (!existsSync(mirrorRoot)) {
+      return; // a checkout without an installed metaproject is not a failure
+    }
+    const drifted: string[] = [];
+    for (const name of reviewerSkills()) {
+      const mirrored = path.join(mirrorRoot, name, "SKILL.md");
+      if (!existsSync(mirrored)) continue; // profile-only skills are not installed
+      if (normalise(readFileSync(mirrored, "utf8")) !== normalise(read(name))) {
+        drifted.push(`${name}: installed copy differs from the bundled source`);
+      }
+    }
+    expect(drifted).toEqual([]);
+  });
 });

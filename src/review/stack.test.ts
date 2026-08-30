@@ -62,6 +62,88 @@ test("AC13: a clean package.json naming none of the tags reports all false, not 
   }
 });
 
+/**
+ * The monorepo shape, which is where the fail-open direction inverted.
+ *
+ * `{"name":"x","workspaces":["packages/*"]}` parses cleanly, so detection
+ * reported `uncertain: false` and every stack tag `false` — and excluded
+ * `review-frontend`, `review-frontend-conventions`, `review-backend` and
+ * `code-mobx-store-review` from a React monorepo. A root manifest that declares
+ * no dependency has not told us the repository has none; it has told us nothing.
+ */
+test("AC13: a package.json with no dependency block anywhere is uncertain, not `no stack`", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ name: "workspace-root", private: true }) }),
+  });
+  expect(detected.uncertain).toBe(true);
+  for (const tag of STACK_TAGS) {
+    expect(detected.tags[tag]).toBe(true);
+  }
+  expect(detected.reason).toMatch(/declares no dependencies/);
+});
+
+test("AC13: an explicitly empty dependency block is uncertain for the same reason", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: {}, devDependencies: {} }) }),
+  });
+  expect(detected.uncertain).toBe(true);
+});
+
+test("AC13: a workspace root is uncertain even when it declares its own dependencies", async () => {
+  // The common React monorepo: tooling at the root, `react` in `packages/web`.
+  // The root manifest is a complete and accurate statement about the root, and
+  // says nothing at all about the code the reviewers will read.
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({
+        workspaces: ["packages/*", "apps/*"],
+        devDependencies: { typescript: "^5", eslint: "^9" },
+      }),
+    }),
+  });
+  expect(detected.uncertain).toBe(true);
+  expect(detected.tags.react).toBe(true);
+  expect(detected.reason).toMatch(/workspaces/);
+  expect(detected.reason).toContain("packages/*");
+});
+
+test("AC13: the npm object form of `workspaces` is recognised too", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({
+        workspaces: { packages: ["libs/*"], nohoist: [] },
+        dependencies: { zod: "^3" },
+      }),
+    }),
+  });
+  expect(detected.uncertain).toBe(true);
+  expect(detected.reason).toContain("libs/*");
+});
+
+test("AC13: an empty `workspaces` list is not a workspace root", async () => {
+  // `"workspaces": []` enumerates no sub-package, so there is nothing unread.
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ workspaces: [], dependencies: { zod: "^3" } }),
+    }),
+  });
+  expect(detected.uncertain).toBe(false);
+  expect(detected.tags.react).toBe(false);
+});
+
+test("AC13: a monorepo root that DOES declare the dependency is still uncertain, never excluded", async () => {
+  // Belt and braces on the direction: even the case where the root happens to
+  // name `react`, the sub-packages remain unread, so nothing is concluded
+  // against them.
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ workspaces: ["packages/*"], dependencies: { react: "^18" } }),
+    }),
+  });
+  expect(detected.uncertain).toBe(true);
+  expect(scopeReviewerByStack("review-frontend", ["react", "mobx"], detected).include).toBe(true);
+});
+
 test("AC13: a missing package.json fails open — uncertain, every tag true", async () => {
   const detected = await detectProjectStack("/proj", { readFile: readFileFrom({}) });
   expect(detected.uncertain).toBe(true);

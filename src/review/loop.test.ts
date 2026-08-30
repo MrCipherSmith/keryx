@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   detectReviewLoop,
-  findingIdentity,
+  findingIdentities,
   normalizeReviewOutput,
   readFlowReviewRounds,
   readTaskAttemptCount,
   renderLoopDetectionMarkdown,
   type ReviewRound,
 } from "./loop";
+import { createManagedReviewPackage } from "./managed";
 import type { StructuredReviewFinding } from "./types";
 
 function finding(overrides: Partial<StructuredReviewFinding> = {}): Partial<StructuredReviewFinding> {
@@ -119,10 +120,44 @@ test("AC9: a finding repeated WITHIN one round is a deduplication problem, not a
 // Finding identity
 // ---------------------------------------------------------------------------
 
-test("dedupe_key wins, then global_id, then the derived content key", () => {
-  expect(findingIdentity(finding({ dedupe_key: "K1", global_id: "r1#F-001" }))).toBe("dedupe:K1");
-  expect(findingIdentity(finding({ global_id: "r1#F-001" }))).toBe("global:r1#F-001");
-  expect(findingIdentity(finding())).toStartWith("derived:");
+/**
+ * Identity is a SET, not a ranking.
+ *
+ * The ranking is what broke it: `global_id` outranked the content key, and
+ * `assignGlobalIds` mints a fresh `<reviewId>#<id>` on every finding before it
+ * is persisted — so the highest-ranked key was guaranteed to differ between any
+ * two rounds, and the content key that would have matched was never consulted.
+ */
+test("every key a finding carries is an identity, not just the highest-ranked one", () => {
+  const keys = findingIdentities(finding({ dedupe_key: "K1", global_id: "r1#F-001" }));
+
+  expect(keys).toContain("dedupe:K1");
+  expect(keys).toContain("global:r1#F-001");
+  expect(keys.some((key) => key.startsWith("derived:"))).toBe(true);
+});
+
+test("a finding with nothing to compare contributes no derived key", () => {
+  // `derived:?|?|?|?|` would make every contentless finding identical to every
+  // other one, which is a detector that fires on nothing meaningful.
+  expect(findingIdentities({ id: "F-001" })).toEqual([]);
+  expect(findingIdentities({ id: "F-001", global_id: "r1#F-001" })).toEqual(["global:r1#F-001"]);
+});
+
+test("a finding whose global_id was minted fresh each round still matches on content", () => {
+  const round1 = finding({ global_id: "2026-08-30-ingest-demo#F-001" });
+  const round2 = finding({ global_id: "round-2#F-001" });
+
+  expect(detectReviewLoop({ rounds: [round("r1", [round1]), round("r2", [round2])] }).escalate).toBe(true);
+});
+
+test("a global_id deliberately carried forward matches even when the wording changed", () => {
+  // The other direction, and the reason `global_id` stays an identity at all: a
+  // producer that carries round N's key is stating the finding is the same one,
+  // and a reworded problem statement must not defeat that.
+  const round1 = finding({ global_id: "r1#F-001", problem: "the variable `x` does not say what it holds" });
+  const round2 = finding({ global_id: "r1#F-001", problem: "rename `x`", file: "src/other.ts" });
+
+  expect(detectReviewLoop({ rounds: [round("r1", [round1]), round("r2", [round2])] }).escalate).toBe(true);
 });
 
 /**
@@ -135,7 +170,7 @@ test("the display id alone never makes two findings the same", () => {
   const a = finding({ id: "F-001", problem: "one", file: "a.ts" });
   const b = finding({ id: "F-001", problem: "two", file: "b.ts" });
 
-  expect(findingIdentity(a)).not.toBe(findingIdentity(b));
+  expect(findingIdentities(a).some((key) => findingIdentities(b).includes(key))).toBe(false);
   expect(detectReviewLoop({ rounds: [round("r1", [a]), round("r2", [b])] }).escalate).toBe(false);
 });
 
@@ -183,7 +218,26 @@ test("AC10: two clean rounds are reported as observed, not as unobserved", () =>
     }),
   );
 
-  expect(markdown).toContain("no repeated finding and no identical consecutive output");
+  expect(markdown).toContain("no repeated finding, and no identical consecutive output");
+  expect(markdown).toContain("output_pairs_compared: 1 of 1");
+});
+
+/**
+ * AC10 again, on the half that was still stating a negative it could not know:
+ * `identical-output` needs BOTH rounds' `report.md`, and a package whose report
+ * is missing or unreadable silently contributes nothing — while the record went
+ * on saying "no identical consecutive output".
+ */
+test("AC10: a negative is not claimed for a comparison that never ran", () => {
+  const markdown = renderLoopDetectionMarkdown(
+    detectReviewLoop({
+      rounds: [round("r1", [finding({ problem: "one" })]), round("r2", [finding({ problem: "two" })])],
+    }),
+  );
+
+  expect(markdown).toContain("output_pairs_compared: 0 of 1");
+  expect(markdown).not.toContain("no identical consecutive output");
+  expect(markdown).toContain("no round pair could be compared");
 });
 
 // ---------------------------------------------------------------------------
@@ -258,4 +312,97 @@ test("a flow with no reviews directory yields no rounds rather than throwing", a
   const { cwd } = await fixtureFlow();
 
   expect(await readFlowReviewRounds(cwd, "203")).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// AC9 END TO END — through the writer, on the state the pipeline actually
+// persists.
+//
+// Every test above this line builds its rounds by hand, and that is exactly how
+// the defect shipped: `assignGlobalIds` mints `<reviewId>#<id>` on every finding
+// before it reaches disk, and `defaultReviewId` is date-keyed, so two rounds of
+// one branch on one day produced (a) two findings with different `global_id`s
+// and (b) one directory. Neither is expressible in a hand-built fixture.
+//
+// These tests go through `createManagedReviewPackage` twice. Nothing below
+// constructs a round object.
+// ---------------------------------------------------------------------------
+
+const PERSISTED_FINDING: StructuredReviewFinding = {
+  id: "F-001",
+  reviewer: "review-style",
+  severity: "minor",
+  problem: "the variable `x` does not say what it holds",
+  impact: "the next reader has to re-derive the meaning",
+  suggested_fix: "rename it to `pendingRounds`",
+  evidence: "src/thing.ts:12",
+  confidence: "high",
+};
+
+async function ingestRound(cwd: string, at: string, summary: string): Promise<string> {
+  const result = await createManagedReviewPackage({
+    cwd,
+    mode: "ingest",
+    // NO reviewId. The documented invocation never passes `--review-id`, and the
+    // round-collapsing half of the defect lived entirely in that default.
+    flowId: "203",
+    target: { kind: "branch", ref: "flow/203-unify-and-bound" },
+    reportText: `# Review round\n\nSummary: ${summary}\n\n- [F-001] minor: the variable \`x\` does not say what it holds\n`,
+    findings: [PERSISTED_FINDING],
+    now: new Date(at),
+  });
+  return result.reviewId;
+}
+
+test("AC9 end-to-end: two ingested rounds of one branch on one day escalate", async () => {
+  const { cwd } = await fixtureFlow();
+
+  // Same day, same branch, and one changed word in the Summary — the shape that
+  // defeated `identical-output` while `repeated-finding` could not fire either.
+  const first = await ingestRound(cwd, "2026-08-30T09:00:00.000Z", "the fix did not land");
+  const second = await ingestRound(cwd, "2026-08-30T10:00:00.000Z", "the fix still did not land");
+
+  // (b): two rounds, two packages. The second must not have overwritten the first.
+  expect(second).not.toBe(first);
+  const rounds = await readFlowReviewRounds(cwd, "203");
+  expect(rounds).toHaveLength(2);
+  expect(rounds.map((item) => item.label)).toEqual([first, second]);
+
+  // (a): the same finding, minted under two different reviewIds, is still the
+  // same finding.
+  const detection = detectReviewLoop({ rounds });
+  expect(detection.escalate).toBe(true);
+  expect(detection.signals.map((signal) => signal.kind)).toContain("repeated-finding");
+  expect(detection.roundsSeen).toBe(2);
+});
+
+test("AC9 end-to-end: an explicit --review-id still owns its directory", async () => {
+  // The discriminator is for the DEFAULT id only. A caller that names the id is
+  // stating the identity of the round, and re-ingesting under that name is a
+  // deliberate replacement — the retry path.
+  const { cwd } = await fixtureFlow();
+
+  const first = await createManagedReviewPackage({
+    cwd,
+    mode: "ingest",
+    reviewId: "named-round",
+    flowId: "203",
+    target: { kind: "branch", ref: "flow/203-unify-and-bound" },
+    reportText: "# Review round\n\nfirst\n",
+    findings: [PERSISTED_FINDING],
+    now: new Date("2026-08-30T09:00:00.000Z"),
+  });
+  const second = await createManagedReviewPackage({
+    cwd,
+    mode: "ingest",
+    reviewId: "named-round",
+    flowId: "203",
+    target: { kind: "branch", ref: "flow/203-unify-and-bound" },
+    reportText: "# Review round\n\nsecond\n",
+    findings: [PERSISTED_FINDING],
+    now: new Date("2026-08-30T10:00:00.000Z"),
+  });
+
+  expect(second.reviewId).toBe(first.reviewId);
+  expect(await readFlowReviewRounds(cwd, "203")).toHaveLength(1);
 });
