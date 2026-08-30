@@ -11,8 +11,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "verification"
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 # Code Verifier

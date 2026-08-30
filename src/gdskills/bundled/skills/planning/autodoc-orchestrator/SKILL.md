@@ -10,7 +10,8 @@ description: >
   Trigger on: user provides a repo path, asks to document existing code, wants
   onboarding docs, API reference, or architecture overview generated automatically.
   NOT for: writing new PRDs or planning new features (use gproject-orchestrator).
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 <!-- SUBAGENT-STOP: If you are a subagent dispatched by another orchestrator, HALT.

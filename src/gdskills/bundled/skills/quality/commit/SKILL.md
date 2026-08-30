@@ -10,8 +10,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "workflow"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Smart Commit

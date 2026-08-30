@@ -338,6 +338,15 @@ test("a finding that cross-references another id keeps its own body", async () =
 // guard that does not run.
 const CONSOLIDATED_REVIEW = path.join(ORIGINAL_CWD, "src", "review", "fixtures", "consolidated-review-2026-08-01.md");
 
+/**
+ * The ids the PARSER produced, with the findings cap lifted.
+ *
+ * The cap (flow 203, AC5) is 10 per reviewer by default and would truncate the
+ * fifteen-finding consolidated review to twelve, which would turn every parser
+ * assertion below into an assertion about the cap. The cap is exercised on its
+ * own in `caps.test.ts` and end-to-end in the ingest test that names it; here it
+ * is explicitly out of the way, and explicitly rather than by accident.
+ */
 async function ingestIds(reportText: string, reviewId: string): Promise<string[]> {
   const result = await createManagedReviewPackage({
     cwd: ROOT,
@@ -345,6 +354,7 @@ async function ingestIds(reportText: string, reviewId: string): Promise<string[]
     reviewId,
     target: { kind: "report", ref: "review.md" },
     reportText,
+    maxFindingsPerReviewer: 1000,
     now: new Date("2026-08-01T22:00:00Z"),
   });
   const findings = JSON.parse(
@@ -1045,7 +1055,10 @@ test("the drop rows reach the record through the supported input, with their rea
   const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
   expect(scope).toContain("files_dropped: 2");
   expect(scope).toContain("| bun.lock | whole file | lockfile |");
-  expect(scope).not.toContain("not recorded");
+  // The PRE-FILTER half specifically. Other stages this ingest was told nothing
+  // about — the spend ceiling, the dispatch plan — correctly render `not
+  // recorded`, and a whole-file assertion would forbid that.
+  expect(scope).not.toContain("not recorded — no pre-filter scope");
 });
 
 test("a supplied scope wins over a stale block already in the package", async () => {
@@ -1133,4 +1146,124 @@ test("disposition is declared in the strict contract and DELIBERATELY not in the
   expect(JSON.stringify(BUNDLED_FINDING_SCHEMA.properties.findings.items.properties.global_id)).toContain(
     "asymmetry",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Flow 203 AC5-AC7, AC10 — the caps, end to end through a real package
+// ---------------------------------------------------------------------------
+
+function findingsFrom(
+  reviewer: string,
+  count: number,
+  severity: StructuredReviewFinding["severity"] = "minor",
+): StructuredReviewFinding[] {
+  return Array.from({ length: count }, (_, index) => ({
+    ...FULL_FINDING,
+    id: `${reviewer}-${index + 1}`,
+    reviewer,
+    severity,
+  }));
+}
+
+test("AC5: an ingest caps each reviewer at ten findings with no caller saying so", async () => {
+  await fresh();
+  // The default has to bind a caller that never heard of it — that is the whole
+  // content of "the default is in code". Fails without the cap: all 14 land.
+  const { findings } = await ingestFindings("2026-08-30-cap-default", {
+    findings: findingsFrom("review-logic", 14),
+  });
+
+  expect(findings).toHaveLength(10);
+});
+
+test("AC10: the ingest names every truncated finding in scope.md, with a count", async () => {
+  await fresh();
+  const { path: pkg, findings } = await ingestFindings("2026-08-30-cap-record", {
+    findings: findingsFrom("review-logic", 13),
+  });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scope).toContain("## Caps");
+  expect(scope).toContain("findings_truncated: 3");
+  expect(scope).toContain("reviewers_truncated: 1");
+  // Named, not merely counted: the three ids missing from findings.json are the
+  // three ids the record lists.
+  const recorded = new Set(findings.map((finding) => finding.id));
+  for (const id of ["review-logic-11", "review-logic-12", "review-logic-13"]) {
+    expect(recorded.has(id)).toBe(false);
+    expect(scope).toContain(id);
+  }
+});
+
+test("AC5: blockers survive an ingest that truncates the same reviewer's minors", async () => {
+  await fresh();
+  const { findings } = await ingestFindings("2026-08-30-cap-blockers", {
+    findings: [
+      ...findingsFrom("review-logic", 12),
+      ...findingsFrom("review-logic", 2, "blocker").map((finding, index) => ({
+        ...finding,
+        id: `review-logic-blocker-${index + 1}`,
+        class_scope: { sites: ["src/a.ts:1"], enumeration_method: "grep over src/**" },
+      })),
+    ],
+  });
+
+  expect(findings.filter((finding) => finding.severity === "blocker")).toHaveLength(2);
+  // Ten ordinary findings survive ALONGSIDE the blockers, not instead of two of them.
+  expect(findings.filter((finding) => finding.severity === "minor")).toHaveLength(10);
+});
+
+test("AC5: the cap never touches the dismissal records", async () => {
+  await fresh();
+  // `--refuted` is the channel that ends the unlogged triage. Capping it would
+  // rebuild by hand the state flow 202 measured: a corpus of survivors that
+  // reports 100% precision whatever the reviewers got right.
+  const { findings } = await ingestFindings("2026-08-30-cap-refuted", {
+    findings: findingsFrom("review-logic", 2),
+    refuted: findingsFrom("review-style", 14).map((finding) => ({
+      ...finding,
+      disposition: { state: "dismissed-out-of-scope" as const, evidence: "declared out of scope by flow 203" },
+    })),
+  });
+
+  expect(findings.filter((finding) => finding.reviewer === "review-style")).toHaveLength(14);
+});
+
+test("AC6/AC10: a spend over the ceiling is recorded as a stop, and the package is still written", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-30-cap-spend", { spend: 4.2 });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scope).toContain("### Spend ceiling");
+  expect(scope).toContain("status: over");
+  expect(scope).toContain("STOPPED at the ceiling");
+  // The record of the stop is the point. A cap that refused the write would
+  // delete the evidence that it fired.
+  expect(existsSync(path.join(ROOT, pkg, "findings.json"))).toBe(true);
+});
+
+test("AC7/AC10: a dispatch plan records its waves, its queue and whether it holds across nesting", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-30-cap-concurrency", {
+    concurrency: { reviewers: ["a", "b", "c", "d", "e", "f"] },
+  });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scope).toContain("### Concurrency cap");
+  expect(scope).toContain("cap: 4");
+  expect(scope).toContain("reviewers_queued: 2");
+  expect(scope).toContain("holds_across_nesting: no");
+  expect(scope).toContain("were QUEUED, not dropped");
+});
+
+test("AC10: caps nobody supplied read `not recorded`, never zero", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-30-cap-absent");
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scope).toContain("not recorded — no spend ceiling was evaluated");
+  expect(scope).toContain("not recorded — no dispatch plan was supplied");
+  // The findings cap DID run — it always runs — so it says so rather than
+  // claiming ignorance about itself.
+  expect(scope).toContain("_the findings cap ran and truncated nothing_");
 });

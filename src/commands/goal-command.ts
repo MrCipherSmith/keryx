@@ -50,6 +50,41 @@ const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
  * is given with no explicit `--auto <N>` override. Counts ADDITIONAL rounds
  * beyond the always-runs first turn — bare `--auto` on a goal that never
  * reaches `isCourseDone` runs this many extra turns, then stops.
+ *
+ * # Why this is 8 and not 3 (flow 203, AC8)
+ *
+ * Three other bounds in this repository disagreed with each other and have been
+ * unified to **3**: `task-implementer`'s self-fix attempts, `job-orchestrator`'s
+ * `max_review_iterations`, and `flow-orchestrator`'s PR review/fix attempts,
+ * which was 6. This one is deliberately NOT 3, and the reason is that it bounds
+ * a different thing.
+ *
+ * Those three are **repair** loops: the same artifact revised again against the
+ * same failing signal. That is the shape the evidence is about, and the evidence
+ * is specifically about degradation under re-revision — *"the first three to
+ * four repair iterations account for most achievable gains"*
+ * ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falling
+ * **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
+ * is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)), i.e. the
+ * agent finds the fix and then destroys it. Aider's `max_reflections = 3` and
+ * OpenHands' critic bound the same shape.
+ *
+ * `/goal --auto` is a **continuation** loop. Each round advances a course toward
+ * a goal and the loop ends on a positive `isCourseDone` signal, not on "the
+ * failing check finally passed". Nothing is re-revised, so the degradation
+ * mechanism the studies measure — overwriting a working answer while trying to
+ * improve it — has nothing to act on. Cutting it to 3 would import a number from
+ * a body of evidence that does not apply, and would make `--auto` stop
+ * mid-course on ordinary multi-step goals. Two different bounds carrying one
+ * number because the numbers looked untidy is the same defect as four bounds
+ * carrying four numbers because nobody compared them.
+ *
+ * What 8 is NOT: it is not evidence-backed either. It is a budget on an
+ * open-ended loop, and the honest guard on that loop is repetition rather than
+ * count — the same argument `src/review/loop.ts` makes for review rounds. A
+ * round that produces no change should end the course whatever the budget says;
+ * until that check exists here, `--auto <N>` is the operator's override and this
+ * is the default it overrides.
  */
 export const DEFAULT_AUTO_GOAL_ROUNDS = 8;
 

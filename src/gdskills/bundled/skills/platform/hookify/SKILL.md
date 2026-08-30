@@ -11,8 +11,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "configuration"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Hookify

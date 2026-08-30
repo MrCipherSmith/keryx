@@ -12,8 +12,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "ideation"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Brainstorm

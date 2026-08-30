@@ -5,7 +5,8 @@ description: >
   and best practices constraints. Catches contradictions, gaps, and violations.
   Use when: dispatched by gproject-orchestrator Phase 5.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # gproject-consistency-checker

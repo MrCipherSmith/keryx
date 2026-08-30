@@ -13,8 +13,8 @@ metadata:
   author: "MrCipherSmith"
   version: "2.4.0"
   category: "analysis"
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 <SUBAGENT-STOP>

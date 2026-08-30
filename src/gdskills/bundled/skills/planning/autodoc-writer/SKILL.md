@@ -5,7 +5,8 @@ description: >
   from analysis artifacts. Dispatched in parallel — one instance per section.
   Use when: dispatched by autodoc-orchestrator Phase 4.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # autodoc-writer

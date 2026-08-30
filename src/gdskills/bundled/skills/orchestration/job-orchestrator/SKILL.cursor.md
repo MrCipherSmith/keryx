@@ -23,8 +23,8 @@ metadata:
   author: "MrCipherSmith"
   version: "3.2.0"
   category: "orchestration"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 <SUBAGENT-STOP>
@@ -971,8 +971,22 @@ Review complete:
 
 Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
 
+Three is the shared round bound: `task-implementer`, `flow-orchestrator` and
+this skill all use it. *"The first three to four repair iterations account for
+most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
+correctness falls **0.820 -> 0.673** across two forced revisions while
+cumulative ever-correct is **0.847**
+([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Aider hardcodes
+`max_reflections = 3`; OpenHands' critic uses 3.
+
+The bound is a ceiling, not a target. Repetition ends the loop earlier and
+**regardless of remaining iterations** — a counter cannot tell "converging
+slowly" from "stuck", and an agent emitting the identical failing output three
+times spends the whole budget before anything notices.
+
 ```
 UNRESOLVED_FINDINGS = all CRITICAL + WARNING findings from step 2.6
+PREVIOUS_REVIEW_OUTPUT = <the review output from step 2.6>
 
 FOR iteration in [1, 2, 3]:
   IF NOT NEEDS_FIX: BREAK
@@ -992,8 +1006,19 @@ FOR iteration in [1, 2, 3]:
   6. Recompute NEEDS_FIX from new findings
   7. Update UNRESOLVED_FINDINGS = remaining CRITICAL + WARNING
 
-IF still NEEDS_FIX after max iterations:
-  Log "Unresolved after <N> iterations" with finding list → continue to checks
+  8. STUCK CHECK — runs before the next iteration and ignores the budget:
+     IF any finding identity is in UNRESOLVED_FINDINGS for the SECOND iteration
+        OR the new review output is identical to PREVIOUS_REVIEW_OUTPUT
+     THEN log "stuck: <what repeated>" and BREAK, even with iterations left.
+     Identity is the finding's dedupe_key when it has one, otherwise
+     reviewer + file + symbol + problem — never the display id, which is
+     per-report and would fire on every second iteration whatever happened.
+  9. PREVIOUS_REVIEW_OUTPUT = the new review output
+
+IF still NEEDS_FIX after max iterations, or the stuck check broke the loop:
+  Log "Unresolved after <N> iterations" with finding list, and say WHICH of the
+  two ended it — a budget exhausted and a loop detected call for different next
+  steps → continue to checks
 ```
 
 **Fix prompt escalation pattern:**

@@ -12,8 +12,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review: Performance (Code-Level Bottlenecks)
@@ -208,10 +208,32 @@ Detectable from query patterns in changed code (not from DB schema directly):
 
 ## Iron Laws
 
-1. **Only flag real performance issues, not premature optimization.** A pattern "that could be slow" without a concrete hot path or execution frequency is `info` only.
-2. **Every `blocker` or `major` finding MUST cite the specific hot path or frequency that makes it a real problem.** "Runs on every keystroke", "called per list item (N=potentially thousands)", "executes on every render of a high-frequency parent" — be specific.
-3. **"Might be slow" without evidence = INFO only, never blocker.** If you cannot articulate the execution frequency and expected data scale, do not escalate.
-4. **Do not flag patterns outside the diff.** Review only changed code. Legacy issues outside the diff are `info` at most, with a note to track separately.
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+### Performance laws
+
+1. **Every `blocker` or `major` finding MUST cite the specific hot path or
+   frequency that makes it a real problem.** "Runs on every keystroke", "called
+   per list item (N = potentially thousands)", "executes on every render of a
+   high-frequency parent" — be specific. For this reviewer, the execution
+   frequency *is* the trigger shared law 1 asks for.
+2. **Do not flag patterns outside the diff.** Review only changed code. Legacy
+   issues outside the diff are `info` at most, with a note to track separately.
 
 ---
 
@@ -292,14 +314,21 @@ STATUS: DONE_WITH_CONCERNS
 [List categories with no findings, confirming they were checked]
 ```
 
-### Severity definitions
+### Where performance conditions land
 
-| Severity | Meaning |
-|----------|---------|
-| `blocker` | Demonstrable performance regression on a critical path; will noticeably degrade UX or server capacity under expected load |
-| `major` | High-likelihood bottleneck on a frequently executed path; strongly recommended before merge |
-| `minor` | Inefficiency worth fixing but not on a hot path; can ship, should be tracked |
-| `info` | Pattern worth noting; no clear hot path or measurable impact in current code |
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no table of its own; what follows is where its recurring
+conditions land under that rubric, not a second rubric.
+
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| A cost that takes the process or request down — OOM, timeout, capacity exhausted at a stated load | `blocker` | Crash |
+| Bottleneck on a path you can name, with the frequency or data scale that makes it a cost | `major` | Trigger and outcome are both named; slow is not one of the four shapes |
+| Inefficiency off any hot path you can name | `minor` | Correct today; the cost is to whoever tunes it next |
+| "Looks slow", no execution context | `info` | Shared law 1 — no reproducible path |
+
+A performance finding is `blocker` only when the degradation *is* an outage.
+"Noticeably degrades UX" is `major`: real, named, and not merge-blocking.
 
 ---
 
@@ -314,7 +343,7 @@ Stop and re-read these rules if you are thinking:
 | "Missing useMemo here is a performance issue" | useMemo has overhead; only flag when the computation is measurably expensive or the component re-renders at high frequency |
 | "I'll add a minor finding for every lodash default import" | Correct — but only flag if the library is large and the import is demonstrably not tree-shaken |
 | "The dataset could grow large, so I'll call it a blocker" | "Could grow" = minor or info; known to be large = major or blocker |
-| "Skipping the hot-path citation to keep the finding concise" | Iron Law 2: hot path is mandatory for blocker/major; omitting it means downgrading to info |
+| "Skipping the hot-path citation to keep the finding concise" | Performance law 1: the hot path is mandatory for blocker/major; omitting it means downgrading to `info` |
 
 ---
 

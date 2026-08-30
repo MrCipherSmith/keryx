@@ -5,7 +5,8 @@ description: >
   technology stack with trade-off analysis.
   Use when: dispatched by gproject-orchestrator Phase 2.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # gproject-stack-advisor

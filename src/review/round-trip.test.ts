@@ -449,6 +449,11 @@ describe("legacy markdown reports are not stranded", () => {
         reviewId: "2026-08-29-legacy",
         target: { kind: "report", ref: "consolidated-review-2026-08-01.md" },
         reportText: legacy,
+        // The findings cap (flow 203, AC5) is 10 per reviewer and would truncate
+        // this fifteen-finding report to twelve, making every assertion below an
+        // assertion about the cap rather than about the legacy reader. Lifted
+        // explicitly; the cap has its own tests.
+        maxFindingsPerReviewer: 1000,
         now: new Date("2026-08-29T10:00:00Z"),
       });
       const findings = JSON.parse(

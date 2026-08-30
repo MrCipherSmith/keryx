@@ -4,7 +4,8 @@ description: >
   Defines core problems, goals, non-goals, and success metrics from discovery data.
   Use when: dispatched by gproject-orchestrator Phase 1.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # gproject-problem-definer

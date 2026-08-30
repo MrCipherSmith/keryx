@@ -719,7 +719,12 @@ describe("the verdict reaches the review record", () => {
     try {
       expect(scope).toContain("files_dropped: 24");
       expect(scope).toContain("blocks_dropped: 15");
-      expect(scope).not.toContain("not recorded");
+      // Scoped to the PRE-FILTER half. `not recorded` is the correct rendering
+      // for any other stage this ingest was told nothing about — the caps block
+      // says it for the spend ceiling and the dispatch plan — so asserting the
+      // phrase is absent from the whole file would forbid other stages from
+      // being honest about never having run.
+      expect(scope).not.toContain("not recorded — no pre-filter scope");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

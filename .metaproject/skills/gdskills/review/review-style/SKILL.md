@@ -7,7 +7,6 @@ description: |
   with --style flag.
   NOT for: logic bugs, architectural violations, security vulnerabilities, performance
   anti-patterns, or any finding that could cause a functional regression.
-version: "1.0.0"
 triggers:
   - "review style"
   - "style review"
@@ -18,8 +17,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review — Style, Naming & Readability
@@ -198,12 +197,32 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 
 ## Iron Laws
 
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+### Style laws
+
 | Rule | Rationale |
 |------|-----------|
-| Style findings are **never** blockers unless they cause a functional bug | Style is a quality concern, not a safety gate |
-| Maximum severity for pure style is `major` (only for actively misleading names or circular imports) | Most style is `minor` or `info` |
+| Style findings are **never** `blocker` | None of the four merge-blocking shapes is reachable from a style observation. This reviewer's finding format omits `blocker` for that reason |
+| A naming issue is `minor`; it reaches `major` only when the name has already produced an observable wrong outcome at a call site you can name | Identical to `review-clean-code` law 2, deliberately: the same condition must not carry two severities |
+| Duplication is `minor`, reported once with every site listed | Identical to `review-clean-code` law 3 |
 | Never flag issues handled by the project's autoformatter (indentation, trailing spaces, bracket style) | Linter/formatter owns that; double-flagging creates noise |
-| Do not expand scope to architectural or logic concerns | Stay in style lane; hand off to the right reviewer |
+| Do not expand scope to architectural or logic concerns | Stay in style lane; hand off to the right reviewer. A circular import that fails at runtime is `review-architecture`'s finding, not a style one |
 
 ---
 

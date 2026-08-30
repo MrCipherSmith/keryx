@@ -9,7 +9,6 @@ description: |
   "review --clean-code", or dispatched by review-orchestrator.
   NOT for: architectural layer violations (review-architecture), naming convention formatting
   (review-style), logic correctness bugs (review-logic), or security (review-security-code).
-version: "1.0.0"
 triggers:
   - "review clean code"
   - "check clean code"
@@ -21,8 +20,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review: Clean Code + SOLID
@@ -84,9 +83,35 @@ worsens them.
 
 ## Iron Laws
 
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+### Clean Code laws
+
 1. **Findings without a specific `file:line` from the diff are not valid findings.** Never cite general observations about the codebase.
-2. **Max severity for a naming issue is `major`.** Pure naming never rises to `blocker` — reserved for issues that break correctness.
-3. **DRY violations require at least 3 repetitions before becoming `major`.** Two occurrences can be accidental; three is a pattern.
+2. **A naming issue is `minor`.** It reaches `major` only when the name has
+   already produced an observable wrong outcome at a call site you can name — a
+   caller misusing the API because of what it is called. "A future reader might
+   misread it" is the maintenance cost that makes it `minor`, not a trigger.
+   Naming is never a `blocker`. (`review-style` carries the identical rule.)
+3. **DRY violations need at least 3 repetitions before they are worth reporting,
+   and they are `minor`.** Two occurrences can be accidental; three is a pattern.
+   Duplication is a cost to whoever edits it next, which is `minor` by the
+   canonical test — report it once, listing every site, per shared law 3.
 4. **SOLID opinions without a named principle and a concrete violation description are `info` only.** State the principle (e.g., SRP), the two responsibilities, and the impact.
 5. **Do not flag language idioms or framework conventions as Clean Code violations.** If it is the standard way to do something in TypeScript / NestJS / React, it is not a violation.
 
@@ -387,14 +412,25 @@ observation is theatre, not rigour.
   ```
 ```
 
-Severity guide for this reviewer:
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no table of its own; what follows is where its recurring
+conditions land under that rubric, not a second rubric.
 
-| Severity | When to use |
-|----------|------------|
-| `blocker` | Swallowed exception (silent failure); constructor performing I/O that prevents testing; LSP violation breaking substitutability at runtime |
-| `major` | Function >40 lines; ≥4 parameters without options object; boolean flag arg; class with two distinct responsibilities; `new ConcreteService()` bypassing DI |
-| `minor` | Poor naming; redundant comment; magic number; 20–40 line function; minor OCP/ISP smell; log+rethrow |
-| `info` | Stylistic opinion; potential future issue with no current concrete violation |
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| Swallowed exception hiding a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Same wording as `review-logic`, deliberately. Silent failure is wrong behaviour; corruption is a different shape |
+| LSP violation that produces a wrong result or a crash at a named call site | `major`, or `blocker` on the crash/corruption outcome | The outcome decides, not the principle's name |
+| Constructor performing I/O | `major` | Named trigger (constructing it) and named outcome (the I/O runs); untestable is not one of the four shapes |
+| Function > 40 lines; ≥ 4 parameters without an options object; boolean flag argument; class with two distinct responsibilities; `new ConcreteService()` bypassing DI | `minor` | The code is correct. The cost is to whoever reads or edits it next — that is exactly `minor` |
+| Poor naming; redundant comment; magic number; 20–40 line function; OCP/ISP smell; log-and-rethrow | `minor` | Same |
+| Stylistic opinion; a future issue with no current violation | `info` | Neither trigger nor a named maintenance cost |
+
+**Clean Code findings are `minor` by default.** A long function with a named
+responsibility split is a maintenance cost, not observable wrong behaviour, and
+`major` is reserved for findings that name a trigger and an outcome. This
+reviewer previously called a 41-line function `major` and thereby forced
+`REQUEST_CHANGES` on it; that is the exact mis-ranking the canonical rubric
+exists to stop.
 
 ---
 

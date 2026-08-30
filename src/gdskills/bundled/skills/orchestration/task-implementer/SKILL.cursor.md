@@ -11,8 +11,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "implementation"
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 # Task Implementer
@@ -284,7 +284,25 @@ npm run build-storybook   # Verify stories compile
 | Test failures | Fix failing tests, re-commit |
 | Story build failure | Fix story code, re-commit |
 
-Maximum 3 self-fix attempts per verification step. 
+Maximum 3 self-fix attempts per verification step.
+
+Three, and it is the same three `job-orchestrator` and `flow-orchestrator`
+use: one round bound, not four. *"The first three to four repair iterations
+account for most achievable gains"*
+([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
+**0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
+**0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the agent
+finds the fix and then destroys it. Aider hardcodes `max_reflections = 3`;
+OpenHands' critic uses 3.
+
+**Stop earlier on repetition, whatever the count says.** If an attempt produces
+the same failure output as the previous attempt — the same failing test with the
+same message, the same type error at the same site — do NOT spend the remaining
+attempts. The counter cannot tell "converging slowly" from "stuck", and three
+identical outputs cost the whole budget to learn what the second one already
+said. Report the block instead, naming what repeated.
+
+
 **ROLLBACK POLICY**: If implementation fatally fails (e.g. tests still failing after 3 attempts or unresolvable compilation errors), you MUST run `git reset --hard` to clean the worktree before reporting the failure in Phase 6, unless explicitly instructed to leave it dirty.
 
 **5.5 Re-commit fixes if any:**

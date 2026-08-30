@@ -13,8 +13,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "quality"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Security Audit

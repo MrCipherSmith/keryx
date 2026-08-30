@@ -13,8 +13,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "context"
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 # Context Collector

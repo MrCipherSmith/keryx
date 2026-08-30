@@ -7,7 +7,6 @@ description: |
   or dispatched by review-orchestrator when a PR URL is provided.
   NOT for: reviewing code directly — this skill reads human or bot PR feedback and
   makes it actionable. To review code, use the domain review skills.
-version: "1.0.0"
 triggers:
   - "analyze PR comments"
   - "review PR feedback"
@@ -19,8 +18,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review — PR Feedback Analyzer
@@ -136,6 +135,12 @@ Organize all comments under each author, distinguishing line-specific from gener
 ## Step 5: Classify Comment Intent
 
 For each comment, classify intent before explaining:
+
+This maps the **intent of an incoming human comment**, which is not a code
+condition. It is not a second severity rubric: the levels themselves are defined
+once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**, and a mapped
+value is a starting point that the canonical test overrides whenever the comment
+names a concrete trigger and outcome.
 
 | Intent class | Description | Default severity mapping |
 |---|---|---|

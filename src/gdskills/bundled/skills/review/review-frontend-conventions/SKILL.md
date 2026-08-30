@@ -11,6 +11,7 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  stack_requires: "react,mobx"
 license: "MIT"
 ---
 
@@ -95,6 +96,27 @@ project-specific guide was found.
 
 ---
 
+## Iron Laws
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+---
+
 ## Orchestrated Review Contract
 
 When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `skills/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
@@ -138,7 +160,15 @@ observation is theatre, not rigour.
 - **Fix**: concrete project-aligned change
 ```
 
-Severity guidance: lost reactivity, direct storage quota risk, masked translation/error behavior,
-and violations that break CI are `blocker`/`major`; naming/story coverage is usually `minor`
-unless it breaks tooling or controls.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no rubric of its own; what follows is where its recurring
+conditions land under that rubric.
+
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| Unguarded direct storage writes that can throw on quota | `blocker` | Crash on a reachable input |
+| Lost reactivity; masked translation or error behaviour | `major` | Named trigger and named outcome. Identical to `review-frontend`'s rating for lost reactivity, deliberately |
+| A convention violation the linter or CI already fails on | `minor` | The machine catches it; a reviewer restating it is not a merge gate |
+| Naming, story coverage, file placement | `minor` | Correct today; the cost is to the next editor |
+| A convention preference with no named consequence | `info` | Shared laws 1 and 2 |
 
