@@ -11,6 +11,11 @@ import {
   type VerificationMergeResult,
 } from "./verification";
 import {
+  applyExternalVerdictRule,
+  partitionExternalFindings,
+  type ExternalReclaim,
+} from "./pr-comments";
+import {
   applyFindingsCap,
   evaluateSpendCap,
   planReviewerWaves,
@@ -100,9 +105,16 @@ export async function createManagedReviewPackage(
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
   // that is still reported, so the drop rate is a measured number before it costs
   // a real finding.
-  const verification = mergeVerifications(reported, input.verifications ?? [], {
+  const merged = mergeVerifications(reported, input.verifications ?? [], {
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
+
+  // AC10. A `refuted` verdict on an EXTERNAL finding does not remove it and does
+  // not dismiss it — it becomes `answered-disagree`, which still owes a reply. A
+  // human asked a question; a machine deciding the question was invalid is not an
+  // answer, and in `filter` mode the finding would otherwise have left the
+  // package entirely with nobody speaking to the person who raised it.
+  const { result: verification, reclaimed: externalReclaims } = applyExternalVerdictRule(merged);
 
   // The findings cap (AC5): 10 per reviewer, blockers exempt, default in code.
   //
@@ -116,7 +128,16 @@ export async function createManagedReviewPackage(
   //
   // Whatever it removes is named, by reviewer and by id, in `scope.md`. A cap
   // that truncated silently would read as "there was nothing more".
-  const findingsCap = applyFindingsCap(verification.retained, {
+  //
+  // External findings do NOT enter the cap. AC9 says an external comment may
+  // never be silently dropped, and this cap drops silently by design — it is a
+  // READING cap over what one reviewer reported. `reviewer` on an external
+  // finding is the commenter's login, so thirty CodeRabbit comments would
+  // truncate to ten and twenty people would go unanswered, with the truncation
+  // recorded under a heading nobody opens. Externals are bounded instead by
+  // `max_replies_total`, which reports its backlog out loud and still answers it.
+  const scoped = partitionExternalFindings(verification.retained);
+  const findingsCap = applyFindingsCap(scoped.internal, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -127,6 +148,7 @@ export async function createManagedReviewPackage(
   // this exists to leave.
   const findings = [
     ...findingsCap.retained,
+    ...scoped.external,
     ...fromVerifierRefutations(verification.refuted),
     ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
   ];
@@ -223,7 +245,7 @@ export async function createManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -657,6 +679,17 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   // therefore droppable".
   if (finding.verification !== undefined) {
     record.verification = finding.verification;
+  }
+  // Same rule again, and this one is not cosmetic: `source` is what makes the
+  // verifier unable to refute a comment (AC10), keeps the findings cap off it
+  // (AC9), and keeps the completion gate closed while it is unanswered (AC5). A
+  // projection that dropped it would leave a finding that looks internal and
+  // silently acquires all three of the behaviours those criteria forbid.
+  if (finding.source !== undefined) {
+    record.source = finding.source;
+  }
+  if (finding.external_ref !== undefined) {
+    record.external_ref = finding.external_ref;
   }
   return record;
 }
@@ -1488,6 +1521,7 @@ function renderScope(
   verification: VerificationMergeResult<NormalizedReviewFinding>,
   carriedPreFilter: string | undefined,
   caps: ReviewCapsRecord,
+  externalReclaims: readonly ExternalReclaim[] = [],
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -1509,8 +1543,40 @@ ${renderStageCountsMarkdown({
   caps: verification.caps,
 })}
 
-${renderCapsMarkdown(caps)}`;
+${renderCapsMarkdown(caps)}${renderExternalReclaimsMarkdown(externalReclaims)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
+}
+
+/**
+ * The AC10 reclaims, on the record.
+ *
+ * Silent would be the failure shape this whole programme removes: the verifier
+ * refuted a human's comment, the finding survived anyway, and nothing said so —
+ * leaving a reader to conclude the verifier agreed. The block is written only
+ * when at least one reclaim happened, on the same rule as every other stage
+ * count: a heading that always says `0` is noise, and this one's absence is not
+ * a claim, because the stage counts above already say how many verdicts landed.
+ */
+function renderExternalReclaimsMarkdown(reclaims: readonly ExternalReclaim[]): string {
+  if (reclaims.length === 0) {
+    return "";
+  }
+  const rows = reclaims
+    .map(
+      (reclaim) =>
+        `- ${reclaim.finding} — ${reclaim.removed ? "removed by the verifier and put back" : "annotated"}: ${reclaim.detail}`,
+    )
+    .join("\n");
+  return `
+
+## External findings the verifier could not refute
+
+A \`refuted\` verdict on an external comment becomes \`answered-disagree\`, never
+\`dismissed-incorrect\`, and never a removal. The finding stays and the reply is
+still owed.
+
+${rows}
+`;
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {

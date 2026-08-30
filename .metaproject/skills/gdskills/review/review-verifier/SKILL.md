@@ -1,5 +1,6 @@
 ---
 name: review-verifier
+model_tier: light
 description: |
   Use when: consolidated findings from other reviewers need to be checked before they are
   reported — by RUNNING something that fails if the finding is real, or by confirming the

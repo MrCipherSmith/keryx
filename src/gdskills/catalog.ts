@@ -164,6 +164,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check retries, idempotency, backpressure, locks, queues, and connection pools.",
     "Prioritize issues that can fail under load.",
   ], ["highload review", "concurrency review", "race condition"]),
+  skill("review-regression", "review", ["recommended", "full"], "Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round.", [
+    "Read the dependency path back to the change before reading the file.",
+    "Ask only whether the change breaks an existing behaviour here; style and architecture in untouched code are rejected in code, not discouraged.",
+    "Anchor class_scope on the callers that break, never on the changed line.",
+    "Say when the radius could not answer — a non-code change has an empty one.",
+  ], ["review regression", "does this change break anything", "blast radius review"]),
   skill("review-core-boundaries", "review", ["recommended", "full"], "Review shared/core module coupling, public API stability, and dependency minimization.", [
     "Identify core/shared surfaces changed by the task.",
     "Check if feature-specific logic leaked into shared modules.",

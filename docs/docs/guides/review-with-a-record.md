@@ -32,6 +32,9 @@ Usage:
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                            [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                            [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
   keryx review loop --flow <flow-id> [--task <Tn>]
@@ -86,6 +89,34 @@ drop list reaches the review record. `--append <package>/scope.md` writes the
 same block directly and now replaces an existing one rather than appending a
 second, but `--scope` is the supported route because it does not depend on two
 commands hitting the same file in the right order.
+
+### And the second scope: what the change can break
+
+```bash
+keryx review blast-radius --ref "$(git merge-base HEAD main)" --json > blast-radius.json
+keryx review blast-radius --ref "$(git merge-base HEAD main)" --brief
+```
+
+A review of the diff answers *is this change correct?* It does not answer *did
+this change break something that was working*. The second scope is computed —
+`gdgraph affected` walked outward from each changed file, ranked by edge
+distance, kept to depth 2, cut at 40 files closest first — and it is bounded on
+purpose: reviewing everything each round is unaffordable, and review quality
+decays as context grows, so an unbounded second scope makes the later rounds
+worse rather than safer.
+
+The set is under **regression check, not under review**. A finding about style,
+naming or architecture in code the change did not touch is refused in code, not
+discouraged in prose. Every file the cap removed is in the record with its hop
+and its path back to the change, and a changed file the graph cannot answer for —
+any Markdown, JSON or shell file — is reported as unresolved rather than as an
+empty radius.
+
+Recompute when the changed-file set moves, and always on the final round:
+
+```bash
+keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
+```
 
 ## Check the bounds before you dispatch
 

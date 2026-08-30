@@ -102,6 +102,7 @@ export const FINDING_DISPOSITION_STATES = [
   "dismissed-wont-fix",
   "dismissed-out-of-scope",
   "dismissed-deprioritised",
+  "answered-disagree",
 ] as const;
 export type FindingDispositionState = (typeof FINDING_DISPOSITION_STATES)[number];
 
@@ -109,6 +110,54 @@ export type FindingDispositionState = (typeof FINDING_DISPOSITION_STATES)[number
 export const FINDING_DISMISSAL_STATES = FINDING_DISPOSITION_STATES.filter((state) =>
   state.startsWith("dismissed-"),
 ) as ReadonlyArray<FindingDispositionState>;
+
+/**
+ * The states that end an external comment's life, and therefore the states the
+ * reply pass will speak.
+ *
+ * `answered-disagree` is deliberately NOT a `dismissed-*` state and is therefore
+ * not in {@link FINDING_DISMISSAL_STATES}. The distinction is the whole content
+ * of AC10: a `refuted` verdict from our own verifier is a machine deciding a
+ * human's question was invalid, and calling that `dismissed-incorrect` would let
+ * the finding leave the pipeline with nobody speaking to the person who raised
+ * it. `answered-disagree` says the same thing about the code and a different
+ * thing about our obligation — it still requires a reply.
+ */
+export const EXTERNAL_TERMINAL_DISPOSITIONS = [
+  "acted-on",
+  "answered-disagree",
+  "dismissed-incorrect",
+  "dismissed-wont-fix",
+  "dismissed-out-of-scope",
+  "dismissed-deprioritised",
+] as const satisfies ReadonlyArray<FindingDispositionState>;
+
+/** Where a finding came from. Absent reads as `internal` — see {@link StructuredReviewFinding.source}. */
+export const REVIEW_FINDING_SOURCES = ["internal", "external"] as const;
+export type ReviewFindingSource = (typeof REVIEW_FINDING_SOURCES)[number];
+
+/**
+ * The GitHub comment an external finding is the record of.
+ *
+ * Every property here exists to make ONE operation possible after the fact:
+ * replying in the right place, to the right person, once. `thread_id` is what
+ * routes the reply into the existing conversation instead of opening a new one;
+ * `submitted_at` is what decides whether a later reply from someone else reopens
+ * a comment we already answered. `path` and `line` are nullable because a review
+ * submission body and a PR-level comment are anchored to the pull request rather
+ * than to a line, and inventing a location for them would put our reply on a file
+ * the reviewer never mentioned.
+ */
+export type ExternalCommentRef = {
+  /** Namespaced (`review-comment:12`), because the three GitHub endpoints number independently. */
+  id: string;
+  author: string;
+  url: string;
+  path?: string | null | undefined;
+  line?: number | null | undefined;
+  thread_id?: string | null | undefined;
+  submitted_at: string;
+};
 
 /**
  * A disposition, which is a state plus the evidence for it.
@@ -296,6 +345,24 @@ export type StructuredReviewFinding = {
    * would be an invitation to fill in the one field they are forbidden to fill.
    */
   verification?: ReviewFindingVerification | undefined;
+  /**
+   * Who raised this: one of our reviewers, or somebody on the pull request.
+   *
+   * Absent reads as `internal`, which is what all 83 pre-contract records are and
+   * what every reviewer emits. It is written only for `external`, on the same
+   * rule as `disposition` and `verification`: a property present on every record
+   * says nothing, and a property present on a few says exactly one thing.
+   *
+   * The value is load-bearing rather than descriptive. Three mechanisms read it
+   * and change behaviour: the verifier cannot refute an external finding (AC10),
+   * the per-reviewer findings cap does not truncate one (AC9 — "may never
+   * silently drop it"), and the completion gate refuses while one is unanswered
+   * (AC5). A finding that lost this property would quietly acquire all three of
+   * the behaviours the criteria forbid.
+   */
+  source?: ReviewFindingSource | undefined;
+  /** Required when `source` is `external`, meaningless otherwise. */
+  external_ref?: ExternalCommentRef | undefined;
 };
 
 /**

@@ -19,6 +19,21 @@ tracker reporting.
 - `keryx flow complete <id> [--comment]`
 - `keryx flow block|unblock <id>` / `flow check`
 
+## Completion gates
+
+`flow complete` runs, in order: `acceptance-criteria`, `pull-request` (or
+`main-merge`), `tasks`, `review`, `health`, `security`. A failing gate returns
+the flow to `in-progress` with the reason recorded.
+
+`tasks` and `review` are opt-in per package (`gates.tasks`, `gates.review`,
+written by `flow init`); a package created before a gate existed reports
+`skipped` for it. The `review` gate requires an ingested review round with every
+finding at or above the severity floor carrying a terminal disposition backed by
+the evidence that disposition requires, run against the PR head, with no
+unanswered external comment and the verifier's stats recorded. A condition that
+could not be observed fails it; absence is never read as clean. Optional
+configuration lives in `.metaproject/tasks.config.json` under `completion`.
+
 ## Entry
 
 - `flows/` (flow packages)

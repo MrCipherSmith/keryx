@@ -1,5 +1,6 @@
 ---
 name: autodoc-architect
+model_tier: deep
 description: >
   Phase 3 subagent for autodoc-orchestrator. Synthesizes all module analyses
   into a system-level architecture description: layers, data flows, integration

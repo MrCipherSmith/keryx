@@ -1,5 +1,6 @@
 ---
 name: review-style
+model_tier: light
 description: |
   Use when: reviewing code for style, naming conventions, readability, and DRY violations —
   without touching logic, architecture, security, or performance. Covers "review style",

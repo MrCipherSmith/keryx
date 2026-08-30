@@ -729,7 +729,25 @@ test("every disposition state the baseline script counts is accepted by the writ
     "dismissed-wont-fix",
     "dismissed-out-of-scope",
     "dismissed-deprioritised",
+    // AC10. Not a dismissal and not in the precision ratio — it says our verifier
+    // refuted somebody ELSE's comment, which answers nothing about whether our
+    // reviewers were right. It is in the script's categories because a state the
+    // writer emits and the measurement does not know exits 1 as a stale ledger.
+    "answered-disagree",
   ]);
+});
+
+test("every state the writer accepts is a category the baseline script counts", () => {
+  // The invariant the test above states in prose, checked against the file
+  // instead of against a copied list. `dismissed-incorrect` was once
+  // structurally unreachable and nothing noticed; a state the script cannot
+  // count is the same defect from the other end — the measurement exits 1 on a
+  // legitimate record, so it stops being run at all.
+  const script = readFileSync(path.join(ORIGINAL_CWD, "scripts", "review-precision-baseline.ts"), "utf8");
+  const listed = script.slice(script.indexOf("const CATEGORIES = ["), script.indexOf("] as const;", script.indexOf("const CATEGORIES = [")));
+  for (const state of FINDING_DISPOSITION_STATES) {
+    expect(listed).toContain(`"${state}"`);
+  }
 });
 
 test("finding ids are globally unique while F-001 stays F-001", async () => {

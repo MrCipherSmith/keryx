@@ -448,7 +448,14 @@ async function runComplete(args: string[]): Promise<void> {
         : gate.status === "skipped"
           ? style.gray(symbols.off)
           : style.red(symbols.cross);
-    console.log(`  ${mark} ${gate.name} ${style.dim(`(${gate.detail})`)}`);
+    // A failing gate has to say WHICH condition failed and for which findings —
+    // one line per condition rather than one line per gate, because the review
+    // gate reports five and a single wrapped line hides four of them.
+    const [first = "", ...rest] = gate.detail.split(" | ");
+    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
+    for (const [index, line] of rest.entries()) {
+      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
+    }
   }
   if (result.passed && result.issueComment) {
     if (result.flow.source.type === "github-issue") {

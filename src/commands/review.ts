@@ -17,7 +17,36 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
+import {
+  blastRadiusRecomputeDecision,
+  computeBlastRadius,
+  DEFAULT_BLAST_RADIUS_DEPTH,
+  DEFAULT_BLAST_RADIUS_MAX_FILES,
+  renderBlastRadiusDispatchBrief,
+  renderBlastRadiusMarkdown,
+  upsertBlastRadiusBlock,
+  type BlastRadius,
+} from "../review/blast-radius";
+import { loadGraph } from "../gdgraph/query";
+import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
+import {
+  buildReplyPass,
+  collectPrComments,
+  createFixturePort,
+  createGhPort,
+  externalFindingsFromComments,
+  postReplyPass,
+  readPrCommentState,
+  recordSeenComments,
+  renderPrCommentsMarkdown,
+  unansweredComments,
+  writePrCommentState,
+  DEFAULT_MAX_REPLIES_TOTAL,
+  DEFAULT_MAX_SENTENCES_PER_REPLY,
+  type CommentOutcome,
+  type GitHubPort,
+} from "../review/pr-comments";
 import {
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
   DEFAULT_MAX_PARALLEL_REVIEWERS,
@@ -94,6 +123,26 @@ const CREATE_FLAGS = [
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
 
+const COMMENTS_COLLECT_FLAGS = ["--repo", "--pr", "--self", "--round", "--fixtures", "--out", "--json"] as const;
+
+const COMMENTS_REPLY_FLAGS = [
+  "--repo",
+  "--pr",
+  // Accepted here only as the fallback for a record that carries no identity yet
+  // — the recorded one wins, so a reply pass cannot run under a different login
+  // from the collection it is answering.
+  "--self",
+  "--outcomes",
+  "--sha",
+  "--round",
+  "--final",
+  "--dry-run",
+  "--max-replies",
+  "--max-sentences",
+  "--flow-link",
+  "--fixtures",
+] as const;
+
 const LOOP_FLAGS = ["--flow", "--task"] as const;
 
 const SCOPE_FLAGS = [
@@ -105,6 +154,20 @@ const SCOPE_FLAGS = [
   "--json",
   "--scoped-diff",
   "--append",
+] as const;
+
+const BLAST_RADIUS_FLAGS = [
+  "--ref",
+  "--base",
+  "--changed",
+  "--depth",
+  "--max-files",
+  "--no-related-tests",
+  "--final",
+  "--previous",
+  "--json",
+  "--brief",
+  "--out",
 ] as const;
 
 const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
@@ -178,8 +241,16 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runScope(args.slice(1));
       return;
     }
+    if (command === "blast-radius") {
+      await runBlastRadius(args.slice(1));
+      return;
+    }
     if (command === "budget") {
       await runBudget(args.slice(1));
+      return;
+    }
+    if (command === "comments") {
+      await runComments(args.slice(1));
       return;
     }
     if (command === "loop") {
@@ -360,6 +431,209 @@ async function runBudget(args: string[]): Promise<void> {
     );
     process.exitCode = 1;
   }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review comments` — collect every round, reply once at the end
+// ---------------------------------------------------------------------------
+
+/**
+ * The two halves of the external-comment loop, deliberately two commands.
+ *
+ * `collect` is safe, idempotent and runs every round. `reply` posts, runs once,
+ * and refuses without `--final`. Fusing them into one command is how a mechanism
+ * that must happen once ends up happening six times: the caller that already runs
+ * collection per round would carry the posting along with it.
+ *
+ * `--fixtures <dir>` answers every read from JSON on disk and records writes
+ * without sending them, so the whole loop can be rehearsed with no token, no
+ * network and no pull request. It is not a test-only affordance — it is the
+ * supported way to see what a reply pass would say before it says it.
+ */
+async function runComments(args: string[]): Promise<void> {
+  const sub = args[0];
+  if (sub === "collect") {
+    await runCommentsCollect(args.slice(1));
+    return;
+  }
+  if (sub === "reply") {
+    await runCommentsReply(args.slice(1));
+    return;
+  }
+  throw new Error("Usage: keryx review comments <collect|reply> --repo <owner/repo> --pr <n> ...");
+}
+
+async function runCommentsCollect(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_COLLECT_FLAGS, "comments collect");
+  const repo = requiredOption(args, "--repo", "comments collect");
+  const number = requiredInteger(args, "--pr");
+  const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+  const port = await resolvePort(args);
+  const self = optionValue(args, "--self") ?? (await resolveSelfLogin(args));
+  const cwd = process.cwd();
+
+  const state = await readPrCommentState(cwd, repo, number);
+  const result = await collectPrComments({
+    port,
+    repo,
+    number,
+    self,
+    handled: state.handled_comments,
+  });
+  const findings = externalFindingsFromComments(result.comments);
+  await writePrCommentState(cwd, recordSeenComments(state, result.comments, round, self));
+
+  const out = optionValue(args, "--out");
+  if (out !== undefined) {
+    await writeFileAtomic(out, `${JSON.stringify(findings, null, 2)}\n`);
+  }
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ ...result, findings }, null, 2));
+    return;
+  }
+  console.log(renderPrCommentsMarkdown({ repo, number, round, result }));
+  console.log(`findings: ${findings.length}${out === undefined ? "" : ` (written to ${out})`}`);
+  console.log(
+    `unanswered so far: ${unansweredComments(recordSeenComments(state, result.comments, round, self)).length} — replies are posted ONCE, after the final round.`,
+  );
+}
+
+async function runCommentsReply(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  const repo = requiredOption(args, "--repo", "comments reply");
+  const number = requiredInteger(args, "--pr");
+  const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+  const isFinal = args.includes("--final");
+  const dryRun = args.includes("--dry-run");
+  const cwd = process.cwd();
+  const port = await resolvePort(args);
+  const state = await readPrCommentState(cwd, repo, number);
+  const collected = await collectPrComments({
+    port,
+    repo,
+    number,
+    // The identity recorded when this pull request was first collected. Resolving
+    // it afresh here would let a reply pass run under a different login from the
+    // collection it is answering, and filter the wrong person's comments.
+    self: state.self ?? (await resolveSelfLogin(args)),
+    handled: state.handled_comments,
+  });
+
+  const outcomes = await readOutcomes(optionValue(args, "--outcomes"));
+  const pass = buildReplyPass({
+    repo,
+    number,
+    comments: collected.comments,
+    outcomes,
+    maxReplies: parseNonNegativeInteger(optionValue(args, "--max-replies"), "--max-replies"),
+    maxSentences: parseNonNegativeInteger(optionValue(args, "--max-sentences"), "--max-sentences"),
+    flowLink: optionValue(args, "--flow-link"),
+  });
+
+  const result = await postReplyPass({
+    port,
+    cwd,
+    repo,
+    number,
+    pass,
+    sha: requiredOption(args, "--sha", "comments reply"),
+    round: { index: round, isFinal },
+    state,
+    dryRun,
+  });
+
+  console.log(`# review comments reply (${dryRun ? "dry run" : "posted"})`);
+  console.log("");
+  for (const request of result.requests) {
+    console.log(`${request.method} ${request.path}`);
+    console.log(`  ${(request.body as { body: string }).body}`);
+  }
+  console.log("");
+  console.log(`posted: ${result.posted.length}`);
+  console.log(`already answered (skipped): ${result.skipped.length}`);
+  console.log(`backlog beyond the reply cap: ${result.backlog.length}${result.backlog.length === 0 ? "" : ` — ${result.backlog.join(", ")}`}`);
+  if (result.escalated.length > 0) {
+    console.error(
+      `ESCALATE: ${result.escalated.length} comment(s) block progress rather than report a problem and were NOT replied to: ${result.escalated.join(
+        ", ",
+      )}. Ask the operator now; answering these at the end would answer the wrong question late.`,
+    );
+    process.exitCode = 1;
+  }
+}
+
+/** `--fixtures <dir>` for an offline rehearsal, otherwise the live `gh` adapter. */
+async function resolvePort(args: string[]): Promise<GitHubPort> {
+  const fixtures = optionValue(args, "--fixtures");
+  if (fixtures === undefined) {
+    return createGhPort();
+  }
+  const files: Record<string, unknown> = {};
+  for (const key of ["pull-comments", "pull-reviews", "issue-comments"]) {
+    const file = join(fixtures, `${key}.json`);
+    try {
+      files[key] = JSON.parse(await readFile(file, "utf8")) as unknown;
+    } catch {
+      files[key] = [];
+    }
+  }
+  return createFixturePort(files);
+}
+
+/**
+ * The login we are acting as, resolved once.
+ *
+ * With `--fixtures` there is no `gh` to ask, so the flag is required; without an
+ * identity the collector refuses rather than filtering nothing, which is the
+ * behaviour that would make a reply pass answer its own replies.
+ */
+async function resolveSelfLogin(args: string[]): Promise<string> {
+  const explicit = optionValue(args, "--self");
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (optionValue(args, "--fixtures") !== undefined) {
+    throw new Error("`--self <login>` is required with `--fixtures`: there is no `gh` to ask who we are.");
+  }
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], { stdout: "pipe", stderr: "pipe" });
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const login = stdout.trim();
+  if (exitCode !== 0 || login === "") {
+    throw new Error(
+      "Could not resolve the acting GitHub login (`gh api user --jq .login`). Pass `--self <login>`. Collecting without it would treat our own replies as a reviewer's and answer them every round.",
+    );
+  }
+  return login;
+}
+
+async function readOutcomes(source: string | undefined): Promise<CommentOutcome[]> {
+  if (source === undefined) {
+    throw new Error(
+      "`--outcomes <file|->` is required: it carries one disposition and one reply sentence per collected comment. The judgement is the model's; this command only enforces the budget, the threading and the once-at-the-end rule.",
+    );
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Expected an array of outcomes in ${source}, got ${typeof parsed}.`);
+  }
+  return parsed as CommentOutcome[];
+}
+
+function requiredOption(args: string[], name: string, usage: string): string {
+  const value = optionValue(args, name);
+  if (value === undefined || value === "") {
+    throw new Error(`\`${name}\` is required for \`keryx review ${usage}\`.`);
+  }
+  return value;
+}
+
+function requiredInteger(args: string[], name: string): number {
+  const parsed = parseNonNegativeInteger(optionValue(args, name), name);
+  if (parsed === undefined) {
+    throw new Error(`\`${name} <n>\` is required.`);
+  }
+  return parsed;
 }
 
 /**
@@ -624,6 +898,141 @@ async function runScope(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * `keryx review blast-radius` — scope B, computed (flow 204, AC1–AC4).
+ *
+ * Scope A asks whether the change is correct. This asks whether it broke
+ * something that was working, over a set derived from `gdgraph affected` rather
+ * than from a model's choice of files to open. Everything it decides is decided
+ * in `review/blast-radius.ts`, which is pure; the only work done here is loading
+ * the graph, resolving the changed-file list, and choosing where the record goes.
+ *
+ * `--previous` + `--final` make AC4 mechanical: the recompute decision is
+ * printed and acted on rather than left to whoever remembers the rule.
+ */
+async function runBlastRadius(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, BLAST_RADIUS_FLAGS, "blast-radius");
+  const cwd = process.cwd();
+  const depth = parseNonNegativeInteger(optionValue(args, "--depth"), "--depth");
+  const maxFiles = parseNonNegativeInteger(optionValue(args, "--max-files"), "--max-files");
+  const includeRelatedTests = !args.includes("--no-related-tests");
+  const isFinalRound = args.includes("--final");
+
+  const explicit = optionValue(args, "--changed");
+  const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const changedFiles =
+    explicit !== undefined
+      ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
+      : await gitChangedFiles(ref);
+
+  // AC4 first: a round that must not recompute should not pay for a graph load.
+  const previousPath = optionValue(args, "--previous");
+  const previous = previousPath === undefined ? undefined : await readPreviousRadius(previousPath);
+  const decision = blastRadiusRecomputeDecision({
+    changedFiles,
+    isFinalRound,
+    previous:
+      previous === undefined
+        ? undefined
+        : { changedFiles: previous.changedFiles, depth: previous.depth, maxFiles: previous.maxFiles },
+    depth,
+    maxFiles,
+  });
+  console.error(`recompute: ${decision.recompute ? "yes" : "no"} — ${decision.reason}`);
+  if (!decision.recompute && previous !== undefined) {
+    await emitBlastRadius(previous, args);
+    return;
+  }
+
+  const graph = await loadGraph(cwd);
+  if (graph.nodes.length === 0) {
+    // An empty graph would produce an empty radius, which reads as "nothing
+    // depends on this change". Refuse instead: a scope that shrank to nothing
+    // because a prerequisite did not run is the failure shape this flow exists
+    // to end.
+    throw new Error(
+      "The code graph is empty or absent, so no blast radius can be computed. Run `keryx gdgraph build` first. " +
+        "An empty radius would read as `nothing depends on the change`, which is a different fact.",
+    );
+  }
+  const testFiles = includeRelatedTests ? await gitTestFiles() : [];
+  const radius = computeBlastRadius({
+    graph,
+    changedFiles,
+    testFiles,
+    config: { depth, maxFiles, includeRelatedTests },
+  });
+  await emitBlastRadius(radius, args);
+
+  if (radius.counts.droppedByCap > 0) {
+    console.error(
+      `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record.`,
+    );
+  }
+  if (radius.counts.changedFilesUnresolved > 0) {
+    console.error(
+      `unresolved: ${radius.counts.changedFilesUnresolved} changed file(s) are absent from the code graph; their blast radius is unknown, not empty.`,
+    );
+  }
+}
+
+async function emitBlastRadius(radius: BlastRadius, args: string[]): Promise<void> {
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(radius, null, 2));
+  } else if (args.includes("--brief")) {
+    console.log(renderBlastRadiusDispatchBrief(radius));
+  } else {
+    console.log(renderBlastRadiusMarkdown(radius));
+  }
+  const out = optionValue(args, "--out");
+  if (out === undefined) {
+    return;
+  }
+  if (out.endsWith(".json")) {
+    await writeFileAtomic(out, `${JSON.stringify(radius, null, 2)}\n`);
+    return;
+  }
+  const existing = await readFile(out, "utf8").catch(() => "");
+  await writeFileAtomic(out, upsertBlastRadiusBlock(existing, renderBlastRadiusMarkdown(radius)));
+}
+
+async function readPreviousRadius(source: string): Promise<BlastRadius> {
+  const text = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  const parsed = JSON.parse(text) as unknown;
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray((parsed as BlastRadius).changedFiles)) {
+    throw new Error(
+      `--previous ${source} is not a blast-radius record (expected the \`--json\` output of \`keryx review blast-radius\`).`,
+    );
+  }
+  return parsed as BlastRadius;
+}
+
+/** The changed-file list scope B is seeded from. Deleted paths are excluded. */
+async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
+  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : [ref])];
+  return (await gitLines(command)).filter(Boolean);
+}
+
+async function gitTestFiles(): Promise<string[]> {
+  return (await gitLines(["git", "ls-files"])).filter((file) => TEST_FILE_RE.test(file));
+}
+
+async function gitLines(command: readonly string[]): Promise<string[]> {
+  const proc = Bun.spawn([...command], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`${command.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
+  }
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 function parseContextLines(raw: string | undefined): number {
   if (raw === undefined) {
     return DEFAULT_CONTEXT_LINES;
@@ -788,8 +1197,18 @@ Usage:
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                            [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                            [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
+                                [--round <n>] [--out <findings.json>] [--json]
+                                [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--round <n>] [--dry-run]
+                              [--max-replies <n>] [--max-sentences <n>]
+                              [--flow-link <url>] [--fixtures <dir>]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review status <review-id-or-path>
@@ -811,6 +1230,17 @@ scope:
   Prints the retained scope AND every drop with its reason; --append writes the
   same record into the review package's scope.md, REPLACING a
   \`## Pre-filter scope\` block already there rather than adding a second.
+
+blast-radius:
+  Scope B: what the change can BREAK, as opposed to whether the change is
+  correct. Computed from \`gdgraph affected\` over the changed files, ranked by
+  edge distance, cut at depth ${DEFAULT_BLAST_RADIUS_DEPTH} and ${DEFAULT_BLAST_RADIUS_MAX_FILES} files. Prints the set, the depth, and
+  EVERY file the cap removed — a silent truncation reads as "we checked
+  everything". \`--brief\` renders the dispatch text for a scope-B reviewer.
+  \`--previous <json> [--final]\` decides whether this round must recompute:
+  the final round always does, whatever the changed-file set did.
+  Requires a built graph (\`keryx gdgraph build\`); an absent graph is refused
+  rather than reported as an empty radius.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and
@@ -850,6 +1280,23 @@ caps (attach/start/ingest):
   ceiling; over it, the package is still written and the command exits non-zero.
   --parallel/--outstanding record the dispatch plan. Every cap that is not given
   reads \`not recorded\`, never \`0\`.
+
+comments:
+  External PR comments, collected EVERY round and answered ONCE at the end.
+  \`collect\` reads all three sources — inline review comments, review submissions
+  and PR-level discussion — excludes only our own identity and comments already
+  answered, and keeps bot reviewers on exactly the same path as humans. A comment
+  already answered comes back if someone else replied in its thread since.
+  Severity is CLASSIFIED, never invented: CHANGES_REQUESTED starts at \`major\`,
+  everything else at \`minor\`, and a comment whose parent review was never seen
+  stays at the floor marked \`unclassified\` rather than being dropped or guessed.
+  \`reply\` refuses without --final: replying per round turns one review thread
+  into six, and a reply written mid-flow states an intention rather than an
+  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences — CUT to that in code, with the
+  remainder replaced by a link — threaded where GitHub gives a thread, and capped
+  at ${DEFAULT_MAX_REPLIES_TOTAL} with one summary comment and a reported backlog beyond it. Nothing
+  here can resolve, hide or dismiss a thread: those endpoints are unreachable
+  through the port. --dry-run and --fixtures rehearse the whole pass offline.
 
 budget:
   The gate to run BEFORE dispatching, where stopping is still possible. Exits

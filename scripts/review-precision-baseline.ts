@@ -66,13 +66,27 @@ import path from "node:path";
 
 const DEFAULT_ROOT = path.resolve(import.meta.dir, "..");
 
-/** The categories. Only the first two are in the precision ratio. */
+/**
+ * The categories. Only the first two are in the precision ratio.
+ *
+ * `answered-disagree` is here and deliberately NOT in the ratio. It is what an
+ * external PR comment gets when our verifier refuted it: the code was checked and
+ * held, and the person who raised it was told so. That says nothing about whether
+ * OUR reviewers were right, which is the only question precision asks — putting it
+ * in the denominator would count somebody else's finding as one of ours.
+ *
+ * It is listed rather than left out because a state the writer emits and this
+ * script does not know is reported as a stale-ledger problem and exits 1
+ * (see the `is not a category` branch below). A measurement that fails on a
+ * legitimate record is a measurement nobody runs.
+ */
 const CATEGORIES = [
   "acted-on",
   "dismissed-incorrect",
   "dismissed-wont-fix",
   "dismissed-out-of-scope",
   "dismissed-deprioritised",
+  "answered-disagree",
   "unknown",
 ] as const;
 type Category = (typeof CATEGORIES)[number];

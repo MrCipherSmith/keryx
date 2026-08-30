@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { assertTransition, evaluateTaskGate } from "./machine";
+import { reviewGate } from "./review-gate";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
 import {
@@ -160,7 +161,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           // that is the only moment that distinguishes "created under the new
           // rules" from "created before them" — `schemaVersion` cannot, since
           // read-time migration makes every package v2 (see FlowGates).
-          gates: { tasks: true },
+          gates: { tasks: true, review: true },
           id,
           slug,
           title,
@@ -446,7 +447,33 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // the flag, so the gate reports `skipped` and never fails them.
       gates.push(taskGate(flow));
 
-      // Gate 4: code health.
+      // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
+      // basis, and never allowed to pass on absence: a condition that could not
+      // be observed fails, because a gate that passes because nothing was
+      // recorded is the exact failure this gate was added to remove.
+      try {
+        gates.push(
+          await reviewGate({
+            cwd,
+            flowDir: dir,
+            flow,
+            tracker: deps.tracker,
+            ...(deps.externalCommentsGate ? { externalCommentsGate: deps.externalCommentsGate } : {}),
+            ...(mergedCommit ? { mergedCommit } : {}),
+          }),
+        );
+      } catch (error) {
+        // A gate that cannot run has not passed. `skipped` is reserved for "this
+        // package did not opt in" and for an explicit configuration opt-out;
+        // an unexpected error is a failure with the error in it.
+        gates.push({
+          name: "review",
+          status: "fail",
+          detail: `review gate could not be evaluated: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+
+      // Gate 5: code health.
       try {
         const health = await deps.healthGate(cwd);
         gates.push(
@@ -462,7 +489,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         });
       }
 
-      // Gate 5: security (§11). Omitted entirely when the module is disabled
+      // Gate 6: security (§11). Omitted entirely when the module is disabled
       // (dep returns null), so advisory `flow complete` is never regressed.
       // Advisory -> pass (informational); enforced/ci -> may fail.
       if (deps.securityGate) {

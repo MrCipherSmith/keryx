@@ -922,6 +922,53 @@ gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci` mode can fail the gate and hold the flow in `in-progress`. The gate
 is omitted entirely when the module is disabled.
 
+### The `review` completion gate
+
+`complete` also runs a `review` gate over the flow's managed review packages
+(`.metaproject/flows/<flow>/reviews/`). It passes only when all five of these
+hold, and the failure names which one did not:
+
+1. **A managed review record exists with at least one ingested round.** A round
+   whose `manifest.json` or `findings.json` is missing cannot be cited — nothing
+   durable records what it found.
+2. **No finding is left without a terminal disposition**, at or above the
+   severity floor. "Terminal" is defined positively, per finding: `acted-on`
+   needs a commit SHA *and* a verifier `refuted` verdict citing that SHA;
+   `dismissed-incorrect` needs a verifier `refuted` verdict with a method and
+   evidence; the other dismissals need a recorded human decision. A finding that
+   simply stops appearing in later rounds is **not** cleared — the check runs
+   over the latest state of every finding ever raised, so absence never reads as
+   a fix.
+3. **The latest round ran against the PR head commit.** A clean round against a
+   stale SHA proves nothing about what will merge.
+4. **No external PR comment is unanswered.**
+5. **The verifier ran and its stats are on the record** (`verification_mode` in
+   the round's `scope.md`; `off` fails).
+
+A condition that could not be *observed* fails the gate just as a violated one
+does — the two are reported differently because the fixes differ, but neither
+passes. Reaching the review round cap with the gate unsatisfied leaves the flow
+`in-progress` and reports the blocker; it never force-completes.
+
+Like the `tasks` gate, `review` is **opt-in per package** (`gates.review`,
+written by `flow init`), so packages created before it existed report `skipped`
+rather than being retroactively invalidated.
+
+Optional per-project configuration, in `.metaproject/tasks.config.json`:
+
+```json
+{
+  "completion": {
+    "severity_floor": "minor",
+    "require_clean_round": true
+  }
+}
+```
+
+`severity_floor` is `blocker`, `major` or `minor` (default `minor`); `info`
+never blocks and is clamped to `minor` with a note. `require_clean_round: false`
+turns the gate off, and says so in the gate list rather than disappearing.
+
 ---
 
 ## rules
@@ -1114,6 +1161,9 @@ keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                          [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                          [--json|--brief] [--out <file>]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -1128,12 +1178,56 @@ flag that is silently dropped writes nothing and still reports success.
 | `complete` | Validate the package, record what became of its findings, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
+| `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
+| `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
+| `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
 by the review service.
+
+### `review comments`
+
+Comments left on the pull request by other people — and by other bots — are
+collected every round and **answered once, at the end**. Not per round: a bot
+that replies on every round turns one review thread into six, and the reviewer
+reads the noise before the answer. The work happens continuously; the speaking
+happens once, after the final round and before the completion gate, so every
+reply states a settled outcome rather than an intention.
+
+All three sources are read: inline review comments, review submissions, and
+PR-level discussion. **Bot authors are handled identically to humans** — a bot
+reviewer is a reviewer. Only our own identity is excluded, and the collector
+refuses to run without knowing it, because a set that includes our own replies
+would have the reply pass answering itself every round.
+
+Each comment becomes a finding with `source: "external"`. Severity is
+**classified, never invented**: a comment on a `CHANGES_REQUESTED` review starts
+at `major`, everything else at `minor`, and a comment that cannot be classified
+takes the `minor` floor with the reason recorded rather than a guess.
+
+Two rules that are not conveniences:
+
+- **The verifier cannot refute an external finding on its own.** A human asked a
+  question; a machine deciding the question was invalid is not an answer. The
+  disposition becomes `answered-disagree`, and it still owes a reply.
+- **A thread we did not open is never resolved or hidden.** Replying is ours;
+  resolving belongs to whoever wrote the comment. Auto-resolving is how a bot
+  silences a person.
+
+Replies are **at most two sentences**, enforced rather than advised: the
+over-long version is not reachable from the function that produces the reply,
+and a truncation with no link to point at is refused outright. Every collected
+comment ends with exactly one reply and one disposition — silence is not an
+acceptable outcome, and neither is answering twice. State is durable per pull
+request and survives a session restart.
+
+The trade-off, stated: a reviewer who comments early waits until the end. That
+is deliberate — answering with a work-in-progress state that later changes is
+worse. A comment that *blocks* progress rather than reporting a problem is
+escalated to the operator immediately instead.
 
 ### `review scope`
 
@@ -1176,6 +1270,53 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### `review blast-radius`
+
+`review scope` bounds **the change**, and a review of it answers *is this change
+correct?* It does not answer *did this change break something that was working*.
+That is a second scope, and it is computed rather than browsed: `gdgraph
+affected` walked outward from every changed file, ranked by edge distance, cut at
+a depth and a file cap, closest first.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` | Take the changed-file list from `git diff --name-only` against this base. |
+| `--changed a,b` | Use this changed-file list instead of asking git. |
+| `--depth <n>` | Edge distance kept. Default **2**. |
+| `--max-files <n>` | File cap, closest first. Default **40**. |
+| `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
+| `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
+| `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
+| `--brief` | The dispatch text a scope-B reviewer is given. |
+| `--out <file>` | Write the record. A `.json` path writes the JSON; anything else upserts a `## Blast radius` block. |
+
+The bounds are not a guess. Measured over 80 commits of this repository against a
+1,041-node graph: the depth-2 dependent set is a median of 19 files (p90 65),
+depth 3 adds eight in the median and doubles the p90, and depth 4 is
+indistinguishable from depth 3 because the graph saturates. The 40-file cap fires
+on 25% of those commits and removes only hop-2 entries on all but two of them, so
+it almost never costs a direct dependent.
+
+**Bounded on purpose.** Reviewing the whole repository every round is
+unaffordable *and* harmful — review quality decays as context grows, and an
+unbounded second scope makes later rounds worse than earlier ones.
+
+**Every file the cap removed is recorded**, with its hop and its dependency path
+back to the change. A truncation nobody can see reads afterwards as "we checked
+everything".
+
+**An empty radius is not a clean one.** The graph indexes code, so a changed
+Markdown, JSON or shell file has no dependents to walk; those are reported under
+`unresolved` with the reason, because "the graph could not answer" and "nothing
+depends on this" are different facts. Runtime edges — a spawned process, a file
+one module writes and another reads, a string-keyed registry — are invisible to
+it, and so is the reverse direction: `affected` walks dependents, not
+dependencies.
+
+Requires a built graph; run `keryx gdgraph build` first. An absent graph is
+refused rather than reported as an empty radius.
 
 ### Caps — findings, spend, concurrency
 

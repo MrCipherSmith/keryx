@@ -51,9 +51,11 @@ unified report sorted by severity. It does not perform any review logic itself.
 
 ```
 Review Orchestrator Progress:
+- [ ] Step 0: On a PR target, collect external comments — `keryx review comments collect`
 - [ ] Step 1: Build Review Context Pack (PR metadata, scope, rules, context_doc summary)
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
+- [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing
 - [ ] Step 4: Parse flags / auto-detect domain from scope
 - [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
 - [ ] Step 6: Plan sub-agent dispatch, token budgets, and model strategy
@@ -64,7 +66,13 @@ Review Orchestrator Progress:
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
 - [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, retained
+- [ ] Step 14: AFTER THE FINAL ROUND ONLY — answer every external comment once, `keryx review comments reply --final`
 ```
+
+Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They are
+two commands for that reason: a caller that already runs collection per round
+would carry the posting along with it, and the reviewer would get six replies to
+one comment.
 
 ---
 
@@ -137,6 +145,7 @@ which of its inputs were recovered and which were never written down.
 | `model_strategy` | string | no | `current`, `ask`, or `adaptive`. Default: `current`; do not switch models unless user or automation allows it. |
 | `managed_review` | object | no | Optional managed review mode: `{mode, target, target_ref, flow_id, reviewers}` where mode is `lightweight`, `attach-review`, `review-flow`, or `ingest`. |
 | `verification_mode` | string | no | `off`, `annotate`, or `filter`. Default `annotate` — verdicts are recorded and nothing is removed. See Wave C. |
+| `pr_comments` | object | no | `{enabled, max_replies_total, max_sentences_per_reply}`. Defaults: enabled when a PR exists, `30`, `2`. Collect every round, reply once at the end. See External PR comments. |
 
 ---
 
@@ -225,6 +234,140 @@ Required artifacts for managed modes:
 When attaching to a flow, resolve the flow by explicit `flow_id`, PR URL, issue
 URL, or branch metadata. Never mutate `.metaproject/flows/*/flow.json` from
 review code; Task Manager state changes remain owned by `keryx flow`.
+
+---
+
+## External PR comments
+
+A human or a bot reviews our pull request. Before this existed, nothing collected
+it, nothing fixed it and nothing answered it — silence was the behaviour for every
+comment, and to the person who wrote it silence is indistinguishable from
+disagreement.
+
+**Collect every round. Answer once, at the end.** Both halves are mechanical and
+both live in the CLI; the judgement — is this comment right, what do we say — stays
+here.
+
+```text
+keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
+                              [--round <n>] [--out <findings.json>] [--json]
+keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--dry-run]
+                              [--max-replies <n>] [--max-sentences <n>]
+                              [--flow-link <url>]
+```
+
+Add `--fixtures <dir>` to either to run the whole loop against JSON on disk —
+no token, no network, nothing posted. Use it to see what a reply pass would say
+before it says it.
+
+### What collection does, so you do not do it by hand
+
+- Reads **all three** sources: inline review comments, review submissions and
+  their bodies, and PR-level discussion.
+- **A bot reviewer is a reviewer.** CodeRabbit, Greptile and Copilot comments go
+  down exactly the same path as a human's. The bot flag is recorded so a report
+  can say who spoke; nothing filters on it.
+- Excludes our own identity, and comments already answered — **unless** the thread
+  has a newer reply from somebody else, which makes the comment new again.
+- Everything filtered is listed with its reason. A filter that removes silently
+  reads as "nobody commented".
+
+### Severity is classified, never invented
+
+A comment on a review whose state is `CHANGES_REQUESTED` starts at **`major`**.
+Everything else starts at **`minor`**. There is no third rule and no model call.
+
+When the classifying fact is missing — an inline comment whose parent review was
+not returned, or a review state GitHub does not document — the comment is **not
+dropped and the severity is not guessed**: it takes the `minor` floor and carries
+`basis: unclassified` naming what was missing. A derived `minor` and a defaulted
+one are different claims, and a record that cannot tell them apart is the
+`dismissed-out-of-scope: 0` failure in a new field.
+
+You may **lower** a severity only by assigning a terminal disposition with a
+reason. You may never silently drop an external comment.
+
+### The verifier cannot refute an external comment
+
+An external finding enters the same fix loop as an internal one with one
+exception: **a `refuted` verdict does not remove it and does not dismiss it.** A
+human asked a question; a machine deciding the question was invalid is not an
+answer. `keryx review ingest` turns that verdict into the disposition
+`answered-disagree`, keeps the finding, and records the reclaim in `scope.md`.
+`answered-disagree` still owes a reply explaining why.
+
+The per-reviewer findings cap does not truncate external comments either, for the
+same reason: the cap drops silently, and an external comment may not be dropped
+silently.
+
+### Replying — once, at the end, briefly
+
+The reply pass runs **after the final round and before the completion gate**, so
+every reply states a settled outcome rather than an intention. `keryx review
+comments reply` refuses without `--final`; it is not a reminder you can skip.
+
+| Outcome | Reply is |
+|---|---|
+| `acted-on` | one sentence naming what changed, plus the commit SHA |
+| `answered-disagree` | one or two sentences on why not, and a link to the flow's journal entry |
+| `dismissed-out-of-scope` / `dismissed-deprioritised` | one sentence, and where it was recorded instead |
+
+Rules, all of them enforced in code rather than asked for here:
+
+- **At most two sentences per comment.** A longer reply is CUT to two and the
+  remainder is replaced by a link — the long version is not reachable from the
+  command's output. A truncation with no link to point at is refused outright: the
+  conclusion posted and the explanation nowhere is worse than either alternative.
+- A fenced code block in a reply is refused. Link, do not paste.
+- Replies go **in the thread**. A review submission body and a PR-level comment
+  have no thread — GitHub offers no reply endpoint for either — so those become one
+  top-level comment that names what it answers.
+- **Never resolve or hide a thread we did not open.** Replying is ours; resolving
+  is the reviewer's call, and auto-resolving is how a bot silences a human. The
+  resolve, hide, minimise and dismiss endpoints are unreachable through the port
+  this command uses, GraphQL included.
+- Exactly **one** reply per comment, and one disposition. A round that changed
+  nothing for a comment still gets a reply saying so, with a terminal disposition
+  — `unknown` is refused, because it is what an unanswered comment already reads
+  as.
+- Capped at **30** replies. Beyond it, one summary comment and a backlog reported
+  by id.
+- Handling is durable: `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json`
+  records id, thread, author, url, first-seen round, handled-at, sha, disposition
+  and reply url, written after **every** post. A resumed session answers nobody
+  twice.
+
+**The trade-off, stated rather than hidden:** a reviewer who comments early waits
+until the end. That is deliberate — answering with a work-in-progress state that
+later changes is worse. If a comment **blocks** progress rather than reporting a
+problem, mark its outcome `escalate: true`: it leaves the reply queue, is reported
+to the operator immediately, and the command exits non-zero. Answering a blocking
+question at the end answers the wrong question late.
+
+---
+
+## Everything written to GitHub is brief
+
+One rule, applied to every outward surface: **PR bodies, PR comments, review
+replies, issue comments, and commit messages going to a PR.**
+
+- Lead with the conclusion. No preamble, no restating the question, no apology,
+  no summary of the flow.
+- Say what changed and where. **Link, do not paste.**
+- The reasoning, the evidence, the rejected alternatives and the round history live
+  in the flow package — `journal.md`, `context.md`, the review artifacts — which is
+  durable, searchable, and costs a reader nothing to skip.
+- A GitHub artifact that needs more than a short paragraph is a signal that the
+  detail belongs in the flow with a link out, **not** that the paragraph should
+  grow.
+- No orchestrator-written PR comment or reply exceeds two sentences without
+  carrying a link to the artifact holding the detail. The reply pass enforces
+  this; for anything else you write outward, hold yourself to it.
+
+This is deliberately asymmetric: **verbose in the flow, terse on GitHub.** The
+flow is written for whoever resumes the work; GitHub is read by someone who did
+not ask for our reasoning and is reading between other tasks.
 
 ## Review Context Pack
 
@@ -415,9 +558,93 @@ handing over only its `counts` object is refused, because eight integers carry n
 reason for any individual drop.
 
 Use `.files` from `scope.json` for the auto-detection table below. A dropped path
-must not select a reviewer.
+must not select a reviewer, and **neither may a blast-radius path**: scope B is
+under regression check, so a `.tsx` file that only appears there must not pull in
+`review-frontend`. Reviewer selection is driven by the scope-A file list alone.
 
 Scope is limited to **changes introduced in the current branch since merge-base**.
+
+---
+
+### Scope B — the blast radius (deep rounds)
+
+Everything above is **scope A**: the change, bounded. It answers *is this change
+correct?* It does not answer *did this change break something that was working*,
+and those are different questions — only the first has ever been asked here.
+
+A deep round dispatches under **both**. Scope B is computed, never browsed:
+
+```bash
+keryx review blast-radius --ref "${BASE_SHA}" --json > blast-radius.json   # KEEP THIS FILE
+keryx review blast-radius --ref "${BASE_SHA}" --brief                      # what a scope-B reviewer is told
+```
+
+It walks `gdgraph affected` outward from every changed file, ranks by edge
+distance, keeps distance ≤ 2, cuts at 40 files closest-first, and adds a changed
+file's naming-related tests when the graph did not already reach them. Requires a
+built graph — run `keryx gdgraph build` if it refuses.
+
+**Do not pick the files yourself, and do not widen it.** "Review the
+functionality so nothing breaks" naively means "review the whole repository every
+round", which is unaffordable *and* actively harmful: review quality decays as
+context grows — measured F1 0.65 at round 2 falling to 0.29 at round 10. An
+unbounded scope B makes later rounds worse than earlier ones.
+
+The bounds are measured on this repository, not guessed: at depth 2 the set is a
+median of 19 files (p90 65); depth 3 buys eight more in the median and doubles
+the p90. The 40-file cap fires on 25% of commits and removes only hop-2 entries
+on all but 2 of 80, so it almost never costs a direct dependent — and when it
+does, it says so.
+
+**Record the whole thing.** `--out "<review-package>/blast-radius.md"` writes the
+set, the depth, and **every file the cap removed**. A truncation nobody can see
+reads afterwards as "we checked everything", which is the claim this pipeline
+exists to stop making. An empty radius is reported as `unresolved`, not as clean:
+the graph indexes code, so a change to a skill, a rule or a schema has no blast
+radius at all and that is a different fact from "nothing depends on it".
+
+#### The scope-B question, and what is rejected
+
+> Does this change break an existing behaviour **at these sites**?
+
+Nothing else. The blast-radius set is **under regression check, not under
+review**. A finding about style, naming or architecture in code the change did
+not touch is refused **by the orchestrator in code** — not discouraged here —
+under four rules:
+
+| Rule | Refused because |
+|---|---|
+| `outside-set` | the file is neither in the computed set nor in the changed set; the reviewer went browsing |
+| `non-regression-dimension` | raised by `review-style`, `review-clean-code`, `review-architecture` or a conventions reviewer — those ask whether the code is good |
+| `non-regression-severity` | below `major`. Under the canonical rubric `minor` states the code behaves correctly and `info` names neither trigger nor outcome; neither can be a claim that something broke |
+| `no-link-to-change` | nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this site |
+
+Rejections are **recorded, not deleted** — raise the observation under scope A or
+as a separate review. Pass `--brief` output verbatim into the scope-B dispatch:
+the code rejection is the enforcement, but a reviewer told afterwards has already
+spent the round producing findings that will all be refused.
+
+`class_scope` on a scope-B finding names the **caller that breaks**, not the
+changed line, because that is the site a human has to look at.
+
+#### When it is recomputed
+
+| Round | Scope A | Scope B |
+|---|---|---|
+| 1 (first after the draft PR) | yes | yes |
+| 2..N | yes | recomputed only if the changed-file set moved |
+| final | yes | **yes, always** |
+
+Do not decide this by memory:
+
+```bash
+keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+```
+
+It prints the decision and the reason, and reuses the previous record when
+nothing moved. The final round recomputes whatever the file set did — otherwise a
+fix introduced in round 3 gets no regression check at all, and the round that
+certifies the flow is the one that checked the least.
 
 ---
 
@@ -1038,13 +1265,22 @@ Publish this review report to the PR?
 
 ### Concise PR Comment
 
-The visible PR comment is for humans. It must be written in English only and stay concise.
+The visible PR comment is for humans. It must be written in English only and stay
+concise, under the brevity rule above: **the summary is at most two sentences and
+carries a link to the artifact holding the detail.**
+
+The finding rows below are a bounded exception, not a licence: they exist because
+a reviewer scanning a PR needs the blockers in front of them. Keep them to the
+`blocker` and `major` rows; everything at `minor` or below goes behind the
+`<details>` fold or, better, into the AI artifact and is linked. The full findings
+set, the round history and the reasoning belong in the flow package — pasting them
+here is the failure this rule names.
 
 ```markdown
 ## AI Review Report
 
 **Verdict:** REQUEST_CHANGES
-**Summary:** 2-3 concise sentences with overall risk and the main merge blocker.
+**Summary:** At most two sentences: the overall risk and the main merge blocker. Detail: <link to the AI artifact or the flow package>.
 
 | Severity | Area | Finding | Suggested Fix | Owner |
 |---|---|---|---|---|
@@ -1224,6 +1460,10 @@ If absent, proceed normally — context is optional and non-blocking.
 | "The verifier suggested a higher severity, I'll apply it" | It cannot suggest one. A claim carrying a severity is discarded whole and the attempt is recorded |
 | "This finding has no `verification`, so it can be dropped" | Absent means nobody checked. All 83 recorded findings are in that state; none of them is thereby wrong |
 | "Precision went up after the verifier landed" | There is no precision baseline to have gone up from. State stage counts: dropped, refuted, retained |
+| "I'll widen the blast radius, this change looks risky" | It is bounded because review quality decays with context: F1 0.65 at round 2 → 0.29 at round 10. Widening makes the later rounds worse, not safer |
+| "The blast radius came back empty, so nothing can break" | Empty and unresolved are different facts. The graph indexes code — a Markdown or JSON change has no radius at all, and the record says which one you got |
+| "The changed files are the same as last round, so scope B can be skipped on the final round" | The final round always recomputes. A fix landed in round 3 is the change; skipping means the certifying round checked the least |
+| "This scope-B file has an obvious naming problem, I'll report it" | Rejected in code as `non-regression-dimension`. The set is under regression check, not under review — raise it under scope A |
 | "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |

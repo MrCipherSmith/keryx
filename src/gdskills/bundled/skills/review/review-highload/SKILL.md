@@ -1,5 +1,6 @@
 ---
 name: review-highload
+model_tier: deep
 description: |
   Use when: reviewing code that will run under high concurrency or high traffic —
   race conditions, connection pool exhaustion, cache invalidation, missing indexes,

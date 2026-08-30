@@ -1,5 +1,6 @@
 ---
 name: review-flow-graph
+model_tier: standard
 description: |
   Use when reviewing generic ReactFlow or graph-surface abstraction changes:
   public graph surface, store subclassing, layout lifecycle, internal helper

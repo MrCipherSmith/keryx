@@ -39,7 +39,8 @@
             "dismissed-incorrect",
             "dismissed-wont-fix",
             "dismissed-out-of-scope",
-            "dismissed-deprioritised"
+            "dismissed-deprioritised",
+            "answered-disagree"
           ],
           "default": "unknown",
           "description": "`unknown` is the default and the reading of an absent `disposition`: nobody recorded an outcome. It is never counted as valid — an unknown counted as acted-on inflates the very figure this field exists to make measurable."
@@ -47,7 +48,7 @@
         "evidence": {
           "type": "string",
           "minLength": 1,
-          "description": "Where the outcome is written down: the commit that closed it, the test that went red, the decision that dismissed it. A disposition without this is an assertion, and assertions are what produced a corpus whose findings all appear correct."
+          "description": "Where the outcome is written down: the commit that closed it, the test that went red, the decision that dismissed it. A disposition without this is an assertion, and assertions are what produced a corpus whose findings all appear correct. `answered-disagree` is the one state that is NOT a dismissal: it records that our verifier refuted an external comment, which settles the code and settles nothing about the person who asked — the reply is still owed."
         }
       },
       "if": {
@@ -106,6 +107,36 @@
     "blocking_merge": { "type": "boolean", "default": false },
     "related_skill": { "type": ["string", "null"] },
     "learning_candidate": { "type": "boolean", "default": false },
+    "source": {
+      "title": "Who raised this finding: one of our reviewers, or somebody on the pull request",
+      "type": "string",
+      "enum": ["internal", "external"],
+      "default": "internal",
+      "description": "Absent reads as `internal`, which is every reviewer-emitted finding and all 83 pre-contract records; it is written only for `external`, on the same rule as `disposition` — a property present on every record says nothing. The value is not descriptive: three mechanisms branch on it. An external finding cannot be removed by the verifier (a machine deciding a human's question was invalid is not an answer), is not truncated by the per-reviewer findings cap, and blocks `flow complete` while it has no reply. A finding that lost this property would quietly acquire all three of the behaviours the criteria forbid."
+    },
+    "external_ref": {
+      "title": "The GitHub comment this finding is the record of",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "author", "url", "submitted_at"],
+      "description": "Every property here exists to make ONE operation possible after a session restart: replying in the right place, to the right person, exactly once. `id` is namespaced (`review-comment:12`) because the three GitHub endpoints number independently and a bare integer collides across them.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "author": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 },
+        "path": { "type": ["string", "null"] },
+        "line": { "type": ["integer", "null"], "minimum": 1 },
+        "thread_id": {
+          "type": ["string", "null"],
+          "description": "The root comment of the review thread. Null for a review submission body and for a PR-level comment, neither of which has a thread — which is why the reply for those is a new top-level comment and is recorded as such rather than pretending to be threaded."
+        },
+        "submitted_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What decides whether a later reply from someone else makes an already-handled comment new again."
+        }
+      }
+    },
     "class_scope": {
       "title": "Every site of this shape, and how the set was derived",
       "description": "A finding anchored to one file:line is a claim about one site. Repeatedly, a fix repaired that site and left its siblings — one writer of five, one operator instruction of four, six readers of eight — and the next review round found them. Required for blocker and major; optional below, because enumerating the class for every info finding is theatre.",
@@ -131,5 +162,16 @@
     "required": ["severity"],
     "properties": { "severity": { "enum": ["blocker", "major"] } }
   },
-  "then": { "required": ["class_scope"] }
+  "then": { "required": ["class_scope"] },
+  "allOf": [
+    {
+      "title": "An external finding must say which comment it is the record of",
+      "description": "Kept in `allOf` rather than merged into the root `if`/`then` above, because that pair is pinned identical to the bundled reviewer-finding schema by review-finding-class-scope.test.ts — and `external_ref` deliberately does NOT belong there. A reviewer never emits an external finding; only the comment collector does. A `source: external` without a ref is a finding that can never be replied to, which is the one outcome AC13 calls unacceptable.",
+      "if": {
+        "required": ["source"],
+        "properties": { "source": { "const": "external" } }
+      },
+      "then": { "required": ["external_ref"] }
+    }
+  ]
 }
