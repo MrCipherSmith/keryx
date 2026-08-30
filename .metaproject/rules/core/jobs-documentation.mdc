@@ -112,7 +112,7 @@ The README is the entry point for both humans and AI agents. It MUST contain:
 1. [x] Analyze issue (issue-analyzer)
 2. [ ] Prepare feature branch
 3. [ ] Implement tasks (task-implementer)
-4. [ ] Review (code-ai-review, code-boss-review, code-style-review)
+4. [ ] Review (code-ai-review, code-learned-review, code-style-review)
 5. [ ] Fix review findings
 6. [ ] Final checks
 7. [ ] Generate report

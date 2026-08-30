@@ -26,7 +26,7 @@ license: "MIT"
 # Review Logic
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
-Inherits from the original `code-ai-review` + `code-boss-review` correctness phases
+Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
 and unifies them into a single focused pass.
 
 This reviewer does not care about formatting, naming, or architecture opinions.

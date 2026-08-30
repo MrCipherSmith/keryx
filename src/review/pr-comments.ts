@@ -1390,6 +1390,21 @@ export type SeenComment = {
   first_seen_round: number;
   last_seen_round: number;
   submitted_at: string;
+  /**
+   * What the comment said, truncated to {@link PROBLEM_BUDGET}.
+   *
+   * The record already answered *who* spoke and *where*; it could not answer
+   * *what they said*, and every consumer that needed the text had to go back to
+   * GitHub for it. `keryx review learn` is one such consumer and re-fetching is
+   * exactly what it must not do — a learning pass that calls the API reads a
+   * pull request that has moved on since the round it claims to be learning
+   * from.
+   *
+   * Optional because records written before this field exist on disk. A comment
+   * with no recorded body is not treated as an empty comment: `review learn`
+   * counts it as unusable and says so, rather than learning silence from it.
+   */
+  body?: string;
 };
 
 export type PrCommentState = {
@@ -1523,11 +1538,18 @@ export function recordSeenComments(
         first_seen_round: round,
         last_seen_round: round,
         submitted_at: comment.submittedAt,
+        body: truncateForRecord(comment.body, PROBLEM_BUDGET),
       });
       continue;
     }
     const prior = seen[existing] as SeenComment;
-    seen[existing] = { ...prior, last_seen_round: round };
+    // A body seen again is re-recorded: an edited comment says something else
+    // now, and the record is meant to hold what it says, not what it first said.
+    seen[existing] = {
+      ...prior,
+      last_seen_round: round,
+      body: truncateForRecord(comment.body, PROBLEM_BUDGET),
+    };
   }
   return {
     ...state,

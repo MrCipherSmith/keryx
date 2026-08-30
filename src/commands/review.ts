@@ -1,7 +1,18 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile } from "node:fs/promises";
+import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
-import { writeFileAtomic } from "../lib/fs";
+import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+import { learnProjectSkill } from "../gdskills/learn";
+import {
+  learningRecordPath,
+  learningSourcePath,
+  loadReviewLearningConfig,
+  renderLearningRecord,
+  renderLearningSource,
+  reviewLearningConfigPath,
+  selectLearnableComments,
+  type LearningSelection,
+} from "../review/review-learning";
 import {
   completeManagedReview,
   createManagedReviewPackage,
@@ -50,6 +61,7 @@ import {
   createGhPort,
   externalFindingsFromComments,
   postReplyPass,
+  prCommentsStatePath,
   readPrCommentState,
   recordSeenComments,
   renderPrCommentsMarkdown,
@@ -60,6 +72,7 @@ import {
   DEFAULT_MAX_SENTENCES_PER_REPLY,
   type CommentOutcome,
   type GitHubPort,
+  type PrCommentState,
 } from "../review/pr-comments";
 import {
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
@@ -175,6 +188,17 @@ const COMMENTS_REPLY_FLAGS = [
 ] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
+
+/**
+ * No `--authors` and no `--skill`.
+ *
+ * Both are named by `.metaproject/review-learning.config.json`, and accepting
+ * either from the command line would make the configured list a default rather
+ * than the rule — one `--authors` on one invocation and a project has learned
+ * from somebody it never named. `--repo` is likewise absent: the config names
+ * the repository whose comments teach this skill.
+ */
+const LEARN_FLAGS = ["--pr", "--dry-run", "--json"] as const;
 
 const SCOPE_FLAGS = [
   "--context",
@@ -300,6 +324,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "comments") {
       await runComments(args.slice(1));
+      return;
+    }
+    if (command === "learn") {
+      await runLearn(args.slice(1));
       return;
     }
     if (command === "loop") {
@@ -985,6 +1013,132 @@ function requiredInteger(args: string[], name: string): number {
 }
 
 /**
+ * `keryx review learn` — the join, and nothing more.
+ *
+ * Reads the record `review comments collect` wrote, keeps the comments whose
+ * author the project configured, renders them, and hands the rendering to the
+ * existing `learnProjectSkill`. It makes no network call and it writes no
+ * `SKILL.md`: the output is a proposal, and `keryx skills learn apply` remains
+ * the only writer.
+ *
+ * Three exits worth naming:
+ *
+ *   - **No config**: one plain line, exit 0. A project that does not learn is the
+ *     normal case, not a problem to warn about.
+ *   - **No record**: an error. The caller asked to learn from a pull request that
+ *     was never collected, and inventing an empty result would report a
+ *     successful pass over comments nobody read.
+ *   - **Config present, no configured author commented**: exit 0 with the counts.
+ *     Nothing was learned and the reason is visible.
+ */
+async function runLearn(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n>");
+  const cwd = process.cwd();
+  const config = await loadReviewLearningConfig(cwd);
+  if (config === null) {
+    console.log(
+      `no review learning configured: ${path.relative(cwd, reviewLearningConfigPath(cwd))} is absent, so this project does not learn from pull-request comments.`,
+    );
+    return;
+  }
+
+  const number = requiredInteger(args, "--pr");
+  const statePath = prCommentsStatePath(cwd, config.repo, number);
+  if (!(await pathExists(statePath))) {
+    throw new Error(
+      `No collected comments for ${config.repo}#${number}: ${path.relative(cwd, statePath)} does not exist. Run \`keryx review comments collect --repo ${config.repo} --pr ${number} --sha <head-sha>\` first — this command reads that record and never fetches from GitHub.`,
+    );
+  }
+
+  const state = await readPrCommentState(cwd, config.repo, number);
+  const selection = selectLearnableComments(state, config.authors);
+  const sourcePath = learningSourcePath(cwd, config.repo, number);
+  const recordPath = learningRecordPath(cwd, config.repo, number);
+  const relativeSourcePath = toPosix(path.relative(cwd, sourcePath));
+  await mkdir(path.dirname(sourcePath), { recursive: true });
+  await writeFileAtomic(sourcePath, renderLearningSource(selection));
+  await writeFileAtomic(
+    recordPath,
+    renderLearningRecord({
+      repo: config.repo,
+      number,
+      skill: config.skill,
+      authors: config.authors,
+      selection,
+      collectedSha: state.collected_sha,
+    }),
+  );
+
+  if (selection.kept.length === 0) {
+    const detail = [
+      `comments in the record: ${state.seen.length}`,
+      `from a configured author: ${selection.kept.length + selection.bodyless.length}`,
+      `excluded as unconfigured: ${selection.unconfigured.length}`,
+      `configured but with no recorded body: ${selection.bodyless.length}`,
+    ].join(", ");
+    if (args.includes("--json")) {
+      console.log(
+        JSON.stringify(
+          { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal: null, selection: counts(state, selection) },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+    console.log(`nothing to learn from ${config.repo}#${number} — ${detail}.`);
+    console.log(`Source: ${relativeSourcePath}`);
+    console.log(`Record: ${toPosix(path.relative(cwd, recordPath))}`);
+    return;
+  }
+
+  const proposal = await learnProjectSkill(cwd, {
+    sourceType: "review",
+    sourcePath: relativeSourcePath,
+    skill: config.skill,
+    dryRun: args.includes("--dry-run"),
+  });
+
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal, selection: counts(state, selection) },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  console.log(`${proposal.dryRun ? "Would create" : "Created"} learning proposal: ${proposal.proposalId}`);
+  console.log(`Skill: ${proposal.skill.module}/${proposal.skill.name}`);
+  console.log(`Source: ${relativeSourcePath}`);
+  console.log(`Record: ${toPosix(path.relative(cwd, recordPath))}`);
+  console.log(`Authors: ${config.authors.join(", ")}`);
+  console.log(
+    `Comments: ${selection.kept.length} used, ${selection.unconfigured.length} excluded as unconfigured, ${selection.bodyless.length} with no recorded body`,
+  );
+  console.log(`Confidence: ${proposal.confidence}`);
+  console.log(`Proposal: ${proposal.proposalPath}`);
+  console.log("Lessons:");
+  for (const lesson of proposal.lessons) {
+    console.log(`- ${lesson}`);
+  }
+  console.log(
+    `Nothing was written to the skill. Apply with: keryx skills learn apply ${proposal.proposalPath}`,
+  );
+}
+
+function counts(state: PrCommentState, selection: LearningSelection): Record<string, number> {
+  return {
+    seen: state.seen.length,
+    used: selection.kept.length,
+    unconfigured: selection.unconfigured.length,
+    bodyless: selection.bodyless.length,
+  };
+}
+
+/**
  * `keryx review loop` — detection, not counting (AC9).
  *
  * Reads the review packages a flow already has on disk and the flow's persisted
@@ -1589,6 +1743,7 @@ Usage:
                               --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>] [--fixtures <dir>]
+  keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review status <review-id-or-path>
@@ -1723,6 +1878,22 @@ tier:
   OWN model: never a downgrade, never a non-zero exit. Detection is skipped
   entirely when the session names no provider and model, because ranking is
   refused without an anchor whatever the catalogue holds.
+
+learn:
+  The join between collected comments and this project's own review skill.
+  Reads \`.metaproject/review-learning.config.json\` — which local skill, which
+  repository, which comment authors — then reads the record
+  \`review comments collect\` already wrote and NEVER fetches from GitHub. Keeps
+  only comments whose author the config names; an author it does not name
+  contributes nothing to any proposal. Writes a proposal under
+  \`.metaproject/data/gdskills/proposals/\` and changes no skill:
+  \`keryx skills learn apply\` remains the only writer, and it refuses any target
+  outside \`.metaproject/project-skills/\`.
+  A project with NO config file does not learn. That prints one line and exits 0
+  — it is a supported state, not a warning.
+  There is no --authors, --skill or --repo flag on purpose: a flag would make the
+  configured list a default, and one invocation could teach a project from
+  somebody it never named.
 
 loop:
   Loop DETECTION, not counting. Escalates (exit non-zero) when the same finding

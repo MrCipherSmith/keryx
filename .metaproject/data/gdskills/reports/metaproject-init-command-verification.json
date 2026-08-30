@@ -6,7 +6,7 @@
   "target": "src/commands/init.ts",
   "skillPath": ".metaproject/project-skills/metaproject/init-command",
   "reportPath": ".metaproject/data/gdskills/reports/metaproject-init-command-verification.json",
-  "verifiedAt": "2026-07-07T09:31:23.484Z",
+  "verifiedAt": "2026-08-30T07:10:47.169Z",
   "signals": [
     {
       "name": "required:SKILL.md",
@@ -35,7 +35,7 @@
     {
       "name": "metadata:last-verified",
       "status": "pass",
-      "message": "Last verified at 2026-07-07T09:18:41.629Z",
+      "message": "Last verified at 2026-08-30T07:10:41.654Z",
       "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
     },
     {
@@ -75,14 +75,13 @@
       "path": ".metaproject/data/health/artifacts/latest.json"
     },
     {
-      "name": "evidence:documentation-memory",
-      "status": "pass",
-      "message": "Evidence available: .metaproject/data/memory/artifacts/latest.json, .metaproject/data/memory/artifacts/latest.md",
-      "path": ".metaproject/data/memory/artifacts/latest.json"
+      "name": "evidence:memory-consultation",
+      "status": "warn",
+      "message": "No applicable canonical accepted memory entries were found."
     }
   ],
   "recommendations": [
-    "Skill evidence is sufficient for the current first-slice verifier."
+    "Search canonical accepted memory before learning from repeated decisions or mistakes."
   ],
   "dryRun": false
 }
