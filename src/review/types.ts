@@ -7,6 +7,11 @@ import type { VerificationCap, VerificationCounts, VerificationRejection } from 
 // `ReviewFindingSeverity` from here as a type, and this imports the caps record
 // as a type. Both are erased, so neither is a runtime cycle.
 import type { ReviewCapsRecord } from "./caps";
+// Type-only for the third time, and for the reason the other two give: the
+// filter-stats producer imports the pre-filter shapes declared below, so a value
+// import back would close a runtime cycle. Both directions are erased.
+import type { ReviewFilterStats } from "./filter-stats";
+import type { ReviewNoteResult } from "./review-notes";
 
 export const MANAGED_REVIEW_MODES = ["attach-review", "review-flow", "ingest"] as const;
 export type ManagedReviewMode = (typeof MANAGED_REVIEW_MODES)[number];
@@ -79,6 +84,23 @@ export type ManagedReviewManifest = {
     decisions: string;
   };
   coverage: ReviewCoverageEntry[];
+  /**
+   * What this round filtered, in a form a machine can check (roadmap §5.1).
+   *
+   * It lives on the MANIFEST rather than in a seventh artifact file for the same
+   * reason the stage counts went into `scope.md`: `missingArtifacts` names the
+   * six files a package must have, and adding a seventh would strand every
+   * package already on disk. The manifest is read back by
+   * {@link module:review/managed.getManagedReviewStatus} and by the review
+   * completion gate, so a record put here already has readers.
+   *
+   * Optional because every package written before flow 207 has none, and absent
+   * is the honest reading of those: nothing measured them. It is NOT optional in
+   * practice — every ingest writes it — which is exactly the state `target.head`
+   * was in before a producer was built for it, so `keryx review status` reads it
+   * back and says `not recorded` rather than letting the silence pass.
+   */
+  filter_stats?: ReviewFilterStats | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
 };
@@ -637,6 +659,17 @@ export type ManagedReviewPackageResult = {
    * spend ceiling without re-reading the package it just wrote.
    */
   caps: ReviewCapsRecord;
+  /** Flow 207 AC1. The same object the manifest carries; see there for why. */
+  filterStats: ReviewFilterStats;
+  /**
+   * The learning notes this round wrote, and the dismissals it refused to write
+   * one for (flow 207 AC5/AC6).
+   *
+   * Returned so the CLI can print both halves. A dismissal that reached no note
+   * is the interesting half: it means a finding was filed as model error with
+   * nobody standing behind the decision.
+   */
+  reviewNotes: ReviewNoteResult;
 };
 
 export type FlowMatchResult = {

@@ -420,7 +420,7 @@ not ask for our reasoning and is reading between other tasks.
 
 ## Review Context Pack
 
-Before routing reviewers, build a compact `review_context` object. This is the shared source of truth for all sub-agents and must follow `skills/review-orchestrator/review-context.schema.json`.
+Before routing reviewers, build a compact `review_context` object. This is the shared source of truth for all sub-agents and must follow `skills/review/review-orchestrator/review-context.schema.json`.
 
 Required content:
 - Request: raw user request, flags, review mode, explicit paths or commit range.
@@ -989,7 +989,7 @@ Runtime rules:
 
 Do not use vague fallback messages such as "running through available agent types" without naming which reviewers used fallback and why.
 
-Pass each sub-reviewer a payload matching `skills/review-orchestrator/reviewer-input.schema.json`:
+Pass each sub-reviewer a payload matching `skills/review/review-orchestrator/reviewer-input.schema.json`:
 
 ```yaml
 review_context: <bounded context pack>
@@ -1012,7 +1012,7 @@ target_path: <resolved path or file list>
 file_contents: <bounded file contents relevant to this reviewer>
 ```
 
-Each reviewer must return a `REVIEW_RESULT` object matching `skills/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
+Each reviewer must return a `REVIEW_RESULT` object matching `skills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
 
 **Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
 

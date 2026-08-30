@@ -128,6 +128,91 @@
         }
       }
     },
+    "filter_stats": {
+      "description": "What the round filtered (roadmap §5.1). Written by the code that does the filtering, never assembled from scope.md. Every count is an integer or null, and null ALWAYS means the stage did not run — it never means zero. A null count must have a matching row in `not_measured` giving the reason; `keryx review status` refuses a record where the two disagree. `dropped_prefilter` counts diff material (whole files and change blocks) and is deliberately not summed with the finding counts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "total",
+        "dropped_prefilter",
+        "dropped_low_confidence",
+        "dropped_refuted",
+        "retained",
+        "by_reason",
+        "not_measured"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "total": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dropped_prefilter": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dropped_low_confidence": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dropped_refuted": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dropped_scope_b": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dropped_findings_cap": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "retained": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "dismissed_by_round": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "by_reason": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "not_measured": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage", "reason"],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "prefilter",
+                  "low_confidence",
+                  "round_dismissed",
+                  "refuted",
+                  "scope_b",
+                  "findings_cap"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
     "createdAt": {
       "type": "string"
     },

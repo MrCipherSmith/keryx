@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "207",
+  "slug": "phase-5-make-the-review-pipeline-measura",
+  "title": "Phase 5: make the review pipeline measurable — filter stats, a dismissal taxonomy that carries a learning signal, skill evaluation, and cross-family review",
+  "status": "in-progress",
+  "createdAt": "2026-08-30T18:26:46.423Z",
+  "updatedAt": "2026-08-30T18:27:36.344Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6706cf9ffc123fbf26a7942d8d4446ef28b84c0fdc54b3043d9cd8690eb56d23",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-30T18:26:46.423Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-30T18:27:36.018Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-30T18:27:36.344Z",
+      "event": "started"
+    }
+  ]
+}

@@ -551,7 +551,7 @@ test("complete requires every managed review artifact", async () => {
   });
 
   const completed = await completeManagedReview(ROOT, result.path);
-  expect(completed.status).toBe("closed");
+  expect(completed.manifest.status).toBe("closed");
 });
 
 test("lightweight CLI mode creates no managed review artifacts", async () => {
@@ -648,7 +648,7 @@ test("closing a round records what became of each finding, with its evidence", a
   await fresh();
   const { path: pkg } = await ingestFindings("2026-08-29-disposition-write");
 
-  const manifest = await completeManagedReview(ROOT, pkg, {
+  const { manifest } = await completeManagedReview(ROOT, pkg, {
     dispositions: [
       { finding: "F-001", state: "acted-on", evidence: "closed by 380bf3b0; config-dir.writers.test.ts" },
     ],

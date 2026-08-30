@@ -40,6 +40,11 @@ import {
   type ProjectSkillRegistryEntry,
 } from "../gdskills/project-skills";
 import { verifyProjectSkill } from "../gdskills/verify";
+import {
+  defaultBundledRoot,
+  evaluateBundledTree,
+  renderBundledEvaluation,
+} from "../gdskills/bundled-eval";
 
 type MetaprojectManifest = {
   modules?: {
@@ -791,6 +796,11 @@ function getLearningSource(args: string[]): { type: LearningSourceType; path: st
 
 async function verifySkillCommand(args: string[]): Promise<void> {
   const target = args[1];
+  if (target === "--bundled" || args.includes("--bundled")) {
+    verifyBundledSkills(args);
+    return;
+  }
+
   if (target === "--all" || args.includes("--all")) {
     await verifyAllProjectSkills(args);
     return;
@@ -831,6 +841,53 @@ async function verifySkillCommand(args: string[]): Promise<void> {
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * `keryx skills verify --bundled` — structural validation of the SHIPPED skill
+ * tree (flow 207, §5.3).
+ *
+ * WHY THIS EXISTS ALONGSIDE THE GUARD TEST, since the same predicate backs both.
+ *
+ * `src/gdskills/bundled-eval.test.ts` runs the identical sweep in CI, and that
+ * is the thing that stops a regression reaching `main`. It is also unreachable
+ * for the person the check is actually for: somebody authoring or editing a
+ * bundled skill wants the verdict on the file in front of them, before they open
+ * a pull request and long before CI has an opinion. A guard answers "did the
+ * tree break"; a command answers "is this skill shippable", and those are asked
+ * at different moments by different people.
+ *
+ * The two share `evaluateBundledTree`, so they cannot disagree — which is the
+ * only reason shipping both is not two implementations of one rule. `--root`
+ * exists so the command can be pointed at a tree that is not this package's own
+ * (a fork's, or an unpacked release); `skills.bundled-verify.test.ts` uses it to
+ * aim the command at a deliberately broken tree and assert the exit code.
+ *
+ * Exit 1 on any finding: a checker that reports defects and exits 0 is a checker
+ * nothing can gate on.
+ */
+function verifyBundledSkills(args: string[]): void {
+  const root = optionValue(args, "--root") ?? defaultBundledRoot();
+  const evaluation = evaluateBundledTree(root);
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(evaluation, null, 2));
+  } else {
+    console.log(renderBundledEvaluation(evaluation));
+  }
+
+  if (evaluation.skills === 0) {
+    // Not a pass. `findings: 0` over an empty denominator is the exact defect
+    // this sweep exists to remove, so it exits non-zero and says why.
+    console.error(
+      `\nNo SKILL.md found under ${path.join(root, "skills")}. Nothing was evaluated, so nothing was verified.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (evaluation.findings.length > 0) {
     process.exitCode = 1;
   }
 }
@@ -1180,6 +1237,7 @@ Usage:
   keryx skills generate <target> --module <module> --name <skill-name>
   keryx skills verify <skill-or-target>
   keryx skills verify --all
+  keryx skills verify --bundled [--root <dir>] [--json]
   keryx skills learn --from-review <path> --skill <module>/<skill>
   keryx skills learn apply <proposal.json>
   keryx skills export <project-skill> --runtime codex|claude
@@ -1196,7 +1254,7 @@ Commands:
   install   Install bundled gdskills into .metaproject
   create    Create a canonical project skill package
   generate  Alias for create
-  verify    Verify a canonical project skill against current evidence
+  verify    Verify a project skill, or --bundled for the shipped skill tree
   learn     Create or apply auditable learning proposals
   export    Export a canonical project skill to a runtime artifact
   sync      Sync exported runtime skills to an explicit target directory
@@ -1251,13 +1309,24 @@ function printVerifyHelp(): void {
 Usage:
   keryx skills verify <skill-or-target> [--dry-run] [--json]
   keryx skills verify --all [--dry-run] [--json]
+  keryx skills verify --bundled [--root <dir>] [--json]
 
 Aliases:
   keryx skill-verify-skill <skill-or-target>
 
+--bundled evaluates the SHIPPED skill tree (the 65 SKILL.md files copied into
+every installation), not this project's generated project-skills. It runs LAYER
+ONE of the three-layer bar only — structural validation: required frontmatter,
+resolvable cross-references, no concrete model name, no persona or personal home
+path, and registration in the install catalogue. It does NOT judge whether a
+skill's instructions are correct or useful; that needs a model in the loop and is
+not built. Exits 1 on any finding, and on an empty tree.
+
 Examples:
   keryx skills verify pipelines/pipeline-step-store
   keryx skills verify .metaproject/project-skills/pipelines/pipeline-step-store --json
+  keryx skills verify --bundled
+  keryx skills verify --bundled --json
 `);
 }
 

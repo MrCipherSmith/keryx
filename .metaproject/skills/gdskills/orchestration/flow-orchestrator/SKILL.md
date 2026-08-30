@@ -385,8 +385,8 @@ Before accepting implementation:
    the `skill_drift` fields from task-implementer results and the
    `## Skill Learning` block from review-orchestrator. For each flagged
    project-skill, dispatch a subagent — on a cheaper / non-flagship model if one
-   is available (`.metaproject/scripts/detect-models.sh`; see
-   `rules/core/model-selection.mdc`), otherwise the session model — to run
+   is available (`keryx review tier --findings 1 --diff-lines 0` resolves one from runtime
+   provider detection; see `rules/core/model-selection.mdc`), otherwise the session model — to run
    `keryx skills learn --from-review <report> --skill <m>/<s>` and return the
    proposal. Then read the proposal and `skills learn apply` it, or discard it.
    Never apply unread; never put `learn` in a hook.

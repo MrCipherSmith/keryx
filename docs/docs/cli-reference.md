@@ -393,6 +393,50 @@ refused; there is no fallback to "some other project".
 
 ---
 
+## providers
+
+Report over the **provider configuration** — the built-in OpenAI-compatible
+registry plus the operator-defined entries in `llm-providers.json`. Read-only and
+network-free: it reads files and exits, and spends no tokens.
+
+```
+keryx providers list [--json]
+keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. |
+| `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. |
+
+### Cross-family review
+
+Reviewing with a different model family than authored the code is worth ~8–10
+recall points in the 1,000-PR study this feature is built on (Claude→Claude 53.7%
+vs GPT→Claude 62.0%; GPT→GPT 50.5% vs Claude→GPT 60.0%).
+
+Three properties, each of which the command enforces rather than describes:
+
+- **Opt-in.** Without `--opt-in` the answer is `single-family`, whatever is
+  configured. Dispatching to another provider spends tokens and sends the change
+  to a second vendor; that is a decision, not an optimisation. The options that
+  were declined are still listed, because "we chose not to" and "there was
+  nothing to choose" are different facts.
+- **Recorded.** The `--json` output is a `cross_family_review` block naming
+  `author_family` and `reviewer_family`, meant to be embedded verbatim in the
+  round's structured output so rounds can later be grouped by the family that
+  reviewed them.
+- **Degrades, never fails.** With no second family configured it reports
+  `single-family` with a stated reason and **exits 0**. One vendor is a normal
+  configuration.
+
+A gateway (`openrouter`) or a local runner (`ollama`, `rapid-mlx`) is deliberately
+**not** classified as a family — it fronts many. Such a provider contributes
+candidates only through the specific models it lists, so a round is never
+recorded as cross-family when both sides in fact ran the same vendor.
+
+---
+
 ## serve
 
 An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent
@@ -666,6 +710,7 @@ keryx skills catalog [--profile recommended]
 keryx skills install [--profile recommended]
 keryx skills create <target> --module <module> --name <skill-name>
 keryx skills verify <skill-or-target>
+keryx skills verify --bundled [--root <dir>] [--json]
 keryx skills learn --from-review <path> --skill <module>/<skill>
 keryx skills learn apply <proposal.json>
 keryx skills export <project-skill> --runtime codex|claude|plugin
@@ -683,6 +728,7 @@ keryx skills contracts validate <file> --schema <name>
 | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
+| `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (the 65 `SKILL.md` files copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
 | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
 | `learn apply <proposal.json>` | `--dry-run`, `--json` | Apply a reviewed proposal to SKILL.md + changelog; bump patch version. |
 | `export <project-skill>` | `--runtime codex\|claude\|plugin`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. The `plugin` runtime (alongside `codex` and `claude`) emits a Claude Code plugin package. |
@@ -693,6 +739,29 @@ keryx skills contracts validate <file> --schema <name>
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
 `subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
 `review-finding`.
+
+### What `verify --bundled` checks, and what it does not
+
+`--bundled` is **layer one of three** and only layer one. It runs the checks that
+can be decided by reading files:
+
+| Check | Rule |
+|---|---|
+| `frontmatter:block` / `:name` / `:description` / `:metadata` | Required fields are present, non-empty, and `metadata` carries a `version`. |
+| `frontmatter:name-unique` | No two skills declare the same `name`; a harness registers by that name. |
+| `catalog:registered` | `BUNDLED_GDSKILLS` names the directory, so `skills install` actually copies it. |
+| `model:concrete-declaration` | No skill names a model id where a `model_tier` belongs. |
+| `persona:name` / `persona:marker` / `path:personal-home` | No shipped file names a particular person or points into their home directory. |
+| `xref:skill` / `xref:path` | Every skill and every `skills/`, `rules/`, `scripts/` path a skill names actually exists in the shipped tree. |
+
+It does **not** judge whether a skill's instructions are correct, useful, or
+followed. That is layer two (a model judging across named dimensions) and layer
+three (reliability over repeated runs), and neither is built. A clean report from
+`--bundled` is not a quality claim, and the command's own output says so.
+
+The identical sweep runs in CI as `src/gdskills/bundled-eval.test.ts`, over the
+same `evaluateBundledTree` predicate, so the guard and the command cannot
+disagree.
 
 ---
 
@@ -1234,8 +1303,8 @@ left off and the gate reports it as unobserved.
 | `attach` | Create a managed package linked to an existing Task Manager flow. |
 | `start` | Create a standalone managed review package. |
 | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
-| `status` | Print mode, status, target, flow link, and coverage count. |
-| `complete` | Validate the package, record what became of its findings, and mark it complete only when required artifacts exist. See below. |
+| `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. |
+| `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
@@ -1777,6 +1846,45 @@ package is carried forward verbatim; with neither, the pre-filter half reads
 different facts. State results as these counts and never as a precision
 improvement; the pipeline has no precision baseline to improve on.
 
+### `filter_stats` — the machine-readable copy
+
+`scope.md` is prose. `manifest.json` carries the same numbers as `filter_stats`,
+written by the code that does the filtering rather than re-derived from the
+markdown, so a claim about what a round dropped can be checked afterwards by
+something other than a person reading a file.
+
+```json
+"filter_stats": {
+  "schema_version": 1,
+  "total": 5,
+  "dropped_prefilter": 2,
+  "dropped_low_confidence": null,
+  "dropped_refuted": 1,
+  "dropped_scope_b": null,
+  "dropped_findings_cap": 1,
+  "retained": 3,
+  "dismissed_by_round": null,
+  "by_reason": { "prefilter:lockfile": 1, "prefilter:generated": 1, "refuted:verifier-refuted": 1 },
+  "not_measured": [{ "stage": "low_confidence", "reason": "…" }, { "stage": "scope_b", "reason": "…" }]
+}
+```
+
+**`null` always means the stage did not run. It never means zero.** Every `null`
+count has a matching row in `not_measured` giving the reason, and the two are
+written together — there is no path that omits one. `dropped_low_confidence` is
+`null` on every record: `confidence` is recorded on each finding and no stage in
+this pipeline filters on it, so the field is carried unmeasured rather than
+reported as a threshold that never fired.
+
+`dropped_prefilter` counts **diff material** — whole files and change blocks
+removed before any reviewer read them. Every other count is findings, and only
+the finding counts are summed: `total` minus the measured finding-stage drops
+must equal `retained`.
+
+`keryx review status` reads it back off disk and **refuses** — exit 1 — when the
+arithmetic does not hold or when a `null` count has no stated reason. A package
+written before `filter_stats` existed carries none; that is reported and exits 0.
+
 ### Recording what became of a finding — `--refuted`, `review complete`
 
 A review package that records only what a round *reported* keeps the survivors
@@ -1799,6 +1907,26 @@ A recorded state **and its citation** cannot be overwritten by a later close —
 record a correction as a new round. Closing with no disposition flags is allowed
 and leaves every finding reading `unknown`, which means "nobody wrote down what
 happened", never "the finding was correct".
+
+#### The learning note — `.metaproject/memory/review-notes/`
+
+A finding recorded as `dismissed-incorrect` — and only that state — writes a
+`review-note` memory entry naming the finding, the reviewer, why it was
+dismissed, and the round and commit it came from. Both writers do it: `ingest`,
+when a `refuted` verdict is applied in `filter` mode, and `complete`, when a
+person records the disposition. The path is
+`.metaproject/memory/review-notes/<review-id>__<finding-id>.md`, so re-running
+either command overwrites its own note rather than accumulating one per run. The
+entry is written `Status: draft`; only `accepted` entries influence skills.
+
+**A note is written only when the dismissal is attested.** The record must carry
+either a named human decision in the disposition evidence (`human: <who>`,
+`decided-by: <who>`, and the other forms the completion gate accepts) or an
+independent verifier's `refuted` verdict with a method and evidence. An
+unattested `dismissed-incorrect` is still recorded in `findings.json` and writes
+no note; the command prints `review-note NOT written for <id>` with the reason.
+The orchestrator does not get to file a finding as its own error, teach a skill
+from it, and move on with nobody having looked.
 
 `bun run baseline:review-precision` recomputes the figure from the packages on
 disk, joining on `global_id`.

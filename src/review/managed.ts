@@ -32,6 +32,12 @@ import {
   type ReviewCapsRecord,
 } from "./caps";
 import {
+  buildFilterStats,
+  renderFilterStatsMarkdown,
+  type ReviewFilterStats,
+} from "./filter-stats";
+import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
+import {
   DEFAULT_VERIFICATION_MODE,
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
@@ -275,13 +281,58 @@ export async function createManagedReviewPackage(
   // would be a second thing every consumer has to remember to read, and the
   // consumer that forgets keeps counting zero wrong findings, which is the state
   // this exists to leave.
+  const roundDismissed = fromRefutedSource(input.refuted, reviewers, flowMatch !== null);
   const findings = [
     ...findingsCap.retained,
     ...scoped.external,
     ...fromVerifierRefutations(verification.refuted),
-    ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
+    ...roundDismissed,
   ];
   assignGlobalIds(findings, reviewId);
+
+  // Read BEFORE the write, because the write is what used to destroy it. The
+  // orchestrator is told to run `keryx review scope --append <package>/scope.md`
+  // at Step 3 and `review ingest` after Step 12; ingest rewrote scope.md
+  // unconditionally, and what replaced the drop table was not a blank — it was
+  // "no pre-filter scope was supplied to this package", a false statement of the
+  // same class as `dismissed-out-of-scope: 0`. When this ingest was handed its
+  // own scope the carried block is superseded and dropped; when it was not, the
+  // block is the only record of the drops and is carried forward verbatim.
+  const carried = input.scope === undefined ? await readPreFilterScopeBlock(packageDir) : undefined;
+
+  // AC10. Every cap that ran is on the record with a count, and every cap that
+  // did NOT run is on the record as `not recorded` rather than as a zero.
+  //
+  // The spend ceiling is EVALUATED here and does not refuse the write. The
+  // package is the record of what the round did, including the record of it
+  // running out of money, and a cap that stopped the write would delete the
+  // evidence that it fired — the same class of failure as an ingest overwriting
+  // the pre-filter's drop table. The refusal is the caller's: the CLI exits
+  // non-zero and says STOP, and `keryx review budget` refuses BEFORE the spend.
+  const concurrency = concurrencyPlan(input, coverage);
+  const caps: ReviewCapsRecord = {
+    findings: { counts: findingsCap.counts, drops: findingsCap.drops },
+    ...(input.spend === undefined && input.spendCeiling === undefined
+      ? {}
+      : { spend: evaluateSpendCap(input.spend, { ceiling: input.spendCeiling }) }),
+    ...(concurrency === undefined ? {} : { concurrency }),
+  };
+
+  // Flow 207 AC1. Built HERE, from the stage results the lines above are still
+  // holding, and never from `scope.md` — a record re-derived from the prose a
+  // renderer wrote would describe the renderer. It goes onto the manifest below,
+  // so it is validated by the same schema pass as everything else and read back
+  // by `keryx review status` (AC3).
+  const filterStats: ReviewFilterStats = buildFilterStats({
+    scope: input.scope,
+    scopeCounts: input.scopeCounts,
+    preFilterCarried: carried !== undefined,
+    verification: verification.counts,
+    ...(scopeB.record.screen === undefined ? {} : { scopeB: scopeB.record.screen }),
+    findingsCap: { counts: findingsCap.counts, drops: findingsCap.drops },
+    externalRetained: scoped.external.length,
+    ...(input.refuted === undefined ? {} : { roundDismissed: roundDismissed.length }),
+  });
   // The commit this round ran against. Resolved HERE rather than left to the
   // caller because leaving it to the caller is what produced a repository full
   // of packages with no head at all: `ManagedReviewTarget.head` existed, the
@@ -296,6 +347,7 @@ export async function createManagedReviewPackage(
     flowMatch,
     coverage,
     at,
+    filterStats,
   });
 
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
@@ -349,39 +401,11 @@ export async function createManagedReviewPackage(
     );
   }
 
-  // Read BEFORE the write, because the write is what used to destroy it. The
-  // orchestrator is told to run `keryx review scope --append <package>/scope.md`
-  // at Step 3 and `review ingest` after Step 12; ingest rewrote scope.md
-  // unconditionally, and what replaced the drop table was not a blank — it was
-  // "no pre-filter scope was supplied to this package", a false statement of the
-  // same class as `dismissed-out-of-scope: 0`. When this ingest was handed its
-  // own scope the carried block is superseded and dropped; when it was not, the
-  // block is the only record of the drops and is carried forward verbatim.
-  const carried = input.scope === undefined ? await readPreFilterScopeBlock(packageDir) : undefined;
-
-  // AC10. Every cap that ran is on the record with a count, and every cap that
-  // did NOT run is on the record as `not recorded` rather than as a zero.
-  //
-  // The spend ceiling is EVALUATED here and does not refuse the write. The
-  // package is the record of what the round did, including the record of it
-  // running out of money, and a cap that stopped the write would delete the
-  // evidence that it fired — the same class of failure as an ingest overwriting
-  // the pre-filter's drop table. The refusal is the caller's: the CLI exits
-  // non-zero and says STOP, and `keryx review budget` refuses BEFORE the spend.
-  const concurrency = concurrencyPlan(input, coverage);
-  const caps: ReviewCapsRecord = {
-    findings: { counts: findingsCap.counts, drops: findingsCap.drops },
-    ...(input.spend === undefined && input.spendCeiling === undefined
-      ? {}
-      : { spend: evaluateSpendCap(input.spend, { ceiling: input.spendCeiling }) }),
-    ...(concurrency === undefined ? {} : { concurrency }),
-  };
-
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -394,6 +418,25 @@ export async function createManagedReviewPackage(
   // Last, and only once the package is complete. See {@link persistScreenRadius}.
   await persistScreenRadius(packageDir, scopeB.resolved);
 
+  // Flow 207 AC5. The findings this round recorded as `dismissed-incorrect` —
+  // and only those — reach `.metaproject/memory/review-notes/`, the folder the
+  // roadmap records as never having been written to. Written AFTER the package,
+  // so a round refused by any gate above leaves no learning note behind claiming
+  // a model error nobody recorded.
+  //
+  // A `refuted` verdict applied in `filter` mode arrives here already carrying
+  // the verifier's method and evidence, so it is attested. A `--refuted` finding
+  // whose evidence names nobody is NOT, and {@link writeReviewNotes} returns it
+  // in `skipped` rather than writing a note: AC6 stands unchanged, and the
+  // orchestrator does not get to file a finding as its own error unattended.
+  const reviewNotes: ReviewNoteResult = await writeReviewNotes(findings, {
+    cwd: input.cwd,
+    reviewId,
+    head,
+    packagePath: path.relative(input.cwd, packageDir),
+    ...(input.now === undefined ? {} : { now: input.now }),
+  });
+
   return {
     reviewId,
     path: path.relative(input.cwd, packageDir),
@@ -402,6 +445,8 @@ export async function createManagedReviewPackage(
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
     caps,
+    filterStats,
+    reviewNotes,
     // Returned as well as written into `scope.md`, on the same rule the caps
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
@@ -673,6 +718,17 @@ export type FindingDispositionRecord = {
 
 export type CompleteManagedReviewOptions = {
   dispositions?: readonly FindingDispositionRecord[] | undefined;
+  /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
+  now?: Date | undefined;
+};
+
+export type CompleteManagedReviewResult = {
+  manifest: ManagedReviewManifest;
+  /**
+   * The learning notes this close wrote, and the dismissals it refused to write
+   * one for (flow 207 AC5/AC6).
+   */
+  reviewNotes: ReviewNoteResult;
 };
 
 /**
@@ -695,7 +751,7 @@ export async function completeManagedReview(
   cwd: string,
   ref: string,
   options: CompleteManagedReviewOptions = {},
-): Promise<ManagedReviewManifest> {
+): Promise<CompleteManagedReviewResult> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
   const manifestPath = path.join(packageDir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
@@ -717,7 +773,27 @@ export async function completeManagedReview(
     throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
   }
   await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
-  return updated;
+
+  // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
+  // durable. This one is the attended path by construction: somebody ran
+  // `keryx review complete --finding <id> --disposition dismissed-incorrect
+  // --evidence <where the decision is written down>`.
+  //
+  // Read back off disk rather than from `dispositions`, so a finding dismissed
+  // by an EARLIER close — or by the ingest, in `filter` mode — is not silently
+  // skipped when a later close touches a different finding. The note file is
+  // named after the round and the finding, so re-closing overwrites its own note
+  // instead of accumulating one per invocation.
+  const recorded = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8")) as StructuredReviewFinding[];
+  const reviewNotes = await writeReviewNotes(recorded, {
+    cwd,
+    reviewId: updated.reviewId,
+    head: updated.target.head ?? null,
+    packagePath: path.relative(cwd, packageDir),
+    ...(options.now === undefined ? {} : { now: options.now }),
+  });
+
+  return { manifest: updated, reviewNotes };
 }
 
 export async function validateManagedReviewManifest(
@@ -818,6 +894,7 @@ function buildManifest(args: {
   flowMatch: FlowMatchResult | null;
   coverage: ReviewCoverageEntry[];
   at: string;
+  filterStats: ReviewFilterStats;
 }): ManagedReviewManifest {
   const artifactPath = (name: string) => path.relative(args.input.cwd, path.join(args.packageDir, name));
   const manifest: ManagedReviewManifest = {
@@ -835,6 +912,7 @@ function buildManifest(args: {
       decisions: artifactPath("decisions.md"),
     },
     coverage: args.coverage,
+    filter_stats: args.filterStats,
     createdAt: args.at,
     updatedAt: args.at,
   };
@@ -1844,6 +1922,7 @@ function renderScope(
   caps: ReviewCapsRecord,
   externalReclaims: readonly ExternalReclaim[] = [],
   scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
+  filterStats?: ReviewFilterStats | undefined,
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -1866,7 +1945,9 @@ ${renderStageCountsMarkdown({
 })}
 
 ${renderCapsMarkdown(caps)}
-${renderScopeBScreenMarkdown(scopeBScreen)}${renderExternalReclaimsMarkdown(externalReclaims)}`;
+${renderScopeBScreenMarkdown(scopeBScreen)}${
+    filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
+  }${renderExternalReclaimsMarkdown(externalReclaims)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

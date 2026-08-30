@@ -600,7 +600,7 @@ When the orchestrator dispatches this skill as a sub-agent:
 You are the context-collector agent. Your task is to research and build
 a context document for the current job.
 
-Load the skill from: skills/context-collector/SKILL.md
+Load the skill from: skills/orchestration/context-collector/SKILL.md
 
 ACTION: collect
 JOB_NAME: <job-name>
@@ -622,7 +622,7 @@ For updates:
 You are the context-collector agent. Your task is to update the existing
 context document for this job.
 
-Load the skill from: skills/context-collector/SKILL.md
+Load the skill from: skills/orchestration/context-collector/SKILL.md
 
 ACTION: update
 JOB_NAME: <job-name>

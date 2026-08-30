@@ -599,6 +599,39 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- providers --------------------------------------------------------
+  // Both are read-only and network-free: they report over `llm-providers.json`
+  // plus the built-in registry and exit. `model: false` is therefore honest —
+  // neither spends a token. `cross-family` in particular never DISPATCHES a
+  // review; it decides whether one may cross families and prints the record.
+  {
+    module: "providers",
+    command: "providers list",
+    summary: "Providers this operator has configured, and the model family of each.",
+    intent: ["какие провайдеры настроены", "list providers", "configured providers", "провайдеры"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured provider/family list" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "providers",
+    command: "providers cross-family",
+    summary: "Whether review may run on a different model family than authored the change (opt-in).",
+    intent: [
+      "кросс-фэмили ревью",
+      "cross family review",
+      "review with a different model family",
+      "какой семьёй ревьюить",
+    ],
+    args: [
+      { name: "opt-in", type: "bool", required: false, desc: "request cross-family review; without it the answer is single-family" },
+      { name: "session-provider", type: "string", required: false, desc: "provider that authored the change; defaults to the persisted shell selection" },
+      { name: "session-model", type: "string", required: false, desc: "model that authored the change; defaults to the persisted shell selection" },
+      { name: "json", type: "bool", required: false, desc: "the record a round should carry" },
+    ],
+    json: true,
+    read: true,
+  },
 ];
 
 /**

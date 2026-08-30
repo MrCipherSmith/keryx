@@ -404,7 +404,21 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+  low_confidence: not measured — this pipeline has no confidence threshold …
+  scope_b: not measured — no blast-radius record reached this ingest …
 ```
+
+`filter_stats` is what the round dropped, read back out of `manifest.json` — the
+same numbers `scope.md` shows a person, in a form something else can check.
+`not-measured` is not `0`: it means that stage did not run, and the reason is
+printed underneath. `status` exits **1** when the numbers do not add up (`total`
+minus the measured finding-stage drops must equal `retained`) or when a count is
+absent with no reason recorded, so a stage that starts dropping findings without
+counting them is caught on the next status call rather than a release later.
+
+`dropped_prefilter` counts diff material — whole files and change blocks removed
+before anyone read them — so it is deliberately not summed with the rest.
 
 ## Complete it — and say what became of each finding
 
@@ -438,6 +452,38 @@ keryx review ingest --report round7.md --ref round7 --refuted refuted.json
 
 Closing with no dispositions is allowed. It leaves every finding reading
 `unknown`, which means "nobody wrote down what happened".
+
+### The one dismissal that teaches something
+
+`dismissed-incorrect` — and only that state — writes a note into
+`.metaproject/memory/review-notes/`, naming the finding, the reviewer, why it was
+dismissed, and the round and commit it came from:
+
+```console
+$ keryx review complete <path> --finding F-002 --disposition dismissed-incorrect \
+    --evidence "human: alice ran the writer under umask 002; the mode is 0700"
+review-note: 2026-08-03-round6#F-002 -> .metaproject/memory/review-notes/2026-08-03-round6__F-002.md (attested by human)
+```
+
+The other three dismissals write nothing, deliberately. They say the finding was
+*correct* and not worth doing now; feeding them into a learning signal teaches
+the reviewer to stop raising true findings, and in the resulting `SKILL.md` that
+is indistinguishable from having learned something real.
+
+A note needs somebody behind it. The evidence must name a human decision
+(`human: <who>`, `decided-by: <who>`) or the finding must carry an independent
+verifier's `refuted` verdict with a method and evidence — which is what an
+applied `--verification-mode filter` verdict already produces at ingest. Without
+either, the dismissal is still recorded in `findings.json` and no note is
+written:
+
+```console
+review-note NOT written for 2026-08-03-round6#F-009: no recorded human decision and no independent verifier `refuted` verdict …
+```
+
+That refusal is the point. An orchestrator that could file its own finding as its
+own error, teach a skill from it and move on would be grading its own work with
+nobody in the room.
 
 ## Feed what you learned back
 
