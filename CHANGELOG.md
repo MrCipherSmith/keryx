@@ -3,6 +3,98 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.71] — 2026-08-30
+
+Phase 4 of the orchestrator-hardening programme: a pull request is now reviewed
+for what it can **break**, not only for what it changed; a flow cannot close over
+an unresolved finding; reviewers on the pull request get an answer; and a
+dispatch is sized to the work instead of every dispatch paying flagship prices.
+
+This release was itself produced through the loop it adds — five review rounds
+over its own pull request, twenty-four findings, every one verified against a
+named commit before being called fixed. Two of the four fix rounds introduced a
+defect that the next round caught, which is the strongest evidence available that
+the rounds are doing something.
+
+### Added
+
+- **A second review scope: the blast radius.** `keryx review blast-radius`
+  computes what a change can break from `gdgraph affected` over the changed
+  files, ranked by edge distance and bounded at depth 2 / 40 files — both
+  measured over 80 commits, not guessed. Every file the cap drops is named in the
+  round manifest and on the terminal, because a silent truncation reads as "we
+  checked everything". A finding raised under this scope that is not a regression
+  is rejected **in code**: it must anchor inside the computed set, clear a
+  severity floor, and name the change it breaks.
+
+- **A `review` gate on `flow complete`.** It passes only when a managed review
+  record exists with at least one readable ingested round, every finding carries
+  a terminal disposition, the round ran against the commit that is merging, no
+  external comment is unanswered, and the verifier ran with its stats recorded.
+  "Clean" is defined positively, per finding: `acted-on` needs a commit SHA and a
+  verifier verdict against it, a dismissal needs one of four taxonomy reasons
+  **and** a recorded human decision. A finding that simply stops appearing in a
+  later round is not cleared — absence never reads as a fix.
+
+- **External pull-request comments are collected and answered.** All three
+  GitHub sources — inline review comments, review submissions, PR-level
+  discussion — with bot authors handled identically to humans. Collected every
+  round, answered **once at the end**, at most two sentences and 600 characters,
+  threaded, and never resolved by us: replying is ours, resolving is the
+  reviewer's call. A comment cannot be refuted by the verifier alone; a human
+  asked a question, and a machine deciding the question was invalid is not an
+  answer.
+
+- **`keryx review tier` — adaptive model selection, computed rather than
+  chosen.** Skills declare a tier (`light`/`standard`/`deep`), never a model
+  name; a skill naming a concrete model fails a test. The tier is assigned
+  deterministically from signals the orchestrator already holds — scope, attempt
+  count, finding count, diff size, verification method, security in scope — and
+  never by asking a model to rate its own difficulty. It resolves against
+  whatever the provider reports **at runtime**, placing the tiers relative to the
+  session's own model. No model id is written anywhere in the codebase: what is
+  hard-coded is a list of sixteen *size words*, which makes no claim about which
+  models exist and cannot go stale when a vendor ships a new one. An environment
+  that cannot be ranked inherits the session model — never a downgrade, never a
+  dispatch failure.
+
+### Fixed
+
+- **A squash merge can now be verified.** The completion gate asked whether the
+  reviewed commit is reachable from the merge, which a squash destroys by
+  construction — so on the merge strategy this project actually uses, the check
+  could never pass. It now compares the two commits' **trees**: equal trees prove
+  the reviewed bytes are the bytes that merged, which is a stronger claim than
+  ancestry. Every non-answer — missing object, shallow clone, `rev-parse`
+  failure, git absent — is `unobserved`, never `pass`.
+
+- **`flow complete` told three different situations apart.** "The comment
+  collection is stale", "the tracker is unreachable" and "nobody has commented"
+  were all reported as one status with advice that fitted only one of them.
+  Collection now records the commit it ran against, and a record that cannot be
+  shown current never reads as fresh.
+
+- **Reply length is bounded by characters as well as sentences.** A single
+  4,000-character sentence satisfied a two-sentence budget and was posted whole.
+
+- **Four mechanisms documented as enforcement had no caller.** `buildTierMap`,
+  `assignTier`, `decideDispatchModel` and `screenBlastRadiusFindings` were
+  reachable only from their own tests while a skill, a schema and a rule all
+  stated they ran. Each is wired at its stated seam, and each wire is pinned by a
+  test that goes red when the wire is cut.
+
+- **`parseModelTier` returned inherited `Object.prototype` keys**, so
+  `model_tier: constructor` passed the guard that exists to reject it and then
+  resolved as a silent downgrade.
+
+- An external comment's dedupe key is stable across rounds by design, so an
+  unanswered comment read as a reviewer stuck in a loop and `review loop` exited
+  non-zero from round 2 naming the commenter.
+
+- A sentence-final abbreviation (`etc.`, `i.e.`, `vs.`) swallowed the stop that
+  ended its sentence, under-counting a reply in the direction that lets a long
+  one through. The mask no longer depends on which regex engine reads it.
+
 ## [0.2.70] — 2026-08-29
 
 ### Fixed
