@@ -44,10 +44,21 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
+      # `npm@11`, not `npm@latest`. The comment above already names the lesson —
+      # "reading a floor from documentation and then asking for `latest` puts two
+      # moving parts in the same step" — and then the step asked for `latest`
+      # anyway. It came due on 0.2.71: `npm@latest` resolved to 12.0.2 and the
+      # publish died at `CA_CREATE_SIGNING_CERTIFICATE_ERROR - (403) Forbidden`,
+      # after every test and the whole build had passed. 0.2.70 had published
+      # cleanly the day before on the 11.x line.
+      #
+      # So the major is pinned to the one trusted publishing is known to work on
+      # here, and the floor assertion below still runs — a pin that drifts under
+      # the floor must fail loudly rather than fall through to the token path.
       - name: Upgrade npm to a trusted-publishing capable version
         run: |
           set -euo pipefail
-          npm install -g npm@latest
+          npm install -g npm@11
           INSTALLED="$(npm --version)"
           echo "npm ${INSTALLED}"
           # Assert the floor rather than assume the upgrade reached it. Without
