@@ -29,7 +29,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { flowCommand, flowServiceDeps } from "../commands/flow";
 import { reviewCommand } from "../commands/review";
-import { durableExternalCommentsGate } from "./review-gate";
+import { durableExternalCommentsGate, runReviewGate } from "./review-gate";
+import type { ReviewGateCondition } from "./review-gate";
+import { readFlow } from "./store";
 import { writePrCommentFixtureState } from "./review-fixtures";
 import type { ManagedReviewManifest } from "../review/types";
 
@@ -186,6 +188,33 @@ async function readManifest(reviewId: string): Promise<ManagedReviewManifest> {
   return JSON.parse(await readFile(await manifestPath(reviewId), "utf8")) as ManagedReviewManifest;
 }
 
+/**
+ * The `head-commit` condition, read off the gate itself.
+ *
+ * `flow complete` prints only the gate's summary line when it PASSES, so the
+ * words a passing condition uses are invisible from the CLI output — and
+ * "accepted by tree equality" versus "accepted by commit containment" is exactly
+ * what an operator reading a green tick needs to be told. Everything this reads
+ * was still produced by the real CLI against the real repository: the flow, the
+ * package, `manifest.target.head`, and the git objects. Only the assertion route
+ * is different, and it is the same function `flow complete` calls.
+ */
+async function headCommitCondition(mergedCommit: string): Promise<ReviewGateCondition> {
+  const dir = await flowDir();
+  const verdict = await runReviewGate({
+    cwd: ROOT,
+    flowDir: dir,
+    flow: await readFlow(ROOT, dir),
+    tracker: null,
+    mergedCommit,
+  });
+  const condition = verdict.conditions.find((item) => item.id === "head-commit");
+  if (condition === undefined) {
+    throw new Error(`no head-commit condition in: ${verdict.detail}`);
+  }
+  return condition;
+}
+
 /** The `review` line `flow complete` printed, with its conditions. */
 function reviewLine(text: string = output()): string {
   const lines = text.split("\n");
@@ -248,7 +277,11 @@ test("B1 — without a recorded head the gate refuses, which is what every flow 
   expect(reviewLine()).toContain("records no target head commit");
 });
 
-test("B1 — `--head` overrides the checkout, and a stale one is caught rather than trusted", async () => {
+test("B1 — `--head` overrides the checkout, and a SHA this clone does not have is unobserved, not trusted", async () => {
+  // The round's head is well-formed and absent from the object database. Neither
+  // `merge-base --is-ancestor` nor `rev-parse ^{tree}` can say anything about it,
+  // so the honest report is `unobserved`: the check could not run. What it must
+  // never be is `pass`.
   const head = await freshRepo();
   await initFlow();
   const stale = "0f1e2d3c4b5a69788796a5b4c3d2e1f098765432";
@@ -259,8 +292,10 @@ test("B1 — `--head` overrides the checkout, and a stale one is caught rather t
   logs = [];
   await flowCommand(["complete", "001", "--merged", head]);
 
-  expect(reviewLine()).toContain("head-commit (violated)");
-  expect(reviewLine()).toContain("stale SHA");
+  expect(reviewLine()).toContain("head-commit (unobserved)");
+  expect(reviewLine()).toContain(stale);
+  expect(reviewLine()).toContain("the trees could not be compared");
+  expect(reviewLine()).toContain("not the same as running and failing");
 });
 
 test("B1 — `--head` refuses a value that is not a commit SHA", async () => {
@@ -298,17 +333,21 @@ test("B1 — a second round moves the recorded head with the tree", async () => 
 // ---------------------------------------------------------------------------
 //
 // On this path `prHead` is null and condition 3 compares the round's head with
-// the merge commit. That was an EQUALITY test, and the two are equal only for a
-// merge that preserved the branch commit. A squash or a rebase mints a new one
-// by construction, so the gate refused every such completion with advice —
-// "re-run the round" — that could not be followed: the next round would record
-// the branch head again and fail identically. Neither case had a test.
+// the merge commit. It has now been three tests:
 //
-// What replaced it: containment. The reviewed commit being IN what merged is the
-// fact condition 3 is actually after, and a merge commit has it. A squash still
-// fails — the reviewed commit does not exist in the merged history and no round
-// against the branch can make it — but it now says so, and names the two things
-// that do work.
+//   1. EQUALITY — held only for a merge that preserved the branch commit;
+//   2. CONTAINMENT (`merge-base --is-ancestor`) — holds for `--no-ff`, and is
+//      false by construction for a squash, which has no ancestry link to the
+//      branch at all. It made the refusal legible without making the path
+//      completable, and squash is what this project merges with;
+//   3. TREE EQUALITY, when containment fails — `<round head>^{tree}` against
+//      `<merged commit>^{tree}`. A clean squash of an up-to-date branch produces
+//      the branch tip's tree exactly, so this is the positive, checkable answer
+//      to the question condition 3 is really asking.
+//
+// The tests below use a REAL `git merge --squash`, because the shape of defect
+// this suite exists for is a fixture that cannot see a producer which never sets
+// the field.
 
 /** A branch commit, reviewed, with `main` still at the base commit. */
 async function reviewedBranch(): Promise<string> {
@@ -323,7 +362,7 @@ async function reviewedBranch(): Promise<string> {
   return head;
 }
 
-test("B1 — a merge that KEPT the reviewed commit completes: the round is contained in it", async () => {
+test("B1 — a merge that KEPT the reviewed commit completes, and says it was containment that proved it", async () => {
   await freshRepo();
   await initFlow();
   const branchHead = await reviewedBranch();
@@ -338,15 +377,64 @@ test("B1 — a merge that KEPT the reviewed commit completes: the round is conta
   const review = reviewLine();
   expect(review).toContain("all 5 conditions hold");
   expect(review).not.toContain("head-commit");
+
+  // The `--no-ff` path is unchanged and still decided by ancestry — the trees of
+  // a merge commit and its second parent happen to be equal here too, so a
+  // passing gate alone would not distinguish the two routes.
+  const condition = await headCommitCondition(merged);
+  expect(condition.status).toBe("pass");
+  expect(condition.detail).toContain("COMMIT CONTAINMENT");
+  expect(condition.detail).not.toContain("TREE EQUALITY");
+  expect(condition.detail).toContain(branchHead);
+  expect(condition.detail).toContain(merged);
 });
 
-test("B1 — a SQUASH merge cannot be completed against, and the gate says why instead of `re-run the round`", async () => {
+test("B1 — a real SQUASH merge completes, accepted by tree equality rather than by ancestry", async () => {
   await freshRepo();
   await initFlow();
   const branchHead = await reviewedBranch();
 
   await git(["merge", "--squash", "feature"], ROOT);
   await git(["commit", "--quiet", "-m", "the change (squashed)"], ROOT);
+  const squashed = await git(["rev-parse", "HEAD"], ROOT);
+
+  // The premise, asserted rather than assumed: the squash has no ancestry
+  // relation to the reviewed commit, so containment cannot be what passes it.
+  expect(squashed).not.toBe(branchHead);
+  const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", branchHead, squashed], { cwd: ROOT });
+  expect(ancestor.exitCode).toBe(1);
+
+  logs = [];
+  await flowCommand(["complete", "001", "--merged", squashed]);
+
+  const review = reviewLine();
+  expect(review).toContain("all 5 conditions hold");
+  expect(review).not.toContain("head-commit");
+
+  const condition = await headCommitCondition(squashed);
+  expect(condition.status).toBe("pass");
+  // Which test succeeded, and the two SHAs it succeeded on.
+  expect(condition.detail).toContain("TREE EQUALITY");
+  expect(condition.detail).toContain(branchHead);
+  expect(condition.detail).toContain(squashed);
+  // And the tree it proved equal, which is the fact the pass rests on.
+  const tree = await git(["rev-parse", `${branchHead}^{tree}`], ROOT);
+  expect(condition.detail).toContain(tree);
+});
+
+test("B1 — a squash whose tree DIFFERS is violated: a base that moved means the reviewers did not read what merged", async () => {
+  await freshRepo();
+  await initFlow();
+  const branchHead = await reviewedBranch();
+
+  // `main` moves under the branch AFTER the round ran. The squash therefore
+  // carries this file as well, and its tree is not the reviewed tree.
+  await writeFile(path.join(ROOT, "CHANGELOG.md"), "# landed first\n", "utf8");
+  await git(["add", "CHANGELOG.md"], ROOT);
+  await git(["commit", "--quiet", "-m", "something else landed first"], ROOT);
+
+  await git(["merge", "--squash", "feature"], ROOT);
+  await git(["commit", "--quiet", "-m", "the change (squashed onto a moved base)"], ROOT);
   const squashed = await git(["rev-parse", "HEAD"], ROOT);
 
   logs = [];
@@ -356,11 +444,38 @@ test("B1 — a SQUASH merge cannot be completed against, and the gate says why i
   expect(review).toContain("head-commit (violated)");
   expect(review).toContain(branchHead);
   expect(review).toContain(squashed);
-  // Advice that can be acted on: the reviewed commit was rewritten, so re-running
-  // the round against the branch is exactly the thing that will not help.
-  expect(review).toContain("SQUASH");
-  expect(review).toContain("not contained in it");
+  // Both trees are named, so "they differ" is checkable rather than asserted.
+  expect(review).toContain(await git(["rev-parse", `${branchHead}^{tree}`], ROOT));
+  expect(review).toContain(await git(["rev-parse", `${squashed}^{tree}`], ROOT));
+  expect(review).toContain("did not read what merged");
+  // Advice that can be acted on: re-running the round against the branch would
+  // record the same tree again and fail identically.
+  expect(review).toContain("will not close this");
   expect(review).toContain(`--head ${squashed}`);
+});
+
+test("B1 — a merged SHA that is not in the object database is unobserved, never a pass", async () => {
+  await freshRepo();
+  await initFlow();
+  const branchHead = await reviewedBranch();
+  const absent = "1234567890abcdef1234567890abcdef12345678";
+
+  logs = [];
+  await flowCommand(["complete", "001", "--merged", absent]);
+
+  const review = reviewLine();
+  expect(review).toContain("head-commit (unobserved)");
+  expect(review).not.toContain("head-commit (pass)");
+  expect(review).toContain(branchHead);
+  expect(review).toContain(absent);
+  // It names the object that could not be read, and it does not accuse the round
+  // of having reviewed the wrong thing — nothing here established that.
+  expect(review).toContain("the trees could not be compared");
+  expect(review).toContain("the merged commit");
+  expect(review).not.toContain("did not read what merged");
+
+  const condition = await headCommitCondition(absent);
+  expect(condition.status).toBe("unobserved");
 });
 
 // ---------------------------------------------------------------------------

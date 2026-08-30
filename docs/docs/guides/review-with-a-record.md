@@ -192,12 +192,13 @@ already current.
 
 **`--merged <sha>` does not lift it.** The merged commit stands in for the PR
 head in the head-commit condition, because "was the reviewed tree the one that
-merged" is a question about commits and `git merge-base` answers it locally. It
-cannot stand in here: "has anyone commented since the record was written" is a
-question about the pull request, and a comment posted after the last round and
-before the merge is invisible to every fact in the local repository. Substituting
-the merged commit would not relax the check, it would answer a different question
-and call the answer clean.
+merged" is a question the local object database answers on its own — see *What
+`--merged <sha>` proves about the round*, below. It cannot stand in here:
+"has anyone commented since the record was written" is a question about the pull
+request, and a comment posted after the last round and before the merge is
+invisible to every fact in the local repository. Substituting the merged commit
+would not relax the check, it would answer a different question and call the
+answer clean.
 
 If an environment will never reach the tracker, the way past is
 `completion.require_clean_round: false` in `.metaproject/tasks.config.json`,
@@ -241,6 +242,74 @@ comment stands for the backlog — which changes how those comments are answered
 never what was decided about them: each keeps the disposition the orchestrator
 reached for it. Inventing `dismissed-deprioritised` there would be a dismissal on
 the orchestrator's own authority, and a dismissal needs a human decision.
+
+## What `--merged <sha>` proves about the round
+
+`flow complete --merged <sha>` has no pull request to ask for a head, so the
+head-commit condition compares the round's recorded commit with the merged one
+instead. The question it is asking is **"is the content the reviewers read the
+content that merged?"** — and there are two ways to answer it yes, both decided
+locally, with no network and no `gh`:
+
+| Route | What it proves | Merge strategy it covers |
+|---|---|---|
+| **Commit containment** — `git merge-base --is-ancestor` | the reviewed commit is reachable from the merge | `--no-ff`, fast-forward |
+| **Tree equality** — `git rev-parse <sha>^{tree}` on both | the reviewed bytes *are* the merged bytes | **squash**, rebase |
+
+Containment is tried first; tree equality only when it fails. **The passing
+detail names which route was used and both SHAs**, so a green tick says what was
+actually proved rather than merely that something was:
+
+```text
+round `round-1` ran against 77811f5…, which is NOT contained in the merged commit
+c056793… — but both commits have the identical tree 188e5b2… (accepted by TREE
+EQUALITY). That is what a clean squash or rebase of the reviewed branch produces,
+and it is a stronger claim than ancestry: the content the reviewers read is
+byte-for-byte the content that merged.
+```
+
+This is why a **squash merge completes**. It did not use to: the condition was
+first an equality test and then a containment test, and a squash commit has no
+ancestry relation to the branch commits at all, so containment is false for it by
+construction. Tree equality is not a weaker fallback — ancestry proves a commit is
+*reachable*, tree equality proves the *bytes are the same*.
+
+### When it fails, and which failure it is
+
+Four outcomes, and the last two are deliberately not the same status:
+
+| What happened | Status | What to do |
+|---|---|---|
+| The round's commit is contained in the merge | `pass` | nothing |
+| It is not contained, and the two trees are identical | `pass` | nothing — this is a clean squash or rebase |
+| It is not contained, and the two trees **differ** | `violated` | ingest a round against the merged commit: `keryx review ingest … --head <merged-sha>` |
+| A tree could not be **read** at all | `unobserved` | fetch the missing object, or ingest a round against the merged commit |
+
+**A moved base legitimately fails.** If something else landed on `main` between
+the round and the squash, the squash carries it and the trees differ. That is
+`violated`, and it is not rescued by a three-way comparison, because it is a true
+statement about the review: the reviewers did not read what merged. The message
+prints both tree ids so the claim is checkable rather than asserted.
+
+**A tree that could not be read is never a pass, and never a `violated` either.**
+A commit missing from this clone, a shallow clone, a directory that is not a
+repository, no `git` on `PATH` — none of those is evidence that the trees differ,
+and none of them is evidence that they match. The condition reports `unobserved`,
+quotes git's own first line of complaint, and names which of the two objects it
+could not read:
+
+```text
+head-commit (unobserved): round `round-1` ran against 77811f5… and the completion
+names merged commit 1234567… . 77811f5… is not contained in it, and the trees could
+not be compared: the merged commit 1234567… — `git rev-parse 1234567…^{tree}` exited
+128: fatal: ambiguous argument … unknown revision or path not in the working tree.
+So nothing here shows either that the reviewed content is what merged or that it is
+not — the check could not run, which is not the same as running and failing.
+```
+
+Both `violated` and `unobserved` fail the gate. They are separate because the
+fixes are different, and because a gate that passed when its check could not run
+is the exact failure this gate exists to end.
 
 ## Check the bounds before you dispatch
 

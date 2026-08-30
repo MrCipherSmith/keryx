@@ -1863,7 +1863,15 @@ describe("the offline seam", () => {
       ]);
     } finally {
       console.error = originalError;
-      process.exitCode = originalExit;
+      // `?? 0`, and not for tidiness. `reviewCommand` reports a refusal by
+      // setting `process.exitCode = 1`, and this test asserts on a refusal, so it
+      // MUST clear it. `originalExit` is `undefined` on the first refusal in a
+      // run, and assigning `undefined` does not clear a code that has been set —
+      // so the suite exited 1 with 0 failures, and did so for long enough that
+      // two separate agents reported it as "pre-existing, not mine". A suite that
+      // exits non-zero while passing teaches everyone reading it to stop
+      // believing exit codes, which is the one signal a CI wrapper has.
+      process.exitCode = originalExit ?? 0;
     }
     expect(errors.join("\n")).toMatch(/nobody decided about|answered ONCE/);
   });

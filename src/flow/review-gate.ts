@@ -1155,9 +1155,31 @@ export type ReviewGateInput = {
    * condition 3.
    */
   mergedCommitContainment?: MergedCommitContainment | undefined;
+  /**
+   * How the round's tree compares with the merged commit's tree, resolved by
+   * {@link runReviewGate} when containment did NOT hold.
+   *
+   * This is the answer for a squash or a rebase, where containment is false by
+   * construction. See {@link compareCommitTrees} and the condition-3 comment.
+   */
+  mergedCommitTree?: MergedTreeComparison | undefined;
 };
 
 export type MergedCommitContainment = "contains" | "does-not-contain" | "unknown";
+
+/**
+ * The result of comparing two commits' trees.
+ *
+ * Three states, and the third is the load-bearing one: `unreadable` is "we could
+ * not get a tree", which is NOT "the trees differ". A gate that cannot read an
+ * object has observed nothing, and rule 2 of this module's header says an
+ * unobservable condition does not pass — but it does not get to claim the
+ * reviewers read the wrong thing either.
+ */
+export type MergedTreeComparison =
+  | { state: "same-tree"; tree: string }
+  | { state: "different-tree"; roundTree: string; mergedTree: string }
+  | { state: "unreadable"; detail: string };
 
 /**
  * Evaluate the five conditions. Pure: everything it reads was already read.
@@ -1258,12 +1280,36 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   // 3. The latest round ran against the PR head commit.
   //
   // On `flow complete --merged <sha>` there IS no pull request head, and the
-  // merged commit stands in for it. That comparison is exact only for a merge
-  // that preserved the branch commit; a squash or a rebase mints a new one by
-  // construction, so an equality test could never hold and the gate refused with
-  // advice ("re-run the round") that could not be followed — the next round would
-  // record the branch head again. So on this path containment is the question:
-  // is the reviewed commit IN what was merged. See `mergedCommitContainment`.
+  // merged commit stands in for it. That comparison was first an EQUALITY test,
+  // which holds only for a merge that preserved the branch commit; then a
+  // CONTAINMENT test (`git merge-base --is-ancestor`), which holds for `--no-ff`
+  // and is false by construction for a squash or a rebase — the squash commit has
+  // no ancestry relation to the branch commits at all. Containment made the
+  // refusal legible; it did not make the path completable, and squash is the
+  // merge strategy this project actually uses.
+  //
+  // # Ancestry was the wrong question
+  //
+  // What this condition asks is *is the content the reviewers read the content
+  // that merged*. Ancestry is one way to answer it and not the only one: a clean
+  // squash of a branch whose base did not move produces a commit whose TREE is
+  // identical to the branch tip's tree. So when containment fails, the trees are
+  // compared — `<round head>^{tree}` against `<merged commit>^{tree}`. Equal
+  // trees are a STRONGER claim than ancestry, not a weaker one: ancestry proves
+  // the commit is reachable, tree equality proves the bytes are the same.
+  //
+  // Three outcomes on this path, and the third is why this is not a two-way test:
+  //
+  //   - containment holds -> pass, "accepted by commit containment";
+  //   - containment fails and the trees are equal -> pass, "accepted by tree
+  //     equality" (the squash / rebase case);
+  //   - containment fails and the trees DIFFER -> violated. That is the honest
+  //     outcome and it is deliberately not rescued by a three-way comparison: a
+  //     base that moved under the branch means the reviewers did not read what
+  //     merged, which is a true statement about the review;
+  //   - a tree could not be READ at all (missing object, shallow clone, no git,
+  //     no repository) -> `unobserved`. Never `pass`, and never `violated`
+  //     either: nothing was established in either direction.
   //
   // # Why the merged commit stands in HERE and not in condition 4
   //
@@ -1272,8 +1318,9 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   // two conditions are asking:
   //
   //   - Condition 3 asks *was the reviewed tree the one that merged*. That is a
-  //     question about COMMITS, and the merged commit answers it completely and
-  //     locally — `git merge-base --is-ancestor`, no network, no `gh`.
+  //     question about the LOCAL OBJECT DATABASE, and the merged commit answers
+  //     it completely and locally — `git merge-base --is-ancestor` and
+  //     `git rev-parse <sha>^{tree}`, no network, no `gh`.
   //   - Condition 4 asks *has anyone spoken since the record was written*. That
   //     is a question about the PULL REQUEST, and no commit answers it: a
   //     comment posted after the last round and before the merge is invisible to
@@ -1316,37 +1363,32 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
         `; round \`${latestRound.reviewId}\` ran against ${latestRound.head}. ` +
         prHeadResolutionRemedy(input.prHead, input.flow.pr.url),
     });
-  } else if (!shaMatches(latestRound.head, prHead) && onMergedPath && input.mergedCommitContainment === "contains") {
-    conditions.push({
-      id: "head-commit",
-      status: "pass",
-      detail:
-        `round \`${latestRound.reviewId}\` ran against ${latestRound.head}, which is contained in the merged ` +
-        `commit ${prHead} — the reviewed tree is part of what merged.`,
-    });
+  } else if (!shaMatches(latestRound.head, prHead) && onMergedPath) {
+    conditions.push(
+      mergedHeadCondition({
+        reviewId: latestRound.reviewId,
+        roundHead: latestRound.head,
+        mergedCommit: prHead,
+        containment: input.mergedCommitContainment,
+        tree: input.mergedCommitTree,
+      }),
+    );
   } else if (!shaMatches(latestRound.head, prHead)) {
     conditions.push({
       id: "head-commit",
       status: "violated",
-      detail: onMergedPath
-        ? `the latest round ran against ${latestRound.head}, but the completion names merged commit ${prHead}, ` +
-          `and ${latestRound.head} is not contained in it ` +
-          (input.mergedCommitContainment === "unknown"
-            ? "(git could not be asked — no repository here, or the commit is not in this clone)"
-            : "(git reports it is not an ancestor)") +
-          ". A clean round against a stale SHA proves nothing about what will merge. If this was a SQUASH or " +
-          "REBASE merge the branch commit was rewritten and can never appear in the merged history, so re-running " +
-          `the round against the branch will not help: ingest a round against the merged commit instead ` +
-          `(\`keryx review ingest … --head ${prHead}\`), or record the pull request on the flow so the round is ` +
-          "compared against the PR head rather than against the merge."
-        : `the latest round ran against ${latestRound.head}, but the PR head is ${prHead}. ` +
-          "A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
+      detail:
+        `the latest round ran against ${latestRound.head}, but the PR head is ${prHead}. ` +
+        "A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
     });
   } else {
     conditions.push({
       id: "head-commit",
       status: "pass",
-      detail: `round \`${latestRound.reviewId}\` ran against the PR head ${prHead}`,
+      detail: onMergedPath
+        ? `round \`${latestRound.reviewId}\` ran against ${latestRound.head}, which IS the merged commit ` +
+          `${prHead} (accepted by COMMIT IDENTITY)`
+        : `round \`${latestRound.reviewId}\` ran against the PR head ${prHead}`,
     });
   }
 
@@ -1459,6 +1501,102 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
     roundsSeen: rounds.length,
     ingestedRounds: ingested.length,
     capReached,
+  };
+}
+
+/**
+ * Condition 3 on the `flow complete --merged <sha>` path, when the round's head
+ * and the merged commit are different SHAs.
+ *
+ * Two ways to be accepted and the detail NAMES which one was used, because
+ * `pass` alone does not tell an operator what was actually proved:
+ *
+ * | route | what it proves |
+ * |---|---|
+ * | commit containment | the reviewed commit is reachable from the merge (`--no-ff`) |
+ * | tree equality | the reviewed bytes ARE the merged bytes (a clean squash or rebase) |
+ *
+ * And two ways to fail, which are not the same failure. `different-tree` is
+ * "we looked and the reviewers did not read what merged" — the base moved under
+ * the branch, or the squash was edited before it was committed. `unreadable` is
+ * "we could not look", which establishes nothing and therefore cannot be a pass:
+ * a gate condition that passed when its check could not run is the exact failure
+ * this gate exists to end.
+ */
+function mergedHeadCondition(input: {
+  reviewId: string;
+  roundHead: string;
+  mergedCommit: string;
+  containment: MergedCommitContainment | undefined;
+  tree: MergedTreeComparison | undefined;
+}): ReviewGateCondition {
+  const { reviewId, roundHead, mergedCommit } = input;
+  if (input.containment === "contains") {
+    return {
+      id: "head-commit",
+      status: "pass",
+      detail:
+        `round \`${reviewId}\` ran against ${roundHead}, which is contained in the merged commit ` +
+        `${mergedCommit} (accepted by COMMIT CONTAINMENT: git reports the reviewed commit is an ancestor of ` +
+        "the merge) — the reviewed tree is part of what merged.",
+    };
+  }
+
+  const tree = input.tree;
+  if (tree === undefined) {
+    // Nobody resolved the comparison. `runReviewGate` always does on this path,
+    // so this is a caller that assembled the input by hand — and an unresolved
+    // check is an unobserved one, never a pass.
+    return {
+      id: "head-commit",
+      status: "unobserved",
+      detail:
+        `round \`${reviewId}\` ran against ${roundHead} and the completion names merged commit ${mergedCommit}; ` +
+        "neither commit containment nor a tree comparison was resolved, so nothing was established about whether " +
+        "the reviewed content is what merged.",
+    };
+  }
+
+  if (tree.state === "same-tree") {
+    return {
+      id: "head-commit",
+      status: "pass",
+      detail:
+        `round \`${reviewId}\` ran against ${roundHead}, which is NOT contained in the merged commit ` +
+        `${mergedCommit} — but both commits have the identical tree ${tree.tree} (accepted by TREE EQUALITY). ` +
+        "That is what a clean squash or rebase of the reviewed branch produces, and it is a stronger claim than " +
+        "ancestry: the content the reviewers read is byte-for-byte the content that merged.",
+    };
+  }
+
+  if (tree.state === "different-tree") {
+    return {
+      id: "head-commit",
+      status: "violated",
+      detail:
+        `the latest round ran against ${roundHead}, but the completion names merged commit ${mergedCommit}, ` +
+        `and ${roundHead} is neither contained in it ` +
+        (input.containment === "unknown"
+          ? "(git could not be asked about ancestry)"
+          : "(git reports it is not an ancestor)") +
+        ` nor does it carry the same tree (round ${tree.roundTree}, merged ${tree.mergedTree}). So the reviewers ` +
+        "did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round " +
+        "against the branch will not close this — ingest a round against the merged commit " +
+        `(\`keryx review ingest … --head ${mergedCommit}\`), or record the pull request on the flow so the round ` +
+        "is compared against the PR head rather than against the merge.",
+    };
+  }
+
+  return {
+    id: "head-commit",
+    status: "unobserved",
+    detail:
+      `round \`${reviewId}\` ran against ${roundHead} and the completion names merged commit ${mergedCommit}. ` +
+      `${roundHead} is not contained in it, and the trees could not be compared: ${tree.detail}. ` +
+      "So nothing here shows either that the reviewed content is what merged or that it is not — the check could " +
+      "not run, which is not the same as running and failing. Fetch the missing object (`git fetch --unshallow`, " +
+      "or fetch the branch the round ran against), or ingest a round against the merged commit " +
+      `(\`keryx review ingest … --head ${mergedCommit}\`).`,
   };
 }
 
@@ -1605,9 +1743,20 @@ export async function runReviewGate(input: {
   // this is the one condition that needs to ask git, and asking it when a pull
   // request head is available would answer a question nobody asked.
   const latestRoundHead = rounds.filter((round) => round.ingested).at(-1)?.head ?? null;
+  const onMergedPath = prHeadOf(prHead) === null && input.mergedCommit !== undefined && latestRoundHead !== null;
   const containment =
-    prHeadOf(prHead) === null && input.mergedCommit !== undefined && latestRoundHead !== null
+    onMergedPath && latestRoundHead !== null && input.mergedCommit !== undefined
       ? await commitContains(input.cwd, latestRoundHead, input.mergedCommit)
+      : undefined;
+  // Only when containment did NOT settle it. A `--no-ff` merge never reaches
+  // git a second time; a squash always does, because containment is false for it
+  // by construction.
+  const treeComparison =
+    containment !== undefined &&
+    containment !== "contains" &&
+    latestRoundHead !== null &&
+    input.mergedCommit !== undefined
+      ? await compareCommitTrees(input.cwd, latestRoundHead, input.mergedCommit)
       : undefined;
 
   return evaluateReviewGate({
@@ -1620,6 +1769,7 @@ export async function runReviewGate(input: {
     ...(externalComments === undefined ? {} : { externalComments }),
     ...(input.mergedCommit === undefined ? {} : { mergedCommit: input.mergedCommit }),
     ...(containment === undefined ? {} : { mergedCommitContainment: containment }),
+    ...(treeComparison === undefined ? {} : { mergedCommitTree: treeComparison }),
   });
 }
 
@@ -1655,6 +1805,80 @@ export async function commitContains(
   } catch {
     return "unknown";
   }
+}
+
+/**
+ * Do two commits have the same tree?
+ *
+ * This is the question condition 3 falls back to when ancestry says no, and it
+ * is the one that a SQUASH can answer. `git merge --squash` writes a commit with
+ * no parent link to the branch, so `merge-base --is-ancestor` is false forever —
+ * but the squash of a clean, up-to-date branch produces the branch tip's tree
+ * exactly. Equal trees therefore prove more than ancestry does: not "the commit
+ * is reachable" but "the bytes are the same".
+ *
+ * # Every failure is `unreadable`, never `different-tree`
+ *
+ * The two are distinguished all the way down, and the distinction is the point.
+ * A missing object, a shallow clone, a directory that is not a repository, no
+ * `git` on `PATH`, a `rev-parse` that exits non-zero or prints something that is
+ * not an object id — none of those is evidence that the trees differ. They are
+ * evidence that nobody looked, which is `unobserved` at the gate and never a
+ * pass. Each carries the first line of git's own message, so the operator is
+ * told which object could not be read rather than being told their review is
+ * stale.
+ */
+export async function compareCommitTrees(
+  cwd: string,
+  roundHead: string,
+  mergedCommit: string,
+): Promise<MergedTreeComparison> {
+  const round = await readCommitTree(cwd, roundHead);
+  if ("error" in round) {
+    return { state: "unreadable", detail: `the round's commit ${roundHead.trim()} — ${round.error}` };
+  }
+  const merged = await readCommitTree(cwd, mergedCommit);
+  if ("error" in merged) {
+    return { state: "unreadable", detail: `the merged commit ${mergedCommit.trim()} — ${merged.error}` };
+  }
+  return round.tree === merged.tree
+    ? { state: "same-tree", tree: round.tree }
+    : { state: "different-tree", roundTree: round.tree, mergedTree: merged.tree };
+}
+
+/** `git rev-parse <sha>^{tree}`, with every non-answer reported as an error rather than guessed at. */
+async function readCommitTree(cwd: string, commit: string): Promise<{ tree: string } | { error: string }> {
+  const sha = commit.trim();
+  if (!/^[0-9a-f]{7,64}$/i.test(sha)) {
+    return { error: `\`${sha}\` is not a commit SHA, so no tree can be read for it` };
+  }
+  let stdout: string;
+  let stderr: string;
+  let exitCode: number;
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", `${sha}^{tree}`], { cwd, stdout: "pipe", stderr: "pipe" });
+    [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+  } catch (error) {
+    // No `git` on `PATH`, or it could not be spawned at all.
+    return { error: `\`git rev-parse\` could not be run (${error instanceof Error ? error.message : String(error)})` };
+  }
+  if (exitCode !== 0) {
+    const first = stderr.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+    return {
+      error:
+        `\`git rev-parse ${sha}^{tree}\` exited ${exitCode}` +
+        (first === "" ? "" : `: ${first.length > 200 ? `${first.slice(0, 200)}…` : first}`),
+    };
+  }
+  const tree = stdout.trim();
+  if (!/^[0-9a-f]{40,64}$/i.test(tree)) {
+    return { error: `\`git rev-parse ${sha}^{tree}\` printed \`${tree.slice(0, 80)}\`, which is not an object id` };
+  }
+  return { tree: tree.toLowerCase() };
 }
 
 /**
