@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-30-pr-413-final",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/413",
+    "head": "264e695046007bd21a667aa5d70114eafdb1e7ff"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/scope.md",
+    "coverage": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/coverage.md",
+    "report": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/report.md",
+    "findings": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/findings.json",
+    "learning": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/learning.md",
+    "decisions": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-core-boundaries",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-verifier",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-30T09:57:32.304Z",
+  "updatedAt": "2026-08-30T09:57:32.304Z",
+  "flow": {
+    "id": "204",
+    "path": ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co"
+  }
+}

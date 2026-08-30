@@ -1,0 +1,646 @@
+[
+  {
+    "id": "logic-01",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Condition 4 passed on a stale collection: `rounds_collected > 0` was taken as proof of freshness while PrCommentState recorded no timestamp and no commit.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 819,
+    "class_scope": {
+      "sites": [
+        "src/flow/review-gate.ts:820",
+        "src/flow/review-gate.ts:827",
+        "src/review/pr-comments.ts:1479",
+        "src/review/pr-comments.ts:1460",
+        "src/commands/review.ts:543"
+      ],
+      "enumeration_method": "keryx ctx rg 'rounds_collected|unansweredComments|collected: true' src/ --glob '!*.test.ts' — five sites decide or feed condition 4; rounds_collected === 0 was the only freshness test any applied."
+    },
+    "global_id": "2026-08-30-pr-413-final#logic-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "screenBlastRadiusFindings, buildTierMap, assignTier and decideDispatchModel were documented as enforcement and had no production caller.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 496,
+    "class_scope": {
+      "sites": [
+        "src/review/blast-radius.ts:764",
+        "src/review/blast-radius.ts:943",
+        "src/gdskills/model-tier.ts:496",
+        "src/gdskills/model-tier.ts:592",
+        "src/gdskills/model-tier.ts:674"
+      ],
+      "enumeration_method": "keryx ctx rg 'screenBlastRadiusFindings|renderBlastRadiusScreenMarkdown|buildTierMap|decideDispatchModel|assignTier\\(' src/ .metaproject/skills — 71 hits over 6 files; every hit outside the two test files was a definition or a prose claim that the mechanism runs."
+    },
+    "global_id": "2026-08-30-pr-413-final#logic-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "postReplyPass skipped on row existence while two sibling readers skipped on reply existence, so a settled row with reply_url null could never be cleared.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/review/pr-comments.ts",
+    "line": 1568,
+    "global_id": "2026-08-30-pr-413-final#logic-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Condition 5 refused only verification_mode off; annotate with zero claims passed while printing that nothing was verified.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 1077,
+    "global_id": "2026-08-30-pr-413-final#logic-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-05",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "parseModelTier returned inherited Object.prototype keys, bypassing the AC14 guard and then resolving as a silent light downgrade.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 106,
+    "global_id": "2026-08-30-pr-413-final#logic-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-06",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The abbreviation mask under-counted a sentence-final `etc.`, the direction the code's own comment names as dangerous.",
+    "impact": "Recorded in the flow journal; fixed in d0290d4b.",
+    "suggested_fix": "See d0290d4b.",
+    "evidence": "Raised and reproduced by a review round; fixed in d0290d4b and verified against it.",
+    "confidence": "high",
+    "file": "src/review/pr-comments.ts",
+    "line": 908,
+    "global_id": "2026-08-30-pr-413-final#logic-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in d0290d4b. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at d0290d4b; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-07",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "flow complete --merged could not accept a squash merge; commit ancestry does not exist for a squash by construction.",
+    "impact": "Recorded in the flow journal; fixed in 2fdc8eff.",
+    "suggested_fix": "See 2fdc8eff.",
+    "evidence": "Raised and reproduced by a review round; fixed in 2fdc8eff and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 1006,
+    "global_id": "2026-08-30-pr-413-final#logic-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 2fdc8eff. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 2fdc8eff; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "logic-08",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "resolveTierFromRanking anchored deep/light at rank 0 when the ranking carried no session rank.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 441,
+    "global_id": "2026-08-30-pr-413-final#logic-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "test-01",
+    "reviewer": "review-testing-practices",
+    "severity": "blocker",
+    "problem": "The tier module was a producer with no consumer: nothing in the shipped runtime called it, so tier selection had no effect on a real dispatch.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 496,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/model-tier.ts:496",
+        "src/gdskills/model-tier.ts:674",
+        "src/gdskills/model-tier.ts:592"
+      ],
+      "enumeration_method": "keryx ctx rg 'buildTierMap|decideDispatchModel' over the repository and 'assignTier\\(' over src/ — all matches confined to model-tier.ts and its test; zero in any dispatch, orchestration or CLI path."
+    },
+    "global_id": "2026-08-30-pr-413-final#test-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "test-02",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "review blast-radius and review comments collect had no test driving them through the real CLI; a throw at the top of the handler left the suite green.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 973,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts:973",
+        "src/commands/review.ts:525"
+      ],
+      "enumeration_method": "keryx ctx rg for the two subcommand literals in src/commands/review.test.ts (0 matches each), then for the handler names across src/ — called only from the reviewCommand dispatcher, never from a test. Confirmed by inserting a throw at the top of the handler and observing the whole suite stay green."
+    },
+    "global_id": "2026-08-30-pr-413-final#test-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "test-03",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "--max-sentences had no coverage at any level and --max-replies none through argv; disconnecting the parse site left 87/87 green.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 588,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts:587",
+        "src/commands/review.ts:588"
+      ],
+      "enumeration_method": "keryx ctx rg 'maxReplies|maxSentences|max-replies|max-sentences' over src/review/pr-comments.test.ts and src/commands/review.ts; confirmed by mutating the forwarding to a no-op and re-running the pr-comments and CLI suites (87/87 still green)."
+    },
+    "global_id": "2026-08-30-pr-413-final#test-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "regr-01",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "External comments carry a dedupe key stable across rounds, so an unanswered comment read as a reviewer in a loop and review loop exited 1 from round 2.",
+    "impact": "Recorded in the flow journal; fixed in 23b43c38.",
+    "suggested_fix": "See 23b43c38.",
+    "evidence": "Raised and reproduced by a review round; fixed in 23b43c38 and verified against it.",
+    "confidence": "high",
+    "file": "src/review/loop.ts",
+    "line": 275,
+    "class_scope": {
+      "sites": [
+        "src/review/loop.ts:275",
+        "src/commands/review.ts:717"
+      ],
+      "enumeration_method": "keryx ctx rg 'readFlowReviewRounds|detectReviewLoop' over the repository: 5 files, of which only src/commands/review.ts is a production consumer. Both sites — where the signal is emitted and where it becomes a non-zero exit — not a sample."
+    },
+    "global_id": "2026-08-30-pr-413-final#regr-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 23b43c38. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 23b43c38; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-01",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The scope-B refusal was an unescapable trap: the message named a path the reader does not read, and following it created the package directory so the next ingest allocated -r02 and refused identically.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/review/managed.ts",
+    "line": 439,
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts:427",
+        "src/review/managed.ts:439",
+        "src/review/managed.ts:470",
+        "src/review/managed.ts:1936",
+        "src/review/managed.ts:453"
+      ],
+      "enumeration_method": "grep -nE 'screenScopeBFindings|readPackageBlastRadius|BLAST_RADIUS_ARTIFACT' over src/review/managed.ts plus the allocatePackage body; confirmed by executing createManagedReviewPackage twice in a temp cwd and observing the identical refusal."
+    },
+    "global_id": "2026-08-30-pr-413-final#r2-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "no-link-to-change built tokens only from changed files while admitting findings anchored anywhere in the radius, so a correctly anchored blocker about a dependent was deleted.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/review/blast-radius.ts",
+    "line": 865,
+    "class_scope": {
+      "sites": [
+        "src/review/blast-radius.ts:865",
+        "src/review/blast-radius.ts:741",
+        "src/review/managed.ts:258",
+        "src/review/managed.ts:448"
+      ],
+      "enumeration_method": "keryx ctx rg 'screenBlastRadiusFindings' src/ — the only non-test caller is managed.ts, reached from createManagedReviewPackage; verified by running the ingest with an inline blastRadius and observing the blocker rejected."
+    },
+    "global_id": "2026-08-30-pr-413-final#r2-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The orchestrator skill listed --blast-radius as optional while omitting it hard-fails, and review-regression claimed no rule reads the reviewer's name while membership does.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 180,
+    "global_id": "2026-08-30-pr-413-final#r2-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "flow complete conflated a stale collection with an unreachable tracker, reporting both as unobserved with advice fitting only one.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 869,
+    "global_id": "2026-08-30-pr-413-final#r2-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-05",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "An eight-line explanatory comment was duplicated verbatim.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 460,
+    "global_id": "2026-08-30-pr-413-final#r2-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-06",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "An unreachable scope-B screen printer branch that could never print.",
+    "impact": "Recorded in the flow journal; fixed in fd7d752c.",
+    "suggested_fix": "See fd7d752c.",
+    "evidence": "Raised and reproduced by a review round; fixed in fd7d752c and verified against it.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 395,
+    "global_id": "2026-08-30-pr-413-final#r2-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd7d752c. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at fd7d752c; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r4-01",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The blocker exemption left no trace, and the renderer then asserted every scope-B finding had been judged.",
+    "impact": "Recorded in the flow journal; fixed in 336d8dda.",
+    "suggested_fix": "See 336d8dda.",
+    "evidence": "Raised and reproduced by a review round; fixed in 336d8dda and verified against it.",
+    "confidence": "high",
+    "file": "src/review/blast-radius.ts",
+    "line": 907,
+    "global_id": "2026-08-30-pr-413-final#r4-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 336d8dda. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 336d8dda; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r4-02",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "--catalog failed with a message naming neither the flag nor the file.",
+    "impact": "Recorded in the flow journal; fixed in 336d8dda.",
+    "suggested_fix": "See 336d8dda.",
+    "evidence": "Raised and reproduced by a review round; fixed in 336d8dda and verified against it.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 691,
+    "global_id": "2026-08-30-pr-413-final#r4-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 336d8dda. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 336d8dda; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r4-03",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Condition 3 printed condition 4's remedy for no-tracker, naming a seam condition 3 never reads.",
+    "impact": "Recorded in the flow journal; fixed in 336d8dda.",
+    "suggested_fix": "See 336d8dda.",
+    "evidence": "Raised and reproduced by a review round; fixed in 336d8dda and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 798,
+    "global_id": "2026-08-30-pr-413-final#r4-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 336d8dda. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at 336d8dda; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r5-01",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The exemption heading was never closed, so a rejected finding rendered under a heading saying it was admitted.",
+    "impact": "Recorded in the flow journal; fixed in dbcc7b53.",
+    "suggested_fix": "See dbcc7b53.",
+    "evidence": "Raised and reproduced by a review round; fixed in dbcc7b53 and verified against it.",
+    "confidence": "high",
+    "file": "src/review/blast-radius.ts",
+    "line": 1120,
+    "global_id": "2026-08-30-pr-413-final#r5-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in dbcc7b53. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at dbcc7b53; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r5-02",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The shared-remedy guarantee had no guard: branching a second arm left 567 tests green.",
+    "impact": "Recorded in the flow journal; fixed in dbcc7b53.",
+    "suggested_fix": "See dbcc7b53.",
+    "evidence": "Raised and reproduced by a review round; fixed in dbcc7b53 and verified against it.",
+    "confidence": "high",
+    "file": "src/flow/review-gate.ts",
+    "line": 807,
+    "global_id": "2026-08-30-pr-413-final#r5-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in dbcc7b53. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at dbcc7b53; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r5-03",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A commit message characterised the known SAC failure as file-isolation dependent; it is nondeterministic.",
+    "impact": "Recorded in the flow journal; fixed in dbcc7b53.",
+    "suggested_fix": "See dbcc7b53.",
+    "evidence": "Raised and reproduced by a review round; fixed in dbcc7b53 and verified against it.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.test.ts",
+    "line": 341,
+    "global_id": "2026-08-30-pr-413-final#r5-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in dbcc7b53. A verifier re-ran the reproduction at that commit and returned `refuted` by execution; the fix was additionally proved load-bearing by a mutation that turns a named test red."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the original reproduction at dbcc7b53; the claim no longer reproduces. The fix was proved load-bearing by breaking it and observing a named test go red, then restoring.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

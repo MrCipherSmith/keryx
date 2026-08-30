@@ -6,9 +6,9 @@
   "id": "204",
   "slug": "deep-review-rounds-after-the-draft-pr-co",
   "title": "Deep review rounds after the draft PR, completion gated on a clean final round, external PR comments answered once at the end, adaptive model tiers, and brevity outward",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-30T05:31:30.403Z",
-  "updatedAt": "2026-08-30T07:13:35.981Z",
+  "updatedAt": "2026-08-30T09:57:38.968Z",
   "source": {
     "type": "description",
     "ref": null
@@ -97,7 +97,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/413"
   },
   "tasks": [
     {
@@ -819,6 +819,20 @@
       "at": "2026-08-30T07:13:35.981Z",
       "event": "ac-confirmed",
       "detail": "AC20: bun run typecheck clean; bun test 5937 pass / 18 skip / 0 fail; bun run test:guards 161 pass / 0 fail; bun run check:doc-links 1130 links / 0 broken."
+    },
+    {
+      "at": "2026-08-30T07:14:27.771Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/413"
+    },
+    {
+      "at": "2026-08-30T09:57:36.883Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-30T09:57:38.968Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
