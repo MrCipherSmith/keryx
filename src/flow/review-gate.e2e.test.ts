@@ -24,15 +24,17 @@
 // because a flow with no PR has no comments anybody could have left.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { flowCommand, flowServiceDeps } from "../commands/flow";
 import { reviewCommand } from "../commands/review";
 import { durableExternalCommentsGate } from "./review-gate";
+import { writePrCommentFixtureState } from "./review-fixtures";
 import type { ManagedReviewManifest } from "../review/types";
 
 const ORIGINAL_CWD = process.cwd();
+const CLI = path.join(import.meta.dir, "..", "cli.ts");
 const realLog = console.log;
 const realError = console.error;
 
@@ -94,6 +96,45 @@ afterEach(async () => {
   }
 });
 
+/**
+ * Run the CLI in a CHILD process whose `gh` cannot authenticate.
+ *
+ * Everything else in this file calls `flowCommand` in-process, which is faster
+ * and enough. It is not enough here, for a reason worth writing down: the state
+ * under test is `githubAdapter.detect()` returning false, `detect()` starts with
+ * `Bun.which("gh")`, and **`Bun.which` reads a `PATH` snapshotted at process
+ * start** — mutating `process.env.PATH` inside the test changes nothing it will
+ * see. `gh` is also commonly wrapped on a developer's machine in a way that
+ * re-derives `GH_CONFIG_DIR`, so pointing the environment at an empty config
+ * does not disarm it either. A fresh process with a `gh` shim first on `PATH` is
+ * the only arrangement in which the real adapter genuinely fails the way it
+ * fails on a CI runner.
+ *
+ * Nothing is injected: the child builds the same `flowServiceDeps()` an operator
+ * gets, reaches the same `githubAdapter`, and asks the process table.
+ */
+async function cliWithoutGh(args: string[]): Promise<string> {
+  const bin = path.join(ROOT, "fake-bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(path.join(bin, "gh"), "#!/bin/sh\necho 'gh: not logged into any hosts' >&2\nexit 1\n", {
+    encoding: "utf8",
+    mode: 0o755,
+  });
+  const proc = Bun.spawn([process.execPath, CLI, ...args], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env["PATH"] ?? ""}` },
+  });
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  await proc.exited;
+  // eslint-disable-next-line no-control-regex
+  return `${stdout}\n${stderr}`.replace(/\[[0-9;]*m/g, "");
+}
+
 /** `flow init` … up to the point where `flow complete` runs its gates. */
 async function initFlow(): Promise<string> {
   await flowCommand(["init", "--title", "gate probe"]);
@@ -146,11 +187,11 @@ async function readManifest(reviewId: string): Promise<ManagedReviewManifest> {
 }
 
 /** The `review` line `flow complete` printed, with its conditions. */
-function reviewLine(): string {
-  const lines = output().split("\n");
+function reviewLine(text: string = output()): string {
+  const lines = text.split("\n");
   const index = lines.findIndex((line) => /^\s*[^\s]\s+review\s/.test(line));
   if (index === -1) {
-    throw new Error(`no review gate line in:\n${output()}`);
+    throw new Error(`no review gate line in:\n${text}`);
   }
   // A failing review gate prints one line per condition, indented under it.
   const rest: string[] = [];
@@ -320,6 +361,85 @@ test("B1 — a SQUASH merge cannot be completed against, and the gate says why i
   expect(review).toContain("SQUASH");
   expect(review).toContain("not contained in it");
   expect(review).toContain(`--head ${squashed}`);
+});
+
+// ---------------------------------------------------------------------------
+// A flow with a pull request, in an environment that cannot reach the tracker
+// ---------------------------------------------------------------------------
+//
+// The state the gate could not previously name. `githubAdapter.detect()` returns
+// false with no `gh` on `PATH` and with a `gh auth status` that exits non-zero,
+// so the pull request is never asked for its head — and the first version of the
+// freshness check reported that as "the pull request's own head could not be
+// resolved, so nothing establishes that the collection is current", which reads
+// as *your record is stale*. A CI runner was told to re-collect comments it had
+// already collected, and no fixture could catch it: the field is produced by an
+// adapter shelling out to a binary, and a hand-built gate input never runs it.
+//
+// The comment RECORD below is a fixture, deliberately and narrowly: writing it
+// for real needs the network these tests exist to avoid. Everything that
+// produces the state under test — the flow, the PR on it, the round, the
+// adapter, the resolution — is the real CLI.
+
+const PR = "https://github.com/acme/app/pull/7";
+
+test("state 3 — an unauthenticated `gh` is reported as a dead tracker, not as a stale record", async () => {
+  const base = await freshRepo();
+  await initFlow();
+  await ingestRound("round-1");
+
+  // `flow implemented` records the PR WITHOUT verifying it, precisely because
+  // the tracker is unavailable — that is how a flow acquires a PR URL in this
+  // environment, and it is what makes condition 4 apply at completion.
+  const implemented = await cliWithoutGh(["flow", "implemented", "001", "--pr", PR]);
+  expect(implemented).toContain("implemented");
+  // Proof the shim bit: with a working `gh` this command REFUSES an unreachable
+  // pull request ("PR not found or inaccessible"), and `acme/app#7` is not one
+  // this machine can see.
+  expect(implemented).not.toContain("not found or inaccessible");
+
+  // Collected at the very commit the round ran against: as current as a record
+  // can be. If the gate calls this stale, it is guessing.
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR, collectedSha: base });
+
+  const review = reviewLine(await cliWithoutGh(["flow", "complete", "001", "--merged", base]));
+  expect(review).toContain("external-comments (unobserved)");
+  // It names the tracker, and the remedy is about the tracker.
+  expect(review).toContain("could not be reached");
+  expect(review).toContain("gh auth login");
+  // The operator-level escape, so the only way out is not "inject a dependency".
+  expect(review).toContain("require_clean_round");
+  // And it does not accuse a current record of being out of date.
+  expect(review).toContain("neither shown to be current nor shown to be stale");
+  expect(review).not.toContain("was last collected against");
+
+  // The precondition this creates, stated by the test that creates it:
+  // condition 3 is SATISFIED here — the merged commit stands in for the PR head
+  // and containment is decided locally — and condition 4 still is not, because
+  // no commit can answer "has anyone commented since". Documented in
+  // `docs/docs/guides/review-with-a-record.md`.
+  expect(review).toContain("1 of 5 conditions failed");
+  expect(review).not.toContain("head-commit (");
+});
+
+test("state 3 — with no `--merged` either, both conditions give the same reason", async () => {
+  await freshRepo();
+  await initFlow();
+  await ingestRound("round-1");
+  await cliWithoutGh(["flow", "implemented", "001", "--pr", PR]);
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR, collectedSha: "0".repeat(40) });
+
+  const review = reviewLine(await cliWithoutGh(["flow", "complete", "001"]));
+  expect(review).toContain("head-commit (unobserved)");
+  expect(review).toContain("external-comments (unobserved)");
+  // One cause, one sentence, printed once per condition. Condition 3 used to say
+  // "the tracker did not report a head SHA" about a tracker it never ran.
+  expect(review.match(/the tracker could not be reached/g)?.length).toBe(2);
+  expect(review).not.toContain("did not report a head SHA");
+  // The record here IS stale, and the gate still does not say so — because with
+  // no head resolved it does not know that, and saying it would be the same
+  // guess in the opposite direction.
+  expect(review).not.toContain("but the PR head is");
 });
 
 test("MAJOR 3 — the external-comment seam is wired at the composition root", () => {

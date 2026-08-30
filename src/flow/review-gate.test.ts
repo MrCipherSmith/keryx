@@ -46,10 +46,20 @@ const STALE = "0f1e2d3c4b5a69788796a5b4c3d2e1f098765432";
 
 let ROOT = "";
 
-function fakeTracker(over: { headSha?: string | null } = {}): TrackerAdapter {
+/**
+ * `detect: false` is the CI runner and the developer with no authenticated
+ * `gh`: `githubAdapter.detect()` returns false when `gh` is off `PATH` or
+ * `gh auth status` exits non-zero, and then the pull request is never asked
+ * anything at all. A test below builds the OTHER shape by hand — the tracker ran and the
+ * pull request is not visible (`flow implemented` refuses a PR it cannot see, so
+ * that one needs a tracker whose answer changes). They are different facts, and
+ * both differ again from a stale comment record. The gate must collapse none of
+ * the three.
+ */
+function fakeTracker(over: { headSha?: string | null; detect?: boolean } = {}): TrackerAdapter {
   return {
     id: "fake",
-    detect: async () => true,
+    detect: async () => over.detect !== false,
     parseRef: () => null,
     fetchIssue: async () => ({ title: "Issue title", body: "body" }),
     prStatus: async () => ({
@@ -120,6 +130,21 @@ async function driveToGates(
     await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL });
   }
   return { id: flow.id, dir };
+}
+
+/**
+ * One condition's slice of a failing gate detail.
+ *
+ * Needed because conditions 3 and 4 now describe the same tracker failure, so
+ * `gate.detail.toContain(…)` can be satisfied by the wrong condition — which is
+ * exactly the confusion these tests exist to pin.
+ */
+function conditionDetail(gate: GateOutcome, id: string): string {
+  const part = gate.detail.split(" | ").find((entry) => entry.includes(`${id} (`));
+  if (part === undefined) {
+    throw new Error(`no \`${id}\` condition in: ${gate.detail}`);
+  }
+  return part;
 }
 
 function reviewOf(gates: GateOutcome[]): GateOutcome {
@@ -731,10 +756,15 @@ test("AC5/4 — a collection that ran before the comments arrived is stale, not 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
   expect(gate.status).toBe("fail");
-  expect(gate.detail).toContain("external-comments (unobserved)");
+  // `violated`, not `unobserved`: the head RESOLVED and the record is against a
+  // different commit. That is a fact we went and got, and it is a different
+  // state from "nobody could reach the tracker" — which reports `unobserved`
+  // and gets different advice. See the tracker-unavailable tests below.
+  expect(gate.detail).toContain("external-comments (violated)");
   expect(gate.detail).toContain("was last collected against");
   expect(gate.detail).toContain(STALE);
   expect(gate.detail).toContain(HEAD);
+  expect(gate.detail).not.toContain("could not resolve");
 });
 
 test("AC5/4 — a record written before collections were dated is not read as fresh", async () => {
@@ -750,8 +780,12 @@ test("AC5/4 — a record written before collections were dated is not read as fr
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
   expect(gate.status).toBe("fail");
-  expect(gate.detail).toContain("external-comments (unobserved)");
+  // `violated` for the same reason as the stale case, and established WITHOUT
+  // the tracker: an undatable file is undatable however healthy your `gh` is, so
+  // the advice must be "re-collect", never "fix your tracker".
+  expect(gate.detail).toContain("external-comments (violated)");
   expect(gate.detail).toContain("does not say which commit it was collected against");
+  expect(gate.detail).not.toContain("gh auth login");
 });
 
 test("AC5/4 — a collection at the PR head passes, and the detail says which commit", async () => {
@@ -765,6 +799,113 @@ test("AC5/4 — a collection at the PR head passes, and the detail says which co
 
   expect(gate.status).toBe("pass");
   expect(gate.detail).toContain("all 5 conditions hold");
+});
+
+// --- The three states of condition 4 ----------------------------------------
+//
+// A fix round closed the freshness hole by refusing every unresolved head, and
+// collapsed two facts doing it: "your comment record is stale" and "nobody could
+// reach the tracker" came out as the same sentence and the same advice. The
+// operator whose `gh` is logged out was told to re-run a collection that was
+// already current, and could not tell from the message which of the two he was
+// in. These tests pin all three apart.
+
+test("AC5/4 — state 3: a tracker that cannot run is unobserved, and does NOT read as a stale record", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: fakeTracker({ detect: false }) }));
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  // The record is CURRENT — collected at exactly the commit the round ran
+  // against. Nothing about it is stale; the only thing missing is a tracker.
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: HEAD });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  // Scoped to condition 4's OWN sentence. Condition 3 fails here too and now
+  // says something similar, and an assertion the neighbour can satisfy proves
+  // nothing about this one.
+  const detail = conditionDetail(gate, "external-comments");
+  expect(detail).toContain("external-comments (unobserved)");
+  // It names the tracker as the thing that failed…
+  expect(detail).toContain("could not be reached");
+  expect(detail).toContain("gh auth status");
+  // …the remedy for THAT, not for a stale collection…
+  expect(detail).toContain("gh auth login");
+  // …and the operator-level way past the gate, which is not "inject a dependency".
+  expect(detail).toContain("require_clean_round");
+  expect(detail).toContain("neither shown to be current nor shown to be stale");
+  // …and it does not accuse the record of being stale, because it is not.
+  expect(gate.detail).not.toContain("was last collected against");
+  expect(gate.detail).not.toContain("no longer exists");
+});
+
+test("AC5/4 — state 3 vs state 2: the same record passes the moment the tracker answers", async () => {
+  // The control for the test above. Identical fixture, identical record; the
+  // ONLY difference is whether `detect()` succeeds. If the failure were about
+  // the record, this would fail too.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: HEAD });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("pass");
+});
+
+test("AC-C2/AC5/4 — conditions 3 and 4 give the SAME reason for the missing head", async () => {
+  // They read one resolution now. Before, condition 3 said "the tracker did not
+  // report a head SHA — an older `gh`, or an inaccessible PR" about a tracker
+  // `detect()` had refused to run, and condition 4 said the record was stale.
+  // Two conditions, two wrong stories, one cause.
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: fakeTracker({ detect: false }) }));
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: STALE });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.detail).toContain("head-commit (unobserved)");
+  expect(gate.detail).toContain("external-comments (unobserved)");
+  // One phrase, twice — once per condition.
+  expect(gate.detail.match(/the tracker could not be reached/g)?.length).toBe(2);
+  expect(gate.detail).not.toContain("did not report a head SHA");
+  // And with the head unresolved, the record's staleness is NOT asserted, even
+  // though this record happens to be stale: nobody looked.
+  expect(gate.detail).not.toContain("but the PR head is");
+});
+
+test("AC5/4 — a pull request the tracker cannot see is its own state, not a dead tracker", async () => {
+  await fresh();
+  // Visible when the flow recorded it — `flow implemented` refuses a PR it
+  // cannot see — and gone by completion time: the branch was deleted, or this
+  // account lost access to the repository.
+  let visible = true;
+  const service = createFlowService(
+    makeDeps({
+      tracker: {
+        ...fakeTracker(),
+        prStatus: async () => ({ exists: visible, isDraft: true, checksGreen: true, headSha: HEAD }),
+      },
+    }),
+  );
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  visible = false;
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: HEAD });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  const detail = conditionDetail(gate, "external-comments");
+  expect(detail).toContain("external-comments (unobserved)");
+  expect(detail).toContain("the pull request is not there");
+  // The advice points at the PR, not at `gh auth login`.
+  expect(detail).toContain(PR_URL);
+  expect(gate.detail).not.toContain("gh auth login");
 });
 
 test("AC5/4 — an injected collector reporting an unanswered comment fails the gate", async () => {

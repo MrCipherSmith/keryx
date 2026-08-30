@@ -377,6 +377,27 @@ export function rankDiscoveredModels(
     );
   }
 
+  // The session model was placed, and NOTHING ELSE was. Observed on a real
+  // provider: the session ran `…-v4-flash` (`flash` is a size word, rank -1)
+  // while the two candidates carried no size word at all, so `ranked` came back
+  // empty. Every tier then resolved through the "no discovered model ranks above
+  // / below" branch and recorded `session-ranked` — which claims the ranking
+  // worked and this is where it landed. It did not work: there was nothing to
+  // rank, and an operator reading `session-ranked` next to `ranked: []` cannot
+  // tell that from a provider whose models were all ranked and all lateral.
+  //
+  // Refusing here costs nothing — with no ranked candidate every tier keeps the
+  // session model on either path — and buys a record that says which of the two
+  // happened.
+  if (ranked.length === 0) {
+    return refuse(
+      candidates,
+      ranked,
+      sessionRank,
+      `none of the ${candidates.length} model(s) provider "${providerId}" reported carries a size marker the hints recognise, so no candidate can be called larger or smaller than the session model "${sessionModel}"`,
+    );
+  }
+
   return {
     providerId,
     candidates,
@@ -457,14 +478,6 @@ export function resolveTierFromRanking(
     );
   }
 
-  // A ranking with no session rank has no anchor, whatever it claims about being
-  // usable. `rankDiscoveredModels` never produces that pair, but this function is
-  // EXPORTED and takes an arbitrary `ModelRanking`, and the previous
-  // `sessionRank ?? 0` silently invented rank 0 for such an input — which places
-  // `light` below zero and `deep` above it rather than below and above the session,
-  // so `light` could pick a model LARGER than the session's. Refusing is the same
-  // answer the "unrankable session model" branch of `rankDiscoveredModels` gives
-  // for the same missing fact.
   // A ranking with no session rank has no anchor, whatever it claims about being
   // usable. `rankDiscoveredModels` never produces that pair, but this function is
   // EXPORTED and takes an arbitrary `ModelRanking`, and the previous

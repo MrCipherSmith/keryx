@@ -32,6 +32,15 @@ import {
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
+import { detectProviders } from "./select";
+import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import {
+  decideDispatchModel,
+  type DiscoveredProvider,
+  type DispatchModelDecision,
+  type SessionModelContext,
+  type TierSignals,
+} from "../gdskills/model-tier";
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import {
@@ -79,6 +88,7 @@ import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_TARGET_KINDS,
+  VERIFICATION_METHODS,
   VERIFICATION_MODES,
   type FindingDispositionState,
   type ManagedReviewInput,
@@ -191,6 +201,20 @@ const BLAST_RADIUS_FLAGS = [
   "--out",
 ] as const;
 
+const TIER_FLAGS = [
+  "--scope",
+  "--fix-attempt",
+  "--forced-strategy-change",
+  "--findings",
+  "--diff-lines",
+  "--verifier",
+  "--security",
+  "--session-provider",
+  "--session-model",
+  "--catalog",
+  "--json",
+] as const;
+
 const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
@@ -268,6 +292,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "budget") {
       await runBudget(args.slice(1));
+      return;
+    }
+    if (command === "tier") {
+      await runTier(args.slice(1));
       return;
     }
     if (command === "comments") {
@@ -391,8 +419,19 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   // facts, and only one of them means the screen ran.
   const scopeB = result.scopeBScreen;
   if (scopeB.screen === undefined) {
+    // An ASSERTION, not a report. `screenScopeBFindings` is total on this pair:
+    // with no radius it either THROWS (any scope-B finding) or returns
+    // `{source: "none", scopeBFindings: 0}`, so an unrecorded screen implies no
+    // scope-B findings and `not recorded (N went through unscreened)` could
+    // never print. A console line that cannot appear is not a safety net — it
+    // reads as one while proving nothing, which is the exact shape of every
+    // defect this pipeline exists to end. If the writer ever gains a fourth
+    // outcome, this fails loudly on the first round that reaches it instead of
+    // printing a line nobody configured a test to look for.
     if (scopeB.scopeBFindings > 0) {
-      console.log(`scope-B screen: not recorded (${scopeB.scopeBFindings} scope-B finding(s) went through unscreened)`);
+      throw new Error(
+        `Invariant violated: ${scopeB.scopeBFindings} scope-B finding(s) reached the package with no screen recorded. \`screenScopeBFindings\` must either run the screen or refuse the round; it did neither. The package was written and is the record of the violation.`,
+      );
     }
   } else {
     console.log(
@@ -524,6 +563,173 @@ async function runBudget(args: string[]): Promise<void> {
     );
     process.exitCode = 1;
   }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review tier` — which model this dispatch is worth, computed
+// ---------------------------------------------------------------------------
+
+/**
+ * `keryx review tier` — the `model` block a dispatch document carries, RUN
+ * rather than reasoned about (flow 204, §4.4).
+ *
+ * `assignTier` and `decideDispatchModel` were reachable only from TypeScript,
+ * and the rule that named their caller named "an orchestrator authoring a
+ * dispatch document" — an LLM agent following prose. An agent cannot call a
+ * TypeScript function, so the tier was in practice assigned by a model reading a
+ * table and doing the arithmetic in its head, which is exactly the mechanical
+ * work this programme moves out of skills and into code. This command is the
+ * entry point that closes that gap: the orchestrator runs one command with the
+ * signals it already holds and pastes the block it prints.
+ *
+ * It sits beside `review scope`, `review blast-radius` and `review budget` for
+ * the same reason those exist: all four are "compute this mechanically, before
+ * dispatching, instead of eyeballing it".
+ *
+ * NO MODEL NAME IS WRITTEN HERE, and none is written anywhere this command
+ * reads. The session's provider/model come from the persisted shell selection
+ * (or from `--session-provider`/`--session-model` for a caller that already
+ * holds them), the candidate set comes from live provider detection (or from
+ * `--catalog`), and `src/gdskills/model-tier.ts` places the tier relative to the
+ * session's own model. When the environment cannot be worked out, the answer is
+ * the caller's OWN model — never a downgrade, never a non-zero exit.
+ */
+async function runTier(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, TIER_FLAGS, "tier");
+  const signals = tierSignalsFromArgs(args);
+  const session = sessionModelFromArgs(args);
+  const catalog = await tierCatalog(args, session);
+  const decision = decideDispatchModel(session, signals, catalog);
+  const block = dispatchModelBlock(decision);
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ model: block }, null, 2));
+    return;
+  }
+
+  const discovery = decision.model_discovery;
+  console.log("# review tier");
+  console.log("");
+  console.log(`tier: ${decision.tier}`);
+  console.log(`tier_reasons: ${decision.tier_reasons.join(", ")}`);
+  console.log(
+    `provider: ${decision.provider === "" ? "not resolved (no --session-provider, and none persisted by `keryx shell`)" : decision.provider}`,
+  );
+  // The operator's standing instruction, printed rather than assumed: an
+  // unresolvable tier inherits the caller's own model. Saying "not resolved" and
+  // stopping there would read as a failure, and the next thing a reader does
+  // with a failure is pick a model by hand.
+  console.log(
+    `model: ${decision.model === "" ? "not resolved — run this dispatch on YOUR OWN model (never a downgrade)" : decision.model}`,
+  );
+  console.log(`tier_resolution: ${decision.tier_resolution}`);
+  console.log(
+    `model_discovery: provider=${discovery.provider === "" ? "none" : discovery.provider} candidates=${discovery.candidates.length} ranked=${discovery.ranked.length} session_rank=${discovery.session_rank ?? "none"}`,
+  );
+  console.log(`fallback_reason: ${discovery.fallback_reason ?? "none (ranking was not refused)"}`);
+  console.log("");
+  console.log("## model block");
+  console.log("");
+  console.log("Paste this verbatim as the dispatch document's `model` field.");
+  console.log("");
+  console.log("```json");
+  console.log(JSON.stringify({ model: block }, null, 2));
+  console.log("```");
+}
+
+/** The §4.4 signals, read from flags an orchestrator already has the answers to. */
+function tierSignalsFromArgs(args: string[]): TierSignals {
+  const scope = optionValue(args, "--scope");
+  const verifier = optionValue(args, "--verifier");
+  if (verifier !== undefined && !(VERIFICATION_METHODS as readonly string[]).includes(verifier)) {
+    // Refused rather than passed through. An unrecognised method changes nothing
+    // in `assignTier`, so a typo would silently produce `standard` and read as a
+    // considered answer — the same failure shape as a silently dropped flag.
+    throw new Error(
+      `Invalid --verifier: ${verifier}. Expected one of ${VERIFICATION_METHODS.join(", ")}. Refused rather than ignored: an unrecognised method would silently leave the tier at its default and read as a decision.`,
+    );
+  }
+  return {
+    ...(scope === undefined ? {} : { scope }),
+    ...(verifier === undefined ? {} : { verifierMethod: verifier }),
+    fixAttempt: parseNonNegativeInteger(optionValue(args, "--fix-attempt"), "--fix-attempt"),
+    findingCount: parseNonNegativeInteger(optionValue(args, "--findings"), "--findings"),
+    diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
+    forcedStrategyChange: args.includes("--forced-strategy-change"),
+    hasSecurityFinding: args.includes("--security"),
+  };
+}
+
+/**
+ * The session's provider/model: the flags when given, otherwise the selection
+ * `keryx shell` persisted.
+ *
+ * Discovered at runtime by construction — there is no default model id in this
+ * file and there must not be. Empty strings when neither source knows, which
+ * `rankDiscoveredModels` reads as "no anchor" and answers with a fallback.
+ */
+function sessionModelFromArgs(args: string[]): SessionModelContext {
+  const config = loadShellConfig();
+  return {
+    providerId: (optionValue(args, "--session-provider") ?? config.provider ?? "").trim(),
+    modelId: (optionValue(args, "--session-model") ?? config.model ?? "").trim(),
+  };
+}
+
+/**
+ * The candidate set, discovered at runtime — or supplied by a caller that
+ * already holds a `detectProviders()` result.
+ *
+ * Detection is skipped when the session names no provider AND model, on the same
+ * rule `runBlastRadius` follows for the graph: ranking is refused without an
+ * anchor whatever the catalogue contains, so a round that cannot use the answer
+ * should not pay for the probe.
+ */
+async function tierCatalog(args: string[], session: SessionModelContext): Promise<readonly DiscoveredProvider[]> {
+  const file = optionValue(args, "--catalog");
+  if (file !== undefined) {
+    const raw = file === "-" ? await Bun.stdin.text() : await Bun.file(file).text();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      throw new Error(
+        `--catalog ${file} is not an array of detected providers. Pass \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,
+      );
+    }
+    for (const entry of parsed) {
+      const provider = entry as Partial<DiscoveredProvider>;
+      if (typeof provider?.name !== "string" || !Array.isArray(provider.models)) {
+        throw new Error(
+          `--catalog ${file} carries an entry with no \`name\` string and \`models\` array. A half-read catalogue would starve discovery and report the fallback as if the environment had been consulted.`,
+        );
+      }
+    }
+    return parsed as DiscoveredProvider[];
+  }
+  if (session.providerId === "" || session.modelId === "") {
+    return [];
+  }
+  return await detectProviders({ fetch, env: envWithSavedApiKeys() });
+}
+
+/**
+ * The dispatch document's `model` object, exactly as
+ * `contracts/subagent-dispatch.schema.json` defines it.
+ *
+ * `provider`/`model` are written only when both were resolved; otherwise the
+ * block carries `inherit: true`, which is the schema's way of saying what the
+ * operator's instruction says — the caller runs the dispatch on its own model.
+ * Writing an empty string into either field would produce a schema-invalid
+ * dispatch that still looks like an answer.
+ */
+function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
+  const named = decision.provider !== "" && decision.model !== "";
+  return {
+    tier: decision.tier,
+    tier_reasons: decision.tier_reasons,
+    ...(named ? { provider: decision.provider, model: decision.model } : { inherit: true }),
+    tier_resolution: decision.tier_resolution,
+    model_discovery: decision.model_discovery,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1341,6 +1547,11 @@ Usage:
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                    [--findings <n>] [--diff-lines <n>]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--session-provider <id>] [--session-model <id>]
+                    [--catalog <file|->] [--json]
   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                                 [--self <login>] [--round <n>]
                                 [--out <findings.json>] [--json] [--fixtures <dir>]
@@ -1466,6 +1677,22 @@ budget:
   another process, so it does NOT bind the total across job-orchestrator ->
   flow-orchestrator -> review-orchestrator, and it says so rather than implying
   otherwise.
+
+tier:
+  The \`model\` block a dispatch document carries, COMPUTED — run this instead of
+  working the tier out by hand. The signals are ones the orchestrator already
+  holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
+  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
+  that produced it, the resolved provider/model, \`tier_resolution\`, and what was
+  on the table when it resolved; --json prints the block alone.
+  NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from
+  the selection \`keryx shell\` persisted (override with --session-provider /
+  --session-model), and the candidate set comes from live provider detection
+  (override with --catalog, the \`detectProviders()\` shape). When the environment
+  cannot be worked out, the block says \`inherit\` and the dispatch runs on YOUR
+  OWN model: never a downgrade, never a non-zero exit. Detection is skipped
+  entirely when the session names no provider and model, because ranking is
+  refused without an anchor whatever the catalogue holds.
 
 loop:
   Loop DETECTION, not counting. Escalates (exit non-zero) when the same finding

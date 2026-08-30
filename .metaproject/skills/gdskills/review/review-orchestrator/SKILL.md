@@ -55,10 +55,10 @@ Review Orchestrator Progress:
 - [ ] Step 1: Build Review Context Pack (PR metadata, scope, rules, context_doc summary)
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
-- [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing
+- [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
 - [ ] Step 4: Parse flags / auto-detect domain from scope
 - [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
-- [ ] Step 6: Plan sub-agent dispatch, token budgets, and model strategy
+- [ ] Step 6: Plan sub-agent dispatch and token budgets, and compute each dispatch's model with `keryx review tier` — never by hand
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
 - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
@@ -73,6 +73,24 @@ Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They 
 two commands for that reason: a caller that already runs collection per round
 would carry the posting along with it, and the reviewer would get six replies to
 one comment.
+
+### Step 6 — the model is computed, not chosen
+
+Before dispatching each reviewer, run `keryx review tier` with the signals you
+already hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`,
+`--verifier`, `--security`, `--forced-strategy-change`) and paste the `model`
+block it prints into that dispatch.
+
+Do NOT assign the tier by reading the table in `rules/core/model-selection.mdc`.
+Working it out in your head is exactly the mechanical step that rule moves into
+code — and it is the step that was documented as running for a whole release
+while nothing called it.
+
+The command names no model. It ranks whatever your provider reports at runtime
+and places the tiers relative to your own model; when it cannot rank anything it
+prints `inherit: true` and exits 0, which means the dispatch runs on the session
+model. That is a correct answer, not a failure — never "fix" it by writing a
+model id into a dispatch.
 
 ---
 
@@ -179,6 +197,8 @@ keryx review ingest --report <path> [--flow <id>] --ref <ref>
                     [--verifications <file>] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file>]
+                    # --blast-radius is REQUIRED whenever this round dispatched a
+                    # scope-B reviewer (review-regression). See below.
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
@@ -194,6 +214,27 @@ pre-filter dropped, **with a reason per drop**, as well as what the verifier
 refuted. Without it — and with no `## Pre-filter scope` block already in the
 package — the record says **`not recorded`** for that stage rather than `0`;
 "dropped nothing" and "never ran" are different facts.
+
+`--blast-radius` is **not optional on any round that dispatched
+`review-regression`** — which is every `recommended` and `full` round, because
+`review-regression` is in both profiles. AC3 is enforced in code: an ingest
+carrying a scope-B finding with no blast-radius record is **refused**, and the
+round is not recordable until the set is supplied. Pass the `--json` output of
+`keryx review blast-radius` — the same record you computed at dispatch time to
+bound the round.
+
+Two channels, and both work:
+
+- `--blast-radius <file>` — always correct, and the one to use.
+- `.metaproject/reviews/blast-radius.json` (or
+  `.metaproject/flows/<flow>/reviews/blast-radius.json` for a flow-attached
+  round) — the handoff slot, read when no flag is passed. The ingest **consumes**
+  it: it is copied into the package it screened and removed from the slot, so a
+  later round cannot be screened against a set nobody recomputed.
+
+Do **not** write the record inside the package directory before the ingest. A
+round that names no `--review-id` has not allocated that directory yet, and
+creating it makes the ingest take the next free name instead.
 
 `--refuted` takes the findings this round **raised and then dismissed**, in the
 same finding shape, each carrying `disposition: {state, evidence}` with one of
@@ -586,6 +627,10 @@ A deep round dispatches under **both**. Scope B is computed, never browsed:
 keryx review blast-radius --ref "${BASE_SHA}" --json > blast-radius.json   # KEEP THIS FILE
 keryx review blast-radius --ref "${BASE_SHA}" --brief                      # what a scope-B reviewer is told
 ```
+
+**KEEP THIS FILE** is not advice. The ingest at Step 12 is **refused** if a
+scope-B finding arrives without it — pass it back as
+`review ingest ... --blast-radius blast-radius.json`.
 
 It walks `gdgraph affected` outward from every changed file, ranks by edge
 distance, keeps distance ≤ 2, cuts at 40 files closest-first, and adds a changed

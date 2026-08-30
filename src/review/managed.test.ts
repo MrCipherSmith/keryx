@@ -1,5 +1,5 @@
 import { afterEach, test, expect } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1453,4 +1453,175 @@ test("AC3: a screen that did not run says so, rather than reporting `rejected: 0
   expect(scope).toContain("no blast-radius record reached this ingest");
   // Not `rejected: 0`, which reads as a screen that ran and found nothing.
   expect(scope).not.toContain("\nrejected: 0");
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 — the two defects the wiring itself introduced
+//
+// Every test above passes `--review-id`, which is why none of them reached the
+// trap: `allocatePackage` only probes for a free directory when the round names
+// none, and the documented orchestrator invocation never names one. So the
+// tests below deliberately DO NOT pass a reviewId. That is the whole difference
+// between the shipping path and the one round 1 tested.
+// ---------------------------------------------------------------------------
+
+const REVIEWS = [".metaproject", "reviews"] as const;
+
+/** An ingest the way `review-orchestrator` runs it: no `--review-id`. */
+async function ingestUnnamed(
+  over: Partial<ManagedReviewIngestInput> = {},
+): Promise<{ path: string; findings: StructuredReviewFinding[]; scopeBScreen: ScopeBScreenRecord }> {
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    target: { kind: "report", ref: "review.md" },
+    reportText: "# Round\n\nno machine-readable block here\n",
+    findings: [FULL_FINDING],
+    now: new Date("2026-08-29T11:00:00Z"),
+    ...over,
+  });
+  return {
+    path: result.path,
+    scopeBScreen: result.scopeBScreen,
+    findings: JSON.parse(
+      await readFile(path.join(ROOT, result.path, "findings.json"), "utf8"),
+    ) as StructuredReviewFinding[],
+  };
+}
+
+async function reviewPackageDirs(): Promise<string[]> {
+  const entries = await readdir(path.join(ROOT, ...REVIEWS), { withFileTypes: true });
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+}
+
+test("AC3: the scope-B refusal is escapable — following the advice does not move the package", async () => {
+  await fresh();
+  // The trap, reproduced first. An ordinary recommended round names no
+  // --review-id, so the package directory does not exist yet; the refusal used
+  // to tell the operator to write the record INSIDE it, and doing that made the
+  // next ingest allocate `<base>-r02` and refuse identically. Throw, write,
+  // throw, up to MAX_SAME_DAY_ROUNDS.
+  const refusal = await ingestUnnamed({ findings: [scopeBFinding()] }).then(
+    () => undefined,
+    (error: unknown) => error as Error,
+  );
+
+  expect(refusal?.message).toContain("no blast-radius record");
+  // The flag that always works, named as the first remedy.
+  expect(refusal?.message).toContain("--blast-radius <file>");
+  // The on-disk channel, as a path relative to cwd rather than a bare basename.
+  expect(refusal?.message).toContain(path.join(...REVIEWS, "blast-radius.json"));
+  // And the trap itself, named so nobody walks back into it.
+  expect(refusal?.message).toContain("has not allocated that directory yet");
+
+  // Now DO what the message says, and check the second ingest lands in the base
+  // directory rather than being pushed to `-r02` by the write.
+  await mkdir(path.join(ROOT, ...REVIEWS), { recursive: true });
+  await writeFile(path.join(ROOT, ...REVIEWS, "blast-radius.json"), JSON.stringify(RADIUS), "utf8");
+
+  const { findings, scopeBScreen, path: pkg } = await ingestUnnamed({ findings: [scopeBFinding()] });
+
+  expect(scopeBScreen.source).toBe("handoff");
+  expect(findings.map((finding) => finding.id)).toContain("F-100");
+  expect(pkg).not.toContain("-r02");
+  expect(await reviewPackageDirs()).toHaveLength(1);
+});
+
+test("AC3: the handoff record is consumed and copied into the package it screened", async () => {
+  await fresh();
+  await mkdir(path.join(ROOT, ...REVIEWS), { recursive: true });
+  const handoff = path.join(ROOT, ...REVIEWS, "blast-radius.json");
+  await writeFile(handoff, JSON.stringify(RADIUS), "utf8");
+
+  const { path: pkg } = await ingestUnnamed({ findings: [scopeBFinding()] });
+
+  // The package holds the exact set it was screened against.
+  const copied = JSON.parse(await readFile(path.join(ROOT, pkg, "blast-radius.json"), "utf8")) as BlastRadiusScreenInput;
+  expect(copied.changedFiles).toEqual(RADIUS.changedFiles);
+  // And the slot is empty, so the NEXT round — a different change, a different
+  // radius — cannot be screened against a set nobody recomputed. It refuses
+  // loudly instead, which is the direction to be wrong in.
+  expect(existsSync(handoff)).toBe(false);
+  await expect(ingestUnnamed({ findings: [scopeBFinding()] })).rejects.toThrow(/no blast-radius record/);
+});
+
+// The set the second round of flow 204 was reviewed under: one changed file,
+// one hop-1 dependent that the change did not touch.
+const DEPENDENT_RADIUS: BlastRadiusScreenInput = {
+  changedFiles: ["src/gdskills/model-tier.ts"],
+  files: [
+    {
+      file: "src/harness/child/spawn.ts",
+      hop: 1,
+      fanIn: 2,
+      via: "src/gdskills/model-tier.ts",
+      path: ["src/harness/child/spawn.ts", "src/gdskills/model-tier.ts"],
+      source: "graph",
+      isTest: false,
+    },
+  ],
+};
+
+/**
+ * A regression claim about a DEPENDENT, written without repeating the changed
+ * filename or its stem. This is the shape `no-link-to-change` was deleting.
+ */
+function dependentRegression(over: Partial<StructuredReviewFinding> = {}): StructuredReviewFinding {
+  return {
+    ...FULL_FINDING,
+    id: "F-300",
+    reviewer: "review-regression",
+    severity: "blocker",
+    problem: "the spawned child no longer inherits the tier argument, so every dispatch runs on the default",
+    impact: "reviews run at the wrong tier and the wave cap is computed from a stale number",
+    suggested_fix: "pass the resolved tier through to the child",
+    evidence: "ran the harness; the child argv carried no tier flag",
+    file: "src/harness/child/spawn.ts",
+    class_scope: {
+      sites: ["src/harness/child/spawn.ts:155"],
+      enumeration_method: "every call site of the spawn helper inside the computed set",
+    },
+    ...over,
+  };
+}
+
+test("AC3: `no-link-to-change` does not delete a blocker regression about a dependent", async () => {
+  await fresh();
+  // Rule 1 admits anything anchored in `radius.files` — the hop-1/hop-2
+  // dependents, which by construction are NOT changed files — while
+  // `changeTokens` is built only from `changedFiles`. So a true regression about
+  // a dependent, described without naming the changed file, was rejected and
+  // filtered out of findings.json, and the gate never saw it. Before the screen
+  // was wired this blocker was persisted and blocked completion.
+  const { findings, scopeBScreen } = await ingestUnnamed({
+    findings: [dependentRegression()],
+    blastRadius: DEPENDENT_RADIUS,
+  });
+
+  expect(scopeBScreen.screen?.rejected).toEqual([]);
+  expect(scopeBScreen.screen?.accepted).toHaveLength(1);
+  expect(findings.map((finding) => finding.id)).toContain("F-300");
+});
+
+test("AC3: rule 3 still holds a major to naming the change, and says so out loud", async () => {
+  await fresh();
+  // The deliberate line. The exemption is placed where the cost of a wrong
+  // rejection is unrecoverable — a refused blocker is a shipped break — and
+  // nowhere else, because including `radius.files` in the tokens (or skipping
+  // rule 3 for anything rule 1 anchored) makes the rule unfireable and lets the
+  // untouched-hop-2 style `major` back into findings.json.
+  const { findings, path: pkg, scopeBScreen } = await ingestUnnamed({
+    findings: [dependentRegression({ id: "F-301", severity: "major" })],
+    blastRadius: DEPENDENT_RADIUS,
+  });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scopeBScreen.screen?.rejected.map((rejection) => rejection.rule)).toEqual(["no-link-to-change"]);
+  expect(findings.map((finding) => finding.id)).not.toContain("F-301");
+  // Removed, never silent: the id and the rule are both in the record, and the
+  // block cannot be read as "there was nothing".
+  expect(scope).toContain("## Scope B rejections");
+  expect(scope).toContain("F-301");
+  expect(scope).toContain("no-link-to-change");
+  expect(scope).toContain("scope_b_findings: 1");
 });

@@ -22,11 +22,16 @@ let errors: string[] = [];
 let logs: string[] = [];
 const realError = console.error;
 const realLog = console.log;
+const REAL_XDG = process.env.XDG_DATA_HOME;
 
 beforeEach(async () => {
   ROOT = await mkdtemp(path.join(tmpdir(), "gd-review-cli-"));
   await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
   process.chdir(ROOT);
+  // `review tier` reads the provider/model `keryx shell` persisted, which lives
+  // under the per-user config directory rather than under the cwd. Without this
+  // the developer's own `auth.json` would decide what these tests assert.
+  process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
   errors = [];
   logs = [];
   console.error = (...args: unknown[]) => {
@@ -41,6 +46,11 @@ beforeEach(async () => {
 afterEach(async () => {
   console.error = realError;
   console.log = realLog;
+  if (REAL_XDG === undefined) {
+    delete process.env.XDG_DATA_HOME;
+  } else {
+    process.env.XDG_DATA_HOME = REAL_XDG;
+  }
   process.chdir(ORIGINAL_CWD);
   process.exitCode = 0;
   if (ROOT) {
@@ -484,6 +494,257 @@ test("--blast-radius reaches the screen, and the screen says which set it used",
 
   expect(process.exitCode).toBe(0);
   expect(logs.join("\n")).toContain("scope-B screen: source=input");
+});
+
+// ---------------------------------------------------------------------------
+// `keryx review blast-radius`, through the CLI
+// ---------------------------------------------------------------------------
+//
+// The computation is proven in `review/blast-radius.test.ts` and the ingest wire
+// in the two tests above. NEITHER touches `runBlastRadius`, and that was
+// measured: `throw new Error("MUTATION")` as the first statement of the handler
+// left `bun test src/commands src/review src/flow` at 1320 pass / 0 fail across
+// 86 files. A hard throw at the top of a shipped command that the entire suite
+// cannot see is the same defect shape as a cap that truncates in silence.
+
+/** Run git in the temp repository, with no dependency on the developer's config. */
+async function git(...args: string[]): Promise<void> {
+  const proc = Bun.spawn(["git", ...args], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_AUTHOR_NAME: "review-cli-test",
+      GIT_AUTHOR_EMAIL: "review-cli-test@example.invalid",
+      GIT_COMMITTER_NAME: "review-cli-test",
+      GIT_COMMITTER_EMAIL: "review-cli-test@example.invalid",
+    },
+  });
+  const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  if (code !== 0) {
+    throw new Error(`git ${args.join(" ")} failed (exit ${code}): ${stderr.trim()}`);
+  }
+}
+
+/** A file node as `keryx gdgraph build` writes it into `storage/nodes.jsonl`. */
+function node(file: string): string {
+  return JSON.stringify({ id: file, kind: "file", path: file, language: "typescript" });
+}
+
+/** An import edge: `from` depends on `to`, so `to`'s dependents are the `from`s. */
+function edge(from: string, to: string): string {
+  return JSON.stringify({ id: `${from}->${to}`, from, to, kind: "imports", specifier: "./core" });
+}
+
+/**
+ * A real git repository with a real graph on disk: three files importing one, a
+ * co-named test, one commit. `loadGraph` reads exactly these two files, so
+ * nothing about the graph is stubbed.
+ */
+async function repoWithGraph(): Promise<void> {
+  const storage = path.join(ROOT, ".metaproject", "data", "gdgraph", "storage");
+  await mkdir(storage, { recursive: true });
+  await mkdir(path.join(ROOT, "src"), { recursive: true });
+  const files = ["src/core.ts", "src/a.ts", "src/b.ts", "src/c.ts", "src/core.test.ts"];
+  for (const file of files) {
+    await writeFile(path.join(ROOT, file), `export const x = "${file}";\n`, "utf8");
+  }
+  await writeFile(
+    path.join(storage, "nodes.jsonl"),
+    `${["src/core.ts", "src/a.ts", "src/b.ts", "src/c.ts"].map(node).join("\n")}\n`,
+    "utf8",
+  );
+  await writeFile(
+    path.join(storage, "edges.jsonl"),
+    `${["src/a.ts", "src/b.ts", "src/c.ts"].map((from) => edge(from, "src/core.ts")).join("\n")}\n`,
+    "utf8",
+  );
+  await git("init", "-q");
+  await git("add", "-A");
+  await git("commit", "-qm", "seed");
+}
+
+test("`review blast-radius` prints the set AND every file the cap removed", async () => {
+  await repoWithGraph();
+
+  await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--max-files", "2"]);
+
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  // Three graph dependents plus the co-named test the repository really has.
+  expect(out).toContain("candidates: 4");
+  expect(out).toContain("retained: 2");
+  expect(out).toContain("dropped_by_cap: 2");
+  expect(out).toContain("### Dropped — NOT reviewed");
+  expect(out).toContain("src/c.ts");
+  // AC: the truncation is on the terminal too. A silent one reads afterwards as
+  // "we checked everything".
+  expect(errors.join("\n")).toContain("recompute: yes");
+  expect(errors.join("\n")).toContain("2 of 4 candidate files were NOT reviewed");
+});
+
+test("`review blast-radius` takes the changed files from git and writes the record to --out", async () => {
+  await repoWithGraph();
+  // A real uncommitted edit, read by the command's own `git diff --name-only`.
+  await writeFile(path.join(ROOT, "src", "core.ts"), 'export const x = "changed";\n', "utf8");
+
+  await reviewCommand(["blast-radius", "--json", "--out", "radius.json"]);
+
+  expect(process.exitCode).toBe(0);
+  const record = JSON.parse(await readFile(path.join(ROOT, "radius.json"), "utf8")) as {
+    changedFiles: string[];
+    files: { file: string }[];
+    counts: { droppedByCap: number };
+  };
+  expect(record.changedFiles).toEqual(["src/core.ts"]);
+  expect(record.files.map((entry) => entry.file).sort()).toEqual([
+    "src/a.ts",
+    "src/b.ts",
+    "src/c.ts",
+    "src/core.test.ts",
+  ]);
+  expect(record.counts.droppedByCap).toBe(0);
+});
+
+test("`review blast-radius` refuses an absent graph rather than reporting an empty radius", async () => {
+  // An empty radius reads as "nothing depends on this change", which is a
+  // different fact from "the prerequisite never ran".
+  await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--no-related-tests"]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("keryx gdgraph build");
+});
+
+// ---------------------------------------------------------------------------
+// `keryx review tier` — the model block, computed rather than reasoned about
+// ---------------------------------------------------------------------------
+//
+// `assignTier`/`decideDispatchModel` had no production caller: the rule said the
+// caller was "an orchestrator authoring a dispatch document", i.e. an LLM agent
+// following prose, and an agent cannot call a TypeScript function. These tests
+// drive `reviewCommand(["tier", …])` with real argv for that reason — a test
+// that calls `assignTier` directly is exactly what could not see the gap.
+//
+// The catalogue is synthetic and vendor-neutral on purpose: the size-word hints
+// are the only knowledge in the resolver, so `demo-large`/`demo-medium`/
+// `demo-mini` exercise them without this file naming a model that exists.
+
+const CATALOG = JSON.stringify([{ name: "demo", models: ["demo-large", "demo-medium", "demo-mini"] }]);
+
+async function tier(...extra: string[]): Promise<void> {
+  await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
+  await reviewCommand([
+    "tier",
+    "--session-provider",
+    "demo",
+    "--session-model",
+    "demo-medium",
+    "--catalog",
+    "catalog.json",
+    ...extra,
+  ]);
+}
+
+/** The `{"model": …}` document `--json` prints. */
+function modelBlock(): Record<string, unknown> {
+  return (JSON.parse(logs.join("\n")) as { model: Record<string, unknown> }).model;
+}
+
+test("`review tier` floors a blast-radius round at deep and names the rule that did it", async () => {
+  // A blast-radius round over a twelve-line diff is still a blast-radius round:
+  // the floor is applied AFTER the small-scope downgrade.
+  await tier("--scope", "blast-radius", "--findings", "1", "--diff-lines", "12");
+
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("tier: deep");
+  expect(out).toContain("light:small-scope");
+  expect(out).toContain("floor:blast-radius");
+  expect(out).toContain("model: demo-large");
+  expect(out).toContain("tier_resolution: discovered");
+});
+
+test("`review tier --json` prints the model block a dispatch document carries", async () => {
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.tier).toBe("light");
+  expect(model.tier_reasons).toEqual(["base:standard", "light:small-scope"]);
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-mini");
+  expect(model.tier_resolution).toBe("discovered");
+  expect((model.model_discovery as { candidates: string[] }).candidates).toEqual([
+    "demo-large",
+    "demo-medium",
+    "demo-mini",
+  ]);
+});
+
+test("`review tier` never runs a security finding below standard, even when verified by execution", async () => {
+  await tier("--verifier", "execution", "--security", "--json");
+
+  const model = modelBlock();
+  expect(model.tier).toBe("standard");
+  expect(model.tier_reasons).toEqual(["base:standard", "light:verifier-execution", "floor:security"]);
+  // `standard` IS the session's model, and ranking worked — which is a different
+  // fact from having fallen back to it.
+  expect(model.model).toBe("demo-medium");
+  expect(model.tier_resolution).toBe("session-ranked");
+});
+
+test("`review tier` discovers the catalogue at runtime when none is supplied", async () => {
+  // No `--catalog`: this drives the real `detectProviders()` wire. `fake` is
+  // always offered, so the candidate list proves detection ran — and `fake-echo`
+  // carries no size marker, so the honest answer is the session's own model.
+  await reviewCommand(["tier", "--session-provider", "fake", "--session-model", "fake-echo", "--json"]);
+
+  expect(process.exitCode).toBe(0);
+  const discovery = modelBlock().model_discovery as {
+    candidates: string[];
+    session_rank: number | null;
+    fallback_reason: string | null;
+  };
+  expect(discovery.candidates).toContain("fake-echo");
+  expect(discovery.session_rank).toBeNull();
+  expect(discovery.fallback_reason).toContain("no size marker");
+  expect(modelBlock().tier_resolution).toBe("session-fallback");
+});
+
+test("with nothing to anchor on, `review tier` says inherit and still exits 0", async () => {
+  // The operator's standing instruction: an unresolvable tier keeps the caller's
+  // OWN model. Never a downgrade, never a failure — and never an empty
+  // `provider`/`model` pair, which would be a schema-invalid dispatch that still
+  // looks like an answer.
+  await reviewCommand(["tier", "--scope", "blast-radius", "--json"]);
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.tier).toBe("deep");
+  expect(model.inherit).toBe(true);
+  expect(model.provider).toBeUndefined();
+  expect(model.model).toBeUndefined();
+  expect(model.tier_resolution).toBe("session-fallback");
+});
+
+test("`review tier` refuses an unrecognised --verifier rather than silently defaulting", async () => {
+  await tier("--verifier", "exection");
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--verifier");
+  expect(errors.join("\n")).toContain("site-check");
+});
+
+test("`review tier` refuses a hand-written tier", async () => {
+  // There is no `--tier`: the tier is COMPUTED from the signals. Accepting one
+  // would put the arithmetic back in the caller's head, which is the defect.
+  await reviewCommand(["tier", "--tier", "deep"]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--tier");
 });
 
 test("a --blast-radius record missing its arrays is refused, not defaulted to an empty set", async () => {

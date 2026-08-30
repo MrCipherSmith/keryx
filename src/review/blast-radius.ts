@@ -816,7 +816,49 @@ function findingText(finding: Partial<StructuredReviewFinding>): string {
  * 3. `no-link-to-change` — nothing in the finding names any changed file, module
  *    or symbol. A regression claim asserts that THE CHANGE broke this site; one
  *    that never mentions the change is a review of untouched code wearing scope
- *    B's badge.
+ *    B's badge. **A `blocker` is exempt** — see below.
+ *
+ * ## Why rule 3 does not judge a `blocker`
+ *
+ * Rules 1 and 2 decide on structured data: is this path in the set, is this
+ * severity above the floor. Both are facts and both are checkable. Rule 3 is a
+ * substring match over prose, and it is the only one of the three that can be
+ * wrong about a true claim. It was: a `blocker` from `review-regression`
+ * anchored at `src/harness/child/spawn.ts` — a hop-1 dependent of the changed
+ * `src/gdskills/model-tier.ts`, in the set, with `class_scope.sites` naming the
+ * file — described the break without repeating the changed filename or its stem,
+ * and the screen deleted it. Before the screen was wired that blocker was
+ * persisted and blocked completion. A mechanism built to stop false negatives
+ * had become one.
+ *
+ * So the exemption is placed exactly where the cost of being wrong is
+ * unrecoverable. A refused `major` costs the reviewer a re-file under scope A; a
+ * refused `blocker` is a shipped break nobody is told about. A prose heuristic
+ * may not be the thing that decides that.
+ *
+ * ### The two wider repairs that were considered and rejected
+ *
+ * Both were proposed, both delete rule 3 outright, and neither was obvious until
+ * {@link findingText} was read alongside them:
+ *
+ * - *"Include `radius.files` in {@link changeTokens}."* `findingText` already
+ *   includes `finding.file` and `class_scope.sites`, and rule 1 has already
+ *   established that one of those is in the set. Adding the set to the token
+ *   list therefore makes every finding that reaches rule 3 match by construction.
+ * - *"Skip rule 3 for a finding rule 1 already anchored."* Rule 1 `continue`s on
+ *   everything it does not anchor, so every finding reaching rule 3 is anchored.
+ *   This is the first proposal spelled differently.
+ *
+ * Either one silently restores the state AC3 was written for: a `major` about the
+ * style of an untouched hop-2 file, inside the computed set, ingested and then
+ * blocking completion at the review gate. A rule that cannot fire is worse than
+ * no rule, because the skill still promises it.
+ *
+ * The residual cost is stated rather than hidden: a genuine `major` regression
+ * about a dependent, written without naming what changed, is still refused — and
+ * refused loudly, with the rule, the detail and the finding id in `scope.md` and
+ * on the terminal. That is a standard a reviewer can meet, and
+ * `review-regression/SKILL.md` states it.
  *
  * Rejections are returned, never discarded. A rejected finding is a fact about
  * the round — it may be a real observation raised under the wrong scope, and the
@@ -862,13 +904,14 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
       continue;
     }
     const text = findingText(finding);
-    if (tokens.length > 0 && !tokens.some((token) => text.includes(token))) {
+    if (severity !== "blocker" && tokens.length > 0 && !tokens.some((token) => text.includes(token))) {
       rejected.push({
         finding,
         rule: "no-link-to-change",
         detail:
           "nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this " +
-          "site; one that never mentions the change is a review of code the change did not touch.",
+          "site; one that never mentions the change is a review of code the change did not touch. " +
+          "Name the changed file, module or symbol whose behaviour moved — a `blocker` is exempt from this rule, a `major` is not.",
       });
       continue;
     }

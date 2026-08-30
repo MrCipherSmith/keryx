@@ -1193,6 +1193,11 @@ keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--parallel <n>] [--outstanding <n>]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                  [--findings <n>] [--diff-lines <n>]
+                  [--verifier execution|site-check|reasoning] [--security]
+                  [--session-provider <id>] [--session-model <id>]
+                  [--catalog <file|->] [--json]
 keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                               [--self <login>] [--round <n>]
                               [--out <findings.json>] [--json] [--fixtures <dir>]
@@ -1234,6 +1239,7 @@ left off and the gate reports it as unobserved.
 | `scope` | Build the bounded review scope deterministically. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
+| `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
@@ -1512,6 +1518,56 @@ concurrency cap holds across the nesting.
 | `--reviewers a,b` | The reviewer set to plan into waves. |
 | `--parallel <n>` | Override the wave size (default 4). |
 | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+
+### `review tier`
+
+Which model a dispatch is worth, **computed** — the `model` block the subagent
+dispatch contract expects, printed ready to paste.
+
+```bash
+keryx review tier --scope blast-radius --findings 12 --diff-lines 340 --json
+```
+
+It sits beside `review scope`, `review blast-radius` and `review budget` for the
+same reason those exist: all four are *compute this mechanically, before
+dispatching, instead of eyeballing it*. The rule used to say an orchestrator
+"calls `decideDispatchModel`" — but an orchestrator is an agent following prose
+and cannot call a TypeScript function, so what actually happened was a model
+reading a table of signals and doing the arithmetic in its head. This is the
+entry point that removes that step.
+
+| Flag | Description |
+|---|---|
+| `--scope <scope>` | The round's scope. `blast-radius` floors the tier at `deep`. |
+| `--fix-attempt <n>` | 1-based attempt at the **same** finding. `>= 2` raises one tier. |
+| `--forced-strategy-change` | A strategy change forced by hitting the loop cap. Floors at `deep`. |
+| `--findings <n>` | Findings in scope for this dispatch. |
+| `--diff-lines <n>` | Changed lines in the diff under review. `<= 3` findings **and** `<= 50` lines allow `light`. |
+| `--verifier <method>` | `execution`, `site-check` or `reasoning`. The first two allow `light`: the evidence comes from running something. An unrecognised method is refused, not ignored. |
+| `--security` | Any security finding in scope. Never below `standard`. |
+| `--session-provider <id>`, `--session-model <id>` | The session's own provider/model, for a caller that already holds them. Omitted, they come from the selection `keryx shell` persisted. |
+| `--catalog <file\|->` | The candidate set, in the `detectProviders()` shape `[{"name": …, "models": [ … ]}]`. Omitted, providers are detected live. |
+| `--json` | Print the `{"model": …}` block alone. |
+
+Floors are applied after downgrades, so *at least `deep`* means at least: a
+blast-radius round over a twelve-line diff is still a blast-radius round. The
+output carries the ordered rule ids that produced the tier, so the answer can be
+explained afterwards rather than re-derived.
+
+**No model name exists in this command, and there is no `--tier` flag.** The
+session's provider/model and the candidate set are both discovered at runtime;
+`src/gdskills/model-tier.ts` places the tier relative to the session's own model
+using size words in model names (`mini`, `haiku`, `pro`, `opus`, …), never a list
+of models that exist. Accepting a hand-written tier would put the arithmetic
+back in the caller's head, which is the defect.
+
+**An unresolvable environment inherits, and exits 0.** With no persisted session,
+an unrankable catalogue, or a session model carrying no size marker, the block
+carries `inherit: true` instead of `provider`/`model` and the dispatch runs on
+the caller's **own** model. Never a downgrade, never a failure — degrading
+capability because discovery failed is the worst of the three outcomes. Detection
+is skipped entirely when the session names neither provider nor model, because
+ranking is refused without an anchor whatever the catalogue holds.
 
 ### `review loop`
 

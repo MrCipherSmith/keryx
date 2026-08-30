@@ -161,6 +161,49 @@ compares it with the pull request's head before believing "nothing outstanding".
 and a file written before anyone commented reads exactly like one written after
 the last round.
 
+### The precondition this puts on `flow complete`
+
+Dating the record means resolving the pull request's head, and that is done with
+`gh pr view`. So **once a flow has a PR recorded, completing it needs a `gh` that
+can authenticate** — `gh` on `PATH` and `gh auth status` exiting `0`. On a CI
+runner or a machine that is logged out, the gate reports:
+
+```text
+✗ review (1 of 5 conditions failed — external-comments (unobserved): acme/app#7 has a
+  comment record collected against a1b2c3d… (round 2), and this run could not resolve
+  the pull request's own head to compare it with: the tracker could not be reached, so
+  the pull request was never asked about — `gh` is not on `PATH`, or `gh auth status`
+  exits non-zero. So the record is neither shown to be current nor shown to be stale —
+  nobody looked. Install `gh` and run `gh auth login` …)
+```
+
+The condition distinguishes three states, and the message says which one you are
+in, because the fix for each is different:
+
+| What happened | Status | What to do |
+|---|---|---|
+| The head resolved and the collection is against it | `pass` | nothing |
+| The head resolved and the collection is against another commit, or names none | `violated` | re-run `keryx review comments collect --sha <pr-head>` |
+| The head could not be resolved at all | `unobserved` | fix the tracker — the message names how it failed |
+
+The third one used to be reported as the second, so a logged-out `gh` read as
+*your comment record is stale* and sent you to re-collect a record that was
+already current.
+
+**`--merged <sha>` does not lift it.** The merged commit stands in for the PR
+head in the head-commit condition, because "was the reviewed tree the one that
+merged" is a question about commits and `git merge-base` answers it locally. It
+cannot stand in here: "has anyone commented since the record was written" is a
+question about the pull request, and a comment posted after the last round and
+before the merge is invisible to every fact in the local repository. Substituting
+the merged commit would not relax the check, it would answer a different question
+and call the answer clean.
+
+If an environment will never reach the tracker, the way past is
+`completion.require_clean_round: false` in `.metaproject/tasks.config.json`,
+which reports the whole review gate as `skipped` in the gate list. That is the
+point of it: the waiver is on the record, rather than hidden inside a green tick.
+
 Each reply is at most **two sentences and 600 characters** — `--max-sentences`
 and `--max-chars`, both refusing a value below one — cut rather than warned
 about, with the detail living in the flow package that the link points at. Both

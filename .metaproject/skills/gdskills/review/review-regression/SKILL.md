@@ -44,19 +44,37 @@ three shapes outright:
   a trigger and an outcome; `minor` and `info` state by definition that it does
   not.
 - `no-link-to-change` — nothing in the finding names a changed file, module or
-  symbol. A regression claim asserts that THE CHANGE broke this site.
+  symbol. A regression claim asserts that THE CHANGE broke this site. **A
+  `blocker` is exempt from this rule; a `major` is not.** The rule is a substring
+  match over your prose — the only one of the three that can be wrong about a
+  true claim — and it may not be the thing that deletes a merge-blocking
+  regression. So: when you report a `major` about a **dependent**, name the
+  changed file, module or symbol whose behaviour moved. The anchor alone is not
+  enough, because every finding the first rule admits is anchored, most of them
+  at code the change never touched.
 
 A refused finding does not reach `findings.json`. It is listed by id in the
 package's `scope.md` under `## Scope B rejections`, with the rule that refused it
-and why — so a round spent on them is a round wasted, visibly, and an observation
-raised under the wrong scope survives to be filed where it belongs.
+and why, and printed on the terminal by `keryx review ingest` — so a round spent
+on them is a round wasted, visibly, and an observation raised under the wrong
+scope survives to be filed where it belongs. What the completion gate never sees
+is a refused finding, deliberately: it is a claim this round has declined to
+make, and the gate blocking on it is the failure this screen exists to remove.
 
-Every rule judges the CLAIM. None reads the reviewer's name: a reviewer whose
-usual question is "is this code good" can still notice a break, and it is
-accepted on its merits.
+Every rejection RULE judges the CLAIM. None of the three reads the reviewer's
+name: a reviewer whose usual question is "is this code good" can still notice a
+break, and it is accepted on its merits. What the name decides is **membership**
+— which findings the screen judges at all. `review-finding.schema.json` carries
+no `scope` property, so the reviewer name is the only surviving record of which
+question a finding was dispatched under, and `isBlastRadiusScopedFinding` reads
+it to tell scope B's findings from scope A's. Screening scope A by scope B's
+rules would reject every legitimate `minor` on a changed file. The distinction is
+the whole of it: the name selects the jury, never the verdict.
 
 If the round has no computed blast-radius record to screen against, the ingest is
-refused rather than recorded unscreened.
+refused rather than recorded unscreened. The orchestrator supplies it with
+`keryx review ingest --blast-radius <file>` — the `--json` output it kept from
+Step 3b.
 
 ## What you are given
 

@@ -83,7 +83,7 @@
       }
     },
     "model": {
-      "description": "Which model runs this dispatch. Skills declare a `tier`; at dispatch time src/gdskills/model-tier.ts DISCOVERS the models runtime provider detection reported for the active provider, ranks them by size markers in their names, and places the tier relative to the session's own model — `standard` is the session model, `deep` a discovered model ranked above it, `light` one ranked below. No table of model ids exists anywhere in the resolution. When the candidates cannot be ranked, every tier keeps the session's model. `provider`/`model` remain available for an explicit lateral selection, and an omitted block inherits the parent verbatim. Two things fill this block. The interactive `spawn_subagent` tool does it in code: it builds the tier map with `buildTierMap` from its host's detection result, hands it to `resolveChildModel`, and records the outcome on the dispatch's run trace. An orchestrator authoring a dispatch document fills it by calling `decideDispatchModel`, which returns exactly the fields below. Neither path is enforced by a reader — nothing validates a recorded resolution against the model that actually ran — so these fields are a record, not a gate.",
+      "description": "Which model runs this dispatch. Skills declare a `tier`; at dispatch time src/gdskills/model-tier.ts DISCOVERS the models runtime provider detection reported for the active provider, ranks them by size markers in their names, and places the tier relative to the session's own model — `standard` is the session model, `deep` a discovered model ranked above it, `light` one ranked below. No table of model ids exists anywhere in the resolution. When the candidates cannot be ranked, every tier keeps the session's model. `provider`/`model` remain available for an explicit lateral selection, and an omitted block inherits the parent verbatim. Two things fill this block. The interactive `spawn_subagent` tool does it in code: it builds the tier map with `buildTierMap` from its host's detection result, hands it to `resolveChildModel`, and records the outcome on the dispatch's run trace. An orchestrator authoring a dispatch document RUNS `keryx review tier`, which takes the §4.4 signals as flags and prints exactly the fields below, ready to paste (`--json` prints this object alone). It is a command rather than a documented function call because an orchestrator is an agent following prose and cannot call a TypeScript function: told to `decideDispatchModel`, it computed the tier in its head from a table, which is the mechanical step that belongs in code. When nothing can be worked out the command emits `inherit: true` instead of `provider`/`model` — the dispatch runs on the caller's own model, never a downgrade. Neither path is enforced by a reader — nothing validates a recorded resolution against the model that actually ran — so these fields are a record, not a gate.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -95,7 +95,7 @@
           "enum": ["light", "standard", "deep"]
         },
         "tier_reasons": {
-          "description": "The ordered rule ids `assignTier` applied, e.g. [\"base:standard\", \"floor:blast-radius\"]. Recorded so a tier can be explained after the run instead of re-derived from a state nobody kept. Ids rather than prose, because they are compared across runs.",
+          "description": "The ordered rule ids `assignTier` applied, e.g. [\"base:standard\", \"floor:blast-radius\"]. Produced by `keryx review tier` from the signals passed as flags, never written by hand: a reason list an author composes records the story they tell about the tier rather than the rules that produced it. Recorded so a tier can be explained after the run instead of re-derived from a state nobody kept. Ids rather than prose, because they are compared across runs.",
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         },
@@ -142,7 +142,10 @@
             }
           }
         },
-        "inherit": { "type": "boolean" }
+        "inherit": {
+          "description": "Run this dispatch on the caller's own model. `keryx review tier` writes it — in place of `provider`/`model`, never alongside them — when the environment could not be worked out: no persisted session selection, an unrankable catalogue, or an unrankable session model. It is the recorded form of \"never a downgrade\": the alternative is an empty `provider`/`model` pair, which is schema-invalid and still reads like an answer. A `tier` and `tier_reasons` may accompany it, because the tier was assigned from signals even when no model could be named for it.",
+          "type": "boolean"
+        }
       }
     },
     "runtime": {

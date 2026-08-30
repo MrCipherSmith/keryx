@@ -716,3 +716,31 @@ describe("AC17: the model-selection rule permits adaptive selection", () => {
     }
   });
 });
+
+test("a catalogue nothing can rank is a fallback, not a ranking that found nothing above", () => {
+  // Observed live: the session ran a model whose id carries a size word while
+  // every candidate the provider reported carried none. `ranked` was empty, yet
+  // each tier resolved through the "no model ranks above/below" branch and
+  // recorded `session-ranked` — a claim that the ranking worked. The model chosen
+  // was right either way; the RECORD was wrong, and the record is the entire
+  // point of `tier_resolution`.
+  const catalog = [{ name: "acme", models: ["acme-reasoner", "acme-chat"] }];
+  const session = { providerId: "acme", modelId: "acme-v4-flash" };
+  const ranking = rankDiscoveredModels(session, catalog);
+
+  expect(ranking.ranked).toHaveLength(0);
+  expect(ranking.usable).toBe(false);
+  expect(ranking.fallbackReason).toContain("size marker");
+
+  for (const tier of MODEL_TIERS) {
+    const resolved = resolveTierModel(session, tier, catalog);
+    expect(resolved.source).toBe("session-fallback");
+    // The safe outcome was never in doubt — only whether the record said why.
+    expect(resolved.modelId).toBe("acme-v4-flash");
+  }
+
+  // Non-vacuity: one rankable candidate and the ranking is usable again.
+  const withOne = rankDiscoveredModels(session, [{ name: "acme", models: ["acme-chat", "acme-opus"] }]);
+  expect(withOne.usable).toBe(true);
+  expect(withOne.ranked).toHaveLength(1);
+});

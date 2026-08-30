@@ -721,6 +721,125 @@ function identityKeys(finding: GateFinding): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Resolving the pull request's head commit
+// ---------------------------------------------------------------------------
+
+/**
+ * How the attempt to resolve the pull request's head commit ended.
+ *
+ * This replaces a `string | null`, and it replaces it because that `null` was
+ * read by two conditions and described wrongly by both. FIVE different facts
+ * produced it:
+ *
+ * 1. the flow records no pull request at all;
+ * 2. no tracker is wired into this process;
+ * 3. a tracker is wired and `detect()` refused — `gh` is not on `PATH`, or
+ *    `gh auth status` exited non-zero (`src/flow/tracker/github.ts`);
+ * 4. the tracker ran and the pull request does not exist or is not visible;
+ * 5. the tracker ran, the pull request exists, and it reported no head SHA (a
+ *    `gh` too old for `headRefOid`).
+ *
+ * Condition 3 called 3, 4 and 5 alike "the tracker did not report a head SHA —
+ * an older `gh`, or an inaccessible PR", which is a statement about a tracker
+ * that in case 3 was never asked anything. Condition 4 was worse: it called all
+ * five "the pull request's own head could not be resolved, so nothing
+ * establishes that the collection is current", which reads as *your comment
+ * record is stale*. An operator on a CI runner with no authenticated `gh` was
+ * told to re-run a collection that was already current, and could not tell from
+ * the message that the problem was their `gh` rather than their record.
+ *
+ * **"We could not look" is a third fact, beside "the record is fresh" and "the
+ * record is stale."** This type is what makes it sayable, and
+ * {@link prHeadResolutionSummary} / {@link prHeadResolutionRemedy} are what make
+ * it say the same thing in both conditions.
+ */
+export type PrHeadResolution =
+  | { state: "resolved"; sha: string }
+  | { state: "no-pr" }
+  | { state: "no-tracker" }
+  | { state: "tracker-unavailable" }
+  | { state: "pr-unreachable" }
+  | { state: "head-unreported" };
+
+/** The SHA when there is one, `null` for every way there is not. */
+export function prHeadOf(resolution: PrHeadResolution): string | null {
+  return resolution.state === "resolved" ? resolution.sha : null;
+}
+
+/** Which of the five non-answers happened, in the operator's words. */
+export function prHeadResolutionSummary(resolution: PrHeadResolution): string {
+  switch (resolution.state) {
+    case "resolved":
+      return `the pull request's head is ${resolution.sha}`;
+    case "no-pr":
+      return "no PR is recorded on this flow";
+    case "no-tracker":
+      return "no tracker is configured, so nothing could be asked";
+    case "tracker-unavailable":
+      return (
+        "the tracker could not be reached, so the pull request was never asked about — " +
+        "`gh` is not on `PATH`, or `gh auth status` exits non-zero"
+      );
+    case "pr-unreachable":
+      return "the tracker ran and the pull request is not there, or this account cannot see it";
+    case "head-unreported":
+      return "the tracker was reached and did not report a head SHA (a `gh` older than the `headRefOid` field)";
+  }
+}
+
+/** What to actually do about it. One remedy per state, none of them "inject a dependency". */
+export function prHeadResolutionRemedy(resolution: PrHeadResolution, prUrl: string | null): string {
+  switch (resolution.state) {
+    case "resolved":
+      return "";
+    case "no-pr":
+      return "Record the pull request with `keryx flow implemented <id> --pr <url>`, or complete with `--merged <sha>`.";
+    case "no-tracker":
+      return "Wire a tracker into the flow service, or inject `FlowServiceDeps.externalCommentsGate`.";
+    case "tracker-unavailable":
+      return (
+        "Install `gh` and run `gh auth login` — the head is read with `gh pr view`, and `gh auth status` is " +
+        "currently failing here."
+      );
+    case "pr-unreachable":
+      return `Check that ${prUrl ?? "the recorded pull request"} still exists and that this \`gh\` account can see it.`;
+    case "head-unreported":
+      return "Upgrade `gh`: this one does not report `headRefOid`, which is the field the head is read from.";
+  }
+}
+
+/**
+ * Ask the tracker for the pull request's head, and record how the asking went.
+ *
+ * Every `null` this used to return is now a named state. Note the ORDER, which
+ * is the whole point: `detect()` is asked before `prStatus`, so "the tracker
+ * cannot run" is distinguishable from "the tracker ran and found nothing" —
+ * they were indistinguishable when both produced `null`.
+ */
+export async function resolvePrHead(input: {
+  flow: FlowState;
+  tracker: TrackerAdapter | null;
+}): Promise<PrHeadResolution> {
+  const url = input.flow.pr.url;
+  if (url === null || url === "") {
+    return { state: "no-pr" };
+  }
+  if (input.tracker === null) {
+    return { state: "no-tracker" };
+  }
+  if (!(await input.tracker.detect())) {
+    return { state: "tracker-unavailable" };
+  }
+  const status = await input.tracker.prStatus(url);
+  if (!status.exists) {
+    return { state: "pr-unreachable" };
+  }
+  return status.headSha === null || status.headSha === undefined
+    ? { state: "head-unreported" }
+    : { state: "resolved", sha: status.headSha };
+}
+
+// ---------------------------------------------------------------------------
 // External comments (§2.2 condition 4, depending on §3)
 // ---------------------------------------------------------------------------
 
@@ -733,8 +852,19 @@ function identityKeys(finding: GateFinding): string[] {
  * pretend the answer is "no" while nothing is there to ask.
  */
 export type ExternalCommentsReport = {
-  /** Whether a collection pass actually ran against the PR. */
+  /** Whether a collection pass actually ran against the PR head under review. */
   collected: boolean;
+  /**
+   * When `collected` is false, WHICH kind of false it is.
+   *
+   * `unobserved` (the default, and what every older collector means) is
+   * "nothing established whether anyone commented". `violated` is "the head was
+   * resolved and the record on disk demonstrably does not answer for the pull
+   * request as it stands" — a fact we went and got, not a question we failed to
+   * ask. Both fail the gate; the operator is told which, because the fixes are
+   * different and one of them is not about the review at all.
+   */
+  status?: "unobserved" | "violated" | undefined;
   /** Comment references with no reply and/or no disposition. */
   unanswered: string[];
   /** Free text for the gate detail; e.g. how many were collected. */
@@ -747,14 +877,15 @@ export type ExternalCommentsGate = (input: {
   flow: FlowState;
   rounds: readonly ReviewRoundRecord[];
   /**
-   * The PR head the gate already resolved, or `null` when it could not be.
+   * How the gate's own attempt to resolve the PR head ended.
    *
-   * Passed because "was anything collected" is not a question a count can
-   * answer — see {@link durableExternalCommentsGate}. A collector that cannot
-   * date its own record against the commit under review can only report that a
-   * file exists.
+   * A {@link PrHeadResolution} rather than a `string | null`, because a
+   * collector that gets `null` cannot tell "the record is stale" from "nobody
+   * could reach the tracker", and the message it writes is read by an operator
+   * who has to act on exactly that difference. See the type's own comment for
+   * the defect that forced it.
    */
-  prHead: string | null;
+  prHead: PrHeadResolution;
 }) => Promise<ExternalCommentsReport | null>;
 
 /**
@@ -821,6 +952,32 @@ export function parsePrRef(url: string): { repo: string; number: number } | null
  * A record with no `collected_sha` was written by an older keryx. It reads as
  * `collected: false` — never as fresh. It has exactly the property an absent
  * file has, which is that nothing in it can say when anybody last looked.
+ *
+ * # Three states, not two
+ *
+ * The freshness check shipped collapsing two of them. Once a record exists and
+ * carries a `collected_sha`, exactly one of these holds:
+ *
+ * 1. **the head resolved and the collection matches it** — `collected: true`,
+ *    the condition passes;
+ * 2. **the head resolved and the collection is against a different commit**
+ *    (or carries none) — `violated`: we looked, and the record demonstrably
+ *    does not answer for the pull request as it stands. Re-run the collector;
+ * 3. **the head could not be resolved at all** — `unobserved`: nothing was
+ *    established about the record either way. This is NOT state 2, and the
+ *    first version of the check reported it as state 2, so an operator whose
+ *    `gh` was logged out was told their comment record was stale and sent to
+ *    re-run a collection that was already current.
+ *
+ * State 3 still FAILS, and deliberately: rule 2 of this module's header says a
+ * condition that could not be observed does not pass, and "nobody could ask the
+ * pull request whether anyone commented on it" is that rule's exact subject. It
+ * does not become acceptable by being spelled "we could not check". What state 3
+ * gets instead of a pass is a message that names the tracker as the thing that
+ * failed, names the remedy for the specific way it failed, and names the visible
+ * opt-out (`completion.require_clean_round: false`) for an environment that will
+ * never have one — an opt-out that reports the whole gate as `skipped` in the
+ * gate list, so the waiver is on the record rather than inside a green tick.
  */
 export const durableExternalCommentsGate: ExternalCommentsGate = async (input) => {
   const url = input.flow.pr.url;
@@ -858,8 +1015,13 @@ export const durableExternalCommentsGate: ExternalCommentsGate = async (input) =
   }
   const collectCommand = `keryx review comments collect --repo ${ref.repo} --pr ${ref.number} --sha <pr-head>`;
   if (state.collected_sha === null) {
+    // State 2, established without asking anybody: an undatable record is
+    // undatable whatever the tracker says, so this is checked BEFORE the head is
+    // consulted. Sending the operator to fix their `gh` here would be advice
+    // about the wrong thing — a working `gh` still cannot date this file.
     return {
       collected: false,
+      status: "violated",
       unanswered: [],
       detail:
         `${ref.repo}#${ref.number} has a comment record that does not say which commit it was collected against ` +
@@ -867,23 +1029,35 @@ export const durableExternalCommentsGate: ExternalCommentsGate = async (input) =
         `shown to be current, and a count of rounds is not a date. Re-run \`${collectCommand}\`.`,
     };
   }
-  if (input.prHead === null) {
+  if (input.prHead.state !== "resolved") {
+    // State 3. Note what is NOT said here: nothing about the record being stale,
+    // because nothing here knows that. The record may be perfectly current; this
+    // run simply could not ask.
     return {
       collected: false,
+      status: "unobserved",
       unanswered: [],
       detail:
-        `${ref.repo}#${ref.number} was collected against ${state.collected_sha}, and the pull request's own head ` +
-        "could not be resolved, so nothing establishes that the collection is current. A comment posted after the " +
-        "collection ran is invisible to this record, and that is the case this condition exists to catch.",
+        `${ref.repo}#${ref.number} has a comment record collected against ${state.collected_sha} (round ` +
+        `${state.collected_round ?? "?"}), and this run could not resolve the pull request's own head to compare ` +
+        `it with: ${prHeadResolutionSummary(input.prHead)}. So the record is neither shown to be current nor shown ` +
+        "to be stale — nobody looked. " +
+        `${prHeadResolutionRemedy(input.prHead, url)} ` +
+        "If this environment will never reach the tracker, the way past this gate is " +
+        `\`completion.require_clean_round: false\` in \`${REVIEW_GATE_CONFIG_PATH}\`, which reports the review gate ` +
+        "as `skipped` rather than passing it.",
     };
   }
-  if (!shaMatches(state.collected_sha, input.prHead)) {
+  if (!shaMatches(state.collected_sha, input.prHead.sha)) {
+    // State 2, the datable kind: we resolved the head and the record is against
+    // a different commit.
     return {
       collected: false,
+      status: "violated",
       unanswered: [],
       detail:
         `${ref.repo}#${ref.number} was last collected against ${state.collected_sha} (round ` +
-        `${state.collected_round ?? "?"}), but the PR head is ${input.prHead}. Everything anyone said after ` +
+        `${state.collected_round ?? "?"}), but the PR head is ${input.prHead.sha}. Everything anyone said after ` +
         `${state.collected_sha} is missing from this record, so "nothing outstanding" would be a statement about a ` +
         `pull request that no longer exists. Re-run \`${collectCommand}\`.`,
     };
@@ -961,11 +1135,14 @@ export type ReviewGateInput = {
   cwd: string;
   flowDir: string;
   flow: FlowState;
-  tracker: TrackerAdapter | null;
   config: ReviewGateConfig;
   rounds: readonly ReviewRoundRecord[];
-  /** The PR head, when the caller already resolved it. `undefined` = unknown. */
-  prHead?: string | null | undefined;
+  /**
+   * How {@link resolvePrHead} got on. Required, and a {@link PrHeadResolution}
+   * rather than a nullable SHA: conditions 3 and 4 both read it, and both used
+   * to describe the same `null` differently and wrongly.
+   */
+  prHead: PrHeadResolution;
   externalComments?: ExternalCommentsReport | null | undefined;
   /** `flow complete --merged <sha>`, when that path was taken. */
   mergedCommit?: string | undefined;
@@ -1087,9 +1264,30 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   // advice ("re-run the round") that could not be followed — the next round would
   // record the branch head again. So on this path containment is the question:
   // is the reviewed commit IN what was merged. See `mergedCommitContainment`.
+  //
+  // # Why the merged commit stands in HERE and not in condition 4
+  //
+  // Both conditions lose the pull request head when the tracker is unreachable,
+  // and only this one has a substitute. That is not an oversight, it is what the
+  // two conditions are asking:
+  //
+  //   - Condition 3 asks *was the reviewed tree the one that merged*. That is a
+  //     question about COMMITS, and the merged commit answers it completely and
+  //     locally — `git merge-base --is-ancestor`, no network, no `gh`.
+  //   - Condition 4 asks *has anyone spoken since the record was written*. That
+  //     is a question about the PULL REQUEST, and no commit answers it: a
+  //     comment posted after the last round and before the merge is invisible to
+  //     every fact in the local repository. Substituting the merged commit there
+  //     would not relax the check, it would answer a different question and call
+  //     the result clean.
+  //
+  // So `flow complete --merged <sha>` needs no tracker for condition 3 and still
+  // needs one for condition 4 whenever a pull request is recorded on the flow.
+  // That precondition is in `docs/docs/guides/review-with-a-record.md`.
   const mergedCommit = input.mergedCommit ?? null;
-  const onMergedPath = (input.prHead ?? null) === null && mergedCommit !== null;
-  const prHead = input.prHead ?? mergedCommit;
+  const resolvedHead = prHeadOf(input.prHead);
+  const onMergedPath = resolvedHead === null && mergedCommit !== null;
+  const prHead = resolvedHead ?? mergedCommit;
   if (latestRound === undefined) {
     conditions.push({
       id: "head-commit",
@@ -1109,14 +1307,14 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
     conditions.push({
       id: "head-commit",
       status: "unobserved",
+      // The same five states condition 4 reports, in the same words, from the
+      // same helper. This branch used to infer the reason from `flow.pr.url` and
+      // `tracker !== null` and therefore said "the tracker did not report a head
+      // SHA" about a tracker that `detect()` had refused to run at all.
       detail:
-        "the PR head commit could not be determined" +
-        (input.flow.pr.url === null
-          ? " (no PR recorded on this flow)"
-          : input.tracker === null
-            ? " (no tracker configured)"
-            : " (the tracker did not report a head SHA — an older `gh`, or an inaccessible PR)") +
-        `; round \`${latestRound.reviewId}\` ran against ${latestRound.head}.`,
+        `the PR head commit could not be determined (${prHeadResolutionSummary(input.prHead)})` +
+        `; round \`${latestRound.reviewId}\` ran against ${latestRound.head}. ` +
+        prHeadResolutionRemedy(input.prHead, input.flow.pr.url),
     });
   } else if (!shaMatches(latestRound.head, prHead) && onMergedPath && input.mergedCommitContainment === "contains") {
     conditions.push({
@@ -1311,11 +1509,18 @@ function externalCommentsCondition(input: ReviewGateInput): ReviewGateCondition 
     };
   }
   if (!report.collected) {
+    // `unobserved` is the default because that is what every collector that
+    // predates `status` means, and because it is the safe reading: a report that
+    // does not claim to have established anything has not established anything.
+    const status = report.status ?? "unobserved";
     return {
       id: "external-comments",
-      status: "unobserved",
+      status,
       detail:
-        `the external-comment collection did not run${report.detail === undefined ? "" : `: ${report.detail}`}` +
+        (status === "violated"
+          ? "the external-comment record does not answer for this pull request"
+          : "the external-comment collection did not run") +
+        `${report.detail === undefined ? "" : `: ${report.detail}`}` +
         (fromRounds.length === 0 ? "" : `; the rounds separately carry ${fromRounds.length} unanswered comment(s): ${fromRounds.join(" | ")}`),
     };
   }
@@ -1379,11 +1584,9 @@ export async function runReviewGate(input: {
 
   const rounds = await readReviewRounds(input.cwd, input.flowDir);
 
-  let prHead: string | null = null;
-  if (input.flow.pr.url !== null && input.tracker !== null && (await input.tracker.detect())) {
-    const status = await input.tracker.prStatus(input.flow.pr.url);
-    prHead = status.exists ? (status.headSha ?? null) : null;
-  }
+  // One resolution, read by conditions 3 and 4. It carries HOW it ended, not
+  // just whether it succeeded — see {@link PrHeadResolution}.
+  const prHead = await resolvePrHead({ flow: input.flow, tracker: input.tracker });
 
   // Defaulted, not merely injectable. The seam existed and was provided by two
   // test cases and by nothing else, so in the shipping CLI condition 4 had no
@@ -1403,7 +1606,7 @@ export async function runReviewGate(input: {
   // request head is available would answer a question nobody asked.
   const latestRoundHead = rounds.filter((round) => round.ingested).at(-1)?.head ?? null;
   const containment =
-    prHead === null && input.mergedCommit !== undefined && latestRoundHead !== null
+    prHeadOf(prHead) === null && input.mergedCommit !== undefined && latestRoundHead !== null
       ? await commitContains(input.cwd, latestRoundHead, input.mergedCommit)
       : undefined;
 
@@ -1411,7 +1614,6 @@ export async function runReviewGate(input: {
     cwd: input.cwd,
     flowDir: input.flowDir,
     flow: input.flow,
-    tracker: input.tracker,
     config,
     rounds,
     prHead,

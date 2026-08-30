@@ -111,30 +111,62 @@ Two places, and they are not the same shape:
   `resolveChildModel`, and records the outcome on the dispatch's run trace.
   Omitting `model_tier` inherits the parent's model, exactly as before the field
   existed.
-- **An orchestrator authoring a dispatch document** calls `decideDispatchModel`,
-  which assigns the tier from signals (below), resolves it, and returns the
-  `model` block the contract schema expects.
+- **An orchestrator authoring a dispatch document** *runs a command*:
+  `keryx review tier`. It takes the signals below as flags and prints the `model`
+  block ready to paste — the tier, the ordered rule ids that produced it, the
+  resolved provider/model, `tier_resolution` and `model_discovery`. `--json`
+  prints the block alone.
+
+That second bullet used to say the orchestrator "calls `decideDispatchModel`".
+An orchestrator is an agent following prose and **cannot call a TypeScript
+function**, so what actually happened was a model reading a table of signals and
+doing the arithmetic in its head — the exact mechanical work this programme moves
+out of skills and into the code that consumes them. `keryx review tier` is that
+code's entry point; `decideDispatchModel` is what it calls.
 
 Nothing reads a recorded resolution back and checks it. These fields explain a
 finished run; they do not gate one.
 
 ## Choosing the tier
 
-The orchestrator assigns the tier from signals it already holds
-(`assignTier` in `src/gdskills/model-tier.ts`). It is never produced by asking a
-model to rate its own difficulty.
+The tier is **computed, not judged**. Run:
 
-| Signal | Effect |
-|---|---|
-| scope is `blast-radius` | at least `deep` |
-| fix attempt >= 2 on the same finding | raise one tier |
-| forced strategy change after the loop cap | `deep` |
-| finding count <= 3 **and** diff <= 50 lines | allow `light` |
-| verification method is `execution` or `site-check` | `light` — the evidence comes from running something, not from reasoning |
-| any security finding in scope | never below `standard` |
+```bash
+keryx review tier --scope blast-radius --findings 12 --diff-lines 340 \
+                  --verifier execution --fix-attempt 2 --security \
+                  --forced-strategy-change --json
+```
+
+Every flag is a signal the orchestrator already holds before it dispatches: the
+round's scope, its own attempt counter, the diff it computed, the findings it is
+holding, the verification method it is about to ask for. None of them is a
+model's self-report — no model is ever asked to rate its own difficulty.
+
+The rules `assignTier` applies, in the order it applies them:
+
+| Signal | Flag | Effect |
+|---|---|---|
+| scope is `blast-radius` | `--scope blast-radius` | at least `deep` |
+| fix attempt >= 2 on the same finding | `--fix-attempt <n>` | raise one tier |
+| forced strategy change after the loop cap | `--forced-strategy-change` | `deep` |
+| finding count <= 3 **and** diff <= 50 lines | `--findings <n> --diff-lines <n>` | allow `light` |
+| verification method is `execution` or `site-check` | `--verifier <method>` | `light` — the evidence comes from running something, not from reasoning |
+| any security finding in scope | `--security` | never below `standard` |
 
 Floors are applied after downgrades, so "at least `deep`" means at least: a
 blast-radius round over a twelve-line diff is still a blast-radius round.
+
+The session's provider/model come from the selection `keryx shell` persisted, and
+the candidate set from live provider detection. A caller that already holds
+either passes `--session-provider`/`--session-model` and `--catalog` instead of
+paying for the lookup. **There is no `--tier` flag, and there will not be**:
+accepting a hand-written tier would put the arithmetic straight back in the
+caller's head.
+
+When nothing can be worked out — no persisted session, an unrankable catalogue,
+an unrankable session model — the block says `inherit: true` and the dispatch
+runs on the **caller's own model**. Exit status is still 0: a fallback is an
+answer, not a failure.
 
 ## Recording the decision
 
@@ -155,12 +187,15 @@ the three outcomes occurred, and what was on the table when it did —
 "Fell back to the session model" and "assigned the session model because it
 ranked there" are different facts. A run that cannot be explained afterwards is
 what these fields exist to prevent. Record them on every dispatch that resolves
-a tier — `decideDispatchModel` returns all four together, so recording them is
-one call rather than four decisions.
+a tier — `keryx review tier` prints all four together as one pasteable block, so
+recording them is one copy rather than four decisions.
 
 ## Mandatory behavior
 
 - Declare a tier in the skill; resolve the model at dispatch time.
+- **Run `keryx review tier` — do not work the tier out by hand.** Assigning it
+  from the table above by reading is the mechanical step this rule exists to
+  remove.
 - **Do not ask the operator which model to use per dispatch.** Asking every time
   is what made adaptive selection impossible.
 - Never write a concrete model name into a skill, a rule, a dispatch template, or

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -161,8 +161,9 @@ export async function findRelatedFlow(input: {
  * `types.ts` describes — nothing in the manifest, the finding record or either
  * schema carries it — so it is declared where it is used and consumed. A caller
  * that ran `keryx review blast-radius` passes the record it already holds; a
- * caller that wrote it next to the package (`--out <package>/blast-radius.json`)
- * passes nothing and {@link readPackageBlastRadius} finds it.
+ * caller that did not passes nothing, and {@link resolveScreenRadius} looks for
+ * the record on disk — see {@link handoffBlastRadiusPath} for where, and why it
+ * is NOT inside the package.
  */
 export type ManagedReviewIngestInput = ManagedReviewInput & {
   /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
@@ -179,14 +180,22 @@ export type ManagedReviewIngestInput = ManagedReviewInput & {
  * which is not the same fact as "it ran and rejected nothing".
  */
 export type ScopeBScreenRecord = {
-  /** Where the blast-radius record came from. `none` — no screen ran. */
-  source: "input" | "package" | "none";
+  /**
+   * Where the blast-radius record came from.
+   *
+   * - `input` — the caller passed it (`--blast-radius <file>`).
+   * - `handoff` — read from the reviews root, the between-commands channel.
+   * - `package` — read from this package's own copy, which a previous ingest of
+   *   the same `--review-id` wrote there. This is the retry path.
+   * - `none` — no screen ran.
+   */
+  source: "input" | "handoff" | "package" | "none";
   /** Findings attributed to a scope-B reviewer, before the screen. */
   scopeBFindings: number;
   screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
 };
 
-/** The name the package's own copy of the blast-radius record is read from. */
+/** The file name every copy of the blast-radius record is read from and written to. */
 const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
@@ -382,6 +391,8 @@ export async function createManagedReviewPackage(
   );
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
+  // Last, and only once the package is complete. See {@link persistScreenRadius}.
+  await persistScreenRadius(packageDir, scopeB.resolved);
 
   return {
     reviewId,
@@ -414,7 +425,11 @@ export async function createManagedReviewPackage(
  *    is the defect this repairs: the enforcement silently not running while the
  *    skill tells the reviewer it did. A screen cannot be applied without the set
  *    the round was dispatched over, so the round is not recordable until the set
- *    is supplied.
+ *    is supplied. The refusal names both channels that work — `--blast-radius
+ *    <file>` and the handoff slot in the reviews root — and names the one that
+ *    does not, because the message used to point at the package directory and
+ *    following it made the ingest allocate a different one. See
+ *    {@link handoffBlastRadiusPath}.
  *
  * Findings that are not scope B pass through untouched. Scope A asks a different
  * question and its `minor` on a changed file is legitimate.
@@ -423,52 +438,122 @@ async function screenScopeBFindings(
   input: ManagedReviewIngestInput,
   packageDir: string,
   findings: readonly NormalizedReviewFinding[],
-): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord }> {
-  const fromPackage = input.blastRadius === undefined ? await readPackageBlastRadius(packageDir) : undefined;
-  const radius = input.blastRadius ?? fromPackage;
-  const reviewers = radius?.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
+): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord; resolved: ResolvedScreenRadius | undefined }> {
+  const resolved = await resolveScreenRadius(input, packageDir);
+  const reviewers = resolved?.radius.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
   const scopeB = findings.filter((finding) => isBlastRadiusScopedFinding(finding, reviewers));
 
-  if (radius === undefined) {
+  if (resolved === undefined) {
     if (scopeB.length > 0) {
       throw new Error(
         `Refusing to record ${scopeB.length} finding(s) raised under scope B (${scopeB
           .map((finding) => `${finding.id} by ${finding.reviewer}`)
           .join(
             ", ",
-          )}) with no blast-radius record: AC3 is enforced in code, and the screen cannot be applied without the computed set the round was dispatched over. Write the set next to the package — \`keryx review blast-radius --out ${path.join(
-          path.basename(packageDir),
-          BLAST_RADIUS_ARTIFACT,
-        )}\` — or pass it to this call, and ingest again.`,
+          )}) with no blast-radius record: AC3 is enforced in code, and the screen cannot be applied without the computed set the round was dispatched over. Two ways out, and the first is the one that always works: (1) compute the set with \`keryx review blast-radius --json > <file>\` and pass \`--blast-radius <file>\` to this ingest; (2) write that record to \`${path.relative(
+          input.cwd,
+          handoffBlastRadiusPath(packageDir),
+        )}\` and ingest again — the ingest reads it from there and consumes it. Do NOT write it to \`${path.relative(
+          input.cwd,
+          path.join(packageDir, BLAST_RADIUS_ARTIFACT),
+        )}\`: a round that names no --review-id has not allocated that directory yet, so creating it makes the next ingest take the NEXT free name and find nothing there either.`,
       );
     }
-    return { retained: [...findings], record: { source: "none", scopeBFindings: 0 } };
+    return { retained: [...findings], record: { source: "none", scopeBFindings: 0 }, resolved: undefined };
   }
 
-  const screen = screenBlastRadiusFindings(scopeB, radius, { minSeverity: radius.minSeverity });
+  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity });
   const rejected = new Set(screen.rejected.map((rejection) => rejection.finding));
+  // The rejected findings do NOT go on to `findings.json`, and that is the
+  // decision rather than an oversight. `findings.json` is what this round is
+  // ASSERTING and what the completion gate must act on; a scope-B finding the
+  // screen refused is a claim the round has explicitly declined to make, and
+  // recording it there would hand the gate the exact thing AC3 exists to stop
+  // blocking completion on — an opinion about untouched code wearing scope B's
+  // badge. What it may not be is invisible, so every rejection is named three
+  // times: in `scope.md` under "## Scope B rejections" with the rule and the
+  // detail, in the `ScopeBScreenRecord` this returns, and on the terminal the
+  // operator was already looking at (`keryx review ingest` prints one line per
+  // rejection). "Rejected 0" and "the screen did not run" stay distinguishable
+  // in all three.
   return {
     retained: findings.filter((finding) => !rejected.has(finding)),
     record: {
-      source: input.blastRadius === undefined ? "package" : "input",
+      source: resolved.source,
       scopeBFindings: scopeB.length,
       screen,
     },
+    resolved,
   };
 }
 
+type ResolvedScreenRadius = {
+  radius: BlastRadiusScreenInput;
+  source: "input" | "handoff" | "package";
+  /** The file it was read from, when it came off disk. Consumed after the write. */
+  file?: string | undefined;
+};
+
 /**
- * The blast-radius record written next to the package, when there is one.
+ * Where the between-commands blast-radius record lives: the REVIEWS ROOT, not
+ * the package.
  *
- * The same channel `readPreFilterScopeBlock` uses and for the same reason: the
- * orchestrator computes the set at dispatch time and ingests after the round, so
- * the record has to survive between two commands without either one holding it
- * in memory. A malformed file throws rather than falling back to "no record" —
- * an unreadable artifact silently disabling the screen is precisely the failure
+ * It used to be the package, and that was a trap. {@link allocatePackage}
+ * returns a directory that does not exist yet for every round that names no
+ * `--review-id` — which is every round the orchestrator runs — so the read
+ * always missed, the refusal always fired, and the refusal told the operator to
+ * create exactly the directory whose existence makes the next ingest allocate
+ * `<base>-r02` instead. Following the advice moved the target. Reproduced end to
+ * end: throw, write, throw, up to `MAX_SAME_DAY_ROUNDS`.
+ *
+ * The reviews root has the property the package dir lacks: writing a file into
+ * it cannot change which package name gets allocated, because allocation probes
+ * `<root>/<reviewId>` DIRECTORIES only. So the record can be written before the
+ * round and read after it without either command knowing the id.
+ *
+ * The record is consumed by the ingest that reads it (see
+ * {@link persistScreenRadius}) and copied into the package it screened. Both
+ * halves matter: the copy is what makes a re-ingest under the same
+ * `--review-id` screen against the same set without re-passing the flag, and
+ * the removal is what stops the NEXT round — a different change, a different
+ * radius — from silently screening against a set nobody recomputed. A stale set
+ * that still screens is the same class of failure as a screen that never ran.
+ */
+function handoffBlastRadiusPath(packageDir: string): string {
+  return path.join(path.dirname(packageDir), BLAST_RADIUS_ARTIFACT);
+}
+
+async function resolveScreenRadius(
+  input: ManagedReviewIngestInput,
+  packageDir: string,
+): Promise<ResolvedScreenRadius | undefined> {
+  if (input.blastRadius !== undefined) {
+    return { radius: input.blastRadius, source: "input" };
+  }
+  // The package's own copy first, so a retry under an explicit `--review-id`
+  // re-screens against the set the first attempt used rather than whatever the
+  // handoff slot happens to hold now.
+  const inPackage = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+  const fromPackage = await readBlastRadiusRecordFile(inPackage);
+  if (fromPackage !== undefined) {
+    return { radius: fromPackage, source: "package", file: inPackage };
+  }
+  const handoff = handoffBlastRadiusPath(packageDir);
+  const fromHandoff = await readBlastRadiusRecordFile(handoff);
+  if (fromHandoff !== undefined) {
+    return { radius: fromHandoff, source: "handoff", file: handoff };
+  }
+  return undefined;
+}
+
+/**
+ * One blast-radius record off disk, or `undefined` when the file is absent.
+ *
+ * A malformed file throws rather than falling back to "no record" — an
+ * unreadable artifact silently disabling the screen is precisely the failure
  * being repaired here.
  */
-async function readPackageBlastRadius(packageDir: string): Promise<BlastRadiusScreenInput | undefined> {
-  const file = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+async function readBlastRadiusRecordFile(file: string): Promise<BlastRadiusScreenInput | undefined> {
   if (!(await pathExists(file))) {
     return undefined;
   }
@@ -479,6 +564,26 @@ async function readPackageBlastRadius(packageDir: string): Promise<BlastRadiusSc
     );
   }
   return parsed as BlastRadiusScreenInput;
+}
+
+/**
+ * Leave the package holding the set it was screened against, and empty the
+ * handoff slot.
+ *
+ * Runs AFTER every other artifact is on disk, so an ingest refused by a later
+ * gate leaves the operator's handoff file exactly where they put it.
+ */
+async function persistScreenRadius(packageDir: string, resolved: ResolvedScreenRadius | undefined): Promise<void> {
+  if (resolved === undefined) {
+    return;
+  }
+  const inPackage = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+  if (resolved.source !== "package") {
+    await writeFileAtomic(inPackage, `${JSON.stringify(resolved.radius, null, 2)}\n`);
+  }
+  if (resolved.source === "handoff" && resolved.file !== undefined) {
+    await rm(resolved.file, { force: true });
+  }
 }
 
 /**
@@ -1773,6 +1878,13 @@ ${renderScopeBScreenMarkdown(scopeBScreen)}${renderExternalReclaimsMarkdown(exte
  * where the screen did not run, which says so in those words rather than
  * printing `rejected: 0`.
  */
+const BLAST_RADIUS_RECORD_SOURCE: Record<ScopeBScreenRecord["source"], string> = {
+  input: "supplied by the caller (--blast-radius)",
+  handoff: `read from ${BLAST_RADIUS_ARTIFACT} in the reviews root, and consumed`,
+  package: `read from ${BLAST_RADIUS_ARTIFACT} in this package`,
+  none: "none",
+};
+
 function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
   const screen = record.screen;
   if (screen === undefined) {
@@ -1786,7 +1898,7 @@ function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
     ].join("\n");
   }
   return `${renderBlastRadiusScreenMarkdown(screen)}scope_b_findings: ${record.scopeBFindings}\nblast_radius_record: ${
-    record.source === "input" ? "supplied by the caller" : `read from ${BLAST_RADIUS_ARTIFACT} in this package`
+    BLAST_RADIUS_RECORD_SOURCE[record.source]
   }\n`;
 }
 
