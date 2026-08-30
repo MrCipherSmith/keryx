@@ -3,6 +3,92 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.72] — 2026-08-30
+
+Phases 5 and 7 of the orchestrator-hardening programme, which completes it: all
+seven phases are now delivered. The theme of both is the same one the programme
+started with — a mechanism whose failure is silent is the one that fails — and
+this release is mostly the result of going looking for those on purpose.
+
+### Added
+
+- **`keryx job`** — the job pipeline has a real implementation, built the way
+  `keryx flow` is: a package on disk, a typed state file, an explicit transition
+  map, atomic writes, an append-only journal. `init` / `status` / `step` /
+  `document` / `complete` / `list`. It uses the `state.schema.json` that had
+  shipped beside the skill since the first commit rather than inventing one, and
+  registers it as a contract — which no command could validate before, because
+  the contract installer carried a duplicate name list instead of deriving from
+  the registry.
+
+- **`keryx skills verify --bundled`** — the 65 skills that ship to every user are
+  evaluated rather than assumed correct. Structural validation: frontmatter,
+  resolvable cross-references, no concrete model name, no persona or
+  home-directory path. It reports itself as *layer 1 of 3* rather than describing
+  a pipeline that was not built.
+
+- **`keryx review learn --pr <n>`** — a reviewer whose checklist is learned
+  locally from pull-request comments by people the project names, configured per
+  project. Learned content stays in that project; the apply path refuses any
+  target outside `.metaproject/project-skills/`, so a misconfigured project
+  cannot teach the shipped template.
+
+- **`keryx providers cross-family`** — opt-in review by a different model family
+  than authored the change, reading the existing provider configuration. It
+  refuses to call a gateway or a local runner a "family", since fronting many
+  vendors and being recorded as cross-family would corrupt the comparison the
+  feature exists to enable.
+
+- **`filter_stats`** in the round manifest, produced by the code that filters —
+  the pre-filter, the verifier, the scope-B screen, the findings cap. Every count
+  distinguishes **measured zero** from **not measured**, and `keryx review
+  status` reads it back off disk in a later invocation and exits non-zero on a
+  record that contradicts itself.
+
+### Fixed
+
+- **The review sections of `job-orchestrator` were two releases stale.** A pull
+  request driven by it failed all five conditions of the completion gate shipped
+  in 0.2.71. They now run the managed pipeline end to end.
+
+- **Things that were documented and did not exist.** An audit of
+  `job-orchestrator` inventoried 217 mechanisms and found six reachable from
+  production code. Deleted or wired: `wave-executor` (the agent every
+  implementation wave was dispatched as), `code-review` (the *default* review
+  mode), `subagent_type: "general"` (41 occurrences; no dispatcher accepts it),
+  three skill-load paths that stopped resolving when the tree was namespaced, and
+  a step that outlived its own removal. Roughly 90 claims were wired to a real
+  command and 45 deleted. None was softened — turning "is enforced" into "should
+  be done" makes a sentence true while leaving the guarantee absent.
+
+- **Claims that were impossible in this execution model**, deleted rather than
+  reworded: a step defaulting "if no response in 60s", when no timer exists and a
+  model cannot observe wall-clock passing while a user does not answer; and
+  routing on time pressure with no clock and no persisted start.
+
+- **27 defects in the shipped skill tree**, found by the new evaluator on its
+  first run: a skill dispatching an agent that has never shipped, 25 unresolvable
+  paths in nine forms including four contract schemas, and
+  `.metaproject/scripts/detect-models.sh` — cited by two different orchestrators
+  as the way to find a cheaper model, and never present in any tree.
+
+- **The four non-Claude harness builds were dead content.** Export copied
+  `SKILL.md` regardless of runtime — even for codex, with `SKILL.codex.md` beside
+  it. They are now selected correctly and can be synced to their platforms by an
+  explicit command, never as a side effect of `keryx update`. A new parity guard
+  caught three sections that had existed only in the Claude build since the
+  bootstrap commit while all five declared the same version.
+
+- **The learning loop had never produced anything.**
+  `.metaproject/memory/review-notes/` did not exist and the note type had never
+  been written. Notes are now written when a finding is dismissed as incorrect —
+  and only that dismissal counts as model error, because the other three are
+  correct findings nobody acted on and conflating them poisons the signal.
+
+- **The reviewer profile no longer describes a person.** It shipped one
+  individual's conventions and speech markers in a public repository. Keryx now
+  ships the mechanism; the conventions live in the projects that hold them.
+
 ## [0.2.71] — 2026-08-30
 
 Phase 4 of the orchestrator-hardening programme: a pull request is now reviewed
