@@ -177,7 +177,8 @@ keryx review attach --flow <id> --target <kind> --ref <ref>
 keryx review start --target <kind> --ref <ref>
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
                     [--verifications <file>] [--verification-mode off|annotate|filter]
-                    [--scope <scope.json>] [--refuted <file>]
+                    [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                    [--refuted <file>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
@@ -249,8 +250,8 @@ both live in the CLI; the judgement — is this comment right, what do we say �
 here.
 
 ```text
-keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
-                              [--round <n>] [--out <findings.json>] [--json]
+keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                              [--self <login>] [--round <n>] [--out <findings.json>] [--json]
 keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
                               --sha <head-sha> --final [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
@@ -260,6 +261,13 @@ keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
 Add `--fixtures <dir>` to either to run the whole loop against JSON on disk —
 no token, no network, nothing posted. Use it to see what a reply pass would say
 before it says it.
+
+`--sha` is the commit you collected against, and it is required. The completion
+gate compares it to the pull request's head: a collection that ran before the
+comments arrived is **stale**, and a gate that could not tell the difference
+would pass a flow with unanswered reviewers on it while printing
+`0 outstanding`. A record with no SHA reads as "cannot be shown current", never
+as "fresh".
 
 ### What collection does, so you do not do it by hand
 

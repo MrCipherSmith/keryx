@@ -663,6 +663,67 @@ export type BlastRadiusScreenResult<T> = {
   minSeverity: ReviewFindingSeverity;
 };
 
+/** The reviewer skill scope B is dispatched as. See {@link isBlastRadiusScopedFinding}. */
+export const BLAST_RADIUS_SCOPE_REVIEWER = "review-regression";
+
+/**
+ * What {@link screenBlastRadiusFindings} needs at ingest, plus who to run it over.
+ *
+ * The set and the changed files are the record `keryx review blast-radius`
+ * produces, so the whole thing is a subset of {@link BlastRadius} and a caller
+ * holding one can pass it unchanged.
+ */
+export type BlastRadiusScreenInput = Pick<BlastRadius, "files" | "changedFiles"> & {
+  /** The scope-B floor. Defaults to `major` — see {@link screenBlastRadiusFindings}. */
+  minSeverity?: ReviewFindingSeverity | undefined;
+  /**
+   * The reviewers this round dispatched under scope B. Defaults to
+   * {@link BLAST_RADIUS_SCOPE_REVIEWER}.
+   */
+  reviewers?: readonly string[] | undefined;
+};
+
+/**
+ * Whether a finding was raised under scope B, and is therefore the screen's
+ * business.
+ *
+ * This is NOT the reviewer deny-list that was removed above, and the difference
+ * is the whole of why it is allowed to read a name. The deny-list decided
+ * REJECTION by reviewer — the same claim accepted or refused depending on who
+ * signed it, which is how a `blocker` regression came to be thrown away. This
+ * decides which QUESTION a finding was asked, and the question is a property of
+ * the dispatch: scope A asks "is this change correct", scope B asks "does it
+ * break something that was working", and a round runs both. Screening scope A's
+ * findings by scope B's rules would reject every legitimate `minor` on a changed
+ * file; screening nothing would leave AC3 as prose again.
+ *
+ * `review-finding.schema.json` carries no `scope` property and is
+ * `additionalProperties: false`, so the reviewer name is the only record of the
+ * dispatch that survives into the finding. When an orchestrator dispatches scope
+ * B under other names it declares them in
+ * {@link BlastRadiusScreenInput.reviewers} rather than editing this default.
+ *
+ * Matching is by containment on a normalised name, so `review-regression`,
+ * `Review-Regression` and `review-regression (deep)` are one reviewer.
+ */
+export function isBlastRadiusScopedFinding(
+  finding: Pick<Partial<StructuredReviewFinding>, "reviewer">,
+  reviewers: readonly string[] = [BLAST_RADIUS_SCOPE_REVIEWER],
+): boolean {
+  const name = normalizeReviewerName(finding.reviewer ?? "");
+  if (name === "") {
+    return false;
+  }
+  return reviewers.some((candidate) => {
+    const declared = normalizeReviewerName(candidate);
+    return declared !== "" && name.includes(declared);
+  });
+}
+
+function normalizeReviewerName(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
 function severityRank(severity: ReviewFindingSeverity): number {
   return REVIEW_FINDING_SEVERITIES.indexOf(severity);
 }

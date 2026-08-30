@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BLAST_RADIUS_SCOPE_REVIEWER,
   blastRadiusRecomputeDecision,
   computeBlastRadius,
+  isBlastRadiusScopedFinding,
   DEFAULT_BLAST_RADIUS_DEPTH,
   DEFAULT_BLAST_RADIUS_MAX_FILES,
   renderBlastRadiusDispatchBrief,
@@ -482,6 +484,39 @@ describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", (
     expect(markdown).toContain("severity_floor: major");
     expect(markdown).toContain("accepted: 1");
     expect(markdown).toContain("rejected: 0");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Which findings the screen is about
+//
+// The rules above judge the CLAIM and never the claimant. This decides which
+// QUESTION a finding was asked, which is a property of the dispatch — scope A
+// and scope B run in the same round, and screening scope A's findings by scope
+// B's floor would delete every legitimate `minor` on a changed file.
+// ---------------------------------------------------------------------------
+
+describe("isBlastRadiusScopedFinding", () => {
+  test("the scope-B reviewer is scope B, and the scope-A reviewers are not", () => {
+    expect(isBlastRadiusScopedFinding({ reviewer: BLAST_RADIUS_SCOPE_REVIEWER })).toBe(true);
+    expect(isBlastRadiusScopedFinding({ reviewer: "review-style" })).toBe(false);
+    expect(isBlastRadiusScopedFinding({ reviewer: "review-logic" })).toBe(false);
+  });
+
+  test("a decorated or differently cased name is the same reviewer", () => {
+    for (const reviewer of ["Review-Regression", " review_regression ", "review-regression (deep)"]) {
+      expect(isBlastRadiusScopedFinding({ reviewer })).toBe(true);
+    }
+  });
+
+  test("a finding with no reviewer is not claimed by scope B", () => {
+    expect(isBlastRadiusScopedFinding({})).toBe(false);
+    expect(isBlastRadiusScopedFinding({ reviewer: "" })).toBe(false);
+  });
+
+  test("an orchestrator that dispatched scope B under other names declares them", () => {
+    expect(isBlastRadiusScopedFinding({ reviewer: "regression-sweep" }, ["regression-sweep"])).toBe(true);
+    expect(isBlastRadiusScopedFinding({ reviewer: BLAST_RADIUS_SCOPE_REVIEWER }, ["regression-sweep"])).toBe(false);
   });
 });
 

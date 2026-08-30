@@ -439,3 +439,70 @@ test("AC9: `review loop` escalates on a repeated finding, whatever the budget", 
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("ESCALATE");
 });
+
+// ---------------------------------------------------------------------------
+// AC3 from the command line: the scope-B screen's set, and its counts
+// ---------------------------------------------------------------------------
+//
+// The screen itself is proven in `review/managed.test.ts`. What is proven here
+// is the pair of wires the library cannot see: that `--blast-radius` reaches
+// `ManagedReviewIngestInput.blastRadius`, and that the counts reach the terminal.
+// The screen shipped with neither, so an enforcement that ran was indistinguishable
+// on the terminal from one that had not — the shape of every defect this round found.
+
+const SCOPE_B_FINDING = {
+  id: "B-001",
+  reviewer: "review-regression",
+  severity: "major",
+  problem: "this function is named badly and the module is arranged oddly",
+  impact: "future readers will be slower",
+  suggested_fix: "rename it",
+  evidence: "read the file",
+  confidence: "high",
+  file: "src/untouched.ts",
+  scope: "blast-radius",
+};
+
+test("--blast-radius reaches the screen, and the screen says which set it used", async () => {
+  await writeFile(
+    path.join(ROOT, "radius.json"),
+    JSON.stringify({ files: [{ path: "src/untouched.ts", hop: 1 }], changedFiles: ["src/changed.ts"] }),
+    "utf8",
+  );
+  await writeFile(path.join(ROOT, "report.md"), reportWith([SCOPE_B_FINDING]), "utf8");
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-08-30-cli-blast-radius",
+    "--blast-radius",
+    "radius.json",
+  ]);
+
+  expect(process.exitCode).toBe(0);
+  expect(logs.join("\n")).toContain("scope-B screen: source=input");
+});
+
+test("a --blast-radius record missing its arrays is refused, not defaulted to an empty set", async () => {
+  // An invented empty set rejects every scope-B finding as `outside-set` and
+  // reports that as the screen working.
+  await writeFile(path.join(ROOT, "radius.json"), JSON.stringify({ depth: 2 }), "utf8");
+  await writeFile(path.join(ROOT, "report.md"), reportWith([SCOPE_B_FINDING]), "utf8");
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-08-30-cli-blast-radius-empty",
+    "--blast-radius",
+    "radius.json",
+  ]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--blast-radius");
+});

@@ -906,10 +906,25 @@ export function splitSentences(text: string): string[] {
     .replace(/<https?:\/\/[^>\s]+>/g, stash)
     .replace(/https?:\/\/\S+/g, stash);
   for (const abbreviation of ABBREVIATIONS) {
-    // `\b` so `no.` does not match the end of "casino." — an abbreviation that
-    // swallows a real full stop UNDER-counts sentences, which is the direction
-    // that lets a long reply through the budget.
-    masked = masked.replace(new RegExp(`\\b${escapeRegExp(abbreviation)}`, "gi"), stash);
+    // Two guards, both against the SAME failure — masking a full stop that really
+    // did end a sentence, which UNDER-counts and is the direction that lets a long
+    // reply through the budget.
+    //
+    // `\b` so `no.` does not match the end of "casino.".
+    //
+    // The lookahead is the second, and it was missing. An abbreviation can also
+    // FALL AT THE END of a sentence — "Fixed the parser, the writer, etc. Also
+    // updated the docs." — and masking it there swallowed the stop that separated
+    // two sentences, so a three-clause reply measured as two and all three clauses
+    // were posted. A real abbreviation is followed by more of its own sentence, so
+    // it is only masked when a lowercase word follows it; `etc. Also` splits and
+    // `etc. and` does not.
+    //
+    // The residue is an over-count: `vs. B`, `e.g. 3 files` and `etc. \`foo\``
+    // read as sentence ends because what follows is not lowercase. That costs a
+    // truncation, which is recorded and carries a link. Under-counting costs the
+    // reviewer a wall of text, which is what this budget exists to prevent.
+    masked = masked.replace(new RegExp(`\\b${escapeRegExp(abbreviation)}(?=\\s+\\p{Ll})`, "giu"), stash);
   }
   const restore = (value: string): string =>
     value.replace(/%%KERYX-SPAN-(\d+)%%/g, (_, index: string) => spans[Number(index)] ?? "");
@@ -1357,6 +1372,27 @@ export type PrCommentState = {
   number: number;
   self: string | null;
   rounds_collected: number;
+  /**
+   * The pull request head the LAST collection pass actually read, and the round
+   * it read it in. Freshness, which nothing recorded.
+   *
+   * `rounds_collected` is a count, and a count cannot say *when*. `SeenComment`
+   * carries `first_seen_round`/`last_seen_round` and no timestamp, and
+   * `keryx review comments collect` defaults `--round` to 1, so
+   * `rounds_collected` sat at 1 however many times collection ran — and a state
+   * file written at the start of round 1 against an empty pull request said
+   * exactly what a state file written after the last round says. Five
+   * CHANGES_REQUESTED comments posted afterwards were invisible to the review
+   * gate, which read `rounds_collected !== 0` as proof the collection was
+   * current and completed the flow with all five unanswered.
+   *
+   * So the record says which commit it was true of, and the gate compares it
+   * against the PR head it already resolved. `null` means the record predates
+   * this field: it is NOT read as fresh — an unknown collection point is exactly
+   * the unobserved case the gate refuses, on the same rule as an absent file.
+   */
+  collected_sha: string | null;
+  collected_round: number | null;
   replies_posted_at: string | null;
   seen: SeenComment[];
   handled_comments: HandledComment[];
@@ -1386,6 +1422,8 @@ export function emptyPrCommentState(repo: string, number: number): PrCommentStat
     number,
     self: null,
     rounds_collected: 0,
+    collected_sha: null,
+    collected_round: null,
     replies_posted_at: null,
     seen: [],
     handled_comments: [],
@@ -1401,6 +1439,11 @@ export async function readPrCommentState(cwd: string, repo: string, number: numb
     return {
       ...emptyPrCommentState(repo, number),
       ...parsed,
+      // Explicit rather than left to the spread: a file written before freshness
+      // was recorded carries no key, and `undefined` must land as `null` — the
+      // value the gate reads as "this collection cannot be shown to be current".
+      collected_sha: parsed.collected_sha ?? null,
+      collected_round: parsed.collected_round ?? null,
       seen: parsed.seen ?? [],
       handled_comments: parsed.handled_comments ?? [],
       backlog: parsed.backlog ?? [],
@@ -1429,12 +1472,18 @@ export async function writePrCommentState(cwd: string, state: PrCommentState): P
  * A comment's first round is the number the reply cites and the number the flow
  * package reports. Recomputing it from the current round would say every comment
  * arrived in the last one.
+ *
+ * `collectedSha` is the head the pass READ, and it is what makes this record
+ * datable — see {@link PrCommentState.collected_sha}. It is written on every
+ * pass, including one that collected nothing, because "we looked at this commit
+ * and there was nothing" is the fact the completion gate needs and is precisely
+ * the fact an undated empty file could not express.
  */
 export function recordSeenComments(
   state: PrCommentState,
   comments: readonly CollectedComment[],
   round: number,
-  self?: string | undefined,
+  options: { self?: string | undefined; collectedSha?: string | null | undefined } = {},
 ): PrCommentState {
   const seen = [...state.seen];
   for (const comment of comments) {
@@ -1456,8 +1505,10 @@ export function recordSeenComments(
   }
   return {
     ...state,
-    self: self ?? state.self,
+    self: options.self ?? state.self,
     rounds_collected: Math.max(state.rounds_collected, round),
+    collected_sha: options.collectedSha ?? state.collected_sha,
+    collected_round: options.collectedSha === undefined || options.collectedSha === null ? state.collected_round : round,
     seen,
   };
 }
@@ -1565,7 +1616,17 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
     const isSummary = reply.mode === "overflow-summary";
     const key = isSummary ? summaryKey : reply.comment.id;
     const prior = alreadyAnswered.get(key);
-    if (prior !== undefined && prior.in_flight !== true) {
+    // **Answered means a reply exists**, not that a row exists — the same
+    // predicate `collectPrComments` and {@link unansweredComments} use.
+    //
+    // This used to skip on row existence (`prior !== undefined && !in_flight`),
+    // and the disagreement with the other two readers was a permanent wedge: a
+    // settled row with `reply_url: null` — reachable when the POST response
+    // carried no locator, and via the recovery branch below — was re-offered by
+    // collection, counted unanswered by the gate, and pushed to `skipped` by
+    // every `reply --final` without ever being posted. Nothing on any code path
+    // could clear it, so the completion gate stayed violated for good.
+    if (prior !== undefined && prior.in_flight !== true && prior.reply_url !== null) {
       skipped.push({ id: key, reply_url: prior.reply_url });
       continue;
     }
@@ -1592,10 +1653,13 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
       via: reply.mode,
     };
 
-    if (prior?.in_flight === true) {
-      // A previous run died with this request in the air. Ask the pull request
-      // what actually happened rather than choosing between answering twice and
-      // never answering.
+    if (prior !== undefined) {
+      // Any prior reaching here has no `reply_url`: either an in-flight marker
+      // from a run that died with this request in the air, or a settled row whose
+      // POST returned no locator. Both are "we may already have spoken and cannot
+      // tell", so both ask the pull request what actually happened rather than
+      // choosing between answering twice and never answering. Blind-posting the
+      // settled-without-url row would answer a reviewer twice.
       const found = await findPostedReply(input.port, input.repo, input.number, reply, body);
       if (found !== null) {
         state = upsertHandled(state, { ...settled, handled_at: prior.handled_at, reply_url: found.url });
@@ -1614,7 +1678,7 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
     }
 
     const response = await input.port.request(request);
-    const replyUrl = stringProperty(response, "html_url");
+    const replyUrl = commentLocator(response);
     posted.push(reply);
     if (isSummary) {
       summaryReplyUrl = replyUrl;
@@ -1695,6 +1759,15 @@ function upsertHandled(state: PrCommentState, entry: HandledComment): PrCommentS
  * {@link enforceReplyBrevity} is a pure function of it — and a retry that
  * rewrote the reply would post a second, different one. Which is the honest
  * outcome for a different answer, but it is worth knowing that is the seam.
+ *
+ * **A match with no locator is not a match.** This returned `{ url: null }` for
+ * a candidate carrying no `html_url`, and the caller wrote that straight into
+ * `reply_url` — manufacturing the settled-row-with-no-reply that collection
+ * re-offers forever and the completion gate counts as unanswered. So the human
+ * URL is preferred, the API `url` is accepted in its place, and a candidate with
+ * neither reads as "not found": it is sent again, which is a duplicate reply in
+ * a shape GitHub does not actually produce, against a wedge that no code path
+ * could clear.
  */
 async function findPostedReply(
   port: GitHubPort,
@@ -1702,7 +1775,7 @@ async function findPostedReply(
   number: number,
   reply: PlannedReply,
   body: string,
-): Promise<{ url: string | null } | null> {
+): Promise<{ url: string } | null> {
   const wanted = body.trim();
   if (reply.mode === "thread-reply") {
     const raw = await callGitHub(port, { method: "GET", path: `repos/${repo}/pulls/${number}/comments` });
@@ -1710,16 +1783,25 @@ async function findPostedReply(
       const inReplyTo = numberProperty(candidate, "in_reply_to_id");
       if (inReplyTo === null || String(inReplyTo) !== reply.comment.threadId) continue;
       if ((stringProperty(candidate, "body") ?? "").trim() !== wanted) continue;
-      return { url: stringProperty(candidate, "html_url") };
+      const url = commentLocator(candidate);
+      if (url === null) continue;
+      return { url };
     }
     return null;
   }
   const raw = await callGitHub(port, { method: "GET", path: `repos/${repo}/issues/${number}/comments` });
   for (const candidate of asArray(raw)) {
     if ((stringProperty(candidate, "body") ?? "").trim() !== wanted) continue;
-    return { url: stringProperty(candidate, "html_url") };
+    const url = commentLocator(candidate);
+    if (url === null) continue;
+    return { url };
   }
   return null;
+}
+
+/** Where a posted comment can be read: the human URL, or the API one behind it. */
+function commentLocator(value: unknown): string | null {
+  return stringProperty(value, "html_url") ?? stringProperty(value, "url");
 }
 
 function firstSeenRound(state: PrCommentState, id: string, fallback: number): number {

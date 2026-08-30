@@ -252,6 +252,76 @@ test("B1 — a second round moves the recorded head with the tree", async () => 
   expect(reviewLine()).toContain("all 5 conditions hold");
 });
 
+// ---------------------------------------------------------------------------
+// `flow complete --merged <sha>` — the completion path with no pull request
+// ---------------------------------------------------------------------------
+//
+// On this path `prHead` is null and condition 3 compares the round's head with
+// the merge commit. That was an EQUALITY test, and the two are equal only for a
+// merge that preserved the branch commit. A squash or a rebase mints a new one
+// by construction, so the gate refused every such completion with advice —
+// "re-run the round" — that could not be followed: the next round would record
+// the branch head again and fail identically. Neither case had a test.
+//
+// What replaced it: containment. The reviewed commit being IN what merged is the
+// fact condition 3 is actually after, and a merge commit has it. A squash still
+// fails — the reviewed commit does not exist in the merged history and no round
+// against the branch can make it — but it now says so, and names the two things
+// that do work.
+
+/** A branch commit, reviewed, with `main` still at the base commit. */
+async function reviewedBranch(): Promise<string> {
+  await git(["checkout", "--quiet", "-b", "feature"], ROOT);
+  await writeFile(path.join(ROOT, "README.md"), "# subject, revised\n", "utf8");
+  await git(["add", "README.md"], ROOT);
+  await git(["commit", "--quiet", "-m", "the change"], ROOT);
+  const head = await git(["rev-parse", "HEAD"], ROOT);
+  await ingestRound("round-1");
+  expect((await readManifest("round-1")).target.head).toBe(head);
+  await git(["checkout", "--quiet", "main"], ROOT);
+  return head;
+}
+
+test("B1 — a merge that KEPT the reviewed commit completes: the round is contained in it", async () => {
+  await freshRepo();
+  await initFlow();
+  const branchHead = await reviewedBranch();
+
+  await git(["merge", "--quiet", "--no-ff", "-m", "merge feature", "feature"], ROOT);
+  const merged = await git(["rev-parse", "HEAD"], ROOT);
+  expect(merged).not.toBe(branchHead);
+
+  logs = [];
+  await flowCommand(["complete", "001", "--merged", merged]);
+
+  const review = reviewLine();
+  expect(review).toContain("all 5 conditions hold");
+  expect(review).not.toContain("head-commit");
+});
+
+test("B1 — a SQUASH merge cannot be completed against, and the gate says why instead of `re-run the round`", async () => {
+  await freshRepo();
+  await initFlow();
+  const branchHead = await reviewedBranch();
+
+  await git(["merge", "--squash", "feature"], ROOT);
+  await git(["commit", "--quiet", "-m", "the change (squashed)"], ROOT);
+  const squashed = await git(["rev-parse", "HEAD"], ROOT);
+
+  logs = [];
+  await flowCommand(["complete", "001", "--merged", squashed]);
+
+  const review = reviewLine();
+  expect(review).toContain("head-commit (violated)");
+  expect(review).toContain(branchHead);
+  expect(review).toContain(squashed);
+  // Advice that can be acted on: the reviewed commit was rewritten, so re-running
+  // the round against the branch is exactly the thing that will not help.
+  expect(review).toContain("SQUASH");
+  expect(review).toContain("not contained in it");
+  expect(review).toContain(`--head ${squashed}`);
+});
+
 test("MAJOR 3 — the external-comment seam is wired at the composition root", () => {
   // It was declared on `FlowServiceDeps`, read by `service.ts:461`, and provided
   // by exactly two test cases. `getService()` — the only builder the CLI uses —

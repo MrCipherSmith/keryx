@@ -5,15 +5,30 @@
 //
 // `src/harness/child/model.ts` already resolves a `{ kind: "tier" }` request
 // through an INJECTED `tiers: Record<string, ModelSelection>` map and applies the
-// three fail-closed authorization gates. It never says where that map comes from,
-// and today nothing builds one — which is why `model.tier` is carried by the
-// dispatch contract and applied in exactly one narrow case.
+// three fail-closed authorization gates. It never says where that map comes from.
 //
-// This module is that missing producer, and it sits next to the thing that
-// declares tiers (`bundled/skills/**/SKILL.md`) and the thing that carries them
+// This module is that producer, and it sits next to the thing that declares tiers
+// (`bundled/skills/**/SKILL.md`) and the thing that carries them
 // (`contracts/subagent-dispatch.schema.json`), not next to the thing that gates
 // them. Composition, not duplication: `buildTierMap` hands `resolveChildModel`
 // the map it already knows how to consume, so the gates stay in one place.
+//
+// THE ONE WIRE, NAMED
+//
+// `createSpawnSubagentTool` (src/harness/tool/builtin/spawn-subagent-tool.ts) is
+// the seam that closes the loop for every interactive dispatch: it calls
+// `buildTierMap` with the session's provider/model and its host's detection
+// result, puts the map on `SubagentConfig.tiers`, and turns the tool's optional
+// `model_tier` input into the `{ kind: "tier" }` request. From there
+// `spawnSubagent` -> `spawnChild` -> `resolveChildModel` applies the gates and
+// the child runs on the resolved model. A tier is asked for only when that input
+// is present; an omitted one inherits the parent, unchanged.
+//
+// That wire is what makes the rest of this file load-bearing rather than
+// decorative, so it is pinned by a test that drives the REAL path
+// (spawn-subagent-model-tier.test.ts) and asserts on the provider the tool
+// actually constructed. A test over a hand-built `tiers` map cannot see a missing
+// producer — it passes just as happily when nothing calls `buildTierMap` at all.
 //
 // FOUR THINGS, DELIBERATELY SEPARATE
 //
@@ -54,7 +69,9 @@
 // worst of the three outcomes, so an unrankable environment is never resolved to
 // "the cheap one by default". `buildTierMap` therefore always returns an entry for
 // every tier, which is what keeps `resolveChildModel`'s `unknown model tier`
-// denial unreachable (AC15).
+// denial unreachable for any dispatch that goes through the wire named above
+// (AC15) — a caller that requests a tier while supplying no map is still denied,
+// and should be.
 //
 // Everything is anchored on the session model: `standard` IS the session model,
 // `deep` is a discovered model ranked strictly above it, `light` one ranked
@@ -85,8 +102,18 @@ export const DEFAULT_MODEL_TIER: ModelTier = "standard";
  * package's AC14 names `light`, so both spellings have to resolve. Reading the
  * older one rather than rejecting it costs one map entry; refusing it would fail
  * dispatches that predate this flow.
+ *
+ * A `Map`, not an object literal, and that is not a style choice. A bare object
+ * inherits `Object.prototype`, so `aliases["constructor"]` returns a FUNCTION and
+ * `aliases["toString"]` a method — neither is `undefined`, which is the only value
+ * `parseModelTier` treats as "not a tier". Read through an object literal, a skill
+ * declaring `model_tier: constructor` passed the AC14 build guard, and
+ * `resolveTierFromRanking` — seeing a value that is neither `undefined`, nor
+ * `standard`, nor `deep` — took the `light` branch and SILENTLY DOWNGRADED the
+ * dispatch. A `Map` has no prototype chain to inherit from, so an unknown key is
+ * `undefined` and nothing else.
  */
-const TIER_ALIASES: Readonly<Record<string, ModelTier>> = { cheap: "light" };
+const TIER_ALIASES: ReadonlyMap<string, ModelTier> = new Map<string, ModelTier>([["cheap", "light"]]);
 
 /** True when `value` is one of the three canonical tiers. */
 export function isModelTier(value: unknown): value is ModelTier {
@@ -103,7 +130,7 @@ export function parseModelTier(raw: string | undefined | null): ModelTier | unde
   if (typeof raw !== "string") return undefined;
   const key = raw.trim().toLowerCase();
   if (isModelTier(key)) return key;
-  return TIER_ALIASES[key];
+  return TIER_ALIASES.get(key);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +457,30 @@ export function resolveTierFromRanking(
     );
   }
 
+  // A ranking with no session rank has no anchor, whatever it claims about being
+  // usable. `rankDiscoveredModels` never produces that pair, but this function is
+  // EXPORTED and takes an arbitrary `ModelRanking`, and the previous
+  // `sessionRank ?? 0` silently invented rank 0 for such an input — which places
+  // `light` below zero and `deep` above it rather than below and above the session,
+  // so `light` could pick a model LARGER than the session's. Refusing is the same
+  // answer the "unrankable session model" branch of `rankDiscoveredModels` gives
+  // for the same missing fact.
+  // A ranking with no session rank has no anchor, whatever it claims about being
+  // usable. `rankDiscoveredModels` never produces that pair, but this function is
+  // EXPORTED and takes an arbitrary `ModelRanking`, and the previous
+  // `sessionRank ?? 0` silently invented rank 0 for such an input — which places
+  // `light` below zero and `deep` above it rather than below and above the session,
+  // so `light` could pick a model LARGER than the session's. Refusing is the same
+  // answer the "unrankable session model" branch of `rankDiscoveredModels` gives
+  // for the same missing fact.
+  if (ranking.sessionRank === null) {
+    return session_(
+      parsed,
+      "session-fallback",
+      `the ranking carries no rank for the session model "${session.modelId}", so no candidate can be called above or below it; keeping the session model for tier ${parsed}`,
+    );
+  }
+
   if (parsed === "standard") {
     return session_(
       parsed,
@@ -438,7 +489,7 @@ export function resolveTierFromRanking(
     );
   }
 
-  const anchor = ranking.sessionRank ?? 0;
+  const anchor = ranking.sessionRank;
   // `ranked` is best-first, so the first strictly-above entry is the most capable
   // and the last strictly-below entry is the least. Strictly: a candidate at the
   // session's own rank is a lateral move, never a tier.
@@ -504,7 +555,7 @@ export function buildTierMap(
     const resolved = resolveTierFromRanking(session, tier, ranking);
     map[tier] = { providerId: resolved.providerId, modelId: resolved.modelId };
   }
-  for (const [alias, tier] of Object.entries(TIER_ALIASES)) {
+  for (const [alias, tier] of TIER_ALIASES) {
     const canonical = map[tier];
     if (canonical !== undefined) map[alias] = canonical;
   }

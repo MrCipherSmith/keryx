@@ -16,6 +16,14 @@ import {
   type ExternalReclaim,
 } from "./pr-comments";
 import {
+  BLAST_RADIUS_SCOPE_REVIEWER,
+  isBlastRadiusScopedFinding,
+  renderBlastRadiusScreenMarkdown,
+  screenBlastRadiusFindings,
+  type BlastRadiusScreenInput,
+  type BlastRadiusScreenResult,
+} from "./blast-radius";
+import {
   applyFindingsCap,
   evaluateSpendCap,
   planReviewerWaves,
@@ -145,9 +153,45 @@ export async function findRelatedFlow(input: {
   return null;
 }
 
+/**
+ * {@link ManagedReviewInput} plus the computed scope-B set, when the round ran
+ * one.
+ *
+ * The set is an ARGUMENT to the screen and not part of the package contract
+ * `types.ts` describes — nothing in the manifest, the finding record or either
+ * schema carries it — so it is declared where it is used and consumed. A caller
+ * that ran `keryx review blast-radius` passes the record it already holds; a
+ * caller that wrote it next to the package (`--out <package>/blast-radius.json`)
+ * passes nothing and {@link readPackageBlastRadius} finds it.
+ */
+export type ManagedReviewIngestInput = ManagedReviewInput & {
+  /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
+  blastRadius?: BlastRadiusScreenInput | undefined;
+};
+
+/**
+ * What the scope-B screen did to this round's findings (AC3).
+ *
+ * Shaped after {@link module:review/caps.FindingsCapResult}, deliberately: a
+ * screen that removes findings owes the same record a cap does — how many it saw,
+ * how many it kept, and every single one it removed WITH the rule that removed
+ * it. `screen: undefined` is the cap's `not recorded`: the screen did not run,
+ * which is not the same fact as "it ran and rejected nothing".
+ */
+export type ScopeBScreenRecord = {
+  /** Where the blast-radius record came from. `none` — no screen ran. */
+  source: "input" | "package" | "none";
+  /** Findings attributed to a scope-B reviewer, before the screen. */
+  scopeBFindings: number;
+  screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
+};
+
+/** The name the package's own copy of the blast-radius record is read from. */
+const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
+
 export async function createManagedReviewPackage(
-  input: ManagedReviewInput,
-): Promise<ManagedReviewPackageResult> {
+  input: ManagedReviewIngestInput,
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord }> {
   const at = (input.now ?? new Date()).toISOString();
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
@@ -203,7 +247,17 @@ export async function createManagedReviewPackage(
   // recorded under a heading nobody opens. Externals are bounded instead by
   // `max_replies_total`, which reports its backlog out loud and still answers it.
   const scoped = partitionExternalFindings(verification.retained);
-  const findingsCap = applyFindingsCap(scoped.internal, {
+
+  // AC3, enforced here rather than asked for in `review-regression/SKILL.md`.
+  // The skill has said "this is enforced, not requested" since the day the
+  // screen was written, and nothing called it: a scope-B `major` about the style
+  // of an untouched hop-2 file was ingested unscreened and then blocked
+  // completion at the review gate — the opposite of the promise. It runs BEFORE
+  // the findings cap so a rejected finding cannot spend a reviewer's reading
+  // budget on its way out.
+  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
+
+  const findingsCap = applyFindingsCap(scopeB.retained, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -318,7 +372,7 @@ export async function createManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -337,7 +391,94 @@ export async function createManagedReviewPackage(
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
     caps,
+    // Returned as well as written into `scope.md`, on the same rule the caps
+    // record follows: a removal an operator has to open a file to discover reads,
+    // on the terminal they were already looking at, as "there was nothing more".
+    scopeBScreen: scopeB.record,
   };
+}
+
+/**
+ * Run the AC3 screen over the findings scope B raised, or refuse to record them.
+ *
+ * Three outcomes, and the third is the point:
+ *
+ * 1. **A blast-radius record and scope-B findings** — the screen runs.
+ *    {@link screenBlastRadiusFindings} keeps the regression claims and returns
+ *    the rest with the rule that refused each one; the rejected findings do not
+ *    reach `findings.json`, and every one of them is named in `scope.md`.
+ * 2. **A blast-radius record and no scope-B findings** — the screen runs over an
+ *    empty set and says so. `accepted: 0, rejected: 0` after a screen that ran is
+ *    a different fact from a screen that did not, and the record keeps them apart.
+ * 3. **Scope-B findings and no blast-radius record** — refused. The alternative
+ *    is the defect this repairs: the enforcement silently not running while the
+ *    skill tells the reviewer it did. A screen cannot be applied without the set
+ *    the round was dispatched over, so the round is not recordable until the set
+ *    is supplied.
+ *
+ * Findings that are not scope B pass through untouched. Scope A asks a different
+ * question and its `minor` on a changed file is legitimate.
+ */
+async function screenScopeBFindings(
+  input: ManagedReviewIngestInput,
+  packageDir: string,
+  findings: readonly NormalizedReviewFinding[],
+): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord }> {
+  const fromPackage = input.blastRadius === undefined ? await readPackageBlastRadius(packageDir) : undefined;
+  const radius = input.blastRadius ?? fromPackage;
+  const reviewers = radius?.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
+  const scopeB = findings.filter((finding) => isBlastRadiusScopedFinding(finding, reviewers));
+
+  if (radius === undefined) {
+    if (scopeB.length > 0) {
+      throw new Error(
+        `Refusing to record ${scopeB.length} finding(s) raised under scope B (${scopeB
+          .map((finding) => `${finding.id} by ${finding.reviewer}`)
+          .join(
+            ", ",
+          )}) with no blast-radius record: AC3 is enforced in code, and the screen cannot be applied without the computed set the round was dispatched over. Write the set next to the package — \`keryx review blast-radius --out ${path.join(
+          path.basename(packageDir),
+          BLAST_RADIUS_ARTIFACT,
+        )}\` — or pass it to this call, and ingest again.`,
+      );
+    }
+    return { retained: [...findings], record: { source: "none", scopeBFindings: 0 } };
+  }
+
+  const screen = screenBlastRadiusFindings(scopeB, radius, { minSeverity: radius.minSeverity });
+  const rejected = new Set(screen.rejected.map((rejection) => rejection.finding));
+  return {
+    retained: findings.filter((finding) => !rejected.has(finding)),
+    record: {
+      source: input.blastRadius === undefined ? "package" : "input",
+      scopeBFindings: scopeB.length,
+      screen,
+    },
+  };
+}
+
+/**
+ * The blast-radius record written next to the package, when there is one.
+ *
+ * The same channel `readPreFilterScopeBlock` uses and for the same reason: the
+ * orchestrator computes the set at dispatch time and ingests after the round, so
+ * the record has to survive between two commands without either one holding it
+ * in memory. A malformed file throws rather than falling back to "no record" —
+ * an unreadable artifact silently disabling the screen is precisely the failure
+ * being repaired here.
+ */
+async function readPackageBlastRadius(packageDir: string): Promise<BlastRadiusScreenInput | undefined> {
+  const file = path.join(packageDir, BLAST_RADIUS_ARTIFACT);
+  if (!(await pathExists(file))) {
+    return undefined;
+  }
+  const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<BlastRadiusScreenInput>;
+  if (!Array.isArray(parsed?.files) || !Array.isArray(parsed?.changedFiles)) {
+    throw new Error(
+      `${file} is not a blast-radius record: it carries no \`files\` and \`changedFiles\` arrays. It is the \`--json\` output of \`keryx review blast-radius\`, and scope B cannot be screened against anything else.`,
+    );
+  }
+  return parsed as BlastRadiusScreenInput;
 }
 
 /**
@@ -1597,6 +1738,7 @@ function renderScope(
   carriedPreFilter: string | undefined,
   caps: ReviewCapsRecord,
   externalReclaims: readonly ExternalReclaim[] = [],
+  scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -1618,8 +1760,34 @@ ${renderStageCountsMarkdown({
   caps: verification.caps,
 })}
 
-${renderCapsMarkdown(caps)}${renderExternalReclaimsMarkdown(externalReclaims)}`;
+${renderCapsMarkdown(caps)}
+${renderScopeBScreenMarkdown(scopeBScreen)}${renderExternalReclaimsMarkdown(externalReclaims)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
+}
+
+/**
+ * The AC3 screen, on the record next to the caps that removed findings beside it.
+ *
+ * A screen that drops findings silently is the failure mode this whole programme
+ * exists to end, so the block is written on every ingest — including the one
+ * where the screen did not run, which says so in those words rather than
+ * printing `rejected: 0`.
+ */
+function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
+  const screen = record.screen;
+  if (screen === undefined) {
+    return [
+      "## Scope B rejections",
+      "",
+      "not recorded — no blast-radius record reached this ingest, so the scope-B screen",
+      "did not run. No finding in this package was raised under scope B; had one been,",
+      "the ingest would have been refused rather than recorded unscreened.",
+      "",
+    ].join("\n");
+  }
+  return `${renderBlastRadiusScreenMarkdown(screen)}scope_b_findings: ${record.scopeBFindings}\nblast_radius_record: ${
+    record.source === "input" ? "supplied by the caller" : `read from ${BLAST_RADIUS_ARTIFACT} in this package`
+  }\n`;
 }
 
 /**

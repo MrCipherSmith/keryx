@@ -103,6 +103,27 @@ describe("tier vocabulary", () => {
     }
     expect(isModelTier("opus")).toBe(false);
   });
+
+  test("an inherited Object.prototype key is not a tier either", () => {
+    // Read through a bare object literal, `aliases["constructor"]` returns the
+    // Object constructor and `aliases["toString"]` a method — neither is
+    // `undefined`, the only value the callers treat as "not a tier". That cost
+    // two real failures at once: `concreteModelDeclarations` accepted a SKILL.md
+    // declaring `model_tier: constructor` as compliant, bypassing the AC14 build
+    // guard, and `resolveTierFromRanking` — seeing a value that is neither
+    // undefined nor `standard` nor `deep` — took the `light` branch and silently
+    // DOWNGRADED the dispatch, the one outcome this module exists to prevent.
+    for (const inherited of ["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty", "prototype"]) {
+      expect(parseModelTier(inherited)).toBeUndefined();
+      expect(parseModelTier(inherited.toUpperCase())).toBeUndefined();
+      // The AC14 guard has to fail such a declaration, not wave it through.
+      expect(concreteModelDeclarations(`---\n${SKILL_TIER_KEY}: ${inherited}\n---\n`)).toHaveLength(1);
+    }
+    // …and the resolver must not read it as a downgrade.
+    const resolved = resolveTierModel(CLAUDE_SESSION, "constructor", CATALOG);
+    expect(resolved.modelId).toBe(CLAUDE_SESSION.modelId);
+    expect(resolved.source).toBe("session-fallback");
+  });
 });
 
 describe("the module holds no model ids — the candidate set is discovered", () => {
@@ -302,6 +323,36 @@ describe("AC15: resolution against a ranked catalogue, and the three outcomes", 
     expect(resolved.source).toBe("session-fallback");
     expect(resolved.modelId).toBe(CLAUDE_SESSION.modelId);
     expect(resolved.tier).toBe("standard");
+  });
+
+  test("a ranking with no session rank is a fallback, never an anchor at rank 0", () => {
+    // `resolveTierFromRanking` is EXPORTED and takes an arbitrary `ModelRanking`.
+    // The previous `sessionRank ?? 0` invented rank 0 for this input, which places
+    // `light` below zero and `deep` above it rather than below and above the
+    // SESSION — so `light` could pick a model larger than the session's, which is
+    // exactly the downgrade-by-accident the anchoring exists to prevent.
+    const anchorless = {
+      providerId: "p",
+      candidates: ["p-mini", "p-max"],
+      ranked: [
+        { modelId: "p-max", rank: 1 },
+        { modelId: "p-mini", rank: -1 },
+      ],
+      sessionRank: null,
+      usable: true,
+      fallbackReason: null,
+    };
+    const session: SessionModelContext = { providerId: "p", modelId: "p-codename" };
+    for (const tier of MODEL_TIERS) {
+      const resolved = resolveTierFromRanking(session, tier, anchorless);
+      expect(resolved.modelId).toBe(session.modelId);
+      expect(resolved.providerId).toBe(session.providerId);
+      expect(resolved.source).toBe("session-fallback");
+      expect(resolved.tier).toBe(tier);
+    }
+    // The specific wrong answer: `light` must not reach for the ranked-below
+    // candidate, since "below rank 0" says nothing about "below the session".
+    expect(resolveTierFromRanking(session, "light", anchorless).modelId).not.toBe("p-mini");
   });
 
   test("buildTierMap is total over the tier vocabulary, rankable or not", () => {

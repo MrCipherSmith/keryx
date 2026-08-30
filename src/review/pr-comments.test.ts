@@ -653,6 +653,26 @@ describe("AC11/AC18 brevity", () => {
     expect(splitSentences("We moved it to the casino. Recorded.")).toHaveLength(2);
   });
 
+  test("a SENTENCE-FINAL abbreviation still ends its sentence", () => {
+    // MINOR, in the direction the doc comment beside the mask calls the dangerous
+    // one. The mask matched an abbreviation wherever it appeared, so `etc.` at the
+    // END of a clause swallowed the stop that separated two sentences: this
+    // three-clause reply measured as two, fitted the budget, and all three clauses
+    // were posted whole.
+    const wall = "Fixed the parser, the writer, etc. Also updated the docs. And the tests.";
+    expect(splitSentences(wall)).toHaveLength(3);
+    const cut = enforceReplyBrevity(wall, { maxSentences: 2, link: "https://x.test/flow/journal.md" });
+    expect(cut.truncated).toBe(true);
+    expect(cut.body).not.toContain("And the tests.");
+
+    // Same shape for the others that can close a clause.
+    expect(splitSentences("Compared the two, i.e. Neither is faster. Recorded.")).toHaveLength(3);
+    expect(splitSentences("Benchmarked A vs. B was slower. Recorded.")).toHaveLength(3);
+
+    // And the mid-sentence use is still not a boundary: `etc. and` does not split.
+    expect(splitSentences("Fixed the parser, the writer, etc. and the docs.")).toHaveLength(1);
+  });
+
   test("inline code containing a full stop is not a boundary", () => {
     expect(splitSentences("Renamed to `a.b.c` in the config. Done.")).toHaveLength(2);
   });
@@ -891,7 +911,19 @@ function githubWorld() {
         .filter((entry) => entry["in_reply_to_id"] === threadRoot)
         .map((entry) => String(entry["html_url"]));
     },
-    port(options: { dieAfterPost?: number; failBeforePost?: number } = {}): FixturePort {
+    port(
+      options: {
+        dieAfterPost?: number;
+        failBeforePost?: number;
+        /**
+         * The POST lands and the comment appears on the pull request, but the
+         * response body carries no `html_url` — so the record settles with
+         * `reply_url: null`. GitHub's own responses always carry one; this is the
+         * shape that produced a row no reader could clear.
+         */
+        postResponseOmitsUrl?: boolean;
+      } = {},
+    ): FixturePort {
       const calls: GitHubRequest[] = [];
       const mine: GitHubRequest[] = [];
       let posted = 0;
@@ -942,7 +974,7 @@ function githubWorld() {
           if (options.dieAfterPost === posted) {
             throw new Error("SIGKILL: the process died after the POST landed");
           }
-          return { id, html_url };
+          return options.postResponseOmitsUrl === true ? { id } : { id, html_url };
         },
       };
     },
@@ -1373,12 +1405,94 @@ describe("AC13 exactly one reply per comment", () => {
     expect(second.state.handled_comments[0]?.in_flight).toBeUndefined();
   });
 
+  test("a settled row with no reply_url is retried and cleared, not skipped for ever", async () => {
+    // MINOR, and a permanent wedge. The skip predicate here tested ROW EXISTENCE
+    // (`prior !== undefined && !in_flight`) while the module's two other readers
+    // of the same rows test REPLY existence: `collectPrComments` re-offers a
+    // comment whose `reply_url` is null, and `unansweredComments` counts it
+    // unanswered. So a settled row with `reply_url: null` — what a POST whose
+    // response carried no locator produces — entered a state nothing could
+    // clear: collection kept offering it, the completion gate stayed violated,
+    // and every `reply --final` pushed it to `skipped` without posting.
+    const root = await fresh();
+    const world = githubWorld();
+    const first = comment({ id: "review-comment:11", threadId: "11" });
+    const pass = buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments: [first],
+      outcomes: [{ comment: first.id, disposition: "acted-on", text: "Fixed in abc123." }],
+    });
+
+    const urlless = world.port({ postResponseOmitsUrl: true });
+    const run1 = await postReplyPass({
+      port: urlless,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha: "abc123",
+      round: { index: 1, isFinal: true },
+      state: recordSeenComments(emptyPrCommentState(REPO, PR), [first], 1),
+    });
+    // The reply IS on the pull request; the record cannot say where.
+    expect(run1.posted).toHaveLength(1);
+    const stuck = await readPrCommentState(root, REPO, PR);
+    expect(stuck.handled_comments[0]?.reply_url).toBeNull();
+    expect(stuck.handled_comments[0]?.in_flight).toBeUndefined();
+    // The other two readers already call this comment unanswered.
+    expect(unansweredComments(stuck).map((entry) => entry.id)).toEqual([first.id]);
+    const reoffered = await collect(world.port(), { handled: stuck.handled_comments });
+    expect(reoffered.comments.map((entry) => entry.id)).toContain(first.id);
+
+    const resumed = world.port();
+    const run2 = await postReplyPass({
+      port: resumed,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha: "abc123",
+      round: { index: 2, isFinal: true },
+      state: stuck,
+    });
+
+    // Resolved against GitHub rather than answered twice or never: the reply is
+    // found in the thread, adopted with its real url, and not sent again.
+    expect(run2.posted).toHaveLength(0);
+    expect(run2.skipped).toHaveLength(1);
+    expect(run2.skipped[0]?.reply_url).not.toBeNull();
+    expect(resumed.posts).toHaveLength(0);
+    expect(world.repliesTo(11)).toHaveLength(1);
+    const healed = await readPrCommentState(root, REPO, PR);
+    expect(healed.handled_comments[0]?.reply_url).toBe(world.repliesTo(11)[0]);
+    expect(unansweredComments(healed)).toEqual([]);
+  });
+
+  test("recordSeenComments dates the collection against the head it read", async () => {
+    // `rounds_collected` is a count and cannot say WHEN. Without this the review
+    // gate read a file written at the start of round 1, against a pull request
+    // nobody had commented on yet, as a current collection.
+    const collected = await collect(createFixturePort(fixtures()));
+    const state = recordSeenComments(emptyPrCommentState(REPO, PR), collected.comments, 3, {
+      self: "keryx-bot",
+      collectedSha: "deadbee1",
+    });
+    expect(state.collected_sha).toBe("deadbee1");
+    expect(state.collected_round).toBe(3);
+    // A record from a keryx older than the field reads as null, never as fresh.
+    expect(emptyPrCommentState(REPO, PR).collected_sha).toBeNull();
+    expect(
+      recordSeenComments(emptyPrCommentState(REPO, PR), collected.comments, 1).collected_sha,
+    ).toBeNull();
+  });
+
   test("the durable record carries every property the criterion names", async () => {
     const root = await fresh();
     const port = createFixturePort(fixtures());
     const collected = await collect(port);
     let state = emptyPrCommentState(REPO, PR);
-    state = recordSeenComments(state, collected.comments, 1, "keryx-bot");
+    state = recordSeenComments(state, collected.comments, 1, { self: "keryx-bot" });
     const pass = buildReplyPass({
       repo: REPO,
       number: PR,
@@ -1645,6 +1759,8 @@ describe("the offline seam", () => {
         String(PR),
         "--self",
         "keryx-bot",
+        "--sha",
+        "abc1234",
         "--round",
         "1",
         "--out",

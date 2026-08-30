@@ -38,9 +38,9 @@ Usage:
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
-  keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
-                                [--round <n>] [--out <findings.json>] [--json]
-                                [--fixtures <dir>]
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                               --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
@@ -141,7 +141,7 @@ keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 
 ```bash
 keryx review comments collect --repo acme/app --pr 7 --self "$(gh api user --jq .login)" \
-  --round 3 --out external-findings.json
+  --sha "$(git rev-parse HEAD)" --round 3 --out external-findings.json
 keryx review comments reply --repo acme/app --pr 7 --outcomes outcomes.json \
   --sha "$(git rev-parse HEAD)" --final --dry-run
 ```
@@ -154,10 +154,19 @@ PR-level discussion), a bot reviewer is treated exactly like a human, and only
 our own identity is filtered out — the collector refuses to run without knowing
 it, because otherwise the reply pass answers itself.
 
-Each reply is at most **two sentences and 600 characters**, cut rather than
-warned about, with the detail living in the flow package that the link points at.
-Both bounds are load-bearing: one 4,000-character sentence is one sentence, and a
-sentence budget alone posts it verbatim.
+`--sha` is required on **both** halves, and on `collect` it is what makes the
+record datable: it is written as `collected_sha`, and the completion gate
+compares it with the pull request's head before believing "nothing outstanding".
+`rounds_collected` cannot do that job — it is a count, `--round` defaults to `1`,
+and a file written before anyone commented reads exactly like one written after
+the last round.
+
+Each reply is at most **two sentences and 600 characters** — `--max-sentences`
+and `--max-chars`, both refusing a value below one — cut rather than warned
+about, with the detail living in the flow package that the link points at. Both
+bounds are load-bearing: one 4,000-character sentence is one sentence, and a
+sentence budget alone posts it verbatim. Beyond `--max-replies` (default 30) one
+summary comment stands for the backlog.
 
 Nothing here can resolve or hide a thread. The port holds an allow-list of five
 endpoints — three reads and two writes — and everything else, GraphQL included,
@@ -178,9 +187,13 @@ GitHub is the record — or sends it. Writing only after the post bounds the los
 to one comment; it does not close the window, and a rerun that answers a reviewer
 twice is as bad as never answering.
 
-A row with no `reply_url` means **nobody answered that comment**, and the
-collector and the completion gate both read it that way, so a comment cannot be
-simultaneously unanswerable and unclearable. Beyond the reply cap one summary
+A row with no `reply_url` means **nobody answered that comment**, and all three
+readers agree: the collector re-offers it, the completion gate counts it
+unanswered, and the reply pass sends it. The pass used to skip on the row merely
+existing, which is how a comment became simultaneously unanswerable and
+unclearable — offered every round, posted never. A row reaching the pass with no
+reply is resolved against the pull request first, so repairing it cannot answer
+the reviewer twice. Beyond the reply cap one summary
 comment stands for the backlog — which changes how those comments are answered,
 never what was decided about them: each keeps the disposition the orchestrator
 reached for it. Inventing `dismissed-deprioritised` there would be a dismissal on

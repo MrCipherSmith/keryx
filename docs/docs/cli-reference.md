@@ -948,14 +948,38 @@ hold, and the failure names which one did not:
    `manifest.target.head`, written by `review start|attach|ingest` from
    `git rev-parse HEAD` (or from `--head`); a round that recorded none is
    *unobserved*, which fails.
-4. **No external PR comment is unanswered.** Answered from the durable record
-   `keryx review comments collect|reply` writes
+
+   On `flow complete --merged <sha>` there is no PR head, and the merged commit
+   stands in for it. The test there is **containment, not equality**: the round
+   passes when its head is an ancestor of (or the same commit as) the merged
+   commit, which is what a merge commit gives you. A **squash or rebase** merge
+   rewrites the branch commit, so the reviewed SHA can never appear in the merged
+   history and this condition cannot be satisfied by re-running the round — the
+   failure says so and names the two things that do work: ingest a round with
+   `--head <merged-sha>`, or record the pull request on the flow so the round is
+   compared against the PR head instead.
+4. **No external PR comment is unanswered, and the collection that says so is
+   current.** Answered from the durable record `keryx review comments
+   collect|reply` writes
    (`.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json`), not from a
    reviewer name in `manifest.coverage` — that is written straight from
    `--reviewers` and collects nothing. A flow with a PR and no such record is
    *unobserved*: "nobody commented" and "nobody looked" are different facts.
+
+   A record that exists is not enough. It carries `collected_sha` — the head
+   `comments collect --sha` read — and the gate compares it with the PR head the
+   same way it compares the round's. A collection made before the comments
+   arrived is *unobserved*, as is a record with no `collected_sha` at all
+   (written by a keryx older than the field): a count of rounds is not a date,
+   and an undated collection cannot be shown to be current.
 5. **The verifier ran and its stats are on the record** (`verification_mode` in
-   the round's `scope.md`; `off` fails).
+   the round's `scope.md`). `off` fails; so does a mode with
+   `claims_received: 0` when the round retained a finding at or above the
+   severity floor — the mode names an intention, the claim count is what was
+   actually read, and `annotate` is the default while `--verifications` is
+   optional. A round with no `claims_received:` line is *unobserved*. A round
+   that retained nothing blocking passes on zero claims: there was nothing to
+   verify.
 
 A condition that could not be *observed* fails the gate just as a violated one
 does — the two are reported differently because the fixes differ, but neither
@@ -1163,11 +1187,19 @@ keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
 keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
 keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
-                    [--scope <scope.json>] [--refuted <file|->]
+                    [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                    [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--parallel <n>] [--outstanding <n>]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                              [--self <login>] [--round <n>]
+                              [--out <findings.json>] [--json] [--fixtures <dir>]
+keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                            --sha <head-sha> --final [--round <n>] [--dry-run]
+                            [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                            [--flow-link <url>] [--fixtures <dir>]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
@@ -1239,6 +1271,32 @@ Two rules that are not conveniences:
   resolving belongs to whoever wrote the comment. Auto-resolving is how a bot
   silences a person.
 
+| Flag | Sub | Description |
+|---|---|---|
+| `--repo <owner/repo>`, `--pr <n>` | both | The pull request. Required. |
+| `--sha <head-sha>` | both | **Required.** On `collect` it is the head the pass READ, written to the record as `collected_sha`; on `reply` it is the head the answers are true of, recorded on every handled comment. 7–40 hex characters — a value that is not a commit SHA is refused. |
+| `--self <login>` | both | The identity we are acting as. Resolved from `gh api user` when omitted, and **required** with `--fixtures`. On `reply` the login recorded at collection time wins. |
+| `--round <n>` | both | The review round. Default `1`. |
+| `--out <file>` | collect | Write the external findings (`source: "external"`) as JSON. |
+| `--json` | collect | Machine-readable result, including the state that was written. |
+| `--outcomes <file\|->` | reply | One disposition and one reply sentence per collected comment. Required — the judgement is the model's; this command enforces the budget, the threading and the once-at-the-end rule. |
+| `--final` | reply | Required. Without it the pass refuses: replying per round turns one thread into six. |
+| `--dry-run` | reply | Print the exact requests; post nothing, write nothing. |
+| `--max-replies <n>` | reply | Individual replies before the overflow summary. Default **30**. `0` is legal and means one summary stands for everybody. |
+| `--max-sentences <n>` | reply | Sentence budget per reply. Default **2**. Below `1` is refused. |
+| `--max-chars <n>` | reply | Character ceiling per reply. Default **600**. Below `1` is refused. |
+| `--flow-link <url>` | reply | The flow artifact the overflow summary points at. |
+| `--fixtures <dir>` | both | Answer every read from JSON on disk and record writes without sending them. |
+
+`collect --sha` is what makes the record **datable**, and the review gate depends
+on it: `rounds_collected` is a count, `--round` defaults to `1`, and nothing else
+in the record carries a timestamp, so a state file written at the start of round
+1 against a pull request nobody had commented on was indistinguishable from one
+written after the last round. Comments posted in between were invisible and the
+gate completed the flow over them. The gate now compares `collected_sha` with the
+PR head and reads a mismatch — or a record with no `collected_sha` — as
+*unobserved*.
+
 Replies are **at most two sentences and at most 600 characters**, enforced rather
 than advised: the over-long version is not reachable from the function that
 produces the reply, and a truncation with no link to point at is refused
@@ -1247,6 +1305,14 @@ one sentence, and a sentence budget alone waves it through. Whole sentences are
 dropped first; a lone sentence over the ceiling is cut at a word boundary, with
 an ellipsis and the link. The `Re <url>:` anchor on a top-level reply sits
 outside both bounds, because it is an address rather than an explanation.
+
+The sentence counter masks URLs, inline code, markdown link targets and
+abbreviations before splitting — but only an abbreviation that is **not
+sentence-final**, i.e. one followed by a lowercase word. `etc. Also updated the
+docs.` is two sentences; `etc. and the docs.` is one. Masking a sentence-final
+abbreviation under-counted, and under-counting is the direction that posts the
+wall of text: over-counting only costs a truncation, which is recorded and
+carries a link.
 
 Every collected comment ends with exactly one reply and one disposition — silence
 is not an acceptable outcome, and neither is answering twice.
@@ -1260,8 +1326,13 @@ visible in the thread, in which case GitHub is the record and the entry is
 completed from it, or it is not, in which case it is sent. Writing only after the
 post bounds the loss to one comment; it does not close the window.
 
-A record with no `reply_url` is a comment **nobody answered**, and both the
-collector and the completion gate read it that way. Being past the reply cap
+A record with no `reply_url` is a comment **nobody answered**, and all three
+readers agree on that: the collector re-offers it, the completion gate counts it
+unanswered, and the reply pass posts it. The pass used to skip on row existence
+instead, which put a settled row with no `reply_url` into a state nothing could
+clear — offered for ever, never answered, gate violated for good. A row reaching
+the pass with no reply is now resolved against the pull request itself before
+anything is sent, so the repair cannot answer a reviewer twice. Being past the reply cap
 changes how a comment is answered — one summary comment stands for the backlog —
 never what was decided about it: each backlogged comment keeps the disposition
 the orchestrator reached for it.

@@ -38,6 +38,15 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { flowsRoot } from "./store";
 
+/**
+ * The commit the gate suites treat as "the PR head".
+ *
+ * Exported and shared so a fixture's `collected_sha` and a suite's `HEAD`
+ * constant cannot drift apart: condition 4 now compares them, and two equal
+ * string literals in two files are a coincidence a later edit is free to break.
+ */
+export const FIXTURE_PR_HEAD = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+
 export type ReviewFixtureFinding = {
   id: string;
   severity?: string;
@@ -64,6 +73,15 @@ export type ReviewFixtureOptions = {
   findings?: ReviewFixtureFinding[];
   /** `null` writes a `scope.md` with NO `verification_mode:` line at all. */
   verificationMode?: string | null;
+  /**
+   * `claims_received:` in the stage counts. Default 1 — a verifier that was
+   * given something.
+   *
+   * `0` is the case condition 5 refuses when the round retained a blocking
+   * finding: a mode line names an intention, and the claim count is what was
+   * actually read.
+   */
+  claimsReceived?: number;
   /** Omit `manifest.json`, so the round reads as not ingested. */
   omitManifest?: boolean;
   /** Omit `findings.json`, likewise. */
@@ -131,7 +149,7 @@ export async function writeReviewPackage(options: ReviewFixtureOptions): Promise
         ? "_no verifier ran against this round_"
         : [
             `verification_mode: ${mode}`,
-            "claims_received: 1",
+            `claims_received: ${options.claimsReceived ?? 1}`,
             "claims_applied: 1",
             "claims_rejected: 0",
             "verdicts_capped_to_unverifiable: 0",
@@ -172,6 +190,14 @@ export async function writePrCommentFixtureState(input: {
   cwd: string;
   prUrl: string;
   roundsCollected?: number;
+  /**
+   * The head the collection ran against, which is what makes the record
+   * DATABLE — condition 4 compares it with the PR head, so a fixture that
+   * omitted it would be a stale collection and would (correctly) fail.
+   * `null` writes the field as null: a record from a keryx older than the
+   * field, which the gate must refuse rather than read as fresh.
+   */
+  collectedSha?: string | null;
   answered?: Array<{ id: string; author?: string; url?: string }>;
   unanswered?: Array<{ id: string; author?: string; url?: string }>;
 }): Promise<string> {
@@ -198,6 +224,8 @@ export async function writePrCommentFixtureState(input: {
     number,
     self: "keryx-bot",
     rounds_collected: input.roundsCollected ?? 1,
+    collected_sha: input.collectedSha === undefined ? FIXTURE_PR_HEAD : input.collectedSha,
+    collected_round: input.collectedSha === null ? null : (input.roundsCollected ?? 1),
     replies_posted_at: answered.length === 0 ? null : "2026-08-29T13:00:00.000Z",
     seen,
     handled_comments: answered.map((comment) => ({
@@ -207,7 +235,7 @@ export async function writePrCommentFixtureState(input: {
       url: comment.url ?? `${input.prUrl}#discussion_r${comment.id}`,
       first_seen_round: 1,
       handled_at: "2026-08-29T13:00:00.000Z",
-      sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      sha: FIXTURE_PR_HEAD,
       disposition: "answered-disagree",
       reply_url: `${input.prUrl}#issuecomment-${comment.id}`,
       via: "inline",
@@ -241,7 +269,11 @@ export async function writeCleanReviewPackage(input: {
   reviewId?: string;
 }): Promise<string> {
   if (input.prUrl !== null) {
-    await writePrCommentFixtureState({ cwd: input.cwd, prUrl: input.prUrl });
+    // Collected against the same head the round ran against, because condition 4
+    // now dates the collection against the PR head. A "clean" helper that wrote a
+    // record with a stale or absent `collected_sha` would be hiding the defect it
+    // is meant to be past.
+    await writePrCommentFixtureState({ cwd: input.cwd, prUrl: input.prUrl, collectedSha: input.head });
   }
   return writeReviewPackage({
     cwd: input.cwd,

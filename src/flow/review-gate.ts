@@ -746,6 +746,15 @@ export type ExternalCommentsGate = (input: {
   flowDir: string;
   flow: FlowState;
   rounds: readonly ReviewRoundRecord[];
+  /**
+   * The PR head the gate already resolved, or `null` when it could not be.
+   *
+   * Passed because "was anything collected" is not a question a count can
+   * answer — see {@link durableExternalCommentsGate}. A collector that cannot
+   * date its own record against the commit under review can only report that a
+   * file exists.
+   */
+  prHead: string | null;
 }) => Promise<ExternalCommentsReport | null>;
 
 /**
@@ -789,6 +798,29 @@ export function parsePrRef(url: string): { repo: string; number: number } | null
  * Absence is reported as `collected: false`, never as "nothing unanswered". A
  * pull request nobody has run the collector against and a pull request nobody
  * has commented on produce the same empty set and are different facts.
+ *
+ * # A stale collection is an absent one
+ *
+ * `rounds_collected > 0` was read as proof the collection was CURRENT, and it
+ * proves nothing of the kind. Nothing in `PrCommentState` used to be datable:
+ * `SeenComment` carries `first_seen_round`/`last_seen_round` and no timestamp,
+ * and `keryx review comments collect` defaults `--round` to 1, so the counter
+ * sat at 1 however many times collection ran. Run collect at the start of round
+ * 1 against a pull request nobody had commented on — the state file is written
+ * unconditionally, `seen: []` — then let a human post five CHANGES_REQUESTED
+ * comments, and `flow complete` found the file, saw `rounds_collected !== 0`,
+ * and passed condition 4 with the detail "0 comment(s) collected over 1
+ * round(s), 0 answered, 0 outstanding". Five unanswered reviewer comments, and
+ * the passing sentence said so.
+ *
+ * So the record now carries `collected_sha`, and it is compared against the PR
+ * head the same way condition 3 compares the ROUND's head. Note the asymmetry
+ * that removes: the round was checked against the pull request and the
+ * collection was checked against nothing at all.
+ *
+ * A record with no `collected_sha` was written by an older keryx. It reads as
+ * `collected: false` — never as fresh. It has exactly the property an absent
+ * file has, which is that nothing in it can say when anybody last looked.
  */
 export const durableExternalCommentsGate: ExternalCommentsGate = async (input) => {
   const url = input.flow.pr.url;
@@ -812,7 +844,7 @@ export const durableExternalCommentsGate: ExternalCommentsGate = async (input) =
         `nothing records whether anyone commented on ${ref.repo}#${ref.number} ` +
         `(\`${path.relative(input.cwd, file)}\` does not exist). Zero collected comments and no collection at ` +
         "all are different facts, and only one of them is clean. Run " +
-        `\`keryx review comments collect --repo ${ref.repo} --pr ${ref.number}\`, or inject ` +
+        `\`keryx review comments collect --repo ${ref.repo} --pr ${ref.number} --sha <pr-head>\`, or inject ` +
         "`FlowServiceDeps.externalCommentsGate` with a collector of your own.",
     };
   }
@@ -824,12 +856,45 @@ export const durableExternalCommentsGate: ExternalCommentsGate = async (input) =
       detail: `${ref.repo}#${ref.number} has a comment record, but it says no collection round has run yet`,
     };
   }
+  const collectCommand = `keryx review comments collect --repo ${ref.repo} --pr ${ref.number} --sha <pr-head>`;
+  if (state.collected_sha === null) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail:
+        `${ref.repo}#${ref.number} has a comment record that does not say which commit it was collected against ` +
+        "(no `collected_sha`; written by a keryx older than the field). A collection that cannot be dated cannot be " +
+        `shown to be current, and a count of rounds is not a date. Re-run \`${collectCommand}\`.`,
+    };
+  }
+  if (input.prHead === null) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail:
+        `${ref.repo}#${ref.number} was collected against ${state.collected_sha}, and the pull request's own head ` +
+        "could not be resolved, so nothing establishes that the collection is current. A comment posted after the " +
+        "collection ran is invisible to this record, and that is the case this condition exists to catch.",
+    };
+  }
+  if (!shaMatches(state.collected_sha, input.prHead)) {
+    return {
+      collected: false,
+      unanswered: [],
+      detail:
+        `${ref.repo}#${ref.number} was last collected against ${state.collected_sha} (round ` +
+        `${state.collected_round ?? "?"}), but the PR head is ${input.prHead}. Everything anyone said after ` +
+        `${state.collected_sha} is missing from this record, so "nothing outstanding" would be a statement about a ` +
+        `pull request that no longer exists. Re-run \`${collectCommand}\`.`,
+    };
+  }
   const unanswered = unansweredComments(state);
   return {
     collected: true,
     unanswered: unanswered.map((comment) => `${comment.author} ${comment.url}`),
     detail:
-      `${ref.repo}#${ref.number}: ${state.seen.length} comment(s) collected over ${state.rounds_collected} round(s), ` +
+      `${ref.repo}#${ref.number}: ${state.seen.length} comment(s) collected over ${state.rounds_collected} round(s) ` +
+      `up to the PR head ${state.collected_sha} (round ${state.collected_round ?? "?"}), ` +
       `${state.handled_comments.length} answered, ${unanswered.length} outstanding`,
   };
 };
@@ -902,9 +967,20 @@ export type ReviewGateInput = {
   /** The PR head, when the caller already resolved it. `undefined` = unknown. */
   prHead?: string | null | undefined;
   externalComments?: ExternalCommentsReport | null | undefined;
-  /** `flow complete --merged-commit`, when that path was taken. */
+  /** `flow complete --merged <sha>`, when that path was taken. */
   mergedCommit?: string | undefined;
+  /**
+   * Whether the latest round's head is CONTAINED in `mergedCommit`, resolved by
+   * {@link runReviewGate} so this function stays pure.
+   *
+   * `unknown` covers no git, no repository, and a commit this clone does not
+   * have — none of which is evidence of containment. Only `contains` relaxes
+   * condition 3.
+   */
+  mergedCommitContainment?: MergedCommitContainment | undefined;
 };
+
+export type MergedCommitContainment = "contains" | "does-not-contain" | "unknown";
 
 /**
  * Evaluate the five conditions. Pure: everything it reads was already read.
@@ -1003,7 +1079,17 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
   }
 
   // 3. The latest round ran against the PR head commit.
-  const prHead = input.prHead ?? (input.mergedCommit ?? null);
+  //
+  // On `flow complete --merged <sha>` there IS no pull request head, and the
+  // merged commit stands in for it. That comparison is exact only for a merge
+  // that preserved the branch commit; a squash or a rebase mints a new one by
+  // construction, so an equality test could never hold and the gate refused with
+  // advice ("re-run the round") that could not be followed — the next round would
+  // record the branch head again. So on this path containment is the question:
+  // is the reviewed commit IN what was merged. See `mergedCommitContainment`.
+  const mergedCommit = input.mergedCommit ?? null;
+  const onMergedPath = (input.prHead ?? null) === null && mergedCommit !== null;
+  const prHead = input.prHead ?? mergedCommit;
   if (latestRound === undefined) {
     conditions.push({
       id: "head-commit",
@@ -1032,13 +1118,31 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
             : " (the tracker did not report a head SHA — an older `gh`, or an inaccessible PR)") +
         `; round \`${latestRound.reviewId}\` ran against ${latestRound.head}.`,
     });
+  } else if (!shaMatches(latestRound.head, prHead) && onMergedPath && input.mergedCommitContainment === "contains") {
+    conditions.push({
+      id: "head-commit",
+      status: "pass",
+      detail:
+        `round \`${latestRound.reviewId}\` ran against ${latestRound.head}, which is contained in the merged ` +
+        `commit ${prHead} — the reviewed tree is part of what merged.`,
+    });
   } else if (!shaMatches(latestRound.head, prHead)) {
     conditions.push({
       id: "head-commit",
       status: "violated",
-      detail:
-        `the latest round ran against ${latestRound.head}, but the PR head is ${prHead}. ` +
-        "A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
+      detail: onMergedPath
+        ? `the latest round ran against ${latestRound.head}, but the completion names merged commit ${prHead}, ` +
+          `and ${latestRound.head} is not contained in it ` +
+          (input.mergedCommitContainment === "unknown"
+            ? "(git could not be asked — no repository here, or the commit is not in this clone)"
+            : "(git reports it is not an ancestor)") +
+          ". A clean round against a stale SHA proves nothing about what will merge. If this was a SQUASH or " +
+          "REBASE merge the branch commit was rewritten and can never appear in the merged history, so re-running " +
+          `the round against the branch will not help: ingest a round against the merged commit instead ` +
+          `(\`keryx review ingest … --head ${prHead}\`), or record the pull request on the flow so the round is ` +
+          "compared against the PR head rather than against the merge."
+        : `the latest round ran against ${latestRound.head}, but the PR head is ${prHead}. ` +
+          "A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
     });
   } else {
     conditions.push({
@@ -1073,6 +1177,42 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
       detail:
         `round \`${latestRound.reviewId}\` ran with \`verification_mode: off\` — no verdict was read, ` +
         "so no finding in it was independently checked by anyone but its author.",
+    });
+  } else if (latestRound.verification.claimsReceived === null) {
+    // Same rule as the `verification === null` branch one level up: a mode line
+    // with no claim count does not say whether anything was verified.
+    conditions.push({
+      id: "verifier-stats",
+      status: "unobserved",
+      detail:
+        `round \`${latestRound.reviewId}\` records \`verification_mode: ${latestRound.verification.mode}\` and no ` +
+        "`claims_received:` line, so nothing says whether the verifier was given anything to check.",
+    });
+  } else if (
+    latestRound.verification.claimsReceived === 0 &&
+    latestRound.findings.some((finding) => blocksAtFloor(finding.severity, config.severityFloor))
+  ) {
+    // `off` was refused on the ground that no verdict was read. The identical
+    // fact holds for a mode that received nothing — and `annotate` is the
+    // DEFAULT while `--verifications` is optional, so `keryx review ingest
+    // --report r.md` produced `verification_mode: annotate, claims_received: 0`
+    // and the gate printed "0 claim(s) received" inside the sentence saying the
+    // condition held. The mode names an intention; the claim count is what was
+    // actually read.
+    //
+    // Bounded to a round that RETAINED something at or above the floor: a round
+    // with nothing to verify has verified everything there was, and failing it
+    // would refuse the honest clean round.
+    const blocking = latestRound.findings.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor));
+    conditions.push({
+      id: "verifier-stats",
+      status: "violated",
+      detail:
+        `round \`${latestRound.reviewId}\` ran with \`verification_mode: ${latestRound.verification.mode}\` and ` +
+        `received 0 claims while retaining ${blocking.length} finding(s) at or above \`${config.severityFloor}\` ` +
+        `(${blocking.map((finding) => finding.globalId ?? finding.id).join(", ")}). The mode says a verifier was ` +
+        "meant to run; the claim count says nothing was checked. Pass the verifier's output with " +
+        "`keryx review ingest --verifications <file|->`.",
     });
   } else {
     conditions.push({
@@ -1255,7 +1395,17 @@ export async function runReviewGate(input: {
     flowDir: input.flowDir,
     flow: input.flow,
     rounds,
+    prHead,
   });
+
+  // Only on the `--merged` path, and only when there is something to compare:
+  // this is the one condition that needs to ask git, and asking it when a pull
+  // request head is available would answer a question nobody asked.
+  const latestRoundHead = rounds.filter((round) => round.ingested).at(-1)?.head ?? null;
+  const containment =
+    prHead === null && input.mergedCommit !== undefined && latestRoundHead !== null
+      ? await commitContains(input.cwd, latestRoundHead, input.mergedCommit)
+      : undefined;
 
   return evaluateReviewGate({
     cwd: input.cwd,
@@ -1267,7 +1417,42 @@ export async function runReviewGate(input: {
     prHead,
     ...(externalComments === undefined ? {} : { externalComments }),
     ...(input.mergedCommit === undefined ? {} : { mergedCommit: input.mergedCommit }),
+    ...(containment === undefined ? {} : { mergedCommitContainment: containment }),
   });
+}
+
+/**
+ * Is `commit` an ancestor of (or the same commit as) `descendant`?
+ *
+ * `git merge-base --is-ancestor` exits 0 for yes and 1 for no; anything else —
+ * no git, no repository, a commit this clone never fetched — is `unknown`, which
+ * this gate treats as "not shown to be contained" rather than as either answer.
+ * The same shape `verifyCommitOnMain` uses for the main-merge gate, kept here
+ * rather than shared because that one asks about `origin/main` and this one asks
+ * about a commit the caller named.
+ */
+export async function commitContains(
+  cwd: string,
+  commit: string,
+  descendant: string,
+): Promise<MergedCommitContainment> {
+  if (!/^[0-9a-f]{7,64}$/i.test(commit.trim()) || !/^[0-9a-f]{7,64}$/i.test(descendant.trim())) {
+    return "unknown";
+  }
+  try {
+    const proc = Bun.spawn(["git", "merge-base", "--is-ancestor", commit.trim(), descendant.trim()], {
+      cwd,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode === 0) {
+      return "contains";
+    }
+    return exitCode === 1 ? "does-not-contain" : "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 /**

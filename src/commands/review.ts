@@ -9,6 +9,7 @@ import {
   resolveGitHead,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
+  type ManagedReviewIngestInput,
 } from "../review/managed";
 import { githubAdapter } from "../flow/tracker/github";
 import {
@@ -28,6 +29,7 @@ import {
   renderBlastRadiusMarkdown,
   upsertBlastRadiusBlock,
   type BlastRadius,
+  type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
 import { TEST_FILE_RE } from "../testing/selection";
@@ -117,6 +119,7 @@ const CREATE_FLAGS = [
   "--verifications",
   "--verification-mode",
   "--scope",
+  "--blast-radius",
   "--refuted",
   "--max-findings",
   "--spent",
@@ -127,7 +130,20 @@ const CREATE_FLAGS = [
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
 
-const COMMENTS_COLLECT_FLAGS = ["--repo", "--pr", "--self", "--round", "--fixtures", "--out", "--json"] as const;
+const COMMENTS_COLLECT_FLAGS = [
+  "--repo",
+  "--pr",
+  "--self",
+  // The head this pass READ, recorded on the durable state so the completion
+  // gate can tell a current collection from one that ran before the comments
+  // arrived. Required, exactly as it is for `reply`: a collection that cannot
+  // say which commit it was true of is one the gate must refuse.
+  "--sha",
+  "--round",
+  "--fixtures",
+  "--out",
+  "--json",
+] as const;
 
 const COMMENTS_REPLY_FLAGS = [
   "--repo",
@@ -297,7 +313,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
-  const input: ManagedReviewInput = {
+  const input: ManagedReviewIngestInput = {
     cwd,
     mode,
     target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
@@ -309,6 +325,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     verifications: await readVerifications(optionValue(args, "--verifications")),
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
+    blastRadius: await readBlastRadiusRecord(optionValue(args, "--blast-radius")),
     maxFindingsPerReviewer: parseNonNegativeInteger(optionValue(args, "--max-findings"), "--max-findings"),
     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
@@ -366,6 +383,23 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     );
     for (const drop of findingsCap.drops) {
       console.log(`  truncated ${drop.truncated} from ${drop.reviewer}: ${drop.truncatedIds.join(", ")}`);
+    }
+  }
+
+  // AC3, on the same rule as the cap above: a screen that removes findings owes
+  // the terminal the same record. `not recorded` and `rejected 0` are different
+  // facts, and only one of them means the screen ran.
+  const scopeB = result.scopeBScreen;
+  if (scopeB.screen === undefined) {
+    if (scopeB.scopeBFindings > 0) {
+      console.log(`scope-B screen: not recorded (${scopeB.scopeBFindings} scope-B finding(s) went through unscreened)`);
+    }
+  } else {
+    console.log(
+      `scope-B screen: source=${scopeB.source} scope_b_findings=${scopeB.scopeBFindings} accepted=${scopeB.screen.accepted.length} rejected=${scopeB.screen.rejected.length} min_severity=${scopeB.screen.minSeverity}`,
+    );
+    for (const rejection of scopeB.screen.rejected) {
+      console.log(`  rejected ${rejection.finding.id ?? "<unidentified>"} [${rejection.rule}]: ${rejection.detail}`);
     }
   }
   const concurrency = caps.concurrency;
@@ -527,6 +561,11 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   const repo = requiredOption(args, "--repo", "comments collect");
   const number = requiredInteger(args, "--pr");
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+  // Required, and refused when it is not a SHA — the same rule `--head` follows
+  // on `review ingest`. The completion gate reads this value as "the commit this
+  // collection was true of"; a free-text one would satisfy the field and prove
+  // nothing, which is the failure mode the field exists to close.
+  const sha = requiredSha(args, "--sha", "comments collect");
   const port = await resolvePort(args);
   const self = optionValue(args, "--self") ?? (await resolveSelfLogin(args));
   const cwd = process.cwd();
@@ -540,20 +579,22 @@ async function runCommentsCollect(args: string[]): Promise<void> {
     handled: state.handled_comments,
   });
   const findings = externalFindingsFromComments(result.comments);
-  await writePrCommentState(cwd, recordSeenComments(state, result.comments, round, self));
+  const recorded = recordSeenComments(state, result.comments, round, { self, collectedSha: sha });
+  await writePrCommentState(cwd, recorded);
 
   const out = optionValue(args, "--out");
   if (out !== undefined) {
     await writeFileAtomic(out, `${JSON.stringify(findings, null, 2)}\n`);
   }
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...result, findings }, null, 2));
+    console.log(JSON.stringify({ ...result, findings, state: recorded }, null, 2));
     return;
   }
   console.log(renderPrCommentsMarkdown({ repo, number, round, result }));
   console.log(`findings: ${findings.length}${out === undefined ? "" : ` (written to ${out})`}`);
+  console.log(`collected against: ${sha} (round ${round})`);
   console.log(
-    `unanswered so far: ${unansweredComments(recordSeenComments(state, result.comments, round, self)).length} — replies are posted ONCE, after the final round.`,
+    `unanswered so far: ${unansweredComments(recorded).length} — replies are posted ONCE, after the final round.`,
   );
 }
 
@@ -686,6 +727,17 @@ function requiredOption(args: string[], name: string, usage: string): string {
     throw new Error(`\`${name}\` is required for \`keryx review ${usage}\`.`);
   }
   return value;
+}
+
+/** A required flag that must carry a commit SHA, checked the way `--head` is. */
+function requiredSha(args: string[], name: string, usage: string): string {
+  const value = requiredOption(args, name, usage);
+  if (!/^[0-9a-f]{7,40}$/i.test(value.trim())) {
+    throw new Error(
+      `\`${name} "${value}"\` is not a commit SHA. Give the head this pass ran against (\`git rev-parse HEAD\`), 7-40 hex characters.`,
+    );
+  }
+  return value.trim().toLowerCase();
 }
 
 function requiredInteger(args: string[], name: string): number {
@@ -897,6 +949,30 @@ async function readScope(source: string | undefined): Promise<ReviewScopeRecordL
     );
   }
   return { ...parsed, counts: parsed.counts, drops: parsed.drops };
+}
+
+/**
+ * The blast-radius record, from `keryx review blast-radius --json` — the set the
+ * scope-B screen holds findings against.
+ *
+ * Refused rather than defaulted when either half is missing, on the same rule
+ * `readScope` follows: an empty `files` list is the positive claim "the radius is
+ * empty", and a document that simply lacks the property is not making it. A screen
+ * run against an invented empty set would reject every scope-B finding as
+ * `outside-set` and report that as enforcement working.
+ */
+async function readBlastRadiusRecord(source: string | undefined): Promise<BlastRadiusScreenInput | undefined> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  const parsed = JSON.parse(raw) as Partial<BlastRadiusScreenInput>;
+  if (!Array.isArray(parsed.files) || !Array.isArray(parsed.changedFiles)) {
+    throw new Error(
+      `--blast-radius ${source} carries no \`files\`/\`changedFiles\` arrays. Pass the output of \`keryx review blast-radius --json\`: an empty set means "the radius is empty", and a missing one means it was never computed.`,
+    );
+  }
+  return { ...parsed, files: parsed.files, changedFiles: parsed.changedFiles };
 }
 
 function parseVerificationMode(raw: string | undefined): ManagedReviewInput["verificationMode"] {
@@ -1254,7 +1330,8 @@ Usage:
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
-                      [--scope <scope.json>] [--refuted <file|->]
+                      [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                    [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
@@ -1264,9 +1341,9 @@ Usage:
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
-  keryx review comments collect --repo <owner/repo> --pr <n> [--self <login>]
-                                [--round <n>] [--out <findings.json>] [--json]
-                                [--fixtures <dir>]
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                               --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
@@ -1360,13 +1437,22 @@ comments:
   Severity is CLASSIFIED, never invented: CHANGES_REQUESTED starts at \`major\`,
   everything else at \`minor\`, and a comment whose parent review was never seen
   stays at the floor marked \`unclassified\` rather than being dropped or guessed.
+  \`collect --sha <head-sha>\` is REQUIRED and records which commit the pass read.
+  The completion gate compares it with the pull request's head: a state file
+  written before the comments arrived is a stale collection, and \`rounds_collected\`
+  — a count that a default \`--round 1\` pins at 1 however often collection runs —
+  could never tell the two apart. A record with no recorded head reads as
+  UNOBSERVED, on the same rule as no record at all.
   \`reply\` refuses without --final: replying per round turns one review thread
   into six, and a reply written mid-flow states an intention rather than an
-  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences AND ${DEFAULT_MAX_REPLY_CHARS} characters — CUT to
-  both in code, with the remainder replaced by a link, because a sentence budget
-  alone lets one 4,000-character sentence through — threaded where GitHub gives
-  a thread, and capped
-  at ${DEFAULT_MAX_REPLIES_TOTAL} with one summary comment and a reported backlog beyond it. Nothing
+  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
+  (--max-chars) — CUT to both in code, with the remainder replaced by a link,
+  because a sentence budget alone lets one 4,000-character sentence through —
+  threaded where GitHub gives a thread, and capped
+  at ${DEFAULT_MAX_REPLIES_TOTAL} (--max-replies) with one summary comment and a reported backlog
+  beyond it. --max-sentences and --max-chars refuse a value below 1: a reply of
+  zero sentences or zero characters is silence with extra steps. --max-replies 0
+  is legal and means "one summary comment stands for everybody". Nothing
   here can resolve, hide or dismiss a thread: those endpoints are unreachable
   through the port. --dry-run and --fixtures rehearse the whole pass offline.
 

@@ -30,6 +30,7 @@ import {
   type GateFinding,
 } from "./review-gate";
 import {
+  FIXTURE_PR_HEAD,
   writeCleanReviewPackage,
   writePrCommentFixtureState,
   writeReviewPackage,
@@ -38,7 +39,9 @@ import {
 import type { FlowService, FlowServiceDeps, FlowState, GateOutcome, TrackerAdapter } from "./types";
 
 const PR_URL = "https://github.com/acme/app/pull/7";
-const HEAD = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+// Shared with the fixtures so the comment record's `collected_sha` and the PR
+// head the fake tracker reports cannot drift: condition 4 compares them.
+const HEAD = FIXTURE_PR_HEAD;
 const STALE = "0f1e2d3c4b5a69788796a5b4c3d2e1f098765432";
 
 let ROOT = "";
@@ -712,6 +715,58 @@ test("AC5/4 — a record that exists but collected nothing is unobserved, not cl
   expect(gate.detail).toContain("no collection round has run yet");
 });
 
+test("AC5/4 — a collection that ran before the comments arrived is stale, not clean", async () => {
+  // MAJOR: `rounds_collected > 0` was read as proof the collection was CURRENT,
+  // and nothing in the record could date it — `SeenComment` has no timestamp and
+  // `comments collect` defaults `--round` to 1, so the counter sat at 1 however
+  // many times collection ran. Collect at the start of round 1 against a PR
+  // nobody had commented on, let five people comment, never re-collect, and the
+  // gate passed with "0 comment(s) collected over 1 round(s), 0 outstanding".
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: STALE });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("external-comments (unobserved)");
+  expect(gate.detail).toContain("was last collected against");
+  expect(gate.detail).toContain(STALE);
+  expect(gate.detail).toContain(HEAD);
+});
+
+test("AC5/4 — a record written before collections were dated is not read as fresh", async () => {
+  // The compatibility decision, stated where it can be checked: a missing
+  // `collected_sha` means "this cannot be shown to be current", which is exactly
+  // what an absent file means. It cannot silently mean fresh.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: null });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("external-comments (unobserved)");
+  expect(gate.detail).toContain("does not say which commit it was collected against");
+});
+
+test("AC5/4 — a collection at the PR head passes, and the detail says which commit", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, { collectComments: false });
+  await writePrCommentFixtureState({ cwd: ROOT, prUrl: PR_URL, collectedSha: HEAD, roundsCollected: 2 });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [] });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("pass");
+  expect(gate.detail).toContain("all 5 conditions hold");
+});
+
 test("AC5/4 — an injected collector reporting an unanswered comment fails the gate", async () => {
   await fresh();
   const service = createFlowService(
@@ -836,6 +891,93 @@ test("AC5/5 — `verification_mode: off` is a violation, not an absence", async 
   expect(gate.status).toBe("fail");
   expect(gate.detail).toContain("verifier-stats (violated)");
   expect(gate.detail).toContain("no finding in it was independently checked");
+});
+
+/** Terminal on the strength of a recorded human decision — no verifier claim needed. */
+function dismissedByHuman(id: string): ReviewFixtureFinding {
+  return {
+    id,
+    severity: "major",
+    disposition: {
+      state: "dismissed-wont-fix",
+      evidence: "human: aleks — accepted as a known limitation, recorded in the flow package",
+    },
+  };
+}
+
+test("AC5/5 — a round that received no claim while retaining a blocking finding is a violation", async () => {
+  // MINOR: the condition refused only `verification_mode: off`, on the ground
+  // that no verdict was read — and the identical fact holds for `annotate` with
+  // zero claims. `annotate` is the DEFAULT and `--verifications` is optional, so
+  // a plain `keryx review ingest --report r.md` produced
+  // `verification_mode: annotate, claims_received: 0`, and the gate printed
+  // "0 claim(s) received" INSIDE the sentence saying the condition held.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    // Terminal, so condition 2 passes and this assertion names one mechanism.
+    findings: [dismissedByHuman("F-001")],
+    verificationMode: "annotate",
+    claimsReceived: 0,
+  });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("verifier-stats (violated)");
+  expect(gate.detail).toContain("received 0 claims");
+  expect(gate.detail).toContain("F-001");
+  expect(gate.detail).not.toContain("terminal-dispositions (violated)");
+});
+
+test("AC5/5 — a round with nothing at or above the floor to verify still passes on 0 claims", async () => {
+  // The bound on the rule: a round that retained nothing blocking has verified
+  // everything there was, and failing it would refuse the honest clean round.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    findings: [{ id: "F-001", severity: "info", problem: "a naming nit" }],
+    verificationMode: "annotate",
+    claimsReceived: 0,
+  });
+
+  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+});
+
+test("AC5/5 — a mode line with no claim count is unobserved, not a pass", async () => {
+  // The same rule the `verification === null` branch already uses one level up:
+  // a record that does not say how much the verifier was given cannot say
+  // whether anything was verified.
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  const packageDir = await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    findings: [],
+    verificationMode: "annotate",
+  });
+  const scopePath = path.join(packageDir, "scope.md");
+  const scope = (await readFile(scopePath, "utf8")).replace(/^claims_received:.*$/m, "");
+  await writeFile(scopePath, scope, "utf8");
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain("verifier-stats (unobserved)");
+  expect(gate.detail).toContain("no `claims_received:` line");
 });
 
 test("AC5/5 — `annotate` satisfies the condition; the verifier ran and said so", async () => {

@@ -33,11 +33,30 @@ Not "is this code good". Not "would I have written it this way". The blast-radiu
 set is code that already worked; your job is to find where the change stops it
 working.
 
-This is enforced, not requested. `screenBlastRadiusFindings` rejects a finding
-from this scope that names a style, naming or architecture concern in code the
-change did not touch, that is below `major`, or that never links back to the
-change. Those rejections are recorded with their reason — so a round spent on
-them is a round wasted, visibly.
+This is enforced, not requested. `keryx review ingest` runs
+`screenBlastRadiusFindings` over the findings this scope returns and refuses
+three shapes outright:
+
+- `outside-set` — anchored to a file that is in neither the computed set nor the
+  changed set. A file-less finding survives this only when its `class_scope.sites`
+  name something in the set.
+- `non-regression-severity` — below `major`. A break in existing behaviour names
+  a trigger and an outcome; `minor` and `info` state by definition that it does
+  not.
+- `no-link-to-change` — nothing in the finding names a changed file, module or
+  symbol. A regression claim asserts that THE CHANGE broke this site.
+
+A refused finding does not reach `findings.json`. It is listed by id in the
+package's `scope.md` under `## Scope B rejections`, with the rule that refused it
+and why — so a round spent on them is a round wasted, visibly, and an observation
+raised under the wrong scope survives to be filed where it belongs.
+
+Every rule judges the CLAIM. None reads the reviewer's name: a reviewer whose
+usual question is "is this code good" can still notice a break, and it is
+accepted on its merits.
+
+If the round has no computed blast-radius record to screen against, the ingest is
+refused rather than recorded unscreened.
 
 ## What you are given
 

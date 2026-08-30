@@ -13,7 +13,10 @@ import {
   findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
+  type ManagedReviewIngestInput,
+  type ScopeBScreenRecord,
 } from "./managed";
+import type { BlastRadiusScreenInput } from "./blast-radius";
 import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
@@ -607,8 +610,8 @@ const FULL_FINDING: StructuredReviewFinding = {
 
 async function ingestFindings(
   reviewId: string,
-  over: Partial<ManagedReviewInput> = {},
-): Promise<{ path: string; findings: StructuredReviewFinding[] }> {
+  over: Partial<ManagedReviewIngestInput> = {},
+): Promise<{ path: string; findings: StructuredReviewFinding[]; scopeBScreen: ScopeBScreenRecord }> {
   const result = await createManagedReviewPackage({
     cwd: ROOT,
     mode: "ingest",
@@ -621,6 +624,7 @@ async function ingestFindings(
   });
   return {
     path: result.path,
+    scopeBScreen: result.scopeBScreen,
     findings: JSON.parse(
       await readFile(path.join(ROOT, result.path, "findings.json"), "utf8"),
     ) as StructuredReviewFinding[],
@@ -1284,4 +1288,169 @@ test("AC10: caps nobody supplied read `not recorded`, never zero", async () => {
   // The findings cap DID run — it always runs — so it says so rather than
   // claiming ignorance about itself.
   expect(scope).toContain("_the findings cap ran and truncated nothing_");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 204 AC3 — the scope-B screen, wired into the ingest
+//
+// `review-regression/SKILL.md` has told the scope-B reviewer "this is enforced,
+// not requested" since the screen was written, and nothing called it: the
+// pipeline ran `applyExternalVerdictRule`, `partitionExternalFindings` and
+// `applyFindingsCap` and never screened. The consequence was the opposite of the
+// promise — a `major` about the style of an untouched file in the blast radius
+// was written into findings.json unscreened, and the review gate then blocked
+// completion on it.
+//
+// Every test below drives `createManagedReviewPackage`, because that is the
+// function that was missing the call.
+// ---------------------------------------------------------------------------
+
+/** The set a round was dispatched over: one changed file, one hop-1 dependent. */
+const RADIUS: BlastRadiusScreenInput = {
+  changedFiles: ["src/core/util.ts"],
+  files: [
+    {
+      file: "src/a.ts",
+      hop: 1,
+      fanIn: 3,
+      via: "src/core/util.ts",
+      path: ["src/a.ts", "src/core/util.ts"],
+      source: "graph",
+      isTest: false,
+    },
+  ],
+};
+
+function scopeBFinding(over: Partial<StructuredReviewFinding> = {}): StructuredReviewFinding {
+  return {
+    ...FULL_FINDING,
+    id: "F-100",
+    reviewer: "review-regression",
+    severity: "major",
+    problem: "the changed util.ts contract now returns undefined, so this call site throws",
+    impact: "the render throws at runtime",
+    suggested_fix: "restore the guard",
+    evidence: "src/a.ts:12",
+    file: "src/a.ts",
+    class_scope: {
+      sites: ["src/a.ts:12"],
+      enumeration_method: "every entry in the blast radius importing the changed helper",
+    },
+    ...over,
+  };
+}
+
+test("AC3: a scope-B major that is not a regression never reaches findings.json", async () => {
+  await fresh();
+  // The reviewer's own scenario: a `major` about an untouched file that IS in
+  // the computed set and names nothing the change did. Unscreened, it is
+  // ingested and the review gate then blocks completion on it.
+  const { findings, scopeBScreen } = await ingestFindings("2026-08-30-scope-b-reject", {
+    findings: [
+      scopeBFinding({
+        problem: "this function is long and hard to follow",
+        impact: "future maintenance",
+        suggested_fix: "extract a helper",
+      }),
+    ],
+    blastRadius: RADIUS,
+  });
+
+  expect(findings.map((finding) => finding.id)).not.toContain("F-100");
+  expect(scopeBScreen.screen?.rejected).toHaveLength(1);
+  expect(scopeBScreen.screen?.rejected[0]?.rule).toBe("no-link-to-change");
+});
+
+test("AC3: a real regression claim inside the set survives the screen", async () => {
+  await fresh();
+  // The other direction, and the one that matters most: a screen that rejected
+  // this would be a false negative in the direction that hides defects.
+  const { findings, scopeBScreen } = await ingestFindings("2026-08-30-scope-b-accept", {
+    findings: [scopeBFinding()],
+    blastRadius: RADIUS,
+  });
+
+  expect(findings.map((finding) => finding.id)).toContain("F-100");
+  expect(scopeBScreen.screen?.rejected).toHaveLength(0);
+  expect(scopeBScreen.scopeBFindings).toBe(1);
+});
+
+test("AC3: the screen judges scope B only — a scope-A minor on a changed file is untouched", async () => {
+  await fresh();
+  // Scope A asks whether the change is correct, and a `minor` is a legitimate
+  // answer to that question. Screening every finding by scope B's floor would
+  // delete it.
+  const { findings } = await ingestFindings("2026-08-30-scope-b-leaves-a", {
+    findings: [{ ...FULL_FINDING, id: "F-200", reviewer: "review-style", severity: "minor", file: "src/core/util.ts" }],
+    blastRadius: RADIUS,
+  });
+
+  expect(findings.map((finding) => finding.id)).toContain("F-200");
+});
+
+test("AC3: every rejection is named in scope.md with the rule that refused it", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-08-30-scope-b-record", {
+    findings: [
+      scopeBFinding({
+        id: "F-101",
+        file: "src/somewhere/else.ts",
+        class_scope: { sites: ["src/somewhere/else.ts:9"], enumeration_method: "read the file" },
+      }),
+      scopeBFinding({ id: "F-102", severity: "minor", class_scope: undefined }),
+    ],
+    blastRadius: RADIUS,
+  });
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  // The cap's shape: a count, and then every single id with its reason. A screen
+  // that dropped findings silently is the failure this programme exists to end.
+  expect(scope).toContain("## Scope B rejections");
+  expect(scope).toContain("rejected: 2");
+  expect(scope).toContain("scope_b_findings: 2");
+  expect(scope).toContain("F-101");
+  expect(scope).toContain("outside-set");
+  expect(scope).toContain("F-102");
+  expect(scope).toContain("non-regression-severity");
+});
+
+test("AC3: a scope-B finding with no blast-radius record is refused, not recorded unscreened", async () => {
+  await fresh();
+  // The silent no-op is the defect. Without the set the round was dispatched
+  // over there is nothing to screen against, and recording the finding anyway is
+  // exactly what the skill promised does not happen.
+  await expect(
+    ingestFindings("2026-08-30-scope-b-unscreened", { findings: [scopeBFinding()] }),
+  ).rejects.toThrow(/no blast-radius record/);
+  expect(existsSync(path.join(ROOT, ".metaproject", "reviews", "2026-08-30-scope-b-unscreened", "findings.json"))).toBe(
+    false,
+  );
+});
+
+test("AC3: the screen reads the blast-radius record written next to the package", async () => {
+  await fresh();
+  // The channel that needs no new flag: the orchestrator computes the set at
+  // dispatch time with `--out <package>/blast-radius.json` and ingests after the
+  // round, the same way the pre-filter's scope block survives between the two.
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-08-30-scope-b-artifact");
+  await mkdir(pkg, { recursive: true });
+  await writeFile(path.join(pkg, "blast-radius.json"), JSON.stringify(RADIUS), "utf8");
+
+  const { findings, scopeBScreen } = await ingestFindings("2026-08-30-scope-b-artifact", {
+    findings: [scopeBFinding({ problem: "this function is long and hard to follow", suggested_fix: "extract" })],
+  });
+
+  expect(scopeBScreen.source).toBe("package");
+  expect(findings.map((finding) => finding.id)).not.toContain("F-100");
+});
+
+test("AC3: a screen that did not run says so, rather than reporting `rejected: 0`", async () => {
+  await fresh();
+  const { path: pkg, scopeBScreen } = await ingestFindings("2026-08-30-scope-b-absent");
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+
+  expect(scopeBScreen.source).toBe("none");
+  expect(scope).toContain("no blast-radius record reached this ingest");
+  // Not `rejected: 0`, which reads as a screen that ran and found nothing.
+  expect(scope).not.toContain("\nrejected: 0");
 });
