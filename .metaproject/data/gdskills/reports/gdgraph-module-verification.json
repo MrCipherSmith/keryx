@@ -6,7 +6,7 @@
   "target": "src/gdgraph",
   "skillPath": ".metaproject/project-skills/gdgraph/module",
   "reportPath": ".metaproject/data/gdskills/reports/gdgraph-module-verification.json",
-  "verifiedAt": "2026-07-06T19:04:50.397Z",
+  "verifiedAt": "2026-08-30T07:10:47.099Z",
   "signals": [
     {
       "name": "required:SKILL.md",
@@ -35,7 +35,7 @@
     {
       "name": "metadata:last-verified",
       "status": "pass",
-      "message": "Last verified at 2026-07-06T19:04:44.233Z",
+      "message": "Last verified at 2026-08-30T07:10:41.584Z",
       "path": ".metaproject/project-skills/gdgraph/module/SKILL.md"
     },
     {
@@ -65,7 +65,7 @@
     {
       "name": "evidence:gdwiki",
       "status": "pass",
-      "message": "Evidence available: .metaproject/wiki/index.md",
+      "message": "gdwiki evidence is valid.",
       "path": ".metaproject/wiki/index.md"
     },
     {
@@ -75,13 +75,13 @@
       "path": ".metaproject/data/health/artifacts/latest.json"
     },
     {
-      "name": "evidence:documentation-memory",
+      "name": "evidence:memory-consultation",
       "status": "warn",
-      "message": "No documentation-memory evidence artifact found."
+      "message": "No applicable canonical accepted memory entries were found."
     }
   ],
   "recommendations": [
-    "Search Documentation Memory before learning from repeated decisions or mistakes."
+    "Search canonical accepted memory before learning from repeated decisions or mistakes."
   ],
   "dryRun": false
 }

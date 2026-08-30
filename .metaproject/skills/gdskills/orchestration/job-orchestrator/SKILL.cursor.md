@@ -946,7 +946,7 @@ journal line is the record.
 `review-orchestrator` is the review path. It is not one strategy among several: it is
 the only entry point that produces a **managed review record**, and every round this
 skill runs is a round that must be citable afterwards. The legacy alternatives —
-launching `code-ai-review` / `code-boss-review` / `code-style-review` by hand, or the
+launching `code-ai-review` / `code-learned-review` / `code-style-review` by hand, or the
 never-bundled `code-review` 4-agent skill — are gone. They emitted prose into a chat
 transcript and nothing else, which is precisely the failure the managed pipeline
 replaced.

@@ -1,15 +1,19 @@
 ---
-description: "boss-style review profile: direct, strict, architecture-first feedback with concrete fixes."
+description: "Strict review profile: direct, architecture-first feedback with concrete fixes."
 alwaysApply: false
 ---
 
-# boss Review Profile
+# Strict Review Profile
 
 ## Purpose
-Replicate the boss review style for requested reviews.
+Apply a strict, architecture-first pass: name the defect, name where the logic
+belongs, and give the replacement.
 
 ## When To Apply
-Apply when user explicitly asks for review in boss style.
+Apply when the caller explicitly asks for a strict review. For a checklist this
+project learned from its own pull-request comments, use
+`core/code-review-learned-profile.mdc` instead — that one carries no conventions
+of its own and reads them from the project.
 
 ## Style Profile
 - Direct and concise.

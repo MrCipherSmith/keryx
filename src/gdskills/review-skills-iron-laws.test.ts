@@ -45,7 +45,7 @@ const SHARED_HEADING = "### Shared laws (every reviewer)";
 const EXEMPT: Record<string, string> = {
   "code-ai-review":
     "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
-  "code-boss-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
+  "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
   "code-mobx-store-review":
     "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",

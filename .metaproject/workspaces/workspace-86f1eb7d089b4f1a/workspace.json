@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "id": "workspace-86f1eb7d089b4f1a",
+  "title": "найди все не завершенные flow",
+  "status": "active",
+  "members": [
+    {
+      "subject": "user:local-1000",
+      "role": "owner"
+    }
+  ],
+  "resources": [],
+  "createdAt": "2026-08-19T16:43:04.116Z",
+  "updatedAt": "2026-08-19T16:43:04.116Z"
+}

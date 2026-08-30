@@ -137,7 +137,7 @@
               "reviewer": {
                 "type": "string",
                 "description": "Which review skill found this",
-                "examples": ["code-ai-review", "code-boss-review", "code-style-review"]
+                "examples": ["code-ai-review", "code-learned-review", "code-style-review"]
               }
             }
           },

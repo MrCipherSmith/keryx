@@ -452,6 +452,26 @@ rounds on one branch, twelve blockers, and every one of them the same mistake
 in a different place until it was written down as a
 [lesson](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/memory/lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md).
 
+### And the comments other people left
+
+The commands above learn from *your own* review reports. The comments humans left
+on the pull request are a second source, and the project decides whose count:
+
+```bash
+keryx review learn --pr <n>
+keryx skills learn apply .metaproject/data/gdskills/proposals/<id>.json
+```
+
+`learn` reads the record `comments collect` already wrote — no second fetch — and
+keeps only the authors named in `.metaproject/review-learning.config.json`. A
+project without that file does not learn, and that is fine. Keryx ships no
+reviewer and no checklist: which reviewers teach a project, and what they teach,
+stays in that project.
+
+Seeding a local skill from conventions you already keep elsewhere is documented
+in [CLI reference › review learn](../cli-reference.md) — the content comes from
+your own copy, because keryx holds none.
+
 ## Verify
 
 ```console

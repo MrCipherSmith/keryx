@@ -66,7 +66,7 @@ into `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`):
    `package.json` declares react/react-dom/mobx/mobx-react(-lite). Reviewer itself untouched.
 4. **Legacy-profile prompt** — removed the interactive "Include legacy/profile reviewers? A/B/C"
    prompt block and the Step 5 workflow instruction to ask about it. Legacy/profile reviewers are
-   now reachable only via explicit flags (`--legacy-profiles`, `--code-ai`, `--b091`,
+   now reachable only via explicit flags (`--legacy-profiles`, `--code-ai`, `--boss`,
    `--code-style`, `--mobx-store`) or `job-orchestrator` automation settings; the
    `code-mobx-store-review` auto-suggestion stays informational-only in the Review Plan Preview.
 

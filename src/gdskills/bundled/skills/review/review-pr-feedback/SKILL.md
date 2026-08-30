@@ -41,7 +41,7 @@ review-pr-feedback Progress:
 - [ ] Step 4: Group comments by author
 - [ ] Step 5: Classify comment types (blocker intent / suggestion / question / nitpick)
 - [ ] Step 6: Explain each comment + suggest concrete fix with code example
-- [ ] Step 7: Detect senior/boss reviewer comments — offer pattern extraction (with user consent)
+- [ ] Step 7: Comments from configured learning authors — offer a learning proposal (with user consent)
 - [ ] Step 8: Emit structured report with action items checklist
 ```
 
@@ -183,20 +183,39 @@ If confidence is Low, state both interpretations and ask the user which one appl
 
 ---
 
-## Step 7: Senior / Boss Reviewer Handling
+## Step 7: Feed the comments back into the project's learned skill
 
-**Detection**: if an author is identified as a senior or boss reviewer (by username, or by
-review authority markers such as "REQUEST_CHANGES from `boss`"), trigger this flow:
+**Detection is configuration, not judgement.** Which authors teach this project is
+declared in `.metaproject/review-learning.config.json`, alongside the local skill
+to teach and the repository to read. Do not decide that an author is senior,
+authoritative, or worth learning from — the file decides, and an author it does
+not name contributes nothing.
 
-1. Notify the user: "This PR has comments from a senior reviewer (`<login>`)."
-2. **NEVER update rules, CLAUDE.md, or any configuration without explicit user consent.**
-3. Ask: "Should I analyze `<login>`'s comments for patterns and suggest updates to review rules?"
-4. If the user agrees:
-   - Identify recurring patterns in that reviewer's feedback (not one-off edge cases)
-   - Propose specific additions to `.metaproject/rules/core/code-review-boss-profile.mdc` or the relevant rule file
-   - Present the proposed changes to the user for approval before writing anything
-   - After approval, update the rule file and note it in the output
-5. Extract generalizable patterns only — not personal phrasing or one-off opinions
+If the file is absent, this project does not learn. Say nothing about it and skip
+this step; absence is a supported state, not a misconfiguration.
+
+If the file is present and names at least one author who commented on this PR:
+
+1. Notify the user: "This PR has comments from `<login>`, a configured learning
+   source for `<module>/<skill>`."
+2. **NEVER apply a proposal without explicit user consent.**
+3. Ask: "Should I turn those comments into a learning proposal for
+   `<module>/<skill>`?"
+4. If the user agrees, run the two commands. The first writes a proposal and
+   changes nothing; the second is the only writer:
+   ```bash
+   keryx review learn --pr <n>
+   keryx skills learn apply .metaproject/data/gdskills/proposals/<id>.json
+   ```
+5. Present the proposal's lessons before applying. `learn` reads the record
+   `keryx review comments collect` already wrote and never re-fetches, so the
+   proposal shows exactly what would be written.
+
+**The target is the project skill, never a rule file.** `.metaproject/rules/core/`
+holds shipped templates that `keryx update` overwrites with force, and
+`applyLearningProposal` refuses any target outside
+`.metaproject/project-skills/` — a lesson written anywhere else is lost on the
+next update, or refused outright.
 
 ---
 
@@ -318,7 +337,7 @@ If provided and the file exists, read it before fetching PR comments. If absent,
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "I'll update the rule file based on the boss's comments without asking" | NEVER auto-update rules; always ask first — rules affect all future reviews |
+| "I'll write these comments into a rule file without asking" | NEVER apply a learning proposal unsupervised, and never target a rule file — `keryx skills learn apply` refuses anything outside `.metaproject/project-skills/` |
 | "The reviewer's question is just curiosity, not a real concern" | Questions often hide concerns; classify carefully |
 | "I'll skip the 'praise' comments — they're not actionable" | Positive patterns help developers understand what to repeat |
 | "Confidence High for an ambiguous comment" | Low confidence is honest; false confidence leads to wrong fixes |

@@ -28,7 +28,7 @@ triggers:
   - "review --flow-graph"
   - "review --legacy-profiles"
   - "review --code-ai"
-  - "review --boss"
+  - "review --learned"
   - "review --code-style"
   - "review --mobx-store"
 metadata:
@@ -153,7 +153,7 @@ which of its inputs were recovered and which were never written down.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `flags` | string[] | no | One or more of: `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--boss`, `--code-style`, `--mobx-store`, `--verify`, `--all` |
+| `flags` | string[] | no | One or more of: `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--verify`, `--all` |
 | `path` | string | no | File or directory path to review (e.g., `src/stores/`, `src/components/UserCard.tsx`). Activates **path mode** — reviews the files at this path directly, not a git diff. |
 | `commit_range` | string | no | Explicit commit hash or range (e.g., `abc123..HEAD`). Overrides merge-base detection. Ignored in path mode. |
 | `issue_url` | string | no | GitHub issue or task URL. If provided, Stage 1 gate checks spec compliance before dispatching reviewers. |
@@ -817,9 +817,9 @@ Legacy/profile reviewers are specialized review profiles that predate the review
 
 | Trigger | Reviewers appended |
 |---|---|
-| `--legacy-profiles` | `code-ai-review` + `code-boss-review` + `code-style-review` + `code-mobx-store-review` when MobX/store files are present |
+| `--legacy-profiles` | `code-ai-review` + `code-learned-review` + `code-style-review` + `code-mobx-store-review` when MobX/store files are present |
 | `--code-ai` | `code-ai-review` |
-| `--boss` | `code-boss-review` |
+| `--learned` | `code-learned-review` |
 | `--code-style` | `code-style-review` |
 | `--mobx-store` | `code-mobx-store-review` |
 | `*.store.ts`, `makeObservable`, `observable`, `computed`, `action.bound` | suggest `code-mobx-store-review` as optional profile reviewer |
@@ -839,13 +839,13 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group an
 ```text
 Optional legacy/profile reviewers:
   - code-ai-review: available via --code-ai or --legacy-profiles
-  - code-boss-review: available via --boss or --legacy-profiles
+  - code-learned-review: available via --learned or --legacy-profiles
   - code-style-review: available via --code-style or --legacy-profiles
   - code-mobx-store-review: auto-suggest when *.store.ts or MobX patterns are present; available via --mobx-store or --legacy-profiles
 
 Skipped reviewers:
   - code-ai-review: profile reviewer, not selected unless --code-ai/--legacy-profiles
-  - code-boss-review: profile reviewer, not selected unless --boss/--legacy-profiles
+  - code-learned-review: profile reviewer, not selected unless --learned/--legacy-profiles
   - code-style-review: legacy style profile, not selected unless --code-style/--legacy-profiles
   - code-mobx-store-review: not selected unless --mobx-store/--legacy-profiles or MobX store files are detected
 ```
@@ -1034,7 +1034,7 @@ Each reviewer must return a `REVIEW_RESULT` object matching `skills/review-orche
 | Test / e2e conventions | NO | `review-testing-practices` |
 | Shared core boundary rules | NO | `review-core-boundaries` |
 | Shared flow/graph abstraction contracts | NO | `review-flow-graph` |
-| Legacy/profile review profiles | NO | `code-ai-review`, `code-boss-review`, `code-style-review`, `code-mobx-store-review` |
+| Legacy/profile review profiles | NO | `code-ai-review`, `code-learned-review`, `code-style-review`, `code-mobx-store-review` |
 
 ---
 
