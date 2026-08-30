@@ -24,10 +24,12 @@ import {
   findingVerdict,
   latestFindingStates,
   parseVerificationStats,
+  prHeadResolutionRemedy,
   readReviewGateConfig,
   readReviewRounds,
   shaMatches,
   type GateFinding,
+  type PrHeadResolution,
 } from "./review-gate";
 import {
   FIXTURE_PR_HEAD,
@@ -1358,4 +1360,38 @@ test("latestFindingStates takes the newest record of each identity and drops not
   // (carried forward, because vanishing is not a disposition).
   expect(states.map((finding) => finding.id).sort()).toEqual(["F-002", "F-009"]);
   expect(states.find((finding) => finding.id === "F-002")?.round).toBe("round-1");
+});
+
+test("only `no-tracker` may differ between the two callers of the remedy helper", () => {
+  // The helper is SHARED so conditions 3 and 4 cannot tell different stories
+  // about one cause — that was round 2's finding. Round 4 then gave it a `caller`
+  // parameter, because for `no-tracker` alone the shared advice named a seam
+  // condition 3 never reads. A caller parameter is exactly how a shared guarantee
+  // gets eroded later: a mutation branching a SECOND arm left 567 tests green.
+  //
+  // So the guarantee is asserted directly, over every state, rather than being
+  // left to the one asymmetry the fix happened to introduce.
+  const url = "https://github.com/o/r/pull/7";
+  const states: PrHeadResolution[] = [
+    { state: "resolved", sha: "a".repeat(40) },
+    { state: "no-pr" },
+    { state: "tracker-unavailable" },
+    { state: "pr-unreachable" },
+    { state: "head-unreported" },
+  ];
+
+  for (const state of states) {
+    expect(prHeadResolutionRemedy(state, url, "head-commit")).toBe(
+      prHeadResolutionRemedy(state, url, "external-comments"),
+    );
+  }
+
+  // Non-vacuity: the one sanctioned asymmetry is still there, and is still
+  // advice each condition can act on.
+  const noTracker: PrHeadResolution = { state: "no-tracker" };
+  const forHead = prHeadResolutionRemedy(noTracker, url, "head-commit");
+  const forComments = prHeadResolutionRemedy(noTracker, url, "external-comments");
+  expect(forHead).not.toBe(forComments);
+  expect(forHead).toContain("--merged");
+  expect(forComments).toContain("externalCommentsGate");
 });

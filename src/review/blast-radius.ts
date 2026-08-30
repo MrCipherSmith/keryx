@@ -1086,7 +1086,8 @@ export function renderBlastRadiusMarkdown(radius: BlastRadius): string {
 }
 
 /**
- * `## Scope B rejections` — what the orchestrator refused, and under which rule.
+ * `## Scope B rejections` — what the orchestrator refused and what it admitted
+ * without judging, each under its own heading and its own rule.
  *
  * Written whether or not anything was rejected. AC3 is enforced by deleting
  * findings from a round's output, and a deletion nobody can see is the failure
@@ -1139,6 +1140,17 @@ export function renderBlastRadiusScreenMarkdown(result: BlastRadiusScreenResult<
     );
     lines.push("");
     return lines.join("\n");
+  }
+  // A heading, and only when one was opened above. Without it the rejection
+  // table is appended as CONTENT of `### Admitted without being judged`, so a
+  // finding the screen DELETED renders under a heading saying it was admitted —
+  // the record asserting the inverse of what happened, which is the one thing
+  // this section exists to prevent. Reachable only when something was exempted
+  // AND something was rejected, which is why no test caught it: every existing
+  // case has one of the two at zero.
+  if (exempted.length > 0) {
+    lines.push("### Rejected");
+    lines.push("");
   }
   lines.push("| finding | reviewer | rule | why |");
   lines.push("|---|---|---|---|");

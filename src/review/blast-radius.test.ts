@@ -664,3 +664,50 @@ describe("defaults", () => {
     expect(result.counts.droppedByCap).toBeGreaterThan(0);
   });
 });
+
+test("an exempted finding and a rejected one each sit under their own heading", () => {
+  // The case no existing test had: every other render case has exempted OR
+  // rejected at zero, and the exemption block opened a heading it never closed —
+  // so the rejection table rendered as content of "Admitted without being
+  // judged", showing a DELETED finding under a heading saying it was admitted.
+  const radius = {
+    changedFiles: ["src/gdskills/model-tier.ts"],
+    files: [{ file: "src/harness/child/spawn.ts", hop: 2 }],
+  };
+  const screened = screenBlastRadiusFindings(
+    [
+      {
+        id: "F-EXEMPT",
+        reviewer: "review-regression",
+        severity: "blocker",
+        file: "src/harness/child/spawn.ts",
+        problem: "this file's naming is inconsistent and the helper is hard to read",
+        evidence: "read the file",
+      },
+      {
+        id: "F-REJECT",
+        reviewer: "review-regression",
+        severity: "blocker",
+        file: "src/nowhere.ts",
+        problem: "something about a file that is not in the set at all",
+        evidence: "read the file",
+      },
+    ] as never,
+    radius as never,
+  );
+  expect(screened.exempted).toHaveLength(1);
+  expect(screened.rejected).toHaveLength(1);
+
+  const markdown = renderBlastRadiusScreenMarkdown(screened as never);
+  const admitted = markdown.indexOf("### Admitted without being judged");
+  const rejectedHeading = markdown.indexOf("### Rejected");
+  const exemptRow = markdown.indexOf("F-EXEMPT");
+  const rejectRow = markdown.indexOf("F-REJECT");
+
+  expect(admitted).toBeGreaterThan(-1);
+  expect(rejectedHeading).toBeGreaterThan(-1);
+  // The exempted finding is under the admitted heading; the rejected one is not.
+  expect(exemptRow).toBeGreaterThan(admitted);
+  expect(exemptRow).toBeLessThan(rejectedHeading);
+  expect(rejectRow).toBeGreaterThan(rejectedHeading);
+});
