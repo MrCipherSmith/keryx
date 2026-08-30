@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true
+  },
+  "id": "203",
+  "slug": "unify-and-bound-one-severity-rubric-the-",
+  "title": "Unify and bound: one severity rubric, the Iron Laws in every reviewer, real caps, loop detection, and the skill format against the published spec",
+  "status": "in-progress",
+  "createdAt": "2026-08-30T04:03:29.740Z",
+  "updatedAt": "2026-08-30T05:05:43.717Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:82aae71e03965033a4f96c221b6c119f7143a65cd153193979e03ad01fed02a1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-30T05:05:42.349Z",
+      "note": "Canonical rubric in review-orchestrator; all eleven per-reviewer rubrics deleted (seven tables plus four one-line paragraphs the plan had missed). A guard fails on any rival table returning. blocker defined by enumeration of four shapes."
+    },
+    "AC2": {
+      "at": "2026-08-30T05:05:42.449Z",
+      "note": "ts-ignore settled as minor with reasoning at the rule. Nine collisions found, not one - eight unnamed, and two reviewers disagreed with themselves between their laws and their conditions table. review-style's surviving duplicate was caught by the pre-PR review and removed."
+    },
+    "AC3": {
+      "at": "2026-08-30T05:05:42.544Z",
+      "note": "Iron Laws 2-4 in all fourteen reviewers, reworded so a style reviewer reads them naturally. Law 1 sharpened where it met the rubric: an unreproducible claim is info, not minor. The attack-vector law stays security-specific."
+    },
+    "AC4": {
+      "at": "2026-08-30T05:05:42.642Z",
+      "note": "review-skills-iron-laws.test.ts parses the laws out of the canonical block rather than hardcoding text, so rewording is free and rewording one reviewer fails. Two holes found in review and closed: a law override in the next paragraph, and the guard reading only the bundled tree."
+    },
+    "AC5": {
+      "at": "2026-08-30T05:05:42.739Z",
+      "note": "DEFAULT_MAX_FINDINGS_PER_REVIEWER = 10 in code, per reviewer not per review, blockers and merge-blocking exempt. Scoped to reported findings only - applied to all channels it would truncate dismissal records and undo flow 202."
+    },
+    "AC6": {
+      "at": "2026-08-30T05:05:42.837Z",
+      "note": "Currency ceiling, 3.00 USD per round, not tokens: the same 200k tokens differ more than 10x in cost within one vendor line-up, so a token ceiling's meaning depends on an unrecorded model choice. Runs before dispatch and exits 1; recording after the fact writes the package then refuses, because a cap that stopped the write would delete its own evidence."
+    },
+    "AC7": {
+      "at": "2026-08-30T05:05:42.938Z",
+      "note": "Concurrency capped at 4 and it does NOT hold across orchestrator nesting - stated plainly. keryx is a per-command CLI with no lease between levels; the only cross-level mechanism is a parent's unverified declaration, and the record says which case applied."
+    },
+    "AC8": {
+      "at": "2026-08-30T05:05:43.035Z",
+      "note": "Round bound 3 in the three places that bound a repair loop. /goal --auto stays at 8, argued: a continuation loop ends on a positive signal with nothing re-revised, so the repair-loop evidence does not apply - and the file records that 8 is not evidence-backed either."
+    },
+    "AC9": {
+      "at": "2026-08-30T05:05:43.131Z",
+      "note": "Detection over persisted state, never the orchestrator's context. Identity is a set of dedupe/global/derived keys grouped by union-find; the reviewer proved the first implementation could not fire at all on real data, and the end-to-end test now goes through createManagedReviewPackage twice."
+    },
+    "AC10": {
+      "at": "2026-08-30T05:05:43.231Z",
+      "note": "Every cap records what it cut: truncated ids listed, queued not dropped, stopped at the ceiling with the shortfall. not recorded rather than 0 when a stage did not run - and the loop record now prints output_pairs_compared X of Y, so zero says the check never ran."
+    },
+    "AC11": {
+      "at": "2026-08-30T05:05:43.330Z",
+      "note": "244 skill files transformed deterministically over both trees: top-level version removed in favour of metadata.version, harness list moved out of compatibility. Nothing read the removed fields - verified before removing. 277 frontmatter blocks parse, zero drift."
+    },
+    "AC12": {
+      "at": "2026-08-30T05:05:43.426Z",
+      "note": "triggers and per-skill I/O schemas documented as deliberate in skills-storage-workflow.mdc - a rules file, not the machine-generated catalog which would be overwritten on the next update."
+    },
+    "AC13": {
+      "at": "2026-08-30T05:05:43.521Z",
+      "note": "keryx review stack reads the manifest deterministically. Failure mode is to include: missing, corrupt, workspaces-declaring, empty-dependency-set and explicitly-empty manifests all resolve uncertain, and uncertain runs everything. Exactly one code path excludes."
+    },
+    "AC14": {
+      "at": "2026-08-30T05:05:43.619Z",
+      "note": "diff over both skill trees, both schema mirrors and the contracts directory: identical for everything this flow touched. The bundled-rule guard passes, and a new test asserts the installed review mirror matches its bundled source."
+    },
+    "AC15": {
+      "at": "2026-08-30T05:05:43.717Z",
+      "note": "typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5708 pass / 18 skip / 0 fail against a 5595 baseline."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Baseline: record test/typecheck state and inventory every per-reviewer severity table",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "One canonical severity rubric; delete the ten per-reviewer tables",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Resolve the ts-ignore contradiction and verify no two reviewers disagree on a condition",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Iron Laws 2-4 into every reviewer, phrased generically",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Test: every reviewer skill carries the Iron Laws",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "max_findings default of 10 in code, blockers exempt, with the drop recorded",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Spend ceiling that stops and asks rather than proceeding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Concurrency cap on parallel dispatch, holding across orchestrator nesting",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Round bound 3, made the same number in all four places that disagree",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Loop detection on repeated finding id or identical consecutive output",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Test: every cap records what it dropped, with a count",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Skill format: version in metadata only; compatibility returned to its spec meaning",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Document triggers and per-skill schemas as deliberate divergences",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Scope stack-specific reviewers by detected stack; failure mode is to include",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Verify both mirrors agree; bundled-rule guard passes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Quality gate: typecheck, full suite against baseline, guards, doc-links",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-30T04:03:29.740Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-30T04:04:22.529Z",
+      "event": "task-added",
+      "detail": "T5: Baseline: record test/typecheck state and inventory every per-reviewer severity table"
+    },
+    {
+      "at": "2026-08-30T04:04:22.618Z",
+      "event": "task-added",
+      "detail": "T6: One canonical severity rubric; delete the ten per-reviewer tables"
+    },
+    {
+      "at": "2026-08-30T04:04:22.709Z",
+      "event": "task-added",
+      "detail": "T7: Resolve the ts-ignore contradiction and verify no two reviewers disagree on a condition"
+    },
+    {
+      "at": "2026-08-30T04:04:22.800Z",
+      "event": "task-added",
+      "detail": "T8: Iron Laws 2-4 into every reviewer, phrased generically"
+    },
+    {
+      "at": "2026-08-30T04:04:22.891Z",
+      "event": "task-added",
+      "detail": "T9: Test: every reviewer skill carries the Iron Laws"
+    },
+    {
+      "at": "2026-08-30T04:04:22.985Z",
+      "event": "task-added",
+      "detail": "T10: max_findings default of 10 in code, blockers exempt, with the drop recorded"
+    },
+    {
+      "at": "2026-08-30T04:04:23.074Z",
+      "event": "task-added",
+      "detail": "T11: Spend ceiling that stops and asks rather than proceeding"
+    },
+    {
+      "at": "2026-08-30T04:04:23.167Z",
+      "event": "task-added",
+      "detail": "T12: Concurrency cap on parallel dispatch, holding across orchestrator nesting"
+    },
+    {
+      "at": "2026-08-30T04:04:23.257Z",
+      "event": "task-added",
+      "detail": "T13: Round bound 3, made the same number in all four places that disagree"
+    },
+    {
+      "at": "2026-08-30T04:04:23.347Z",
+      "event": "task-added",
+      "detail": "T14: Loop detection on repeated finding id or identical consecutive output"
+    },
+    {
+      "at": "2026-08-30T04:04:23.442Z",
+      "event": "task-added",
+      "detail": "T15: Test: every cap records what it dropped, with a count"
+    },
+    {
+      "at": "2026-08-30T04:04:23.539Z",
+      "event": "task-added",
+      "detail": "T16: Skill format: version in metadata only; compatibility returned to its spec meaning"
+    },
+    {
+      "at": "2026-08-30T04:04:23.636Z",
+      "event": "task-added",
+      "detail": "T17: Document triggers and per-skill schemas as deliberate divergences"
+    },
+    {
+      "at": "2026-08-30T04:04:23.725Z",
+      "event": "task-added",
+      "detail": "T18: Scope stack-specific reviewers by detected stack; failure mode is to include"
+    },
+    {
+      "at": "2026-08-30T04:04:23.813Z",
+      "event": "task-added",
+      "detail": "T19: Verify both mirrors agree; bundled-rule guard passes"
+    },
+    {
+      "at": "2026-08-30T04:04:23.905Z",
+      "event": "task-added",
+      "detail": "T20: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-30T04:04:24.001Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-30T04:04:24.090Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-30T05:05:18.686Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-30T05:05:18.788Z",
+      "event": "task-done",
+      "detail": "T5: Baseline: record test/typecheck state and inventory every per-reviewer severity table"
+    },
+    {
+      "at": "2026-08-30T05:05:18.892Z",
+      "event": "task-done",
+      "detail": "T6: One canonical severity rubric; delete the ten per-reviewer tables"
+    },
+    {
+      "at": "2026-08-30T05:05:18.997Z",
+      "event": "task-done",
+      "detail": "T7: Resolve the ts-ignore contradiction and verify no two reviewers disagree on a condition"
+    },
+    {
+      "at": "2026-08-30T05:05:19.095Z",
+      "event": "task-done",
+      "detail": "T8: Iron Laws 2-4 into every reviewer, phrased generically"
+    },
+    {
+      "at": "2026-08-30T05:05:19.195Z",
+      "event": "task-done",
+      "detail": "T9: Test: every reviewer skill carries the Iron Laws"
+    },
+    {
+      "at": "2026-08-30T05:05:19.296Z",
+      "event": "task-done",
+      "detail": "T10: max_findings default of 10 in code, blockers exempt, with the drop recorded"
+    },
+    {
+      "at": "2026-08-30T05:05:19.399Z",
+      "event": "task-done",
+      "detail": "T11: Spend ceiling that stops and asks rather than proceeding"
+    },
+    {
+      "at": "2026-08-30T05:05:19.499Z",
+      "event": "task-done",
+      "detail": "T12: Concurrency cap on parallel dispatch, holding across orchestrator nesting"
+    },
+    {
+      "at": "2026-08-30T05:05:19.601Z",
+      "event": "task-done",
+      "detail": "T13: Round bound 3, made the same number in all four places that disagree"
+    },
+    {
+      "at": "2026-08-30T05:05:19.700Z",
+      "event": "task-done",
+      "detail": "T14: Loop detection on repeated finding id or identical consecutive output"
+    },
+    {
+      "at": "2026-08-30T05:05:19.804Z",
+      "event": "task-done",
+      "detail": "T15: Test: every cap records what it dropped, with a count"
+    },
+    {
+      "at": "2026-08-30T05:05:19.909Z",
+      "event": "task-done",
+      "detail": "T16: Skill format: version in metadata only; compatibility returned to its spec meaning"
+    },
+    {
+      "at": "2026-08-30T05:05:20.009Z",
+      "event": "task-done",
+      "detail": "T17: Document triggers and per-skill schemas as deliberate divergences"
+    },
+    {
+      "at": "2026-08-30T05:05:20.112Z",
+      "event": "task-done",
+      "detail": "T18: Scope stack-specific reviewers by detected stack; failure mode is to include"
+    },
+    {
+      "at": "2026-08-30T05:05:20.213Z",
+      "event": "task-done",
+      "detail": "T19: Verify both mirrors agree; bundled-rule guard passes"
+    },
+    {
+      "at": "2026-08-30T05:05:20.320Z",
+      "event": "task-done",
+      "detail": "T20: Quality gate: typecheck, full suite against baseline, guards, doc-links"
+    },
+    {
+      "at": "2026-08-30T05:05:42.349Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Canonical rubric in review-orchestrator; all eleven per-reviewer rubrics deleted (seven tables plus four one-line paragraphs the plan had missed). A guard fails on any rival table returning. blocker defined by enumeration of four shapes."
+    },
+    {
+      "at": "2026-08-30T05:05:42.449Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ts-ignore settled as minor with reasoning at the rule. Nine collisions found, not one - eight unnamed, and two reviewers disagreed with themselves between their laws and their conditions table. review-style's surviving duplicate was caught by the pre-PR review and removed."
+    },
+    {
+      "at": "2026-08-30T05:05:42.544Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Iron Laws 2-4 in all fourteen reviewers, reworded so a style reviewer reads them naturally. Law 1 sharpened where it met the rubric: an unreproducible claim is info, not minor. The attack-vector law stays security-specific."
+    },
+    {
+      "at": "2026-08-30T05:05:42.642Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-skills-iron-laws.test.ts parses the laws out of the canonical block rather than hardcoding text, so rewording is free and rewording one reviewer fails. Two holes found in review and closed: a law override in the next paragraph, and the guard reading only the bundled tree."
+    },
+    {
+      "at": "2026-08-30T05:05:42.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: DEFAULT_MAX_FINDINGS_PER_REVIEWER = 10 in code, per reviewer not per review, blockers and merge-blocking exempt. Scoped to reported findings only - applied to all channels it would truncate dismissal records and undo flow 202."
+    },
+    {
+      "at": "2026-08-30T05:05:42.837Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Currency ceiling, 3.00 USD per round, not tokens: the same 200k tokens differ more than 10x in cost within one vendor line-up, so a token ceiling's meaning depends on an unrecorded model choice. Runs before dispatch and exits 1; recording after the fact writes the package then refuses, because a cap that stopped the write would delete its own evidence."
+    },
+    {
+      "at": "2026-08-30T05:05:42.938Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Concurrency capped at 4 and it does NOT hold across orchestrator nesting - stated plainly. keryx is a per-command CLI with no lease between levels; the only cross-level mechanism is a parent's unverified declaration, and the record says which case applied."
+    },
+    {
+      "at": "2026-08-30T05:05:43.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Round bound 3 in the three places that bound a repair loop. /goal --auto stays at 8, argued: a continuation loop ends on a positive signal with nothing re-revised, so the repair-loop evidence does not apply - and the file records that 8 is not evidence-backed either."
+    },
+    {
+      "at": "2026-08-30T05:05:43.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Detection over persisted state, never the orchestrator's context. Identity is a set of dedupe/global/derived keys grouped by union-find; the reviewer proved the first implementation could not fire at all on real data, and the end-to-end test now goes through createManagedReviewPackage twice."
+    },
+    {
+      "at": "2026-08-30T05:05:43.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Every cap records what it cut: truncated ids listed, queued not dropped, stopped at the ceiling with the shortfall. not recorded rather than 0 when a stage did not run - and the loop record now prints output_pairs_compared X of Y, so zero says the check never ran."
+    },
+    {
+      "at": "2026-08-30T05:05:43.330Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: 244 skill files transformed deterministically over both trees: top-level version removed in favour of metadata.version, harness list moved out of compatibility. Nothing read the removed fields - verified before removing. 277 frontmatter blocks parse, zero drift."
+    },
+    {
+      "at": "2026-08-30T05:05:43.426Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: triggers and per-skill I/O schemas documented as deliberate in skills-storage-workflow.mdc - a rules file, not the machine-generated catalog which would be overwritten on the next update."
+    },
+    {
+      "at": "2026-08-30T05:05:43.521Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: keryx review stack reads the manifest deterministically. Failure mode is to include: missing, corrupt, workspaces-declaring, empty-dependency-set and explicitly-empty manifests all resolve uncertain, and uncertain runs everything. Exactly one code path excludes."
+    },
+    {
+      "at": "2026-08-30T05:05:43.619Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: diff over both skill trees, both schema mirrors and the contracts directory: identical for everything this flow touched. The bundled-rule guard passes, and a new test asserts the installed review mirror matches its bundled source."
+    },
+    {
+      "at": "2026-08-30T05:05:43.717Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: typecheck clean; test:guards 161/0; check:doc-links 1130 links 0 broken; bun test 5708 pass / 18 skip / 0 fail against a 5595 baseline."
+    }
+  ]
+}
