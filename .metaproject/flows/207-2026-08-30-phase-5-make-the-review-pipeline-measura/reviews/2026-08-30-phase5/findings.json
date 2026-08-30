@@ -1,0 +1,176 @@
+[
+  {
+    "id": "p5-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "major",
+    "problem": "No structured filter_stats existed: stage counts were readable by a person and by nothing else, so no Phase 2 claim could be checked afterwards.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": "src/review/managed.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts"
+      ],
+      "enumeration_method": "evaluateBundledTree sweeps all 65 shipped skills with a non-vacuity assertion; filter-stats tests read the real artifact off disk."
+    },
+    "global_id": "2026-08-30-phase5#p5-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "p5-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Instrumentation that reports zero because nothing measured reads as a clean result; measured-zero and not-measured had to be distinguishable.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": "src/review/filter-stats.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/review/filter-stats.ts"
+      ],
+      "enumeration_method": "evaluateBundledTree sweeps all 65 shipped skills with a non-vacuity assertion; filter-stats tests read the real artifact off disk."
+    },
+    "global_id": "2026-08-30-phase5#p5-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "p5-03",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "A field with no reader repeats the attempts.count defect — declared and never written for a whole release.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts"
+      ],
+      "enumeration_method": "evaluateBundledTree sweeps all 65 shipped skills with a non-vacuity assertion; filter-stats tests read the real artifact off disk."
+    },
+    "global_id": "2026-08-30-phase5#p5-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "p5-04",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The review-note type had never been written, so the learning loop had produced nothing to date.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": ".metaproject/memory/review-notes",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        ".metaproject/memory/review-notes"
+      ],
+      "enumeration_method": "evaluateBundledTree sweeps all 65 shipped skills with a non-vacuity assertion; filter-stats tests read the real artifact off disk."
+    },
+    "global_id": "2026-08-30-phase5#p5-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "p5-05",
+    "reviewer": "review-core-boundaries",
+    "severity": "blocker",
+    "problem": "65 shipped skills had no evaluation of any kind; the tree was assumed correct and carried 27 real defects including a skill dispatching an agent that never shipped and a script that never existed.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled"
+      ],
+      "enumeration_method": "evaluateBundledTree sweeps all 65 shipped skills with a non-vacuity assertion; filter-stats tests read the real artifact off disk."
+    },
+    "global_id": "2026-08-30-phase5#p5-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "p5-06",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Cross-family review capability existed in configuration and was read by nothing in the review pipeline.",
+    "impact": "A claim that could not be checked, or a mechanism that measured nothing.",
+    "suggested_fix": "Instrument at the producer; give every count a consumer; prove the evaluator fails something.",
+    "evidence": "Established by enumeration over the tree and by running each surface end to end.",
+    "confidence": "high",
+    "file": "src/lib/provider-config.ts",
+    "line": 1,
+    "global_id": "2026-08-30-phase5#p5-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 141ebac5 (PR #416); 17 mutations across both halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran each surface at 141ebac5: skills verify --bundled reports 65 evaluated / 0 findings, providers cross-family exits 0 with a stated reason, review status reads filter_stats off disk. Reverting any producer turns named tests red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

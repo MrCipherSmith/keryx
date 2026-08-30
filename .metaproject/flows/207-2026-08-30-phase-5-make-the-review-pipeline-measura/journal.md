@@ -3,3 +3,24 @@
 - 2026-08-30T18:26:46.423Z - flow created
 - 2026-08-30T18:27:36.018Z - frozen: 14 criteria; checksum recorded
 - 2026-08-30T18:27:36.344Z - started
+- 2026-08-30T19:13:47.362Z - task-done: T1: Collect remaining context
+- 2026-08-30T19:13:47.485Z - task-done: T2: Implement per plan
+- 2026-08-30T19:13:47.604Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-30T19:13:47.725Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-30T19:14:05.817Z - ac-confirmed: AC1: buildFilterStats() called inside createManagedReviewPackage from live stage results; lands in manifest.json. Nothing re-parses prose.
+- 2026-08-30T19:14:05.937Z - ac-confirmed: AC2: One helper emits the null and its not_measured reason in the same expression. Both directions asserted against the real artifact: an ingest with no scope/radius/refuted reads null with reasons; one with empty arrays reads 0.
+- 2026-08-30T19:14:06.056Z - ac-confirmed: AC3: keryx review status reads it off disk in a different invocation than wrote it, reports every stage, checks the arithmetic and exits 1 on a self-contradicting record. Chosen because a same-process reader would have stayed green through a release in which the field did not exist.
+- 2026-08-30T19:14:06.176Z - ac-confirmed: AC4: MODEL_ERROR_STATES is dismissed-incorrect alone; modelErrorSignal reads disposition, never the derived classification. A dismissed-wont-fix contributes nothing, asserted.
+- 2026-08-30T19:14:06.294Z - ac-confirmed: AC5: .metaproject/memory/review-notes/ written from both producers, naming finding, reviewer, severity, location, reason, round and commit. The directory had never existed and the type had never been written.
+- 2026-08-30T19:14:06.412Z - ac-confirmed: AC6: Flow 204's gate untouched. The note writer refuses to manufacture a signal from an unattested dismissal, requiring a named human decision or an independent verifier verdict with method and evidence.
+- 2026-08-30T19:14:06.537Z - ac-confirmed: AC7: evaluateBundledTree sweeps all 65 shipped skills; non-vacuity asserted three ways, plus an empty-root case that emits NOTHING WAS EVALUATED and exits 1 rather than reading as a pass.
+- 2026-08-30T19:14:06.657Z - ac-confirmed: AC8: A seven-skill fixture including a correct control; rejection AND each reason asserted, and the control draws only the catalog rule. Proven on the real tree: 27 defects found on the first clean run.
+- 2026-08-30T19:14:06.778Z - ac-confirmed: AC9: decideCrossFamilyReview lives beside the llm-providers.json loader; candidates come from configuredProviders(). No second registry.
+- 2026-08-30T19:14:06.899Z - ac-confirmed: AC10: Without opt-in the answer is single-family, always, with the reason naming the cost. Declined candidates are still recorded so 'we chose not to' and 'there was nothing to choose' do not read alike.
+- 2026-08-30T19:14:07.017Z - ac-confirmed: AC11: Three distinct degradation reasons; keryx providers cross-family always exits 0, asserted by spawning the real CLI with a temp HOME and cleared API-key vars.
+- 2026-08-30T19:14:07.135Z - ac-confirmed: AC12: The skill evaluator reports itself as layer 1 of 3 rather than describing a pipeline that was not built. One real defect — seven planning skills whose frontmatter name disagrees with their directory — was left unenforced rather than shipped with a seven-entry exemption list, and flagged instead.
+- 2026-08-30T19:14:07.257Z - ac-confirmed: AC13: Both trees updated across 68 markdown files; diff -rq reports 0 content differences; mirror and build-parity guards pass.
+- 2026-08-30T19:14:07.377Z - ac-confirmed: AC14: typecheck clean; bun test 6185 pass / 18 skip; test:guards 161/0; check:doc-links 1131 links / 0 broken. The single failure is the known nondeterministic SAC test, present in the baseline.
+- 2026-08-30T19:14:36.452Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/416 (warning: PR is not a draft)
+- 2026-08-30T19:14:36.668Z - completing
+- 2026-08-30T19:14:40.419Z - done: all gates passed
