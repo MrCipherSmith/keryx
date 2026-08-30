@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
+import { CONTRACTS, contractPath } from "./contracts";
 import { installGdskills } from "./install";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -113,6 +114,49 @@ test("every bundled rule is byte-identical to its installed copy in this repo", 
     }
     if (await readFile(file, "utf8") !== targetText) {
       drifted.push(`${relative}: bundled source and installed copy differ`);
+    }
+  }
+  expect(drifted).toEqual([]);
+});
+
+// The contract mirror had the same drift the rules mirror had, and worse: the
+// installer carried its OWN list of five file names beside a registry of five
+// entries, and the job-orchestrator state schema was in neither. It could
+// therefore not be validated (`keryx skills contracts validate` could not load
+// it) and was not installed. `installContracts` now derives from `CONTRACTS`;
+// these two tests are what makes that derivation load-bearing.
+test("every registered contract is installed into core/gdskills/contracts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-contracts-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+
+    // Non-vacuity: the registry must actually name the contract this closes.
+    expect(CONTRACTS.map((contract) => contract.name)).toContain("job-orchestrator-state");
+
+    for (const contract of CONTRACTS) {
+      const installed = await readFile(
+        path.join(metaprojectRoot, "core", "gdskills", "contracts", contract.fileName),
+        "utf8",
+      );
+      expect(installed).toBe(await readFile(contractPath(contract), "utf8"));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("this repo's installed contracts are byte-identical to their sources", async () => {
+  const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+  const drifted: string[] = [];
+  for (const contract of CONTRACTS) {
+    const target = path.join(repoRoot, ".metaproject", "core", "gdskills", "contracts", contract.fileName);
+    try {
+      if ((await readFile(target, "utf8")) !== (await readFile(contractPath(contract), "utf8"))) {
+        drifted.push(`${contract.fileName}: source and installed copy differ`);
+      }
+    } catch {
+      drifted.push(`${contract.fileName}: missing from .metaproject/core/gdskills/contracts`);
     }
   }
   expect(drifted).toEqual([]);

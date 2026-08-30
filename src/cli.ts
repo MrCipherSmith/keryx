@@ -11,6 +11,7 @@ import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { flowCommand } from "./commands/flow";
+import { jobCommand } from "./commands/job";
 import { reviewCommand } from "./commands/review";
 import { rulesCommand } from "./commands/rules";
 import { standardCommand } from "./commands/standard";
@@ -72,6 +73,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   test: testCommand,
   memory: memoryCommand,
   flow: flowCommand,
+  job: jobCommand,
   review: reviewCommand,
   rules: rulesCommand,
   agents: agentsCommand,
@@ -183,6 +185,12 @@ Usage:
   keryx flow list
   keryx flow status <id>
   keryx flow complete <id> [--comment]
+  keryx job init --name <slug> [--intent implement|analyze|review|custom] [--project <path>]
+  keryx job list [--json]
+  keryx job status <name> [--json]
+  keryx job step <name> <step-id> --status pending|in-progress|completed|skipped|failed [--reason "<text>"]
+  keryx job document <name> --type analysis|implementation-report|review|verification-report --file <path>
+  keryx job complete <name>
   keryx review attach|start|ingest|status|complete
   keryx standard validate
   keryx standard doctor
@@ -233,6 +241,7 @@ Commands:
   test      Analyze testing context and normalize test reports
   memory    Store and search long-term project memory
   flow      Agent-first flow lifecycle (Task Manager)
+  job       Agent-first job packages (job-orchestrator state, steps, documents)
   review    Managed review packages and lightweight report-only review mode
   standard  Validate the workspace against the Metaproject Standard
   commands  Agent-callable command registry (intents, args, output, model usage)

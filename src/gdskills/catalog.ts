@@ -217,11 +217,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Review branch changes from merge-base.",
     "Report concrete findings first.",
   ], ["code-ai-review", "AI review baseline", "strict AI review"]),
-  skill("code-b091-review", "review", ["full"], "Run the b091-style direct review profile.", [
-    "Load the b091 review profile.",
+  skill("code-boss-review", "review", ["full"], "Run the boss-style direct review profile.", [
+    "Load the boss review profile.",
     "Review changed code for correctness and weak assumptions.",
     "Use direct concise findings.",
-  ], ["b091 review", "code-b091-review", "review as b091"]),
+  ], ["boss review", "code-boss-review", "review as boss"]),
   skill("code-style-review", "review", ["full"], "Run the legacy code style and architecture review profile.", [
     "Load code-style rules and local conventions.",
     "Review naming, structure, boundaries, and TypeScript usage.",

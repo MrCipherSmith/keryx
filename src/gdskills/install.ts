@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
+import { CONTRACTS, contractPath } from "./contracts";
 import {
   type GdskillsProfile,
   getBundledSkillsForProfile,
@@ -113,20 +114,25 @@ async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: st
   return `${nextCatalog.trimEnd()}\n\n${section}\n`;
 }
 
+/**
+ * Mirror every registered contract into `.metaproject/core/gdskills/contracts/`.
+ *
+ * Derived from `CONTRACTS` rather than from a second hand-written list. The list
+ * that used to live here named five files while the registry named five, and the
+ * job-orchestrator state schema was in neither — so it could not be validated
+ * and was not installed. Deriving means adding a contract to the registry
+ * installs it, with no way to add one and forget this.
+ *
+ * A contract that declares `sourcePath` (its authoritative file lives with the
+ * skill that owns it) is resolved through `contractPath`; the rest keep the
+ * original `contracts/<fileName>` lookup.
+ */
 async function installContracts(contractsRoot: string): Promise<void> {
-  const contractFiles = [
-    "agent-event.schema.json",
-    "orchestrator-state.schema.json",
-    "review-finding.schema.json",
-    "subagent-dispatch.schema.json",
-    "subagent-result.schema.json",
-  ];
-
   await Promise.all(
-    contractFiles.map((fileName) =>
+    CONTRACTS.map((contract) =>
       copyFile(
-        contractSourcePath(fileName),
-        path.join(contractsRoot, fileName),
+        contract.sourcePath ? contractPath(contract) : contractSourcePath(contract.fileName),
+        path.join(contractsRoot, contract.fileName),
       ),
     ),
   );

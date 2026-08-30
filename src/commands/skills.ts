@@ -28,7 +28,12 @@ import {
   exportProjectSkill,
   normalizeSkillRuntime,
 } from "../gdskills/export";
-import { syncRuntimeSkills } from "../gdskills/sync";
+import {
+  GLOBAL_SYNC_RUNTIMES,
+  resolveGlobalSyncTarget,
+  syncRuntimeSkills,
+  syncRuntimeSkillsToGlobal,
+} from "../gdskills/sync";
 import {
   createProjectSkill,
   normalizeProjectSkillFormat,
@@ -585,23 +590,38 @@ export function normalizeRouteText(value: string): string {
 async function syncSkillCommand(args: string[]): Promise<void> {
   const runtime = normalizeSkillRuntime(optionValue(args, "--runtime"));
   const target = optionValue(args, "--target");
+  // Writing into ~/.cursor/ and ~/.config/zed/ reaches outside the project, so
+  // it is opt-in by an explicit flag and never a side effect of any other
+  // command.
+  const global = args.includes("--global");
   if (args.includes("--help") || args.includes("-h")) {
     printSyncHelp();
     return;
   }
 
-  if (!runtime || !target) {
+  if (!runtime || (!target && !global)) {
     printSyncHelp();
     process.exitCode = 1;
     return;
   }
 
+  if (global && target) {
+    console.error("Use either --global or --target <dir>, not both.");
+    process.exitCode = 1;
+    return;
+  }
+
   try {
-    const result = await syncRuntimeSkills(process.cwd(), {
-      runtime,
-      target,
-      dryRun: args.includes("--dry-run"),
-    });
+    const result = global
+      ? await syncRuntimeSkillsToGlobal(process.cwd(), {
+          runtime,
+          dryRun: args.includes("--dry-run"),
+        })
+      : await syncRuntimeSkills(process.cwd(), {
+          runtime,
+          target: target as string,
+          dryRun: args.includes("--dry-run"),
+        });
 
     if (args.includes("--json")) {
       console.log(JSON.stringify(result, null, 2));
@@ -609,6 +629,7 @@ async function syncSkillCommand(args: string[]): Promise<void> {
     }
 
     console.log(`${result.dryRun ? "Would sync" : "Synced"} runtime skills: ${result.runtime}`);
+    console.log(`Mode: ${result.mode}`);
     console.log(`Source: ${result.sourceRoot}`);
     console.log(`Target: ${result.targetRoot}`);
     console.log(`Skills: ${result.syncedSkills.join(", ")}`);
@@ -652,6 +673,11 @@ async function exportSkillCommand(args: string[]): Promise<void> {
     console.log(`${result.dryRun ? "Would export" : "Exported"} project skill: ${result.module}/${result.name}`);
     console.log(`Runtime: ${result.runtime}`);
     console.log(`Source: ${result.sourcePath}`);
+    if (result.sourceBuild !== null) {
+      console.log(
+        `Build: ${result.sourceBuild}${result.usedFallbackBuild ? ` (fallback — no SKILL.${result.runtime}.md in this skill)` : ""}`,
+      );
+    }
     console.log(`Output: ${result.outputPath}`);
     console.log("Files:");
     for (const filePath of result.files) {
@@ -909,7 +935,7 @@ async function contractsCommand(args: string[]): Promise<void> {
 
   if (command === "list") {
     for (const contract of CONTRACTS) {
-      console.log(`${contract.name}\t${relativeContractPath(contract.fileName)}\t${contract.description}`);
+      console.log(`${contract.name}\t${relativeContractPath(contract)}\t${contract.description}`);
     }
     return;
   }
@@ -1255,9 +1281,20 @@ function printExportHelp(): void {
   console.log(`keryx skills export
 
 Usage:
-  keryx skills export <project-skill> --runtime codex [--dry-run] [--json]
-  keryx skills export <project-skill> --runtime claude [--dry-run] [--json]
-  keryx skills export <project-skill> --runtime plugin [--dry-run] [--json]
+  keryx skills export <project-skill> --runtime <runtime> [--dry-run] [--json]
+
+Runtimes:
+  claude    canonical SKILL.md
+  codex     SKILL.codex.md    (falls back to SKILL.md)
+  cursor    SKILL.cursor.md   (falls back to SKILL.md)
+  zed       SKILL.zed.md      (falls back to SKILL.md)
+  opencode  SKILL.opencode.md (falls back to SKILL.md)
+  plugin    marketplace package layout
+
+Notes:
+  Each harness receives its own build when the skill ships one. The chosen
+  build is reported as "Build:" and recorded in export-manifest.json, and a
+  fallback to SKILL.md is always stated rather than silent.
 
 Examples:
   keryx skills export pipelines/pipeline-step-store --runtime codex
@@ -1267,18 +1304,37 @@ Examples:
 }
 
 function printSyncHelp(): void {
+  const mapping = GLOBAL_SYNC_RUNTIMES.map((runtime) => {
+    let documented: string;
+    try {
+      documented = resolveGlobalSyncTarget(runtime).documented;
+    } catch {
+      documented = "(unresolved)";
+    }
+    return `  ${runtime.padEnd(9)} ${documented}`;
+  }).join("\n");
+
   console.log(`keryx skills sync
 
 Usage:
-  keryx skills sync --runtime codex --target <dir> [--dry-run] [--json]
-  keryx skills sync --runtime claude --target <dir> [--dry-run] [--json]
+  keryx skills sync --runtime <runtime> --target <dir> [--dry-run] [--json]
+  keryx skills sync --runtime <runtime> --global [--dry-run] [--json]
+
+Global sync mapping (rules/core/skills-storage-workflow.mdc):
+${mapping}
 
 Notes:
-  Sync is explicit-target only in this implementation slice. It does not auto-write to global runtime folders.
+  --global is opt-in and writes outside the project, into the harness's own
+  home directory. No other command performs it: it never runs as a side effect
+  of keryx update. If the harness home does not exist, sync refuses instead of
+  creating directory trees in your home.
+
+  claude and plugin have no global destination — use --target for those.
 
 Examples:
   keryx skills sync --runtime codex --target .metaproject/runtime/synced/codex
-  keryx skills sync --runtime claude --target /tmp/metaproject-claude-skills --dry-run
+  keryx skills sync --runtime cursor --global --dry-run
+  keryx skills sync --runtime zed --global
 `);
 }
 

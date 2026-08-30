@@ -42,7 +42,7 @@ This skill focuses on:
 This skill does NOT duplicate:
 - MobX store-specific patterns → covered by code-mobx-store-review
 - Naming/formatting/import organization → covered by code-style-review
-- Architecture opinions and persona-specific insights → covered by code-b091-review
+- Architecture opinions and persona-specific insights → covered by code-boss-review
 
 ## Главное правило: скоуп ревью
 
@@ -180,7 +180,7 @@ This skill covers **general AI code quality review** following `code-review-ai-a
 |---------|-----------|-------------|
 | Types, safety, architecture, readability, performance, tests | ✅ YES | — |
 | MobX store internals (actions, computed, reactions, async) | ⚠️ surface-level only | `code-mobx-store-review` for deep store analysis |
-| b091-style direct feedback, logic-layer enforcement | ❌ NO | `code-b091-review` |
+| boss-style direct feedback, logic-layer enforcement | ❌ NO | `code-boss-review` |
 | Pure style/naming/pattern audit | ❌ NO | `code-style-review` |
 
 ---
