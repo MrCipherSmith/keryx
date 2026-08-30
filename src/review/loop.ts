@@ -35,6 +35,34 @@
  * `tasks[].attempts.count` from `flow.json`, which flow 201 put there precisely
  * so a bound survives a session restart. A resumed session's own context starts
  * at zero while the real count does not.
+ *
+ * # What this could not detect, and why (flow 203, second pass)
+ *
+ * Reading persisted state was necessary and was not sufficient. Both signals
+ * were inert against the state `createManagedReviewPackage` actually writes,
+ * and the record said so as a positive fact — "no repeated finding and no
+ * identical consecutive output" — which is the silent-cap failure AC10 exists
+ * to end, stated as an observation.
+ *
+ * - **`repeated-finding` could not fire.** Identity was a RANKING with
+ *   `global_id` above the content key, and `assignGlobalIds` mints a fresh
+ *   `<reviewId>#<id>` on every finding before it is persisted. The top-ranked
+ *   key therefore differed between any two rounds by construction. Identity is
+ *   now a SET and matching is intersection — see {@link findingIdentities}.
+ * - **Two rounds shared one directory.** `defaultReviewId` is date-keyed and the
+ *   documented invocation passes no `--review-id`, so a second round of the same
+ *   branch on the same day overwrote the first: one package, `rounds_seen: 1`,
+ *   nothing to compare. Fixed in `managed.ts` (`allocatePackage`), which is
+ *   where the naming lives.
+ * - **`identical-output` was the only thing left, and one changed word in the
+ *   Summary defeats it.** It still does — the signal is deliberately exact. What
+ *   changed is that the record no longer reports an unrun comparison as a clean
+ *   one: `outputPairsCompared` counts the pairs that could be compared at all.
+ *
+ * The tests that hold this down go through `createManagedReviewPackage` twice
+ * and assert on what came back off disk. Hand-built round fixtures are what let
+ * the ranked identity ship green — `loop.test.ts` passed 18/18 while the
+ * detector was inert in production, because no fixture carried a `global_id`.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -70,6 +98,16 @@ export type LoopDetection = {
   signals: LoopSignal[];
   roundsSeen: number;
   /**
+   * Consecutive round pairs where BOTH sides carried a report, so the
+   * identical-output check could actually run. `0` with
+   * {@link LoopDetection.outputPairsPossible} above zero means that half of the
+   * detection was unobserved — which is not the same fact as "nothing repeated",
+   * and the record must not print it as one.
+   */
+  outputPairsCompared: number;
+  /** Consecutive round pairs that existed at all: `max(roundsSeen - 1, 0)`. */
+  outputPairsPossible: number;
+  /**
    * `tasks[].attempts.count` from `flow.json`, when a task was named.
    * `undefined` means nobody looked it up — NOT zero attempts.
    *
@@ -79,39 +117,81 @@ export type LoopDetection = {
 };
 
 /**
- * The identity two occurrences of "the same finding" must share.
+ * EVERY key a finding can be recognised by — a set, not a ranking.
  *
- * Resolution order, and the reason for each:
+ * The ranking was the defect, and it made the whole detector inert on the state
+ * this pipeline actually persists. `assignGlobalIds` in `managed.ts` mints
+ * `<reviewId>#<id>` on every finding *before* it is written, so a
+ * highest-ranked `global_id` is guaranteed to differ between any two rounds:
  *
- * 1. `dedupe_key` — the field that exists to say "these are the same finding".
- *    When a producer sets it, nothing here should second-guess it.
- * 2. `global_id` — `<reviewId>#<id>`, minted per package. A freshly minted one
- *    can never collide across rounds, so including it is free: it matches only
- *    when a producer deliberately carried round N's key into round N+1, which
- *    is that producer stating the finding is the same one.
- * 3. A derived content key — reviewer, file, symbol, line and the normalised
- *    problem text.
+ *     round 1: global_id = "2026-08-30-ingest-demo#F-001"
+ *     round 2: global_id = "round-2#F-001"
  *
- * `id` is deliberately NOT in this list. It is per-report: `F-001` denotes a
- * different finding in every round of every review in the corpus, so a detector
- * keyed on it fires on the second round of every flow whatever happened. A
- * detector that always fires is one that gets turned off.
+ * Same finding, same file, same problem text — and under a ranked resolution
+ * the content key that would have matched was never reached. `repeated-finding`
+ * could not fire on anything the writer produced, and the record then printed
+ * "no repeated finding" as a positive fact.
+ *
+ * So a finding contributes every key it has, and two findings are the same one
+ * when their key sets INTERSECT:
+ *
+ * 1. `dedupe:<dedupe_key>` — the field that exists to say "these are the same
+ *    finding". When a producer sets it, nothing here second-guesses it.
+ * 2. `global:<global_id>` — kept as an identity, and now it earns its place
+ *    rather than shadowing the content key. A freshly minted key never collides
+ *    across rounds, so it costs nothing; a key a producer deliberately CARRIED
+ *    from round N into round N+1 matches even when the problem text was
+ *    reworded, which is the one thing the content key cannot do.
+ * 3. `derived:...` — reviewer, file, symbol, line and normalised problem text.
+ *    Omitted entirely when there is no content to compare; see
+ *    {@link derivedContentKey}.
+ *
+ * `id` is deliberately NOT a key. It is per-report: `F-001` denotes a different
+ * finding in every round of every review in the corpus, so a detector keyed on
+ * it fires on the second round of every flow whatever happened. A detector that
+ * always fires is one that gets turned off.
  */
-export function findingIdentity(finding: Partial<StructuredReviewFinding>): string {
+export function findingIdentities(finding: Partial<StructuredReviewFinding>): string[] {
+  const keys: string[] = [];
   const dedupe = finding.dedupe_key;
   if (typeof dedupe === "string" && dedupe.trim() !== "") {
-    return `dedupe:${dedupe.trim()}`;
+    keys.push(`dedupe:${dedupe.trim()}`);
   }
   const global = finding.global_id;
   if (typeof global === "string" && global.trim() !== "") {
-    return `global:${global.trim()}`;
+    keys.push(`global:${global.trim()}`);
+  }
+  const derived = derivedContentKey(finding);
+  if (derived !== undefined) {
+    keys.push(derived);
+  }
+  return keys;
+}
+
+/**
+ * The content key, or `undefined` when the finding carries no content to
+ * compare.
+ *
+ * `reviewer` and `line` are in the key but cannot justify it on their own:
+ * `derived:review-style|?|?|?|` would make every contentless finding identical
+ * to every other one from the same reviewer, and a detector that fires on that
+ * is worse than one that stays quiet. A finding with no `problem`, no `file` and
+ * no `symbol` therefore contributes no derived key at all — it is compared on
+ * `dedupe_key` and `global_id` or not compared.
+ */
+function derivedContentKey(finding: Partial<StructuredReviewFinding>): string | undefined {
+  const problem = normalizeText(finding.problem ?? "");
+  const file = (finding.file ?? "").trim();
+  const symbol = (finding.symbol ?? "").trim();
+  if (problem === "" && file === "" && symbol === "") {
+    return undefined;
   }
   const parts = [
     finding.reviewer ?? "?",
-    finding.file ?? "?",
-    finding.symbol ?? "?",
+    file === "" ? "?" : file,
+    symbol === "" ? "?" : symbol,
     finding.line === undefined || finding.line === null ? "?" : String(finding.line),
-    normalizeText(finding.problem ?? ""),
+    problem,
   ];
   return `derived:${parts.join("|")}`;
 }
@@ -155,12 +235,30 @@ export function detectReviewLoop(input: {
   const rounds = input.rounds;
   const signals: LoopSignal[] = [];
 
-  // 1. The same finding identity in two or more distinct rounds.
+  // 1. The same finding in two or more distinct rounds.
+  //
+  // Two passes, because identity is a SET of keys and "the same finding" is
+  // therefore an intersection rather than an equality. Pass one unions every
+  // key a finding carries into one group, so a `global_id` carried forward and a
+  // content key that matches independently name the SAME finding rather than two.
+  // Pass two buckets the findings by that group.
+  const groups = new KeyGroups();
+  for (const round of rounds) {
+    for (const finding of round.findings) {
+      groups.link(findingIdentities(finding));
+    }
+  }
   const seen = new Map<string, { rounds: string[]; sample: Partial<StructuredReviewFinding> }>();
   for (const round of rounds) {
     const inThisRound = new Set<string>();
     for (const finding of round.findings) {
-      const identity = findingIdentity(finding);
+      const keys = findingIdentities(finding);
+      const identity = groups.representative(keys);
+      if (identity === undefined) {
+        // Nothing to compare it by. Silence here is honest: the alternative is a
+        // shared placeholder key that makes every such finding a repeat.
+        continue;
+      }
       if (inThisRound.has(identity)) {
         // A repeat WITHIN one round is a deduplication problem, not a loop.
         continue;
@@ -190,6 +288,12 @@ export function detectReviewLoop(input: {
   }
 
   // 2. Two CONSECUTIVE rounds whose output is byte-identical after normalisation.
+  //
+  // `comparedPairs` is counted rather than assumed, because this check needs BOTH
+  // rounds' `report.md` and a package whose report is missing contributes nothing
+  // — silently, while the record went on printing "no identical consecutive
+  // output". A negative you cannot observe is not a negative (AC10).
+  let comparedPairs = 0;
   for (let index = 1; index < rounds.length; index += 1) {
     const previous = rounds[index - 1] as ReviewRound;
     const current = rounds[index] as ReviewRound;
@@ -198,6 +302,12 @@ export function detectReviewLoop(input: {
     }
     const before = normalizeReviewOutput(previous.output);
     const after = normalizeReviewOutput(current.output);
+    if (before === "" && after === "") {
+      // Two reports that normalise to nothing were not compared; they were both
+      // absent in all but name.
+      continue;
+    }
+    comparedPairs += 1;
     if (before === "" || before !== after) {
       continue;
     }
@@ -214,8 +324,62 @@ export function detectReviewLoop(input: {
     escalate: signals.length > 0,
     signals,
     roundsSeen: rounds.length,
+    outputPairsCompared: comparedPairs,
+    outputPairsPossible: Math.max(rounds.length - 1, 0),
     attempts: input.attempts,
   };
+}
+
+/**
+ * Union-find over identity keys.
+ *
+ * Needed because identity is a set: a finding carrying `global:r1#F-001` and
+ * `derived:...` binds those two keys together for good, so a later finding
+ * matching EITHER of them is the same finding. Without the union, one finding
+ * would be counted under two identities and a repetition spanning the two would
+ * be split into two groups of one — and neither would reach the threshold.
+ */
+class KeyGroups {
+  private readonly parent = new Map<string, string>();
+
+  link(keys: readonly string[]): void {
+    const first = keys[0];
+    if (first === undefined) {
+      return;
+    }
+    for (const key of keys) {
+      this.union(first, key);
+    }
+  }
+
+  /** The group id shared by these keys, or `undefined` when there are none. */
+  representative(keys: readonly string[]): string | undefined {
+    const first = keys[0];
+    return first === undefined ? undefined : this.find(first);
+  }
+
+  private find(key: string): string {
+    let current = key;
+    let next = this.parent.get(current);
+    while (next !== undefined && next !== current) {
+      current = next;
+      next = this.parent.get(current);
+    }
+    this.parent.set(key, current);
+    return current;
+  }
+
+  private union(a: string, b: string): void {
+    const rootA = this.find(a);
+    const rootB = this.find(b);
+    if (rootA === rootB) {
+      return;
+    }
+    // Lexicographically smallest root wins, so the group id is deterministic
+    // whatever order the rounds were read in.
+    const [keep, drop] = rootA < rootB ? [rootA, rootB] : [rootB, rootA];
+    this.parent.set(drop, keep);
+  }
 }
 
 /**
@@ -302,14 +466,11 @@ export function renderLoopDetectionMarkdown(detection: LoopDetection): string {
   lines.push("");
   lines.push(`rounds_seen: ${detection.roundsSeen}`);
   lines.push(`attempts_recorded: ${detection.attempts === undefined ? "not recorded" : detection.attempts}`);
+  lines.push(`output_pairs_compared: ${detection.outputPairsCompared} of ${detection.outputPairsPossible}`);
   lines.push(`escalate: ${detection.escalate ? "yes" : "no"}`);
   lines.push("");
   if (detection.signals.length === 0) {
-    lines.push(
-      detection.roundsSeen < 2
-        ? "_fewer than two rounds: repetition cannot be observed yet. This is not `no loop`._"
-        : "_no repeated finding and no identical consecutive output across the rounds on disk._",
-    );
+    lines.push(negativeFinding(detection));
     lines.push("");
     return lines.join("\n");
   }
@@ -323,6 +484,34 @@ export function renderLoopDetectionMarkdown(detection: LoopDetection): string {
   lines.push("a detector that can be argued out of firing by an unspent budget is a counter.");
   lines.push("");
   return lines.join("\n");
+}
+
+/**
+ * What "nothing fired" is allowed to claim.
+ *
+ * Three different facts, and collapsing them is the silent-cap failure AC10
+ * exists to end. `_no repeated finding and no identical consecutive output_` was
+ * printed unconditionally, including when there was one round (nothing to
+ * repeat) and when no round pair carried a report on both sides (the second
+ * check never ran). Both read as "we looked and it was clean".
+ */
+function negativeFinding(detection: LoopDetection): string {
+  if (detection.roundsSeen < 2) {
+    return "_fewer than two rounds: repetition cannot be observed yet. This is not `no loop`._";
+  }
+  if (detection.outputPairsCompared === 0) {
+    return (
+      `_no repeated finding across the ${detection.roundsSeen} rounds on disk. ` +
+      `The output check did NOT run: no round pair could be compared, because all ` +
+      `${detection.outputPairsPossible} pair(s) were missing a report on one or both sides. ` +
+      "That half is unobserved, not clean._"
+    );
+  }
+  const partial =
+    detection.outputPairsCompared < detection.outputPairsPossible
+      ? ` (${detection.outputPairsPossible - detection.outputPairsCompared} pair(s) could not be compared and are unobserved)`
+      : "";
+  return `_no repeated finding, and no identical consecutive output, across the ${detection.roundsSeen} rounds on disk${partial}._`;
 }
 
 function escapePipes(value: string): string {

@@ -49,6 +49,26 @@ Modes:
 (The help also prints a paragraph on `scope` and one on verification; both are in
 the [CLI reference](../cli-reference.md#review).)
 
+### Rounds, and why a second one gets its own directory
+
+Without `--review-id`, a package is named from the date, the mode and the ref.
+A second round of the same branch on the same day therefore used to land on the
+first one and overwrite it — which quietly made loop detection impossible, since
+repetition cannot be observed when only the latest round survives.
+
+A default-named round now takes the next free name: `<base>`, then `<base>-r02`,
+`<base>-r03`. The first round of a day keeps the name it always had.
+
+**An explicit `--review-id` still overwrites, deliberately.** That is the retry
+path — the same round re-ingested after a correction — and giving it a
+discriminator would turn every retry into a phantom round whose report is
+byte-identical to the one before it, which reads as a stuck loop.
+
+The cost of the choice, stated: running `review ingest` twice with no
+`--review-id` records two rounds, and if the reports match it escalates. That is
+what the record says happened, and it is the safe direction — reusing the
+directory would delete exactly the signal a genuinely stuck round produces.
+
 ## Narrow the scope before anyone reads it
 
 ```bash

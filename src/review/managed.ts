@@ -78,9 +78,8 @@ export async function createManagedReviewPackage(
   input: ManagedReviewInput,
 ): Promise<ManagedReviewPackageResult> {
   const at = (input.now ?? new Date()).toISOString();
-  const reviewId = input.reviewId ?? defaultReviewId(input.mode, input.target.kind, input.target.ref, at);
   const flowMatch = await resolvePackageFlow(input);
-  const packageDir = packagePath(input.cwd, input.mode, reviewId, flowMatch);
+  const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
@@ -1578,6 +1577,70 @@ function defaultReviewId(mode: ManagedReviewMode, kind: string, ref: string, at:
   const date = at.slice(0, 10);
   const normalizedRef = ref.replace(/^https?:\/\//, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `${date}-${mode === "attach-review" ? kind : mode}-${slugify(normalizedRef || kind)}`;
+}
+
+/**
+ * How many same-day rounds of one target this will name before refusing.
+ *
+ * Two digits, so `-r02` … `-r99` sort in round order by NAME as well as by
+ * `manifest.createdAt` — `readFlowReviewRounds` falls back to the directory name
+ * when a package carries no timestamp, and `-r10` sorting before `-r2` would put
+ * the rounds in the wrong order for the consecutive-output check.
+ */
+const MAX_SAME_DAY_ROUNDS = 99;
+
+/**
+ * The review id and the directory it owns — the fix for the second half of the
+ * loop-detection defect (flow 203, AC9).
+ *
+ * `defaultReviewId` is `<YYYY-MM-DD>-<mode>-<ref>` and the documented invocation
+ * never passes `--review-id`, so **two rounds of the same branch on the same day
+ * resolved to one directory and the second silently overwrote the first**. What
+ * reached disk was one package, `rounds_seen: 1`, and a detector with nothing to
+ * compare — the canonical repair loop, made unobservable by the naming scheme.
+ *
+ * So a default-named round takes the next free directory: `<base>`, then
+ * `<base>-r02`, `<base>-r03`. The first round of a day keeps exactly the name it
+ * had before, which is why nothing that already names a package by hand had to
+ * change.
+ *
+ * **An explicit `reviewId` is untouched** and still overwrites. That is the
+ * difference in kind: a caller passing `--review-id` is stating the identity of
+ * the round, and re-ingesting under that name is a deliberate replacement — the
+ * retry path after a failed gate. A discriminator there would turn every retry
+ * into a phantom round with byte-identical output, which is precisely the shape
+ * `identical-output` escalates on. The default has no such statement behind it;
+ * two ingests that named nothing are two rounds.
+ *
+ * The cost, stated rather than hidden: an operator who runs `review ingest`
+ * twice on the SAME report without `--review-id` now records two rounds and gets
+ * an `identical-output` escalation. That is a true statement about the record —
+ * it does hold two identical rounds — and it is the direction to be wrong in.
+ * The alternative, reusing the directory when the report matches, would delete
+ * exactly the signal a genuinely stuck round produces.
+ */
+async function allocatePackage(
+  input: ManagedReviewInput,
+  flowMatch: FlowMatchResult | null,
+  at: string,
+): Promise<{ reviewId: string; packageDir: string }> {
+  if (input.reviewId !== undefined) {
+    return {
+      reviewId: input.reviewId,
+      packageDir: packagePath(input.cwd, input.mode, input.reviewId, flowMatch),
+    };
+  }
+  const base = defaultReviewId(input.mode, input.target.kind, input.target.ref, at);
+  for (let round = 1; round <= MAX_SAME_DAY_ROUNDS; round += 1) {
+    const reviewId = round === 1 ? base : `${base}-r${String(round).padStart(2, "0")}`;
+    const packageDir = packagePath(input.cwd, input.mode, reviewId, flowMatch);
+    if (!(await pathExists(packageDir))) {
+      return { reviewId, packageDir };
+    }
+  }
+  throw new Error(
+    `Refusing to record a ${MAX_SAME_DAY_ROUNDS + 1}th review round for "${base}" in one day. ${MAX_SAME_DAY_ROUNDS} rounds against one target is a repair loop that nothing stopped — run \`keryx review loop --flow <id>\`, or pass --review-id to name this round yourself.`,
+  );
 }
 
 function matchesTarget(flow: FlowState, dir: string, kind: string, ref: string): boolean {

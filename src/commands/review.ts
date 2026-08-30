@@ -400,7 +400,7 @@ async function runLoop(args: string[]): Promise<void> {
  * decision to `include: true`; see `review/stack.ts` for why that direction is
  * the only one this command will not reverse.
  *
- * This command answers the scoping question; it does not by itself change
+ * `review-orchestrator` calls this before dispatch; it does not by itself change
  * dispatch. `review-orchestrator`'s routing table is where that answer would
  * be consulted, and wiring it in is a follow-up — see the flow journal.
  */
@@ -877,7 +877,8 @@ stack:
   is met. UNCERTAIN detection (package.json missing or unparsable) — and any
   reviewer that declares no requirement — always resolves to \`include: true\`;
   a stack-gated reviewer is excluded ONLY when detection ran cleanly and found
-  none of its declared tags. This command answers the scoping question; wiring
-  the answer into review-orchestrator's dispatch is a separate step.
+  none of its declared tags. \`review-orchestrator\` calls this before dispatch
+  and records the exclusions with their reasons; a reviewer silently absent from
+  a report would read as having had nothing to say.
 `);
 }

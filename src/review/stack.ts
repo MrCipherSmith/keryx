@@ -15,11 +15,30 @@
  * **Uncertain always means included.** A reviewer that runs needlessly costs
  * tokens; a reviewer wrongly skipped hides a real defect its checklist would
  * have caught, and that asymmetry is why every failure mode below resolves to
- * "keep it": a missing `package.json`, one that fails to parse, or one that is
- * not a JSON object — each sets `uncertain: true`, and `uncertain` forces
+ * "keep it": a missing `package.json`, one that fails to parse, one that is not
+ * a JSON object, one that declares **no dependencies at all**, or one that
+ * declares **workspaces** — each sets `uncertain: true`, and `uncertain` forces
  * every tag `true` regardless of what was or was not found. The only way a tag
- * comes back `false` is a `package.json` that parsed cleanly and plainly does
- * not name the dependency.
+ * comes back `false` is a `package.json` that parsed cleanly, declared
+ * dependencies, and plainly does not name the one in question.
+ *
+ * The last two are the ones a "clean parse means certain" rule got wrong, and
+ * they are the common shape rather than the exotic one. A monorepo workspace
+ * root parses perfectly and names `typescript` and `eslint`; `react` lives in
+ * `packages/web`. Reading that root as "this repository does not use React"
+ * excluded `review-frontend`, `review-frontend-conventions`, `review-backend`
+ * and `code-mobx-store-review` from a React monorepo — the exact inversion of
+ * the direction AC13 requires. A manifest declaring nothing has told you
+ * nothing, and "nothing" is not "no".
+ *
+ * Walking the workspace globs would give a real answer, and is deliberately not
+ * done here: it needs directory traversal, which turns a single deterministic
+ * read into an unbounded filesystem walk whose failure modes (a glob that
+ * matches nothing, a sub-package with no manifest, a symlinked package outside
+ * the tree) each need their own answer — and every wrong answer among them costs
+ * a skipped reviewer. Being uncertain about a monorepo root is cheap and honest;
+ * the reason names the globs so an operator can point the detector at a
+ * sub-package instead.
  *
  * # What this module does NOT do
  *
@@ -102,6 +121,25 @@ export async function detectProjectStack(cwd: string, options: DetectStackOption
     }
   }
 
+  // A manifest that parses is not a manifest that TOLD you something. Both
+  // checks below reached `uncertain: false` before, and both then excluded every
+  // stack-gated reviewer from repositories that plainly use the stack.
+  const workspaceGlobs = workspacePatterns(record);
+  if (workspaceGlobs.length > 0) {
+    return uncertainStack(
+      `package.json at ${manifestPath} declares workspaces (${workspaceGlobs.join(
+        ", ",
+      )}); the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
+    );
+  }
+  if (names.size === 0) {
+    return uncertainStack(
+      `package.json at ${manifestPath} declares no dependencies in ${DEPENDENCY_FIELDS.join(
+        "/",
+      )} — a manifest that declares nothing has not said the repository uses nothing`,
+    );
+  }
+
   const matched: string[] = [];
   const nestjsMatches = [...names].filter((name) => name.startsWith("@nestjs/")).sort();
   matched.push(...nestjsMatches);
@@ -119,6 +157,24 @@ export async function detectProjectStack(cwd: string, options: DetectStackOption
     reason: `detected from ${manifestPath} (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
     matched,
   };
+}
+
+/**
+ * The workspace globs a root manifest declares, in either accepted form.
+ *
+ * `"workspaces": ["packages/*"]` is the yarn/bun/pnpm-compatible array; npm also
+ * accepts `{"packages": [...]}`. An EMPTY list is not a workspace root: it
+ * enumerates no sub-package, so there is nothing unread and nothing to be
+ * uncertain about.
+ */
+function workspacePatterns(record: Record<string, unknown>): string[] {
+  const declared = record["workspaces"];
+  const list = Array.isArray(declared)
+    ? declared
+    : typeof declared === "object" && declared !== null
+      ? (declared as Record<string, unknown>)["packages"]
+      : undefined;
+  return Array.isArray(list) ? list.filter((item): item is string => typeof item === "string" && item !== "") : [];
 }
 
 function uncertainStack(reason: string): DetectedStack {

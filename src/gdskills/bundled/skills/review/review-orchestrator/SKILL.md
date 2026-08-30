@@ -492,8 +492,9 @@ keryx review stack --json
 ```
 
 It reads `package.json` and reports, per reviewer, `include` or `exclude` with a
-reason. A reviewer carrying `metadata.stack_requires` is dispatched only when
-every tag it names is present.
+reason. A reviewer carrying `metadata.stack_requires` is dispatched when **any**
+tag it names is present — matching what `keryx review stack` actually computes,
+and failing toward inclusion rather than away from it.
 
 **Its failure mode is to include, never to skip.** A missing, unparsable or
 unexpected manifest sets `uncertain`, and an uncertain detection marks every tag
@@ -827,6 +828,13 @@ Two consequences, both previously decided differently in different files:
 - Severity is a property of the demonstrated outcome, never of the reviewer that
   found it. A security reviewer's unproven concern is `info` under the same test
   that puts a style reviewer's unproven concern there.
+- **And never of how crisply the finding is worded.** An outcome that costs a
+  user, a caller or persisted state nothing is `minor` however precisely its
+  trigger is named. Without this clause the test above rates prose quality: a
+  cosmetic wording nit stated as "trigger X produces output Y" reads as `major`,
+  while a real defect stated tersely reads as `info`. That is not academic — the
+  findings cap truncates by severity, so the well-written typo would survive and
+  the terse real defect would be cut.
 
 The boundary this rubric does **not** draw is `major` against `major`. Two
 findings that both name a trigger and an outcome are the same severity even when

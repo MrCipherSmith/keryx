@@ -104,7 +104,7 @@ Only review code changed in scope. Do not flag style issues in lines outside the
 - File names match the primary export: `UserService` → `user.service.ts`
 - Test files: `*.spec.ts` or `*.test.ts` next to the subject file
 
-Flag naming issues as `minor` unless the name is actively misleading (e.g., `isLoading` that is actually a count), which is `major`.
+Naming severity is set by the Style laws below and by the canonical rubric in `review-orchestrator` — not here. A second ruling in the same file is the defect this flow removed from `review-highload` and `review-frontend`.
 
 ---
 

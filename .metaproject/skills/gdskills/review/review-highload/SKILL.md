@@ -460,6 +460,7 @@ conditions land under that rubric, not a second rubric.
 | Unbounded in-memory queue or collection growing with request rate | `blocker` | OOM is a crash; state the rate that reaches it |
 | Distributed cron or job with no lock | `blocker` | Concurrent runs duplicate side effects |
 | Transaction held open across external I/O | `blocker` | Pool exhaustion takes the service down |
+| Blocking I/O on a thread or fiber shared with the event loop | `major` | Named trigger: a request served on that thread. Named outcome: every concurrent request on it stalls behind the one slow call. Restored — the per-reviewer rubric that carried this floor was deleted and the conditions table did not pick it up, leaving the skill's own description advertising hot-path blocking I/O with no rule assigning it a severity |
 | Connection without a pool; unbounded `Promise.all`; missing retry timeout or backoff; cache stampede on a hot key; N+1 on a hot path; long transaction; missing DLQ | `major` | Named trigger (a load level) and named outcome, but the outcome is degradation, not one of the four shapes |
 | Backoff without jitter; TTL misconfigured; per-request allocation on a hot path; full-row fetch for one field | `minor` | Correct under load; the cost is to whoever tunes it next |
 | Architectural note with no failure mode at a stated load | `info` | Shared law 1 |
