@@ -9,7 +9,6 @@ description: |
   finding's text.
   NOT for: first-pass review (run domain reviewers first); re-scoring findings by re-reading
   them, which is the operation this skill replaced and which is measured to degrade accuracy.
-version: "1.0.0"
 triggers:
   - "verify findings"
   - "review --verify"
@@ -19,8 +18,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review — Verifier

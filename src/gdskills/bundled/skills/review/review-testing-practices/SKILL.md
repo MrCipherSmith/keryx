@@ -85,6 +85,27 @@ If the repository has local test documentation, cite the relevant convention in 
 
 ---
 
+## Iron Laws
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+---
+
 ## Orchestrated Review Contract
 
 When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `skills/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
@@ -128,7 +149,17 @@ observation is theatre, not rigour.
 - **Fix**: concrete test rewrite or fixture/handler change
 ```
 
-Severity guidance: real-network leaks, shared-data mutation, fixed sleeps, and backend-race
-assertions are usually `major` or `blocker`; substrate choice and smoke tagging are usually
-`minor` unless they make CI flaky.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no rubric of its own; what follows is where its recurring
+conditions land under that rubric.
+
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| A test that passes while the behaviour it names is broken | `blocker` | The acceptance criterion is unimplemented — the test only claims otherwise |
+| Real-network leak; shared-data mutation across tests; fixed sleeps; asserting on a backend race | `major` | Named trigger (the run) and named outcome (flake or a false pass) |
+| Substrate choice, smoke tagging, locator priority, co-location | `minor` | The suite is correct; the cost is to whoever maintains it |
+| A convention preference with no effect on determinism or signal | `info` | Shared laws 1 and 2 |
+
+A flaky test is `major`, not `blocker`: it wastes time, but it does not ship a
+defect. A test that cannot fail does — which is why it is the one `blocker` here.
 

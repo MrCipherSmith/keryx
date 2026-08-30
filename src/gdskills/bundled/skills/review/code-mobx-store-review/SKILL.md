@@ -9,8 +9,9 @@ metadata:
   author: "MrCipherSmith"
   version: "1.1.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode"
+  stack_requires: "mobx"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 ---

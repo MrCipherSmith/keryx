@@ -7,7 +7,6 @@ description: |
   "review --verify", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
   consolidates findings into one unified report.
   NOT for: running a single specialized reviewer — invoke it directly by name instead.
-version: "1.8.0"
 triggers:
   - "review"
   - "code review"
@@ -36,8 +35,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.8.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review Orchestrator
@@ -478,6 +477,32 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 These convention reviewers are additive: keep the generic reviewers selected by normal detection,
 then add the matching convention pass. Deduplicate reviewer names before dispatch.
 
+### Stack scoping — run it after detection, before dispatch
+
+The tables above select reviewers by **file shape**. A `.ts` file looks the same
+whether or not the repository has React in it, so those tables will happily
+dispatch a React/MobX conventions reviewer at a Bun CLI with no frontend — which
+is exactly what happened here, on every review, for months.
+
+So the selected set is filtered once more, by what the repository actually
+declares:
+
+```bash
+keryx review stack --json
+```
+
+It reads `package.json` and reports, per reviewer, `include` or `exclude` with a
+reason. A reviewer carrying `metadata.stack_requires` is dispatched only when
+every tag it names is present.
+
+**Its failure mode is to include, never to skip.** A missing, unparsable or
+unexpected manifest sets `uncertain`, and an uncertain detection marks every tag
+present, so every reviewer runs. A reviewer that runs needlessly costs tokens; a
+reviewer wrongly skipped hides a real defect, and that asymmetry is not close.
+
+Record the exclusions with their reasons alongside the pre-filter drops. A
+reviewer silently absent from a report reads as "it had nothing to say".
+
 ### Convention Reviewer Confirmation
 
 When convention reviewers are auto-detected and the user did not explicitly pass
@@ -742,6 +767,86 @@ Before consolidation, validate every reviewer result:
 - Duplicate findings are merged by `dedupe_key` or by `(file, line, problem)`.
 - `NEEDS_CONTEXT` triggers one targeted context refill. If still unresolved, keep it as an explicit open question, not as a blocker.
 - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
+
+---
+
+## Severity (canonical)
+
+**This is the only severity rubric in the review domain.** Reviewers do not carry
+their own. Ten private rubrics feeding one sort produce a ranking that means ten
+different things at once, and ranking is what an operator uses to decide what to
+read first. A reviewer may state which of *its* conditions land where; it may not
+redefine the levels.
+
+### `blocker` — merge-blocking, and nothing else
+
+Exactly four shapes. Nothing outside this list is a `blocker`, however strongly
+the reviewer feels about it:
+
+1. **A crash** — the process, request, or render dies on an input the change
+   admits.
+2. **Data loss or corruption** — something persisted, transmitted, or returned is
+   destroyed or silently wrong.
+3. **An exploitable vulnerability** — an attacker action with a named entry point
+   and a named impact.
+4. **An unimplemented acceptance criterion** — the change claims work the diff
+   does not contain.
+
+Everything else is at most `major`. "This will definitely cause problems later"
+is not one of the four. Neither is "this violates the architecture", "this fails
+the linter", or "this is how the last outage started".
+
+### `major` / `minor` / `info` — the boundary test
+
+Ask one question, and ask it of the **finding**, not of the code:
+
+> **Does it name a trigger, and the observable outcome that trigger produces?**
+
+- **`major`** — it does. There is an input, a call, a render, or a load level, and
+  a resulting behaviour a user or a caller would call wrong: a wrong value, a lost
+  update, a leak, a hang, a cost stated together with the frequency that makes it
+  a cost. Not one of the four shapes above, so not merge-blocking — but the code
+  does the wrong thing.
+- **`minor`** — it does not, and does not claim to. The code behaves correctly;
+  the cost lands on whoever reads or edits it next, and the finding names that
+  cost at a named site.
+- **`info`** — it names neither. An observation, a preference, or a risk with no
+  demonstrated path.
+
+The test is procedural on purpose. It is applied by reading the finding, so
+someone who did not write it — and has not read the code — reaches the same
+answer: look for the trigger and the outcome. Present → `major`. Absent, but a
+concrete maintenance cost is named → `minor`. Neither → `info`.
+
+Two consequences, both previously decided differently in different files:
+
+- A finding that **claims** runtime harm and cannot name the trigger is `info`,
+  not `major`. It is not demoted to `minor`: `minor` is for findings that never
+  claimed runtime harm at all. The two are different failures and stay
+  distinguishable.
+- Severity is a property of the demonstrated outcome, never of the reviewer that
+  found it. A security reviewer's unproven concern is `info` under the same test
+  that puts a style reviewer's unproven concern there.
+
+The boundary this rubric does **not** draw is `major` against `major`. Two
+findings that both name a trigger and an outcome are the same severity even when
+one is obviously worse; the ordering inside a severity is the operator's, and
+inventing a fifth level to express it would put us back where we started.
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+`review-security-code` carries a fourth — every security finding states its attack
+vector — which does not generalise and stays there.
 
 ---
 
@@ -1103,6 +1208,9 @@ If absent, proceed normally — context is optional and non-blocking.
 | "Spec compliance can wait until after quality review" | Stage 1 gate exists because unimplemented requirements invalidate quality work |
 | "I'll deduplicate findings manually in my head" | Always normalize to [F-NNN] format before consolidation to avoid losing findings |
 | "Minor findings from one reviewer cancel out the major from another" | Each finding stands independently; severity is per-finding, not averaged |
+| "The reviewer's own severity table said blocker" | There are no reviewer tables. One rubric, in **Severity (canonical)** above; a reviewer that ships one is the defect this replaced |
+| "It's a security/architecture finding, so it's a blocker" | Severity is the demonstrated outcome, not the domain that found it. `blocker` is exactly the four shapes |
+| "It will definitely break something eventually, so blocker" | Name the trigger and the outcome. Named → `major`. Unnamed → `info`. "Eventually" is neither |
 | "A strict re-read of the findings will sharpen them" | That pass existed and was removed: self-correction without new evidence measured 95.5 → 91.5 → 89.0 on GSM8K and 75.8 → 38.1 on CommonSenseQA. Run something instead |
 | "Three reviewers agree, so the finding is verified" | Consensus is not evidence. 80+ agents unanimously endorsed a vulnerability that did not exist; one empirical test killed it |
 | "The verifier suggested a higher severity, I'll apply it" | It cannot suggest one. A claim carrying a severity is discarded whole and the attempt is recorded |

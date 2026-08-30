@@ -7,7 +7,6 @@ description: |
   Also invoked directly: "review logic", "check correctness", "are there any bugs here".
   NOT for: security vulnerabilities, performance profiling, style/naming preferences,
   or architectural pattern concerns — those belong in their respective specialized reviewers.
-version: "1.0.0"
 triggers:
   - "review logic"
   - "check correctness"
@@ -19,8 +18,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Review Logic
@@ -220,16 +219,44 @@ observation is theatre, not rigour.
   ```
 ```
 
-Severity guide for this reviewer:
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no table of its own; what follows is where its recurring
+conditions land under that rubric, not a second rubric.
 
-| Severity | When to use |
-|----------|------------|
-| `blocker` | Crash, data corruption, unimplemented acceptance criterion, unhandled promise rejection in critical path |
-| `major` | Silent wrong result, race condition, swallowed error, type contract broken |
-| `minor` | Edge case not handled but unlikely in practice, non-null assertion without comment |
-| `info` | Suggestion to make code more defensive, no current observable defect |
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| Unhandled promise rejection reaching the process | `blocker` | Crash |
+| Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
+| Unimplemented acceptance criterion | `blocker` | Named shape 4 |
+| Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
+| Silent wrong result on a named input | `major` | Trigger and outcome are both named |
+| Swallowed error that hides a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Silent failure is wrong behaviour; corruption is a different shape |
+| Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
+| Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
+| Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |
+| "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
 
-Iron laws:
+## Iron Laws
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+### Logic laws
+
 - Every `blocker` MUST include a concrete reproduction scenario or a spec reference.
 - NEVER flag a style preference (naming, formatting) as a logic bug.
 - If in doubt between `major` and `blocker`, use `major` — overstating severity loses credibility.

@@ -5,7 +5,8 @@ description: >
   to extract purpose, structure, public API surface, patterns, and key dependencies.
   Use when: dispatched by autodoc-orchestrator Phase 2 (one instance per module).
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # autodoc-analyst

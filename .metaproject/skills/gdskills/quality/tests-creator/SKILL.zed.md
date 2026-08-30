@@ -10,8 +10,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "testing"
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 # Tests Creator

@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import {
@@ -17,6 +18,28 @@ import {
   type ReviewScope,
 } from "../review/scope";
 import { isVerificationMode, verificationClaims } from "../review/verification";
+import {
+  DEFAULT_MAX_FINDINGS_PER_REVIEWER,
+  DEFAULT_MAX_PARALLEL_REVIEWERS,
+  DEFAULT_SPEND_CEILING_USD,
+  evaluateSpendCap,
+  planReviewerWaves,
+} from "../review/caps";
+import {
+  detectReviewLoop,
+  readFlowReviewRounds,
+  readTaskAttemptCount,
+  renderLoopDetectionMarkdown,
+} from "../review/loop";
+import {
+  detectProjectStack,
+  extractStackRequiresField,
+  parseStackRequires,
+  renderStackScopingMarkdown,
+  scopeReviewerByStack,
+  type DetectedStack,
+  type StackScopingDecision,
+} from "../review/stack";
 import {
   DEFAULT_VERIFICATION_MODE,
   FINDING_DISPOSITION_STATES,
@@ -62,7 +85,16 @@ const CREATE_FLAGS = [
   "--verification-mode",
   "--scope",
   "--refuted",
+  "--max-findings",
+  "--spent",
+  "--spend-ceiling",
+  "--parallel",
+  "--outstanding",
 ] as const;
+
+const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
+
+const LOOP_FLAGS = ["--flow", "--task"] as const;
 
 const SCOPE_FLAGS = [
   "--context",
@@ -76,6 +108,8 @@ const SCOPE_FLAGS = [
 ] as const;
 
 const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
+
+const STACK_FLAGS = ["--json"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.
@@ -144,6 +178,18 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runScope(args.slice(1));
       return;
     }
+    if (command === "budget") {
+      await runBudget(args.slice(1));
+      return;
+    }
+    if (command === "loop") {
+      await runLoop(args.slice(1));
+      return;
+    }
+    if (command === "stack") {
+      await runStack(args.slice(1));
+      return;
+    }
     if (command === "status") {
       await runStatus(args.slice(1));
       return;
@@ -185,6 +231,10 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     verifications: await readVerifications(optionValue(args, "--verifications")),
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
+    maxFindingsPerReviewer: parseNonNegativeInteger(optionValue(args, "--max-findings"), "--max-findings"),
+    spend: parseMoney(optionValue(args, "--spent"), "--spent"),
+    spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
+    concurrency: parseConcurrency(args),
   };
   const result = await createManagedReviewPackage(input);
   console.log(`# managed review: ${result.reviewId}`);
@@ -216,6 +266,230 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
       ? "pre-filter: not recorded (no --scope supplied; this is not `dropped 0`)"
       : `pre-filter: files_dropped=${preFilter.counts.filesDropped} blocks_dropped=${preFilter.counts.blocksDropped} changed_lines_dropped=${preFilter.counts.changedLinesDropped} drop_rows=${preFilter.drops.length}`,
   );
+
+  // AC10: every cap says what it dropped, on the terminal as well as in
+  // scope.md. A truncation an operator has to open a file to discover reads, on
+  // the terminal they were already looking at, as "there was nothing more".
+  const caps = result.caps;
+  const findingsCap = caps.findings;
+  if (findingsCap !== undefined) {
+    console.log(
+      `findings cap: limit=${findingsCap.counts.limit}/reviewer truncated=${findingsCap.counts.truncated} exempt=${findingsCap.counts.exempt} reviewers_truncated=${findingsCap.counts.reviewersTruncated}`,
+    );
+    for (const drop of findingsCap.drops) {
+      console.log(`  truncated ${drop.truncated} from ${drop.reviewer}: ${drop.truncatedIds.join(", ")}`);
+    }
+  }
+  const concurrency = caps.concurrency;
+  if (concurrency !== undefined) {
+    console.log(
+      `concurrency cap: cap=${concurrency.cap} effective=${concurrency.effective} waves=${concurrency.waves.length} queued=${concurrency.queued} holds_across_nesting=${
+        concurrency.holdsAcrossNesting ? "yes (declared)" : "no"
+      }`,
+    );
+  }
+  const spend = caps.spend;
+  if (spend !== undefined) {
+    console.log(
+      `spend: ${spend.spent === undefined ? "not recorded" : spend.spent} / ${spend.ceiling} ${spend.currency} (${spend.status})`,
+    );
+    if (spend.stop) {
+      // The package IS written — it is the record of the round running out of
+      // money — and then the command refuses. A cap that deleted its own
+      // evidence would be the failure this flow exists to end.
+      console.error(
+        `STOP: spend ${spend.spent} ${spend.currency} has reached the ${spend.ceiling} ${spend.currency} ceiling (over by ${spend.overBy}). Ask the operator before another round. The package was written; it is the record of the stop.`,
+      );
+      process.exitCode = 1;
+    }
+  }
+}
+
+/**
+ * `keryx review budget` — the spend and concurrency gate, run BEFORE dispatch.
+ *
+ * This is where "stops and asks" is real. `review ingest` can only record that a
+ * round went over, because by then the money is spent; this refuses first, with
+ * a non-zero exit, which is the only signal an orchestrator reliably notices.
+ */
+async function runBudget(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, BUDGET_FLAGS, "budget");
+  const spend = evaluateSpendCap(parseMoney(optionValue(args, "--spent"), "--spent"), {
+    ceiling: parseMoney(optionValue(args, "--ceiling"), "--ceiling"),
+  });
+  const reviewers =
+    optionValue(args, "--reviewers")
+      ?.split(",")
+      .map((item) => item.trim())
+      .filter(Boolean) ?? [];
+  const plan = planReviewerWaves(reviewers, {
+    cap: parseNonNegativeInteger(optionValue(args, "--parallel"), "--parallel"),
+    outstanding: parseNonNegativeInteger(optionValue(args, "--outstanding"), "--outstanding"),
+  });
+
+  console.log("# review budget");
+  console.log("");
+  console.log(`spend_ceiling: ${spend.ceiling} ${spend.currency}`);
+  console.log(`spent: ${spend.spent === undefined ? "not recorded" : spend.spent}`);
+  console.log(`spend_status: ${spend.status}`);
+  if (spend.status === "not-recorded") {
+    console.log(
+      "  `not recorded` is not `under`: nobody reported a spend, so staying inside the ceiling was never demonstrated.",
+    );
+  }
+  console.log("");
+  console.log(`concurrency_cap: ${plan.cap}`);
+  console.log(`outstanding_declared: ${plan.outstanding === undefined ? "not recorded" : plan.outstanding}`);
+  console.log(`effective_wave_size: ${plan.effective}`);
+  console.log(`waves: ${plan.waves.length}`);
+  console.log(`reviewers_queued: ${plan.queued}`);
+  console.log(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
+  if (!plan.holdsAcrossNesting) {
+    console.log(
+      "  The cap bounds THIS plan only. Nothing declared what job-orchestrator or flow-orchestrator already had in flight, and keryx cannot observe it. Pass --outstanding <n> to make the cap mean something across the nesting.",
+    );
+  }
+  plan.waves.forEach((wave, index) => {
+    console.log(`  wave ${index + 1}: ${wave.join(", ")}`);
+  });
+
+  if (spend.stop) {
+    console.error("");
+    console.error(
+      `STOP: ${spend.spent} ${spend.currency} spent against a ${spend.ceiling} ${spend.currency} ceiling (over by ${spend.overBy}). Do NOT dispatch another round. Ask the operator to raise the ceiling with --ceiling or to end the review.`,
+    );
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * `keryx review loop` — detection, not counting (AC9).
+ *
+ * Reads the review packages a flow already has on disk and the flow's persisted
+ * `attempts.count`, never this session's memory. Exits non-zero when it
+ * escalates, and the escalation does not consult the remaining round budget.
+ */
+async function runLoop(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, LOOP_FLAGS, "loop --flow <id>");
+  const flowRef = optionValue(args, "--flow") ?? args.find((item) => !item.startsWith("--"));
+  if (!flowRef) {
+    throw new Error("Usage: keryx review loop --flow <flow-id> [--task <Tn>]");
+  }
+  const taskId = optionValue(args, "--task");
+  const rounds = await readFlowReviewRounds(process.cwd(), flowRef);
+  const attempts = taskId === undefined ? undefined : await readTaskAttemptCount(process.cwd(), flowRef, taskId);
+  const detection = detectReviewLoop({ rounds, attempts });
+  console.log(renderLoopDetectionMarkdown(detection));
+  if (detection.escalate) {
+    console.error(
+      `ESCALATE: ${detection.signals.length} repetition signal(s) across ${detection.roundsSeen} rounds. Change strategy — do not spend the remaining rounds on the same approach. The round budget was deliberately not consulted.`,
+    );
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * `keryx review stack` — deterministic stack scoping for the reviewers whose
+ * checklists target a framework this repository may not use (flow 203, AC13,
+ * roadmap §3.2).
+ *
+ * Reads `package.json` once (never a model), then reads every installed
+ * review-category skill's `metadata.stack_requires` frontmatter and reports,
+ * per reviewer, whether its declared requirement is met — with the reason.
+ * `detected.uncertain` (a missing or unparsable `package.json`) forces every
+ * decision to `include: true`; see `review/stack.ts` for why that direction is
+ * the only one this command will not reverse.
+ *
+ * This command answers the scoping question; it does not by itself change
+ * dispatch. `review-orchestrator`'s routing table is where that answer would
+ * be consulted, and wiring it in is a follow-up — see the flow journal.
+ */
+async function runStack(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, STACK_FLAGS, "stack");
+  const cwd = process.cwd();
+  const detected = await detectProjectStack(cwd);
+  const decisions = await stackScopingForInstalledReviewers(cwd, detected);
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ detected, decisions }, null, 2));
+    return;
+  }
+  console.log(renderStackScopingMarkdown(detected, decisions));
+}
+
+/**
+ * Walk `.metaproject/skills/gdskills/review/*\/SKILL.md` (exact basename only,
+ * matching `walkSkillCatalog` in `metaproject-adapter.ts`) and decide each
+ * one's stack scoping. A reviewer with no `metadata.stack_requires` field — the
+ * majority, since only NestJS/React/MobX/Prisma-specific reviewers declare one
+ * — is a generic reviewer and always included. Never throws: a missing
+ * gdskills root or an unreadable category yields no decisions, not a failure.
+ */
+async function stackScopingForInstalledReviewers(cwd: string, detected: DetectedStack): Promise<StackScopingDecision[]> {
+  const reviewRoot = join(cwd, ".metaproject", "skills", "gdskills", "review");
+  let entries;
+  try {
+    entries = await readdir(reviewRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const decisions: StackScopingDecision[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const skillMdPath = join(reviewRoot, entry.name, "SKILL.md");
+    let content: string;
+    try {
+      content = await readFile(skillMdPath, "utf8");
+    } catch {
+      continue;
+    }
+    const requires = parseStackRequires(extractStackRequiresField(content));
+    decisions.push(scopeReviewerByStack(entry.name, requires, detected));
+  }
+  return decisions.sort((a, b) => a.reviewer.localeCompare(b.reviewer));
+}
+
+function parseNonNegativeInteger(raw: string | undefined, flag: string): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || String(parsed) !== raw.trim() || parsed < 0) {
+    throw new Error(`Invalid ${flag}: ${raw}. Expected a non-negative integer.`);
+  }
+  return parsed;
+}
+
+function parseMoney(raw: string | undefined, flag: string): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid ${flag}: ${raw}. Expected a non-negative number of US dollars.`);
+  }
+  return parsed;
+}
+
+/**
+ * `--parallel` / `--outstanding` on an ingest.
+ *
+ * Returns `undefined` when NEITHER was given, so a package whose caller said
+ * nothing about dispatch records `not recorded` rather than a one-wave plan it
+ * never made.
+ */
+function parseConcurrency(args: string[]): ManagedReviewInput["concurrency"] {
+  const cap = parseNonNegativeInteger(optionValue(args, "--parallel"), "--parallel");
+  const outstanding = parseNonNegativeInteger(optionValue(args, "--outstanding"), "--outstanding");
+  if (cap === undefined && outstanding === undefined) {
+    return undefined;
+  }
+  return {
+    ...(cap === undefined ? {} : { cap }),
+    ...(outstanding === undefined ? {} : { outstanding }),
+  };
 }
 
 /**
@@ -510,8 +784,14 @@ Usage:
   keryx review ingest --report <path> [--flow <id>] --ref <ref>
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--refuted <file|->]
+                      [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                      [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review budget [--spent <usd>] [--ceiling <usd>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review loop --flow <flow-id> [--task <Tn>]
+  keryx review stack [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
@@ -558,5 +838,46 @@ verification (attach/start/ingest):
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
   carried forward verbatim; with neither, that stage reads \`not recorded\`, which
   is not the same fact as \`dropped 0\`.
+
+caps (attach/start/ingest):
+  Findings are capped at ${DEFAULT_MAX_FINDINGS_PER_REVIEWER} per reviewer by default (--max-findings), with
+  \`blocker\` and \`blocking_merge\` findings EXEMPT and not consuming the budget.
+  The cap runs over reported findings only, never over the dismissal records:
+  truncating those would rebuild the unlogged triage the --refuted channel
+  exists to end. Everything it truncates is named, by reviewer and by id, in
+  \`scope.md\` under \`## Caps\` and on this terminal.
+  --spent/--spend-ceiling record the round's cost against a ${DEFAULT_SPEND_CEILING_USD} USD default
+  ceiling; over it, the package is still written and the command exits non-zero.
+  --parallel/--outstanding record the dispatch plan. Every cap that is not given
+  reads \`not recorded\`, never \`0\`.
+
+budget:
+  The gate to run BEFORE dispatching, where stopping is still possible. Exits
+  non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
+  orchestrator asks the operator instead of proceeding. Also prints the reviewer
+  dispatch waves for the concurrency cap (default ${DEFAULT_MAX_PARALLEL_REVIEWERS} in flight).
+  --outstanding <n> is what an enclosing orchestrator already has in flight.
+  WITHOUT it the cap bounds this plan only: keryx cannot observe subagents in
+  another process, so it does NOT bind the total across job-orchestrator ->
+  flow-orchestrator -> review-orchestrator, and it says so rather than implying
+  otherwise.
+
+loop:
+  Loop DETECTION, not counting. Escalates (exit non-zero) when the same finding
+  recurs in two rounds, or two consecutive rounds produce identical output —
+  regardless of the remaining round budget, which it deliberately never reads.
+  It reads the flow's review packages on disk and the persisted
+  \`tasks[].attempts.count\`, never a session's own memory: a resumed session
+  starts at zero while the real count does not.
+
+stack:
+  Deterministic stack scoping, no model call. Reads package.json once and every
+  installed review-category skill's \`metadata.stack_requires\`, then reports
+  per reviewer whether its declared requirement (nestjs, react, mobx, prisma)
+  is met. UNCERTAIN detection (package.json missing or unparsable) — and any
+  reviewer that declares no requirement — always resolves to \`include: true\`;
+  a stack-gated reviewer is excluded ONLY when detection ran cleanly and found
+  none of its declared tags. This command answers the scoping question; wiring
+  the answer into review-orchestrator's dispatch is a separate step.
 `);
 }

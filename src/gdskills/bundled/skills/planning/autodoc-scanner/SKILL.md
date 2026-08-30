@@ -5,7 +5,8 @@ description: >
   detects stack, identifies module boundaries, entry points, and dependencies.
   Use when: dispatched by autodoc-orchestrator Phase 1.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # autodoc-scanner

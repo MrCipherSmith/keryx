@@ -3,6 +3,10 @@
 // result types live there because they describe what the merge does, not what a
 // finding is.
 import type { VerificationCap, VerificationCounts, VerificationRejection } from "./verification";
+// Type-only for the same reason, in the other direction: `review/caps` imports
+// `ReviewFindingSeverity` from here as a type, and this imports the caps record
+// as a type. Both are erased, so neither is a runtime cycle.
+import type { ReviewCapsRecord } from "./caps";
 
 export const MANAGED_REVIEW_MODES = ["attach-review", "review-flow", "ingest"] as const;
 export type ManagedReviewMode = (typeof MANAGED_REVIEW_MODES)[number];
@@ -392,6 +396,41 @@ export type ManagedReviewInput = {
   scope?: ReviewScopeRecordLike | undefined;
   /** The counts half of {@link ManagedReviewInput.scope}, when that is all the caller has. */
   scopeCounts?: ReviewScopeCountsLike | undefined;
+  /**
+   * Findings cap, per reviewer. Defaults to
+   * {@link module:review/caps.DEFAULT_MAX_FINDINGS_PER_REVIEWER} — the default
+   * lives in code precisely so a caller that says nothing still gets a bound.
+   *
+   * Blockers and anything flagged `blocking_merge` are exempt and do not consume
+   * it. Whatever it truncates is named in `scope.md` under `## Caps`.
+   */
+  maxFindingsPerReviewer?: number | undefined;
+  /**
+   * What this round cost so far, in US dollars.
+   *
+   * Absent is recorded as `not recorded`, NOT as `0`: a round that never
+   * reported its spend has not demonstrated it stayed inside the ceiling.
+   */
+  spend?: number | undefined;
+  /** Defaults to {@link module:review/caps.DEFAULT_SPEND_CEILING_USD}. */
+  spendCeiling?: number | undefined;
+  /**
+   * The parallel dispatch plan, when the caller has one.
+   *
+   * `outstanding` is the subagent count the CALLER declares it already has in
+   * flight. It is the only thing that lets the cap say anything about the
+   * `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting,
+   * and it is a declaration rather than an observation — see
+   * {@link module:review/caps.ConcurrencyPlan.holdsAcrossNesting}.
+   */
+  concurrency?:
+    | {
+        cap?: number | undefined;
+        outstanding?: number | undefined;
+        /** Defaults to the coverage entries whose status is `run`. */
+        reviewers?: readonly string[] | undefined;
+      }
+    | undefined;
   now?: Date | undefined;
 };
 
@@ -497,6 +536,13 @@ export type ManagedReviewPackageResult = {
   verification: VerificationCounts;
   verificationRejections: readonly VerificationRejection[];
   verificationCaps: readonly VerificationCap[];
+  /**
+   * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).
+   *
+   * Returned as well as written into `scope.md` so the CLI can say STOP on a
+   * spend ceiling without re-reading the package it just wrote.
+   */
+  caps: ReviewCapsRecord;
 };
 
 export type FlowMatchResult = {

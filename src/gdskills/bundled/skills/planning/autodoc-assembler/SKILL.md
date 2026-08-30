@@ -5,7 +5,8 @@ description: >
   into a cohesive package: main README.md and navigation index.
   Use when: dispatched by autodoc-orchestrator Phase 5.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # autodoc-assembler

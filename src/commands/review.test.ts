@@ -302,3 +302,140 @@ test("`--scope` carries the drop REASONS into the package, not only the counts",
   expect(scope).toContain("lockfile");
   expect(scope).not.toContain("no pre-filter scope was supplied");
 });
+
+// ---------------------------------------------------------------------------
+// Flow 203 AC5-AC7, AC9, AC10 — the caps and the loop detector, from the CLI
+// ---------------------------------------------------------------------------
+
+test("AC6: `review budget` STOPS when spend has reached the ceiling", async () => {
+  // The gate that runs BEFORE dispatch, where stopping is still possible.
+  // `ingest` can only record that a round went over; by then the money is spent.
+  await reviewCommand(["budget", "--spent", "3.40"]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("STOP");
+  expect(errors.join("\n")).toContain("Ask the operator");
+});
+
+test("AC6: `review budget` under the ceiling proceeds", async () => {
+  await reviewCommand(["budget", "--spent", "0.40"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(logs.join("\n")).toContain("spend_status: under");
+});
+
+test("AC10: unreported spend reads `not recorded`, not `under`", async () => {
+  await reviewCommand(["budget"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(logs.join("\n")).toContain("spend_status: not-recorded");
+  expect(logs.join("\n")).toContain("`not recorded` is not `under`");
+});
+
+test("AC7/AC10: `review budget` plans waves and says whether the cap holds across nesting", async () => {
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f"]);
+  const output = logs.join("\n");
+
+  expect(output).toContain("concurrency_cap: 4");
+  expect(output).toContain("reviewers_queued: 2");
+  expect(output).toContain("holds_across_nesting: no");
+  expect(output).toContain("outstanding_declared: not recorded");
+});
+
+test("AC7: a declared outstanding count is the only thing that reaches the nesting", async () => {
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--outstanding", "2"]);
+  const output = logs.join("\n");
+
+  expect(output).toContain("effective_wave_size: 2");
+  expect(output).toContain("holds_across_nesting: yes");
+});
+
+test("AC5/AC10: an ingest over the cap truncates and says so on the terminal", async () => {
+  const many = Array.from({ length: 14 }, (_, index) => ({
+    ...FINDING,
+    id: `F-${String(index + 1).padStart(3, "0")}`,
+  }));
+  await writeFile(path.join(ROOT, "report.md"), reportWith(many), "utf8");
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-08-30-cli-cap",
+  ]);
+
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-08-30-cli-cap");
+  expect(await findingsOf(pkg)).toHaveLength(10);
+  // On the terminal the operator was already looking at, not only in a file
+  // they had no reason to open.
+  expect(logs.join("\n")).toContain("findings cap: limit=10/reviewer truncated=4");
+  expect(logs.join("\n")).toContain("truncated 4 from review-security-code");
+});
+
+test("AC6: an ingest over the ceiling still writes the package, then refuses", async () => {
+  await writeFile(path.join(ROOT, "report.md"), reportWith([FINDING]), "utf8");
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-08-30-cli-spend",
+    "--spent",
+    "5",
+  ]);
+
+  // The record of the stop survives; the command still refuses.
+  const scope = await readFile(
+    path.join(ROOT, ".metaproject", "reviews", "2026-08-30-cli-spend", "scope.md"),
+    "utf8",
+  );
+  expect(scope).toContain("STOPPED at the ceiling");
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("STOP: spend 5 USD");
+});
+
+test("AC9: `review loop` escalates on a repeated finding, whatever the budget", async () => {
+  const flowDir = path.join(ROOT, ".metaproject", "flows", "203-loop");
+  await mkdir(flowDir, { recursive: true });
+  await writeFile(
+    path.join(flowDir, "flow.json"),
+    JSON.stringify({
+      schemaVersion: 2,
+      id: "203",
+      slug: "loop",
+      title: "loop",
+      status: "in-progress",
+      createdAt: "2026-08-30T00:00:00.000Z",
+      updatedAt: "2026-08-30T00:00:00.000Z",
+      source: { type: "description", ref: null },
+      acChecksum: null,
+      acConfirmed: {},
+      pr: { url: null },
+      tasks: [{ id: "T1", title: "fix", kind: "implement", status: "todo", attempts: { count: 1, log: [] } }],
+      history: [],
+    }),
+    "utf8",
+  );
+  for (const [name, at] of [
+    ["round-1", "2026-08-30T01:00:00.000Z"],
+    ["round-2", "2026-08-30T02:00:00.000Z"],
+  ] as const) {
+    const dir = path.join(flowDir, "reviews", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: name, createdAt: at }), "utf8");
+    await writeFile(path.join(dir, "findings.json"), JSON.stringify([FINDING]), "utf8");
+    await writeFile(path.join(dir, "report.md"), `# ${name}\n`, "utf8");
+  }
+
+  await reviewCommand(["loop", "--flow", "203", "--task", "T1"]);
+
+  // One attempt spent out of three: a counter would say "keep going".
+  expect(logs.join("\n")).toContain("attempts_recorded: 1");
+  expect(logs.join("\n")).toContain("repeated-finding");
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("ESCALATE");
+});

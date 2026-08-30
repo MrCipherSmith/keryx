@@ -14,8 +14,8 @@ metadata:
   author: "MrCipherSmith"
   version: "1.3.0"
   category: "orchestration"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 # Flow Orchestrator
@@ -84,8 +84,8 @@ flowchart TD
   H -- "yes" --> I{"Ask user how to finish"}
   I -- "create PR" --> J["create PR and run review/fix loop"]
   J --> K{"review clean, PR mergeable?"}
-  K -- "no, attempts < 6" --> J
-  K -- "no, attempts = 6" --> R["enrich context and change fix strategy"]
+  K -- "no, attempts < 3" --> J
+  K -- "no, attempts = 3 or repetition detected" --> R["enrich context and change fix strategy"]
   R --> J
   K -- "yes" --> L["merge PR into recorded base branch"]
   L --> M["keryx flow implemented --pr"]
@@ -128,10 +128,21 @@ it already tried. The flow package does.
       ```
 
    5. Apply the Phase 4 attempt budget against the **persisted** count. If
-      `attempts.count` for the task has already reached six, do not re-dispatch
-      the same approach: go to the re-planning step (Phase 4, PR review/fix
-      loop, step 4) and record the decision in `journal.md`.
-   6. If the flow is `blocked`, read the blocking reason from `journal.md`,
+      `attempts.count` for the task has already reached **three**, do not
+      re-dispatch the same approach: go to the re-planning step (Phase 4, PR
+      review/fix loop, step 4) and record the decision in `journal.md`.
+   6. Run the repetition check before spending an attempt, whatever the count
+      says:
+
+      ```bash
+      keryx review loop --flow <id> --task <Tn>
+      ```
+
+      A non-zero exit means the same finding has recurred or two consecutive
+      rounds produced identical output. Go straight to the re-planning step.
+      Do not spend the remaining attempts on the same approach because the
+      budget has some left — that is the failure this check exists to catch.
+   7. If the flow is `blocked`, read the blocking reason from `journal.md`,
       resolve or escalate it, then `keryx flow unblock <id>`.
 4. If the user wants a new flow, continue at 0.1.
 
@@ -351,7 +362,23 @@ Before accepting implementation:
 1. Run focused tests for touched scope.
 2. Run `code-verifier`.
 3. Run `keryx health run` when Code Health is enabled.
-4. Run `review-orchestrator` with relevant domains.
+4. Check the bounds, then run `review-orchestrator` with relevant domains.
+
+   ```bash
+   keryx review budget --spent <usd-so-far> --outstanding <subagents you already have in flight>
+   ```
+
+   A non-zero exit means the spend ceiling (3 USD by default) has been reached:
+   **stop and ask the user** rather than dispatching another fan-out.
+
+   `--outstanding` is the part that matters here. `review-orchestrator`
+   dispatches reviewers in parallel and runs *nested* under this skill, and
+   keryx cannot observe subagents in another process. Passing the count you
+   already have in flight is the only thing that makes the concurrency cap mean
+   anything across the nesting; omit it and the cap bounds the reviewer fan-out
+   alone, which the review record then states plainly rather than implying
+   otherwise.
+
 5. If findings require code changes, dispatch fix work through `task-implementer`
    and record the fix task in the flow.
 6. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
@@ -397,18 +424,45 @@ How should this flow end?
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
    task, dispatch `task-implementer`, push the fix, and run review again.
-3. Allow at most six review/fix attempts for the current approach. Count an
-   attempt when review/check results are available, including a clean result,
+3. Allow at most **three** review/fix attempts for the current approach. Count
+   an attempt when review/check results are available, including a clean result,
    and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the
    count survives a session restart. Read the budget from that task's
    `attempts.count` in `flow.json`, never from this session's memory.
-4. If attempt six is not clean, do not blindly repeat the same loop. Enrich
-   context from the findings, affected graph, relevant wiki, and
-   health/testing artifacts; identify the likely cycle cause; choose a
-   materially different fix strategy or split the work into narrower tasks;
-   record the decision in `journal.md`; then continue with the enriched
-   context.
-5. Never merge while findings or required checks remain unresolved. If the
+
+   Three, and the same three that `task-implementer` and `job-orchestrator`
+   already use. This skill said six, which was an outlier with nothing behind
+   it. The evidence converges on three: *"the first three to four repair
+   iterations account for most achievable gains"*
+   ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
+   **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
+   is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the
+   agent finds the fix and then destroys it, throwing away ~15 points by not
+   stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
+   Rounds four through six were not buying convergence; they were buying
+   regressions.
+
+4. **Before** spending an attempt, and regardless of how much budget is left,
+   run the repetition check:
+
+   ```bash
+   keryx review loop --flow <id> --task <Tn>
+   ```
+
+   It escalates (non-zero exit) when the same finding recurs in two rounds, or
+   two consecutive rounds produce identical review output. It reads the review
+   packages on disk and the persisted `attempts.count`, not this session's
+   memory, and it deliberately never reads the remaining budget — an agent
+   emitting the identical failing output three times must be caught on the
+   second, not after the budget runs out.
+
+5. If the third attempt is not clean, **or the repetition check escalated
+   earlier**, do not blindly repeat the same loop. Enrich context from the
+   findings, affected graph, relevant wiki, and health/testing artifacts;
+   identify the likely cycle cause; choose a materially different fix strategy
+   or split the work into narrower tasks; record the decision in `journal.md`;
+   then continue with the enriched context.
+6. Never merge while findings or required checks remain unresolved. If the
    re-planned approach still cannot produce a mergeable PR, leave the flow
    `in-progress` and report the blocker instead of forcing completion.
 

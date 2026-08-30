@@ -28,8 +28,13 @@ Usage:
   keryx review ingest --report <path> [--flow <id>] --ref <ref>
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]
+                      [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                      [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review budget [--spent <usd>] [--ceiling <usd>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+  keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
@@ -61,6 +66,44 @@ drop list reaches the review record. `--append <package>/scope.md` writes the
 same block directly and now replaces an existing one rather than appending a
 second, but `--scope` is the supported route because it does not depend on two
 commands hitting the same file in the right order.
+
+## Check the bounds before you dispatch
+
+```bash
+keryx review budget --spent 2.10 --reviewers review-logic,review-style,review-security-code --outstanding 1
+```
+
+Three caps, all with defaults in code so a caller that says nothing still gets a
+bound: **10 findings per reviewer** (blockers exempt), a **3.00 USD** spend
+ceiling, and **4** reviewers in flight at once. This command exits non-zero when
+the spend ceiling is reached, which is the point at which stopping is still
+possible — an ingest can only record that a round already went over.
+
+`--outstanding` is what an enclosing orchestrator already has in flight. It
+matters because `review-orchestrator` runs nested under `flow-orchestrator` and
+`job-orchestrator`, and keryx cannot see subagents in another process: without a
+declared count the cap bounds this dispatch alone, and the record says so rather
+than implying it covered more.
+
+**Every cap records what it dropped** — the truncated finding ids, the queued
+reviewers, the stop — in the package's `scope.md` under `## Caps`. A cap that
+did not run prints `not recorded`, never `0`.
+
+## Stop a fix loop that is not converging
+
+```bash
+keryx review loop --flow 203 --task T4
+```
+
+The round bound is three attempts. But a bound that fires on count alone lets an
+agent emit the identical failing output three times and spend the whole budget
+before anything notices. This escalates — exit 1 — when the same finding recurs
+in two rounds or two consecutive rounds produce identical output, **regardless of
+the remaining budget**, which it deliberately never reads.
+
+It reads the review packages on disk and `tasks[].attempts.count` from
+`flow.json`, not the session's memory: a resumed orchestrator's context starts at
+zero while the real count does not.
 
 ## Verify the findings before you report them
 

@@ -12,8 +12,8 @@ metadata:
   version: "1.1.0"
   category: "analysis"
   agent_worthy: true
+  compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode"
 ---
 
 # Issue Analyzer

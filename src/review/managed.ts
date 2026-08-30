@@ -11,6 +11,14 @@ import {
   type VerificationMergeResult,
 } from "./verification";
 import {
+  applyFindingsCap,
+  evaluateSpendCap,
+  planReviewerWaves,
+  renderCapsMarkdown,
+  type ConcurrencyPlan,
+  type ReviewCapsRecord,
+} from "./caps";
+import {
   DEFAULT_VERIFICATION_MODE,
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
@@ -97,13 +105,29 @@ export async function createManagedReviewPackage(
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
 
+  // The findings cap (AC5): 10 per reviewer, blockers exempt, default in code.
+  //
+  // It runs over the SURVIVING reported findings only, and over neither of the
+  // other two channels, for a reason that is the whole point of this pipeline:
+  // `fromVerifierRefutations` and `input.refuted` are the record of what was
+  // raised and then DISMISSED. Truncating those would rebuild by hand the exact
+  // state flow 202 measured — a corpus holding only the survivors of an unlogged
+  // triage, which reports 100% precision whatever the reviewers got right.
+  // A reading cap belongs on the report, never on the dismissals.
+  //
+  // Whatever it removes is named, by reviewer and by id, in `scope.md`. A cap
+  // that truncated silently would read as "there was nothing more".
+  const findingsCap = applyFindingsCap(verification.retained, {
+    limit: input.maxFindingsPerReviewer,
+  });
+
   // What the round reported, then what the verifier removed, then what the round
   // itself refuted — one array, one file, one gate. A separate `refuted.json`
   // would be a second thing every consumer has to remember to read, and the
   // consumer that forgets keeps counting zero wrong findings, which is the state
   // this exists to leave.
   const findings = [
-    ...verification.retained,
+    ...findingsCap.retained,
     ...fromVerifierRefutations(verification.refuted),
     ...fromRefutedSource(input.refuted, reviewers, flowMatch !== null),
   ];
@@ -178,11 +202,29 @@ export async function createManagedReviewPackage(
   // block is the only record of the drops and is carried forward verbatim.
   const carried = input.scope === undefined ? await readPreFilterScopeBlock(packageDir) : undefined;
 
+  // AC10. Every cap that ran is on the record with a count, and every cap that
+  // did NOT run is on the record as `not recorded` rather than as a zero.
+  //
+  // The spend ceiling is EVALUATED here and does not refuse the write. The
+  // package is the record of what the round did, including the record of it
+  // running out of money, and a cap that stopped the write would delete the
+  // evidence that it fired — the same class of failure as an ingest overwriting
+  // the pre-filter's drop table. The refusal is the caller's: the CLI exits
+  // non-zero and says STOP, and `keryx review budget` refuses BEFORE the spend.
+  const concurrency = concurrencyPlan(input, coverage);
+  const caps: ReviewCapsRecord = {
+    findings: { counts: findingsCap.counts, drops: findingsCap.drops },
+    ...(input.spend === undefined && input.spendCeiling === undefined
+      ? {}
+      : { spend: evaluateSpendCap(input.spend, { ceiling: input.spendCeiling }) }),
+    ...(concurrency === undefined ? {} : { concurrency }),
+  };
+
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried),
+    renderScope(input, flowMatch, at, verification, carried, caps),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -200,7 +242,34 @@ export async function createManagedReviewPackage(
     verification: verification.counts,
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
+    caps,
   };
+}
+
+/**
+ * The dispatch plan the caps record carries, or `undefined` when the caller
+ * supplied no concurrency input at all.
+ *
+ * `undefined` is deliberately distinct from "a plan with one wave". A package
+ * whose caller said nothing about dispatch renders `not recorded`; a package
+ * whose caller planned four reviewers into one wave renders `queued: 0`. Only
+ * the second is a statement that nothing was deferred.
+ *
+ * The reviewer list defaults to the coverage entries that actually ran, because
+ * that is the set `review-orchestrator` dispatched and the set whose waves the
+ * record is about.
+ */
+function concurrencyPlan(input: ManagedReviewInput, coverage: ReviewCoverageEntry[]): ConcurrencyPlan | undefined {
+  const requested = input.concurrency;
+  if (requested === undefined) {
+    return undefined;
+  }
+  const reviewers =
+    requested.reviewers ?? coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  return planReviewerWaves(reviewers, {
+    cap: requested.cap,
+    outstanding: requested.outstanding,
+  });
 }
 
 /**
@@ -1419,6 +1488,7 @@ function renderScope(
   at: string,
   verification: VerificationMergeResult<NormalizedReviewFinding>,
   carriedPreFilter: string | undefined,
+  caps: ReviewCapsRecord,
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -1438,7 +1508,9 @@ ${renderStageCountsMarkdown({
   verification: verification.counts,
   rejections: verification.rejections,
   caps: verification.caps,
-})}`;
+})}
+
+${renderCapsMarkdown(caps)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

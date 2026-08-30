@@ -1104,6 +1104,11 @@ keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path
 keryx review ingest --report <path> [--flow <id>] --ref <ref>
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--refuted <file|->]
+                    [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                    [--parallel <n>] [--outstanding <n>]
+keryx review budget [--spent <usd>] [--ceiling <usd>]
+                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
@@ -1123,6 +1128,8 @@ flag that is silently dropped writes nothing and still reports success.
 | `complete` | Validate the package, record what became of its findings, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
+| `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
+| `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
@@ -1169,6 +1176,100 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### Caps — findings, spend, concurrency
+
+Nothing in the review pipeline was capped: `budget.max_findings` was required by
+the schema with no default anywhere, there was no cost ceiling, and reviewers
+were dispatched in parallel with no wave size while `review-orchestrator` itself
+runs nested under `flow-orchestrator` and `job-orchestrator`.
+
+The defaults are in code (`src/review/caps.ts`), so a caller that says nothing
+still gets a bound.
+
+| Cap | Default | Flag | What it does |
+|---|---|---|---|
+| Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
+| Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
+| Concurrency | **4** reviewers in flight | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. |
+
+**Every cap records what it dropped**, in the package's `scope.md` under
+`## Caps` and on the terminal — a count, and for the findings cap the id of every
+truncated finding. A cap that truncates in silence reads as "there was nothing
+more". A cap that did not run prints `not recorded`, never `0`: "dropped nothing"
+and "never ran" are different facts.
+
+The findings cap runs over the reported findings only, never over the dismissal
+records reaching the package through `--refuted` or through a `refuted` verdict.
+Those are the record of what was raised and then dismissed; truncating them would
+rebuild a corpus of triage survivors, which measures 100% precision whatever the
+reviewers got right.
+
+**The spend cap is currency, not tokens.** A token count is not comparable across
+models — the same 200k tokens differ by more than an order of magnitude in cost
+between the cheapest and the most capable model in one vendor's line-up — so a
+token ceiling is either inert or ruinous depending on an unrecorded model choice.
+Currency is the unit the decision is made in and the unit the operator's budget
+is denominated in, and token counts convert to it while the reverse does not.
+3.00 USD follows SWE-agent's $3/instance cap; a keryx review round is one target
+and one reviewer fan-out, the analogue of one instance.
+
+**The concurrency cap does not bind the nested total on its own, and says so.**
+keryx is a CLI invoked once per command: it cannot observe subagents running in
+another orchestrator's process, and there is no lease between the three
+orchestration levels. `--outstanding <n>` is an enclosing orchestrator declaring
+what it already has in flight, which shrinks the effective wave; it is a
+declaration, not an observation, and nothing verifies it. The record therefore
+carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
+than implying a guarantee that does not exist.
+
+### `review budget`
+
+The gate to run **before** dispatching reviewers, where stopping is still
+possible. `review ingest --spent` can only record that a round went over; by then
+the money is spent.
+
+```bash
+keryx review budget --spent 2.10 --reviewers review-logic,review-style --outstanding 1
+```
+
+Exits 1 when spend has reached the ceiling, with a message naming the overage and
+asking the operator. Prints the dispatch waves, the queue size, and whether the
+concurrency cap holds across the nesting.
+
+| Flag | Description |
+|---|---|
+| `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
+| `--ceiling <usd>` | Override the 3.00 USD default. |
+| `--reviewers a,b` | The reviewer set to plan into waves. |
+| `--parallel <n>` | Override the wave size (default 4). |
+| `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+
+### `review loop`
+
+Loop **detection**, not counting. The round bound fires on attempt count alone,
+so an agent producing the identical failing output three times spends the whole
+budget before anything notices — a counter cannot tell "converging slowly" from
+"stuck".
+
+```bash
+keryx review loop --flow 203 --task T4
+```
+
+Escalates (exit 1) when the same finding recurs in two rounds, or two consecutive
+rounds produce identical review output. **Regardless of the remaining round
+budget**, which it deliberately never reads: a detector handed the remaining
+budget is a detector that can be argued out of firing.
+
+It reads real persisted state — the flow's review packages on disk, ordered by
+`manifest.createdAt`, and `tasks[].attempts.count` from `flow.json` — never a
+session's own memory. A resumed orchestrator's context starts at zero while the
+real count does not.
+
+A finding's identity is its `dedupe_key`, then its `global_id`, then a derived
+key over reviewer, file, symbol, line and problem text. Never the display `id`:
+`F-001` denotes a different finding in every round, so a detector keyed on it
+would fire on the second round of every flow whatever happened.
 
 ### Verification — `--verifications`, `--verification-mode`
 

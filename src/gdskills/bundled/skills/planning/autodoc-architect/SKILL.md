@@ -6,7 +6,8 @@ description: >
   points, and cross-cutting concerns.
   Use when: dispatched by autodoc-orchestrator Phase 3.
   NOT for: direct user invocation.
-version: 1.0.0
+metadata:
+  version: 1.0.0
 ---
 
 # autodoc-architect

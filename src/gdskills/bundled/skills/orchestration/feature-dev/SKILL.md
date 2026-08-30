@@ -11,8 +11,8 @@ metadata:
   author: "MrCipherSmith"
   version: "2.0.0"
   category: "workflow"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
-compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
 <SUBAGENT-STOP>

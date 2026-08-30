@@ -29,6 +29,42 @@ Before creating or editing a skill, ask and confirm:
 
 `SKILL.md` is always required. Platform variants are optional — if absent, `keryx update` installs `SKILL.md` as fallback.
 
+## Frontmatter Fields (Agent Skills spec alignment)
+
+`SKILL.md` frontmatter follows the published Agent Skills specification
+(agentskills.io — the format Zed adopted when it dropped its own Rules
+Library), with two deliberate additions. Flow 203 removed two accidental
+divergences that had crept in; keep both fixes intact when authoring or
+editing a skill:
+
+- **`version` lives in `metadata.version` only.** The spec has no top-level
+  `version` field — its own example nests it under `metadata`. Do not
+  reintroduce a top-level `version:` key; nothing in this codebase reads one.
+- **`compatibility` carries the spec's meaning, not ours.** The spec defines
+  `compatibility` as environment requirements written in prose (e.g. "Requires
+  git, docker, jq, and access to the internet"). Our machine-readable CSV of
+  supported harnesses (`cursor,codex,zed,opencode,claude`) lives instead at
+  `metadata.compatible_harnesses`. Do not put a harness CSV back into
+  `compatibility` — if a skill genuinely needs to declare environment
+  requirements, write them there as prose, per the spec.
+
+Two divergences are deliberate and stay — a later pass must not "fix" them
+back toward the spec:
+
+- **`triggers`** — a list of trigger phrases. Not in the spec, and absent from
+  every skill collection surveyed while building this convention; the spec's
+  only discovery mechanism is semantic matching on `description`. `triggers`
+  gives the router a cheap, deterministic first-pass match before falling back
+  to semantic matching. It is additive and costs nothing as long as
+  `description` stays self-sufficient on its own — never let `triggers` carry
+  meaning `description` lacks.
+- **Per-skill `input-contract.schema.json` / `output-contract.schema.json`**
+  (sibling files, not frontmatter keys) — genuinely unique to this codebase.
+  Nothing in the spec or any surveyed collection defines one, because the spec
+  assumes a single agent reading a single skill file. This project dispatches
+  typed payloads to subagent workers instead, which the spec does not attempt
+  to address.
+
 ## Global Sync Mapping
 - `SKILL.cursor.md` (or `SKILL.md`) → `~/.cursor/skills/<skill-name>/SKILL.md`
 - `SKILL.codex.md` (or `SKILL.md`) → `${CODEX_HOME:-~/.codex}/skills/<skill-name>/SKILL.md`

@@ -45,6 +45,27 @@ If a more specific module reviewer also applies, run both.
 
 ---
 
+## Iron Laws
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+   name the input, call, or condition that reaches the code, you have an
+   observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code
+   under review. Do not report a safe API because it could be misused, or a
+   pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears
+   at several sites, report it once and list every site. Ten findings that are one
+   finding hide the other nine problems.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+---
+
 ## Orchestrated Review Contract
 
 When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `skills/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
@@ -88,6 +109,16 @@ observation is theatre, not rigour.
 - **Fix**: move to domain module, invert dependency, or extract a truly shared abstraction
 ```
 
-Severity guidance: importing feature code into core or adding feature-specific public API is
-usually `major`; broad shared API breakage can be `blocker`.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no rubric of its own; what follows is where its recurring
+conditions land under that rubric.
+
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| A core API change that breaks a named consumer at runtime | `blocker` | Crash at a named call site |
+| Importing feature code into core; adding feature-specific public API to core; inverted dependency | `major` | Named trigger (the import) and named outcome (the cycle or the leak), but structural — not one of the four shapes |
+| A generic helper whose names or types lean on one feature's language | `minor` | Works today; the cost is to the next module that needs it |
+| A blast-radius concern with no named consumer | `info` | Shared law 1 |
+
+"Broad blast radius" is not by itself a `blocker`. Name the consumer that breaks.
 

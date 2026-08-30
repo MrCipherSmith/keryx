@@ -79,7 +79,7 @@
         "max_prompt_tokens": { "type": ["integer", "null"], "minimum": 1000 },
         "max_output_tokens": { "type": ["integer", "null"], "minimum": 500 },
         "max_runtime_ms": { "type": ["integer", "null"], "minimum": 1000 },
-        "max_findings": { "type": ["integer", "null"], "minimum": 1 }
+        "max_findings": { "type": ["integer", "null"], "minimum": 1, "default": 10, "description": "Findings a reviewer may report. Per reviewer, not per review: a global cap on a fan-out is spent by whichever reviewer runs first. Blockers and merge-blocking findings are exempt and consume no budget. Applies to reported findings only, never to dismissal or refutation records - truncating those would rebuild the triage-survivor corpus that made precision unmeasurable." }
       }
     },
     "model": {
