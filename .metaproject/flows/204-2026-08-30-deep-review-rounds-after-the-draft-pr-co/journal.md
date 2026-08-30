@@ -592,3 +592,48 @@ the head-resolution PRECEDENCE for `pr` targets, recorded under B1 above: the
 review's "or the PR head for a `pr` target" would make condition 3 pass on
 exactly the divergence it was added to detect, so the local checkout wins and
 the PR head is the fallback rather than the other way round.
+- 2026-08-30T07:11:54.752Z - task-done: T1: Collect remaining context
+- 2026-08-30T07:11:55.036Z - task-done: T2: Implement per plan
+- 2026-08-30T07:11:55.320Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-30T07:11:55.606Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-30T07:11:55.894Z - task-done: T5: Baseline: record test/typecheck state
+- 2026-08-30T07:11:56.178Z - task-done: T6: Blast radius computed from gdgraph affected, ranked, capped, drops recorded
+- 2026-08-30T07:11:56.442Z - task-done: T7: Regression scope rejects non-regression findings in code
+- 2026-08-30T07:11:56.750Z - task-done: T8: Recompute the blast radius on changed-file set change and always on the final round
+- 2026-08-30T07:11:57.027Z - task-done: T9: Test: blast radius is computed and every capped drop is recorded
+- 2026-08-30T07:11:57.304Z - task-done: T10: review gate in flow complete, five conditions
+- 2026-08-30T07:11:57.597Z - task-done: T11: Clean defined positively per finding; dismissal needs a recorded human decision
+- 2026-08-30T07:11:57.897Z - task-done: T12: Test: round cap with unsatisfied gate leaves the flow in-progress
+- 2026-08-30T07:11:58.183Z - task-done: T13: Collect PR comments from all three sources, bots as humans
+- 2026-08-30T07:11:58.466Z - task-done: T14: External findings: source, external_ref, classified severity, never silently dropped
+- 2026-08-30T07:11:58.748Z - task-done: T15: Verifier cannot refute an external finding alone; answered-disagree still replies
+- 2026-08-30T07:11:59.026Z - task-done: T16: Reply once at the end, two sentences, threaded, enforced in code
+- 2026-08-30T07:11:59.315Z - task-done: T17: Never resolve a thread we did not open
+- 2026-08-30T07:11:59.613Z - task-done: T18: Test: one reply and one disposition per comment; idempotent across restart
+- 2026-08-30T07:11:59.903Z - task-done: T19: Model tiers in skills; a concrete model name fails a test
+- 2026-08-30T07:12:00.203Z - task-done: T20: Tier resolution per provider; unknown provider inherits the session model
+- 2026-08-30T07:12:00.481Z - task-done: T21: Deterministic tier assignment recorded in the dispatch
+- 2026-08-30T07:12:00.776Z - task-done: T22: Rewrite model-selection.mdc; it forbids adaptive selection today
+- 2026-08-30T07:12:01.062Z - task-done: T23: Brevity rule for every outward GitHub artifact, enforced not advised
+- 2026-08-30T07:12:01.331Z - task-done: T24: Verify both mirrors; bundled-rule and review-mirror guards pass
+- 2026-08-30T07:12:01.630Z - task-done: T25: Quality gate: typecheck, full suite against baseline, guards, doc-links
+- 2026-08-30T07:13:30.611Z - ac-confirmed: AC1: src/review/blast-radius.ts computeBlastRadius + ReviewRoundManifest scope_b in src/review/types.ts record the set, the depth and every capped drop; src/review/blast-radius.test.ts asserts the drop list is non-empty when the cap bites.
+- 2026-08-30T07:13:30.886Z - ac-confirmed: AC2: computeBlastRadius walks keryx gdgraph affected from the changed files, ranks by edge distance, bounds by depth 2 / 40 files (both measured over 80 commits); no code path takes a model-chosen file list.
+- 2026-08-30T07:13:31.166Z - ac-confirmed: AC3: screenBlastRadiusFindings in src/review/blast-radius.ts rejects outside-set findings, findings under the severity floor and findings with no link to the change, in code; the reviewer deny-list was removed because it screened by author, not content.
+- 2026-08-30T07:13:31.447Z - ac-confirmed: AC4: blastRadiusRecomputePlan (src/review/blast-radius.ts:552) forces a recompute when the changed-file set differs and unconditionally on the final round; covered in blast-radius.test.ts.
+- 2026-08-30T07:13:31.765Z - ac-confirmed: AC5: src/flow/review-gate.ts implements the five conditions and is wired as the review gate in src/flow/service.ts; src/flow/review-gate.e2e.test.ts drives flow init/freeze/start + review ingest + flow complete through the real CLI.
+- 2026-08-30T07:13:32.090Z - ac-confirmed: AC6: reviewFindingsGate requires a terminal disposition per finding: fixed needs a commit SHA and a verifier verdict against it, refuted needs method and evidence, the three wont-fix dismissals need a recorded human decision, answered-disagree needs a reply URL. Absence never clears a finding — the check runs over the latest state of every finding ever raised.
+- 2026-08-30T07:13:32.392Z - ac-confirmed: AC7: flow complete refuses while the review gate is unsatisfied; the round cap is reported as the blocker and the flow stays in-progress. Covered in src/flow/review-gate.test.ts and end to end in review-gate.e2e.test.ts.
+- 2026-08-30T07:13:32.667Z - ac-confirmed: AC8: collectPrComments reads pulls/comments, pulls/reviews and issues/comments; bot authors take the same path as humans — only our own identity is excluded. src/review/pr-comments.test.ts covers all three sources.
+- 2026-08-30T07:13:32.938Z - ac-confirmed: AC9: externalFindingsFromComments sets source: external and external_ref, and classifies severity from the review state (CHANGES_REQUESTED -> major, otherwise minor). Lowering requires a terminal disposition with a reason.
+- 2026-08-30T07:13:33.163Z - ac-confirmed: AC10: The verifier cannot terminate an external finding: an external finding capped at refuted is rejected by the review gate, which requires answered-disagree plus a reply URL.
+- 2026-08-30T07:13:33.466Z - ac-confirmed: AC11: postReplyPass refuses without --final; enforceReplyBrevity cuts to two sentences AND 600 characters, whole sentences first, then a word-boundary cut with the link. --max-sentences/--max-chars expose both from the CLI (src/commands/review-comments-cli.test.ts).
+- 2026-08-30T07:13:33.730Z - ac-confirmed: AC12: The GitHub port rejects every resolve/hide/minimise/edit/delete path including the GraphQL resolveReviewThread endpoint (src/review/pr-comments.ts guardGitHubRequest); a resolve attempt fails at the port.
+- 2026-08-30T07:13:34.109Z - ac-confirmed: AC13: Reply state is durable in .metaproject/reviews/pr-comments/<repo>__<n>.json; recordSeenComments plus the in-flight marker and findPostedReply make a restart mid-pass reply exactly once. Every collected comment carries one disposition or the gate fails.
+- 2026-08-30T07:13:34.387Z - ac-confirmed: AC14: concreteModelDeclarations (src/gdskills/model-tier.ts:758) is the executable half; src/gdskills/model-tier.test.ts walks every real SKILL.md and fails on a model declared instead of a tier.
+- 2026-08-30T07:13:34.629Z - ac-confirmed: AC15: rankDiscoveredModels ranks whatever the provider reports at runtime; when nothing is discoverable, tier_resolution falls back to session-fallback and every tier resolves to the session model — never a downgrade, never a dispatch failure.
+- 2026-08-30T07:13:34.888Z - ac-confirmed: AC16: assignModelTier derives the tier from scope, attempt count, verifier method and severity, and the result plus tier_resolution is written into the dispatch (contracts/subagent-dispatch.schema.json). No model is asked to rate its own difficulty.
+- 2026-08-30T07:13:35.141Z - ac-confirmed: AC17: src/gdskills/bundled/rules/core/model-selection.mdc rewritten: no provider model names, size words only, and the ask-before-changing-a-model mandate that made adaptive selection impossible is gone. Mirrored to .metaproject/rules/core/.
+- 2026-08-30T07:13:35.397Z - ac-confirmed: AC18: review-orchestrator SKILL.md section 'One rule, applied to every outward surface' governs PR bodies, comments and replies; enforced in code for replies by enforceReplyBrevity, with the detail linked from the flow package.
+- 2026-08-30T07:13:35.658Z - ac-confirmed: AC19: Both trees carry every skill and rule edit; diff -q on review-orchestrator SKILL.md is identical, the bundled-rule guard and the review-mirror guard pass in bun run test:guards (161 pass / 0 fail).
+- 2026-08-30T07:13:35.981Z - ac-confirmed: AC20: bun run typecheck clean; bun test 5937 pass / 18 skip / 0 fail; bun run test:guards 161 pass / 0 fail; bun run check:doc-links 1130 links / 0 broken.
