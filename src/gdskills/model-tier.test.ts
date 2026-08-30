@@ -643,6 +643,11 @@ describe("AC14: skills declare a tier, never a model name", () => {
   });
 
   test("no installed skill declares a concrete model either", () => {
+    // The same guard the bundled sweep gets, for the same reason. `skillFiles`
+    // returns `[]` for a root that is not there, so without this the sweep would
+    // report "no offenders" for a tree that does not exist — a guard passing
+    // vacuously is the shape this flow found five times over.
+    expect(skillFiles(INSTALLED_SKILLS).length).toBeGreaterThan(20);
     const offenders: string[] = [];
     for (const file of skillFiles(INSTALLED_SKILLS)) {
       for (const line of concreteModelDeclarations(readFileSync(file, "utf8"))) {
