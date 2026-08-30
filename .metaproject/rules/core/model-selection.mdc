@@ -101,6 +101,23 @@ Do not "fix" a fallback by adding model ids to the code. Add a size word to the
 hints if one genuinely applies, or leave it: running on the session's model is a
 correct answer.
 
+## Where this actually runs
+
+Two places, and they are not the same shape:
+
+- **`spawn_subagent`** (`src/harness/tool/builtin/spawn-subagent-tool.ts`) takes an
+  optional `model_tier` input and does the rest in code: it builds the tier map
+  with `buildTierMap` from its host's detection result, hands it to
+  `resolveChildModel`, and records the outcome on the dispatch's run trace.
+  Omitting `model_tier` inherits the parent's model, exactly as before the field
+  existed.
+- **An orchestrator authoring a dispatch document** calls `decideDispatchModel`,
+  which assigns the tier from signals (below), resolves it, and returns the
+  `model` block the contract schema expects.
+
+Nothing reads a recorded resolution back and checks it. These fields explain a
+finished run; they do not gate one.
+
 ## Choosing the tier
 
 The orchestrator assigns the tier from signals it already holds
@@ -138,7 +155,8 @@ the three outcomes occurred, and what was on the table when it did —
 "Fell back to the session model" and "assigned the session model because it
 ranked there" are different facts. A run that cannot be explained afterwards is
 what these fields exist to prevent. Record them on every dispatch that resolves
-a tier.
+a tier — `decideDispatchModel` returns all four together, so recording them is
+one call rather than four decisions.
 
 ## Mandatory behavior
 

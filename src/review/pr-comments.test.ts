@@ -671,6 +671,27 @@ describe("AC11/AC18 brevity", () => {
 
     // And the mid-sentence use is still not a boundary: `etc. and` does not split.
     expect(splitSentences("Fixed the parser, the writer, etc. and the docs.")).toHaveLength(1);
+
+    // The abbreviation is still matched in either case — the `i` flag was removed
+    // from this regex, so this is the half of it that could have been lost.
+    expect(splitSentences("Fixed the parser, ETC. and the docs.")).toHaveLength(1);
+    expect(splitSentences("Compared them, E.g. in the parser. Recorded.")).toHaveLength(2);
+  });
+
+  test("the lookahead discriminates case, whatever the engine does with /iu", () => {
+    // This is the assertion that would have caught it. The mask was written
+    // `/giu` with a `\p{Ll}` lookahead; under `iu` the spec case-folds the
+    // property escape, so `\p{Ll}` matches `A` too and the lookahead stops
+    // discriminating — reverting the mask to the pre-fix behaviour. Bun 1.3.11
+    // does not fold it; CI's engine does. The suite was green locally and red in
+    // CI on the same commit.
+    //
+    // So the property is asserted directly on the regex the mask builds, not
+    // only through its effect on a sentence count.
+    const lowercaseFollows = /\betc\.(?=\s+\p{Ll})/gu;
+    expect(lowercaseFollows.test("etc. and the docs")).toBe(true);
+    lowercaseFollows.lastIndex = 0;
+    expect(lowercaseFollows.test("etc. Also updated")).toBe(false);
   });
 
   test("inline code containing a full stop is not a boundary", () => {

@@ -924,7 +924,16 @@ export function splitSentences(text: string): string[] {
     // read as sentence ends because what follows is not lowercase. That costs a
     // truncation, which is recorded and carries a link. Under-counting costs the
     // reviewer a wall of text, which is what this budget exists to prevent.
-    masked = masked.replace(new RegExp(`\\b${escapeRegExp(abbreviation)}(?=\\s+\\p{Ll})`, "giu"), stash);
+    //
+    // The `i` flag is spelled out per letter instead of being set, and that is
+    // not style. With `iu`, `\p{Ll}` in the lookahead is itself subject to case
+    // folding, so it matches `A` as well as `a` and stops discriminating — the
+    // mask reverts to exactly the pre-fix behaviour this lookahead was added to
+    // remove. Bun 1.3.11 does not fold it and CI's engine does; the spec is on
+    // CI's side. A guard that depends on which engine reads it is not a guard,
+    // so the abbreviation carries its own case-insensitivity and the lookahead
+    // stays case-sensitive under `u` alone.
+    masked = masked.replace(new RegExp(`\\b${caseInsensitiveLiteral(abbreviation)}(?=\\s+\\p{Ll})`, "gu"), stash);
   }
   const restore = (value: string): string =>
     value.replace(/%%KERYX-SPAN-(\d+)%%/g, (_, index: string) => spans[Number(index)] ?? "");
@@ -949,6 +958,23 @@ function isBareLink(part: string): boolean {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * A literal matched in either case, without setting the `i` flag.
+ *
+ * See the abbreviation mask in {@link splitSentences}: `i` would case-fold the
+ * `\p{Ll}` lookahead standing next to it, and a bound whose behaviour depends on
+ * which engine evaluates it is not a bound.
+ */
+function caseInsensitiveLiteral(value: string): string {
+  return [...value]
+    .map((character) => {
+      const lower = character.toLowerCase();
+      const upper = character.toUpperCase();
+      return lower === upper ? escapeRegExp(character) : `[${escapeRegExp(lower)}${escapeRegExp(upper)}]`;
+    })
+    .join("");
 }
 
 export type BrevityResult = {
