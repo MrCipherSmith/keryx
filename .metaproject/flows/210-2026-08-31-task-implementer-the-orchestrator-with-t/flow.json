@@ -7,24 +7,65 @@
   "id": "210",
   "slug": "task-implementer-the-orchestrator-with-t",
   "title": "task-implementer: the orchestrator with the worst ratio — 2 wired mechanisms of 88, measured and never fixed",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T08:14:12.199Z",
-  "updatedAt": "2026-08-31T08:14:40.339Z",
+  "updatedAt": "2026-08-31T10:17:49.258Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2898a69cb7b61e4cd9a064cbe94e24a117478bb3e906a25430ce5682d6f5d440",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-31T10:17:07.252Z",
+      "note": "inventory.md enumerates 109 mechanisms with section, quoted claim and the search that classified each — the Phase 7 method applied to task-implementer."
+    },
+    "AC2": {
+      "at": "2026-08-31T10:17:07.537Z",
+      "note": "wired requires a production file:line and the entry point; a test-only call site counts as prose-only. That rule is why the before-number is 7 and it was not relaxed."
+    },
+    "AC3": {
+      "at": "2026-08-31T10:17:07.814Z",
+      "note": "48 wired, 16 deleted, 0 prose-only remaining. No verb was softened."
+    },
+    "AC4": {
+      "at": "2026-08-31T10:17:08.117Z",
+      "note": "The STATUS: contract is untouched and re-pinned in all five builds and both trees; status-contract.test.ts still derives its scope from it."
+    },
+    "AC5": {
+      "at": "2026-08-31T10:17:08.383Z",
+      "note": "Eight restatements of existing code found. Five wired: assertions to skills contracts validate, mkdir results to keryx job document, the automation table to the contract object, lint/type-check to keryx health run, npm test to keryx test run. Three named and deliberately not wired with reasons."
+    },
+    "AC6": {
+      "at": "2026-08-31T10:17:08.671Z",
+      "note": "Twelve mutations from the audit plus one for the destructive-git guard, each observed red and restored. One mutation corrupted contracts.ts via a non-unique anchor; repaired and re-run with unique anchors, recorded in the journal."
+    },
+    "AC7": {
+      "at": "2026-08-31T10:17:08.939Z",
+      "note": "All five builds regenerated from SKILL.md and mirrored byte-identical; build-parity and round-bound both green. A stale rules mirror that CI caught was committed separately."
+    },
+    "AC8": {
+      "at": "2026-08-31T10:17:09.239Z",
+      "note": "Before 7 of 109, after 55 of 109; core 2 of 54 to 20 of 54. The measurement's 2-of-88 did not reproduce and the discrepancy is explained in inventory.md rather than smoothed — the correction improves the before-number."
+    },
+    "AC9": {
+      "at": "2026-08-31T10:17:09.542Z",
+      "note": "Named unfixed: agent_worthy/triggers/version have no consumer; the duplicate 4.1 heading; RESEARCH_SUMMARY and CHANGE_PLAN are not artifacts; no code-side stuck detector; task-implementer is still not dispatched by production code; parseChildResult binds only harness children, not host-agent subagents. The ROLLBACK POLICY hazard was named by the audit and fixed rather than carried."
+    },
+    "AC10": {
+      "at": "2026-08-31T10:17:09.806Z",
+      "note": "typecheck clean; bun test 6264 pass / 18 skip / 0 fail against a 6242/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/418"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -32,13 +73,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +88,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,13 +103,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +118,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -90,6 +135,90 @@
     {
       "at": "2026-08-31T08:14:40.339Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-31T10:16:47.859Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T10:16:48.129Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T10:16:48.447Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T10:16:48.735Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T10:17:07.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: inventory.md enumerates 109 mechanisms with section, quoted claim and the search that classified each — the Phase 7 method applied to task-implementer."
+    },
+    {
+      "at": "2026-08-31T10:17:07.537Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: wired requires a production file:line and the entry point; a test-only call site counts as prose-only. That rule is why the before-number is 7 and it was not relaxed."
+    },
+    {
+      "at": "2026-08-31T10:17:07.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 48 wired, 16 deleted, 0 prose-only remaining. No verb was softened."
+    },
+    {
+      "at": "2026-08-31T10:17:08.117Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: The STATUS: contract is untouched and re-pinned in all five builds and both trees; status-contract.test.ts still derives its scope from it."
+    },
+    {
+      "at": "2026-08-31T10:17:08.383Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Eight restatements of existing code found. Five wired: assertions to skills contracts validate, mkdir results to keryx job document, the automation table to the contract object, lint/type-check to keryx health run, npm test to keryx test run. Three named and deliberately not wired with reasons."
+    },
+    {
+      "at": "2026-08-31T10:17:08.671Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Twelve mutations from the audit plus one for the destructive-git guard, each observed red and restored. One mutation corrupted contracts.ts via a non-unique anchor; repaired and re-run with unique anchors, recorded in the journal."
+    },
+    {
+      "at": "2026-08-31T10:17:08.939Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: All five builds regenerated from SKILL.md and mirrored byte-identical; build-parity and round-bound both green. A stale rules mirror that CI caught was committed separately."
+    },
+    {
+      "at": "2026-08-31T10:17:09.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Before 7 of 109, after 55 of 109; core 2 of 54 to 20 of 54. The measurement's 2-of-88 did not reproduce and the discrepancy is explained in inventory.md rather than smoothed — the correction improves the before-number."
+    },
+    {
+      "at": "2026-08-31T10:17:09.542Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Named unfixed: agent_worthy/triggers/version have no consumer; the duplicate 4.1 heading; RESEARCH_SUMMARY and CHANGE_PLAN are not artifacts; no code-side stuck detector; task-implementer is still not dispatched by production code; parseChildResult binds only harness children, not host-agent subagents. The ROLLBACK POLICY hazard was named by the audit and fixed rather than carried."
+    },
+    {
+      "at": "2026-08-31T10:17:09.806Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: typecheck clean; bun test 6264 pass / 18 skip / 0 fail against a 6242/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    },
+    {
+      "at": "2026-08-31T10:17:45.033Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/418 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-31T10:17:45.462Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-31T10:17:49.258Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

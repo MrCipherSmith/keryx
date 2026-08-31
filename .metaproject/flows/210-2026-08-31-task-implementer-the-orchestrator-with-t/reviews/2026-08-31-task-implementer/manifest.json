@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-31-task-implementer",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/418",
+    "head": "e4692960e22a7218c5b42708f6dc1f5c02c1e4fa"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/scope.md",
+    "coverage": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/coverage.md",
+    "report": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/report.md",
+    "findings": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/findings.json",
+    "learning": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/learning.md",
+    "decisions": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-core-boundaries",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-verifier",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 5,
+    "dropped_prefilter": null,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "retained": 5,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "prefilter",
+        "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "createdAt": "2026-08-31T10:17:35.372Z",
+  "updatedAt": "2026-08-31T10:17:35.372Z",
+  "flow": {
+    "id": "210",
+    "path": ".metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t"
+  }
+}

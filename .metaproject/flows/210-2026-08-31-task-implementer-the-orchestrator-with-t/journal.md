@@ -98,3 +98,20 @@ measurement does not have to rediscover them:
    wave-mate's uncommitted work in its blast radius. The correct form is a
    path-scoped `git checkout -- <target_files>` or a `git stash`; that is a
    behaviour change and wants its own flow.
+- 2026-08-31T10:16:47.859Z - task-done: T1: Collect remaining context
+- 2026-08-31T10:16:48.129Z - task-done: T2: Implement per plan
+- 2026-08-31T10:16:48.447Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T10:16:48.735Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-31T10:17:07.252Z - ac-confirmed: AC1: inventory.md enumerates 109 mechanisms with section, quoted claim and the search that classified each — the Phase 7 method applied to task-implementer.
+- 2026-08-31T10:17:07.537Z - ac-confirmed: AC2: wired requires a production file:line and the entry point; a test-only call site counts as prose-only. That rule is why the before-number is 7 and it was not relaxed.
+- 2026-08-31T10:17:07.814Z - ac-confirmed: AC3: 48 wired, 16 deleted, 0 prose-only remaining. No verb was softened.
+- 2026-08-31T10:17:08.117Z - ac-confirmed: AC4: The STATUS: contract is untouched and re-pinned in all five builds and both trees; status-contract.test.ts still derives its scope from it.
+- 2026-08-31T10:17:08.383Z - ac-confirmed: AC5: Eight restatements of existing code found. Five wired: assertions to skills contracts validate, mkdir results to keryx job document, the automation table to the contract object, lint/type-check to keryx health run, npm test to keryx test run. Three named and deliberately not wired with reasons.
+- 2026-08-31T10:17:08.671Z - ac-confirmed: AC6: Twelve mutations from the audit plus one for the destructive-git guard, each observed red and restored. One mutation corrupted contracts.ts via a non-unique anchor; repaired and re-run with unique anchors, recorded in the journal.
+- 2026-08-31T10:17:08.939Z - ac-confirmed: AC7: All five builds regenerated from SKILL.md and mirrored byte-identical; build-parity and round-bound both green. A stale rules mirror that CI caught was committed separately.
+- 2026-08-31T10:17:09.239Z - ac-confirmed: AC8: Before 7 of 109, after 55 of 109; core 2 of 54 to 20 of 54. The measurement's 2-of-88 did not reproduce and the discrepancy is explained in inventory.md rather than smoothed — the correction improves the before-number.
+- 2026-08-31T10:17:09.542Z - ac-confirmed: AC9: Named unfixed: agent_worthy/triggers/version have no consumer; the duplicate 4.1 heading; RESEARCH_SUMMARY and CHANGE_PLAN are not artifacts; no code-side stuck detector; task-implementer is still not dispatched by production code; parseChildResult binds only harness children, not host-agent subagents. The ROLLBACK POLICY hazard was named by the audit and fixed rather than carried.
+- 2026-08-31T10:17:09.806Z - ac-confirmed: AC10: typecheck clean; bun test 6264 pass / 18 skip / 0 fail against a 6242/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken.
+- 2026-08-31T10:17:45.033Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/418 (warning: PR is not a draft)
+- 2026-08-31T10:17:45.462Z - completing
+- 2026-08-31T10:17:49.258Z - done: all gates passed
