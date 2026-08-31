@@ -17,7 +17,7 @@ triggers:
   - "verification pass"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -129,6 +129,30 @@ A finding is `confirmed` when the procedure **reproduced the defect**, and
 `refuted` when the procedure **that would have shown the defect did not**. If the
 command you ran would not have failed either way, you have not verified anything —
 use `unverifiable` and say what you ran.
+
+#### `refuted` by unreachability is not the end of the thread
+
+There is one refutation shape that closes a finding and leaves a question standing:
+the input the finding needs is **unreachable given the current behaviour of a
+producer you do not own** — another repository, a service, a generated client.
+
+The harm claim is genuinely dead and `refuted` is the correct verdict. But an
+invariant held by another repo's code plus a comment on ours is exactly what breaks
+silently when the contract moves, and the question the refutation raises is a
+different one:
+
+> *Does any test build the shape that was in question?*
+
+Record that successor question in your **prose summary**, naming the producer and
+the SHA your check relied on. It is prose, never a claim — you delete, you do not
+add — and the orchestrator picks it up for the next round or routes it to
+`review-testing-practices`.
+
+The failure this exists to stop is recorded: a reviewer asked "is this broken?",
+a verifier correctly answered "no, the backend never emits that", and the thread
+ended. The shape was untested, stayed untested, and the coverage gap was found by a
+different reviewer two rounds later. *Is it broken* and *is it pinned* are two
+questions; refuting the first says nothing about the second.
 
 ### 2. `site-check` — do the named sites exist?
 

@@ -107,6 +107,32 @@ Do not review unrelated files.
 - [ ] Incorrect boolean logic (double negation, De Morgan's law violations)
 - [ ] Unreachable branches or dead code that hides a bug
 
+### The Change That Does Nothing
+
+The diff adds a prop, guard, field or branch, and nothing can reach it. The code is
+correct — which is why every reviewer asking "is this correct" passes it — and the
+work the change was written to do is not done.
+
+- [ ] A prop passed to a component that cannot act on it: the parent unmounts the
+      child rather than disabling it, or the render site the prop guards is gated by
+      a condition that is false whenever the prop is true.
+- [ ] A field added to a type, a `Pick`, or a payload and never read. Search for the
+      reads before accepting it as plumbing for a later change; if it is, say so.
+- [ ] A guard against a value its producer cannot emit — `=== undefined` against a
+      backend that stamps `0`, a status the producer writes in one place the route
+      never reaches.
+- [ ] State set on one path and cleared on none, or cleared only on paths the
+      triggering interaction cannot take.
+- [ ] A branch whose condition is unsatisfiable given the call sites in this repo.
+
+Prove it by **negative enumeration**: name the complete candidate set and why each
+member fails to apply, in `class_scope.enumeration_method` with `sites: []`. See
+**Negative enumeration** in `review-orchestrator/SKILL.md` → Finding Format.
+
+`minor` when the change is merely dead. `major` when its deadness means the defect
+it was written to fix is still live — the usual case when the change answers an
+earlier review round, because there the finding is recorded as closed and is not.
+
 ### Null / Undefined / Optional Chaining
 
 - [ ] Accessing property on value that can be `null` or `undefined` without guard

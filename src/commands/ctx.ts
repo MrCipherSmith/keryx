@@ -521,8 +521,9 @@ export function summarizeDiff(
   untracked: string[] | null = null,
 ): string {
   const lines = nonEmptyLines(result.raw);
-  const files = parseDiffFiles(lines);
-  const risky = files.filter((file) =>
+  const shape = parseDiffOutput(lines);
+  const count = diffFileCount(shape);
+  const risky = shape.files.filter((file) =>
     /(^|\/)(package\.json|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
   );
   const hunks = lines.filter((line) => line.startsWith("@@")).slice(0, config.maxOutputLines);
@@ -532,16 +533,16 @@ export function summarizeDiff(
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-Changed files: \`${files.length}\`
-${untracked ? `Untracked files: \`${untracked.length}\`\n` : ""}Raw lines: \`${lines.length}\`
+Changed files: \`${count ?? "unknown"}\`
+${shape.mode === "patch" || shape.mode === "empty" ? "" : `Output shape: \`${shape.mode}\`\n`}${untracked ? `Untracked files: \`${untracked.length}\`\n` : ""}Raw lines: \`${lines.length}\`
 
 ## Files
 
-${renderDiffFiles(files, config)}
+${renderDiffFiles(shape, config)}
 ${untracked ? `\n## Untracked\n\n${renderUntrackedFiles(untracked, config)}\n` : ""}
 ## Risk Hints
 
-${risky.length > 0 ? risky.map((file) => `- ${file.path}`).join("\n") : "- none"}
+${renderRiskHints(risky, shape)}
 
 ## Hunks
 
@@ -885,7 +886,106 @@ ${selected.join("\n")}
 `;
 }
 
-function parseDiffFiles(lines: string[]): Array<{ path: string; added: number; removed: number }> {
+export type DiffFileStat = {
+  path: string;
+  /** Exact, from patch or `--numstat`. `undefined` when the shape cannot give them. */
+  added?: number;
+  removed?: number;
+  /** Total changed lines, from `--stat`, which reports one number and a histogram. */
+  changed?: number;
+};
+
+export type DiffOutputShape = {
+  mode: "empty" | "patch" | "numstat" | "stat" | "name-status" | "name-only" | "unenumerable";
+  files: DiffFileStat[];
+  /** git's own count, from a `N files changed` summary line. Beats counting rows. */
+  reportedFileCount?: number;
+  /** `--stat` elides long paths to `.../tail`, so path-matching is unreliable. */
+  pathsAbbreviated: boolean;
+};
+
+const STAT_SUMMARY = /^\s*(\d+) files? changed/;
+const NUMSTAT_ROW = /^(\d+|-)\t(\d+|-)\t(.+)$/;
+const STAT_ROW = /^\s*(\S.*?)\s+\|\s+(\d+|Bin)\b/;
+const NAME_STATUS_ROW = /^([ACDMRTUXB]\d*)\t(.+)$/;
+
+// The summariser used to understand ONE output shape — a full patch, found by
+// its `diff --git` headers and counted from `+`/`-` lines. Every other shape git
+// can be asked for (`--stat`, `--numstat`, `--name-only`, `--name-status`,
+// `--shortstat`) carries no such header, so the parser found nothing and the
+// summary said `Changed files: 0` over a real diff. That is a FALSE-CLEAN
+// report: an agent reading the summary concludes the tree is untouched while
+// the raw log beside it lists hundreds of changed lines. Reproduced against 14
+// modified files whose raw log ended `14 files changed, 831 insertions(+)`.
+//
+// So the shape is now inferred from the OUTPUT rather than from the flags — the
+// same fact regardless of how the flag was spelled (`--stat`, `--stat=200`,
+// `-p --stat`) — and any shape that cannot be enumerated reports `unknown`
+// rather than a confident zero. Only genuinely empty output means zero.
+export function parseDiffOutput(lines: string[]): DiffOutputShape {
+  if (lines.length === 0) {
+    return { mode: "empty", files: [], reportedFileCount: 0, pathsAbbreviated: false };
+  }
+
+  if (lines.some((line) => line.startsWith("diff --git "))) {
+    return { mode: "patch", files: parsePatchFiles(lines), pathsAbbreviated: false };
+  }
+
+  const numstat = lines.map((line) => line.match(NUMSTAT_ROW)).filter((m) => m !== null);
+  if (numstat.length > 0) {
+    const files = numstat.map((m) => ({
+      path: m[3] as string,
+      // git writes `-` for binary files; absent counts, not zero ones — a
+      // reported `+0 -0` would claim the file was touched without changing.
+      ...(m[1] === "-" ? {} : { added: Number(m[1]) }),
+      ...(m[2] === "-" ? {} : { removed: Number(m[2]) }),
+    }));
+    return { mode: "numstat", files: sortBySize(files), pathsAbbreviated: false };
+  }
+
+  const summary = lines.map((line) => line.match(STAT_SUMMARY)).find((m) => m !== null);
+  const statRows = lines
+    .filter((line) => !STAT_SUMMARY.test(line))
+    .map((line) => line.match(STAT_ROW))
+    .filter((m) => m !== null);
+  if (summary || statRows.length > 0) {
+    const files = statRows.map((m) => ({
+      path: (m[1] as string).trim(),
+      ...(m[2] === "Bin" ? {} : { changed: Number(m[2]) }),
+    }));
+    return {
+      mode: "stat",
+      files: sortBySize(files),
+      ...(summary ? { reportedFileCount: Number(summary[1]) } : {}),
+      pathsAbbreviated: files.some((file) => file.path.includes(".../")),
+    };
+  }
+
+  const nameStatus = lines.map((line) => line.match(NAME_STATUS_ROW)).filter((m) => m !== null);
+  if (nameStatus.length > 0) {
+    return {
+      mode: "name-status",
+      files: nameStatus.map((m) => ({ path: m[2] as string })),
+      pathsAbbreviated: false,
+    };
+  }
+
+  // `--name-only`: bare paths, one per line. Required to be unanimous — a single
+  // line of prose means this is some other shape and guessing would invent files.
+  if (lines.every((line) => /^[^\s|]\S*$/.test(line))) {
+    return { mode: "name-only", files: lines.map((path) => ({ path })), pathsAbbreviated: false };
+  }
+
+  return { mode: "unenumerable", files: [], pathsAbbreviated: false };
+}
+
+function sortBySize(files: DiffFileStat[]): DiffFileStat[] {
+  const size = (file: DiffFileStat): number =>
+    file.changed ?? (file.added ?? 0) + (file.removed ?? 0);
+  return [...files].sort((a, b) => size(b) - size(a));
+}
+
+function parsePatchFiles(lines: string[]): DiffFileStat[] {
   const files = new Map<string, { path: string; added: number; removed: number }>();
   let current: { path: string; added: number; removed: number } | undefined;
 
@@ -908,21 +1008,59 @@ function parseDiffFiles(lines: string[]): Array<{ path: string; added: number; r
     }
   }
 
-  return [...files.values()].sort((a, b) => b.added + b.removed - (a.added + a.removed));
+  return sortBySize([...files.values()]);
 }
 
-function renderDiffFiles(
-  files: Array<{ path: string; added: number; removed: number }>,
-  config: CtxConfig,
-): string {
-  if (files.length === 0) {
+/** What the `Changed files:` line reports. `undefined` means "not knowable here". */
+export function diffFileCount(shape: DiffOutputShape): number | undefined {
+  if (shape.reportedFileCount !== undefined) {
+    return shape.reportedFileCount;
+  }
+  return shape.mode === "unenumerable" ? undefined : shape.files.length;
+}
+
+function renderDiffFiles(shape: DiffOutputShape, config: CtxConfig): string {
+  if (shape.files.length === 0) {
+    const count = diffFileCount(shape);
+    if (count === undefined) {
+      return `- not enumerable: this output shape carries no per-file rows. Read the raw log.`;
+    }
+    if (count > 0) {
+      return `- ${count} file(s) changed, but this output shape lists no per-file rows (\`--shortstat\`). Read the raw log.`;
+    }
     return "- none";
   }
 
-  return files
-    .slice(0, config.maxGroupItems)
-    .map((file) => `- ${file.path}: +${file.added} -${file.removed}`)
-    .join("\n");
+  const shown = shape.files.slice(0, config.maxGroupItems);
+  const omitted = shape.files.length - shown.length;
+  return [
+    ...shown.map((file) => `- ${file.path}${renderDiffCounts(file)}`),
+    ...(omitted > 0 ? [`… omitted ${omitted} more`] : []),
+  ].join("\n");
+}
+
+function renderDiffCounts(file: DiffFileStat): string {
+  if (file.added !== undefined || file.removed !== undefined) {
+    return `: +${file.added ?? "?"} -${file.removed ?? "?"}`;
+  }
+  return file.changed !== undefined ? `: ~${file.changed} changed` : "";
+}
+
+// `--stat` elides a long path to `.../tail`, so the risk regexes — which match on
+// prefixes like `src/commands/` — cannot fire on paths that no longer carry one.
+// Reporting "- none" there would be the same false-clean the file-count fix
+// removed, one section further down.
+function renderRiskHints(risky: DiffFileStat[], shape: DiffOutputShape): string {
+  const hints = risky.map((file) => `- ${file.path}`);
+  if (shape.pathsAbbreviated) {
+    hints.push(
+      "- (paths are abbreviated by `--stat`; risk matching is unreliable — re-run with `--numstat` or `--name-only` to check)",
+    );
+  }
+  if (hints.length === 0) {
+    return shape.mode === "unenumerable" ? "- unknown: no file list in this output shape" : "- none";
+  }
+  return hints.join("\n");
 }
 
 function renderUntrackedFiles(untracked: string[], config: CtxConfig): string {

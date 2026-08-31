@@ -124,6 +124,94 @@ test("summarizeDiff reports untracked files, and omits the section when not appl
   expect(explicit).not.toContain("Untracked files:");
 });
 
+// Regression: the diff summariser understood ONE output shape — a full patch,
+// found by its `diff --git` headers. Asked for any other shape it found no
+// files and reported `Changed files: 0` over a real diff, while the raw log it
+// wrote beside the summary carried every one of them. A false-clean report is
+// the worst failure mode for a context tool: nothing in the output signals the
+// disagreement, so an agent reads "no changes" and stops.
+const STAT_OUTPUT = [
+  " .../gdskills/review/review-clean-code/SKILL.md     |  34 +++-",
+  " src/gdskills/catalog.ts                            |   6 +",
+  " 2 files changed, 39 insertions(+), 1 deletion(-)",
+].join("\n");
+
+test("summarizeDiff counts files from --stat, not zero", () => {
+  const out = summarizeDiff("git diff --stat HEAD", result(STAT_OUTPUT), CONFIG, null);
+  expect(out).toContain("Changed files: `2`");
+  expect(out).not.toContain("Changed files: `0`");
+  expect(out).toContain("Output shape: `stat`");
+  expect(out).toContain("src/gdskills/catalog.ts");
+  expect(out).not.toContain("- none");
+});
+
+test("summarizeDiff warns that --stat abbreviated the paths it matches risk on", () => {
+  const out = summarizeDiff("git diff --stat HEAD", result(STAT_OUTPUT), CONFIG, null);
+  // `src/commands/` and friends cannot match a path git elided to `.../tail`,
+  // so a bare "- none" here would be the same false-clean one section down.
+  expect(out).toContain("paths are abbreviated");
+});
+
+test("summarizeDiff reads exact counts from --numstat, and binary files carry none", () => {
+  const out = summarizeDiff(
+    "git diff --numstat HEAD",
+    result(["34\t1\tsrc/a.ts", "-\t-\tassets/logo.png"].join("\n")),
+    CONFIG,
+    null,
+  );
+  expect(out).toContain("Changed files: `2`");
+  expect(out).toContain("- src/a.ts: +34 -1");
+  // a binary file reported as `+0 -0` would claim it was touched without changing
+  expect(out).toContain("- assets/logo.png");
+  expect(out).not.toContain("assets/logo.png: +0 -0");
+});
+
+test("summarizeDiff still counts a real patch, and --name-only/--name-status too", () => {
+  const patch = [
+    "diff --git a/src/a.ts b/src/a.ts",
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1 +1,2 @@",
+    "+added",
+    "-removed",
+  ].join("\n");
+  expect(summarizeDiff("git diff HEAD", result(patch), CONFIG, null)).toContain("Changed files: `1`");
+  // the patch shape is the default and stays unannotated
+  expect(summarizeDiff("git diff HEAD", result(patch), CONFIG, null)).not.toContain("Output shape:");
+
+  expect(summarizeDiff("git diff --name-only HEAD", result("src/a.ts\nsrc/b.ts"), CONFIG, null)).toContain(
+    "Changed files: `2`",
+  );
+  expect(
+    summarizeDiff("git diff --name-status HEAD", result("M\tsrc/a.ts\nA\tsrc/b.ts"), CONFIG, null),
+  ).toContain("Changed files: `2`");
+});
+
+test("summarizeDiff reports --shortstat's count even though it lists no rows", () => {
+  const out = summarizeDiff(
+    "git diff --shortstat HEAD",
+    result(" 14 files changed, 831 insertions(+), 12 deletions(-)"),
+    CONFIG,
+    null,
+  );
+  expect(out).toContain("Changed files: `14`");
+  expect(out).toContain("no per-file rows");
+});
+
+test("summarizeDiff says unknown, never zero, for a shape it cannot enumerate", () => {
+  const out = summarizeDiff("git diff --some-future-flag", result("a b c\nd e f"), CONFIG, null);
+  expect(out).toContain("Changed files: `unknown`");
+  expect(out).not.toContain("Changed files: `0`");
+  expect(out).toContain("not enumerable");
+});
+
+test("summarizeDiff still reports a genuinely clean tree as zero", () => {
+  // The fix must not turn "clean" into "unknown": empty output IS enumerable.
+  const out = summarizeDiff("git diff HEAD", result(""), CONFIG, []);
+  expect(out).toContain("Changed files: `0`");
+  expect(out).toContain("- none");
+});
+
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
 
 async function git(cwd: string, args: string[]): Promise<void> {

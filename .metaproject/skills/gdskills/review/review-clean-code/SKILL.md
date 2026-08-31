@@ -211,8 +211,40 @@ Flags:
 
 Flags:
 - Redundant comment restating the code — **minor**
-- Stale comment contradicting the code — **major** (actively misleads readers)
+- Stale comment contradicting the code — **minor** (misleads the next reader; it
+  names no runtime trigger, so the canonical rubric puts it here. It was
+  **major** in this file until that was reconciled against
+  `review-orchestrator/SKILL.md` → **Severity (canonical)**, which reviewers may
+  not override. If the comment's inaccuracy *causes* a defect — someone relied on
+  it and the code does otherwise — that defect is the finding, at its own severity)
 - Commented-out code block — **minor** (use git history, not comments, to preserve old code)
+
+#### C1a. Documentation drift — the shapes worth searching for
+
+Stale comments are not found by reading comments; they are found by reading each
+comment **against the statement it sits above**. Three shapes recur, and they are
+the cheapest real findings in a multi-round review:
+
+- **A doc describing the rule a later round replaced.** A prop's JSDoc says the
+  tooltip drops the split "unless both are known"; the live rule is that both must
+  be greater than zero. The behaviour changed, the sentence did not. Check every
+  doc comment on every symbol the diff touched, not only the ones the diff edited.
+- **A comment detached from its statement.** A `const` gets inserted between a
+  comment and the expression it explained, so the comment now reads as an
+  explanation of the insertion. The text is unchanged and is now wrong. Look for
+  this wherever the diff adds a line inside an existing block.
+- **Two files documenting one field oppositely.** One says a cell is the valid
+  percentage, another computes `100 - cell` and calls it the invalid percentage.
+  Only one is right, and the diff just made the field load-bearing.
+
+Where an issue or PR is cited, check that it is the right one and still says what
+the comment claims — a closed *issue* cited in place of the *PR* that shipped the
+work sends the next reader to the wrong page.
+
+A comment that describes a behaviour with **no code path at all** — including one
+left behind by a review finding that was later withdrawn — is the same class: it
+should state the defensiveness it actually provides, not assert a path that does
+not exist.
 
 #### C2. Comments That Compensate for Bad Names
 
