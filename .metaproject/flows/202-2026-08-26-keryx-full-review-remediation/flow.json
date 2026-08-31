@@ -3,9 +3,9 @@
   "id": "202",
   "slug": "keryx-full-review-remediation",
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-31T12:09:15.906Z",
+  "updatedAt": "2026-08-31T12:19:26.672Z",
   "source": {
     "type": "description",
     "ref": null
@@ -70,7 +70,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/421"
   },
   "tasks": [
     {
@@ -543,6 +543,34 @@
       "at": "2026-08-31T12:09:15.906Z",
       "event": "task-done",
       "detail": "T15: Run managed final PR review and merge gate"
+    },
+    {
+      "at": "2026-08-31T12:14:18.631Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/421 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-31T12:14:28.269Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-31T12:14:31.970Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-31T12:19:18.520Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/421 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-31T12:19:23.177Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-31T12:19:26.672Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
