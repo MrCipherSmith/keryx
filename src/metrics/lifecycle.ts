@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
-import { guardOutput, redactRaw } from "../security/guard";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { renderRunMarkdown, stableJson, validateRunRecord } from "./record";
 import type { ExecutionRunRecord, RunProvenance } from "./types";
 
@@ -52,10 +52,10 @@ export async function writeRunArtifacts(
   if (options.cwd) {
     const serialized = stableJson(record);
     const guard = await guardOutput({ cwd: options.cwd, content: serialized, target: "report", source: "generated" });
-    if (!guard.allowed) throw new Error(guard.reason ?? "security gate blocked metrics artifact");
-    const redacted = await redactRaw({ cwd: options.cwd, content: serialized, source: "generated" });
+    const output = prepareOutputForPersistence(guard, serialized);
+    if (!output.allowed) throw new Error(output.reason);
     try {
-      safeRecord = JSON.parse(redacted.content) as ExecutionRunRecord;
+      safeRecord = JSON.parse(output.content) as ExecutionRunRecord;
     } catch {
       throw new Error("security redaction produced an invalid metrics record");
     }

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { guardOutput } from "../security/guard";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
 import { collectPages } from "./collect";
@@ -812,18 +812,19 @@ async function writeCollectedPage(
     target: "wiki",
     source: "generated",
   });
-  if (!guard.allowed) {
+  const output = prepareOutputForPersistence(guard, candidate.content);
+  if (!output.allowed) {
     return {
       path: relativePath,
       type: candidate.type,
       source: candidate.source,
       action: "skipped",
-      securityReason: guard.reason ?? "security gate blocked",
+      securityReason: output.reason,
     };
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, candidate.content, "utf8");
+  await writeFile(filePath, output.content, "utf8");
   return {
     path: relativePath,
     type: candidate.type,

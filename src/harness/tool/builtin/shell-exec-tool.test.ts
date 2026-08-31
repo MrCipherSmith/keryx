@@ -69,6 +69,24 @@ test("shell_exec propagates a runner failure", async () => {
   expect(result.output).toBe("boom");
 });
 
+describe("C-06 through C-08: timeout cleanup dispositions", () => {
+  test("C-06/C-07: an already-exited process makes both TERM and KILL cleanup fail-soft", () => {
+    const source = readFileSync(new URL("./shell-exec-tool.ts", import.meta.url), "utf8");
+
+    expect(source).toMatch(/proc\.kill\("SIGTERM"\);\s*}\s*catch\s*{\s*\/\/ already gone/s);
+    expect(source).toMatch(/proc\.kill\("SIGKILL"\);\s*}\s*catch\s*{\s*\/\/ already gone/s);
+    expect(source).toContain("shell_exec: timed out after ${timeoutMs}ms and was killed");
+  });
+
+  test("C-08: a torn-down output reader preserves already-collected bytes", () => {
+    const source = readFileSync(new URL("./shell-exec-tool.ts", import.meta.url), "utf8");
+
+    expect(source).toMatch(/sink\.text \+= decoder\.decode\(chunk\.value, \{ stream: true \}\)/);
+    expect(source).toMatch(/catch\s*{\s*\/\/ stream torn down by the kill — keep what we have/s);
+    expect(source).toMatch(/Promise\.race\(\[drained, new Promise\(\(r\) => setTimeout\(r, 200\)\)\]\)/);
+  });
+});
+
 describe("resolveShellSandboxMode", () => {
   test("default off; workspace/strict opt-in; danger forces off", () => {
     // Isolate from the developer's real sandbox.json

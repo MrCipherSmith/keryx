@@ -52,13 +52,14 @@ describe("createProjectSkill security guard", () => {
     }
   });
 
-  test("the same content is allowed when the security module is enabled but advisory (report-only)", async () => {
+  test("advisory mode allows the write but persists only the redacted representation", async () => {
     const root = await makeProjectRoot({ security: true, mode: "advisory" });
     try {
       const result = await createProjectSkill(root, { target: `aws_key = ${AWS_KEY}`, module: "example", name: "leaky-advisory" });
       expect(result.dryRun).toBe(false);
       const written = await readFile(path.join(root, result.skillPath, "SKILL.md"), "utf8");
-      expect(written).toContain(AWS_KEY);
+      expect(written).not.toContain(AWS_KEY);
+      expect(written).toContain("[REDACTED:secret]");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

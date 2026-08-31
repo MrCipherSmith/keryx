@@ -28,16 +28,17 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { findSession, exportSessionMarkdown, readSessionSlate, TranscriptUnreadableError } from "../session/store";
-import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./machine-wrap-up";
+import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./wrap-up-evidence";
 import { readCourse } from "../session/slate-course";
 import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
+import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 /** How long a resolved wrap-up may sit unconsumed before `verify()` expires it. */
 const WRAP_UP_TTL_MS = 60 * 60 * 1000;
 
 export class SessionWrapUpError extends Error {
   constructor(
-    readonly code: "session_not_found" | "session_too_short" | "session_unreadable",
+    readonly code: "session_not_found" | "session_too_short" | "session_unreadable" | "security_denied",
     message: string,
   ) {
     super(message);
@@ -101,8 +102,6 @@ export async function resolveSessionWrapUp(input: {
   }
   const relPath = sessionEvidenceRef(input.workspaceId, summary.id).slice(2); // drop leading "./"
   const evidenceDir = path.dirname(relPath);
-  await mkdir(path.join(input.cwd, evidenceDir), { recursive: true });
-  await writeFile(path.join(input.cwd, relPath), markdown, "utf8");
 
   // SLATE-21 primary evidence: same machine-collected shape as
   // resolveMachineWrapUp's "flow" source — Course/flow status, this session's
@@ -133,17 +132,38 @@ export async function resolveSessionWrapUp(input: {
   ].join("\n");
   const wrapUpRelPath = path.join(evidenceDir, `${summary.id}.wrap-up.md`);
   const diffRelPath = path.join(evidenceDir, `${summary.id}.diff.txt`);
-  await writeFile(path.join(input.cwd, wrapUpRelPath), wrapUpMarkdown, "utf8");
-  await writeFile(path.join(input.cwd, diffRelPath), diffText, "utf8");
+  const [sessionGuard, wrapUpGuard, diffGuard] = await Promise.all([
+    guardOutput({ cwd: input.cwd, content: markdown, target: "report", source: "generated", path: relPath }),
+    guardOutput({ cwd: input.cwd, content: wrapUpMarkdown, target: "report", source: "generated", path: wrapUpRelPath }),
+    guardOutput({ cwd: input.cwd, content: diffText, target: "report", source: "tool-output", path: diffRelPath }),
+  ]);
+  const safeSession = prepareOutputForPersistence(sessionGuard, markdown);
+  const safeWrapUp = prepareOutputForPersistence(wrapUpGuard, wrapUpMarkdown);
+  const safeDiff = prepareOutputForPersistence(diffGuard, diffText);
+  if (!safeSession.allowed || !safeWrapUp.allowed || !safeDiff.allowed) {
+    const reason = !safeSession.allowed
+      ? safeSession.reason
+      : !safeWrapUp.allowed
+        ? safeWrapUp.reason
+        : !safeDiff.allowed
+          ? safeDiff.reason
+          : "security gate blocked";
+    throw new SessionWrapUpError("security_denied", reason);
+  }
+
+  await mkdir(path.join(input.cwd, evidenceDir), { recursive: true });
+  await writeFile(path.join(input.cwd, relPath), safeSession.content, "utf8");
+  await writeFile(path.join(input.cwd, wrapUpRelPath), safeWrapUp.content, "utf8");
+  await writeFile(path.join(input.cwd, diffRelPath), safeDiff.content, "utf8");
 
   const observedAt = now().toISOString();
   const evidence: WrapUpEvidence[] = [
-    { kind: "wrap-up", uri: `./${wrapUpRelPath}`, revision: createHash("sha256").update(wrapUpMarkdown).digest("hex"), observedAt },
-    { kind: "diff", uri: `./${diffRelPath}`, revision: createHash("sha256").update(diffText).digest("hex"), observedAt },
+    { kind: "wrap-up", uri: `./${wrapUpRelPath}`, revision: createHash("sha256").update(safeWrapUp.content).digest("hex"), observedAt },
+    { kind: "diff", uri: `./${diffRelPath}`, revision: createHash("sha256").update(safeDiff.content).digest("hex"), observedAt },
     // Reference/attachment, deliberately last (never evidence[0], which
     // readVerifiedProposalEvidence hands to every owner writer as THE
     // content) — the full verbatim transcript, still hash-verified.
-    { kind: "session", uri: `./${relPath}`, revision: createHash("sha256").update(markdown).digest("hex"), observedAt },
+    { kind: "session", uri: `./${relPath}`, revision: createHash("sha256").update(safeSession.content).digest("hex"), observedAt },
   ];
   return {
     workspaceId: input.workspaceId,

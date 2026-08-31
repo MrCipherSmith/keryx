@@ -17,7 +17,7 @@
 // "denied"`), not a tool failure; `isError` here is reserved for malformed
 // tool input.
 import { randomUUID } from "node:crypto";
-import { createLocalFwkReadService, normalizeFwkResult } from "../../../sac/fwk-service";
+import { createLocalFwkReadService, normalizeFwkResult } from "../../../sac/harness-facade";
 import type { InteractiveTool } from "./interactive-tools";
 
 function parseBudget(input: Record<string, unknown>, defaultMaxItems: number): { maxItems: number; maxTokens: number } | { error: string } {

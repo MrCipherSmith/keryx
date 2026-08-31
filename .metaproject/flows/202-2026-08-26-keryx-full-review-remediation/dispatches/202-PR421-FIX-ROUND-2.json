@@ -1,0 +1,37 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-PR421-FIX-ROUND-2",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-regression",
+  "task": {
+    "title": "Review PR 421 CI fix round",
+    "description": "Review the small a7f3961f..dcf557a3 fix round for test correctness and security-contract alignment.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Confirm both CI fixes preserve the intended production contracts and make only test or flow-artifact changes.",
+    "Verify targeted test evidence and detect weakened assertions or leaked fixture secrets.",
+    "Return actionable findings or an explicit clean verdict with exactly one fenced json keryx:findings block."
+  ],
+  "context_refs": [
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-regression-testing.md", "kind": "review", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-regression/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/process/sandbox/proxy.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/gdskills/project-skills.test.ts"
+  ],
+  "constraints": [
+    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, navigation, or command.",
+    "Read-only: do not modify files, flow state, commits, PR, or review package.",
+    "Review exact range a7f3961f49bf5a8b4d93903579eab18b67527323..dcf557a3 and current tests.",
+    "Use gdctx for output and keryx ctx rg for text search."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-fix-round-2-review.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-31T12:02:00Z", "created_by": "review-orchestrator"}
+}

@@ -38,6 +38,21 @@ export type GuardResult = {
   reason?: string;
 };
 
+/**
+ * Materialize content for a durable sink from its completed guard decision.
+ * A redacted representation is authoritative whenever present; a blocked
+ * decision never yields bytes that a caller could accidentally persist.
+ */
+export function prepareOutputForPersistence(
+  guard: GuardResult,
+  original: string,
+): { allowed: true; content: string } | { allowed: false; reason: string } {
+  if (!guard.allowed) {
+    return { allowed: false, reason: guard.reason ?? "security gate blocked" };
+  }
+  return { allowed: true, content: guard.redacted ?? original };
+}
+
 export type RedactRawInput = {
   cwd: string;
   content: string;

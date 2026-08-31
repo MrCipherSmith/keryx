@@ -1,0 +1,34 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-CATCH-A",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {"title": "Characterize catch dispositions C-01 through C-05", "description": "Add provider and external-MCP fallback tests for the first five audited catch sites.", "intent": "test"},
+  "acceptance_criteria": [
+    "C-01 through C-05 each have one executable targeted assertion matching catch-dispositions.md.",
+    "All five intentional-fallback tests pass on current production behavior without exposing raw HTTP bodies.",
+    "Fetch mocks remain compatible with Bun fetch.preconnect typing and tsc passes."
+  ],
+  "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/catch-dispositions.md", "kind": "custom", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/catch-dispositions.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/compat/openai-compat-provider.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/single-turn.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/anthropic/anthropic-provider.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/openai/openai-provider.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/external/supervise-mcp.test.ts"
+  ],
+  "constraints": [
+    "Read the exact new worktree .metaproject/index.md first and local testing context.",
+    "Use gdgraph and keryx ctx rg; never bare rg/grep; use apply_patch.",
+    "Modify only the five named test files; no production/docs/flow/graph/commit/full suite.",
+    "Return STATUS first with exact C-ID mapping, focused counts, and tsc result."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/harness/provider/compat/openai-compat-provider.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:31:00Z", "created_by": "flow-orchestrator"}
+}

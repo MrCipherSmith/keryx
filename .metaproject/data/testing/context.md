@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-22T15:31:16.206Z
+generatedAt: 2026-08-31T11:45:54.148Z
 
 ## Frameworks
 
@@ -10,7 +10,7 @@ generatedAt: 2026-08-22T15:31:16.206Z
 
 - `check`: `tsc --noEmit && bun test`
 - `test`: `bun test`
-- `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts`
+- `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
 
@@ -57,6 +57,7 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/commands/harness-network-posture.test.ts
 - src/commands/harness.replay.test.ts
 - src/commands/harness.test.ts
+- src/commands/health-status.test.ts
 - src/commands/init-mcp-offer.test.ts
 - src/commands/init-mcp-runtimes.test.ts
 - src/commands/init.escape.test.ts
@@ -72,8 +73,15 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/commands/orient.dry-run.test.ts
 - src/commands/permission-mode.test.ts
 - src/commands/projects.escape.test.ts
+- src/commands/providers.balance.test.ts
+- src/commands/providers.cross-family.test.ts
+- src/commands/providers.custom.test.ts
 - src/commands/providers.test.ts
+- src/commands/review-comments-cli.test.ts
+- src/commands/review-learn-cli.test.ts
+- src/commands/review.test.ts
 - src/commands/rules.test.ts
+- src/commands/sandbox.test.ts
 - src/commands/security-hooks-init.test.ts
 - src/commands/security.check-input.test.ts
 - src/commands/select.test.ts
@@ -89,19 +97,11 @@ generatedAt: 2026-08-22T15:31:16.206Z
 - src/commands/shell-slash-registry.test.ts
 - src/commands/shell.test.ts
 - src/commands/skills-route.test.ts
+- src/commands/skills.bundled-verify.installed.test.ts
+- src/commands/skills.bundled-verify.test.ts
 - src/commands/status.help.test.ts
-- src/commands/update.test.ts
-- src/commands/version.test.ts
-- src/commands/workspace.test.ts
-- src/contracts/fixtures.test.ts
-- src/ctx/hook-install.test.ts
-- src/ctx/hook.test.ts
-- src/ctx/orient-runtimes.test.ts
-- src/ctx/orient.test.ts
-- src/ctx/runtimes.test.ts
-- src/eval/block-d-corpora.test.ts
 
-- ... 372 more
+- ... 438 more
 
 ## CI
 

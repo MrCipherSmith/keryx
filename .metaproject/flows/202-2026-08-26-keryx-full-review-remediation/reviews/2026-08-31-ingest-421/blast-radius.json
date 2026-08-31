@@ -1,0 +1,2425 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/testing/context.json",
+    ".metaproject/data/testing/context.md",
+    ".metaproject/data/testing/recommendations.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/acceptance-criteria.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/code-verification.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/draft-pr.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/full-suite-baseline-comparison.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-architecture.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-security.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/description.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH-B.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH-TESTS.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-A.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-B.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-GREEN.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-DOCS.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-FIX-FLEET-TEST.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-HEALTH-FIX.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-REVIEW-ARCH.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-REVIEW-SECURITY.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-SECURITY.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-VERIFY-FINAL.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/flow.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/journal.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/metrics/run-2026-08-26T06-06-15Z.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/plan.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/coverage.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/decisions.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/findings.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/learning.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/manifest.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/report.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/scope.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/coverage.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/decisions.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/findings.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/learning.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/manifest.json",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/report.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/scope.md",
+    ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/tasks.md",
+    "docs/requirements/keryx-full-review-remediation/README.md",
+    "docs/requirements/keryx-full-review-remediation/catch-dispositions.md",
+    "docs/requirements/keryx-full-review-remediation/change-report.md",
+    "docs/requirements/keryx-full-review-remediation/implementation-plan.md",
+    "docs/requirements/keryx-full-review-remediation/prd.md",
+    "docs/requirements/keryx-full-review-remediation/specification.md",
+    "docs/reviews/keryx-full-project-review-validation-2026-08-26.md",
+    "src/commands/agent.ts",
+    "src/commands/health-status.test.ts",
+    "src/commands/health.ts",
+    "src/commands/shell.ts",
+    "src/commands/workspace.ts",
+    "src/gdskills/project-skills.ts",
+    "src/harness/external/supervise-mcp.test.ts",
+    "src/harness/process/sandbox/proxy.test.ts",
+    "src/harness/process/sandbox/worker-resolution.test.ts",
+    "src/harness/process/shell-spawn.ts",
+    "src/harness/provider/anthropic/anthropic-provider.test.ts",
+    "src/harness/provider/compat/openai-compat-provider.test.ts",
+    "src/harness/provider/openai/openai-provider.test.ts",
+    "src/harness/provider/single-turn.test.ts",
+    "src/harness/tool/builtin/background-job-registry.test.ts",
+    "src/harness/tool/builtin/background-job-registry.ts",
+    "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+    "src/harness/tool/builtin/shell-exec-tool.test.ts",
+    "src/harness/tool/builtin/shell-exec-tool.ts",
+    "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+    "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/harness/tool/builtin/workspace-context-tool.ts",
+    "src/harness/tool/builtin/workspace-lifecycle-tool.test.ts",
+    "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+    "src/health/scoring.test.ts",
+    "src/health/service-status.test.ts",
+    "src/health/service.ts",
+    "src/health/types.ts",
+    "src/memory/write.ts",
+    "src/metrics/lifecycle.ts",
+    "src/sac/harness-facade.ts",
+    "src/sac/machine-wrap-up.ts",
+    "src/sac/proposal-lifecycle.ts",
+    "src/sac/review-confirm-token.ts",
+    "src/sac/session-wrap-up.ts",
+    "src/sac/wiki-owner-writer.ts",
+    "src/sac/wrap-up-evidence.ts",
+    "src/security/guard.ts",
+    "src/security/persistence-sinks.test.ts",
+    "src/security/web-taint-durable-boundary.test.ts",
+    "src/session/store.ts",
+    "src/testing/coverage-map.ts",
+    "src/testing/service.ts",
+    "src/wiki/enrich.ts",
+    "src/wiki/service.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/init.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/testing/service.ts",
+      "path": [
+        "src/commands/init.ts",
+        "src/testing/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/health/service.ts",
+      "path": [
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/health/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/config.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/config.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/export.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/export.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/memory/service.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/memory/write.ts",
+      "path": [
+        "src/memory/service.ts",
+        "src/memory/write.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/sac/machine-wrap-up.ts",
+      "path": [
+        "src/commands/harness.ts",
+        "src/sac/machine-wrap-up.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/sources/helpers.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/sources/helpers.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/catch-up.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/sac/machine-wrap-up.ts",
+      "path": [
+        "src/sac/catch-up.ts",
+        "src/sac/machine-wrap-up.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/index.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/session/store.ts",
+      "path": [
+        "src/session/index.ts",
+        "src/session/store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/learn.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/learn.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/metrics/coverage.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/metrics/coverage.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/health/service.ts",
+      "path": [
+        "src/mcp/tools.ts",
+        "src/health/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/health.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/health.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/goal-command.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/commands/skills.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "path": [
+        "src/harness/run-external-factory.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/baseline.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/baseline.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/scopes.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/scopes.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/memory/ingest.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/memory/write.ts",
+      "path": [
+        "src/memory/ingest.ts",
+        "src/memory/write.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/external-slate.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/sac/machine-wrap-up.ts",
+      "path": [
+        "src/session/external-slate.ts",
+        "src/sac/machine-wrap-up.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/background-job-session.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "path": [
+        "src/tui/background-job-session.ts",
+        "src/harness/tool/builtin/background-job-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-inspector.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/sac/machine-wrap-up.ts",
+      "path": [
+        "src/tui/review-inspector.ts",
+        "src/sac/machine-wrap-up.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/ctx.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/security/guard.ts",
+      "path": [
+        "src/commands/ctx.ts",
+        "src/security/guard.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/flow.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/health/service.ts",
+      "path": [
+        "src/commands/flow.ts",
+        "src/health/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/shell-approval.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/gate.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/gate.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/run.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/run.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/scoring.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/scoring.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/workspace-resolve.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+      "path": [
+        "src/sac/workspace-resolve.ts",
+        "src/harness/tool/builtin/workspace-lifecycle-tool.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "path": [
+        "src/tui/external-bridge.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/job-bridge.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "path": [
+        "src/tui/job-bridge.ts",
+        "src/harness/tool/builtin/background-job-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/gdgraph.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/wiki/service.ts",
+      "path": [
+        "src/commands/gdgraph.ts",
+        "src/wiki/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.ts",
+        "src/harness/tool/builtin/background-job-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/resolve.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/resolve.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/verify.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/verify.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/harness/external/supervise-mcp.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/history.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/history.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/metrics/complexity-findings.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/metrics/complexity-findings.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/health/sources/dependency-audit.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "path": [
+        "src/health/sources/dependency-audit.ts",
+        "src/health/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/health/sources/eslint.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 212 at hop 1, fan-in 2, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/sources/index.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 212 at hop 1, fan-in 2, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/sources/sonarqube.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 212 at hop 1, fan-in 2, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/sources/typescript.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 212 at hop 1, fan-in 2, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/reflect.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 212 at hop 1, fan-in 2, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/supersede.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 212 at hop 1, fan-in 2, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/lifecycle-flag.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 212 at hop 1, fan-in 2, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/memory-owner-writer.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 212 at hop 1, fan-in 2, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/skill-owner-writer.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 212 at hop 1, fan-in 2, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/harness-scan.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 212 at hop 1, fan-in 2, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 212 at hop 1, fan-in 2, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 212 at hop 1, fan-in 2, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 212 at hop 1, fan-in 2, reached via src/harness/tool/builtin/shell-exec-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 212 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sync.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 212 at hop 1, fan-in 1, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/test.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/testing/coverage-map.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 212 at hop 1, fan-in 1, reached via src/testing/coverage-map.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/wiki.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/wiki/enrich.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 212 at hop 1, fan-in 1, reached via src/wiki/enrich.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/report.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 212 at hop 1, fan-in 1, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/sources/tests.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 212 at hop 1, fan-in 1, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/redact-seam.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 212 at hop 1, fan-in 1, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/metrics/index.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/metrics/lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 212 at hop 1, fan-in 1, reached via src/metrics/lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/service.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/sac/proposal-lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 212 at hop 1, fan-in 1, reached via src/sac/proposal-lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/eval/block-d-corpora.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/testing/coverage-map.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 212 at hop 1, fan-in 0, reached via src/testing/coverage-map.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/project-skills.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 212 at hop 1, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/verify.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 212 at hop 1, fan-in 0, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-background.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-timeout.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/shell-exec-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-context-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/workspace-context-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/workspace-context-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 212 at hop 1, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/metrics/hotspot.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 212 at hop 1, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/parsers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 212 at hop 1, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/sources/sonarqube.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 212 at hop 1, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 212 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/sac-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/review-confirm-token.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 212 at hop 1, fan-in 0, reached via src/sac/review-confirm-token.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/wiki-ask.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 212 at hop 1, fan-in 0, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/lifecycle-write-p4.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 212 at hop 1, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/metrics/service.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/metrics/lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 212 at hop 1, fan-in 0, reached via src/metrics/lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/catch-up.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/proposal-lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 212 at hop 1, fan-in 0, reached via src/sac/proposal-lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/machine-wrap-up.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 212 at hop 1, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/proposal-lifecycle-parity.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/proposal-lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 212 at hop 1, fan-in 0, reached via src/sac/proposal-lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/proposal-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/proposal-lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 212 at hop 1, fan-in 0, reached via src/sac/proposal-lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/review-confirm-token.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/review-confirm-token.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 212 at hop 1, fan-in 0, reached via src/sac/review-confirm-token.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/session-wrap-up.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/session-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 212 at hop 1, fan-in 0, reached via src/sac/session-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/wiki-owner-writer.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/sac/wiki-owner-writer.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 212 at hop 1, fan-in 0, reached via src/sac/wiki-owner-writer.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/workspace-resolve.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/workspace-lifecycle-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 212 at hop 1, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/project-root.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 212 at hop 1, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/store.callers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 212 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/block-d-no-network.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 212 at hop 1, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/coverage-map.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/testing/coverage-map.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 212 at hop 1, fan-in 0, reached via src/testing/coverage-map.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/security-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 212 at hop 1, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/service.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 212 at hop 1, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/smoke.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 212 at hop 1, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-session.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 212 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/inspector-sources.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 212 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/job-bridge.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/background-job-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/background-job-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 212 at hop 1, fan-in 0, reached via src/harness/tool/builtin/shell-exec-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 212 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich-rlm.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/enrich.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 212 at hop 1, fan-in 0, reached via src/wiki/enrich.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/enrich.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 212 at hop 1, fan-in 0, reached via src/wiki/enrich.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/security-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 212 at hop 1, fan-in 0, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/service.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 212 at hop 1, fan-in 0, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 212 at hop 2, fan-in 11, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/inspector-sources.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 212 at hop 2, fan-in 9, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/memory.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 212 at hop 2, fan-in 6, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/dispatch.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 212 at hop 2, fan-in 6, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 212 at hop 2, fan-in 5, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/metaproject-tools.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 212 at hop 2, fan-in 5, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/modules.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 212 at hop 2, fan-in 3, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 212 at hop 2, fan-in 3, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/metrics.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/metrics/lifecycle.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 212 at hop 2, fan-in 2, reached via src/metrics/lifecycle.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sessions.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 212 at hop 2, fan-in 2, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/sync.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 212 at hop 2, fan-in 2, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 212 at hop 2, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 212 at hop 2, fan-in 2, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/capability/golden-rule.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/ctx.rg-argv.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 141 of 212 at hop 2, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/ctx.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 142 of 212 at hop 2, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-extension-wave.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 143 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-restricted.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 144 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 145 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-network-posture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 146 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 147 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 148 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 149 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-runtimes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 150 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 151 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.no-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 152 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 153 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 154 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/module-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 155 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/health.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 156 of 212 at hop 2, fan-in 0, reached via src/commands/health.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 157 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 158 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sessions.fork.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 159 of 212 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-approval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 160 of 212 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 161 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/health.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 162 of 212 at hop 2, fan-in 0, reached via src/commands/health.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/depends-and-attempts.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 163 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 164 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/build-parity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 165 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 166 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/export-plugin.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 167 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/export-runtime-builds.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 168 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/learn.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 169 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/round-bound.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 170 of 212 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/status-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 171 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run-external-factory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 172 of 212 at hop 2, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/memory-recall-p3.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 173 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 174 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 175 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/history.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 176 of 212 at hop 2, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/metrics/complexity-findings.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 177 of 212 at hop 2, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/provenance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 178 of 212 at hop 2, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/scopes-component.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 179 of 212 at hop 2, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/scopes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 180 of 212 at hop 2, fan-in 0, reached via src/health/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/skill-loop.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 181 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 182 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-client/live-elicitation.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 183 of 212 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 184 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/slate-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/health/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 185 of 212 at hop 2, fan-in 0, reached via src/health/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/embedding/embedding.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 186 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/ingest.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 187 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/no-network.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 188 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/p0-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 189 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/p5-temporal-config-catalog.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 190 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/reflect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 191 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/report.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 192 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/security-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 193 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/supersede.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 194 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-learning.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 195 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/lifecycle-flag.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/wiki/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 196 of 212 at hop 2, fan-in 0, reached via src/wiki/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/memory-owner-writer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/memory/write.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 197 of 212 at hop 2, fan-in 0, reached via src/memory/write.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/skill-owner-writer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 198 of 212 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/harness-scan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/guard.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 199 of 212 at hop 2, fan-in 0, reached via src/security/guard.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/store.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 200 of 212 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/health.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 201 of 212 at hop 2, fan-in 0, reached via src/commands/health.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/testing/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 202 of 212 at hop 2, fan-in 0, reached via src/testing/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 203 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/sac/machine-wrap-up.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 204 of 212 at hop 2, fan-in 0, reached via src/sac/machine-wrap-up.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 205 of 212 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 206 of 212 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 207 of 212 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 208 of 212 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 209 of 212 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-headless-sigint.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 210 of 212 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 211 of 212 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/workspace.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/workspace.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 212 of 212 at hop 3, fan-in 0, reached via src/commands/workspace.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/recommendations.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/code-verification.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/draft-pr.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/full-suite-baseline-comparison.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-architecture.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-security.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH-B.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH-TESTS.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-ARCH.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-A.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-B.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-CATCH-GREEN.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-DOCS.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-FIX-FLEET-TEST.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-HEALTH-FIX.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-REVIEW-ARCH.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-REVIEW-SECURITY.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-SECURITY.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/dispatches/202-VERIFY-FINAL.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/metrics/run-2026-08-26T06-06-15Z.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-branch-fix-full-project-review-remediation-2026/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-26-ingest-fix-full-project-review-remediation-2026/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/catch-dispositions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/change-report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/implementation-plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/prd.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-full-review-remediation/specification.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/reviews/keryx-full-project-review-validation-2026-08-26.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 100,
+    "changedFilesResolved": 47,
+    "changedFilesUnresolved": 53,
+    "candidates": 212,
+    "retained": 40,
+    "droppedByCap": 172,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 7,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 1098,
+    "edges": 3347
+  }
+}

@@ -109,8 +109,11 @@ export function createCodeHealthService(): CodeHealthService {
       );
       const latest = await readLatest(input.cwd);
       const project = latest?.metrics.find((m) => m.key === "project") ?? null;
-      const regressions = latest
+      const decliningScopes = latest
         ? latest.metrics.filter((m) => m.regression_score > 0).length
+        : 0;
+      const regressedScopes = latest
+        ? latest.metrics.filter((m) => m.trend === "regressed").length
         : 0;
       return {
         enabled,
@@ -120,7 +123,9 @@ export function createCodeHealthService(): CodeHealthService {
           latest?.sources.map((s) => ({ source: s.source, status: s.status })) ??
           [],
         projectScore: project?.health_score ?? null,
-        regressions,
+        regressions: decliningScopes,
+        decliningScopes,
+        regressedScopes,
       };
     },
 

@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "./workspace-lifecycle-tool";
@@ -51,6 +51,15 @@ describe("workspaceCreateTool", () => {
     const listed = await workspaceListTool(cwd).invoke({});
     const workspaces = JSON.parse(listed.output) as Array<{ id: string }>;
     expect(workspaces.map((w) => w.id)).toContain(created.id);
+  });
+
+  test("C-11: a failed lazy Slate binding is surfaced as a redaction-safe degraded result", async () => {
+    // The creation path currently catches the lazy `writeSlate` failure and
+    // leaves the workspace listable. This assertion intentionally stays RED
+    // until that catch exposes a safe, observable degraded indicator.
+    const source = await readFile(new URL("./workspace-lifecycle-tool.ts", import.meta.url), "utf8");
+
+    expect(source).toMatch(/(?:binding.*degraded|degraded.*binding)/i);
   });
 });
 

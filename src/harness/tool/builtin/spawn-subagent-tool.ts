@@ -33,7 +33,6 @@ import {
   type SlateChildDispatch,
 } from "../../../session/slate";
 import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycle";
-import { emitSubagentFleet } from "../../../tui/subagent-bridge";
 import { withFileLock } from "../../../lib/fs";
 import {
   buildTierMap,
@@ -44,6 +43,25 @@ import {
 } from "../../../gdskills/model-tier";
 
 export type SubagentMode = "read_only" | "general";
+
+/**
+ * Neutral fleet event emitted by a shell host. The tool deliberately owns no
+ * TUI dependency: an interactive surface can adapt these events to a sidebar,
+ * while headless callers can omit the callback entirely.
+ */
+export type SpawnSubagentFleetEvent =
+  | {
+      kind: "upsert";
+      id: string;
+      label: string;
+      status: "running" | "done" | "failed";
+      detail?: string;
+      model?: string;
+      task?: string;
+      runtime?: "external";
+      agentId?: string;
+    }
+  | { kind: "log"; id: string; entry: { kind: "task" | "text" | "reasoning" | "tool" | "result" | "system"; text: string } };
 
 /**
  * D2 (flow 171, Phase D / spec §D2): structured completion status for one
@@ -255,6 +273,8 @@ export interface SpawnSubagentToolDeps {
    * unchanged.
    */
   onLedgerReady?: (controls: { resetBudget: () => void }) => void;
+  /** Optional host bridge for fleet updates; omitted for non-TUI shells. */
+  onFleetEvent?: (event: SpawnSubagentFleetEvent) => void;
   /**
    * External-agent runtime seam (flow 176; docs/requirements/keryx-external-agent-runtime).
    *
@@ -329,6 +349,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
     maxRuntimeMs: DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
   };
   let ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: DEFAULT_MAX_CHILDREN });
+  const emitFleetEvent = (event: SpawnSubagentFleetEvent): void => {
+    try {
+      deps.onFleetEvent?.(event);
+    } catch {
+      // A presentation host must never break the agent turn.
+    }
+  };
   deps.onLedgerReady?.({
     resetBudget: () => {
       ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: DEFAULT_MAX_CHILDREN });
@@ -532,7 +559,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       );
 
       if (!spawned.ok) {
-        emitSubagentFleet({
+        emitFleetEvent({
           id: workerId,
           kind: "upsert",
           label,
@@ -583,7 +610,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         externalRuntime !== undefined && deps.runExternal !== undefined
           ? ({ runtime: "external", ...(externalAgentId === undefined ? {} : { agentId: externalAgentId }) } as const)
           : ({} as const);
-      emitSubagentFleet({
+      emitFleetEvent({
         kind: "upsert",
         id: workerId,
         label,
@@ -596,7 +623,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       if (tierRecord !== undefined) {
         // The run trace is where this is read back from afterwards; it goes out
         // on the same diagnostics channel every other per-dispatch fact uses.
-        emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
+        emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
       }
 
       // Placed here because `spawnSubagent` above has already applied admission,
@@ -606,7 +633,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const externalStartedAt = performance.now();
         try {
           const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
-          emitSubagentFleet({
+          emitFleetEvent({
             kind: "upsert",
             id: workerId,
             label,
@@ -619,7 +646,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         } catch (err) {
           // A throwing hook is a keryx bug, not an agent failure, and must not
           // surface as though the external agent reported something.
-          emitSubagentFleet({
+          emitFleetEvent({
             kind: "upsert",
             id: workerId,
             label,
@@ -811,19 +838,19 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           if (closed) {
             return;
           }
-          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "text", text } });
+          emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "text", text } });
         },
         onReasoning: (text) => {
           if (closed) {
             return;
           }
-          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
+          emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
         },
         onToolCall: (name) => {
           if (closed) {
             return;
           }
-          emitSubagentFleet({
+          emitFleetEvent({
             kind: "upsert",
             id: workerId,
             label,
@@ -832,14 +859,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             model: `${runModel.provider}/${runModel.model}`,
             task,
           });
-          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
+          emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
         },
         onToolResult: (name, result) => {
           if (closed) {
             return;
           }
           const preview = result.output.trim().slice(0, 400);
-          emitSubagentFleet({
+          emitFleetEvent({
             kind: "log",
             id: workerId,
             entry: { kind: "result", text: `${name}${result.isError ? " (error)" : ""} ${preview}` },
@@ -849,7 +876,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           if (closed) {
             return;
           }
-          emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text } });
+          emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text } });
         },
         // SECURITY-CRITICAL INVARIANT — do not relax without an ADR.
         // `mode` is chosen by the MODEL and `read_only` is auto-approved with no
@@ -1012,12 +1039,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                   // message) with a fold-specific failure. Finding 3 (fix round,
                   // error-handling IRON LAW 1 — a bare `catch {}` is forbidden):
                   // still log the failure so it is at least observable, via this
-                  // file's own established `emitSubagentFleet({ kind: "log",
-                  // ... })` diagnostics channel (same one every other
+                  // file's own established injected fleet `log` diagnostics
+                  // channel (the same one every other
                   // `invoke()` branch already uses for the parent-facing Workers
                   // panel/inspector) rather than a fresh `console.error` seam.
                   const foldMsg = foldCause instanceof Error ? foldCause.message : String(foldCause);
-                  emitSubagentFleet({
+                  emitFleetEvent({
                     kind: "log",
                     id: workerId,
                     entry: { kind: "system", text: `slate fold failed (ignored): ${foldMsg}` },
@@ -1049,7 +1076,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           // F-001 window only in this already-abnormal fallback path, never
           // on the common path above.
           const lockMsg = lockCause instanceof Error ? lockCause.message : String(lockCause);
-          emitSubagentFleet({
+          emitFleetEvent({
             kind: "log",
             id: workerId,
             entry: { kind: "system", text: `slate cleanup lock failed (ignored): ${lockMsg}` },
@@ -1111,7 +1138,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               // abandoned turn; do not surface after the parent already timed out
             });
             releaseBudget();
-            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
+            emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             await foldChildSlateAndCleanup("incomplete");
             const partial = assistant.trim();
             return {
@@ -1152,7 +1179,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
         const isError = status !== "Completed";
-        emitSubagentFleet({
+        emitFleetEvent({
           kind: "upsert",
           id: workerId,
           label,
@@ -1178,7 +1205,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         childAbort.abort();
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
-        emitSubagentFleet({
+        emitFleetEvent({
           kind: "upsert",
           id: workerId,
           label,

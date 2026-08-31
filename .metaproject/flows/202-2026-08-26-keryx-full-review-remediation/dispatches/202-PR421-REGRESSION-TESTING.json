@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-PR421-REGRESSION-TESTING",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-regression",
+  "task": {
+    "title": "Final PR 421 regression and testing review",
+    "description": "Review origin/main...a7f3961f plus recorded Scope B for untested consumers, platform regressions, brittle assertions, and compatibility gaps.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Inspect Scope B high-risk consumers and explicitly account for graph file-cap and graph-absent changed files.",
+    "Evaluate test adequacy, deterministic behavior, platform portability, and baseline comparison evidence.",
+    "Return severity-ranked findings or an explicit no-findings verdict with exactly one fenced json keryx:findings block."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-31-pr-421/blast-radius.json", "kind": "review", "exists": true},
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/full-suite-baseline-comparison.md", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-regression/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+  ],
+  "constraints": [
+    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, or command.",
+    "Read-only: do not modify files, flow state, commits, PR, or review package.",
+    "Review origin/main...a7f3961f49bf5a8b4d93903579eab18b67527323; do not re-report pre-existing baseline failures unless worsened by the diff.",
+    "Use gdgraph first, gdwiki where relevant, gdctx for output, and keryx ctx rg for text search."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-regression-testing.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-31T11:57:00Z", "created_by": "review-orchestrator"}
+}

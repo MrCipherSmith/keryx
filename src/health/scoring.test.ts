@@ -43,6 +43,13 @@ test("trendOf classifies against baseline", () => {
   expect(trendOf(90, null)).toBe("unknown");
 });
 
+test("trendOf keeps the exact ±2 deadband while regressionScore records every decline", () => {
+  expect([trendOf(87, 90), trendOf(88, 90), trendOf(89, 90), trendOf(90, 90), trendOf(91, 90), trendOf(92, 90), trendOf(93, 90), trendOf(90, null)]).toEqual([
+    "regressed", "stable", "stable", "stable", "stable", "stable", "improved", "unknown",
+  ]);
+  expect([regressionScore(87, 90), regressionScore(88, 90), regressionScore(89, 90), regressionScore(90, 90), regressionScore(90, null)]).toEqual([3, 2, 1, 0, 0]);
+});
+
 test("regressionScore is baseline minus current", () => {
   expect(regressionScore(85, 90)).toBe(5);
   expect(regressionScore(95, 90)).toBe(-5);

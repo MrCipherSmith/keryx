@@ -2,46 +2,46 @@
 
 ## Stats
 
-- Source files indexed: 980
+- Source files indexed: 1094
 - Imported asset files indexed: 4
-- Total nodes: 984
-- Edges: 2987
-- Import edges: 2946
+- Total nodes: 1098
+- Edges: 3347
+- Import edges: 3297
 - Asset edges: 9
-- Unresolved imports: 32
-- Import resolution: 98.9%
-- Skipped generated/static directories: 12
+- Unresolved imports: 41
+- Import resolution: 98.8%
+- Skipped generated/static directories: 7
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 246 |
-| commands | 97 |
-| lib | 79 |
-| tui | 71 |
-| sac | 48 |
-| security | 42 |
+| harness | 254 |
+| commands | 109 |
+| tui | 98 |
+| lib | 82 |
+| sac | 50 |
+| security | 45 |
+| health | 40 |
 | memory | 40 |
-| health | 39 |
-| gdgraph | 36 |
-| scripts | 32 |
+| gdgraph | 37 |
+| scripts | 33 |
+| gdskills | 33 |
+| flow | 30 |
+| review | 28 |
 | metrics | 27 |
 | wiki | 23 |
 | vscode-extension | 22 |
-| flow | 21 |
 | mcp | 21 |
-| gdskills | 18 |
 | session | 16 |
 | standard | 14 |
 | capability | 13 |
-| ctx | 12 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| relative-code | 25 |
+| relative-code | 34 |
 | . | 2 |
 | .js | 2 |
 | .css | 1 |
@@ -51,17 +51,12 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
 - `dist`
-- `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
-- `vscode-extension/.metaproject`
-- `vscode-extension/dist`
-- `vscode-extension/node_modules`
 
 ## Generated Files
 

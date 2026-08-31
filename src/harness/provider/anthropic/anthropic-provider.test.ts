@@ -786,3 +786,15 @@ test("an unlinked pair keeps the previous plain-text mapping", async () => {
   };
   expect(body.messages[1]).toEqual({ role: "user", content: "/tmp" });
 });
+
+test("C-03: a non-JSON HTTP error keeps Anthropic's generic status message", async () => {
+  const { fetch: fetchMock } = makeFetchMock(() => new Response("opaque upstream body", { status: 503 }));
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("catch-c03"), { attemptId: "catch-c03" }));
+
+  expect(events).toHaveLength(1);
+  expect(events[0]?.kind).toBe("provider_error");
+  expect(events[0]?.error?.kind).toBe("unavailable");
+  expect(events[0]?.error?.message).toBe("Anthropic API returned HTTP 503");
+  expect(JSON.stringify(events)).not.toContain("opaque upstream body");
+});

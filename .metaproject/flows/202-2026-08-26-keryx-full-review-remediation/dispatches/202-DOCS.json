@@ -1,0 +1,31 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-DOCS",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Restore validated review and remediation docpack", "description": "Recreate the tracked validation report and versioned requirements package from the validated findings in flow context.", "intent": "docs"},
+  "acceptance_criteria": [
+    "Create docs/reviews/keryx-full-project-review-validation-2026-08-26.md with confirmed/corrected/deferred/disproved evidence.",
+    "Create docs/requirements/keryx-full-review-remediation/{README.md,prd.md,specification.md,implementation-plan.md,catch-dispositions.md} with version/status and exact behavioral contracts.",
+    "catch-dispositions.md contains exactly C-01..C-14 using the audited sites and only intentional-fallback or observable-degraded."
+  ],
+  "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/docs/reviews/keryx-full-project-review-2026-08-24.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/rules/core/requirements-package-standard.mdc"
+  ],
+  "constraints": [
+    "Read the new worktree .metaproject/index.md before every repository action.",
+    "Use gdgraph/gdwiki/gdctx routing and keryx ctx rg; no bare rg/grep.",
+    "Use apply_patch; modify docs only; do not edit flow state, source, tests, graph, or commit.",
+    "All deliverables are Markdown and must distinguish validated evidence from inference.",
+    "Return STATUS first with files and security/docpack checks."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "docs/requirements/keryx-full-review-remediation/README.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:25:00Z", "created_by": "flow-orchestrator"}
+}

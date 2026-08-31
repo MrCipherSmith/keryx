@@ -33,13 +33,11 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService } from "../../../sac/workspace-service";
-import { createHarnessProposalLifecycleService, normalizeProposalLifecycleResult } from "../../../sac/proposal-lifecycle";
-import { proposalNotePath } from "../../../sac/proposal-evidence";
-import { sessionEvidenceRef } from "../../../sac/session-wrap-up";
+import { createHarnessProposalLifecycleService, localWorkspaceAuthorizationServer, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
 import { writeSlate } from "../../../session/slate";
 import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";
+import { guardOutput, prepareOutputForPersistence } from "../../../security/guard";
 
 // Mirrors PROPOSAL_KINDS in src/commands/workspace.ts exactly — every kind a
 // real owner writer exists for (ownerFor in proposal-lifecycle.ts).
@@ -87,6 +85,7 @@ export function workspaceCreateTool(cwd: string, getSessionDir?: () => string | 
         // session's slate so wrap-up can propose into it without a second
         // manual bind. Best-effort — no active session (or a slate-write
         // failure) never fails the create itself.
+        let bindingStatus: "binding_degraded" | undefined;
         const dir = getSessionDir?.();
         if (dir !== undefined) {
           try {
@@ -98,10 +97,16 @@ export function workspaceCreateTool(cwd: string, getSessionDir?: () => string | 
               workspaceId: workspace.id,
             }));
           } catch {
-            // ignored — the workspace exists; binding is best-effort
+            // The workspace exists even when binding is unavailable. Surface a
+            // stable, non-sensitive status without exposing the session path
+            // or raw write failure.
+            bindingStatus = "binding_degraded";
           }
         }
-        return { output: JSON.stringify(workspace, null, 2), isError: false };
+        return {
+          output: JSON.stringify(bindingStatus === undefined ? workspace : { ...workspace, bindingStatus }, null, 2),
+          isError: false,
+        };
       } catch (cause) {
         return errorOutput("workspace_create failed", cause);
       }
@@ -210,7 +215,19 @@ export function workspaceProposeTool(cwd: string, getSessionDir: () => string | 
         // Mirrors src/commands/workspace.ts's `propose` handler exactly.
         const session = findSession(cwd, sessionRef);
         if (!session) return { output: `workspace_propose: no session matching "${sessionRef}" in this project`, isError: true };
-        const { service: lifecycle, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(note ? { note } : {}) });
+        const proposalId = `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+        const notePath = proposalNotePath(cwd, workspaceId, proposalId);
+        const materializedNote = note === undefined
+          ? undefined
+          : prepareOutputForPersistence(
+              await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
+              note,
+            );
+        if (materializedNote !== undefined && !materializedNote.allowed) {
+          return { output: materializedNote.reason, isError: true };
+        }
+        const persistedNote = materializedNote?.allowed ? materializedNote.content : undefined;
+        const { service: lifecycle, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(persistedNote ? { note: persistedNote } : {}) });
         const requestCorrelationId = randomUUID();
         const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
         if (!actor) return { output: "workspace_propose: trusted ActorContext is required", isError: true };
@@ -219,7 +236,7 @@ export function workspaceProposeTool(cwd: string, getSessionDir: () => string | 
           request: undefined,
           requestCorrelationId,
           workspaceId,
-          id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`,
+          id: proposalId,
           proposalRevision: "1",
           kind: kind as never,
           wrapUp,
@@ -228,7 +245,7 @@ export function workspaceProposeTool(cwd: string, getSessionDir: () => string | 
         // sidecar the memory/wiki/skill owner-writers read back at accept
         // time, since accept may happen in a different process/reviewer
         // session. Mirrors src/commands/workspace.ts's `propose` handler.
-        if (note) await writeFile(proposalNotePath(cwd, workspaceId, proposal.id), note, "utf8");
+        if (persistedNote) await writeFile(notePath, persistedNote, "utf8");
         return { output: JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2), isError: false };
       } catch (cause) {
         return errorOutput("workspace_propose failed", cause);

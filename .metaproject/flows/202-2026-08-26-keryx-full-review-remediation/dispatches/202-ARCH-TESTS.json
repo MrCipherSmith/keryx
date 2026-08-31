@@ -1,0 +1,32 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-ARCH-TESTS",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {"title": "Add structural regression tests for remediated boundaries", "description": "Add focused tests proving neutral shell imports, absent TUI runtime import, injected/no-op fleet behavior, SAC runtime-SCC removal, and harness facade usage.", "intent": "test"},
+  "acceptance_criteria": [
+    "Architecture test proves background registry imports the neutral process seam and not shell-exec-tool.",
+    "Architecture test proves spawn-subagent has no TUI runtime import and covers injected fleet events plus absent sink.",
+    "SAC test proves no runtime value-import SCC and no direct SAC implementation imports from workspace tools while behavior invariants pass.",
+    "All new tests and tsc pass without production edits."
+  ],
+  "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "custom", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/process/shell-spawn.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/machine-wrap-up.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.test.ts"
+  ],
+  "constraints": [
+    "Read exact worktree index and testing context first; use gdgraph/gdctx/keryx ctx rg.",
+    "Tests only: add review-remediation architecture/lifecycle tests; no production/docs/flow/graph/commit/full suite.",
+    "Parse runtime imports accurately enough to exclude import type; do not weaken behavior assertions; apply_patch; STATUS first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/harness/tool/builtin/review-remediation-architecture.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:39:00Z", "created_by": "flow-orchestrator"}
+}

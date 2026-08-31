@@ -129,6 +129,11 @@ describe("runModelTurn", () => {
     ).toBe("anthropic");
   });
 
+  test("C-02: saved-shell resolution failure falls through to deterministic candidates", () => {
+    expect(resolveAutoProvider({}, { preferSavedShell: false })).toEqual({ provider: "anthropic" });
+    expect(resolveAutoProvider({ OPENAI_API_KEY: "fixture-key" }, { preferSavedShell: false }).provider).toBe("openai");
+  });
+
   test("runModelTurn without --provider uses auto provider from env keys", async () => {
     const seen: string[] = [];
     const factory: ProviderFactory = (name) => {

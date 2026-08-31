@@ -5,8 +5,11 @@
 // for anyone who does not use it, and that when it IS used the child is still
 // gated by the same admission the native path goes through.
 import { expect, test } from "bun:test";
-import { createSpawnSubagentTool, type StructuredSubagentResult } from "./spawn-subagent-tool";
-import { setSubagentFleetListener, type SubagentFleetEvent } from "../../../tui/subagent-bridge";
+import {
+  createSpawnSubagentTool,
+  type SpawnSubagentFleetEvent,
+  type StructuredSubagentResult,
+} from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
 
 function stubProvider(text: string): ProviderPort {
@@ -34,7 +37,10 @@ function stubProvider(text: string): ProviderPort {
   };
 }
 
-function makeTool(runExternal?: Parameters<typeof createSpawnSubagentTool>[0]["runExternal"]) {
+function makeTool(
+  runExternal?: Parameters<typeof createSpawnSubagentTool>[0]["runExternal"],
+  onFleetEvent?: Parameters<typeof createSpawnSubagentTool>[0]["onFleetEvent"],
+) {
   return createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
@@ -46,6 +52,7 @@ function makeTool(runExternal?: Parameters<typeof createSpawnSubagentTool>[0]["r
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
     ...(runExternal === undefined ? {} : { runExternal }),
+    ...(onFleetEvent === undefined ? {} : { onFleetEvent }),
   });
 }
 
@@ -236,60 +243,50 @@ test("an empty task is still refused before the hook is consulted", async () => 
 // not just the terminal one — a row that starts life looking native is a row the
 // operator has already read by the time it is corrected.
 
-function captureFleet(): { events: SubagentFleetEvent[]; stop: () => void } {
-  const events: SubagentFleetEvent[] = [];
-  setSubagentFleetListener((event) => events.push(event));
-  return { events, stop: () => setSubagentFleetListener(undefined) };
+function captureFleet(): {
+  events: SpawnSubagentFleetEvent[];
+  onFleetEvent: NonNullable<Parameters<typeof createSpawnSubagentTool>[0]["onFleetEvent"]>;
+} {
+  const events: SpawnSubagentFleetEvent[] = [];
+  return { events, onFleetEvent: (event) => events.push(event) };
 }
 
 test("an external dispatch marks every sidebar upsert with its runtime and agent", async () => {
   const captured = captureFleet();
-  try {
-    const tool = makeTool(async () => EXTERNAL_RESULT);
-    await tool.invoke({
-      task: "Find why the resume suite is flaky",
-      mode: "read_only",
-      label: "codex-1",
-      runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" },
-    });
-    const upserts = captured.events.filter((e) => e.kind === "upsert");
-    expect(upserts.length).toBeGreaterThanOrEqual(2);
-    for (const event of upserts) {
-      expect(event).toMatchObject({ runtime: "external", agentId: "codex-cli" });
-    }
-  } finally {
-    captured.stop();
+  const tool = makeTool(async () => EXTERNAL_RESULT, captured.onFleetEvent);
+  await tool.invoke({
+    task: "Find why the resume suite is flaky",
+    mode: "read_only",
+    label: "codex-1",
+    runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" },
+  });
+  const upserts = captured.events.filter((e) => e.kind === "upsert");
+  expect(upserts.length).toBeGreaterThanOrEqual(2);
+  for (const event of upserts) {
+    expect(event).toMatchObject({ runtime: "external", agentId: "codex-cli" });
   }
 });
 
 test("a native dispatch carries no runtime mark at all", async () => {
   const captured = captureFleet();
-  try {
-    const tool = makeTool(async () => EXTERNAL_RESULT);
-    await tool.invoke({ task: "Review auth module", mode: "read_only", label: "native" });
-    for (const event of captured.events.filter((e) => e.kind === "upsert")) {
-      expect((event as { runtime?: unknown }).runtime).toBeUndefined();
-    }
-  } finally {
-    captured.stop();
+  const tool = makeTool(async () => EXTERNAL_RESULT, captured.onFleetEvent);
+  await tool.invoke({ task: "Review auth module", mode: "read_only", label: "native" });
+  for (const event of captured.events.filter((e) => e.kind === "upsert")) {
+    expect((event as { runtime?: unknown }).runtime).toBeUndefined();
   }
 });
 
 test("a dispatch with a runtime block but NO hook stays unmarked — it ran natively", async () => {
   // The mark describes what actually executed, not what was asked for.
   const captured = captureFleet();
-  try {
-    const tool = makeTool();
-    await tool.invoke({
-      task: "Review auth module briefly",
-      mode: "read_only",
-      label: "auth-check",
-      runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" },
-    });
-    for (const event of captured.events.filter((e) => e.kind === "upsert")) {
-      expect((event as { runtime?: unknown }).runtime).toBeUndefined();
-    }
-  } finally {
-    captured.stop();
+  const tool = makeTool(undefined, captured.onFleetEvent);
+  await tool.invoke({
+    task: "Review auth module briefly",
+    mode: "read_only",
+    label: "auth-check",
+    runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" },
+  });
+  for (const event of captured.events.filter((e) => e.kind === "upsert")) {
+    expect((event as { runtime?: unknown }).runtime).toBeUndefined();
   }
 });

@@ -15,7 +15,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { guardOutput, redactRaw, formatGuardWarning } from "../security/guard";
+import { guardOutput, formatGuardWarning, prepareOutputForPersistence } from "../security/guard";
 import type { CoverageMap, CoverageMapEntry, TestingConfig } from "./types";
 
 const COVERAGE_MAP_SCHEMA_VERSION = 1 as const;
@@ -236,14 +236,15 @@ export async function buildCoverageMap(
   // Persist any raw coverage output through the security write seam (AC18).
   if (raw.length > 0) {
     const guard = await guardOutput({ cwd, content: raw, target: "report", source: "tool-output" });
-    if (guard.allowed) {
-      await writeRawCoverageLog(cwd, (await redactRaw({ cwd, content: raw, source: "tool-output" })).content);
+    const output = prepareOutputForPersistence(guard, raw);
+    if (output.allowed) {
+      await writeRawCoverageLog(cwd, output.content);
       const warning = formatGuardWarning(guard.decision, "testing");
       if (warning) {
         securityWarnings.push(warning);
       }
     } else {
-      securityWarnings.push(`raw coverage log not persisted: ${guard.reason ?? "security gate blocked"}`);
+      securityWarnings.push(`raw coverage log not persisted: ${output.reason}`);
     }
   }
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
 import { collectGitProvenance } from "../metrics/provenance";
 import { readArtifactPointer } from "../metrics/lifecycle";
-import { guardOutput, redactRaw, formatGuardWarning } from "../security/guard";
+import { guardOutput, redactRaw, formatGuardWarning, prepareOutputForPersistence } from "../security/guard";
 import { isTestingCapabilityEnabled } from "./capability";
 import { loadCoverageMap, selectByCoverageMap, coveredFilesInMap } from "./coverage-map";
 import { relatedByNamingAndDirectory as relatedNaming, resolveSmokeSet, staticChangedSelection } from "./selection";
@@ -159,15 +159,16 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
       target: "report",
       source: "tool-output",
     });
-    if (guard.allowed) {
-      rawLogPath = await writeRawLog(cwd, raw);
+    const output = prepareOutputForPersistence(guard, raw);
+    if (output.allowed) {
+      rawLogPath = await writeRawLog(cwd, output.content);
       const warning = formatGuardWarning(guard.decision, "testing");
       if (warning) {
         securityWarnings.push(warning);
       }
     } else {
       securityWarnings.push(
-        `raw log not persisted: ${guard.reason ?? "security gate blocked"}`,
+        `raw log not persisted: ${output.reason}`,
       );
     }
     // Everything derived from output and put into the committable report must

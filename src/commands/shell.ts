@@ -39,6 +39,7 @@ import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import { emitBackgroundJob } from "../tui/job-bridge";
+import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
@@ -1832,6 +1833,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd,
+        onFleetEvent: emitSubagentFleet,
         onLedgerReady: (controls) => {
           resetSubagentBudget = controls.resetBudget;
         },

@@ -41,6 +41,12 @@ import {
 } from "../session/slate-lifecycle";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
+const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
+
+function isDurableToolCall(name: string, risk: string | undefined): boolean {
+  return risk !== "read" || DURABLE_READ_TOOL_NAMES.has(name);
+}
+
 /**
  * Extra context handed to an approver alongside the raw tool input.
  *
@@ -1456,7 +1462,7 @@ async function runAgentTurnCore(
       // web content entered history, EVERY later tool call for the rest of
       // the session was refused, including plain code/graph/wiki lookups
       // that have nothing to do with the tainted content.
-      if (risk !== "read" && (untrustedContentSeen || batchContainsUntrustedWeb)) {
+      if (isDurableToolCall(call.name, risk) && (untrustedContentSeen || batchContainsUntrustedWeb)) {
         const result: InteractiveToolResult = {
           output: "tool blocked: external web content cannot authorize further tool calls in this turn",
           isError: true,

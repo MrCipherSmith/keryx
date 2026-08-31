@@ -14,7 +14,7 @@
 // a claim about any vendor's lineup — the resolution holds no table of models, so
 // a test that used real ids would be testing the ids rather than the mechanism.
 import { expect, test } from "bun:test";
-import { createSpawnSubagentTool } from "./spawn-subagent-tool";
+import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
 
 function stubProvider(text: string): ProviderPort {
@@ -59,6 +59,7 @@ function makeTool(
   sessionModel: string = SESSION_MODEL,
 ) {
   const built: { providerId: string; modelId: string }[] = [];
+  const fleetEvents: SpawnSubagentFleetEvent[] = [];
   const tool = createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: sessionModel }),
@@ -72,8 +73,9 @@ function makeTool(
       return () => `tier-${n++}`;
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
+    onFleetEvent: (event) => fleetEvents.push(event),
   });
-  return { tool, built };
+  return { tool, built, fleetEvents };
 }
 
 const RANKABLE = [{ name: "ollama", models: [SESSION_MODEL, ABOVE, BELOW] }];
@@ -92,11 +94,15 @@ test("model_tier deep runs the child on a DISCOVERED model ranked above the sess
 });
 
 test("model_tier light runs the child on a discovered model ranked below the session's", async () => {
-  const { tool, built } = makeTool(RANKABLE);
+  const { tool, built, fleetEvents } = makeTool(RANKABLE);
   const result = await tool.invoke({ task: "mechanical check", mode: "read_only", model_tier: "light" });
 
   expect(built).toEqual([{ providerId: "ollama", modelId: BELOW }]);
   expect(result.output).toMatch(/model tier light .*\[discovered\]/);
+  const tierLog = fleetEvents.find(
+    (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.includes("model tier light"),
+  );
+  expect(tierLog).toBeDefined();
 });
 
 test("model_tier standard is the session's own model, recorded as ranked rather than fallen back to", async () => {

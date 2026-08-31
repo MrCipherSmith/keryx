@@ -1,0 +1,29 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-FIX-FLEET-TEST",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Adapt external fleet test to injected event sink", "description": "Fix the sole new full-suite failure by injecting the fleet listener into createSpawnSubagentTool instead of relying on the removed runtime TUI import.", "intent": "fix"},
+  "acceptance_criteria": [
+    "External dispatch test receives at least two injected upserts marked runtime=external and agentId=codex-cli.",
+    "Native and no-hook runtime cases remain unmarked.",
+    "Production remains unchanged; targeted suite and tsc pass."
+  ],
+  "context_refs": [{"path": ".metaproject/data/gdctx/artifacts/latest.md", "kind": "report", "exists": true}],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.ts"
+  ],
+  "constraints": [
+    "Read exact worktree index/testing context first; use gdgraph/gdctx/keryx ctx rg.",
+    "Modify only spawn-subagent-external-seam.test.ts; do not restore a production TUI import.",
+    "Use apply_patch; no flow/graph/commit/full suite; STATUS first with targeted and tsc."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:50:00Z", "created_by": "flow-orchestrator"}
+}

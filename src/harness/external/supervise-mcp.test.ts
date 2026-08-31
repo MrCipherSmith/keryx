@@ -39,7 +39,7 @@ interface FakeHarness {
   sendElicitation(request: RawElicitationRequest): Promise<ElicitationResponsePayload>;
 }
 
-function fakePort(toolCallOutcome: McpToolCallOutcome): FakeHarness {
+function fakePort(toolCallOutcome: McpToolCallOutcome, closeError?: Error): FakeHarness {
   const connectCalls: Array<{ argv: readonly string[]; options: McpSpawnOptions }> = [];
   const callToolCalls: Array<{ name: string; args: Record<string, unknown>; timeoutMs: number | undefined }> = [];
   let codexEventHandler: ((event: RawCodexEventNotification) => void) | undefined;
@@ -63,6 +63,7 @@ function fakePort(toolCallOutcome: McpToolCallOutcome): FakeHarness {
             codexEventHandler = handler;
           },
           async close(): Promise<void> {
+            if (closeError !== undefined) throw closeError;
             harness.closed = true;
           },
         };
@@ -501,6 +502,20 @@ describe("superviseCodexMcpRun — elicitation-answer timeout (T10, AC4)", () =>
 
     expect(outcome.elicitations[0]).toMatchObject({ verdict: "deny", timedOut: false });
   });
+});
+
+test("C-05: connection close rejection preserves the computed MCP outcome", async () => {
+  const harness = fakePort(
+    { kind: "result", result: { content: "done", isError: false } },
+    new Error("cleanup failed"),
+  );
+  const outcome = await superviseCodexMcpRun(baseInput(), {
+    client: harness.port,
+    requestApproval: undefined,
+  });
+
+  expect(outcome.toolCall).toEqual({ kind: "result", result: { content: "done", isError: false } });
+  expect(outcome.events.map((event) => event.kind)).toContain("child_finished");
 });
 
 // ---------------------------------------------------------------------------

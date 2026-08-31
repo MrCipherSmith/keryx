@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-REVIEW-SECURITY",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Review durable-write security remediation",
+    "description": "Independent security and test-adequacy review of guarded persistence sinks, web-taint tool authorization, session/proposal/wiki handling, and acknowledgement semantics.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Trace untrusted web output to every modified durable sink and verify guard-before-write with redacted output.",
+    "Verify read-only tools stay usable while durable write-risk tools and needs-approval confirmations fail closed.",
+    "Return severity-ranked findings or explicit no-findings verdict with residual risks."
+  ],
+  "context_refs": [
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true},
+    {"path": "src/security/web-taint-durable-boundary.test.ts", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+  ],
+  "constraints": [
+    "Read the exact worktree index and reviewer skill before navigation; use gdgraph/gdwiki/gdctx and keryx ctx rg.",
+    "Read-only: do not modify files, flow state, generated artifacts, or commits.",
+    "Review commit range 1ece28b2818d6ce2d5bfa89e0bc8a8b57b96c797..HEAD plus working-tree changes.",
+    "Do not recommend weakening durable-write denial or logging raw rejected content."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/review-security.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-26T05:57:30Z", "created_by": "review-orchestrator"}
+}
