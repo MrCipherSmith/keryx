@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Smart Pull Request creation: analyzes all branch commits, generates structured title and description with Summary/Changes/Test plan, creates PR via gh CLI. Auto-pushes if branch not on remote."
+description: "Use when opening a pull request for the current branch."
 triggers:
   - "/pr"
   - "Create PR"

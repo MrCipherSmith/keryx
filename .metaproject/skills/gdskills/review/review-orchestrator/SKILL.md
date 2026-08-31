@@ -534,9 +534,22 @@ Rules:
 
 A **fix round** is any review of work produced to answer earlier findings. Set
 `is_fix_round: true` on every reviewer input, and populate `prior_findings` with
-the earlier findings and the disposition the fix claimed for each — the schema
-rejects the dispatch otherwise. A reviewer that cannot see what the fix was
-answering cannot tell whether the fix is complete.
+the earlier findings and the disposition the fix claimed for each.
+
+**Nothing refuses a dispatch that omits them, and this file used to say
+otherwise.** `reviewer-input.schema.json` states the rule and no production
+TypeScript loads that schema; reviewer dispatch is an action the host agent
+takes, not a `keryx` invocation, so there is no point at which a malformed
+dispatch could be rejected. `reviewer-input` is also absent from the `CONTRACTS`
+registry (`src/gdskills/contracts.ts`), so `keryx skills contracts validate`
+cannot be pointed at it either. The sentence that stood here until flow 209 told
+you the schema would reject a dispatch without `prior_findings`; it asserted an
+enforcement that has never existed, which is the same class of claim this whole
+package was written to delete.
+
+So this is a requirement on you, unenforced, and the only evidence it was met is
+the `prior_findings` array the reviewer actually receives. A reviewer that cannot
+see what the fix was answering cannot tell whether the fix is complete.
 
 Two scope rules apply, and they exist because breaking them is what produced
 seven rounds on PR #215 and four on PR #216:

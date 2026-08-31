@@ -105,7 +105,16 @@ export interface ParsedChildResult {
   canonical: CanonicalSubagentResult;
 }
 
-const CANONICAL_STATUS_TOKENS: ReadonlySet<CanonicalSubagentStatus> = new Set([
+/**
+ * The only first-line tokens {@link parseChildResult} accepts.
+ *
+ * Exported because it is the contract a shipped skill has to ask for. A skill
+ * whose build never says `STATUS: <TOKEN>` produces prose that this function
+ * THROWS on, and a skill that names a token absent from this set does the same —
+ * so `src/gdskills/status-contract.test.ts` reads the vocabulary from here
+ * rather than restating it, and the two cannot drift.
+ */
+export const CANONICAL_STATUS_TOKENS: ReadonlySet<CanonicalSubagentStatus> = new Set([
   "DONE",
   "DONE_WITH_CONCERNS",
   "NEEDS_CONTEXT",

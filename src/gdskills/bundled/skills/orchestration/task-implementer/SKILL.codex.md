@@ -1,6 +1,7 @@
 ---
 name: task-implementer
-description: "Autonomous implementation agent that receives a single atomic task (JSON task object from issue-analyzer) and implements it end-to-end: researches codebase, plans changes, writes code, creates tests/stories as needed, verifies via lint/type-check/test, and reports results. Use when: implementing a single decomposed task from issue-analyzer, executing code changes autonomously."
+model_tier: standard
+description: "Use when implementing a single decomposed task from issue-analyzer end-to-end, or executing autonomous code changes from a JSON task object."
 triggers:
   - "Implement task"
   - "Execute task scenario"
@@ -9,8 +10,9 @@ triggers:
   - "Implement issue task"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.2.0"
   category: "implementation"
+  agent_worthy: true
   compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
 ---
@@ -38,7 +40,7 @@ Phase 2: RESEARCH   →  Deep-read target files, understand module patterns
 Phase 3: PLAN       →  Decide implementation approach, list file changes
 Phase 4: IMPLEMENT  →  Write code, tests, stories
 Phase 5: VERIFY     →  Run lint, type-check, tests
-Phase 6: REPORT     →  Emit JSON result object
+Phase 6: REPORT     →  Write result file + emit compact STATUS response
 ```
 
 ---
@@ -75,6 +77,7 @@ TASK: (from JSON object passed by orchestrator)
   existing_tests:       array of file path strings (may be empty)
   existing_stories:     array of file path strings (may be empty)
   module_patterns:      string: how similar code is written in this module
+  test_case_specs:      optional — provided by tests-creator (RED-phase test stubs already committed)
 ```
 
 **1.2 Extract from workspace context:**
@@ -105,6 +108,18 @@ ASSERT codebase_path EXISTS           → otherwise ABORT("Codebase path not fou
 ASSERT branch IS NOT EMPTY            → otherwise ABORT("Wrong branch checked out")
 ```
 
+**1.5 TDD Check (if `test_case_specs` is present):**
+
+If the task object contains `test_case_specs` (provided by `tests-creator`):
+1. Read each test file listed in `test_case_specs.test_files`
+2. Run the tests using `test_case_specs.run_command` — confirm they FAIL
+3. If tests pass already → report `DONE_WITH_CONCERNS` (tests may not be testing the right thing)
+4. Note: **implementation goal is to make these tests GREEN** — do not rewrite or delete them
+
+If `test_case_specs` is absent:
+- The task was not pre-processed by `tests-creator`
+- Write tests as part of Phase 4 (standard mode) following `tdd-workflow.mdc`
+
 ### Phase 2: RESEARCH
 
 Deep-read the target files and surrounding module to understand patterns.
@@ -112,10 +127,20 @@ Deep-read the target files and surrounding module to understand patterns.
 **2.0 Read job context (if available):**
 
 If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
-- Read `CONTEXT_PATH` (e.g., `.metaproject/jobs/<job-name>/ai/context.md`)
+- Read `CONTEXT_PATH` (e.g., `<JOBS_ROOT>/<job-name>/ai/context.md`)
 - Extract relevant sections: library docs, codebase patterns, conventions, best practices
 - Use this context throughout Phase 2-4 to guide implementation decisions
 - If the file does not exist, proceed without it — context is optional
+
+**2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+
+Before you rely on a project-skill's guidance, confirm it still matches the code:
+- `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
+- If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
+- If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+- If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
+
+This step is read-only and inline; do not spawn a subagent for it.
 
 **2.1 Read all target files:**
 - Read each file from `target_files` in full
@@ -139,15 +164,28 @@ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
 
 **2.4 Load relevant rules (from `module_patterns` or by detection):**
 
-Based on what you're implementing, load and follow the relevant project rules:
+Based on what you're implementing, load and follow the relevant project rules.
 
-| Task Type | Relevant Rules |
+**Always load (all task types):**
+- `tdd-workflow.mdc` — red-green-refactor, STATUS: DONE requires passing tests
+- `error-handling.mdc` — Result pattern, no silent failures
+- `solid-principles.mdc` — SRP, OCP, DIP (load for any task that creates new classes/services)
+
+**Load by task type:**
+
+| Task Type | Additional Rules |
 |-----------|---------------|
 | `ui_component` | `code-style-patterns.mdc`, `frontend-assistant.mdc`, `storybook-guidelines.mdc` |
 | `store_logic` | `code-style-patterns.mdc`, `mobx-store-template.mdc` |
-| `service_api` | `code-style-patterns.mdc`, `nestjs-dto.mdc` |
-| `fix` | Load rules based on the files being fixed |
-| `mixed` | Load all applicable rules |
+| `service_api` | `code-style-patterns.mdc`, `nestjs-dto.mdc`, `api-contracts.mdc` |
+| `fix` | Rules based on the files being fixed; always `error-handling.mdc` |
+| `mixed` | All applicable rules above |
+
+**Load when detected:**
+- Database/ORM files touched → `database-patterns.mdc`
+- Auth, API keys, user input → `security-baseline.mdc`
+- `async`/`await` or queue code → `async-patterns.mdc`
+- New architectural layers or modules → `clean-architecture.mdc`
 
 Rules are located at:
 - OpenCode: `.metaproject/rules/core/<rule>.mdc`
@@ -204,13 +242,25 @@ CHANGE_PLAN:
 
 Execute the change plan. Write production-quality code.
 
-**4.1 Implementation order:**
+**4.0 TDD Mode Selection:**
+
+- **TDD Mode** (when `test_case_specs` is present): tests already exist and are RED. Skip to writing implementation code that makes them GREEN. Do NOT write new tests — only write code that satisfies the existing stubs.
+- **Standard Mode** (no `test_case_specs`): write tests first (per `tdd-workflow.mdc`), then implementation.
+
+**4.1 Implementation order (Standard Mode):**
 1. Types and interfaces first (shared types, DTOs)
-2. Service/API layer changes
-3. Store/logic layer changes
-4. Component/UI layer changes
-5. Tests
+2. Write failing tests for each acceptance criterion (RED)
+3. Service/API layer implementation (make service tests GREEN)
+4. Store/logic layer implementation (make store tests GREEN)
+5. Component/UI layer implementation (make component tests GREEN)
 6. Stories (if needed)
+
+**4.1 Implementation order (TDD Mode — test_case_specs provided):**
+1. Read all test stubs from `test_case_specs.test_files`
+2. Understand the expected API shape from test assertions
+3. Implement types/interfaces to satisfy test imports
+4. Implement code layer by layer until all tests are GREEN
+5. Stories (if needed)
 
 **4.2 Code standards (always follow):**
 - TypeScript strict mode — no `any`, no `as` casts unless justified
@@ -316,10 +366,15 @@ task: <task_id>"
 
 ### Phase 6: REPORT
 
-Emit a JSON result object as the final message to the orchestrator.
+Write the full result to a file, then emit a compact STATUS response to the orchestrator.
 
-**Output structure:**
+**6.1 Write result file (when `JOB_NAME` is provided):**
 
+If the orchestrator provided `JOB_NAME` in the workspace context:
+```bash
+mkdir -p <JOBS_ROOT>/<JOB_NAME>/results
+```
+Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 ```json
 {
   "task_id": "<task_id>",
@@ -336,14 +391,25 @@ Emit a JSON result object as the final message to the orchestrator.
   "test_result": "<pass|N passed, M failed: details|skipped>",
   "story_result": "<pass|build error: details|not applicable>",
   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
+  "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
   "notes": "<any warnings, blockers, or additional context>"
 }
 ```
 
+Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+
+If `JOB_NAME` is not provided, skip the file write.
+
+**6.2 Emit compact STATUS response:**
+
+Return a compact STATUS response following `rules/core/subagent-status-protocol.md`.
+**Do NOT include the full JSON block inline** — the orchestrator reads the result file when it needs details.
+The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary.
+
 **Status classification:**
-- `success`: All acceptance criteria met, all verifications pass
-- `partial`: Some criteria met or some verification failures after self-fix attempts
-- `failed`: Critical blockers prevented implementation. Worktree must be reverted via `git reset --hard`.
+- `success` → `STATUS: DONE`
+- `partial` → `STATUS: DONE_WITH_CONCERNS`
+- `failed` → `STATUS: BLOCKED`
 
 ---
 
@@ -392,13 +458,109 @@ This skill is designed to run fully autonomously. The following settings control
 
 ---
 
+## Red Flags — Stop and re-read this skill if you are thinking:
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "I'll implement first and verify acceptance criteria later" | Implementing without criteria means you might build the wrong thing correctly |
+| "This is a small change, I don't need to read the context document" | Context documents exist because the task description alone is incomplete by design |
+| "The task description is clear, I don't need to read related files first" | Module patterns and conventions only emerge from reading the actual files, not the description |
+| "I'll report DONE and note the skipped tests as a concern" | Skipped verification is a failed verification — partial is not done |
+| "I understand how this module works from previous tasks" | Each task targets a specific slice; read the files fresh to catch state that has changed |
+
+**IRON LAW: READ ALL SPECIFIED FILES AND THE CONTEXT DOCUMENT BEFORE WRITING A SINGLE LINE OF CODE.**
+
+---
+
+## Reporting Results
+
+**Rule:** `rules/core/subagent-status-protocol.md`
+
+Every final response to the orchestrator MUST begin with `STATUS: <STATUS>`. The full JSON result object is written to a file in Phase 6.1 — the inline response contains only the compact STATUS format. No JSON in the response body.
+
+### Iron Law
+
+**STATUS LINE IS MANDATORY — ORCHESTRATOR CANNOT INTERPRET FREE TEXT**
+
+### When to use each status
+
+| Status | Use when |
+|--------|----------|
+| `DONE` | All acceptance criteria met, all verifications pass (or pass after self-fix) |
+| `DONE_WITH_CONCERNS` | Task complete but: criteria required interpretation, workaround was used, unexpected discovery, verification passed with warnings |
+| `BLOCKED` | Unresolvable blocker: required file missing after checking, unresolvable type errors after 3 attempts, branch conflict needing orchestrator action |
+| `NEEDS_CONTEXT` | Task input is incomplete: `target_files` empty, `acceptance_criteria` uses undefined terms, `context` field missing required types |
+
+### Correct final response format
+
+```
+STATUS: DONE
+
+## Completed
+- Added validation logic to PipelineStep component
+- Created unit tests covering all 4 acceptance criteria
+- Committed 2 conventional commits
+
+## Files changed
+- src/components/PipelineStep.tsx — added validateStep() method
+- src/components/PipelineStep.test.tsx — new test file, 14 tests
+
+## Verification
+- lint: pass
+- type-check: pass
+- tests: 14 passed, 0 failed
+
+Result file: <JOBS_ROOT>/<job-name>/results/task-1.json
+```
+
+For `DONE_WITH_CONCERNS`:
+
+```
+STATUS: DONE_WITH_CONCERNS
+
+## Completed
+- Implemented feature as described
+
+## Files changed
+- src/services/auth.ts — updated token refresh logic
+
+## Verification
+- lint: pass
+- type-check: pass
+- tests: 8 passed, 0 failed
+
+## Concerns for orchestrator
+- The acceptance criterion "support legacy tokens" was ambiguous — implemented support for both v1 and v2 token formats. If only v2 is needed, the v1 branch can be removed.
+
+Result file: <JOBS_ROOT>/<job-name>/results/task-2.json
+```
+
+For `BLOCKED`:
+
+```
+STATUS: BLOCKED
+
+## Reason
+src/types/pipeline.ts does not exist and is listed as a dependency. Cannot implement the store layer without the type definitions.
+
+## What I need from orchestrator
+Run task-1 (which creates pipeline.ts) before re-dispatching this task, or provide the type definitions directly.
+
+## Work completed so far
+- (nothing — blocked before implementation could start)
+```
+
+See `rules/core/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
+
+---
+
 ## Job Context Awareness
 
 When dispatched by `job-orchestrator`, the prompt MAY include:
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
 If provided, read the context document at the start of Phase 2 (RESEARCH) before reading target files. The context document contains:

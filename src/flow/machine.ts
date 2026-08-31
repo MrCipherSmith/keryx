@@ -106,6 +106,143 @@ export function isUnknownDisposition(task: FlowTask): boolean {
   return !GATE_PASSING_DISPOSITIONS.has(task.disposition);
 }
 
+// --- `dependsOn`, read (flow 209, AC6) ---
+//
+// `dependsOn` was written by `flow task add --depends`, migrated by
+// `store.ts:175`, typed in `types.ts:64` — and read by nothing, for two
+// releases. `flow-orchestrator`'s documented "resume at the first task not done,
+// respecting `dependsOn` order" had no code behind it, so the ordering an
+// operator declared was advice to a model and nothing more.
+//
+// The two functions below are that code. `nextTask` is the resume decision
+// (`keryx flow next`); `dependencyIssues` is the integrity check
+// (`keryx flow check`, which exits non-zero). Both are pure over an already
+// loaded task list, so both are testable without touching disk — and both are
+// reached from the CLI, which is what "used" has to mean after `attempts.count`.
+
+/** What `keryx flow next` answers. Exactly one of the three shapes. */
+export type NextTaskDecision =
+  | { kind: "ready"; task: FlowTask }
+  | { kind: "blocked"; blocked: Array<{ task: FlowTask; waitingOn: string[] }> }
+  | { kind: "none" };
+
+/** A task is satisfied for ordering purposes once it is `done`, however it ended. */
+function isSatisfied(task: FlowTask | undefined): boolean {
+  return task?.status === "done";
+}
+
+/**
+ * The first task that is not done and whose declared dependencies are all done.
+ *
+ * "First" is the task list's own order, which is creation order: `dependsOn`
+ * constrains it, and does not replace it. A dependency naming a task that does
+ * not exist is treated as UNSATISFIED rather than ignored — the alternative is
+ * that a typo silently unblocks the task it was meant to hold back, which is the
+ * failure mode of every check that defaults to permissive.
+ *
+ * `blocked` (rather than `none`) when work remains but nothing is startable:
+ * that is a real state — a dependency cycle, or a typo — and reporting it as
+ * "nothing left to do" would close a flow over open work, which is the leak the
+ * task gate exists to stop.
+ */
+export function nextTask(tasks: readonly FlowTask[]): NextTaskDecision {
+  const byId = new Map(tasks.map((task) => [task.id.toUpperCase(), task]));
+  const blocked: Array<{ task: FlowTask; waitingOn: string[] }> = [];
+  for (const task of tasks) {
+    if (task.status === "done") {
+      continue;
+    }
+    const waitingOn = (task.dependsOn ?? [])
+      .map((dependency) => dependency.toUpperCase())
+      .filter((dependency) => !isSatisfied(byId.get(dependency)));
+    if (waitingOn.length === 0) {
+      return { kind: "ready", task };
+    }
+    blocked.push({ task, waitingOn });
+  }
+  return blocked.length === 0 ? { kind: "none" } : { kind: "blocked", blocked };
+}
+
+/** One way a task list's `dependsOn` graph is broken. */
+export type DependencyIssue = {
+  task: string;
+  kind: "unknown-dependency" | "self-dependency" | "cycle";
+  message: string;
+};
+
+/**
+ * Everything wrong with the declared dependency graph.
+ *
+ * Reported by `keryx flow check`, which fails on it. Without this the three
+ * shapes below are all silently equivalent to "no dependencies": a dependency on
+ * a task that was renamed, a task depending on itself, and a cycle each produce a
+ * `dependsOn` array nothing can satisfy, and before AC6 nothing looked.
+ */
+export function dependencyIssues(tasks: readonly FlowTask[]): DependencyIssue[] {
+  const known = new Set(tasks.map((task) => task.id.toUpperCase()));
+  const issues: DependencyIssue[] = [];
+  for (const task of tasks) {
+    for (const raw of task.dependsOn ?? []) {
+      const dependency = raw.toUpperCase();
+      if (dependency === task.id.toUpperCase()) {
+        issues.push({
+          task: task.id,
+          kind: "self-dependency",
+          message: `${task.id} depends on itself, so it can never become ready`,
+        });
+        continue;
+      }
+      if (!known.has(dependency)) {
+        issues.push({
+          task: task.id,
+          kind: "unknown-dependency",
+          message: `${task.id} depends on ${dependency}, which is not a task in this flow — the dependency can never be satisfied`,
+        });
+      }
+    }
+  }
+  for (const id of tasksInCycles(tasks)) {
+    issues.push({
+      task: id,
+      kind: "cycle",
+      message: `${id} is part of a dependsOn cycle, so neither it nor anything waiting on it can ever start`,
+    });
+  }
+  return issues;
+}
+
+/**
+ * Ids that cannot be ordered — i.e. that remain after repeatedly removing every
+ * task whose dependencies are all outside the remaining set.
+ *
+ * A Kahn-style peel rather than a DFS, because the answer wanted here is "which
+ * tasks are stuck", not "which edge closed the loop": every member of a cycle,
+ * and everything downstream of one, is equally unable to start, and naming only
+ * the back-edge would send an operator to one task out of four.
+ */
+function tasksInCycles(tasks: readonly FlowTask[]): string[] {
+  const known = new Set(tasks.map((task) => task.id.toUpperCase()));
+  const remaining = new Map(
+    tasks.map((task) => [
+      task.id.toUpperCase(),
+      (task.dependsOn ?? [])
+        .map((dependency) => dependency.toUpperCase())
+        .filter((dependency) => known.has(dependency) && dependency !== task.id.toUpperCase()),
+    ]),
+  );
+  let peeled = true;
+  while (peeled) {
+    peeled = false;
+    for (const [id, dependencies] of remaining) {
+      if (dependencies.every((dependency) => !remaining.has(dependency))) {
+        remaining.delete(id);
+        peeled = true;
+      }
+    }
+  }
+  return [...remaining.keys()].sort();
+}
+
 export type TaskGateVerdict = {
   passed: boolean;
   /** Non-terminal tasks: status is not yet "done". */

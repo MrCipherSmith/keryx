@@ -1,6 +1,6 @@
 ---
 name: commit
-description: "Smart git commit: auto-stages changes, analyzes diff, generates conventional commit message. Supports custom messages, amend, and selective staging. Use when committing code changes with meaningful messages."
+description: "Use when committing code changes and a well-structured conventional commit message is needed, with optional amend or selective staging."
 triggers:
   - "/commit"
   - "Commit changes"

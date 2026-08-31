@@ -35,11 +35,24 @@ alongside them:
 
 ## Status
 
-**Phases 0 and 1 delivered** in 0.2.70 (flow 201, PR #408). Phases 2 through 7
-are specified and not started.
+**All seven phases delivered**, released as **0.2.72 on 2026-08-30**
+(`eb987aa2`). Phases 0 and 1 landed first, in 0.2.70 (flow 201, PR #408);
+phases 2 through 7 followed in 0.2.71 and 0.2.72. This block was stale for one
+release — it went on describing phases 2 through 7 as unstarted while all seven
+had shipped — and the correction is recorded here rather than quietly applied,
+because a status line nobody re-reads is how the claim survived.
 
-What landed: the task gate is code rather than a sentence, the review record can
-seed the next round, attempt counts persist, and the dead surface is gone.
+What landed: the task gate is code rather than a sentence, the review record
+survives a round and can seed the next one, attempt counts persist, the
+deterministic pre-filter, the caps, the verifier, the review completion gate,
+external PR comment handling, `keryx job`, and the structural skill sweep.
+Per-phase evidence is in [roadmap.md](roadmap.md).
+
+**Delivered is not defect-free.** A re-measurement on 2026-08-31
+([measurement-2026-08-31.md](measurement-2026-08-31.md)) found **eleven
+regressions** in the shipped result, including a flagship instrument that
+returns an empty result from an installed copy and a field that shipped with no
+consumer. They are tracked as flow 209 and are not closed by this status line.
 
 What that work taught, and what now governs the rest of this package: **"put it
 in code" is too blunt.** The prose we carry is two different things — judgement,
@@ -53,12 +66,13 @@ The orchestrators it modifies *are* implemented
 `src/review/`). Every defect cited below was observed in the current tree or
 measured from `.metaproject/flows/`; none is hypothetical.
 
-One dependency is load-bearing and is stated once here rather than repeated:
+One dependency was load-bearing and is stated once here rather than repeated:
 **§Deep rounds and §Completion gate both require the durable review record to
-survive a round.** It does not today — `src/review/managed.ts` re-parses findings
-from Markdown and drops four of the five fields the next round's input contract
-requires. Until that is fixed there is nothing to gate on. It is therefore
-Phase 1, not an optimisation.
+survive a round.** When this package was written it did not — `src/review/managed.ts`
+re-parsed findings from Markdown and dropped four of the five fields the next
+round's input contract requires — which is why it was scheduled as Phase 1
+rather than as an optimisation. It was delivered in `df1e6234`: the record now
+survives a round, and both capabilities gate on it.
 
 ## The measured baseline
 

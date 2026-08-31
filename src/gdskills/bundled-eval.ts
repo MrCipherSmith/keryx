@@ -61,6 +61,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { BUNDLED_GDSKILLS } from "./catalog";
+import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "path:personal-home",
   "xref:skill",
   "xref:path",
+  "document:addressable",
 ] as const;
 
 export type BundledSkillCheck = (typeof BUNDLED_SKILL_CHECKS)[number];
@@ -108,6 +110,15 @@ export interface BundledSkillEvaluation {
   readonly root: string;
   /** How many `SKILL.md` files were found. Zero means the sweep proved nothing. */
   readonly skills: number;
+  /**
+   * How many skill DOCUMENTS were read — `SKILL.md` plus every harness build.
+   *
+   * A second denominator, not a replacement: `skills` counts the skills, this
+   * counts the files whose bytes were actually checked. They differ by the 111
+   * harness builds, and reporting only the first is what let a build diverge
+   * from its own `SKILL.md` while the sweep reported everything clean.
+   */
+  readonly documents: number;
   /** Every skill directory name found, sorted — the resolvable cross-reference set. */
   readonly skillNames: readonly string[];
   readonly findings: readonly BundledSkillFinding[];
@@ -374,8 +385,44 @@ function normaliseReferencePath(reference: string): string | undefined {
 // The sweep
 // ---------------------------------------------------------------------------
 
-/** Every `SKILL.md` under `root`, absolute, sorted. `[]` when `root` is absent. */
-export function bundledSkillFiles(root: string): string[] {
+/**
+ * Every filename that IS a shipped skill document.
+ *
+ * `SKILL.md` is the Claude build; `SKILL.<runtime>.md` is a harness build, and
+ * `skillBuildFileName` is the single definition of that spelling — the same one
+ * `resolveSkillBuild` uses to decide which file a `--runtime` export copies. It
+ * is imported rather than restated so a new harness cannot be added to the
+ * exporter and stay invisible to this sweep.
+ *
+ * Membership is by exact name, never by pattern. `SKILL.detail.md`
+ * (`orchestration/feature-analyzer`) matches `SKILL.*.md` and is NOT a build: it
+ * is an overflow document with no frontmatter, and sweeping it would report a
+ * missing frontmatter block that is correct as it stands.
+ */
+const SKILL_DOCUMENT_NAMES: ReadonlySet<string> = new Set(
+  HARNESS_SKILL_RUNTIMES.map((runtime) => skillBuildFileName(runtime)),
+);
+
+/**
+ * `SKILL*.md` files that are deliberately NOT builds, each with its reason.
+ *
+ * The set exists so `document:addressable` can tell "a companion document" from
+ * "a build no runtime can reach". The distinction is not academic: nine
+ * `SKILL.claude.md` files shipped in 0.2.72 and were read by nothing —
+ * `skillBuildFileName("claude")` is `SKILL.md`, so no `--runtime` export, no
+ * install, and no sweep ever opened them. They were Claude Code slash-command
+ * files left behind by the conversion to skills, and they were removed rather
+ * than allowed, because an allowance without a reader is a backlog entry
+ * wearing an exemption's clothes.
+ */
+export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new Map([
+  [
+    "SKILL.detail.md",
+    "overflow reference for `orchestration/feature-analyzer`, linked from its SKILL.md; carries no frontmatter and is not addressed by any runtime",
+  ],
+]);
+
+function walkSkillDocuments(root: string, accept: (name: string) => boolean): string[] {
   if (!existsSync(root)) return [];
   const out: string[] = [];
   const walk = (dir: string): void => {
@@ -385,16 +432,61 @@ export function bundledSkillFiles(root: string): string[] {
         walk(full);
         continue;
       }
-      if (entry.name === "SKILL.md") out.push(full);
+      if (accept(entry.name)) out.push(full);
     }
   };
   walk(root);
   return out.sort();
 }
 
-/** The default tree: the 65 skills shipped inside this package. */
+/** Every `SKILL.md` under `root`, absolute, sorted. `[]` when `root` is absent. */
+export function bundledSkillFiles(root: string): string[] {
+  return walkSkillDocuments(root, (name) => name === "SKILL.md");
+}
+
+/**
+ * Every shipped skill DOCUMENT under `root` — `SKILL.md` and every harness
+ * build beside it.
+ *
+ * This is the set the sweep actually walks, and it is a different number from
+ * `bundledSkillFiles`. The tree ships 65 `SKILL.md` and 111 harness builds; a
+ * sweep that reads only the first spelling reported `xref:path` clean over 65 of
+ * 176 documents and said nothing about the other 111 — which is how
+ * `task-implementer` shipped four builds missing their entire reporting
+ * contract while every check reported "pass".
+ */
+export function bundledSkillDocuments(root: string): string[] {
+  return walkSkillDocuments(root, (name) => SKILL_DOCUMENT_NAMES.has(name));
+}
+
+/**
+ * The default tree: the 65 skills shipped inside this package.
+ *
+ * TWO LAYOUTS, AND THE SECOND ONE IS THE ONE USERS HAVE.
+ *
+ * In the repository this module lives at `src/gdskills/bundled-eval.ts`, so
+ * `import.meta.dir/bundled` is the tree. In an INSTALLED copy it does not
+ * exist: `bun build` collapses every module into `dist/cli.js`, so
+ * `import.meta.dir` is `<package>/dist`, while `package.json`'s `files` list
+ * ships the skills at `<package>/src/gdskills/bundled`. Resolving only the
+ * first spelling is why `keryx skills verify --bundled` returned
+ * `skills_evaluated: 0` for every user who installed 0.2.72 — the sweep walked
+ * `dist/bundled`, which has never existed in any release.
+ *
+ * `install.ts` already resolves both spellings the same way
+ * (`bundledSkillSourcePath`, `contractSourcePath`); this function simply never
+ * got the second rung. The fallback is checked, not assumed: if neither exists
+ * the direct path is returned so the caller reports an empty sweep against the
+ * address it actually looked at.
+ */
 export function defaultBundledRoot(): string {
-  return path.join(import.meta.dir, "bundled");
+  const directPath = path.join(import.meta.dir, "bundled");
+  if (existsSync(directPath)) return directPath;
+
+  const packagedPath = path.join(import.meta.dir, "..", "src", "gdskills", "bundled");
+  if (existsSync(packagedPath)) return packagedPath;
+
+  return directPath;
 }
 
 /**
@@ -407,17 +499,26 @@ export function defaultBundledRoot(): string {
  */
 export function evaluateBundledTree(root: string = defaultBundledRoot()): BundledSkillEvaluation {
   const skillsRoot = path.join(root, "skills");
-  const files = bundledSkillFiles(skillsRoot);
-  const skillNames = [...new Set(files.map((file) => path.basename(path.dirname(file))))].sort();
+  const canonical = bundledSkillFiles(skillsRoot);
+  const files = bundledSkillDocuments(skillsRoot);
+  const skillNames = [...new Set(canonical.map((file) => path.basename(path.dirname(file))))].sort();
   const known = new Set(skillNames);
   const findings: BundledSkillFinding[] = [];
-  /** Declared frontmatter name -> the first file that declared it. */
-  const declaredNames = new Map<string, string>();
+  /**
+   * Declared frontmatter name -> the skill DIRECTORY that first declared it.
+   *
+   * Keyed by directory, not by file, because the five builds of one skill all
+   * declare that skill's name and are supposed to. The collision this catches is
+   * two DIFFERENT skills answering to one name, which is the case a harness
+   * cannot resolve.
+   */
+  const declaredNames = new Map<string, { dir: string; file: string }>();
   /** `<category>/<directory>` pairs the install catalogue names. */
   const catalogued = new Set(BUNDLED_GDSKILLS.map((entry) => `${entry.category}/${entry.name}`));
 
   for (const file of files) {
-    const skill = path.basename(path.dirname(file));
+    const skillDir = path.dirname(file);
+    const skill = path.basename(skillDir);
     const rel = path.relative(skillsRoot, file).split(path.sep).join("/");
     const text = readFileSync(file, "utf8");
     const add = (check: BundledSkillCheck, line: number | null, message: string): void => {
@@ -446,14 +547,14 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       const declaredName = name === undefined ? undefined : name.replace(/^["']|["']$/g, "");
       if (declaredName !== undefined && declaredName.length > 0) {
         const previous = declaredNames.get(declaredName);
-        if (previous !== undefined) {
+        if (previous === undefined) {
+          declaredNames.set(declaredName, { dir: skillDir, file: rel });
+        } else if (previous.dir !== skillDir) {
           add(
             "frontmatter:name-unique",
             1,
-            `frontmatter \`name: ${declaredName}\` is already declared by \`${previous}\`; a harness registers skills by this name and cannot tell two of them apart.`,
+            `frontmatter \`name: ${declaredName}\` is already declared by \`${previous.file}\`; a harness registers skills by this name and cannot tell two of them apart.`,
           );
-        } else {
-          declaredNames.set(declaredName, rel);
         }
       }
       const description = keys.get("description");
@@ -547,7 +648,29 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     });
   }
 
-  return { root, skills: files.length, skillNames, findings };
+  // --- every SKILL*.md in the tree is either read above or named a companion --
+  //
+  // The sweep now reads `SKILL.md` and the four harness builds. That is only
+  // full coverage if nothing ELSE in a skill directory is spelled like a build,
+  // so this closes the set: a `SKILL.<x>.md` that no runtime addresses is a
+  // document that ships, is never opened, and whose every claim is inert.
+  for (const dir of [...new Set(files.map((file) => path.dirname(file)))].sort()) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (!/^SKILL\..+\.md$/.test(entry.name)) continue;
+      if (SKILL_DOCUMENT_NAMES.has(entry.name)) continue;
+      if (KNOWN_SKILL_COMPANION_DOCUMENTS.has(entry.name)) continue;
+      findings.push({
+        check: "document:addressable",
+        skill: path.basename(dir),
+        file: path.relative(skillsRoot, path.join(dir, entry.name)).split(path.sep).join("/"),
+        line: null,
+        message: `\`${entry.name}\` is spelled like a harness build, but no runtime in HARNESS_SKILL_RUNTIMES resolves to it (${[...SKILL_DOCUMENT_NAMES].join(", ")}). Nothing exports it, installs it, or reads it — delete it, rename it to the build it was meant to be, or register it in KNOWN_SKILL_COMPANION_DOCUMENTS with a reason.`,
+      });
+    }
+  }
+
+  return { root, skills: canonical.length, documents: files.length, skillNames, findings };
 }
 
 /**
@@ -564,10 +687,14 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   lines.push("");
   lines.push(`root: ${evaluation.root}`);
   lines.push(`skills_evaluated: ${evaluation.skills}`);
+  // Both denominators, always. `skills_evaluated` alone read as full coverage
+  // while 111 harness builds went unread; printing the document count is what
+  // makes the gap visible without anyone having to know it exists.
+  lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds)`);
   lines.push(`findings: ${evaluation.findings.length}`);
   lines.push("");
 
-  if (evaluation.skills === 0) {
+  if (evaluation.documents === 0) {
     lines.push(
       "NOTHING WAS EVALUATED. The root holds no SKILL.md, so `findings: 0` means the sweep walked an empty tree — not that the tree is clean.",
     );

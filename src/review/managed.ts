@@ -896,6 +896,12 @@ function buildManifest(args: {
   at: string;
   filterStats: ReviewFilterStats;
 }): ManagedReviewManifest {
+  // Flow 209 AC2. Written only when the caller supplied one: the property is
+  // omitted rather than set to `null`, so `keryx review status` can tell "nobody
+  // ran the decision" from "the decision was single-family". A `null` here would
+  // collapse those two into one and reproduce the defect the block was added to
+  // measure.
+  const crossFamily = args.input.crossFamilyReview;
   const artifactPath = (name: string) => path.relative(args.input.cwd, path.join(args.packageDir, name));
   const manifest: ManagedReviewManifest = {
     schemaVersion: 1,
@@ -913,6 +919,7 @@ function buildManifest(args: {
     },
     coverage: args.coverage,
     filter_stats: args.filterStats,
+    ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
     createdAt: args.at,
     updatedAt: args.at,
   };

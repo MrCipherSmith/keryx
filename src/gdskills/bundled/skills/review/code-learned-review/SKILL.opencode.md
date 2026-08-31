@@ -85,38 +85,12 @@ An author the config does not name contributes nothing — their text reaches no
 proposal and no `SKILL.md`. A project with no config file does not learn, and
 that is a supported state rather than an error.
 
-## Determining the parent ref (deterministic — the branch parent, not the upstream)
+## Scope Detection
 
-Use the first variant that exists:
+See shared script: `skills/shared/git-merge-base.md`
 
-1. `origin/main`
-2. `origin/master`
-3. `main`
-4. `master`
-5. `@{upstream}` **only when it is not the current feature branch**
-
-```bash
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-UPSTREAM_REF="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
-
-PARENT=""
-if git rev-parse --verify -q "origin/main" >/dev/null; then
-  PARENT="origin/main"
-elif git rev-parse --verify -q "origin/master" >/dev/null; then
-  PARENT="origin/master"
-elif git rev-parse --verify -q "main" >/dev/null; then
-  PARENT="main"
-elif git rev-parse --verify -q "master" >/dev/null; then
-  PARENT="master"
-elif [ -n "$UPSTREAM_REF" ] && [ "$UPSTREAM_REF" != "$BRANCH" ] && [ "$UPSTREAM_REF" != "origin/$BRANCH" ]; then
-  PARENT="@{upstream}"
-else
-  echo "Cannot determine parent ref" >&2
-  exit 1
-fi
-
-BASE_SHA="$(git merge-base HEAD "$PARENT")"
-```
+Run the script from that file to determine MERGE_BASE and SCOPE before
+proceeding with the review.
 
 ## Commands to assemble the review slice
 
@@ -228,6 +202,23 @@ index 0000000..1111111 100644
 -const x = 1;
 +const x = 2;
 ```
+
+---
+
+## Scope Boundaries
+
+This skill covers **review against this project's own learned conventions**,
+following `code-review-learned-profile.mdc`. It has no opinions of its own.
+
+| Concern                                                        | This skill | Use instead              |
+| -------------------------------------------------------------- | ---------- | ------------------------ |
+| This project's accumulated review conventions                  | ✅ YES     | —                        |
+| General AI review (broader quality, performance, UX)           | ❌ NO      | `code-ai-review`         |
+| MobX store internals (actions, computed, reactions)            | ❌ NO      | `code-mobx-store-review` |
+| Pure style/naming/architecture pattern audit                   | ❌ NO      | `code-style-review`      |
+| Logic correctness with no learned lesson behind it             | ❌ NO      | `review-logic`           |
+
+---
 
 ## Job Context Awareness
 

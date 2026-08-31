@@ -308,7 +308,7 @@ FOCUS AREA:
 ```javascript
 Task({
   description: "Feature analysis: pipeline-variables",
-  subagent_type: "general",
+  subagent_type: "general-purpose",
   prompt: "<сгенерированный промпт выше>"
 })
 ```

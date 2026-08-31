@@ -26,7 +26,9 @@ import {
   BUNDLED_SKILL_CHECKS,
   GENERATED_PATH_ROOTS,
   KNOWN_EXTERNAL_SKILL_REFERENCES,
+  KNOWN_SKILL_COMPANION_DOCUMENTS,
   type BundledSkillCheck,
+  bundledSkillDocuments,
   bundledSkillFiles,
   defaultBundledRoot,
   evaluateBundledTree,
@@ -34,6 +36,7 @@ import {
   personaOffenders,
   renderBundledEvaluation,
 } from "./bundled-eval";
+import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 
 // ---------------------------------------------------------------------------
 // AC7: the real tree
@@ -55,6 +58,39 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     for (const category of ["orchestration", "planning", "platform", "quality", "review"]) {
       expect(files.some((file) => file.includes(`${path.sep}${category}${path.sep}`))).toBe(true);
     }
+  });
+
+  test("the sweep reads harness builds, not only SKILL.md", () => {
+    // AC5. The tree ships 65 `SKILL.md` and 100-odd harness builds; the sweep
+    // used to walk the first set only, so `xref:path` reported clean over 65 of
+    // 167 shipped documents and said nothing about the rest. That is how
+    // `task-implementer` shipped four builds missing their whole reporting
+    // contract with every check green.
+    const skillsRoot = path.join(defaultBundledRoot(), "skills");
+    const canonical = bundledSkillFiles(skillsRoot);
+    const documents = bundledSkillDocuments(skillsRoot);
+
+    // Strictly more documents than skills, or the walker is still canonical-only.
+    expect(documents.length).toBeGreaterThan(canonical.length);
+    // Every canonical file is still in the set — a walker that swapped one set
+    // for the other would satisfy the line above and check less than before.
+    for (const file of canonical) expect(documents).toContain(file);
+
+    const evaluation = evaluateBundledTree();
+    expect(evaluation.documents).toBe(documents.length);
+    expect(evaluation.skills).toBe(canonical.length);
+
+    // Named files, so a walker that finds builds "somewhere" cannot pass while
+    // missing the one the measurement found broken.
+    for (const runtime of HARNESS_SKILL_RUNTIMES) {
+      expect(documents).toContain(
+        path.join(skillsRoot, "orchestration", "task-implementer", skillBuildFileName(runtime)),
+      );
+    }
+    // …and the denominator is printed, not just returned.
+    expect(renderBundledEvaluation(evaluation)).toContain(
+      `documents_evaluated: ${documents.length}`,
+    );
   });
 
   test("every shipped skill passes structural validation", () => {
@@ -172,12 +208,59 @@ Reads \`skills/quality/control-example/SKILL.md\` — a path that resolves insid
 this tree — and mentions \`review-logic\` without asking for it as a skill.
 `;
 
+/**
+ * A skill whose `SKILL.md` is clean and whose CODEX BUILD is not.
+ *
+ * This is AC5 in one fixture. Before the sweep read harness builds, this skill
+ * drew no finding at all: the file with the defect was never opened. The build
+ * below carries a dangling skill reference and nothing else, so a sweep that
+ * reports it can only have read the build.
+ */
+const BUILD_ONLY_DEFECT_CANONICAL = `---
+name: build-drift-example
+description: Clean in the Claude build; broken in the Codex build.
+metadata:
+  version: 1.0.0
+---
+
+# Build Drift Example
+`;
+
+const BUILD_ONLY_DEFECT_CODEX = `---
+name: build-drift-example
+description: Clean in the Claude build; broken in the Codex build.
+metadata:
+  version: 1.0.0
+---
+
+# Build Drift Example
+
+VIOLATION xref:skill — Launch \`only-in-the-codex-build\` skill on the diff.
+`;
+
+/** A build no runtime addresses: nothing exports, installs, or reads it. */
+const UNADDRESSED_BUILD = `---
+name: unaddressed-build-example
+description: Spelled like a build for a harness this codebase does not ship.
+metadata:
+  version: 1.0.0
+---
+
+# Unaddressed Build
+`;
+
 let fixtureRoot = "";
 
 function writeSkill(root: string, category: string, name: string, body: string): void {
   const dir = path.join(root, "skills", category, name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "SKILL.md"), body, "utf8");
+}
+
+function writeSkillFile(root: string, category: string, name: string, file: string, body: string): void {
+  const dir = path.join(root, "skills", category, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, file), body, "utf8");
 }
 
 beforeAll(() => {
@@ -190,6 +273,22 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "collides-a", DUPLICATE_NAME_SKILL);
   writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL);
   writeSkill(fixtureRoot, "quality", "control-example", CONTROL_SKILL);
+  writeSkill(fixtureRoot, "quality", "build-drift-example", BUILD_ONLY_DEFECT_CANONICAL);
+  writeSkillFile(
+    fixtureRoot,
+    "quality",
+    "build-drift-example",
+    skillBuildFileName("codex"),
+    BUILD_ONLY_DEFECT_CODEX,
+  );
+  writeSkill(fixtureRoot, "quality", "unaddressed-build-example", UNADDRESSED_BUILD);
+  writeSkillFile(
+    fixtureRoot,
+    "quality",
+    "unaddressed-build-example",
+    "SKILL.gemini.md",
+    UNADDRESSED_BUILD,
+  );
 });
 
 afterAll(() => {
@@ -205,8 +304,47 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    expect(evaluation.skills).toBe(7);
+    expect(evaluation.skills).toBe(9);
+    // Nine skills, ten documents: `build-drift-example` also ships a Codex build.
+    expect(evaluation.documents).toBe(10);
     expect(evaluation.findings.length).toBeGreaterThan(0);
+  });
+
+  test("a defect that exists ONLY in a harness build is found", () => {
+    // The AC5 proof. `build-drift-example/SKILL.md` is clean; the defect lives in
+    // `SKILL.codex.md` alone. A sweep that walks canonical files only reports
+    // nothing here, which is exactly what the shipped sweep did.
+    const found = findingsFor("build-drift-example");
+    const xref = found.filter((finding) => finding.check === "xref:skill");
+    expect(xref).toHaveLength(1);
+    expect(xref[0]?.message).toContain("only-in-the-codex-build");
+
+    const located = evaluateBundledTree(fixtureRoot).findings.find(
+      (finding) => finding.check === "xref:skill" && finding.skill === "build-drift-example",
+    );
+    // Located in the BUILD, not in SKILL.md — otherwise the report sends the
+    // reader to a file that is correct.
+    expect(located?.file).toBe("quality/build-drift-example/SKILL.codex.md");
+  });
+
+  test("the five builds of one skill are not read as five colliding skills", () => {
+    // `frontmatter:name-unique` keys on the skill DIRECTORY. Reading builds means
+    // one name is now declared by up to five files on purpose, and a check that
+    // fired on that would make the whole sweep unusable — the false-positive
+    // failure from the other direction.
+    const collisions = findingsFor("build-drift-example").filter(
+      (finding) => finding.check === "frontmatter:name-unique",
+    );
+    expect(collisions).toEqual([]);
+  });
+
+  test("a build no runtime addresses is rejected", () => {
+    const found = findingsFor("unaddressed-build-example").filter(
+      (finding) => finding.check === "document:addressable",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("SKILL.gemini.md");
+    expect(found[0]?.message).toContain("no runtime in HARNESS_SKILL_RUNTIMES resolves to it");
   });
 
   test("an empty `name` and a versionless `metadata` are each rejected", () => {
@@ -316,6 +454,16 @@ describe("every allowance states why it is one", () => {
     expect(KNOWN_EXTERNAL_SKILL_REFERENCES.size).toBeGreaterThan(0);
     for (const [name, why] of KNOWN_EXTERNAL_SKILL_REFERENCES) {
       expect(name.length).toBeGreaterThan(0);
+      expect(why.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  test("an allowed companion document names why it is not a build", () => {
+    expect(KNOWN_SKILL_COMPANION_DOCUMENTS.size).toBeGreaterThan(0);
+    for (const [name, why] of KNOWN_SKILL_COMPANION_DOCUMENTS) {
+      expect(name).toMatch(/^SKILL\..+\.md$/);
+      // A build name would be silently shadowed by the allowance, so refuse one.
+      expect(HARNESS_SKILL_RUNTIMES.map((runtime) => skillBuildFileName(runtime))).not.toContain(name);
       expect(why.trim().length).toBeGreaterThan(0);
     }
   });

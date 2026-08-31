@@ -1,6 +1,6 @@
 ---
 name: hookify
-description: "Create Claude Code / Cursor hooks from natural language descriptions. Generates hook config JSON for settings.json with proper event matchers and commands. Supports PreToolUse, PostToolUse, Stop, Notification events."
+description: "Use when adding automated hook behavior to Claude Code or Cursor from a natural language description."
 triggers:
   - "/hookify"
   - "Create hook"

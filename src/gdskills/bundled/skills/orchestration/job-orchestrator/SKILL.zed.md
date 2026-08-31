@@ -299,7 +299,7 @@ PLAN:
   5.  { id: "implement",      type: "implement", agent: "task-implementer",  depends: ["tests-creator"] }
   6.  { id: "sanity-check",    type: "check",    agent: "orchestrator",    depends: ["implement"] }
   7.  { id: "verify",          type: "verify",   agent: "code-verifier",   depends: ["sanity-check"] }
-  8.  { id: "review",          type: "review",   agent: "code-review",     depends: ["verify"] }
+  8.  { id: "review",          type: "review",   agent: "review-orchestrator", depends: ["verify"] }
   9.  { id: "security",        type: "security", agent: "security-audit",  depends: ["implement"], conditional: true }
   10. { id: "fix",             type: "fix",      agent: "task-implementer", depends: ["review"], conditional: true }
   11. { id: "verify-post-fix", type: "verify",   agent: "code-verifier",   depends: ["fix"], conditional: true }

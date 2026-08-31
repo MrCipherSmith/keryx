@@ -19,7 +19,12 @@ const IMPLEMENT: PlanTemplate = [
   { id: "implement", type: "implement", agent: "task-implementer", depends: ["tests-creator"] },
   { id: "sanity-check", type: "check", agent: "orchestrator", depends: ["implement"] },
   { id: "verify", type: "verify", agent: "code-verifier", depends: ["sanity-check"] },
-  { id: "review", type: "review", agent: "code-review", depends: ["verify"] },
+  // `review-orchestrator`, never `code-review`. The plan's `agent` is a label
+  // and not a dispatch target, but a label naming a skill that has never been
+  // bundled is the dangling reference this programme has now removed three
+  // times — and it survived here because nothing compared the label against the
+  // catalogue. `src/gdskills/agent-catalogue-xref.test.ts` does.
+  { id: "review", type: "review", agent: "review-orchestrator", depends: ["verify"] },
   { id: "security", type: "security", agent: "security-audit", depends: ["implement"], conditional: true },
   { id: "fix", type: "fix", agent: "task-implementer", depends: ["review"], conditional: true },
   { id: "verify-post-fix", type: "verify", agent: "code-verifier", depends: ["fix"], conditional: true },

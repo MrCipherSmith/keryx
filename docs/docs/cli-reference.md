@@ -422,10 +422,21 @@ Three properties, each of which the command enforces rather than describes:
   to a second vendor; that is a decision, not an optimisation. The options that
   were declined are still listed, because "we chose not to" and "there was
   nothing to choose" are different facts.
-- **Recorded.** The `--json` output is a `cross_family_review` block naming
-  `author_family` and `reviewer_family`, meant to be embedded verbatim in the
-  round's structured output so rounds can later be grouped by the family that
-  reviewed them.
+- **Recorded, and read back.** The `--json` output is a `cross_family_review`
+  block naming `author_family` and `reviewer_family`. Hand it to the round:
+
+  ```bash
+  keryx providers cross-family --opt-in --json > cross-family.json
+  keryx review ingest --report round.md --ref <ref> --cross-family-review cross-family.json
+  keryx review status <review-id>
+  ```
+
+  `review ingest` writes it onto `manifest.cross_family_review`; `review status`
+  — a later, separate invocation — reads it off disk, prints it, and **exits
+  non-zero** on a record that contradicts itself: `cross-family` naming no
+  reviewer, naming the family that authored the change, or naming a reviewer that
+  was never among the recorded candidates. A round that recorded nothing reports
+  `not recorded`, which is **not** `single-family`: nobody decided.
 - **Degrades, never fails.** With no second family configured it reports
   `single-family` with a stated reason and **exits 0**. One vendor is a normal
   configuration.
@@ -949,8 +960,10 @@ keryx flow status <id>
 keryx flow freeze <id>
 keryx flow plan <id> [--provider <p>] [--json]
 keryx flow start <id>
-keryx flow task add <id> --title "<t>" [--kind <k>]
-keryx flow task done <id> <taskId>
+keryx flow next <id> [--json]
+keryx flow task add <id> --title "<t>" [--kind <k>] [--depends T1,T2]
+keryx flow task done <id> <taskId> [--disposition <d>] [--reason "<why>"]
+keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what>"]
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
@@ -970,21 +983,23 @@ keryx flow schema [--out <path>]
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
-| `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs` | Append a task. |
-| `task done <id> <taskId>` | — | Mark a task `done`. |
+| `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. |
+| `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs`, `--depends T1,T2` | Append a task. `--depends` is read by `flow next` and validated by `flow check`. |
+| `task done <id> <taskId>` | `--disposition completed\|blocked\|failed\|skipped`, `--reason "<why>"` | Mark a task `done`. A `failed` or `blocked` close **records an attempt automatically** — those two dispositions are attempts by definition, and requiring a second command is why the counter read zero across seven flows. |
+| `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
 | `ac confirm <id> <ACn>` | `--note "<evidence>"` | Confirm one acceptance criterion. |
 | `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum; void prior confirmations. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment` | Run completion gates; on pass `→ done` (optionally comment the issue), on fail `→ in-progress`. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
-| `check` | — | Consistency audit across all flows. |
+| `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
 | `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. |
 | `schema` | `--out <path>` | Emit the flow JSON schema. |
 
 Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
 `done`, `blocked`. `task` and `ac` are command groups — the atomic verbs are
-`task add`, `task done`, `ac confirm`, `ac update`.
+`task add`, `task done`, `task attempt`, `ac confirm`, `ac update`.
 
 When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);

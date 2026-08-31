@@ -42,11 +42,19 @@ describe("keryx skills verify --bundled", () => {
     expect(result.code).toBe(0);
   });
 
-  test("--json emits the evaluation, denominator included", async () => {
+  test("--json emits the evaluation, both denominators included", async () => {
     const result = await runCli(["skills", "verify", "--bundled", "--json"]);
     expect(result.code).toBe(0);
-    const parsed = JSON.parse(result.out) as { skills: number; findings: unknown[]; skillNames: string[] };
+    const parsed = JSON.parse(result.out) as {
+      skills: number;
+      documents: number;
+      findings: unknown[];
+      skillNames: string[];
+    };
     expect(parsed.skills).toBe(65);
+    // The harness builds are read too, and the count says so. `skills` alone
+    // read as full coverage while 100-odd builds went unopened.
+    expect(parsed.documents).toBeGreaterThan(parsed.skills);
     expect(parsed.findings).toEqual([]);
     expect(parsed.skillNames).toContain("review-orchestrator");
   });

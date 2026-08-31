@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: "Generate changelog from git commits between tags or date ranges. Groups by conventional commit type (features, fixes, performance, etc.), links PRs and issues. Supports output to file or prepend to existing CHANGELOG.md."
+description: "Use when generating a changelog, release notes, or summarizing what changed between tags, versions, or date ranges."
 triggers:
   - "/changelog"
   - "Generate changelog"

@@ -111,7 +111,7 @@ CONTEXT_RESULT block as your final message.
 ```javascript
 Task({
   description: "context-collector: collect context for {{JOB_NAME}}",
-  subagent_type: "general",
+  subagent_type: "general-purpose",
   prompt: "<generated prompt from template above>"
 })
 ```

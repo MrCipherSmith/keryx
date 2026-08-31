@@ -1,6 +1,6 @@
 ---
 name: test-gen
-description: "Auto-generate tests for a file or module. Discovers project testing patterns (Jest/Vitest/Pytest), analyzes code structure, creates unit and integration tests matching existing conventions. Verifies all tests pass."
+description: "Use when unit or integration tests need to be written for a specific file or module."
 triggers:
   - "/test-gen"
   - "Generate tests"

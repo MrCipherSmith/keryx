@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: "Security audit: runs npm/bun/yarn audit for dependency vulnerabilities, scans for accidentally committed secrets, checks Docker images if present. Groups findings by severity (critical → high → moderate → low). Produces remediation report."
+description: "Use when checking for dependency vulnerabilities, accidentally committed secrets, or security issues in Docker images."
 triggers:
   - "Security audit"
   - "Check vulnerabilities"

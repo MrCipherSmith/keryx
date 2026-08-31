@@ -1,6 +1,6 @@
 ---
 name: db-migrate
-description: "Database migration management: create, apply, rollback, check status. Auto-detects Prisma, TypeORM, Knex, Sequelize, Drizzle, Alembic, raw SQL. Shows migration SQL preview before applying."
+description: "Use when creating, applying, rolling back, or checking the status of database migrations."
 triggers:
   - "/db-migrate"
   - "Create migration"

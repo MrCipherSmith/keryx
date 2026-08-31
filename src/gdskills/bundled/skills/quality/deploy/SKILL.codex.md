@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: "Automated deployment pipeline: pre-flight checks (tests, lint, type-check, build), then deploy to target environment. Auto-detects Docker Compose, PM2, SSH, Vercel, Railway. Post-deploy health verification."
+description: "Use when deploying to any environment (staging, production) or when a deployment pipeline needs to run."
 triggers:
   - "/deploy"
   - "Deploy to"

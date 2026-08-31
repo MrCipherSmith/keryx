@@ -1,6 +1,6 @@
 ---
 name: push
-description: "Smart git push with safety checks: verifies branch status, sets upstream if needed, protects main/master from force push. Handles common push issues automatically."
+description: "Use when pushing the current branch to the remote, especially when upstream tracking or safety checks are needed."
 triggers:
   - "/push"
   - "Push changes"

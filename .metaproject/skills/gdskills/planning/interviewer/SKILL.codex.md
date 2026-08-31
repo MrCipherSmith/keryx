@@ -1,6 +1,6 @@
 ---
 name: interviewer
-description: "Critical requirements interviewer that gathers precise context before complex tasks. Asks one focused question at a time (with A/B/C options where applicable). Skips questions already answered by provided context. Can be called by other skills as a sub-agent or directly by the user. Outputs structured context for the calling skill."
+description: "Use when requirements are ambiguous and precise clarification is needed before proceeding with a complex task."
 triggers:
   - "Interview me"
   - "Ask me questions"
@@ -14,6 +14,12 @@ metadata:
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
+This skill is for orchestrators and interactive session-level routing only.
+Proceed directly with your assigned task.
+</SUBAGENT-STOP>
 
 # Interviewer
 

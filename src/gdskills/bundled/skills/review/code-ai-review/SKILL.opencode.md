@@ -31,6 +31,19 @@ Code Review Progress:
 - [ ] Step 6: Generate report with patches
 ```
 
+## Scope Boundaries
+This skill focuses on:
+- Correctness and logic bugs
+- Type safety and TypeScript contract violations
+- Security and null-safety issues
+- Error handling completeness
+- Performance anti-patterns
+
+This skill does NOT duplicate:
+- MobX store-specific patterns → covered by code-mobx-store-review
+- Naming/formatting/import organization → covered by code-style-review
+- Architecture opinions and persona-specific insights → covered by code-learned-review
+
 ## Главное правило: скоуп ревью
 
 Ревьюй только изменения, внесённые в текущей ветке с момента её ответвления от родительской.
@@ -41,38 +54,11 @@ Code Review Progress:
 - Если пользователь **явно передал commit hash/range**, ревьюй только запрошенный диапазон; локальные незакоммиченные изменения не добавляй, если это отдельно не попросили.
 - Не ревьюй не связанные с веткой части репозитория.
 
-## Определение parent ref (детерминированно, именно родитель ветки)
+## Scope Detection
 
-Используй первый существующий вариант:
+See shared script: `skills/shared/git-merge-base.md`
 
-1. `origin/main`
-2. `origin/master`
-3. `main`
-4. `master`
-5. `@{upstream}` только если это не текущая feature-ветка
-
-```bash
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-UPSTREAM_REF="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
-
-PARENT=""
-if git rev-parse --verify -q "origin/main" >/dev/null; then
-  PARENT="origin/main"
-elif git rev-parse --verify -q "origin/master" >/dev/null; then
-  PARENT="origin/master"
-elif git rev-parse --verify -q "main" >/dev/null; then
-  PARENT="main"
-elif git rev-parse --verify -q "master" >/dev/null; then
-  PARENT="master"
-elif [ -n "$UPSTREAM_REF" ] && [ "$UPSTREAM_REF" != "$BRANCH" ] && [ "$UPSTREAM_REF" != "origin/$BRANCH" ]; then
-  PARENT="@{upstream}"
-else
-  echo "Cannot determine parent ref" >&2
-  exit 1
-fi
-
-BASE_SHA="$(git merge-base HEAD "$PARENT")"
-```
+Run the script from that file to determine MERGE_BASE and SCOPE before proceeding with the review.
 
 ## Команды, чтобы собрать “срез” для ревью
 
@@ -183,6 +169,19 @@ index 0000000..1111111 100644
 -const x = 1;
 +const x = 2;
 ```
+
+---
+
+## Scope Boundaries
+
+This skill covers **general AI code quality review** following `code-review-ai-assistant.mdc`.
+
+| Concern | This skill | Use instead |
+|---------|-----------|-------------|
+| Types, safety, architecture, readability, performance, tests | ✅ YES | — |
+| MobX store internals (actions, computed, reactions, async) | ⚠️ surface-level only | `code-mobx-store-review` for deep store analysis |
+| Review against this project's own learned conventions | ❌ NO | `code-learned-review` |
+| Pure style/naming/pattern audit | ❌ NO | `code-style-review` |
 
 ---
 

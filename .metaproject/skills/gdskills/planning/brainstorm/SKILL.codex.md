@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: "Structured brainstorming with multiple thinking perspectives (Pragmatist, Innovator, Critic). Generates ideas, evaluates trade-offs via comparison matrix, produces actionable recommendation. Use for architecture decisions, feature ideation, problem solving, tech choices, naming."
+description: "Use when exploring architecture decisions, tech choices, feature ideas, or any open-ended problem that benefits from multiple perspectives."
 triggers:
   - "/brainstorm"
   - "Brainstorm"

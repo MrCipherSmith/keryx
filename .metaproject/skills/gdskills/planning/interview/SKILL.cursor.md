@@ -1,6 +1,6 @@
 ---
 name: interview
-description: "Critical requirements interviewer: asks targeted clarifying questions one-by-one before expensive operations. Identifies uncertainty zones, provides answer options, adapts follow-ups based on responses. Can trigger mini-brainstorm on ambiguous points. Use before implementation, design, or migration to gather precise context."
+description: "Use before implementation, design, or migration when requirements are unclear and targeted clarifying questions are needed to gather precise context."
 triggers:
   - "/interview"
   - "Interview"
@@ -15,6 +15,12 @@ metadata:
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
+This skill is for orchestrators and interactive session-level routing only.
+Proceed directly with your assigned task.
+</SUBAGENT-STOP>
 
 # Interview
 

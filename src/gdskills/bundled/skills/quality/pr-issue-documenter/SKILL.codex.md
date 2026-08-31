@@ -1,6 +1,6 @@
 ---
 name: pr-issue-documenter
-description: "Analyzes PR commits/diff and generates structured descriptions for PRs and linked GitHub issues. Creates sub-issues, checks for contradictions with existing descriptions, updates parent issues. Use when: documenting PR changes, adding PR description, creating issue for PR, updating issue body."
+description: "Use when documenting PR changes, adding a PR description, creating a linked issue for a PR, or updating an existing issue body."
 triggers:
   - "Add PR description"
   - "Document PR changes"
@@ -362,3 +362,17 @@ Always present contradictions to user before making changes.
 8. **DO NOT** create issues without user confirmation
 9. **DO NOT** modify PR title unless explicitly asked
 10. **DO NOT** write comments on GitHub PRs/issues (only edit body)
+
+## Job Context Awareness
+
+If called within an orchestrator job context, check for job context before starting:
+
+```
+IF JOB_NAME is provided AND .metaproject/jobs/<JOB_NAME>/ai/context.md exists:
+  Read context.md — use it to understand the codebase, affected areas, and conventions
+  This enriches PR description generation with project-specific knowledge
+ELSE:
+  Proceed with standard workflow (analyze PR/commits directly)
+```
+
+The job context path is: `<JOBS_ROOT>/<JOB_NAME>/ai/context.md`
