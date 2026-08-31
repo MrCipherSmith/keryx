@@ -10,10 +10,10 @@ triggers:
   - "Implement issue task"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "implementation"
   agent_worthy: true
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "claude,cursor,codex,zed,opencode"
 license: "MIT"
 ---
 
@@ -69,7 +69,7 @@ TASK: (from JSON object passed by orchestrator)
   task_name:            string, e.g. "Add validation to form"
   task_type:            string: ui_component|store_logic|service_api|refactoring|fix|mixed
   complexity:           string: low|medium|high
-  dependencies:         array of task_id strings (already satisfied — orchestrator ensures order)
+  dependencies:         array of task_id strings this task reads from
   description:          string: what to implement
   target_files:         array of file path strings
   acceptance_criteria:  array of criterion strings
@@ -95,17 +95,46 @@ WORKSPACE:
 ```
 FIX_CONTEXT:
   review_feedback:      structured findings from reviewer (file, line, severity, message)
-  original_task_id:     the task that introduced the issue
-  iteration:            fix iteration number (1 or 2)
+  original_task_ids:    the tasks that introduced the findings (array)
+  iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
 ```
 
-**1.4 Validate:**
+**1.4 Validate the request against the contract:**
+
+Write the request you were handed to a file and run:
+
+```bash
+keryx skills contracts validate <request.json> --schema task-implementer-input
 ```
-ASSERT task_id IS NOT EMPTY           → otherwise ABORT("Missing task_id")
-ASSERT task_type IN valid_types       → otherwise ABORT("Invalid task_type")
-ASSERT target_files IS NOT EMPTY      → otherwise ABORT("No target files")
-ASSERT codebase_path EXISTS           → otherwise ABORT("Codebase path not found")
-ASSERT branch IS NOT EMPTY            → otherwise ABORT("Wrong branch checked out")
+
+Non-zero exit means the dispatch is malformed — ABORT and report `NEEDS_CONTEXT`
+with the validator's own message. Do not repair the request yourself; the
+orchestrator owns it.
+
+The refusals are the contract's, not a checklist you run by eye
+(`input-contract.schema.json`, registered in `src/gdskills/contracts.ts`):
+
+| What is refused | Where the schema says so |
+|---|---|
+| Missing `task_id` / `task_name` / `task_type` / `description` / `target_files` / `acceptance_criteria` | `task.required` |
+| `task_type` outside `ui_component\|store_logic\|service_api\|refactoring\|fix\|mixed` | `task.task_type.enum` |
+| A `task_id` that is not `task-<n>` | `task.task_id.pattern` |
+| Empty `target_files` or empty `acceptance_criteria` | `minItems: 1` on both |
+| Missing `codebase_path` / `branch` / `issue_number` | `workspace.required` |
+| `skip_confirmation` anything but `true` | `automation.skip_confirmation.const` |
+| `max_self_fix_attempts` above 3 | `automation.max_self_fix_attempts.maximum` |
+| Any field the contract does not declare | `additionalProperties: false` |
+
+The list above is a reading aid. The schema is the authority, and if the two
+disagree the schema wins.
+
+Two things a schema cannot check, because they are facts about the machine
+rather than about the payload. Check them yourself and ABORT with
+`STATUS: NEEDS_CONTEXT` on either:
+
+```bash
+test -d "<codebase_path>"                       # otherwise: codebase path not found
+git -C "<codebase_path>" rev-parse --abbrev-ref HEAD   # must equal <branch>
 ```
 
 **1.5 TDD Check (if `test_case_specs` is present):**
@@ -148,8 +177,10 @@ This step is read-only and inline; do not spawn a subagent for it.
 - Read the `context` field for additional type/signature info
 
 **2.2 Read existing tests and stories:**
-- If `existing_tests` is not "none" — read each test file
-- If `existing_stories` is not "none" — read each story file
+- `existing_tests` and `existing_stories` are arrays and default to `[]`
+  (`input-contract.schema.json`). Empty means none; the string `"none"` is not a
+  legal value and a request carrying it is refused by 1.4
+- Read each file listed in either array
 - Understand existing test patterns (describe/it structure, mocks, fixtures)
 
 **2.3 Read module neighbors:**
@@ -187,10 +218,10 @@ Based on what you're implementing, load and follow the relevant project rules.
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Rules are located at:
-- OpenCode: `.metaproject/rules/core/<rule>.mdc`
-- Cursor: `.cursor/rules/core/<rule>.mdc`
-- Codex: `.metaproject/rules/core/<rule>.mdc`
+Rules live at `.metaproject/rules/core/<rule>.mdc` on every harness — that is the
+one tree `keryx init` installs and the one every build of this skill reads.
+Cursor additionally mirrors them under `.cursor/rules/core/<rule>.mdc`; when both
+are present they are copies of the same file, so read either.
 
 **Output of Phase 2:** Mental model of the implementation:
 ```
@@ -308,28 +339,38 @@ Commit type mapping:
 Run verification checks appropriate to the task type.
 
 **5.1 Always run:**
+
 ```bash
-npm run lint              # ESLint (errors only)
-npm run type-check        # tsc --noEmit
+keryx health run --changed --source eslint,typescript
 ```
+
+Lint and type-check in one call, over the changed files only. Do NOT hard-code a
+package manager and a script name: the project may not be an npm project, and
+`src/health/sources/eslint.ts` and `src/health/sources/typescript.ts` resolve the
+real invocation. The run writes a normalized report; `keryx health status` prints
+it.
 
 **5.2 Run if tests exist:**
+
 ```bash
-npm test                  # Vitest run
+keryx test run --changed --strict
 ```
 
-If tests were created or modified, ensure they pass.
+`src/testing/service.ts:780` detects `bun` / `pnpm` / `yarn` / `npm` from the
+lockfile and builds the argv from the project's own test script — the
+if-chain you would otherwise write in shell, already written. `--strict` makes a
+non-zero exit the signal; if tests were created or modified they must pass.
 
-**5.3 Run if stories were created (optional, only if build is available):**
+**5.3 Run if stories were created (optional, only if the script exists):**
 ```bash
-npm run build-storybook   # Verify stories compile
+<pm> run build-storybook   # <pm> is the package manager keryx test run detected
 ```
 
 **5.4 Handle failures:**
 
 | Failure | Action |
 |---------|--------|
-| Lint errors | Fix automatically using `npm run lint:fix:changed`, re-run lint |
+| Lint errors | Fix them in code, re-run `keryx health run --changed` |
 | Type errors | Fix the type errors in code, re-commit |
 | Test failures | Fix failing tests, re-commit |
 | Story build failure | Fix story code, re-commit |
@@ -353,7 +394,9 @@ identical outputs cost the whole budget to learn what the second one already
 said. Report the block instead, naming what repeated.
 
 
-**ROLLBACK POLICY**: If implementation fatally fails (e.g. tests still failing after 3 attempts or unresolvable compilation errors), you MUST run `git reset --hard` to clean the worktree before reporting the failure in Phase 6, unless explicitly instructed to leave it dirty.
+**ROLLBACK POLICY**: If implementation fatally fails (tests still failing after 3 attempts, or unresolvable compilation errors), restore ONLY the files this task changed — `git checkout -- <your files>` for tracked ones, delete the untracked ones you created — then report the failure in Phase 6.
+
+**Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
 **5.5 Re-commit fixes if any:**
 ```bash
@@ -398,7 +441,41 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 
 Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
 
-If `JOB_NAME` is not provided, skip the file write.
+Then check the shape and record the file — two commands, both of which refuse
+rather than warn:
+
+```bash
+keryx skills contracts validate <JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json \
+  --schema task-implementer-output
+keryx job document <JOB_NAME> --type implementation-report \
+  --file <JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json
+```
+
+- `contracts validate` exits non-zero on a missing required field, a `status`
+  outside `success|partial|failed`, a `task_id` that is not `task-<n>`, or any
+  key the contract does not declare (`additionalProperties: false`). Fix the
+  result and re-run; do not report a result the contract rejects.
+- `job document` **refuses when the file does not exist** — "`--file` not found:
+  … Write the document first, then record it" (`src/job/service.ts`) — and
+  refuses a `--type` outside `analysis|implementation-report|review|verification-report`
+  and a job name no package matches. On success it copies the result into the
+  job package and appends it to `documentation.documents_created` in
+  `state.json`, which is what makes "the result was recorded" a fact
+  `keryx job status <JOB_NAME> --json` can be asked about instead of a sentence
+  in this file.
+
+One caveat, stated because it is real: the package holds ONE
+`implementation-report.json` per job, so a later task in the same wave replaces
+it. The per-task files under `results/` are the complete set; the recorded
+document is the most recent.
+
+If `JOB_NAME` is not provided, skip the file write and both commands — there is
+no job package to record against.
+
+The step's own status is the orchestrator's to write (`keryx job step <JOB_NAME>
+<step-id> --status …`). Do not write it yourself: `src/job/plans.ts` makes
+`implement` ONE step for a whole wave, so a single task cannot close it, and
+`keryx job complete` refuses while any step is still open.
 
 **6.2 Emit compact STATUS response:**
 
@@ -415,17 +492,18 @@ The inline response must contain only: STATUS line + Completed bullets + Files c
 
 ## Automation Settings
 
-This skill is designed to run fully autonomously. The following settings control behavior:
+This skill is designed to run fully autonomously. The settings, their types,
+their defaults and their bounds are declared in one place —
+`input-contract.schema.json`, the `automation` object — and are checked by the
+validation in Phase 1.4. To see them:
 
-| Setting | Default | Options | Description |
-|---------|---------|---------|-------------|
-| `auto_commit` | `true` | true/false | Automatically commit changes |
-| `verify_lint` | `true` | true/false | Run ESLint after implementation |
-| `verify_types` | `true` | true/false | Run type-check after implementation |
-| `verify_tests` | `true` | true/false | Run tests after implementation |
-| `verify_stories` | `false` | true/false | Build storybook to verify stories |
-| `max_self_fix_attempts` | `3` | 1-5 | Max attempts to fix verification failures |
-| `commit_message_style` | `conventional` | `conventional` | Commit format |
+```bash
+keryx skills contracts list          # names task-implementer-input and its file
+```
+
+They are deliberately not restated here. The table that used to sit in this spot
+said `max_self_fix_attempts: 1-5` while Phase 5.4 says the maximum is 3, and a
+second copy of a schema is how that happens.
 
 ---
 
@@ -454,7 +532,12 @@ This skill is designed to run fully autonomously. The following settings control
 7. **DO** use `runInAction()` after every `await` in MobX actions.
 8. **DO** commit with conventional commit format referencing the issue number.
 9. **DO** verify your work before reporting.
-10. Return the JSON result object as your **final message** to the orchestrator.
+10. **DO** make `STATUS: <TOKEN>` the first line of your final message, and put no
+    JSON in the response body. The full JSON result is the file Phase 6.1 writes
+    and records. (This rule used to say the opposite — "return the JSON result
+    object as your final message" — which contradicted 6.2, `## Reporting
+    Results`, and `parseChildResult`, the production function that throws on any
+    first line that is not a canonical STATUS token.)
 
 ---
 
