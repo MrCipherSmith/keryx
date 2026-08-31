@@ -109,7 +109,26 @@ describe("the installed metaproject is internally consistent", () => {
  *
  * Derived from the same registry the template uses, so the two cannot disagree.
  */
-test("the installed index names every registered contract", () => {
+test("the installed index names every registered contract, and no others", () => {
+  // `index.includes(name)` was unsound twice over, and three of eleven contracts
+  // could be deleted from the inventory with the gate green: `orchestrator-state`
+  // is a substring of `job-orchestrator-state`, and `subagent-dispatch` /
+  // `subagent-result` both occur again in the workflow prose further up the file.
+  // A gate written because six contracts went invisible could not see three go.
+  //
+  // So: find the one bullet, parse its list, compare SETS. Set equality also
+  // catches the reverse — a name left behind after a contract is renamed —
+  // which no containment test can see.
   const index = readFileSync(path.join(METAPROJECT, "index.md"), "utf8");
-  expect(CONTRACTS.filter((contract) => !index.includes(contract.name)).map((c) => c.name)).toEqual([]);
+  const bullet = index
+    .split("\n")
+    .find((line) => line.startsWith("- `core/gdskills/contracts/`"));
+  expect(bullet).toBeDefined();
+  const listed = /\(skill\/worker communication schemas: ([^)]*)\)/
+    .exec(bullet as string)?.[1]
+    ?.split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  expect(listed).toBeDefined();
+  expect([...(listed as string[])].sort()).toEqual([...CONTRACTS.map((c) => c.name)].sort());
 });

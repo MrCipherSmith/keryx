@@ -74,12 +74,13 @@ export function renderIndexMarkdown({
           "- `skills/catalog.md`",
           "- `skills/gdskills/`",
           "- `project-skills/`",
-          // Derived, not restated. The hand-written list named five while the
-          // registry held nine, so four contracts — including the one that gates
-          // a dispatch before it merges third-party content — were invisible in
-          // the file every agent is hard-gated to read first. `installContracts`
-          // was derived from `CONTRACTS` for exactly this reason; this is the
-          // same fix one file over.
+          // Derived, not restated: a hand-written list drifted from the registry
+          // and left contracts invisible in the file every agent is hard-gated to
+          // read first — including the one that gates a dispatch before it merges
+          // third-party content. `installContracts` was derived from `CONTRACTS`
+          // for exactly this reason; this is the same fix one file over. No count
+          // is quoted here on purpose: the drift was found twice, at different
+          // sizes, and a number in a comment is one more thing to go stale.
           `- \`core/gdskills/contracts/\` (skill/worker communication schemas: ${CONTRACTS.map(
             (contract) => contract.name,
           ).join(", ")})`,

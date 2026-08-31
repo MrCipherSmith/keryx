@@ -105,7 +105,10 @@ describe("collection goes through the CLI, and the skill says why", () => {
     // A fallback is allowed; a fallback that looks equivalent is not.
     expect(skill).toContain("gh api --paginate");
     expect(skill).toMatch(/no durable record/i);
-    expect(skill).toMatch(/Never present a\s+fallback run as equivalent/i);
+    expect(flat(skill)).toContain("Never present a fallback run as equivalent");
+    // The fallback must also say which value the contract will carry, not only that
+    // it lost the screen — the pairing is enforced and a run that omits it fails.
+    expect(flat(skill)).toContain("`screen_status: unavailable` with `screened: 0`");
   });
 
   test("the two consumers of the record are named, and so is the gate", () => {
@@ -229,37 +232,56 @@ describe("the skill no longer claims a contract two other guards exempt it from"
     expect(schema.required.filter((key) => !keys.includes(key))).toEqual([]);
     expect(keys.filter((key) => !(key in schema.properties))).toEqual([]);
 
-    // Nested keys too, PER PARENT. Two bugs lived here in turn: a column-0 anchor
-    // that could not see anything under `fix:` at all, and then a flat list of
-    // every indented key in the block — which `fix.operator_confirmed` satisfied
-    // while documented under `replies:`, a block the schema rejects twice over.
-    // The character class is broad on purpose: `[a-z_]+` silently skipped any
-    // hyphenated or capitalised required key.
-    // Walk lines, not a regex window: `^` under /m matches at index 0 too, so
-    // slicing past the parent line and searching for the next top-level key
-    // matched the parent's own remainder and collapsed the window to one char.
-    const lines = yaml.split("\n");
-    const childrenOf = (parent: string): string[] => {
-      const at = lines.findIndex((line) => line.startsWith(`${parent}:`));
-      if (at < 0) return [];
-      const out: string[] = [];
-      for (const line of lines.slice(at + 1)) {
-        if (/^[A-Za-z_]/.test(line)) break;
-        const child = /^ {2}([A-Za-z0-9_-]+):/.exec(line);
-        if (child) out.push(child[1] as string);
+    // Nested keys, at EVERY depth. Three attempts lived here: a column-0 anchor
+    // that saw nothing under `fix:`; a flat indent list that did not care which
+    // parent a key sat under; and a per-parent walk that stopped at depth 1 —
+    // leaving `fix.operator_confirmed`'s own three required keys, the field this
+    // whole branch hardened, unchecked. `filtered` was skipped too, because its
+    // `required` lives under `items` and `sub.required` is undefined.
+    //
+    // Parse the block into a tree once, then walk the schema against it.
+    type Node = { children: Map<string, Node> };
+    const root: Node = { children: new Map() };
+    const stack: { indent: number; node: Node }[] = [{ indent: -1, node: root }];
+    for (const line of yaml.split("\n")) {
+      const m = /^( *)([A-Za-z0-9_-]+):(.*)$/.exec(line);
+      if (!m) continue;
+      const indent = (m[1] as string).length;
+      while (stack.length > 1 && indent <= (stack[stack.length - 1] as { indent: number }).indent) stack.pop();
+      const parent = (stack[stack.length - 1] as { node: Node }).node;
+      const node: Node = { children: new Map() };
+      parent.children.set(m[2] as string, node);
+      // The block writes short shapes as INLINE maps — `filtered: [ { comment: …,
+      // reason: … } ]`, `operator_confirmed: { confirmed_by: … }`. Their keys are
+      // children too, and a parser that only walked indentation reported them
+      // missing from a block that documents them correctly.
+      for (const inline of (m[3] as string).matchAll(/([A-Za-z0-9_-]+):/g)) {
+        node.children.set(inline[1] as string, { children: new Map() });
       }
-      return out;
-    };
-    let checkedNested = 0;
-    for (const [name, sub] of Object.entries(schema.properties)) {
-      const nested = (sub as { required?: string[] }).required;
-      if (!nested || !keys.includes(name)) continue;
-      checkedNested += 1;
-      expect(nested.filter((key) => !childrenOf(name).includes(key))).toEqual([]);
+      stack.push({ indent, node });
     }
-    // Non-vacuity: if no parent carried nested `required`, the loop above proved
-    // nothing and the next schema change would go unguarded.
-    expect(checkedNested).toBeGreaterThan(0);
+
+    let checkedNested = 0;
+    const walk = (schemaNode: Record<string, unknown>, docNode: Node | undefined, where: string): void => {
+      if (docNode === undefined) return;
+      const req = schemaNode.required as string[] | undefined;
+      if (req && where !== "") {
+        checkedNested += 1;
+        expect({ where, missing: req.filter((key) => !docNode.children.has(key)) })
+          .toEqual({ where, missing: [] });
+      }
+      for (const [name, sub] of Object.entries((schemaNode.properties ?? {}) as Record<string, Record<string, unknown>>)) {
+        walk(sub, docNode.children.get(name), where === "" ? name : `${where}.${name}`);
+      }
+      // An array's shape lives under `items`; the documented block shows one
+      // element inline, so its keys are the parent's children.
+      const items = schemaNode.items as Record<string, unknown> | undefined;
+      if (items) walk(items, docNode, `${where}[]`);
+    };
+    walk(schema as unknown as Record<string, unknown>, root, "");
+    // Non-vacuity, floored at the number of nested `required` lists the schema
+    // actually carries — a floor of 1 was exactly the count the depth-1 walk had.
+    expect(checkedNested).toBeGreaterThan(2);
   });
 
   test("the canonical STATUS line survives outside that block", () => {

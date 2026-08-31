@@ -155,7 +155,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "The merge commit. Its presence is what makes the round's exit condition enforceable: a recorded merge REQUIRES remaining_findings.blocker/major/minor to be 0. The threshold was prose in two skills and nothing refused an output that merged over three blockers."
         },
         "review_rounds": {
           "type": "integer",
@@ -195,13 +196,49 @@
           "description": "Who authorised the merge and the replies, and against which plan. REQUIRED in fix mode and NOT nullable: the field exists to separate an approved run from an assumed one, and both an omitted field and a null one are the assumed run wearing the approved one's shape. An interactive run records the operator it asked; there is no merge without somebody behind it.",
           "properties": {
             "confirmed_by": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "confirmed_at": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "plan_digest": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "if": {
+        "required": [
+          "merge_sha"
+        ],
+        "properties": {
+          "merge_sha": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "remaining_findings": {
+            "required": [
+              "blocker",
+              "major",
+              "minor"
+            ],
+            "properties": {
+              "blocker": {
+                "const": 0
+              },
+              "major": {
+                "const": 0
+              },
+              "minor": {
+                "const": 0
+              }
             }
           }
         }
@@ -262,7 +299,7 @@
     "screened": {
       "type": "integer",
       "minimum": 0,
-      "description": "Comments passed through `keryx security check-input`. REQUIRED: absent and 0 are different claims, and this is the only field that records whether the screen ran at all. A fallback run that could not screen reports 0 alongside the report line saying so."
+      "description": "Comments passed through `keryx security check-input`. REQUIRED: absent and 0 are different claims. Whether the screen ran at all is `screen_status`, not this \u2014 a fallback run reports `screened: 0` with `screen_status: unavailable`, and that pairing is enforced."
     },
     "excluded_for_injection": {
       "type": "array",
@@ -300,5 +337,39 @@
         "type": "object"
       }
     }
-  }
+  },
+  "else": {
+    "properties": {
+      "fix": {
+        "type": "null"
+      },
+      "replies": {
+        "type": "null"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "screen_status"
+        ],
+        "properties": {
+          "screen_status": {
+            "const": "unavailable"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "screened": {
+            "const": 0
+          },
+          "excluded_for_injection": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ]
 }
