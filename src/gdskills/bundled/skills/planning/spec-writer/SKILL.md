@@ -1,5 +1,5 @@
 ---
-name: gproject-spec-writer
+name: spec-writer
 description: >
   Generates PRD or Implementation Plan constrained by decisions registry,
   architecture doc, and best practices. Does NOT invent new architectural decisions.

@@ -1,5 +1,5 @@
 ---
-name: gproject-consistency-checker
+name: consistency-checker
 description: >
   Validates PRD/Implementation Plan against decisions registry, architecture doc,
   and best practices constraints. Catches contradictions, gaps, and violations.

@@ -1,5 +1,5 @@
 ---
-name: gproject-discovery
+name: project-discovery
 description: >
   Collects and structures initial project information from multiple sources.
   Use when: dispatched by gproject-orchestrator Phase 0.
