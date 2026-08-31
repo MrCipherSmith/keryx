@@ -1,0 +1,110 @@
+[
+  {
+    "id": "s-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "major",
+    "problem": "The programme quoted 34 unfinished tasks across 24 flows for a month; the count is 59 across 26, and the severity was overstated because the figure mixed bookkeeping with dropped work.",
+    "impact": "A quoted number that overstated, a document that described a task that did not exist, or a proposed mechanism that would record an unmade decision.",
+    "suggested_fix": "Measure before asserting; render the document from the same constant as the state; mark origin as a fact; refuse the time term.",
+    "evidence": "Measured across all 206 flow packages; the template drift verified against the committed file.",
+    "confidence": "high",
+    "file": ".metaproject/flows",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        ".metaproject/flows"
+      ],
+      "enumeration_method": "All 206 flow packages read and categorised; scaffold rows matched by id and title at the pre-cleanup commit."
+    },
+    "global_id": "2026-08-31-scaffold#s-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 55e1bd83 and b1646404. Two mutations for the scaffold decision, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at b1646404: 9 of 59 remain and all are blocked by flow 002's checksum guard; tasks.md now renders from DEFAULT_TASKS; origin is recorded; isUntouchedScaffold contains no time term. Full suite 6275/0.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "s-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "tasks.md documented T4 as 'Review, fix findings, and prepare PR' while flow.json carried 'Self-review and prepare draft PR' — every generated package described a task it did not contain.",
+    "impact": "A quoted number that overstated, a document that described a task that did not exist, or a proposed mechanism that would record an unmade decision.",
+    "suggested_fix": "Measure before asserting; render the document from the same constant as the state; mark origin as a fact; refuse the time term.",
+    "evidence": "Measured across all 206 flow packages; the template drift verified against the committed file.",
+    "confidence": "high",
+    "file": "src/flow/templates.ts",
+    "line": 48,
+    "class_scope": {
+      "sites": [
+        "src/flow/templates.ts"
+      ],
+      "enumeration_method": "All 206 flow packages read and categorised; scaffold rows matched by id and title at the pre-cleanup commit."
+    },
+    "global_id": "2026-08-31-scaffold#s-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 55e1bd83 and b1646404. Two mutations for the scaffold decision, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at b1646404: 9 of 59 remain and all are blocked by flow 002's checksum guard; tasks.md now renders from DEFAULT_TASKS; origin is recorded; isUntouchedScaffold contains no time term. Full suite 6275/0.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "s-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The scaffold rows carried no marker, so identifying them required matching titles — which breaks on any rewording and cannot distinguish a generated row from an identical hand-written one.",
+    "impact": "A quoted number that overstated, a document that described a task that did not exist, or a proposed mechanism that would record an unmade decision.",
+    "suggested_fix": "Measure before asserting; render the document from the same constant as the state; mark origin as a fact; refuse the time term.",
+    "evidence": "Measured across all 206 flow packages; the template drift verified against the committed file.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": 82,
+    "global_id": "2026-08-31-scaffold#s-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 55e1bd83 and b1646404. Two mutations for the scaffold decision, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at b1646404: 9 of 59 remain and all are blocked by flow 002's checksum guard; tasks.md now renders from DEFAULT_TASKS; origin is recorded; isUntouchedScaffold contains no time term. Full suite 6275/0.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "s-04",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "A time-based expiry for scaffold rows was requested; it would record a judgement nobody made, since 'expired' means nobody looked rather than that anyone decided.",
+    "impact": "A quoted number that overstated, a document that described a task that did not exist, or a proposed mechanism that would record an unmade decision.",
+    "suggested_fix": "Measure before asserting; render the document from the same constant as the state; mark origin as a fact; refuse the time term.",
+    "evidence": "Measured across all 206 flow packages; the template drift verified against the committed file.",
+    "confidence": "high",
+    "file": "src/flow/machine.ts",
+    "line": 1,
+    "global_id": "2026-08-31-scaffold#s-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 55e1bd83 and b1646404. Two mutations for the scaffold decision, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at b1646404: 9 of 59 remain and all are blocked by flow 002's checksum guard; tasks.md now renders from DEFAULT_TASKS; origin is recorded; isUntouchedScaffold contains no time term. Full suite 6275/0.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

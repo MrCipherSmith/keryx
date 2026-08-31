@@ -7,15 +7,56 @@
   "id": "211",
   "slug": "clear-the-historical-unfinished-task-deb",
   "title": "Clear the historical unfinished-task debt, and stop flow init from generating more of it",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T10:38:19.796Z",
-  "updatedAt": "2026-08-31T10:38:47.824Z",
+  "updatedAt": "2026-08-31T11:21:55.495Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2fb894f6707338a0c34cd72d855fc6d6d1c7ea3df91b6706440c80bae9926038",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-31T11:21:08.730Z",
+      "note": "Recorded in 55e1bd83: the real figure is 59 across 26, not 34 across 24, with the query that produced it. Third of our own measurements to need correcting in two days."
+    },
+    "AC2": {
+      "at": "2026-08-31T11:21:08.853Z",
+      "note": "Categorised and counted: 30 scaffold superseded, 4 scaffold in a flow with nothing completed, 25 named work. The single mixed number is what made the original claim overstate."
+    },
+    "AC3": {
+      "at": "2026-08-31T11:21:08.977Z",
+      "note": "Every disposition went through keryx flow task done --disposition --reason. No flow.json or acceptance-criteria.md was hand-edited."
+    },
+    "AC4": {
+      "at": "2026-08-31T11:21:09.103Z",
+      "note": "Each scaffold row closed as skipped with a reason naming why — the explicit task list superseded it and completed."
+    },
+    "AC5": {
+      "at": "2026-08-31T11:21:09.226Z",
+      "note": "Flows 001 and 002 were read individually and checked against the tree, not bulk-skipped. Named work recorded completed with the file paths that prove it; 002's dead-code decision was resolved by removal, verified by both symbols being absent from src/."
+    },
+    "AC6": {
+      "at": "2026-08-31T11:21:09.352Z",
+      "note": "Flow 116 investigated rather than assumed: it recorded no explicit tasks, and the work shipped as PR #196 merged 2026-07-22, verified against the merged pull request."
+    },
+    "AC7": {
+      "at": "2026-08-31T11:21:09.476Z",
+      "note": "flow check reports no issue introduced by this flow. Flow 002's checksum mismatch is reported and left for the operator — the sanctioned remedy re-baselines a checksum over an edit nobody can inspect. Flow 178's self-dependency is reported and cannot be repaired by any command."
+    },
+    "AC8": {
+      "at": "2026-08-31T11:21:09.598Z",
+      "note": "Addressed by measurement, and the proposal was refuted: across 206 packages zero replaced the scaffold, 91.5% of scaffold rows reached done, and for 43% of flows it IS the plan. Removing it would pass the task gate vacuously and leave /goal --auto with no task source. Kept, with the decision and its four measurements recorded at the definition."
+    },
+    "AC9": {
+      "at": "2026-08-31T11:21:09.723Z",
+      "note": "src/flow/default-tasks.test.ts, 11 tests. Two mutations: emptying the scaffold turned 5 of 6 red; reverting the template to its hardcoded table went red on exactly the T4 drift."
+    },
+    "AC10": {
+      "at": "2026-08-31T11:21:09.845Z",
+      "note": "typecheck clean; bun test 6275 pass / 18 skip / 0 fail against a 6264/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -24,7 +65,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -32,13 +73,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +88,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,13 +103,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +118,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -90,6 +135,91 @@
     {
       "at": "2026-08-31T10:38:47.824Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-31T11:21:08.240Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T11:21:08.365Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T11:21:08.486Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T11:21:08.609Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T11:21:08.730Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Recorded in 55e1bd83: the real figure is 59 across 26, not 34 across 24, with the query that produced it. Third of our own measurements to need correcting in two days."
+    },
+    {
+      "at": "2026-08-31T11:21:08.853Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Categorised and counted: 30 scaffold superseded, 4 scaffold in a flow with nothing completed, 25 named work. The single mixed number is what made the original claim overstate."
+    },
+    {
+      "at": "2026-08-31T11:21:08.977Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Every disposition went through keryx flow task done --disposition --reason. No flow.json or acceptance-criteria.md was hand-edited."
+    },
+    {
+      "at": "2026-08-31T11:21:09.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Each scaffold row closed as skipped with a reason naming why — the explicit task list superseded it and completed."
+    },
+    {
+      "at": "2026-08-31T11:21:09.226Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Flows 001 and 002 were read individually and checked against the tree, not bulk-skipped. Named work recorded completed with the file paths that prove it; 002's dead-code decision was resolved by removal, verified by both symbols being absent from src/."
+    },
+    {
+      "at": "2026-08-31T11:21:09.352Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Flow 116 investigated rather than assumed: it recorded no explicit tasks, and the work shipped as PR #196 merged 2026-07-22, verified against the merged pull request."
+    },
+    {
+      "at": "2026-08-31T11:21:09.476Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: flow check reports no issue introduced by this flow. Flow 002's checksum mismatch is reported and left for the operator — the sanctioned remedy re-baselines a checksum over an edit nobody can inspect. Flow 178's self-dependency is reported and cannot be repaired by any command."
+    },
+    {
+      "at": "2026-08-31T11:21:09.598Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Addressed by measurement, and the proposal was refuted: across 206 packages zero replaced the scaffold, 91.5% of scaffold rows reached done, and for 43% of flows it IS the plan. Removing it would pass the task gate vacuously and leave /goal --auto with no task source. Kept, with the decision and its four measurements recorded at the definition."
+    },
+    {
+      "at": "2026-08-31T11:21:09.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/flow/default-tasks.test.ts, 11 tests. Two mutations: emptying the scaffold turned 5 of 6 red; reverting the template to its hardcoded table went red on exactly the T4 drift."
+    },
+    {
+      "at": "2026-08-31T11:21:09.845Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: typecheck clean; bun test 6275 pass / 18 skip / 0 fail against a 6264/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    },
+    {
+      "at": "2026-08-31T11:21:55.478Z",
+      "event": "completing",
+      "detail": "merged commit: b16464041d20b6c1cc0703fc8a2034b7eb4a33f8"
+    },
+    {
+      "at": "2026-08-31T11:21:55.495Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "b16464041d20b6c1cc0703fc8a2034b7eb4a33f8",
+    "ref": "origin/main",
+    "at": "2026-08-31T11:21:55.495Z"
+  }
 }

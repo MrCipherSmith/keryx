@@ -3,3 +3,19 @@
 - 2026-08-31T10:38:19.796Z - flow created
 - 2026-08-31T10:38:47.594Z - frozen: 10 criteria; checksum recorded
 - 2026-08-31T10:38:47.824Z - started
+- 2026-08-31T11:21:08.240Z - task-done: T1: Collect remaining context
+- 2026-08-31T11:21:08.365Z - task-done: T2: Implement per plan
+- 2026-08-31T11:21:08.486Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T11:21:08.609Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-31T11:21:08.730Z - ac-confirmed: AC1: Recorded in 55e1bd83: the real figure is 59 across 26, not 34 across 24, with the query that produced it. Third of our own measurements to need correcting in two days.
+- 2026-08-31T11:21:08.853Z - ac-confirmed: AC2: Categorised and counted: 30 scaffold superseded, 4 scaffold in a flow with nothing completed, 25 named work. The single mixed number is what made the original claim overstate.
+- 2026-08-31T11:21:08.977Z - ac-confirmed: AC3: Every disposition went through keryx flow task done --disposition --reason. No flow.json or acceptance-criteria.md was hand-edited.
+- 2026-08-31T11:21:09.103Z - ac-confirmed: AC4: Each scaffold row closed as skipped with a reason naming why — the explicit task list superseded it and completed.
+- 2026-08-31T11:21:09.226Z - ac-confirmed: AC5: Flows 001 and 002 were read individually and checked against the tree, not bulk-skipped. Named work recorded completed with the file paths that prove it; 002's dead-code decision was resolved by removal, verified by both symbols being absent from src/.
+- 2026-08-31T11:21:09.352Z - ac-confirmed: AC6: Flow 116 investigated rather than assumed: it recorded no explicit tasks, and the work shipped as PR #196 merged 2026-07-22, verified against the merged pull request.
+- 2026-08-31T11:21:09.476Z - ac-confirmed: AC7: flow check reports no issue introduced by this flow. Flow 002's checksum mismatch is reported and left for the operator — the sanctioned remedy re-baselines a checksum over an edit nobody can inspect. Flow 178's self-dependency is reported and cannot be repaired by any command.
+- 2026-08-31T11:21:09.598Z - ac-confirmed: AC8: Addressed by measurement, and the proposal was refuted: across 206 packages zero replaced the scaffold, 91.5% of scaffold rows reached done, and for 43% of flows it IS the plan. Removing it would pass the task gate vacuously and leave /goal --auto with no task source. Kept, with the decision and its four measurements recorded at the definition.
+- 2026-08-31T11:21:09.723Z - ac-confirmed: AC9: src/flow/default-tasks.test.ts, 11 tests. Two mutations: emptying the scaffold turned 5 of 6 red; reverting the template to its hardcoded table went red on exactly the T4 drift.
+- 2026-08-31T11:21:09.845Z - ac-confirmed: AC10: typecheck clean; bun test 6275 pass / 18 skip / 0 fail against a 6264/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken.
+- 2026-08-31T11:21:55.478Z - completing: merged commit: b16464041d20b6c1cc0703fc8a2034b7eb4a33f8
+- 2026-08-31T11:21:55.495Z - done: all gates passed
