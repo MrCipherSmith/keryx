@@ -82,6 +82,19 @@ export type FlowTask = {
   evidenceRefs?: string[] | undefined;
   budget?: TaskBudget | undefined;
   runLink?: TaskRunLink | undefined;
+  /**
+   * Who wrote this row. `"scaffold"` means `flow init` generated it from
+   * {@link DEFAULT_TASKS}; absent means an operator or an agent added it
+   * through `flow task add`, or the package predates this field.
+   *
+   * Recorded rather than inferred. Before this existed the only way to ask "is
+   * this a generated row?" was to string-match the title against a hardcoded
+   * list — which is exactly how flow 211 had to take its measurement, and which
+   * breaks silently the first time a default is reworded. Absence is never
+   * read as "scaffold", so the 207 packages written before this field are never
+   * accused of carrying one.
+   */
+  origin?: "scaffold" | undefined;
 };
 
 export type FlowSource = {

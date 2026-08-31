@@ -977,7 +977,7 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>` | Scaffold a flow package. Requires a title or issue URL. |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, tasks, recent history. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
@@ -1005,6 +1005,33 @@ When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci` mode can fail the gate and hold the flow in `in-progress`. The gate
 is omitted entirely when the module is disabled.
+
+### The default task scaffold
+
+`flow init` writes four tasks into every new package — T1 collect context, T2
+implement, T3 test, T4 self-review — each carrying `origin: "scaffold"` so a
+generated row is a recorded fact rather than a title match. They are a default
+checklist, not a plan: add your own with `flow task add`, and close any scaffold
+row your plan supersedes with a stated reason:
+
+```
+keryx flow task done <id> T1 --disposition skipped --reason "<why this flow did not need it>"
+```
+
+Measured over the 206 packages that existed when this was last reviewed: no flow
+has ever *replaced* the scaffold (flows extend it), 91.5% of scaffold rows reach
+`done`, and 43% of flows record no task beyond these four — so for nearly half
+of all flows this scaffold is the entire task list. Removing it would leave those
+flows with an empty task list, and an empty list passes the task gate vacuously
+(`0 task(s) terminal`), which is weaker than the four rows it replaced.
+
+**Scaffold rows never expire.** Nothing closes them on a timer, at completion or
+anywhere else. `disposition: "skipped"` means somebody judged the work
+unnecessary; "nobody looked for N days" is the absence of that judgement, and
+recording it as one is the defect the task gate exists to prevent. What the tool
+does instead is make the debt visible and cheap to clear: when the task gate
+fails, it names the scaffold rows that were never started separately from the
+flow's own open work, and prints the command above. The `--reason` stays yours.
 
 ### The `review` completion gate
 

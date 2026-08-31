@@ -95,6 +95,22 @@ export function isBlockedTask(task: FlowTask): boolean {
   return task.disposition === "blocked";
 }
 
+/**
+ * A generated scaffold row that nothing has touched since `flow init` wrote it
+ * (flow 211, AC8).
+ *
+ * Every clause is an observed fact about the record: `origin` was written at
+ * creation, `status` is still the initial one, and the attempt log is empty.
+ * There is deliberately no time term. "Untouched" is checkable; "stale" would
+ * need a threshold, and a threshold invites a rule that closes the row when it
+ * trips — which would record a judgement nobody made. This predicate only ever
+ * decides how a task is DESCRIBED in a gate failure; it never changes whether
+ * the gate passes.
+ */
+export function isUntouchedScaffold(task: FlowTask): boolean {
+  return task.origin === "scaffold" && task.status === "todo" && (task.attempts?.count ?? 0) === 0;
+}
+
 /** A disposition this build does not recognise. Fails the gate; never passes it. */
 export function isUnknownDisposition(task: FlowTask): boolean {
   if (task.disposition === undefined || task.disposition === null) {

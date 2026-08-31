@@ -2,10 +2,17 @@ import { mkdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { assertTransition, dependencyIssues, evaluateTaskGate, nextTask } from "./machine";
+import {
+  assertTransition,
+  dependencyIssues,
+  evaluateTaskGate,
+  isUntouchedScaffold,
+  nextTask,
+} from "./machine";
 import { reviewGate } from "./review-gate";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
+import { DEFAULT_TASKS } from "./default-tasks";
 import {
   acChecksum,
   acPath,
@@ -51,7 +58,6 @@ import type {
   GateOutcome,
   AttemptOutcome,
   TaskAttempts,
-  TaskKind,
 } from "./types";
 
 /**
@@ -78,13 +84,6 @@ function recordAttempt(
   task.attempts = attempts;
   return attempts;
 }
-
-const DEFAULT_TASKS: Array<{ id: string; title: string; kind: TaskKind }> = [
-  { id: "T1", title: "Collect remaining context", kind: "context" },
-  { id: "T2", title: "Implement per plan", kind: "implement" },
-  { id: "T3", title: "Add/adjust tests and make them pass", kind: "test" },
-  { id: "T4", title: "Self-review and prepare draft PR", kind: "review" },
-];
 
 export function createFlowService(deps: FlowServiceDeps): FlowService {
   const now = () => deps.now().toISOString();
@@ -824,7 +823,26 @@ function taskGate(flow: FlowState): GateOutcome {
   }
   const reasons: string[] = [];
   if (verdict.open.length > 0) {
+    // Flow 211, AC8 — name the generated rows nobody touched separately from
+    // the flow's own open work. Same verdict either way (both are `open`, both
+    // fail); the difference is that an operator reading this can tell four
+    // untouched placeholders from four abandoned tasks, and is handed the
+    // command that closes them. That is the whole "clean them up" mechanism:
+    // it makes the debt visible and cheap, and leaves the judgement — the
+    // `--reason` — to whoever is accountable for it.
     reasons.push(`not done: ${verdict.open.join(", ")}`);
+    const byId = new Map(flow.tasks.map((task) => [task.id, task]));
+    const untouched = verdict.open.filter((id) => {
+      const task = byId.get(id);
+      return task !== undefined && isUntouchedScaffold(task);
+    });
+    if (untouched.length > 0) {
+      reasons.push(
+        `never started since \`flow init\` generated them: ${untouched.join(", ")} ` +
+          "(nothing closes these on a timer — close each with a stated reason: " +
+          `keryx flow task done ${flow.id} ${untouched[0]} --disposition skipped --reason "<why this flow did not need it>")`,
+      );
+    }
   }
   if (verdict.failed.length > 0) {
     reasons.push(`failed: ${verdict.failed.join(", ")}`);

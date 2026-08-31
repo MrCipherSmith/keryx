@@ -1,3 +1,5 @@
+import { DEFAULT_TASKS } from "./default-tasks";
+
 export function renderDescription(title: string, source: string): string {
   return `# ${title}
 
@@ -37,18 +39,31 @@ Chosen approach and why (link brainstorm alternatives if any).
 `;
 }
 
+/**
+ * The `tasks.md` that ships in a fresh flow package.
+ *
+ * The table is rendered FROM {@link DEFAULT_TASKS} rather than typed out
+ * beside it. Hand-maintained, the two drifted: `flow.json` carried
+ * `T4 Self-review and prepare draft PR` while this table claimed
+ * `T4 Review, fix findings, and prepare PR`, so every package documented a
+ * task it did not contain. One list means the document cannot disagree with
+ * the state again — and `flow init`'s scaffold being "exactly the documented
+ * set" is the claim `default-tasks.test.ts` pins (flow 211, AC9).
+ */
 export function renderTasksDoc(): string {
+  const rows = DEFAULT_TASKS.map((task) => `| ${task.id} | ${task.kind} | ${task.title} |`).join("\n");
   return `# Tasks
 
 Task definitions live here; task **statuses** live in flow.json and are managed
 only via \`keryx flow task done <id> <taskId>\`.
 
+These four are created by \`keryx flow init\` as a default checklist. Add your
+own with \`keryx flow task add\`; a scaffold row your plan supersedes is closed
+with \`--disposition skipped --reason "<why>"\`, not left open.
+
 | ID | Kind | Title |
 |----|------|-------|
-| T1 | context | Collect remaining context |
-| T2 | implement | Implement per plan |
-| T3 | test | Add/adjust tests and make them pass |
-| T4 | review | Review, fix findings, and prepare PR |
+${rows}
 `;
 }
 
@@ -201,7 +216,11 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
 5. If hard requirements are ambiguous, dispatch \`interviewer\`: focused
    questions with options and a recommendation. Do not guess hard requirements.
 6. Break work into tasks: \`keryx flow task add <id> --title ... --kind
-   context|implement|test|review|docs\` (defaults T1-T4 already exist; adjust).
+   context|implement|test|review|docs\`. The four \`origin: "scaffold"\` rows
+   T1-T4 already exist as a default checklist — work them, or close the ones
+   your plan supersedes with
+   \`keryx flow task done <id> <Tn> --disposition skipped --reason "<why>"\`.
+   Nothing closes them on a timer; leaving them open blocks \`flow complete\`.
 7. Write acceptance-criteria.md: hard, verifiable \`- ACn:\` criteria grounded in
    the collected evidence.
 8. Re-verify the whole package, then freeze and hand off:
