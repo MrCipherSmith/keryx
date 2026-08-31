@@ -7,15 +7,52 @@
   "id": "212",
   "slug": "sac-ledger-historical-tampering-is-undet",
   "title": "SAC ledger: historical tampering is undetected when a same-size rewrite lands in the same filesystem timestamp tick",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T11:25:58.474Z",
-  "updatedAt": "2026-08-31T11:26:23.932Z",
+  "updatedAt": "2026-08-31T12:39:42.536Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:3444944725d1cc1cc557c5f489f2db60f1774a7671c602f6a7ccaf9812d9dbab",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-31T12:11:38.330Z",
+      "note": "A same-size rewrite with unchanged mtimeNs/ctimeNs is now detected: the content digest changes. Merged as fe0431fc."
+    },
+    "AC2": {
+      "at": "2026-08-31T12:11:38.452Z",
+      "note": "The four stat fields are removed from the checkpoint entirely and identityMatches is deleted; trust derives from a sha256 over the audited ledger prefix, not from the filesystem's opinion about when the file changed."
+    },
+    "AC3": {
+      "at": "2026-08-31T12:11:38.574Z",
+      "note": "The test passes deterministically: 5 consecutive isolated runs green on the branch and 5 more on main after merge, against 6 consecutive red on the pre-fix code. Not quarantined, not weakened."
+    },
+    "AC4": {
+      "at": "2026-08-31T12:11:38.694Z",
+      "note": "Mutation: deleting the single digest-comparison line in fastCheckpointState turned the named test red 3/3 in isolation and took the new mid-ledger test with it. Restored and re-verified."
+    },
+    "AC5": {
+      "at": "2026-08-31T12:11:38.823Z",
+      "note": "The fast path stays one sequential read plus one sha256. The assumption is stated at the code: identical bytes yield identical records because the audit splits on newlines and JSON-parses each line, both deterministic, so byte equality with an audited snapshot is as strong as re-running that audit."
+    },
+    "AC6": {
+      "at": "2026-08-31T12:11:38.942Z",
+      "note": "Detection covers the whole audited prefix, so an edit at index 0, mid-ledger or at the tail is equally visible. A new test corrupts the middle record of a three-record ledger. The chain alone could not do this: a mid-ledger edit leaves every stored hash byte-identical, so the link check passes."
+    },
+    "AC7": {
+      "at": "2026-08-31T12:11:39.066Z",
+      "note": "A v1.0 checkpoint fails parsing on both key set and version, so it is re-audited from scratch and rewritten as 1.1, never trusted under the new rule. A tampered ledger under a hand-forged, correctly-hashed legacy checkpoint is refused rather than adopted."
+    },
+    "AC8": {
+      "at": "2026-08-31T12:11:39.184Z",
+      "note": "Divergence refuses rather than falling back: a short file or digest mismatch throws. Falling back to a full audit would let a clean truncation to a valid prefix pass as a healthy, merely shorter ledger, because the audit cannot know how long the ledger should be."
+    },
+    "AC9": {
+      "at": "2026-08-31T12:11:39.308Z",
+      "note": "typecheck clean; bun test 6279 pass / 18 skip / 0 fail against a 6275/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken; the previously nondeterministic test green across five consecutive isolated runs."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -25,7 +62,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +70,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +86,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,14 +102,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,7 +118,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -94,6 +135,116 @@
     {
       "at": "2026-08-31T11:26:23.932Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-31T12:11:37.841Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T12:11:37.963Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T12:11:38.080Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T12:11:38.204Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T12:11:38.330Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: A same-size rewrite with unchanged mtimeNs/ctimeNs is now detected: the content digest changes. Merged as fe0431fc."
+    },
+    {
+      "at": "2026-08-31T12:11:38.453Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: The four stat fields are removed from the checkpoint entirely and identityMatches is deleted; trust derives from a sha256 over the audited ledger prefix, not from the filesystem's opinion about when the file changed."
+    },
+    {
+      "at": "2026-08-31T12:11:38.575Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: The test passes deterministically: 5 consecutive isolated runs green on the branch and 5 more on main after merge, against 6 consecutive red on the pre-fix code. Not quarantined, not weakened."
+    },
+    {
+      "at": "2026-08-31T12:11:38.694Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Mutation: deleting the single digest-comparison line in fastCheckpointState turned the named test red 3/3 in isolation and took the new mid-ledger test with it. Restored and re-verified."
+    },
+    {
+      "at": "2026-08-31T12:11:38.823Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: The fast path stays one sequential read plus one sha256. The assumption is stated at the code: identical bytes yield identical records because the audit splits on newlines and JSON-parses each line, both deterministic, so byte equality with an audited snapshot is as strong as re-running that audit."
+    },
+    {
+      "at": "2026-08-31T12:11:38.942Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Detection covers the whole audited prefix, so an edit at index 0, mid-ledger or at the tail is equally visible. A new test corrupts the middle record of a three-record ledger. The chain alone could not do this: a mid-ledger edit leaves every stored hash byte-identical, so the link check passes."
+    },
+    {
+      "at": "2026-08-31T12:11:39.066Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: A v1.0 checkpoint fails parsing on both key set and version, so it is re-audited from scratch and rewritten as 1.1, never trusted under the new rule. A tampered ledger under a hand-forged, correctly-hashed legacy checkpoint is refused rather than adopted."
+    },
+    {
+      "at": "2026-08-31T12:11:39.184Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Divergence refuses rather than falling back: a short file or digest mismatch throws. Falling back to a full audit would let a clean truncation to a valid prefix pass as a healthy, merely shorter ledger, because the audit cannot know how long the ledger should be."
+    },
+    {
+      "at": "2026-08-31T12:11:39.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: typecheck clean; bun test 6279 pass / 18 skip / 0 fail against a 6275/0 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken; the previously nondeterministic test green across five consecutive isolated runs."
+    },
+    {
+      "at": "2026-08-31T12:22:44.064Z",
+      "event": "completing",
+      "detail": "merged commit: fe0431fc"
+    },
+    {
+      "at": "2026-08-31T12:22:44.075Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/212-2026-08-31-sac-ledger-historical-tampering-is-undet/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-08-31T12:36:22.559Z",
+      "event": "completing",
+      "detail": "merged commit: fe0431fc"
+    },
+    {
+      "at": "2026-08-31T12:36:22.582Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 2026-08-31-sac-mutation#m-01 (major, round 2026-08-31-sac-mutation): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-08-31-sac-mutation#m-02 (major, round 2026-08-31-sac-mutation): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-08-31-sac-mutation#m-04 (minor, round 2026-08-31-sac-mutation): disposition `acknowledged` is not a state this build recognises | verifier-stats (violated): round `2026-08-31-sac-mutation` ran with `verification_mode: annotate` and received 0 claims while retaining 3 finding(s) at or above `minor` (2026-08-31-sac-mutation#m-01, 2026-08-31-sac-mutation#m-02, 2026-08-31-sac-mutation#m-04). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-08-31T12:39:29.159Z",
+      "event": "completing",
+      "detail": "merged commit: fe0431fc"
+    },
+    {
+      "at": "2026-08-31T12:39:29.210Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-08-31-sac-mutation#m-04 (minor, round 2026-08-31-sac-mutation): marked fixed at 4f5c6acb but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-08-31T12:39:42.487Z",
+      "event": "completing",
+      "detail": "merged commit: fe0431fc"
+    },
+    {
+      "at": "2026-08-31T12:39:42.536Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "fe0431fc",
+    "ref": "origin/main",
+    "at": "2026-08-31T12:39:42.536Z"
+  }
 }

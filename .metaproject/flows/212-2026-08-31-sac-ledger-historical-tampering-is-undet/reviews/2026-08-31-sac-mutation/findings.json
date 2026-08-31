@@ -1,0 +1,124 @@
+[
+  {
+    "id": "m-01",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The `ledgerBytes !== checkpoint.ledgerBytes` guard in `fastCheckpointState` could be deleted with the entire suite still green. Nothing observed its removal.",
+    "impact": "Without the guard the fast path reads the tail record at the STALE `tailOffset`, validates it (it is a real record), and returns the stale `headHash`. The next append then chains from a record that is no longer last \u2014 a silently broken integrity chain produced by the code whose job is to keep it intact, and worse than the tampering this flow set out to detect, because nothing refuses. The state is reachable rather than theoretical: the ledger append is the commit point and its checkpoint refresh is explicitly allowed to fail, which leaves precisely a stale checkpoint over a longer ledger.",
+    "suggested_fix": "Rewind the checkpoint to describe only the first of two on-disk records \u2014 every field honest about that prefix, including the content digest, so only the length comparison can notice \u2014 then append and assert the new record's `previousRecordHash` equals the second record's `recordHash`, not the first's.",
+    "evidence": "Mutation pass: gate deleted, `bun test src/sac/fwk-service.test.ts` returned 28 pass / 0 fail. Non-vacuity established first by deleting the digest comparison, which returned 26 pass / 2 fail.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.ts",
+    "line": 191,
+    "class_scope": {
+      "sites": [
+        "src/sac/fwk-service.ts:191",
+        "src/sac/fwk-service.ts:639",
+        "src/sac/fwk-service.ts:182"
+      ],
+      "enumeration_method": "Every gate the merged change added was mutated one at a time and the suite run against each; four gates total, three returned green."
+    },
+    "global_id": "2026-08-31-sac-mutation#m-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Covered by \"a ledger that grew past its checkpoint is re-audited, so the next receipt chains from the real tail\", landed in #423 (4f5c6acb)."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked after the fix at 4f5c6acb: the mutation that used to pass now fails. Guard deleted three times in isolation, 28 pass / 1 fail each time, the new test being the failure; restored, 30 pass / 0 fail. The gap no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "m-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The post-append `ledgerByteLength(ledger) !== ledgerBytes` check could be deleted with the entire suite still green.",
+    "impact": "`state.digest` carries the audited pre-append bytes and the checkpoint folds the written line into it without re-reading the file. That shortcut is honest only while the file is exactly the audited prefix plus that line. Remove the check and the checkpoint commits to a byte sequence that was never on disk \u2014 this flow's own defect reintroduced one layer down, in the mechanism built to remove it.",
+    "suggested_fix": "Inject the fault through `verifyReceiptLedger`, which runs inside the audit between the read and the append, and assert the checkpoint is absent afterwards rather than sealed.",
+    "evidence": "Mutation pass: gate deleted, 28 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.ts",
+    "line": 639,
+    "class_scope": {
+      "sites": [
+        "src/sac/fwk-service.ts:639"
+      ],
+      "enumeration_method": "Same mutation sweep as m-01."
+    },
+    "global_id": "2026-08-31-sac-mutation#m-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Covered by \"an append whose post-write size does not match the audited prefix drops the checkpoint instead of sealing it\", landed in #423 (4f5c6acb)."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked after the fix at 4f5c6acb: guard deleted three times in isolation, 29 pass / 1 fail each time; restored, 30 pass / 0 fail. The gap no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "m-03",
+    "reviewer": "review-core-boundaries",
+    "severity": "info",
+    "problem": "The `ledgerBytes < checkpoint.ledgerBytes` truncation guard also survives deletion with the suite green, which reads as a third coverage gap.",
+    "impact": "None. Its removal is invisible for a sound reason: `digestLedgerPrefix` returns `undefined` on the short read and the caller throws the identical `truncated-ledger`. The guard is redundant by construction, not unwatched.",
+    "suggested_fix": "Leave the guard in place as defence in depth and record the reasoning, so the next mutation pass does not re-open it as a gap or delete it as dead code.",
+    "evidence": "Gate deleted: 28 pass / 0 fail, and \"a ledger truncated to a valid prefix is refused instead of silently shortened\" still passes asserting `truncated-ledger`, sourced from the short-read path instead.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.ts",
+    "line": 182,
+    "class_scope": {
+      "sites": [
+        "src/sac/fwk-service.ts:182"
+      ],
+      "enumeration_method": "Same mutation sweep as m-01."
+    },
+    "global_id": "2026-08-31-sac-mutation#m-03",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "Traced to the short-read path in digestLedgerPrefix, which returns undefined and makes the caller throw the identical truncated-ledger. The behaviour is guarded, by a different line than the one mutated, so the claim that this is a coverage gap is wrong. Reasoning recorded in the 4f5c6acb commit message so the next sweep does not re-open it."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "The existing truncation test still passes with the gate deleted AND still asserts the truncated-ledger error string, which can only come from the short-read path. No code change made.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "m-04",
+    "reviewer": "review-verifier",
+    "severity": "minor",
+    "problem": "This flow's own acceptance criterion asserted mutation proof for the change, and that assertion was accurate only of the digest comparison.",
+    "impact": "The criterion was true as written and the coverage behind it was narrower than a reader would take it to be. This is the recurring class the programme exists to remove \u2014 a record that asserts more than the code established \u2014 appearing in the record of a flow whose subject was exactly that class.",
+    "suggested_fix": "State which mechanism a mutation proof covers, and sweep every gate a change adds rather than the one the fix is named after.",
+    "evidence": "Flow 212 AC4 names the digest-comparison line specifically; three sibling gates in the same function and its append path were never mutated until this round.",
+    "confidence": "high",
+    "file": ".metaproject/flows/212-2026-08-31-sac-ledger-historical-tampering-is-undet/acceptance-criteria.md",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        ".metaproject/flows/212-2026-08-31-sac-ledger-historical-tampering-is-undet"
+      ],
+      "enumeration_method": "Single flow; the criterion text read against the mutation sweep's results."
+    },
+    "global_id": "2026-08-31-sac-mutation#m-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "The correction is written into this round's report and into the 4f5c6acb commit message, both of which state that the flow's mutation proof covered the digest comparison only. The frozen criteria are not rewritten after the fact; the correction lives where a later reader looks."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "inspection",
+      "evidence": "Re-read at 4f5c6acb, the commit the fix landed in: its message states in full that the mutation proof covered the digest comparison only, and this round's report carries the same correction. A reader of the flow's evidence set is no longer led to take the proof as covering every gate, so the misleading-record condition no longer reproduces at that tree.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]
