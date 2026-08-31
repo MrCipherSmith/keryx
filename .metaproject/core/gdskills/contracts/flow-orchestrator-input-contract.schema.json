@@ -78,5 +78,20 @@
         }
       }
     }
+  },
+  "if": {
+    "required": [
+      "completion_outcome"
+    ],
+    "properties": {
+      "completion_outcome": {
+        "const": "create-pr-and-merge"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "operator_confirmed"
+    ]
   }
 }

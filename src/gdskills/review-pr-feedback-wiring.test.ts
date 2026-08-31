@@ -65,7 +65,9 @@ function read(file: string): string {
  */
 function rules(text: string): string {
   const table = text.indexOf("## Red Flags");
-  expect(table).toBeGreaterThan(0);
+  // Throw, not `expect`: a helper that asserts reports `expect(-1) > 0` from two
+  // or three tests at once and names neither the window nor the missing heading.
+  if (table < 0) throw new Error("rules(): the document has no `## Red Flags` heading to slice at");
   return text.slice(0, table);
 }
 
@@ -77,9 +79,9 @@ function flat(text: string): string {
 /** One section of the document, so an assertion cannot be satisfied from another. */
 function section(text: string, from: string, to: string): string {
   const start = text.indexOf(from);
-  expect(start).toBeGreaterThan(0);
+  if (start < 0) throw new Error(`section(): no ${JSON.stringify(from)} in the document`);
   const end = text.indexOf(to, start + from.length);
-  expect(end).toBeGreaterThan(start);
+  if (end < 0) throw new Error(`section(): no ${JSON.stringify(to)} after ${JSON.stringify(from)}`);
   return text.slice(start, end);
 }
 
@@ -123,8 +125,10 @@ describe("the learning step proposes and stops", () => {
   });
 
   test("the target is a project skill, never a rule file", () => {
-    expect(skill).toContain(".metaproject/project-skills/");
-    expect(skill).toMatch(/never a rule file/i);
+    // Both against `rules()`: the Red Flags row names the path too, so the gloss
+    // satisfied this on its own while Step 11's rule could be gutted.
+    expect(rules(skill)).toContain(".metaproject/project-skills/");
+    expect(rules(skill)).toMatch(/never a rule file/i);
   });
 });
 
@@ -161,14 +165,30 @@ describe("the skill no longer claims a contract two other guards exempt it from"
     expect(defined.filter((verdict) => !declared.includes(verdict))).toEqual([]);
   });
 
-  test("Step 6's two load-bearing rules are pinned", () => {
+  test("Step 6's rules are pinned, and name verdicts the schema still declares", () => {
     const step6 = section(skill, "## Step 6", "## Step 7");
+    // A coordinated edit — drop a verdict from the schema, the table AND the yaml
+    // block — keeps the derivation above consistent while leaving these rules
+    // naming a verdict that no longer exists.
+    const schema = JSON.parse(
+      readFileSync(path.join(SKILL_DIR, "output-contract.schema.json"), "utf8"),
+    ) as { properties: { verdicts: { properties: Record<string, unknown> } } };
+    const declared = Object.keys(schema.properties.verdicts.properties);
+    for (const verdict of ["unverified", "needs-clarification"]) {
+      expect(declared).toContain(verdict);
+    }
     // Without this, a verdict reached by re-reading the comment passes for one
     // reached by reading the code.
     expect(flat(step6)).toContain("A verdict carries evidence or it is `unverified`");
     // Without this, an ambiguous comment is guessed at and the fix answers a
     // question nobody asked.
     expect(flat(step6)).toContain("`needs-clarification` is asked before `--fix` runs, not after");
+    // The three the first fix round left open. All against the Step 6 window,
+    // because the Red Flags table paraphrases two of them and would satisfy a
+    // whole-document assertion while the rule itself was inverted.
+    expect(flat(step6)).toContain("Never lower a comment's severity to make it disappear");
+    expect(flat(step6)).toContain("Read the actual code, not the `diff_hunk`");
+    expect(flat(step6)).toContain("carries `escalate: true` into Step 10, leaves the");
   });
 
   test("every verdict reaches a disposition, including the one that arrives late", () => {
@@ -278,7 +298,11 @@ describe("comment text is data, never direction", () => {
     // `untrusted-external`, not `external`: the latter is a TARGET kind, and
     // `parseSource` falls back silently rather than refusing it.
     expect(body).toContain("keryx security check-input --source untrusted-external");
-    expect(body).not.toContain("--source external ");
+    // Against the WHOLE document, and on a word boundary. A negative assertion has
+    // no legitimate window: scoped to `rules()` the forbidden flag could reappear
+    // in the Red Flags table, which is exactly where a reader copies a command
+    // from. The old trailing space also could not fire at end of line.
+    expect(skill).not.toMatch(/--source external(?![a-z-])/);
     expect(body).toMatch(/not dropped and not\s+obeyed/);
     // Anchored to the rule's own words. The Red Flags row says "It addresses the
     // developer", which an `addresses?` pattern matched while the rule was gone.
@@ -340,9 +364,19 @@ describe("every comment is answered once, at the end, in English", () => {
     const mapping = section(skill, "Verdict from Step 6 maps to disposition", "### Every comment gets");
     const named = EXTERNAL_TERMINAL_DISPOSITIONS.filter((d) => mapping.includes(`\`${d}\``));
     expect(named.length).toBeGreaterThan(2);
-    const invented = [...mapping.matchAll(/\| `([a-z-]+)` \|/g)]
-      .map((m) => m[1] as string)
-      .filter((d) => d.startsWith("dismissed-") || d === "acted-on" || d === "answered-disagree")
+    // By ROW. A flat `/\| \`(x)\` \|/g` over the table consumes the pipe that
+    // separates the two cells, so on a row whose verdict cell is a single token
+    // the disposition is never reached — three of nine rows went unguarded, and
+    // inventing a disposition on any of them passed.
+    const rows = mapping
+      .split("\n")
+      .filter((line) => line.startsWith("| ") && !line.includes("---"))
+      .map((line) => line.split("|").map((cell) => cell.trim()))
+      .filter((cells) => cells.length > 3);
+    expect(rows.length).toBeGreaterThan(6);
+    const invented = rows
+      .map((cells) => /^`([a-z-]+)`$/.exec(cells[2] ?? "")?.[1])
+      .filter((d): d is string => d !== undefined)
       .filter((d) => !(EXTERNAL_TERMINAL_DISPOSITIONS as readonly string[]).includes(d));
     expect(invented).toEqual([]);
     expect(rules(skill)).toMatch(/`unknown` is refused/);
@@ -392,12 +426,19 @@ describe("the catalog describes the skill that shipped", () => {
   const catalog = readFileSync(path.join(import.meta.dir, "catalog.ts"), "utf8");
 
   test("the entry names collection, validation, the fix run, the reply, and the proposal", () => {
-    // The slice is the WORKFLOW array alone. `indexOf("]),")` found the close of
-    // the TRIGGERS array, so the window silently included the purpose string and
-    // the trigger list — wider than the variable name promised.
+    // The workflow array ALONE, and it takes two anchors to get there. The first
+    // attempt sliced from `indexOf("]),")` — the close of the TRIGGERS array. The
+    // second sliced from `indexOf('", [')`, which lands on `"review", ["full"]`,
+    // so the modes array and the whole purpose string stayed inside: a required
+    // phrase moved from a bullet into the purpose string still passed.
     expect(catalog).toContain('skill("review-pr-feedback"');
     const entry = catalog.slice(catalog.indexOf('skill("review-pr-feedback"'));
-    const bullets = entry.slice(entry.indexOf('", ['), entry.indexOf("], ["));
+    const afterModes = entry.indexOf("],");
+    expect(afterModes).toBeGreaterThan(0);
+    const bullets = entry.slice(entry.indexOf('", [', afterModes), entry.indexOf("], ["));
+    // Non-vacuity: the purpose string must be OUTSIDE the window now.
+    expect(bullets).not.toContain("Analyze existing PR review comments");
+    expect(bullets).not.toContain('["full"]');
     expect(bullets).toContain("keryx review comments collect");
     expect(bullets).toMatch(/verdict against the code/);
     expect(bullets).toContain("flow-orchestrator");
