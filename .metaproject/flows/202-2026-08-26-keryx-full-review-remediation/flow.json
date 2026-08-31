@@ -5,7 +5,7 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-31T11:54:27.161Z",
+  "updatedAt": "2026-08-31T12:01:19.600Z",
   "source": {
     "type": "description",
     "ref": null
@@ -284,6 +284,39 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Run managed final PR review and merge gate",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Align advisory project-skill test with redacted persistence",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -489,6 +522,21 @@
       "at": "2026-08-31T11:54:27.161Z",
       "event": "task-done",
       "detail": "T14: Make C-14 proxy fallback test portable across Bun hosts"
+    },
+    {
+      "at": "2026-08-31T11:55:40.079Z",
+      "event": "task-added",
+      "detail": "T15: Run managed final PR review and merge gate"
+    },
+    {
+      "at": "2026-08-31T12:00:32.756Z",
+      "event": "task-added",
+      "detail": "T16: Align advisory project-skill test with redacted persistence"
+    },
+    {
+      "at": "2026-08-31T12:01:19.600Z",
+      "event": "task-done",
+      "detail": "T16: Align advisory project-skill test with redacted persistence"
     }
   ]
 }

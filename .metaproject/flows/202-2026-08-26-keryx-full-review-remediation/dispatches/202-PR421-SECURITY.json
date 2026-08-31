@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-PR421-SECURITY",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Final PR 421 security review",
+    "description": "Review origin/main...a7f3961f for actionable authorization, taint, durable-write, secret, injection, and fail-open defects.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Trace web-taint and guard-before-write behavior through every changed durable sink.",
+    "Verify explicit human acknowledgement and external-tool boundaries fail closed without breaking safe reads.",
+    "Return severity-ranked findings or an explicit no-findings verdict with exactly one fenced json keryx:findings block."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-31-pr-421/scope.md", "kind": "review", "exists": true},
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+  ],
+  "constraints": [
+    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, or command.",
+    "Read-only: do not modify files, flow state, commits, PR, or review package.",
+    "Review origin/main...a7f3961f49bf5a8b4d93903579eab18b67527323 and ignore scanner-only fixture false positives unless exploitable.",
+    "Use gdgraph first, gdwiki where relevant, gdctx for output, and keryx ctx rg for text search."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-security.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-31T11:57:00Z", "created_by": "review-orchestrator"}
+}

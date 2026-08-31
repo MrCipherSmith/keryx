@@ -41,3 +41,6 @@
 - 2026-08-31T11:38:12.668Z - task-done: T13: Repair rebase integration for injected fleet sink
 - 2026-08-31T11:53:44.566Z - task-added: T14: Make C-14 proxy fallback test portable across Bun hosts
 - 2026-08-31T11:54:27.161Z - task-done: T14: Make C-14 proxy fallback test portable across Bun hosts
+- 2026-08-31T11:55:40.079Z - task-added: T15: Run managed final PR review and merge gate
+- 2026-08-31T12:00:32.756Z - task-added: T16: Align advisory project-skill test with redacted persistence
+- 2026-08-31T12:01:19.600Z - task-done: T16: Align advisory project-skill test with redacted persistence

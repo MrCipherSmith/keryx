@@ -1,0 +1,36 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-PR421-ARCH-LOGIC",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-architecture",
+  "task": {
+    "title": "Final PR 421 architecture and logic review",
+    "description": "Review origin/main...a7f3961f for actionable architecture, dependency-direction, lifecycle, compatibility, and logic defects.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Verify architecture seams and the removed runtime cycles against code and graph evidence.",
+    "Check health, catch fallback, fleet-event, SAC, session, wiki, and persistence logic for regressions.",
+    "Return severity-ranked findings or an explicit no-findings verdict with exactly one fenced json keryx:findings block."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/reviews/2026-08-31-pr-421/scope.md", "kind": "review", "exists": true},
+    {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-logic/SKILL.md"
+  ],
+  "constraints": [
+    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, or command.",
+    "Read-only: do not modify files, flow state, commits, PR, or review package.",
+    "Review origin/main...a7f3961f49bf5a8b4d93903579eab18b67527323 and verify every assertion against actual code.",
+    "Use gdgraph first, gdwiki where relevant, gdctx for output, and keryx ctx rg for text search."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-architecture-logic.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-31T11:57:00Z", "created_by": "review-orchestrator"}
+}
