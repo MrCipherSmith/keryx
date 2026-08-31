@@ -957,6 +957,8 @@ async function createSkillCommand(args: string[]): Promise<void> {
       target,
       module: optionValue(args, "--module"),
       name: optionValue(args, "--name"),
+      note: optionValue(args, "--note"),
+      origin: optionValue(args, "--origin"),
       format: normalizeProjectSkillFormat(optionValue(args, "--format")),
       dryRun: args.includes("--dry-run"),
     });
@@ -1295,11 +1297,28 @@ function printCreateHelp(command: "create" | "generate"): void {
   console.log(`keryx skills ${command}
 
 Usage:
-  keryx skills ${command} <target> --module <module> --name <skill-name> [--format auto|single|package] [--dry-run]
+  keryx skills ${command} <target> --module <module> --name <skill-name>
+      [--note <one-line gist>] [--origin <source file>]
+      [--format auto|single|package] [--dry-run]
+
+<target> is a ROUTING KEY, not a description: \`keryx skills route\` matches
+queries against it and \`verify\` resolves it as a path. Keep it a path, a
+symbol, or a short concept. Put the sentence in --note.
+
+--origin records the external file this skill was built from — a rules file, a
+review profile, a conventions doc. The path is stored verbatim and its content
+hashed, so \`keryx review reviewers\` can later report that the source has moved
+on since the import.
+
+A project-skill under --module review is a REVIEWER: it lands at
+.metaproject/project-skills/review/<name>/, mirroring where bundled reviewers
+live, and \`review-orchestrator\` dispatches it alongside them.
 
 Examples:
   keryx skills ${command} src/pipelines --module pipelines --name pipelines-module
   keryx skills ${command} PipelineStepStore --module pipelines --name pipeline-step-store --dry-run
+  keryx skills ${command} "review profile" --module review --name b091-profile \\
+      --origin ~/.vantage-frontend/rules/core/code-review-b091-profile.mdc
 `);
 }
 

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { homedir } from "node:os";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
@@ -10,6 +12,24 @@ export type CreateProjectSkillOptions = {
   target: string;
   module?: string | undefined;
   name?: string | undefined;
+  /**
+   * A one-line human gist about WHY this skill exists, kept out of `target`.
+   *
+   * `target` is a routing key: `keryx skills route` matches queries against it
+   * and `verify` resolves it as a path. Prose in that slot yields a skill that
+   * matches nothing and verifies as permanently stale, so callers that have a
+   * sentence to contribute pass it here instead.
+   */
+  note?: string | undefined;
+  /**
+   * Path to an external file this skill was built FROM — a rules file, a
+   * profile, an exported convention doc — recorded so the skill can say where
+   * it came from and detect that the source has moved on since.
+   *
+   * The path is stored verbatim (a `~` stays a `~`) because it is a human
+   * reference, and hashed from the resolved file so drift is detectable.
+   */
+  origin?: string | undefined;
   format?: ProjectSkillFormat | undefined;
   dryRun?: boolean | undefined;
 };
@@ -67,6 +87,7 @@ export async function createProjectSkill(
   const format = options.format ?? "auto";
   const packageRoot = path.join(metaprojectRoot, "project-skills", moduleName, skillName);
   const relativeSkillPath = toPosix(path.relative(projectRoot, packageRoot));
+  const origin = options.origin ? await readSkillOrigin(projectRoot, options.origin) : undefined;
   const evidence = await collectEvidence(projectRoot, options.target);
   const warnings = collectWarnings(evidence, format);
   const files = filesForPackage(packageRoot, format);
@@ -79,6 +100,8 @@ export async function createProjectSkill(
         moduleName,
         skillName,
         target: options.target,
+        note: options.note,
+        origin,
         evidence,
         format,
       });
@@ -107,6 +130,83 @@ export async function createProjectSkill(
   };
 }
 
+/**
+ * The longest a `target` may be and still be a routing key.
+ *
+ * `target` is not a description. `keryx skills route` matches queries against
+ * it, `verify` resolves it as a path to check the skill is still about
+ * something real, and the generated SKILL.md repeats it in four places. A
+ * sentence in that slot produces a skill that matches no query, verifies as
+ * permanently stale, and reads as noise wherever it is quoted.
+ */
+export const MAX_SKILL_TARGET_LENGTH = 80;
+
+export type SkillOrigin = {
+  /** Verbatim, as the caller wrote it — `~` preserved. */
+  ref: string;
+  /** `sha256:<hex>` of the source file's bytes at import time. */
+  hash: string;
+  importedAt: string;
+};
+
+/** Expand a leading `~`; anything else is left to `path.resolve`. */
+export function resolveOriginPath(ref: string, projectRoot: string): string {
+  const trimmed = ref.trim();
+  if (trimmed === "~" || trimmed.startsWith("~/")) {
+    return path.join(homedir(), trimmed.slice(1));
+  }
+  return path.resolve(projectRoot, trimmed);
+}
+
+export function hashOriginContent(content: string): string {
+  return `sha256:${createHash("sha256").update(content).digest("hex")}`;
+}
+
+/**
+ * Read and hash an origin file. Throws when it cannot be read, deliberately:
+ * a skill claiming an origin it could not open would record a provenance that
+ * was never true, and a wrong provenance is worse than none — it is the thing
+ * a later drift check would trust.
+ */
+export async function readSkillOrigin(
+  projectRoot: string,
+  ref: string,
+  now: () => Date = () => new Date(),
+): Promise<SkillOrigin> {
+  const resolved = resolveOriginPath(ref, projectRoot);
+  let content: string;
+  try {
+    content = await readFile(resolved, "utf8");
+  } catch (cause) {
+    throw new Error(
+      `Cannot read the origin file ${ref} (resolved to ${resolved}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+  return { ref: ref.trim(), hash: hashOriginContent(content), importedAt: now().toISOString() };
+}
+
+/**
+ * Whether a target can serve as a routing key.
+ *
+ * Deliberately permissive: a short concept ("auth flow"), a symbol
+ * (`IResultDqReport`) and a path (`src/dq/components/DqScoreCard.tsx`) all
+ * pass, because `classifyTarget` supports all three. What it rejects is prose —
+ * a sentence, a commit message, a wrap-up summary — which is the shape that
+ * actually reached this code and put two content-free skills in the registry.
+ */
+export function isRoutableSkillTarget(target: string): boolean {
+  const trimmed = target.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_SKILL_TARGET_LENGTH) {
+    return false;
+  }
+  if (/[\n\r]/.test(trimmed)) {
+    return false;
+  }
+  // Sentence punctuation is the tell that separates a target from prose. A path
+  // and a symbol carry neither; a summary carries at least one.
+  return !/[.!?;:—–]|\s-\s/.test(trimmed.replace(/\.[a-z0-9]+$/i, ""));
+}
+
 export function normalizeProjectSkillFormat(value: string | undefined): ProjectSkillFormat {
   if (value === "single" || value === "package" || value === "auto") {
     return value;
@@ -121,6 +221,8 @@ async function writeProjectSkillPackage({
   moduleName,
   skillName,
   target,
+  note,
+  origin,
   evidence,
   format,
 }: {
@@ -129,11 +231,13 @@ async function writeProjectSkillPackage({
   moduleName: string;
   skillName: string;
   target: string;
+  note?: string | undefined;
+  origin?: SkillOrigin | undefined;
   evidence: Evidence;
   format: ProjectSkillFormat;
 }): Promise<void> {
   const packageFormat = format === "single" ? "single" : "package";
-  const skillContent = renderProjectSkill({ moduleName, skillName, target, evidence, packageFormat });
+  const skillContent = renderProjectSkill({ moduleName, skillName, target, note, origin, evidence, packageFormat });
 
   // Security write seam, mirroring `keryx wiki collect`'s guard before publishing
   // a generated page (src/wiki/service.ts) and `keryx memory new`'s
@@ -271,15 +375,31 @@ function renderProjectSkill({
   moduleName,
   skillName,
   target,
+  note,
+  origin,
   evidence,
   packageFormat,
 }: {
   moduleName: string;
   skillName: string;
   target: string;
+  note?: string | undefined;
+  origin?: SkillOrigin | undefined;
   evidence: Evidence;
   packageFormat: "single" | "package";
 }): string {
+  // The note is prose, so it belongs in prose. It is rendered once, under
+  // Purpose, and never interpolated into `target`, the frontmatter description,
+  // or the "When To Use" match list — those four are what routing and
+  // verification read, and a sentence in any of them makes the skill unmatchable.
+  const noteLine = note && note.trim().length > 0 ? `\n\n${note.trim()}` : "";
+  // Provenance goes in the metadata header, one `Label: value` per line, the
+  // same shape `parseSkillMetadata` (gdskills/verify.ts) already reads. Absent
+  // for a skill with no external source — an empty `Origin:` would be a claim
+  // that there is one.
+  const originLines = origin
+    ? `\nOrigin: ${origin.ref}\nOrigin Hash: ${origin.hash}\nImported At: ${origin.importedAt}`
+    : "";
   const filesToRead = evidence.targetPath
     ? `- \`${evidence.targetPath}\``
     : "- Resolve target with `keryx gdgraph affected <target>` or compact search before broad reads.";
@@ -304,13 +424,13 @@ description: Use when working with ${target} in module ${moduleName}; prefer thi
 
 Version: ${VERSION}
 Target: ${target}
-Module: ${moduleName}
+Module: ${moduleName}${originLines}
 Status: active
 Last Verified: never
 
 ## Purpose
 
-Provide project-local guidance for creating, changing, reviewing, and verifying work related to \`${target}\`.${referenceHint}
+Provide project-local guidance for creating, changing, reviewing, and verifying work related to \`${target}\`.${noteLine}${referenceHint}
 
 ## When To Use
 

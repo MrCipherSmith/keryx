@@ -53,6 +53,51 @@ async function seedProposal(cwd: string, evidenceContent: string): Promise<void>
   );
 }
 
+// Regression: `target` is a routing key, not a description. This writer used to
+// fold the wrap-up title AND a free-text note into it, so every SAC-derived
+// skill carried a whole sentence as its target — matching no `skills route`
+// query and verifying as permanently stale. Two such skills reached `main`.
+describe("createRealSkillOwnerWriter.persist — the target is a routing key", () => {
+  test("refuses a wrap-up title that is prose rather than a routable target", async () => {
+    await seedProposal(
+      cwd,
+      "# Fix afd028b on main: /review Accept/Decline were a plain text hint, not buttons.\n\nbody\n",
+    );
+    const writer = createRealSkillOwnerWriter(cwd);
+    const result = await writer.persist({ ...baseIntent, owner: "skill" });
+
+    expect(result).toEqual({ ok: false, code: "skill_write_refused_unroutable_target" });
+    // Refusing means refusing: no package, and nothing registered that a later
+    // `keryx skills verify --all` would fail on.
+    expect(
+      await readFile(path.join(cwd, ".metaproject", "project-skills", "sac", "proposal-a", "SKILL.md"), "utf8").then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+  });
+
+  test("a note reaches the skill body but never the target or the match list", async () => {
+    await seedProposal(cwd, "# WorktreePort\n\nbody\n");
+    const writer = createRealSkillOwnerWriter(cwd, { note: "Accept/Decline are real buttons now" });
+    const result = await writer.persist({ ...baseIntent, owner: "skill" });
+
+    if (!("receiptRef" in result)) throw new Error(`expected a receipt, got ${JSON.stringify(result)}`);
+    const written = await readFile(
+      path.join(cwd, ".metaproject", "project-skills", "sac", "proposal-a", "SKILL.md"),
+      "utf8",
+    );
+    expect(written).toContain("Accept/Decline are real buttons now");
+    // The four lines routing and verification actually read stay clean.
+    expect(written).toContain("Target: WorktreePort");
+    expect(written).not.toContain("Target: WorktreePort — Accept/Decline");
+    const description = written.split("\n").find((line) => line.startsWith("description:")) ?? "";
+    expect(description).not.toContain("Accept/Decline");
+    const whenToUse = written.split("\n").find((line) => line.startsWith("- The task mentions")) ?? "";
+    expect(whenToUse).not.toContain("Accept/Decline");
+  });
+});
+
 describe("createRealSkillOwnerWriter.authorize", () => {
   test("allows owner and editor, denies anyone else", async () => {
     const writer = createRealSkillOwnerWriter(cwd);

@@ -37,7 +37,7 @@ async function runCli(args: string[]): Promise<{ code: number; out: string; err:
 describe("keryx skills verify --bundled", () => {
   test("the shipped tree passes, over a non-zero denominator, and exits 0", async () => {
     const result = await runCli(["skills", "verify", "--bundled"]);
-    expect(result.out).toContain("skills_evaluated: 66");
+    expect(result.out).toContain("skills_evaluated: 67");
     expect(result.out).toContain("findings: 0");
     expect(result.code).toBe(0);
   });
@@ -51,7 +51,7 @@ describe("keryx skills verify --bundled", () => {
       findings: unknown[];
       skillNames: string[];
     };
-    expect(parsed.skills).toBe(66);
+    expect(parsed.skills).toBe(67);
     // The harness builds are read too, and the count says so. `skills` alone
     // read as full coverage while 100-odd builds went unopened.
     expect(parsed.documents).toBeGreaterThan(parsed.skills);
