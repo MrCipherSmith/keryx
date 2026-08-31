@@ -10,6 +10,15 @@ export type CreateProjectSkillOptions = {
   target: string;
   module?: string | undefined;
   name?: string | undefined;
+  /**
+   * A one-line human gist about WHY this skill exists, kept out of `target`.
+   *
+   * `target` is a routing key: `keryx skills route` matches queries against it
+   * and `verify` resolves it as a path. Prose in that slot yields a skill that
+   * matches nothing and verifies as permanently stale, so callers that have a
+   * sentence to contribute pass it here instead.
+   */
+  note?: string | undefined;
   format?: ProjectSkillFormat | undefined;
   dryRun?: boolean | undefined;
 };
@@ -79,6 +88,7 @@ export async function createProjectSkill(
         moduleName,
         skillName,
         target: options.target,
+        note: options.note,
         evidence,
         format,
       });
@@ -107,6 +117,39 @@ export async function createProjectSkill(
   };
 }
 
+/**
+ * The longest a `target` may be and still be a routing key.
+ *
+ * `target` is not a description. `keryx skills route` matches queries against
+ * it, `verify` resolves it as a path to check the skill is still about
+ * something real, and the generated SKILL.md repeats it in four places. A
+ * sentence in that slot produces a skill that matches no query, verifies as
+ * permanently stale, and reads as noise wherever it is quoted.
+ */
+export const MAX_SKILL_TARGET_LENGTH = 80;
+
+/**
+ * Whether a target can serve as a routing key.
+ *
+ * Deliberately permissive: a short concept ("auth flow"), a symbol
+ * (`IResultDqReport`) and a path (`src/dq/components/DqScoreCard.tsx`) all
+ * pass, because `classifyTarget` supports all three. What it rejects is prose —
+ * a sentence, a commit message, a wrap-up summary — which is the shape that
+ * actually reached this code and put two content-free skills in the registry.
+ */
+export function isRoutableSkillTarget(target: string): boolean {
+  const trimmed = target.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_SKILL_TARGET_LENGTH) {
+    return false;
+  }
+  if (/[\n\r]/.test(trimmed)) {
+    return false;
+  }
+  // Sentence punctuation is the tell that separates a target from prose. A path
+  // and a symbol carry neither; a summary carries at least one.
+  return !/[.!?;:—–]|\s-\s/.test(trimmed.replace(/\.[a-z0-9]+$/i, ""));
+}
+
 export function normalizeProjectSkillFormat(value: string | undefined): ProjectSkillFormat {
   if (value === "single" || value === "package" || value === "auto") {
     return value;
@@ -121,6 +164,7 @@ async function writeProjectSkillPackage({
   moduleName,
   skillName,
   target,
+  note,
   evidence,
   format,
 }: {
@@ -129,11 +173,12 @@ async function writeProjectSkillPackage({
   moduleName: string;
   skillName: string;
   target: string;
+  note?: string | undefined;
   evidence: Evidence;
   format: ProjectSkillFormat;
 }): Promise<void> {
   const packageFormat = format === "single" ? "single" : "package";
-  const skillContent = renderProjectSkill({ moduleName, skillName, target, evidence, packageFormat });
+  const skillContent = renderProjectSkill({ moduleName, skillName, target, note, evidence, packageFormat });
 
   // Security write seam, mirroring `keryx wiki collect`'s guard before publishing
   // a generated page (src/wiki/service.ts) and `keryx memory new`'s
@@ -271,15 +316,22 @@ function renderProjectSkill({
   moduleName,
   skillName,
   target,
+  note,
   evidence,
   packageFormat,
 }: {
   moduleName: string;
   skillName: string;
   target: string;
+  note?: string | undefined;
   evidence: Evidence;
   packageFormat: "single" | "package";
 }): string {
+  // The note is prose, so it belongs in prose. It is rendered once, under
+  // Purpose, and never interpolated into `target`, the frontmatter description,
+  // or the "When To Use" match list — those four are what routing and
+  // verification read, and a sentence in any of them makes the skill unmatchable.
+  const noteLine = note && note.trim().length > 0 ? `\n\n${note.trim()}` : "";
   const filesToRead = evidence.targetPath
     ? `- \`${evidence.targetPath}\``
     : "- Resolve target with `keryx gdgraph affected <target>` or compact search before broad reads.";
@@ -310,7 +362,7 @@ Last Verified: never
 
 ## Purpose
 
-Provide project-local guidance for creating, changing, reviewing, and verifying work related to \`${target}\`.${referenceHint}
+Provide project-local guidance for creating, changing, reviewing, and verifying work related to \`${target}\`.${noteLine}${referenceHint}
 
 ## When To Use
 

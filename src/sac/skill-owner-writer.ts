@@ -21,7 +21,7 @@
 // writing `.metaproject/project-skills/` files a second, parallel way.
 import { readFile } from "node:fs/promises";
 import { writeFileAtomic } from "../lib/fs";
-import { createProjectSkill } from "../gdskills/project-skills";
+import { createProjectSkill, isRoutableSkillTarget } from "../gdskills/project-skills";
 import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
 import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
 
@@ -35,12 +35,29 @@ function slug(value: string): string {
 }
 
 /**
- * The real skill `GuardedOwnerWriter` composition. `note` is an optional
- * caller-supplied one-line gist (e.g. from `keryx workspace propose --note`) —
- * folded into the skill's `target` description, never presented as evidence
- * itself. Every SAC-derived skill lands under the fixed `sac` module so it is
- * always distinguishable from a skill a person created via `keryx skills
- * create` directly.
+ * The real skill `GuardedOwnerWriter` composition. Every SAC-derived skill lands
+ * under the fixed `sac` module so it is always distinguishable from a skill a
+ * person created via `keryx skills create` directly.
+ *
+ * `note` — an optional caller-supplied one-line gist, e.g. from
+ * `keryx workspace propose --note` — used to be folded into the skill's
+ * `target`, described in this comment as a "description". That one word was the
+ * defect: `target` is a ROUTING KEY, not a description. `keryx skills route`
+ * matches queries against it and `verify` resolves it as a path, so a prose
+ * sentence there produces a skill that matches nothing and verifies as
+ * permanently stale. Two such skills reached the registry on `main`, each
+ * carrying a whole wrap-up sentence as its target and `Target exists: false`.
+ *
+ * The note itself is not the problem and is still written — it is the one piece
+ * of human context a wrap-up carries — but through `createProjectSkill`'s own
+ * `note` field, which renders it under Purpose and keeps it out of `target`,
+ * the frontmatter description, and the match list.
+ *
+ * What IS refused now is an unroutable title. This owner has no structured
+ * target to fall back on — the proposal record carries `{ id, workspaceId,
+ * evidence }` and nothing else — so a skill it cannot name properly is a skill
+ * it should not write. That is the fail-closed posture the rest of this file
+ * already takes, and an absent skill is cheaper than a permanently stale one.
  */
 export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; now?: () => Date }): {
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
@@ -71,14 +88,21 @@ export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; 
       if (!("proposal" in verified)) return verified;
       const { proposal, content: evidenceContent } = verified;
 
-      const title = titleFrom(evidenceContent, proposal.id);
+      const target = titleFrom(evidenceContent, proposal.id).trim();
       const sidecarNote = await readSidecarNote(cwd, intent.workspaceId, intent.proposalId);
       const note = (sidecarNote ?? opts?.note)?.trim();
-      const target = note && note.length > 0 ? `SAC wrap-up: ${title} — ${note}` : `SAC wrap-up: ${title}`;
+      if (!isRoutableSkillTarget(target)) {
+        // A wrap-up title is usually a summary of work, not the name of a thing
+        // a reviewer or implementer would later look up. When it is a summary,
+        // the honest result is no skill at all: an unroutable skill is worse
+        // than a missing one, because it occupies the registry, fails every
+        // verification, and reads to the next author as coverage of something.
+        return { ok: false, code: "skill_write_refused_unroutable_target" };
+      }
 
       let result: Awaited<ReturnType<typeof createProjectSkill>>;
       try {
-        result = await createProjectSkill(cwd, { target, module: "sac", name: proposal.id, format: "single" });
+        result = await createProjectSkill(cwd, { target, note, module: "sac", name: proposal.id, format: "single" });
       } catch (cause) {
         // createProjectSkill throws when its own security guard blocks the
         // write (or on other real failures, e.g. metaproject not initialized) —
