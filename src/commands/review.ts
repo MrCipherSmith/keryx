@@ -23,6 +23,7 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -254,6 +255,7 @@ const TIER_FLAGS = [
 const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
+const REVIEWERS_FLAGS = ["--json"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.
@@ -348,6 +350,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "stack") {
       await runStack(args.slice(1));
+      return;
+    }
+    if (command === "reviewers") {
+      await runReviewers(args.slice(1));
       return;
     }
     if (command === "status") {
@@ -1217,6 +1223,31 @@ async function runLoop(args: string[]): Promise<void> {
  * dispatch. `review-orchestrator`'s routing table is where that answer would
  * be consulted, and wiring it in is a follow-up — see the flow journal.
  */
+/**
+ * `keryx review reviewers [--json]` — who can review in THIS project.
+ *
+ * The bundled half comes from the installed gdskills tree, so it reflects the
+ * profile this project actually installed rather than everything keryx ships.
+ * The project half is every project-skill under module `review`, with the
+ * provenance recorded at import time and a freshly computed drift verdict.
+ *
+ * `review-orchestrator` calls this during detection and adds the project half
+ * to its dispatch set. That is the whole point: before this, a reviewer a team
+ * wrote for itself was invisible to every round, and the routing table was the
+ * only answer to "who can review", which meant the answer could only ever be
+ * "whoever keryx ships".
+ */
+async function runReviewers(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, REVIEWERS_FLAGS, "reviewers");
+  const inventory = await collectReviewers(process.cwd());
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(inventory, null, 2));
+    return;
+  }
+  console.log(renderReviewerInventoryMarkdown(inventory));
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();

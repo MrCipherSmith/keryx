@@ -50,6 +50,14 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run `keryx skills route <target>` and `keryx skills inspect <module>/<skill-name>` to confirm registration and routing.",
     "Run `keryx skills verify <module>/<skill-name>` and finish with `keryx skills status`.",
   ], ["create skill", "generate project skill", "new entity skill", "создай скил", "создай скилл для <path>"]),
+  skill("reviewer-skill-creator", "core", ["recommended", "full"], "Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.", [
+    "Read the source in full and sort it into method, convention, and persona before writing anything.",
+    "Scaffold with `keryx skills create <target> --module review --name <reviewer> --note <gist> --origin <source file>`; the target is a routing key, the note is the prose.",
+    "Always pass --origin when a source file exists, so `keryx review reviewers` can report when the source moves on.",
+    "Write the reviewer against the orchestrated review contract; point at the canonical severity rubric instead of inventing one.",
+    "Drop the persona, keep the method, and state the reason beside every rule kept.",
+    "Confirm with `keryx review reviewers` — creating files is not registration, and registration is not discovery.",
+  ], ["create a reviewer", "new reviewer for review-orchestrator", "make a reviewer from this profile", "создай ревьюера", "создай нового ревьюера на основании"]),
   skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.", [
     "Resolve candidate skills through ownership and gdgraph affected context.",
     "Compare skill claims with current code, wiki decisions, health reports, and memory.",

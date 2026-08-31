@@ -932,6 +932,59 @@ Three bounds keep it from deleting coverage:
 Record every gated reviewer with the trigger set that found nothing. "Skipped:
 no matching paths" is a result the reader can check; an absent reviewer is not.
 
+### Project-local reviewers — ask, do not assume
+
+The routing table below names the reviewers **keryx ships**. A project may also
+define its own, and before this step existed they were invisible to every round:
+a team could write a reviewer, register it, and watch nothing dispatch it.
+
+So the reviewer set is asked for, not recited:
+
+```bash
+keryx review reviewers --json
+```
+
+It returns two halves. `bundled` is the installed gdskills review tree — the set
+this project's install profile actually produced, which is not everything keryx
+ships. `project` is every project-skill under module `review`, living at
+`.metaproject/project-skills/review/<name>/` so that it sits beside
+`.metaproject/skills/gdskills/review/<name>/` and needs no other marking.
+
+**Dispatch the project half alongside the bundled one.** A project reviewer is a
+reviewer: it returns `REVIEW_RESULT`, its findings merge with everyone else's,
+it is bound by the canonical severity rubric and the shared laws, and it is
+verified in Wave C like any other. It is not advisory and not a second-class
+pass — a team that wrote down how it reviews has said something about this
+codebase that no shipped reviewer knows.
+
+Two things it does NOT get:
+
+- **No exemption from the contract.** A project reviewer whose output does not
+  conform is handled by the Sub-Agent Report Quality Gate exactly as a bundled
+  one would be. Local authorship is not evidence.
+- **No self-verification.** The never-self-verify rule is about the actor, not
+  the origin.
+
+#### `drift` — the source moved, the reviewer did not
+
+A project reviewer built from an external file — a rules file, a review profile,
+a conventions doc — records where it came from and the hash of that file at
+import. `keryx review reviewers` re-reads the source and reports:
+
+| `drift` | Meaning | What to do this round |
+|---|---|---|
+| `none` | No external source; written here | Nothing |
+| `clean` | Source matches the import | Nothing |
+| `changed` | Source has moved on since import | Dispatch it, and say so in the report |
+| `missing` | Source can no longer be read | Dispatch it, and say so in the report |
+
+**A drifted reviewer still runs.** It is a reviewer built from an older version
+of its source, which is a fact about provenance, not a defect in its findings —
+suppressing it would trade real coverage for tidiness. Record the drift in
+`review_context` and name it once in the report, so the next person knows the
+profile is due a re-read. Never file it as a finding against the code under
+review: it is a fact about the review, not about the diff.
+
 ### Convention Reviewer Confirmation
 
 When convention reviewers are auto-detected and the user did not explicitly pass

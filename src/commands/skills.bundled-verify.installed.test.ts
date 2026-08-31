@@ -161,7 +161,7 @@ describe("keryx skills verify --bundled, from an installed copy", () => {
       // The regression, stated as the assertion that catches it.
       expect(result.out).not.toContain("skills_evaluated: 0");
       expect(result.out).not.toContain("NOTHING WAS EVALUATED");
-      expect(result.out).toContain("skills_evaluated: 66");
+      expect(result.out).toContain("skills_evaluated: 67");
       expect(result.out).toContain("findings: 0");
       expect(result.code).toBe(0);
 
@@ -183,7 +183,7 @@ describe("keryx skills verify --bundled, from an installed copy", () => {
       const result = await runInstalled(root, ["skills", "verify", "--bundled", "--json"]);
       expect(result.code).toBe(0);
       const parsed = JSON.parse(result.out) as { skills: number; documents: number };
-      expect(parsed.skills).toBe(66);
+      expect(parsed.skills).toBe(67);
       expect(parsed.documents).toBeGreaterThan(parsed.skills);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -16,6 +16,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `entity-skill-creator`: Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.
 - `entity-skill-learner`: Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.
 - `entity-skill-router`: Select relevant project-skills for known modules, components, stores, services, and domain entities.
+- `reviewer-skill-creator`: Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.
 - `entity-skill-verifier`: Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.
 - `metaproject-router`: Choose which Metaproject module, working skill, or project-skill should be used for a user request.
 
