@@ -85,6 +85,12 @@ implements approval-gate plus verification-gate over declared acceptance
 contracts and reports **0% hallucinated completions against 100% in the
 baseline, at 8.3% overhead**.
 
+**Sample size, which this paragraph omitted until 2026-08-31: n = 8 tasks.**
+"0% against 100%" is 0-of-8 against 8-of-8, from a single-author preprint at v1.
+The direction is corroboration; the percentages are not a population estimate,
+and quoting them without the denominator overstates what the paper supports.
+Re-verified 2026-08-31 — no retraction, text unchanged.
+
 ### 0.2 Delete the false claim, in the same commit
 
 A document asserting a safety property that does not exist is worse than no
@@ -409,9 +415,29 @@ gdskills.
 ### 5.4 Cross-family review
 
 If a second provider is configured, review with a different model family than
-authored the code. Greptile's 1,000-PR study reports **~8–10 recall points**
-for free: Claude→Claude 53.7% vs GPT→Claude 62.0%; GPT→GPT 50.5% vs
-Claude→GPT 60.0%. We already have `llm-providers.json`.
+authored the code. We already have `llm-providers.json`.
+
+**The numbers this section used to quote are UNVERIFIED and are withdrawn
+pending a human reading the source.** It claimed "~8–10 recall points" with the
+pairing Claude→Claude 53.7% vs GPT→Claude 62.0%; GPT→GPT 50.5% vs Claude→GPT
+60.0%.
+
+Re-checked 2026-08-31. The [Greptile 1,000-PR
+study](https://www.greptile.com/blog/cross-model-review) exists (2026-07-21) and
+its method is confirmed — 500 Claude-authored and 500 Codex-authored pull
+requests, ~1,500 ground-truth comments, LLM-as-a-judge, high-severity findings
+only — and the qualitative direction it reports, that a different family reviews
+better, is confirmed verbatim in its prose.
+
+**The percentages, however, appear only in a chart and not in the article's
+text.** Two independent extractions disagreed, implying either **+6.3 / +11.5**
+points or **+2.0 / −3.2** points. The pairing quoted above matches neither. Under
+the second reading the effect is close to nothing, which would change the
+cost/benefit of this section materially.
+
+So §5.4 shipped on the qualitative claim, which holds, and not on a number. The
+implementation is opt-in for exactly this reason. Someone should read the chart
+and either restore a figure with its source or delete this paragraph.
 
 ---
 

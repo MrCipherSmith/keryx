@@ -102,8 +102,10 @@ silently.
 
 | Document | Purpose |
 |---|---|
-| [Roadmap](roadmap.md) | Phased plan: what changes, in what order, why, at what cost, with the evidence for each. Eight phases; 0 and 1 are delivered. |
+| [Roadmap](roadmap.md) | Phased plan: what changes, in what order, why, at what cost, with the evidence for each. **All seven phases delivered, released as 0.2.72 on 2026-08-30.** Two citations in it were re-checked on 2026-08-31 and corrected — see §0.1 and §5.4. |
 | [Specification](specification.md) | The three new capabilities in implementable detail — deep rounds, the completion gate, and external PR comment handling. |
+| [Internal measurement, 2026-08-31](measurement-2026-08-31.md) | The four orchestrators re-inventoried by the Phase 7 method, stated as before/after. **Reports eleven regressions**, including a command that returns an empty result from the installed package and a field shipped with no consumer. |
+| [Market comparison, 2026-08-31](market-2026-08-31.md) | Competitors re-checked with versions and sources, and the dimensions where they lead. **No shared-task run happened**, so no recall or precision number comparing tools is claimed. |
 
 ## Related
 
