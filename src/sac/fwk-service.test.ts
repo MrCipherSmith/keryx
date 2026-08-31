@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -339,6 +340,117 @@ test("same-size historical receipt corruption invalidates the checkpoint and ref
   expect((await stat(ledger)).size).toBe(before);
   await expect(read(service, { requestCorrelationId: "fwk-historical-third-0001" }))
     .rejects.toThrow("invalid access receipt ledger");
+});
+
+const ledgerPaths = (root: string) => ({
+  ledger: path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl"),
+  checkpoint: path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json"),
+});
+const receiptService = (root: string) => new FwkReadService({
+  guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+  authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+  source: async () => source(),
+  canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+  now: () => new Date(stamp),
+});
+
+test("same-size corruption of a middle receipt, not just the first, refuses the next append", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-mid-ledger-"));
+  const service = receiptService(root);
+  const { ledger } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-mid-ledger-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-mid-ledger-second-0001" });
+  await read(service, { requestCorrelationId: "fwk-mid-ledger-third-0001" });
+  const lines = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  expect(lines).toHaveLength(3);
+  const middle = JSON.parse(lines[1]!) as { cost: { tokens: number } };
+  expect(middle.cost.tokens).toBe(0);
+  middle.cost.tokens = 9;
+  lines[1] = JSON.stringify(middle);
+  const before = (await stat(ledger)).size;
+  await writeFile(ledger, `${lines.join("\n")}\n`);
+  expect((await stat(ledger)).size).toBe(before);
+  await expect(read(service, { requestCorrelationId: "fwk-mid-ledger-fourth-0001" }))
+    .rejects.toThrow("invalid access receipt ledger");
+});
+
+test("a checkpoint without a content commitment is re-audited rather than trusted", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-legacy-checkpoint-"));
+  const service = receiptService(root);
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-legacy-checkpoint-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-legacy-checkpoint-second-0001" });
+
+  // A checkpoint in the shape the previous release wrote: stat identity, no
+  // content digest. It must not be honoured, and the honest ledger under it
+  // must still work once it has been re-audited.
+  const current = JSON.parse(await readFile(checkpoint, "utf8")) as { ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number };
+  const stats = await stat(ledger, { bigint: true });
+  const legacyBody = {
+    schemaVersion: "1.0", ledgerBytes: current.ledgerBytes, device: stats.dev.toString(), inode: stats.ino.toString(),
+    modifiedNs: stats.mtimeNs.toString(), changedNs: stats.ctimeNs.toString(),
+    recordCount: current.recordCount, headHash: current.headHash, tailOffset: current.tailOffset,
+  };
+  const legacyHash = createHash("sha256").update(JSON.stringify(legacyBody), "utf8").digest("hex");
+  await writeFile(checkpoint, `${JSON.stringify({ ...legacyBody, integrity: { checkpointHash: legacyHash } })}\n`);
+
+  let fullAudits = 0;
+  const auditing = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+    verifyReceiptLedger: (receipts) => { fullAudits += 1; return verifyAccessReceiptLedger(receipts); },
+  });
+  await read(auditing, { requestCorrelationId: "fwk-legacy-checkpoint-third-0001" });
+  expect(fullAudits).toBe(1);
+  const upgraded = JSON.parse(await readFile(checkpoint, "utf8")) as { schemaVersion: string; contentDigest?: string };
+  expect(upgraded.schemaVersion).toBe("1.1");
+  expect(upgraded.contentDigest).toMatch(/^[a-f0-9]{64}$/);
+  const receipts = (await readFile(ledger, "utf8")).trimEnd().split("\n").map((line) => JSON.parse(line));
+  expect(verifyAccessReceiptLedger(receipts)).toMatchObject({ ok: true, verifiedCount: 3 });
+});
+
+test("a legacy checkpoint over an already-tampered ledger is refused, not adopted", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-legacy-tampered-"));
+  const service = receiptService(root);
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-legacy-tampered-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-legacy-tampered-second-0001" });
+  const current = JSON.parse(await readFile(checkpoint, "utf8")) as { ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number };
+
+  const lines = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  const first = JSON.parse(lines[0]!) as { cost: { tokens: number } };
+  first.cost.tokens = 9;
+  lines[0] = JSON.stringify(first);
+  await writeFile(ledger, `${lines.join("\n")}\n`);
+
+  const stats = await stat(ledger, { bigint: true });
+  const legacyBody = {
+    schemaVersion: "1.0", ledgerBytes: Number(stats.size), device: stats.dev.toString(), inode: stats.ino.toString(),
+    modifiedNs: stats.mtimeNs.toString(), changedNs: stats.ctimeNs.toString(),
+    recordCount: current.recordCount, headHash: current.headHash, tailOffset: current.tailOffset,
+  };
+  const legacyHash = createHash("sha256").update(JSON.stringify(legacyBody), "utf8").digest("hex");
+  await writeFile(checkpoint, `${JSON.stringify({ ...legacyBody, integrity: { checkpointHash: legacyHash } })}\n`);
+
+  await expect(read(service, { requestCorrelationId: "fwk-legacy-tampered-third-0001" }))
+    .rejects.toThrow("invalid access receipt ledger");
+});
+
+test("a ledger truncated to a valid prefix is refused instead of silently shortened", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-truncated-"));
+  const service = receiptService(root);
+  const { ledger } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-truncated-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-truncated-second-0001" });
+  const lines = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  // Dropping the last record leaves a chain that verifies perfectly on its own.
+  await writeFile(ledger, `${lines[0]!}\n`);
+  expect(verifyAccessReceiptLedger([JSON.parse(lines[0]!)])).toMatchObject({ ok: true });
+  await expect(read(service, { requestCorrelationId: "fwk-truncated-third-0001" }))
+    .rejects.toThrow("invalid access receipt ledger: truncated-ledger");
 });
 
 test("runtime policy experiment resolver prefers candidate when full pinned chain is valid", async () => {

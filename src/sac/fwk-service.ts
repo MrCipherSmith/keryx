@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, type Hash } from "node:crypto";
+import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import {
@@ -74,33 +74,77 @@ const isImmutableVersion = (value: unknown): value is string =>
   && /\d/.test(value)
   && !immutableVersionPattern.test(value);
 
-type LedgerIdentity = Readonly<{ ledgerBytes: number; device: string; inode: string; modifiedNs: string; changedNs: string }>;
-type CheckpointBody = LedgerIdentity & Readonly<{ schemaVersion: "1.0"; recordCount: number; headHash: string; tailOffset: number }>;
+/**
+ * Checkpoint schema v1.1. `contentDigest` is sha256 over the ledger's first
+ * `ledgerBytes` bytes exactly as they stood when a full audit accepted them, so
+ * the checkpoint's confidence is derived from the ledger's CONTENT.
+ *
+ * v1.0 pinned the checkpoint to `stat` metadata instead — `device`, `inode`,
+ * `modifiedNs`, `changedNs` — and then re-verified only the tail record. That is
+ * not a tamper signal: an in-place same-size rewrite of a historical record
+ * leaves every one of those fields identical (measured here: 189 of 200
+ * attempts left both `mtimeNs` and `ctimeNs` untouched), the tail record stays
+ * internally consistent, and the edit was accepted. The chain in
+ * `receipt-integrity` does not rescue the shortcut either: `recordHash`
+ * commits to `previousRecordHash`, but a mid-ledger edit leaves every STORED
+ * hash in place, so only recomputing a hash from the record's own bytes can
+ * expose it. Those stat fields are therefore gone from the checkpoint entirely,
+ * not merely unused, so no future fast path can reach for them again.
+ */
+type CheckpointBody = Readonly<{ schemaVersion: "1.1"; ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number; contentDigest: string }>;
 type Checkpoint = CheckpointBody & Readonly<{ integrity: Readonly<{ checkpointHash: string }> }>;
-type LedgerState = Readonly<{ identity: LedgerIdentity; recordCount: number; headHash: string; tailOffset: number }>;
+/**
+ * `digest` is a sha256 already primed with exactly the `ledgerBytes` verified
+ * bytes this state was derived from. The append path folds the appended line
+ * into it, so sealing the next checkpoint costs nothing and the ledger is read
+ * once per append rather than twice.
+ */
+type LedgerState = Readonly<{ ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number; digest: Hash }>;
 type LedgerVerifier = (receipts: readonly IntegrityLinkedAccessReceipt[]) => AccessReceiptLedgerVerification | Promise<AccessReceiptLedgerVerification>;
 const receiptHashPattern = /^[a-f0-9]{64}$/;
-const missingIdentity: LedgerIdentity = Object.freeze({ ledgerBytes: 0, device: "0", inode: "0", modifiedNs: "0", changedNs: "0" });
+const ledgerDigestChunkBytes = 64 * 1024;
 const isMissing = (error: unknown): boolean => error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 const checkpointHash = (body: CheckpointBody): string => createHash("sha256").update(JSON.stringify(body), "utf8").digest("hex");
 
-async function ledgerIdentity(ledger: string): Promise<LedgerIdentity> {
+async function ledgerByteLength(ledger: string): Promise<number> {
   const value = await stat(ledger, { bigint: true });
   if (value.size > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("invalid access receipt ledger: ledger-too-large");
-  return { ledgerBytes: Number(value.size), device: value.dev.toString(), inode: value.ino.toString(), modifiedNs: value.mtimeNs.toString(), changedNs: value.ctimeNs.toString() };
+  return Number(value.size);
+}
+/**
+ * sha256 over the ledger's first `byteLength` bytes, read in bounded chunks so a
+ * large ledger is never materialised. Returns `undefined` when the file ends
+ * early: a short read is a truncated ledger, and the caller refuses rather than
+ * hashing whatever prefix happened to survive.
+ */
+async function digestLedgerPrefix(handle: FileHandle, byteLength: number): Promise<Hash | undefined> {
+  const digest = createHash("sha256");
+  if (byteLength === 0) return digest;
+  const buffer = Buffer.alloc(Math.min(ledgerDigestChunkBytes, byteLength));
+  let position = 0;
+  while (position < byteLength) {
+    const result = await handle.read(buffer, 0, Math.min(buffer.length, byteLength - position), position);
+    if (result.bytesRead === 0) return undefined;
+    digest.update(buffer.subarray(0, result.bytesRead));
+    position += result.bytesRead;
+  }
+  return digest;
 }
 function parseCheckpoint(value: unknown): Checkpoint | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const document = value as Record<string, unknown>;
-  const expected = ["schemaVersion", "ledgerBytes", "device", "inode", "modifiedNs", "changedNs", "recordCount", "headHash", "tailOffset", "integrity"];
-  if (Object.keys(document).length !== expected.length || !expected.every((key) => Object.hasOwn(document, key)) || document.schemaVersion !== "1.0") return undefined;
+  const expected = ["schemaVersion", "ledgerBytes", "recordCount", "headHash", "tailOffset", "contentDigest", "integrity"];
+  // A v1.0 checkpoint fails here on both shape and version. It carries no
+  // content commitment, so it cannot support the new guarantee and is never
+  // trusted under it: the caller falls through to a full re-audit.
+  if (Object.keys(document).length !== expected.length || !expected.every((key) => Object.hasOwn(document, key)) || document.schemaVersion !== "1.1") return undefined;
   if (![document.ledgerBytes, document.recordCount, document.tailOffset].every((entry) => Number.isSafeInteger(entry) && Number(entry) >= 0)) return undefined;
-  if (![document.device, document.inode, document.modifiedNs, document.changedNs].every((entry) => typeof entry === "string" && /^\d+$/.test(entry))) return undefined;
+  if (typeof document.contentDigest !== "string" || !receiptHashPattern.test(document.contentDigest)) return undefined;
   if (typeof document.headHash !== "string" || (document.headHash !== "GENESIS" && !receiptHashPattern.test(document.headHash))) return undefined;
   if (typeof document.integrity !== "object" || document.integrity === null || Array.isArray(document.integrity)) return undefined;
   const integrity = document.integrity as Record<string, unknown>;
   if (Object.keys(integrity).length !== 1 || typeof integrity.checkpointHash !== "string" || !receiptHashPattern.test(integrity.checkpointHash)) return undefined;
-  const body: CheckpointBody = { schemaVersion: "1.0", ledgerBytes: document.ledgerBytes as number, device: document.device as string, inode: document.inode as string, modifiedNs: document.modifiedNs as string, changedNs: document.changedNs as string, recordCount: document.recordCount as number, headHash: document.headHash, tailOffset: document.tailOffset as number };
+  const body: CheckpointBody = { schemaVersion: "1.1", ledgerBytes: document.ledgerBytes as number, recordCount: document.recordCount as number, headHash: document.headHash, tailOffset: document.tailOffset as number, contentDigest: document.contentDigest };
   return checkpointHash(body) === integrity.checkpointHash ? { ...body, integrity: { checkpointHash: integrity.checkpointHash } } : undefined;
 }
 async function readCheckpoint(checkpointPath: string): Promise<{ present: boolean; checkpoint?: Checkpoint }> {
@@ -113,46 +157,76 @@ async function writeCheckpoint(checkpointPath: string, body: CheckpointBody): Pr
   try { await writeFile(temporary, `${JSON.stringify(checkpoint)}\n`, { mode: 0o600, flag: "wx" }); await rename(temporary, checkpointPath); }
   catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
 }
-function identityMatches(checkpoint: Checkpoint, identity: LedgerIdentity): boolean {
-  return checkpoint.ledgerBytes === identity.ledgerBytes && checkpoint.device === identity.device && checkpoint.inode === identity.inode && checkpoint.modifiedNs === identity.modifiedNs && checkpoint.changedNs === identity.changedNs;
-}
-async function fastCheckpointState(ledger: string, checkpoint: Checkpoint, identity: LedgerIdentity): Promise<LedgerState | undefined> {
-  if (!identityMatches(checkpoint, identity)) return undefined;
-  if (checkpoint.recordCount === 0) return checkpoint.ledgerBytes === 0 && checkpoint.headHash === "GENESIS" && checkpoint.tailOffset === 0 ? { identity, recordCount: 0, headHash: "GENESIS", tailOffset: 0 } : undefined;
-  const tailBytes = checkpoint.ledgerBytes - checkpoint.tailOffset;
-  if (checkpoint.tailOffset < 0 || tailBytes <= 1 || tailBytes > 1024 * 1024) return undefined;
+/**
+ * Content-derived fast path. The checkpoint is believed only when sha256 over
+ * the ledger's on-disk bytes still equals the digest recorded when those exact
+ * bytes were fully audited. No `stat` field takes part in the decision, so a
+ * same-size in-place rewrite that leaves `mtimeNs` and `ctimeNs` untouched is
+ * still caught — and caught wherever it lands, because the digest covers the
+ * whole audited prefix rather than the tail record alone.
+ *
+ * What the shortcut assumes, and why the assumption holds: identical bytes
+ * yield identical records, because `auditLedger` derives its records from the
+ * ledger by splitting on "\n" and `JSON.parse`-ing each line, both
+ * deterministic. Byte equality with an audited snapshot is therefore exactly as
+ * strong as re-running that audit, at the cost of one sequential read and one
+ * sha256 instead of N JSON parses and N schema validations.
+ *
+ * Divergence from the committed bytes is a refusal, not a retry: a short file or
+ * a digest mismatch throws. Falling back to a full audit there would let a clean
+ * truncation to a valid prefix pass as a healthy — merely shorter — ledger.
+ * Checkpoint-internal inconsistencies that say nothing about the ledger's
+ * content return `undefined` instead, which re-audits.
+ */
+async function fastCheckpointState(ledger: string, checkpoint: Checkpoint, ledgerBytes: number): Promise<LedgerState | undefined> {
+  if (ledgerBytes < checkpoint.ledgerBytes) throw new Error("invalid access receipt ledger: truncated-ledger");
   const handle = await open(ledger, "r");
   try {
+    const digest = await digestLedgerPrefix(handle, checkpoint.ledgerBytes);
+    if (!digest) throw new Error("invalid access receipt ledger: truncated-ledger");
+    if (digest.copy().digest("hex") !== checkpoint.contentDigest) throw new Error("invalid access receipt ledger: checkpoint-content-mismatch");
+    // Committed bytes intact but the ledger grew past them: an append that
+    // landed without its checkpoint refresh. The extra records were never
+    // audited, so re-audit rather than adopt them.
+    if (ledgerBytes !== checkpoint.ledgerBytes) return undefined;
+    if (checkpoint.recordCount === 0) return checkpoint.ledgerBytes === 0 && checkpoint.headHash === "GENESIS" && checkpoint.tailOffset === 0 ? { ledgerBytes, recordCount: 0, headHash: "GENESIS", tailOffset: 0, digest } : undefined;
+    const tailBytes = checkpoint.ledgerBytes - checkpoint.tailOffset;
+    if (checkpoint.tailOffset < 0 || tailBytes <= 1 || tailBytes > 1024 * 1024) return undefined;
     const buffer = Buffer.alloc(tailBytes); let offset = 0;
     while (offset < buffer.length) { const result = await handle.read(buffer, offset, buffer.length - offset, checkpoint.tailOffset + offset); if (result.bytesRead === 0) return undefined; offset += result.bytesRead; }
     if (buffer.at(-1) !== 0x0a || buffer.subarray(0, -1).includes(0x0a)) return undefined;
     let receipt: IntegrityLinkedAccessReceipt;
     try { receipt = JSON.parse(buffer.subarray(0, -1).toString("utf8")) as IntegrityLinkedAccessReceipt; } catch { return undefined; }
+    // The digest already vouches for these bytes; this only holds the
+    // checkpoint's own `headHash`/`tailOffset` claims against them.
     if (!verifyAccessReceiptRecord(receipt) || receipt.integrity.recordHash !== checkpoint.headHash) return undefined;
-    return { identity, recordCount: checkpoint.recordCount, headHash: checkpoint.headHash, tailOffset: checkpoint.tailOffset };
+    return { ledgerBytes, recordCount: checkpoint.recordCount, headHash: checkpoint.headHash, tailOffset: checkpoint.tailOffset, digest };
   } finally { await handle.close(); }
 }
 async function auditLedger(ledger: string, checkpointPath: string, verifier: LedgerVerifier): Promise<LedgerState> {
-  const raw = await readFile(ledger, "utf8");
+  const bytes = await readFile(ledger);
+  const raw = bytes.toString("utf8");
   if (raw.length > 0 && !raw.endsWith("\n")) throw new Error("invalid access receipt ledger: unterminated-record");
   const lines = raw.length === 0 ? [] : raw.slice(0, -1).split("\n"); let receipts: IntegrityLinkedAccessReceipt[];
   try { receipts = lines.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt); } catch { throw new Error("invalid access receipt ledger: malformed-json"); }
   const verification = await verifier(receipts);
   if (!verification.ok) throw new Error(`invalid access receipt ledger: ${verification.reason} at record ${verification.firstInvalidIndex}`);
-  const identity = await ledgerIdentity(ledger); const bytes = Buffer.from(raw, "utf8");
+  // The digest commits to the same buffer the audit just accepted, so the
+  // checkpoint can never vouch for bytes nobody verified.
+  const digest = createHash("sha256").update(bytes);
   const tailOffset = receipts.length === 0 ? 0 : bytes.lastIndexOf(0x0a, bytes.length - 2) + 1;
-  const state = { identity, recordCount: receipts.length, headHash: verification.headHash, tailOffset };
-  await writeCheckpoint(checkpointPath, { schemaVersion: "1.0", ...identity, recordCount: state.recordCount, headHash: state.headHash, tailOffset });
+  const state: LedgerState = { ledgerBytes: bytes.length, recordCount: receipts.length, headHash: verification.headHash, tailOffset, digest };
+  await writeCheckpoint(checkpointPath, { schemaVersion: "1.1", ledgerBytes: state.ledgerBytes, recordCount: state.recordCount, headHash: state.headHash, tailOffset, contentDigest: digest.copy().digest("hex") });
   return state;
 }
 async function resolveLedgerState(ledger: string, checkpointPath: string, verifier: LedgerVerifier): Promise<LedgerState> {
-  const document = await readCheckpoint(checkpointPath); let identity: LedgerIdentity;
-  try { identity = await ledgerIdentity(ledger); } catch (error) {
+  const document = await readCheckpoint(checkpointPath); let ledgerBytes: number;
+  try { ledgerBytes = await ledgerByteLength(ledger); } catch (error) {
     if (!isMissing(error)) throw error;
     if (document.present) throw new Error("invalid access receipt ledger: orphaned-checkpoint");
-    return { identity: missingIdentity, recordCount: 0, headHash: "GENESIS", tailOffset: 0 };
+    return { ledgerBytes: 0, recordCount: 0, headHash: "GENESIS", tailOffset: 0, digest: createHash("sha256") };
   }
-  if (document.checkpoint) { const fast = await fastCheckpointState(ledger, document.checkpoint, identity); if (fast) return fast; }
+  if (document.checkpoint) { const fast = await fastCheckpointState(ledger, document.checkpoint, ledgerBytes); if (fast) return fast; }
   return auditLedger(ledger, checkpointPath, verifier);
 }
 
@@ -552,12 +626,21 @@ export class FwkReadService {
       if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
       const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
       if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
-      await appendFile(ledger, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      const line = `${JSON.stringify(receipt)}\n`;
+      await appendFile(ledger, line, { mode: 0o600 });
       try {
-        const identity = await ledgerIdentity(ledger);
+        // `state.digest` already holds the verified pre-append bytes, so folding
+        // in the line just written yields the digest of the whole new ledger
+        // without reading it back. The size check keeps that claim honest: if
+        // the file is not exactly the audited prefix plus this line, the
+        // checkpoint would vouch for bytes it never saw, so drop it instead.
+        const appendedBytes = Buffer.byteLength(line, "utf8");
+        const ledgerBytes = state.ledgerBytes + appendedBytes;
+        if (await ledgerByteLength(ledger) !== ledgerBytes) throw new Error("invalid access receipt ledger: unexpected-append-size");
         await (this.options.refreshReceiptCheckpoint ?? writeCheckpoint)(checkpointPath, {
-          schemaVersion: "1.0", ...identity, recordCount: state.recordCount + 1,
-          headHash: receipt.integrity.recordHash, tailOffset: state.identity.ledgerBytes,
+          schemaVersion: "1.1", ledgerBytes, recordCount: state.recordCount + 1,
+          headHash: receipt.integrity.recordHash, tailOffset: state.ledgerBytes,
+          contentDigest: state.digest.update(line).digest("hex"),
         });
       } catch {
         // The ledger append is the commit point. A checkpoint is only a bounded
