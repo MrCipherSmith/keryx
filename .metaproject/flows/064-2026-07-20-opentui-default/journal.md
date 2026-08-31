@@ -23,3 +23,5 @@
 - 2026-07-20T08:53:41.580Z - ac-confirmed: AC4: tsc clean; bun test 1506/0; non-TTY + --no-tui smokes → readline; no new dep; driver/chat/roleLabel unchanged
 - 2026-07-20T08:54:05.319Z - completing
 - 2026-07-20T08:54:05.359Z - done: all gates passed
+- 2026-08-31T10:38:20.030Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-31T10:39:11.887Z - task-done: T4: Self-review and prepare draft PR

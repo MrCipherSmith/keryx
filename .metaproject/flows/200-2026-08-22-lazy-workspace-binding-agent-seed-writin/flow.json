@@ -5,7 +5,7 @@
   "title": "Lazy workspace binding + agent seed-writing instruction",
   "status": "done",
   "createdAt": "2026-08-22T15:43:01.915Z",
-  "updatedAt": "2026-08-22T15:52:55.076Z",
+  "updatedAt": "2026-08-31T10:39:11.767Z",
   "source": {
     "type": "description",
     "ref": null
@@ -45,7 +45,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -53,13 +53,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -67,13 +69,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -81,13 +85,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -95,7 +101,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T5",
@@ -361,6 +369,26 @@
       "at": "2026-08-22T15:52:55.076Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:39:11.404Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T10:39:11.526Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T10:39:11.646Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T10:39:11.767Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "merged": {

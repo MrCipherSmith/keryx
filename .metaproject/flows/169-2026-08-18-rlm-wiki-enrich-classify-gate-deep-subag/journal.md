@@ -155,3 +155,4 @@
 - 2026-08-18T08:42:17.821Z - ac-confirmed: AC8: typecheck clean; full bun test suite 4086 pass/0 fail on the feature branch before merge, 87/87 src/wiki/ tests re-verified green on main post-merge
 - 2026-08-18T08:42:21.141Z - completing
 - 2026-08-18T08:42:23.168Z - done: all gates passed
+- 2026-08-31T10:39:10.416Z - task-done: T4: Self-review and prepare draft PR

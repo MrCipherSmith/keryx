@@ -45,3 +45,19 @@
 - 2026-07-09T19:18:50.459Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/20 (tracker unavailable: existence not verified)
 - 2026-07-09T19:18:54.723Z - completing
 - 2026-07-09T19:18:55.436Z - done: all gates passed
+- 2026-08-31T10:40:47.031Z - task-done: T1: Collect remaining context
+- 2026-08-31T10:40:47.690Z - task-done: T2: Implement per plan
+- 2026-08-31T10:40:48.218Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T10:40:48.632Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-31T10:40:49.176Z - task-done: T5: Confirm managed review CLI surface and runtime boundaries before code
+- 2026-08-31T10:40:49.434Z - task-done: T6: Implement managed review data contracts and schema validation
+- 2026-08-31T10:40:49.709Z - task-done: T7: Implement related flow matching by explicit flow id, PR URL, issue URL, and branch
+- 2026-08-31T10:40:50.015Z - task-done: T8: Implement managed review artifact package creation without direct flow.json mutation
+- 2026-08-31T10:40:50.226Z - task-done: T9: Implement attach-review mode under existing flow review artifacts
+- 2026-08-31T10:40:50.345Z - task-done: T10: Implement ingest mode for existing review reports and finding classification
+- 2026-08-31T10:40:50.709Z - task-done: T11: Implement standalone review-flow mode under .metaproject/reviews
+- 2026-08-31T10:40:50.976Z - task-done: T12: Preserve lightweight review mode as report-only behavior
+- 2026-08-31T10:40:51.225Z - task-done: T13: Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes
+- 2026-08-31T10:40:51.487Z - task-done: T14: Run focused tests, full check, and code-verifier before implementation acceptance
+- 2026-08-31T10:40:51.791Z - task-done: T15: Run review-orchestrator with managed review coverage and resolve findings
+- 2026-08-31T10:40:52.073Z - task-done: T16: Update docs and completion evidence for managed review feedback loop

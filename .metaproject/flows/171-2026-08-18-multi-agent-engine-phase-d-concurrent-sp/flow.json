@@ -5,7 +5,7 @@
   "title": "Multi-Agent Engine Phase D: concurrent spawn_subagent waves + structured completion status",
   "status": "done",
   "createdAt": "2026-08-18T16:28:02.331Z",
-  "updatedAt": "2026-08-18T18:34:09.874Z",
+  "updatedAt": "2026-08-31T10:39:10.781Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,7 +92,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T3",
@@ -113,7 +115,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -121,7 +123,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T5",
@@ -371,6 +375,16 @@
       "at": "2026-08-18T18:34:09.874Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:39:10.659Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T10:39:10.781Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

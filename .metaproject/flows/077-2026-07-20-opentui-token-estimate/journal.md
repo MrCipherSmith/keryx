@@ -22,3 +22,4 @@
 - 2026-07-20T13:47:30.656Z - ac-confirmed: AC4: tsc clean; bun test 1511/0; estimate unit-tested
 - 2026-07-20T13:47:30.758Z - completing
 - 2026-07-20T13:47:30.796Z - done: all gates passed
+- 2026-08-31T10:39:09.550Z - task-done: T4: Self-review and prepare draft PR

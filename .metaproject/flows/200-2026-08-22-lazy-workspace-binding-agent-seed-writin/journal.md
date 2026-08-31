@@ -29,3 +29,7 @@
 - 2026-08-22T15:52:46.830Z - completion-failed: main-merge: 1cdb128 is not contained in origin/main
 - 2026-08-22T15:52:55.050Z - completing: merged commit: 1cdb128
 - 2026-08-22T15:52:55.076Z - done: all gates passed
+- 2026-08-31T10:39:11.404Z - task-done: T1: Collect remaining context
+- 2026-08-31T10:39:11.526Z - task-done: T2: Implement per plan
+- 2026-08-31T10:39:11.646Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T10:39:11.767Z - task-done: T4: Self-review and prepare draft PR

@@ -22,3 +22,4 @@
 - 2026-07-20T11:31:55.745Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; headless unaffected; no new dep
 - 2026-07-20T11:31:55.880Z - completing
 - 2026-07-20T11:31:55.920Z - done: all gates passed
+- 2026-08-31T10:39:08.548Z - task-done: T4: Self-review and prepare draft PR

@@ -24,3 +24,4 @@
 - 2026-07-20T14:36:08.444Z - ac-confirmed: AC4: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY
 - 2026-07-20T14:36:08.609Z - completing
 - 2026-07-20T14:36:08.639Z - done: all gates passed
+- 2026-08-31T10:39:10.172Z - task-done: T4: Self-review and prepare draft PR

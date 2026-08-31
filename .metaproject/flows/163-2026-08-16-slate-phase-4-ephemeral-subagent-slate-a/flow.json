@@ -5,7 +5,7 @@
   "title": "Slate Phase 4: Ephemeral subagent slate and wrap-up composer",
   "status": "done",
   "createdAt": "2026-08-16T18:53:47.460Z",
-  "updatedAt": "2026-08-16T21:11:59.578Z",
+  "updatedAt": "2026-08-31T10:39:10.293Z",
   "source": {
     "type": "description",
     "ref": null
@@ -98,7 +98,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -106,7 +106,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T5",
@@ -216,6 +218,11 @@
       "at": "2026-08-16T21:11:59.578Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:39:10.293Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

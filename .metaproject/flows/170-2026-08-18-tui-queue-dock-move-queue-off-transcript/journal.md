@@ -130,3 +130,4 @@
 - 2026-08-18T14:53:34.682Z - ac-confirmed: AC15: Full suite 4126 pass/0 fail pre-merge, 241/241 src/tui re-verified on main post-merge; main-queue.test.ts unmodified and passing
 - 2026-08-18T14:53:40.924Z - completing
 - 2026-08-18T14:53:42.930Z - done: all gates passed
+- 2026-08-31T10:39:10.538Z - task-done: T4: Self-review and prepare draft PR

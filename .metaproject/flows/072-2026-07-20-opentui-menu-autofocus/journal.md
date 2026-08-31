@@ -22,3 +22,4 @@
 - 2026-07-20T12:13:17.544Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; user validates on TTY
 - 2026-07-20T12:13:17.632Z - completing
 - 2026-07-20T12:13:17.659Z - done: all gates passed
+- 2026-08-31T10:39:08.939Z - task-done: T4: Self-review and prepare draft PR

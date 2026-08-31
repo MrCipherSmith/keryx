@@ -23,3 +23,4 @@
 - 2026-07-20T11:27:31.487Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; fmtTokens unit; no new dep
 - 2026-07-20T11:27:31.568Z - completing
 - 2026-07-20T11:27:31.594Z - done: all gates passed
+- 2026-08-31T10:39:08.427Z - task-done: T4: Self-review and prepare draft PR

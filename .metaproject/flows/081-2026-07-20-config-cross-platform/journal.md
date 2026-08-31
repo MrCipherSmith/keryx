@@ -22,3 +22,4 @@
 - 2026-07-20T14:28:45.551Z - ac-confirmed: AC4: tsc clean; bun test 1516/0; XDG test added
 - 2026-07-20T14:28:45.637Z - completing
 - 2026-07-20T14:28:45.668Z - done: all gates passed
+- 2026-08-31T10:39:10.047Z - task-done: T4: Self-review and prepare draft PR

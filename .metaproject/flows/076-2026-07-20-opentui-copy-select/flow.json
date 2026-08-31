@@ -5,7 +5,7 @@
   "title": "OpenTUI copy-on-select — mouse selection copies to system clipboard via OSC52 (grok/opencode style)",
   "status": "done",
   "createdAt": "2026-07-20T13:42:16.625Z",
-  "updatedAt": "2026-07-20T13:43:04.027Z",
+  "updatedAt": "2026-08-31T10:39:09.431Z",
   "source": {
     "type": "description",
     "ref": null
@@ -82,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -90,7 +90,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T5",
@@ -205,6 +207,11 @@
       "at": "2026-07-20T13:43:04.027Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:39:09.431Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "merged": {

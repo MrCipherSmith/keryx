@@ -22,3 +22,4 @@
 - 2026-07-20T13:57:20.776Z - ac-confirmed: AC4: tsc clean; bun test 1511/0; toast+copy = user on TTY
 - 2026-07-20T13:57:20.862Z - completing
 - 2026-07-20T13:57:20.885Z - done: all gates passed
+- 2026-08-31T10:39:09.802Z - task-done: T4: Self-review and prepare draft PR

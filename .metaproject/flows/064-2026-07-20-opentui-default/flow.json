@@ -5,7 +5,7 @@
   "title": "OpenTUI shell Phase 5 (TUI default on TTY agent mode, --no-tui opt-out, readline retained as fallback)",
   "status": "done",
   "createdAt": "2026-07-20T08:51:48.553Z",
-  "updatedAt": "2026-07-20T08:54:05.359Z",
+  "updatedAt": "2026-08-31T10:39:11.887Z",
   "source": {
     "type": "description",
     "ref": null
@@ -82,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -90,7 +90,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row created by `flow init` and superseded by this flow's explicit task list, which completed. Not dropped work: the named tasks that replaced it are all terminal. Dispositioned in flow 211 after categorising the historical debt."
     },
     {
       "id": "T5",
@@ -205,6 +207,16 @@
       "at": "2026-07-20T08:54:05.359Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:38:20.030Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T10:39:11.887Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "merged": {

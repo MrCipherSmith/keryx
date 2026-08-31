@@ -5,7 +5,7 @@
   "title": "Test suite isolation: concurrent runs must not collide (shared artifacts + git spawn under load)",
   "status": "done",
   "createdAt": "2026-07-22T06:35:14.040Z",
-  "updatedAt": "2026-07-22T07:04:43.806Z",
+  "updatedAt": "2026-08-31T10:39:57.359Z",
   "source": {
     "type": "description",
     "ref": null
@@ -57,7 +57,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -65,13 +65,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row never used. The work itself shipped: PR #196 \"test: make the suite safe to run concurrently (25 failures → 0)\", merged 2026-07-22. This flow recorded no explicit task list, so the four `flow init` rows are the only tasks it ever had and none was dispositioned. Verified against the merged pull request, not assumed."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,13 +81,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row never used. The work itself shipped: PR #196 \"test: make the suite safe to run concurrently (25 failures → 0)\", merged 2026-07-22. This flow recorded no explicit task list, so the four `flow init` rows are the only tasks it ever had and none was dispositioned. Verified against the merged pull request, not assumed."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -93,13 +97,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row never used. The work itself shipped: PR #196 \"test: make the suite safe to run concurrently (25 failures → 0)\", merged 2026-07-22. This flow recorded no explicit task list, so the four `flow init` rows are the only tasks it ever had and none was dispositioned. Verified against the merged pull request, not assumed."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,7 +113,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row never used. The work itself shipped: PR #196 \"test: make the suite safe to run concurrently (25 failures → 0)\", merged 2026-07-22. This flow recorded no explicit task list, so the four `flow init` rows are the only tasks it ever had and none was dispositioned. Verified against the merged pull request, not assumed."
     }
   ],
   "history": [
@@ -196,6 +204,26 @@
       "at": "2026-07-22T07:04:43.806Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:39:56.508Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T10:39:56.807Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T10:39:57.076Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T10:39:57.359Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

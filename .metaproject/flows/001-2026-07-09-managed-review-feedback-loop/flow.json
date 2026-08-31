@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "001",
   "slug": "managed-review-feedback-loop",
   "title": "Implement Managed Review Feedback Loop from requirements docpack",
   "status": "done",
   "createdAt": "2026-07-09T18:54:04.831Z",
-  "updatedAt": "2026-07-09T19:18:55.436Z",
+  "updatedAt": "2026-08-31T10:40:52.073Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,97 +65,337 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:56:28.060Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "skipped",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Scaffold row created by `flow init` and never used — this flow's named tasks (T5+) are the real work. Dispositioned in flow 211."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T19:08:21.163Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "skipped",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Scaffold row created by `flow init` and never used — this flow's named tasks (T5+) are the real work. Dispositioned in flow 211."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T19:08:24.213Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "skipped",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Scaffold row created by `flow init` and never used — this flow's named tasks (T5+) are the real work. Dispositioned in flow 211."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T19:08:28.425Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "skipped",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Scaffold row created by `flow init` and never used — this flow's named tasks (T5+) are the real work. Dispositioned in flow 211."
     },
     {
       "id": "T5",
       "title": "Confirm managed review CLI surface and runtime boundaries before code",
       "kind": "context",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:54:46.941Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T6",
       "title": "Implement managed review data contracts and schema validation",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:54:51.370Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T7",
       "title": "Implement related flow matching by explicit flow id, PR URL, issue URL, and branch",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:01.785Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T8",
       "title": "Implement managed review artifact package creation without direct flow.json mutation",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:01.836Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T9",
       "title": "Implement attach-review mode under existing flow review artifacts",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:01.855Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T10",
       "title": "Implement ingest mode for existing review reports and finding classification",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:01.868Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T11",
       "title": "Implement standalone review-flow mode under .metaproject/reviews",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:01.889Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T12",
       "title": "Preserve lightweight review mode as report-only behavior",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:06.312Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T13",
       "title": "Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:10.147Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T14",
       "title": "Run focused tests, full check, and code-verifier before implementation acceptance",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:14.558Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T15",
       "title": "Run review-orchestrator with managed review coverage and resolve findings",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:17.511Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     },
     {
       "id": "T16",
       "title": "Update docs and completion evidence for managed review feedback loop",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-09T18:55:22.078Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "dispositionReason": "Work shipped and verified present in the tree: src/review/managed.ts implements the managed review package, attach-review and review-flow modes, and the schema validation this task named. Delivered via PR #20 (merged). Recorded late because flow 001 predates the task-disposition convention, not because the work was skipped."
     }
   ],
   "history": [
@@ -380,6 +620,86 @@
       "at": "2026-07-09T19:18:55.436Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-08-31T10:40:47.031Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T10:40:47.690Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T10:40:48.218Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T10:40:48.632Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T10:40:49.176Z",
+      "event": "task-done",
+      "detail": "T5: Confirm managed review CLI surface and runtime boundaries before code"
+    },
+    {
+      "at": "2026-08-31T10:40:49.434Z",
+      "event": "task-done",
+      "detail": "T6: Implement managed review data contracts and schema validation"
+    },
+    {
+      "at": "2026-08-31T10:40:49.709Z",
+      "event": "task-done",
+      "detail": "T7: Implement related flow matching by explicit flow id, PR URL, issue URL, and branch"
+    },
+    {
+      "at": "2026-08-31T10:40:50.015Z",
+      "event": "task-done",
+      "detail": "T8: Implement managed review artifact package creation without direct flow.json mutation"
+    },
+    {
+      "at": "2026-08-31T10:40:50.226Z",
+      "event": "task-done",
+      "detail": "T9: Implement attach-review mode under existing flow review artifacts"
+    },
+    {
+      "at": "2026-08-31T10:40:50.345Z",
+      "event": "task-done",
+      "detail": "T10: Implement ingest mode for existing review reports and finding classification"
+    },
+    {
+      "at": "2026-08-31T10:40:50.709Z",
+      "event": "task-done",
+      "detail": "T11: Implement standalone review-flow mode under .metaproject/reviews"
+    },
+    {
+      "at": "2026-08-31T10:40:50.976Z",
+      "event": "task-done",
+      "detail": "T12: Preserve lightweight review mode as report-only behavior"
+    },
+    {
+      "at": "2026-08-31T10:40:51.225Z",
+      "event": "task-done",
+      "detail": "T13: Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes"
+    },
+    {
+      "at": "2026-08-31T10:40:51.487Z",
+      "event": "task-done",
+      "detail": "T14: Run focused tests, full check, and code-verifier before implementation acceptance"
+    },
+    {
+      "at": "2026-08-31T10:40:51.791Z",
+      "event": "task-done",
+      "detail": "T15: Run review-orchestrator with managed review coverage and resolve findings"
+    },
+    {
+      "at": "2026-08-31T10:40:52.073Z",
+      "event": "task-done",
+      "detail": "T16: Update docs and completion evidence for managed review feedback loop"
     }
   ]
 }

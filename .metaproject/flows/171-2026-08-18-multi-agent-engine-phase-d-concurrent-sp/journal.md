@@ -196,3 +196,5 @@
 - 2026-08-18T18:34:05.137Z - ac-confirmed: AC12: T8 flipped all 6 requirements-package files + roadmap.md from specification-ready to implemented with runtime evidence (file:line + test file citations), matching A-B-C's own status-note convention
 - 2026-08-18T18:34:08.133Z - completing
 - 2026-08-18T18:34:09.874Z - done: all gates passed
+- 2026-08-31T10:39:10.659Z - task-done: T2: Implement per plan
+- 2026-08-31T10:39:10.781Z - task-done: T4: Self-review and prepare draft PR

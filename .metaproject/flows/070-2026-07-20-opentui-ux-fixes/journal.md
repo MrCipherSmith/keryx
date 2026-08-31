@@ -22,3 +22,4 @@
 - 2026-07-20T11:44:23.411Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; no new dep; keyboard+look = user
 - 2026-07-20T11:44:23.492Z - completing
 - 2026-07-20T11:44:23.515Z - done: all gates passed
+- 2026-08-31T10:39:08.677Z - task-done: T4: Self-review and prepare draft PR

@@ -93,3 +93,7 @@ retry, and recorded in `docs/docs/onboarding.md`.
 - 2026-07-22T07:04:41.581Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/196 (warning: PR is not a draft)
 - 2026-07-22T07:04:41.735Z - completing
 - 2026-07-22T07:04:43.806Z - done: all gates passed
+- 2026-08-31T10:39:56.508Z - task-done: T1: Collect remaining context
+- 2026-08-31T10:39:56.807Z - task-done: T2: Implement per plan
+- 2026-08-31T10:39:57.076Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T10:39:57.359Z - task-done: T4: Self-review and prepare draft PR

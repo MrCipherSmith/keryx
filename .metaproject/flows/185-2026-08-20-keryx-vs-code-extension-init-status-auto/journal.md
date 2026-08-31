@@ -29,3 +29,7 @@
 - 2026-08-20T23:09:30.754Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/366 (warning: PR is not a draft)
 - 2026-08-21T05:38:00.442Z - completing
 - 2026-08-21T05:38:03.220Z - done: all gates passed
+- 2026-08-31T10:39:10.908Z - task-done: T1: Collect remaining context
+- 2026-08-31T10:39:11.031Z - task-done: T2: Implement per plan
+- 2026-08-31T10:39:11.148Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T10:39:11.272Z - task-done: T4: Self-review and prepare draft PR

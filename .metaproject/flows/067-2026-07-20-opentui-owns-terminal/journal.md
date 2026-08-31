@@ -23,3 +23,4 @@
 - 2026-07-20T11:00:48.519Z - ac-confirmed: AC4: tsc clean; bun test 1506/0; default --agent → readline smoke; no new dep; real-TTY --tui = user
 - 2026-07-20T11:01:13.968Z - completing
 - 2026-07-20T11:01:14.013Z - done: all gates passed
+- 2026-08-31T10:39:08.305Z - task-done: T4: Self-review and prepare draft PR
