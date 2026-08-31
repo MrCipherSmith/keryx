@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/review-pr-feedback/input-contract.schema.json",
+  "title": "ReviewPrFeedbackInput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pr_url"],
+  "properties": {
+    "pr_url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "GitHub PR URL (https://github.com/owner/repo/pull/123), owner/repo#123, or #123 when the git remote resolves the repository."
+    },
+    "fix": {
+      "type": "boolean",
+      "default": false,
+      "description": "Run the execution steps: dispatch flow-orchestrator with the fix plan, merge into the reviewed PR's head branch, and answer every comment. Never inferred — absent this flag the skill produces a plan and stops."
+    },
+    "context_doc": {
+      "type": "string",
+      "description": "Path to a job context document, e.g. <JOBS_ROOT>/<job>/ai/context.md. Optional and non-blocking."
+    },
+    "comment_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Restrict the run to these collected comment ids. Every excluded comment is still listed, with that as its reason — a filter that removes silently reads as nobody having commented."
+    },
+    "max_fix_rounds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Ceiling on review/fix rounds, passed to flow-orchestrator as a constraint. It can only lower that skill's own attempt budget, never raise it."
+    }
+  }
+}

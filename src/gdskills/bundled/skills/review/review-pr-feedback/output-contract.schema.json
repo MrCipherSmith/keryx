@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/review-pr-feedback/output-contract.schema.json",
+  "title": "ReviewPrFeedbackOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "mode", "pr", "head_sha", "collected", "verdicts", "plan_items", "summary"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"]
+    },
+    "mode": { "type": "string", "enum": ["analyze", "fix"] },
+    "pr": { "type": "string", "description": "<owner>/<repo>#<n>" },
+    "head_sha": {
+      "type": "string",
+      "description": "The commit the collection and every verdict are true of. A run that cannot name it is stale, never fresh."
+    },
+    "collected": { "type": "integer", "minimum": 0 },
+    "filtered": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["comment", "reason"],
+        "properties": {
+          "comment": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "description": "Everything the collection or comment_ids removed, with the reason. Never empty by omission."
+    },
+    "verdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "valid": { "type": "integer", "minimum": 0 },
+        "valid-wider": { "type": "integer", "minimum": 0 },
+        "already-fixed": { "type": "integer", "minimum": 0 },
+        "not-reproducible": { "type": "integer", "minimum": 0 },
+        "disagree": { "type": "integer", "minimum": 0 },
+        "out-of-scope": { "type": "integer", "minimum": 0 },
+        "needs-clarification": { "type": "integer", "minimum": 0 },
+        "unverified": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "plan_items": { "type": "integer", "minimum": 0 },
+    "fix": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "Present in fix mode only. Null in analyze mode: no branch, no PR, no merge, no reply.",
+      "required": ["flow_id", "flow_status", "merged_into"],
+      "properties": {
+        "flow_id": { "type": "string" },
+        "flow_status": {
+          "type": "string",
+          "enum": ["initialized", "in_progress", "implemented", "done", "blocked", "failed"]
+        },
+        "fix_pr_url": { "type": ["string", "null"] },
+        "merged_into": {
+          "type": ["string", "null"],
+          "description": "The reviewed PR's head branch. Any other value is a fix that did not land inside the pull request it answers."
+        },
+        "merge_sha": { "type": ["string", "null"] },
+        "review_rounds": { "type": "integer", "minimum": 0 },
+        "remaining_findings": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "blocker": { "type": "integer", "minimum": 0 },
+            "major": { "type": "integer", "minimum": 0 },
+            "minor": { "type": "integer", "minimum": 0 },
+            "info": { "type": "integer", "minimum": 0 }
+          },
+          "description": "A merge requires blocker, major and minor to be zero. info does not hold the loop."
+        }
+      }
+    },
+    "replies": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "Present in fix mode only, after the merge.",
+      "properties": {
+        "posted": { "type": "integer", "minimum": 0 },
+        "escalated": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "backlog": { "type": "array", "items": { "type": "string" }, "default": [] }
+      }
+    },
+    "action_items": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "learning_proposal": {
+      "type": ["string", "null"],
+      "description": "Path to the proposal keryx review learn wrote. Proposed, never applied — applying is the caller's step."
+    },
+    "needs_context": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "summary": { "type": "string" }
+  }
+}

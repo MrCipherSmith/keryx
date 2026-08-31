@@ -221,11 +221,14 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check component, state, styling, i18n, error, and Storybook conventions.",
     "Report concrete convention violations with source references.",
   ], ["frontend conventions", "local frontend rules", "CLAUDE frontend"]),
-  skill("review-pr-feedback", "review", ["full"], "Analyze existing PR review comments and turn feedback into actions and reusable lessons.", [
-    "Collect review comments and group them by author/topic.",
-    "Explain each actionable comment and map it to files or skills.",
-    "Propose fixes and rule/skill learning updates when patterns repeat.",
-  ], ["review PR feedback", "analyze PR comments", "review comments"]),
+  skill("review-pr-feedback", "review", ["full"], "Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer.", [
+    "Collect through `keryx review comments collect`; a hand-rolled fetch loses page two and writes no record.",
+    "Give every comment a verdict against the code at the head SHA, with the evidence that settled it.",
+    "Plan by class, one item per shape, each carrying a verifiable acceptance criterion.",
+    "Under --fix, dispatch flow-orchestrator: branch from the reviewed PR's own branch, draft PR, review/fix loop to zero minor-and-above, merge back into it.",
+    "Answer each comment once after the merge, in English, through `keryx review comments reply --final`.",
+    "Propose a learning update for configured authors; never apply it.",
+  ], ["review PR feedback", "analyze PR comments", "review comments", "fix PR comments"]),
   skill("code-ai-review", "review", ["full"], "Run the legacy strict AI review profile.", [
     "Load the AI review baseline rule.",
     "Review branch changes from merge-base.",

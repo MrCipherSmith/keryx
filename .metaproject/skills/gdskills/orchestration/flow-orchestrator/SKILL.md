@@ -12,7 +12,7 @@ triggers:
   - "managed implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.3.0"
+  version: "1.4.0"
   category: "orchestration"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -418,12 +418,43 @@ How should this flow end?
   Preserve the base branch recorded during initialization. Do not mark the
   flow implemented or complete before the PR is merged into that branch.
 
+### A dispatched run answers the question in its constraints
+
+The choice above is the USER's, and a subagent has no user to ask. When this
+skill is dispatched by another skill, the completion outcome, the base branch and
+the review exit condition arrive in `constraints[]`, and asking anyway is how a
+dispatched run stalls forever on a prompt nobody will read.
+
+So: if `constraints` names the outcome, take it and record in `journal.md` who
+chose it and where the constraint came from. If it does not, ask — a dispatch that
+forgot to say is not a dispatch that meant A.
+
+Three constraints have to be obeyed exactly, because each one is a way the run
+lands somewhere it was not asked to:
+
+| Constraint | Obey it as |
+|---|---|
+| `base_branch: <branch>` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. |
+| `completion: outcome A` | Skip the Completion Choice question, run the PR review/fix loop, merge into the recorded base, complete the flow. |
+| `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
+
+A constraint that would raise this skill's own attempt budget is **not** obeyed.
+The three-attempt bound and the `keryx review loop` repetition check are this
+skill's, they are evidence-backed, and a caller asking for "loop until clean" gets
+the bound plus an escalation — never an unbounded loop.
+
 ### PR review/fix loop
 
 1. Run the relevant `review-orchestrator` checks against the PR and current
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
    task, dispatch `task-implementer`, push the fix, and run review again.
+
+   **The threshold is `minor`.** The loop exits when the round reports zero
+   findings at `blocker`, `major` or `minor`; `info` does not hold it. State the
+   remaining `info` findings in the completion report rather than fixing them
+   under a loop that was not opened for them. A caller may lower the threshold in
+   `constraints`; it cannot raise it to merge over a `minor`.
 3. Allow at most **three** review/fix attempts for the current approach. Count
    an attempt when review/check results are available, including a clean result,
    and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the
