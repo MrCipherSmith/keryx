@@ -1,6 +1,6 @@
 ---
 name: context-collector
-description: "Collects, summarizes, and maintains a unified context document for a job. Gathers relevant local documentation (docs/, jobs/, rules), identifies libraries/patterns/references, fetches external documentation via web, extracts best practices, and produces a single context document that all sub-agents can reference during the job lifecycle. Can be invoked by job-orchestrator or directly by user."
+description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution."
 triggers:
   - "Collect context"
   - "Build context"
@@ -11,11 +11,18 @@ triggers:
   - "Research context"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "context"
+  agent_worthy: true
   compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
 ---
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
+This skill is for orchestrators and interactive session-level routing only.
+Proceed directly with your assigned task.
+</SUBAGENT-STOP>
 
 # Context Collector
 
@@ -163,9 +170,15 @@ Scan local sources for relevant context. Be selective — only include what is d
    |------------|---------------|
    | React components | code-style-patterns.mdc, frontend-assistant.mdc, storybook-guidelines.mdc |
    | MobX stores | code-style-patterns.mdc, mobx-store-template.mdc |
-   | API / DTOs | nestjs-dto.mdc, code-style-patterns.mdc |
-   | Testing | playwright-testing.mdc, storybook-guidelines.mdc |
+   | API / DTOs | nestjs-dto.mdc, code-style-patterns.mdc, api-contracts.mdc |
+   | Testing | playwright-testing.mdc, storybook-guidelines.mdc, tdd-workflow.mdc |
    | General code | code-style-patterns.mdc, frontend-assistant.mdc |
+   | TDD / test-first | tdd-workflow.mdc |
+   | Architecture / layers | clean-architecture.mdc, solid-principles.mdc |
+   | Error handling | error-handling.mdc |
+   | Database / ORM | database-patterns.mdc |
+   | Security | security-baseline.mdc |
+   | Async code | async-patterns.mdc |
    
 2. Read each applicable rule
 3. Extract: specific conventions, required patterns, prohibited practices
@@ -189,6 +202,61 @@ Scan local sources for relevant context. Be selective — only include what is d
    - Key patterns to follow for consistency
 ```
 
+### 2.5 Test Framework Detection (`PROJECT_DIR`)
+
+Always detect the test framework — `tests-creator` and `task-implementer` both need this.
+
+```
+1. Read package.json:
+   - Check "dependencies" and "devDependencies" for:
+     vitest, jest, @jest/*, mocha, jasmine, bun:test, pytest, go test
+   
+2. Check for config files:
+   - vitest.config.ts / vitest.config.js
+   - jest.config.ts / jest.config.js
+   - .mocharc.* / mocha.opts
+
+3. Read 2-3 existing test files (*.test.ts, *.spec.ts, test_*.py):
+   - Import style (global vs explicit import)
+   - Describe/it/test nesting depth
+   - Assertion style (expect().toBe vs assert.equal)
+   - Mock library (vi.fn / jest.fn / sinon)
+   - Fixture patterns (factories, builders, inline data)
+   - Test file location convention (co-located vs __tests__/)
+
+4. Summarize as "Test Framework Context":
+   framework: <vitest|jest|bun:test|mocha|pytest>
+   import_style: esm | cjs | global
+   file_pattern: "*.test.ts" | "*.spec.ts"
+   file_location: co-located | __tests__ | tests/
+   mock_library: vi | jest | sinon
+   run_command: "bun test" | "npx vitest run" | "npm test"
+   example_test_file: <path to a representative test>
+```
+
+### 2.6 Greptile Codebase Context (when available)
+
+Greptile indexes the full repository and stores codebase-level context. If Greptile MCP is available in the session, query it as an additional local source — it can surface cross-file patterns that a manual scan would miss.
+
+```
+1. Try fetching stored custom context:
+   mcp__greptile__get_custom_context({})
+   or
+   mcp__greptile__search_custom_context({ query: "<task_description>" })
+
+2. If Greptile context is returned:
+   - Extract: documented patterns, known exceptions, team conventions
+   - Note: "Source: Greptile codebase index"
+
+3. Check for relevant past review comments (signals about recurring issues):
+   mcp__greptile__search_greptile_comments({ query: "<focus_area>", limit: 5 })
+   - Extract recurring findings → add to "Known Issues / Watch Areas" section
+
+4. If Greptile MCP is not available or returns empty: skip silently, proceed normally.
+```
+
+Greptile context is additive — it supplements local context, never replaces it.
+
 **Output of Phase 2:**
 ```
 LOCAL_CONTEXT:
@@ -196,6 +264,8 @@ LOCAL_CONTEXT:
   related_jobs:      [{job_name, relevance, key_findings}]
   applicable_rules:  [{rule, key_conventions: [string]}]
   codebase_patterns: [{area, patterns: [string], example_files: [path]}]
+  test_framework:    {framework, import_style, file_pattern, file_location, mock_library, run_command, example_test_file}
+  greptile_context:  {available: bool, patterns: [string], known_issues: [string]}
 ```
 
 ---
@@ -444,6 +514,24 @@ For ACTION=update, use the same flow — `job-documenter` will overwrite the exi
 If no JOB_NAME is provided:
 - Write context to `<DOCS_ROOT>/context/<descriptive-slug>.md`
 - Include full metadata block
+
+## Reporting Results
+
+Every final response to the orchestrator MUST begin with the status line:
+
+```
+STATUS: DONE
+
+## Context collected
+[summary of what was gathered]
+
+## CONTEXT_RESULT
+[the full result block]
+```
+
+Use `STATUS: DONE_WITH_CONCERNS` if context is partial. Use `STATUS: BLOCKED` if access fails.
+
+**IRON LAW: THE FIRST LINE OF YOUR FINAL RESPONSE IS ALWAYS "STATUS: <STATUS>". THE CONTEXT_RESULT BLOCK FOLLOWS AFTER.**
 
 ### 5.3 Return Result
 

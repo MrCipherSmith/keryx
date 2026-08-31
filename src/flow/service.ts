@@ -2,7 +2,7 @@ import { mkdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { assertTransition, evaluateTaskGate } from "./machine";
+import { assertTransition, dependencyIssues, evaluateTaskGate, nextTask } from "./machine";
 import { reviewGate } from "./review-gate";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
@@ -34,6 +34,7 @@ import {
   renderPlan,
   renderTasksDoc,
 } from "./templates";
+import type { NextTaskDecision } from "./machine";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
@@ -48,8 +49,35 @@ import type {
   FlowTask,
   FlowSummary,
   GateOutcome,
+  AttemptOutcome,
+  TaskAttempts,
   TaskKind,
 } from "./types";
+
+/**
+ * Append one attempt to a task, returning the counter it now carries.
+ *
+ * One writer, two callers: `taskAttempt` (the explicit verb) and `taskDone`
+ * (which records the attempt a `failed`/`blocked` close implies). Sharing it is
+ * what makes "the count is the number of entries in the log" true by
+ * construction rather than by two implementations agreeing.
+ *
+ * `attempts` is optional on v1-shaped tasks that were never migrated in this
+ * process; default rather than throw, so recording an attempt is always
+ * possible. Append-only: a prior entry is never rewritten (TM-01 §5.1).
+ */
+function recordAttempt(
+  task: FlowTask,
+  outcome: AttemptOutcome,
+  at: string,
+  detail?: string | undefined,
+): TaskAttempts {
+  const attempts = task.attempts ?? { count: 0, log: [] };
+  attempts.count += 1;
+  attempts.log.push({ at, outcome, ...(detail?.trim() ? { detail: detail.trim() } : {}) });
+  task.attempts = attempts;
+  return attempts;
+}
 
 const DEFAULT_TASKS: Array<{ id: string; title: string; kind: TaskKind }> = [
   { id: "T1", title: "Collect remaining context", kind: "context" },
@@ -219,6 +247,19 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       return (await load(cwd, id)).flow;
     },
 
+    /**
+     * Flow 209 AC6 — the reader `dependsOn` did not have.
+     *
+     * Read-only, so it takes no lock and writes no history: asking what to do
+     * next is not an event in the flow's life. What makes it a real consumer is
+     * that `keryx flow next` is the resume path `flow-orchestrator` documents,
+     * so the ordering an operator declares is now computed from the record
+     * rather than re-derived by a model from prose.
+     */
+    async next({ cwd, id }): Promise<NextTaskDecision> {
+      return nextTask((await load(cwd, id)).flow.tasks);
+    },
+
     async freeze({ cwd, id }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       assertTransition(flow.status, "ready");
@@ -297,6 +338,25 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (runLink !== undefined) {
         task.runLink = runLink;
       }
+      // Flow 209 AC6 — the attempt counter, written by the code that should
+      // write it.
+      //
+      // `keryx flow task attempt` worked and NOTHING CALLED IT: zero of the
+      // seven flows completed after it shipped recorded a single attempt. The
+      // failure had moved from "the code never increments it" to "nothing calls
+      // the code that increments it", which is the same blindness one layer
+      // down. A counter that depends on an agent remembering a second command is
+      // a counter that stays at zero.
+      //
+      // So a task closed `failed` or `blocked` records its attempt here, on the
+      // path an operator already runs. Those two dispositions ARE attempts by
+      // definition — something was tried and did not finish — and the reason
+      // given for the disposition is the detail. `completed` and `skipped` are
+      // deliberately not recorded: a skip was never attempted, and inventing an
+      // attempt for it would make the log say work happened that did not.
+      if (task.disposition === "failed" || task.disposition === "blocked") {
+        recordAttempt(task, task.disposition, now(), task.dispositionReason);
+      }
       return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}`);
       });
     },
@@ -308,14 +368,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (!task) {
           throw new Error(`Task not found: ${taskId}. Known: ${flow.tasks.map((t) => t.id).join(", ")}`);
         }
-        // `attempts` is optional on v1-shaped tasks that were never migrated in
-        // this process; default rather than throw, so recording an attempt is
-        // always possible.
-        const attempts = task.attempts ?? { count: 0, log: [] };
-        attempts.count += 1;
-        // Append-only: a prior entry is never rewritten (TM-01 §5.1).
-        attempts.log.push({ at: now(), outcome, ...(detail?.trim() ? { detail: detail.trim() } : {}) });
-        task.attempts = attempts;
+        const attempts = recordAttempt(task, outcome, now(), detail);
         return save(
           cwd,
           dir,
@@ -683,6 +736,34 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         }
         if (flow.status === "done" && !flow.pr.url && !flow.merged) {
           issues.push({ flow: dir, kind: "state", message: "done without a recorded PR" });
+        }
+        // Flow 209 AC6 — `dependsOn`, checked. A dependency naming a task that
+        // does not exist, a task depending on itself, and a cycle all produce an
+        // ordering that can never be satisfied, and before this every one of
+        // them was indistinguishable from "no dependencies declared".
+        for (const issue of dependencyIssues(flow.tasks)) {
+          issues.push({ flow: dir, kind: "dependency", message: issue.message });
+        }
+        // Flow 209 AC6 — the attempt counter, checked. `taskDone` now records
+        // the attempt a `failed`/`blocked` close implies, so a task carrying one
+        // of those dispositions and no attempt at all can only have been written
+        // by hand or by a build that predates the wiring. Either way the record
+        // says work was tried and holds nothing that was.
+        for (const task of flow.tasks) {
+          if (task.disposition !== "failed" && task.disposition !== "blocked") {
+            continue;
+          }
+          if ((task.attempts?.count ?? 0) > 0) {
+            continue;
+          }
+          issues.push({
+            flow: dir,
+            kind: "attempts",
+            message:
+              `${task.id} is recorded ${task.disposition} with attempts.count 0 — a task that failed without a ` +
+              "single recorded attempt describes work nobody can audit. Record what was tried with: " +
+              `keryx flow task attempt ${flow.id} ${task.id} --outcome ${task.disposition} --detail "<what happened>"`,
+          });
         }
       }
       return { ok: issues.length === 0, issues };

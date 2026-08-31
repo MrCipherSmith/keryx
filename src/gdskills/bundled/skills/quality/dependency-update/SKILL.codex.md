@@ -1,6 +1,6 @@
 ---
 name: dependency-update
-description: "Smart dependency updates: check outdated packages, classify by risk (patch/minor/major), update with compatibility verification. Runs tests after each major update, rollbacks on failure. Creates atomic commits per group."
+description: "Use when checking for outdated packages or upgrading dependencies with compatibility verification."
 triggers:
   - "/dependency-update"
   - "Update dependencies"

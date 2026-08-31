@@ -157,6 +157,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runSimple(args.slice(1), "freeze");
       case "start":
         return await runSimple(args.slice(1), "start");
+      case "next":
+        return await runNext(args.slice(1));
       case "task":
         return await runTask(args.slice(1));
       case "ac":
@@ -311,7 +313,21 @@ async function runStatus(args: string[]): Promise<void> {
   const doneCount = flow.tasks.filter((task) => task.status === "done").length;
   heading(`Tasks (${doneCount}/${flow.tasks.length})`);
   for (const task of flow.tasks) {
-    statusLine(`${task.id} ${task.title}`, task.status === "done", task.kind);
+    // Flow 209 AC6: the two v2 fields, on the screen an operator already reads.
+    // Both were written, migrated and typed while nothing ever displayed them,
+    // so an operator had to open flow.json to discover either — which is how a
+    // field goes a release without anyone noticing it stayed at zero.
+    const attempts = task.attempts?.count ?? 0;
+    const declared = task.dependsOn ?? [];
+    const annotations = [
+      ...(declared.length === 0 ? [] : [`depends on ${declared.join(", ")}`]),
+      ...(attempts === 0 ? [] : [`${attempts} attempt(s)`]),
+    ];
+    statusLine(
+      `${task.id} ${task.title}${annotations.length === 0 ? "" : ` ${style.dim(`[${annotations.join("; ")}]`)}`}`,
+      task.status === "done",
+      task.kind,
+    );
   }
 
   heading("Recent history");
@@ -320,6 +336,62 @@ async function runStatus(args: string[]): Promise<void> {
       `  ${style.dim(event.at)} ${event.event}${event.detail ? style.dim(`: ${event.detail}`) : ""}`,
     );
   }
+}
+
+/**
+ * `keryx flow next` — the resume decision, computed from `dependsOn` (flow 209,
+ * AC6).
+ *
+ * `flow-orchestrator` has documented "resume at the first task not done,
+ * respecting `dependsOn` order" since the field was added, and until now nothing
+ * computed it: `dependsOn` was written by `flow task add --depends`, migrated by
+ * the store, typed in `types.ts`, and read by nothing. An agent resuming a flow
+ * re-derived the order from prose, which is the same as not having the field.
+ *
+ * Exits non-zero when work remains and nothing is startable. That state is a
+ * declared cycle or a typo, and reporting it as "nothing to do" would let a flow
+ * close over open work.
+ */
+async function runNext(args: string[]): Promise<void> {
+  const id = requireId(args);
+  const decision = await getService().next({ cwd: process.cwd(), id });
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(decision, null, 2));
+    if (decision.kind === "blocked") {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (decision.kind === "ready") {
+    console.log(
+      `  ${style.cyan(symbols.arrow)} ${style.bold(decision.task.id)} ${decision.task.title} ${style.dim(`(${decision.task.kind})`)}`,
+    );
+    const declared = decision.task.dependsOn ?? [];
+    note(
+      declared.length === 0
+        ? "no declared dependencies; this is the first task that is not done"
+        : `all declared dependencies are done: ${declared.join(", ")}`,
+    );
+    return;
+  }
+
+  if (decision.kind === "none") {
+    console.log(`  ${style.green(symbols.ok)} Every task is done.`);
+    return;
+  }
+
+  heading(`${style.red(symbols.cross)} ${decision.blocked.length} task(s) remain and none can start`);
+  for (const entry of decision.blocked) {
+    console.log(
+      `  ${style.red(symbols.cross)} ${style.bold(entry.task.id)} ${entry.task.title} ${style.dim(`waiting on ${entry.waitingOn.join(", ")}`)}`,
+    );
+  }
+  note(
+    "A dependency that is not done, does not exist, or forms a cycle. `keryx flow check` names which.",
+  );
+  process.exitCode = 1;
 }
 
 async function runSimple(args: string[], action: "freeze" | "start" | "unblock"): Promise<void> {
@@ -569,6 +641,7 @@ function printHelp(): void {
     "keryx flow status <id>",
     "keryx flow freeze <id>",
     "keryx flow start <id>",
+    "keryx flow next <id> [--json]   (first task not done whose dependsOn are all done)",
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
     'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',

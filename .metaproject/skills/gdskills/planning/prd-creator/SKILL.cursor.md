@@ -1,6 +1,6 @@
 ---
 name: prd-creator
-description: "Transforms unstructured user requests into structured, complete, and testable Product Requirements Documents (PRD). Operates in Direct Mode for user interaction and Orchestrated Mode for pipelined multi-agent workflows."
+description: "Use when a vague or unstructured request needs to be converted into a formal, testable Product Requirements Document."
 triggers:
   - "Create a PRD"
   - "Formulate requirements"
@@ -155,7 +155,7 @@ Then
 - You MUST NOT create a single file in the generic `docs/` root.
 
 **Orchestrated Mode:**
-- The PRD MUST be saved within the active job's directory for traceability: `.metaproject/jobs/<current_job>/`
+- The PRD MUST be saved within the active job's directory for traceability: `<JOBS_ROOT>/<current_job>/`
 - Follow the orchestrator's constraints for exact file naming in the job context.
 
 ---

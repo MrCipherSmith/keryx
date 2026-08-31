@@ -23,6 +23,12 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+import {
+  checkCrossFamilyReview,
+  parseCrossFamilyReviewInput,
+  renderCrossFamilyReviewLine,
+} from "../review/cross-family";
+import type { CrossFamilyReviewDecision } from "../lib/provider-config";
 import { githubAdapter } from "../flow/tracker/github";
 import {
   buildPathScope,
@@ -144,6 +150,11 @@ const CREATE_FLAGS = [
   "--verification-mode",
   "--scope",
   "--blast-radius",
+  // Flow 209 AC2. The `cross_family_review` block, as
+  // `keryx providers cross-family --json` prints it. Without a way in, the
+  // command computed a decision nothing could ever record — and a record nothing
+  // holds is a record nothing reads.
+  "--cross-family-review",
   "--refuted",
   "--max-findings",
   "--spent",
@@ -383,6 +394,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
     blastRadius: await readBlastRadiusRecord(optionValue(args, "--blast-radius")),
+    crossFamilyReview: await readCrossFamilyReview(optionValue(args, "--cross-family-review")),
     maxFindingsPerReviewer: parseNonNegativeInteger(optionValue(args, "--max-findings"), "--max-findings"),
     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
@@ -434,6 +446,13 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   // `not-measured` is printed where a count is absent, never `0`.
   console.log(renderFilterStatsLine(result.filterStats));
   reportFilterStatsProblems(result.filterStats, `${result.path}/manifest.json`);
+
+  // Flow 209 AC2, the producer half. The block is now ON the manifest; the
+  // reader is `keryx review status`, in a later invocation. Printed as
+  // `not recorded` when no `--cross-family-review` was supplied, because the
+  // alternative — printing nothing — is what let a decision nobody made read as
+  // a decision that came out single-family.
+  console.log(renderCrossFamilyReviewLine(result.manifest.cross_family_review));
 
   // AC10: every cap says what it dropped, on the terminal as well as in
   // scope.md. A truncation an operator has to open a file to discover reads, on
@@ -1383,6 +1402,31 @@ async function readBlastRadiusRecord(source: string | undefined): Promise<BlastR
   return { ...parsed, files: parsed.files, changedFiles: parsed.changedFiles };
 }
 
+/**
+ * The §5.4 decision, from `keryx providers cross-family --json` (flow 209, AC2).
+ *
+ * Refused rather than defaulted on every malformed input, on the same rule
+ * `readScope` and `readBlastRadiusRecord` follow. `single-family` is a DECISION
+ * and quietly substituting it for an unreadable file would record that a
+ * question was answered when nobody asked it — which is precisely the state the
+ * field was added to make visible.
+ */
+async function readCrossFamilyReview(source: string | undefined): Promise<CrossFamilyReviewDecision | undefined> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `--cross-family-review ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Pass the output of \`keryx providers cross-family --json\`.`,
+    );
+  }
+  return parseCrossFamilyReviewInput(parsed, `--cross-family-review ${source}`);
+}
+
 function parseVerificationMode(raw: string | undefined): ManagedReviewInput["verificationMode"] {
   if (raw === undefined) {
     return DEFAULT_VERIFICATION_MODE;
@@ -1648,6 +1692,21 @@ async function runStatus(args: string[]): Promise<void> {
   // is reported and exits 0: it is a fact about old packages, not a
   // contradiction inside a new one, and failing on it would make the check
   // impossible to adopt.
+  // Flow 209 AC2: THE CONSUMER. `cross_family_review` is read back HERE, out of
+  // `manifest.json`, by an invocation that shares nothing with the ingest that
+  // wrote it — and then checked, and then refused on.
+  //
+  // A same-process reader would not have been enough, and this is not a
+  // hypothetical: `attempts.count` was written and read inside one process and
+  // stayed green for a whole release. The separation is the check.
+  //
+  // Reported BEFORE the `filter_stats` early return, because a package that
+  // predates `filter_stats` can still carry a family decision, and returning
+  // first would make this reader unreachable on exactly the old packages a
+  // recall comparison most wants to group.
+  console.log(renderCrossFamilyReviewLine(manifest.cross_family_review));
+  reportCrossFamilyReviewProblems(manifest.cross_family_review, `${ref}/manifest.json`);
+
   const stats = manifest.filter_stats;
   if (stats === undefined) {
     console.log("filter_stats: not recorded — this package predates it. Re-ingest the round to record what it filtered.");
@@ -1675,6 +1734,28 @@ async function runStatus(args: string[]): Promise<void> {
  * already on disk: a refusal that deleted the record of its own failure is the
  * shape this whole pipeline exists to remove.
  */
+/**
+ * Print whatever is wrong with a persisted `cross_family_review`, and fail the
+ * command if anything is (flow 209, AC2).
+ *
+ * `not-recorded` is filtered out and never fails, exactly as it is for
+ * `filter_stats`: a round that did not run `keryx providers cross-family` has
+ * recorded an absence, which is honest. A round that recorded a
+ * self-contradictory decision has recorded a claim, and that is the one this
+ * refuses — because a consumer that can only agree with the producer is a
+ * printer, and a printer is what `attempts.count` had.
+ */
+function reportCrossFamilyReviewProblems(decision: unknown, where: string): void {
+  const problems = checkCrossFamilyReview(decision).filter((problem) => problem.code !== "not-recorded");
+  if (problems.length === 0) {
+    return;
+  }
+  for (const problem of problems) {
+    console.error(`cross_family_review [${problem.code}] in ${where}: ${problem.message}`);
+  }
+  process.exitCode = 1;
+}
+
 function reportFilterStatsProblems(stats: unknown, where: string): void {
   const problems = checkFilterStats(stats).filter((problem) => problem.code !== "not-recorded");
   if (problems.length === 0) {
@@ -1800,6 +1881,7 @@ Usage:
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                      [--cross-family-review <file|->]
                     [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
@@ -1863,6 +1945,15 @@ blast-radius:
   the final round always does, whatever the changed-file set did.
   Requires a built graph (\`keryx gdgraph build\`); an absent graph is refused
   rather than reported as an empty radius.
+
+cross-family-review:
+  The block \`keryx providers cross-family --json\` prints: which model family
+  reviewed this round, and why. Recorded on \`manifest.cross_family_review\` and
+  read back — and CHECKED — by \`keryx review status\`, which exits non-zero on a
+  record that contradicts itself (\`cross-family\` naming no reviewer, naming the
+  authoring family, or naming a reviewer that was never a candidate).
+  Omitted, the round records NOTHING, and \`status\` says \`not recorded\`.
+  That is not \`single-family\`: nobody decided.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and

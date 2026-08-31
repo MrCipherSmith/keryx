@@ -12,6 +12,11 @@ import type { ReviewCapsRecord } from "./caps";
 // import back would close a runtime cycle. Both directions are erased.
 import type { ReviewFilterStats } from "./filter-stats";
 import type { ReviewNoteResult } from "./review-notes";
+// Type-only: the decision is COMPUTED in `lib/provider-config`, which is where
+// the provider registry has its single reader, and only carried here. A value
+// import would make the review package depend on provider configuration at
+// runtime for a record it merely stores.
+import type { CrossFamilyReviewDecision } from "../lib/provider-config";
 
 export const MANAGED_REVIEW_MODES = ["attach-review", "review-flow", "ingest"] as const;
 export type ManagedReviewMode = (typeof MANAGED_REVIEW_MODES)[number];
@@ -101,6 +106,20 @@ export type ManagedReviewManifest = {
    * back and says `not recorded` rather than letting the silence pass.
    */
   filter_stats?: ReviewFilterStats | undefined;
+  /**
+   * Which model family reviewed this round, and why (flow 209, AC2).
+   *
+   * Produced by `keryx providers cross-family --json`, handed to
+   * `keryx review ingest --cross-family-review <file>`, and read back off disk
+   * by `keryx review status` — a different invocation, which is the only kind of
+   * reader that would have caught `attempts.count`.
+   *
+   * Optional, and absent means NOBODY DECIDED. It is never read as
+   * `single-family`: a round that did not ask the question and a round that
+   * asked it and stayed on one family are different facts, and only the recorded
+   * block distinguishes them. See {@link module:review/cross-family}.
+   */
+  cross_family_review?: CrossFamilyReviewDecision | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
 };
@@ -482,6 +501,17 @@ export type ManagedReviewInput = {
   verifications?: readonly VerificationClaimInput[] | undefined;
   /** Defaults to {@link DEFAULT_VERIFICATION_MODE}. */
   verificationMode?: VerificationMode | undefined;
+  /**
+   * The §5.4 decision this round ran under, from
+   * `keryx providers cross-family --json` (flow 209, AC2).
+   *
+   * Carried, never computed: {@link module:lib/provider-config} keeps the single
+   * reader of the provider registry, and an ingest that assembled its own
+   * decision would be a second one. Absent is recorded as absent — see
+   * {@link ManagedReviewManifest.cross_family_review} for why that is not
+   * `single-family`.
+   */
+  crossFamilyReview?: CrossFamilyReviewDecision | undefined;
   /**
    * What the pre-filter removed, from `keryx review scope --json`: the counts
    * AND the reason for every individual drop.

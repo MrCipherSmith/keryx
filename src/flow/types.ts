@@ -1,3 +1,9 @@
+// Type-only, and therefore erased: `machine.ts` imports `FlowStatus`/`FlowTask`
+// from here as types, so the decision type coming back the other way closes no
+// runtime cycle. It is declared there because it is the return of a pure
+// function over a task list, not a shape flow state carries.
+import type { NextTaskDecision } from "./machine";
+
 export type FlowStatus =
   | "initializing"
   | "ready"
@@ -247,7 +253,16 @@ export type FlowCompleteResult = {
 
 export type FlowCheckIssue = {
   flow: string;
-  kind: "structure" | "checksum" | "schema" | "state" | "duplicate-id";
+  kind:
+    | "structure"
+    | "checksum"
+    | "schema"
+    | "state"
+    | "duplicate-id"
+    /** A `dependsOn` that can never be satisfied: unknown id, self-reference, or cycle. */
+    | "dependency"
+    /** A task recorded as `failed`/`blocked` with no attempt behind it. */
+    | "attempts";
   message: string;
 };
 export type FlowCheckResult = { ok: boolean; issues: FlowCheckIssue[] };
@@ -303,6 +318,16 @@ export interface FlowService {
     outcome: AttemptCliOutcome;
     detail?: string | undefined;
   }): Promise<FlowState>;
+  /**
+   * Which task to work on next: the first that is not done and whose declared
+   * `dependsOn` are all done (flow 209, AC6).
+   *
+   * This is the reader `dependsOn` did not have. The field was written by
+   * `flow task add --depends`, migrated, typed, and consumed by nothing, while
+   * `flow-orchestrator` documented "resume at the first task not done,
+   * respecting `dependsOn` order" as if something enforced it.
+   */
+  next(input: { cwd: string; id: string }): Promise<NextTaskDecision>;
   acConfirm(input: {
     cwd: string;
     id: string;

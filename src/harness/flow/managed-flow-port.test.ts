@@ -266,6 +266,7 @@ function makeSpyService(
     taskAdd: notImplemented("taskAdd", calls),
     taskDone,
     taskAttempt: notImplemented("taskAttempt", calls),
+    next: notImplemented("next", calls),
     acConfirm: notImplemented("acConfirm", calls),
     acUpdate: notImplemented("acUpdate", calls),
     implemented: notImplemented("implemented", calls),

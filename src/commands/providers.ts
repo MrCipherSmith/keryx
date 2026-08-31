@@ -655,7 +655,17 @@ export function renderCrossFamilyDecision(decision: CrossFamilyReviewDecision): 
   lines.push("");
   lines.push("## record");
   lines.push("");
-  lines.push("Embed this block in the round's structured output so a later recall comparison can group rounds by the family that reviewed them.");
+  // Flow 209 AC2. This used to say "embed this block in the round's structured
+  // output", which named no command and no file — and so nothing ever did. The
+  // consumer now exists and is named here, because an instruction that does not
+  // say WHERE is how a field ships with no reader.
+  lines.push("Record it on the round, and read it back:");
+  lines.push("");
+  lines.push("    keryx providers cross-family --opt-in --json > cross-family.json");
+  lines.push("    keryx review ingest ... --cross-family-review cross-family.json");
+  lines.push("    keryx review status <review-id>   # reads it off disk and refuses a self-contradictory record");
+  lines.push("");
+  lines.push("A round that records nothing reports `not recorded`, which is NOT `single-family`: nobody decided.");
   lines.push("");
   lines.push("```json");
   lines.push(JSON.stringify({ cross_family_review: decision }, null, 2));

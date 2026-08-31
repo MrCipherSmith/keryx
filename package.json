@@ -42,7 +42,7 @@
     "check": "tsc --noEmit && bun test",
     "check:doc-links": "bun scripts/check-doc-links.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
-    "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts"
+    "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts"
   },
   "files": [
     "dist",

@@ -181,7 +181,7 @@ EXECUTION: Run to completion, return JSON result.
 ```javascript
 Task({
   description: "Implement task-1: <TASK_NAME>",
-  subagent_type: "general",
+  subagent_type: "general-purpose",
   prompt: "<generated prompt from template above>"
 })
 ```

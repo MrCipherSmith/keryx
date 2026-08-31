@@ -1,6 +1,6 @@
 ---
 name: issue-analyzer
-description: "Autonomous GitHub issue analysis and decomposition into atomic implementation tasks. Fetches issue data via gh CLI, analyzes codebase for affected areas, decomposes into Gherkin Scenarios with full context for implementer sub-agents. Use when: decomposing issues for AI implementation, planning task breakdown, preparing work for task-implementer agents."
+description: "Use when decomposing a GitHub issue into atomic tasks for AI implementation, planning task breakdown, or preparing work for task-implementer agents."
 triggers:
   - "Analyze issue"
   - "Decompose issue"
@@ -9,8 +9,9 @@ triggers:
   - "Plan issue implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "analysis"
+  agent_worthy: true
   compatible_harnesses: "cursor,codex,zed,opencode"
 license: "MIT"
 ---
@@ -22,7 +23,7 @@ license: "MIT"
 Analyzes a GitHub issue and decomposes it into atomic implementation tasks that can be dispatched to `task-implementer` sub-agents. Designed to run autonomously as a sub-agent — no user interaction required.
 
 **Input:** GitHub issue URL (or repo + number) + codebase path(s)
-**Output:** Gherkin Feature with one Scenario per task, each containing full context for implementation
+**Output:** JSON analysis object with one task entry per atomic task, each containing full context for implementation
 
 ## When to Use
 
@@ -36,7 +37,7 @@ Analyzes a GitHub issue and decomposes it into atomic implementation tasks that 
 Phase 1: COLLECT   →  Fetch all issue data from GitHub
 Phase 2: ANALYZE   →  Extract intent, find affected code areas
 Phase 3: DECOMPOSE →  Break into atomic tasks with dependencies
-Phase 4: FORMALIZE →  Emit Gherkin Feature with Scenarios
+Phase 4: FORMALIZE →  Emit structured JSON analysis object
 ```
 
 ---
@@ -48,7 +49,7 @@ Issue Analyzer Progress:
 - [ ] Phase 1: Collect issue data from GitHub
 - [ ] Phase 2: Analyze intent and search codebase
 - [ ] Phase 3: Decompose into atomic tasks
-- [ ] Phase 4: Formalize as Gherkin output
+- [ ] Phase 4: Formalize as JSON output
 ```
 
 ### Phase 1: COLLECT
@@ -201,49 +202,102 @@ TASKS:
 
 ### Phase 4: FORMALIZE
 
-Convert the task list into Gherkin Feature format.
+Convert the task list into a structured JSON object for reliable machine parsing.
 
 **Output structure:**
 
-```gherkin
-Feature: Issue #<N> — <Issue Title>
+```json
+{
+  "issue": {
+    "number": "<issue_number>",
+    "title": "<issue_title>",
+    "type": "<bug|feature|enhancement|refactoring|chore>",
+    "repo": "<owner/repo>",
+    "intent": "<1-2 sentence intent summary>",
+    "labels": ["<label1>", "<label2>"],
+    "assignees": ["<user1>"],
+    "total_tasks": "<N>"
+  },
+  "tasks": [
+    {
+      "task_id": "task-1",
+      "task_name": "<Descriptive Task Name>",
+      "task_type": "<ui_component|store_logic|service_api|refactoring|fix|mixed>",
+      "complexity": "<low|medium|high>",
+      "dependencies": [],
+      "description": "<full description of what to implement>",
+      "target_files": ["src/path/file.ts"],
+      "acceptance_criteria": ["criterion 1", "criterion 2"],
+      "context": "<relevant code context, key types, function signatures>",
+      "existing_tests": ["src/path/file.test.ts"],
+      "existing_stories": [],
+      "module_patterns": "<how similar code is written in this module>",
+      "requires_tests_creator": true
+    },
+    {
+      "task_id": "task-2",
+      "task_name": "<Descriptive Task Name>",
+      "task_type": "<type>",
+      "complexity": "<low|medium|high>",
+      "dependencies": ["task-1"],
+      "description": "<description>",
+      "target_files": ["src/path/other.ts"],
+      "acceptance_criteria": ["criterion 1"],
+      "context": "<context>",
+      "existing_tests": [],
+      "existing_stories": [],
+      "module_patterns": "<patterns>",
+      "requires_tests_creator": true
+    }
+  ],
+  "dependency_order": ["task-1", "task-2"]
+}
+```
 
-  Background: Issue Context
-    Given GitHub issue #<N> "<title>"
-    And issue type is "<issue_type>"
-    And repository "<owner/repo>"
-    And target codebase at "<codebase_path>"
+**Each task object is the explicit context for task-implementer.**
 
-    | Aspect | Detail |
-    | Intent | <1-2 sentence intent> |
-    | Labels | <comma-separated labels> |
-    | Assignees | <comma-separated assignees> |
-    | Total Tasks | <N> |
+When `job-orchestrator` dispatches `task-implementer`, it passes the task object directly as the subagent's context. This means:
+- `task.context`, `task.target_files`, and `task.acceptance_criteria` are **required fields** — never omit or leave them empty when the information exists.
+- `task.context` must contain enough information for the implementer to start without reading the full codebase: key types, function signatures, relevant patterns, and any design decisions.
+- `task.module_patterns` must describe how similar code is written nearby — the implementer uses this for style consistency.
 
-  Scenario: task-1 — <Task Name>
-    Given task type is "<task_type>"
-    And estimated complexity is "<low|medium|high>"
-    And this task has no dependencies
+**Red Flag: "The implementer can figure out the context from the codebase"**
 
-    | Aspect | Detail |
-    | Description | <full description of what to implement> |
-    | Target Files | <comma-separated file paths> |
-    | Acceptance Criteria | <criteria 1>; <criteria 2> |
-    | Context | <relevant code context, key types, function signatures> |
-    | Existing Tests | <paths to existing test files, or "none"> |
-    | Existing Stories | <paths to existing story files, or "none"> |
-    | Module Patterns | <brief note on how similar code is written in this module> |
+→ It cannot — not reliably. An implementer with no context will make assumptions, produce inconsistent code, or ask questions. Every omitted field is a gap the implementer will fill with a guess.
 
-  Scenario: task-2 — <Task Name>
-    Given task type is "<task_type>"
-    And estimated complexity is "<low|medium|high>"
-    And this task depends on "task-1"
+## Reporting Results
 
-    | Aspect | Detail |
-    | ... | ... |
+Every final response to the orchestrator MUST begin with `STATUS: DONE` or `STATUS: BLOCKED`.
 
-  Scenario: task-N — <Task Name>
-    ...
+```
+STATUS: DONE
+
+## Analysis
+[structured JSON analysis object]
+```
+
+Use `STATUS: BLOCKED` only if the issue cannot be fetched (404) or the codebase cannot be accessed.
+
+**IRON LAW: THE FIRST LINE OF YOUR FINAL RESPONSE IS ALWAYS "STATUS: DONE" OR "STATUS: BLOCKED". THE JSON ANALYSIS FOLLOWS AFTER.**
+
+**Rules for JSON output:**
+- `dependency_order` must be topologically sorted — tasks with no dependencies come first
+- `task_id` format: `task-1`, `task-2`, ... (sequential)
+- `dependencies` lists task_ids that must complete before this task
+- All string arrays may be empty `[]` but not omitted
+- `context` and `module_patterns` may be empty string if not applicable
+- `requires_tests_creator` is always `true` — orchestrator must dispatch `tests-creator` before `task-implementer` for each task
+- Output the JSON block as the **final message** to the orchestrator, preceded by a brief summary (issue type, number of tasks, overall complexity)
+
+**Return format** (final message to orchestrator):
+```
+Analysis complete.
+- Issue type: <type>
+- Total tasks: <N>
+- Overall complexity: <low|medium|high>
+- Dependency order: task-1 → task-2 → task-3
+
+<json block>
 ```
 
 ---
@@ -280,13 +334,25 @@ This skill is designed to run fully autonomously. The following settings control
 1. **DO NOT** ask the user any questions. All input comes from the input contract.
 2. **DO NOT** modify any files. This is a read-only analysis skill.
 3. **DO NOT** make assumptions about implementation approach — describe WHAT, not HOW.
-4. **DO** include enough context in each Scenario for a task-implementer to start without asking questions.
+4. **DO** include enough context in each task entry for a task-implementer to start without asking questions.
 5. **DO** respect the 3-layer architecture: Service → Store → Component ordering.
 6. **DO** identify existing tests and stories so implementer knows what to update.
 7. **DO** note module patterns (how similar code is written nearby) for consistency.
-8. Return the Gherkin Feature as your **final message** to the orchestrator.
+8. Return the JSON analysis result as your **final message** to the orchestrator.
 
 ---
+
+## Red Flags — Stop and re-read this skill if you are thinking:
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "The issue title is clear enough, I'll skip reading the full body" | Acceptance criteria, repro steps, and constraints live in the body — the title is just a label |
+| "I know this codebase, I don't need to search for affected files" | Prior knowledge drifts; the search step catches files that have changed since you last looked |
+| "I'll create one big task instead of decomposing — simpler to track" | A monolithic task cannot be parallelized or independently verified; it defeats the whole system |
+| "The dependencies between tasks seem obvious, no need to map them" | Untracked dependencies cause agents to overwrite each other's work or build on stale code |
+| "The issue body is mostly boilerplate, I've got the gist" | Edge cases and acceptance criteria are often buried in what looks like boilerplate |
+
+**IRON LAW: ALWAYS READ THE FULL ISSUE BODY AND SEARCH THE CODEBASE BEFORE DECOMPOSING INTO TASKS.**
 
 ## Job Context Awareness
 
@@ -294,8 +360,8 @@ When dispatched by `job-orchestrator`, the prompt MAY include:
 
 ```
 JOB_NAME:     <job-name>
-JOBS_ROOT:    .metaproject/jobs
-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+JOBS_ROOT:    <JOBS_ROOT>
+CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
 If `CONTEXT_PATH` is provided and the file exists, read it during Phase 2 (ANALYZE) to:

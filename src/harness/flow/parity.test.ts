@@ -399,6 +399,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       taskAdd: notImplemented("taskAdd", calls),
       taskDone,
       taskAttempt: notImplemented("taskAttempt", calls),
+      next: notImplemented("next", calls),
       acConfirm: notImplemented("acConfirm", calls),
       acUpdate: notImplemented("acUpdate", calls),
       implemented: notImplemented("implemented", calls),

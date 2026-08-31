@@ -1,6 +1,6 @@
 ---
 name: claude-md-management
-description: "Capture session learnings and persist into CLAUDE.md files. Extracts coding patterns, conventions, commands, and gotchas discovered during work. Classifies into project-level vs global vs personal CLAUDE.md. Shows diff preview before applying."
+description: "Use when saving session learnings, coding patterns, conventions, or commands discovered during work into CLAUDE.md files."
 triggers:
   - "/revise-claude-md"
   - "Update claude md"

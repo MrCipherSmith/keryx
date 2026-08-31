@@ -213,6 +213,72 @@
         }
       }
     },
+    "cross_family_review": {
+      "description": "Which model family reviewed this round, and why (roadmap §5.4). Produced by `keryx providers cross-family --json`, recorded here by `keryx review ingest --cross-family-review <file>`, and read back and checked by `keryx review status` — a later invocation, which is the only kind of reader that catches a field nothing consumes. ABSENT MEANS NOBODY DECIDED and is never read as `single-family`. `mode: cross-family` must name a reviewer family and provider, must differ from `author_family`, and must appear among `candidates`; `mode: single-family` must leave all three reviewer fields null. `keryx review status` exits non-zero on any of those contradictions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "mode",
+        "requested",
+        "author_family",
+        "reviewer_family",
+        "reviewer_provider",
+        "reviewer_model",
+        "reason",
+        "candidates"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["cross-family", "single-family"]
+        },
+        "requested": {
+          "type": "boolean"
+        },
+        "author_family": {
+          "type": ["string", "null"]
+        },
+        "reviewer_family": {
+          "type": ["string", "null"]
+        },
+        "reviewer_provider": {
+          "type": ["string", "null"]
+        },
+        "reviewer_model": {
+          "type": ["string", "null"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "model", "family"],
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model": {
+                "type": ["string", "null"]
+              },
+              "family": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
     "createdAt": {
       "type": "string"
     },

@@ -28,32 +28,11 @@ license: "MIT"
 - Фидбек должен быть подробным: проблема -> почему это проблема -> где (файл/участок) -> что сделать -> пример исправления.
 - Исправления предлагай в виде unified diff-патчей, не вноси изменения в код напрямую.
 
-## Git workflow (вычислить базу и diff)
+## Scope Detection
 
-Определи parent ref и вычисли merge-base:
+See shared script: `skills/shared/git-merge-base.md`
 
-```bash
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-UPSTREAM_REF="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
-
-PARENT=""
-if git rev-parse --verify -q "origin/main" >/dev/null; then
-  PARENT="origin/main"
-elif git rev-parse --verify -q "origin/master" >/dev/null; then
-  PARENT="origin/master"
-elif git rev-parse --verify -q "main" >/dev/null; then
-  PARENT="main"
-elif git rev-parse --verify -q "master" >/dev/null; then
-  PARENT="master"
-elif [ -n "$UPSTREAM_REF" ] && [ "$UPSTREAM_REF" != "$BRANCH" ] && [ "$UPSTREAM_REF" != "origin/$BRANCH" ]; then
-  PARENT="@{upstream}"
-else
-  echo "Cannot determine parent ref" >&2
-  exit 1
-fi
-
-BASE_SHA="$(git merge-base HEAD "$PARENT")"
-```
+Run the script from that file to determine MERGE_BASE and SCOPE before proceeding with the review.
 
 Собери входные данные:
 
@@ -155,6 +134,20 @@ git diff --find-renames <FROM_SHA>..<TO_SHA>
 - Привязывай замечания к конкретным изменённым строкам (по diff).
 - Если есть несколько вариантов, предлагай один default и короткий альтернативный.
 - Не предлагай новые библиотеки без явного запроса.
+
+---
+
+## Scope Boundaries
+
+This skill covers **code style and architecture patterns** — naming, organization, TypeScript usage, pattern compliance per `code-style-patterns.mdc`.
+
+| Concern | This skill | Use instead |
+|---------|-----------|-------------|
+| Naming conventions, file organization, import order | ✅ YES | — |
+| TypeScript patterns, component/hook structure | ✅ YES | — |
+| Architecture pattern compliance | ✅ YES | — |
+| Logic correctness, type safety deep dives | ❌ NO | `code-ai-review` or `code-learned-review` |
+| MobX store internals | ❌ NO | `code-mobx-store-review` |
 
 ---
 

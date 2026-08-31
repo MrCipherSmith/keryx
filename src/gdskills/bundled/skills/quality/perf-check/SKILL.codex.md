@@ -1,6 +1,6 @@
 ---
 name: perf-check
-description: "Performance analysis: bundle size measurement, Lighthouse audit, dependency weight analysis, code-level anti-pattern detection (N+1, missing memoization, heavy imports). Produces prioritized report with optimization suggestions."
+description: "Use when measuring bundle size, detecting performance regressions, auditing slow queries, or investigating why something is slow."
 triggers:
   - "/perf-check"
   - "Check performance"

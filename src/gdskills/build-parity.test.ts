@@ -1,25 +1,40 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 
 /**
- * Flow 205: build-vs-build parity.
+ * Flow 205, widened by flow 209: build-vs-build parity.
  *
  * `job-orchestrator` ships five builds — SKILL.md, SKILL.codex.md,
  * SKILL.cursor.md, SKILL.opencode.md, SKILL.zed.md — all declaring
  * `metadata.version: "3.2.0"` and the same `compatible_harnesses`. Nothing
- * compared them, so they drifted: the four non-Claude builds are byte-identical
- * to each other and 33 lines shorter than SKILL.md.
+ * compared them, so they drifted: the four non-Claude builds were
+ * byte-identical to each other and 33 lines shorter than SKILL.md.
  *
  * `round-bound.test.ts` already implements the analogous bundled-vs-mirror
  * byte-equality check. That guard runs along one axis (source vs installed
  * copy) and this one runs along the other (build vs build) — the axis that was
  * simply never checked.
  *
- * This guard is EXPECTED TO FAIL until the markdown owner reconciles the three
- * hunks it names. Its job is to name them precisely enough to act on.
+ * WHY THE ENROLLED SET IS NOW COMPUTED, NOT LISTED
+ *
+ * Flow 205 enrolled ONE skill and said so honestly ("Absence from this list is
+ * a backlog entry, NOT an exemption"). The 2026-08-31 measurement then counted
+ * the backlog: 37 skills ship harness builds and 36 of them diverged — and the
+ * one enrolled skill was the one clean skill, so the guard's denominator and
+ * the defect were disjoint sets. The worst instance it could not see was
+ * `task-implementer`, whose four non-Claude builds were 162 lines short and
+ * omitted the entire `## Reporting Results` section that production code parses.
+ *
+ * A hand-maintained frontier reproduces that failure by construction: a skill
+ * that gains harness builds tomorrow is outside the guard until somebody
+ * remembers to add it. So the set is taken from the filesystem — every skill
+ * directory that ships at least one harness build is enforced, and enrolment is
+ * automatic. What remains hand-written is the ALLOW-LIST, which is where a
+ * decision belongs: each entry names a hunk that is genuinely harness-specific
+ * and says why.
  */
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -29,21 +44,54 @@ const SKILL_ROOTS = [
   path.join(REPO_ROOT, ".metaproject", "skills", "gdskills"),
 ];
 
-/**
- * Skills whose builds are held to parity today.
- *
- * Deliberately narrow. Every skill in this repo that ships harness builds has
- * drifted the same way — a census at the time of writing found ~50 of them —
- * so enforcing repo-wide would emit a report nobody can act on. The mechanism
- * below is general; this list is the enforced frontier, and skills join it as
- * their builds are reconciled. Absence from this list is a backlog entry, NOT
- * an exemption.
- */
-const PARITY_ENFORCED_SKILLS: readonly SkillLocation[] = [
-  { category: "orchestration", skill: "job-orchestrator" },
-];
-
 type SkillLocation = { category: string; skill: string };
+
+const HARNESS_BUILD_NAMES = HARNESS_SKILL_RUNTIMES.filter((runtime) => runtime !== "claude")
+  .map((runtime) => skillBuildFileName(runtime))
+  .sort();
+
+/** Does this directory ship at least one harness build next to its SKILL.md? */
+function shipsHarnessBuilds(dir: string): boolean {
+  if (!existsSync(path.join(dir, "SKILL.md"))) return false;
+  return HARNESS_BUILD_NAMES.some((name) => existsSync(path.join(dir, name)));
+}
+
+/**
+ * Every `<category>/<skill>` in the bundled tree that ships harness builds.
+ *
+ * Taken from the bundled source only. The `.metaproject` mirror is a partial
+ * copy — `round-bound.test.ts` enforces that what it does hold is byte-equal —
+ * so using it as the enrolment source would make the denominator depend on
+ * which skills happen to be installed here.
+ */
+function enrolledSkills(): SkillLocation[] {
+  const root = SKILL_ROOTS[0] as string;
+  const out: SkillLocation[] = [];
+  for (const category of readdirSync(root, { withFileTypes: true })) {
+    if (!category.isDirectory()) continue;
+    for (const skill of readdirSync(path.join(root, category.name), { withFileTypes: true })) {
+      if (!skill.isDirectory()) continue;
+      if (!shipsHarnessBuilds(path.join(root, category.name, skill.name))) continue;
+      out.push({ category: category.name, skill: skill.name });
+    }
+  }
+  return out.sort((left, right) =>
+    `${left.category}/${left.skill}`.localeCompare(`${right.category}/${right.skill}`),
+  );
+}
+
+const PARITY_ENFORCED_SKILLS: readonly SkillLocation[] = enrolledSkills();
+
+/**
+ * The census the 2026-08-31 measurement ran, pinned as a floor.
+ *
+ * Not an equality: a new skill that ships builds must raise this number without
+ * anyone editing this file, and that is the point of computing the set. A DROP
+ * is the failure mode worth catching — a skill whose builds are deleted, or a
+ * category renamed, would silently shrink the denominator back toward the
+ * one-skill frontier this flow replaced.
+ */
+const CENSUS_FLOOR = 37;
 
 /**
  * A documented, harness-specific difference that a build is allowed to carry.
@@ -61,6 +109,31 @@ type SkillLocation = { category: string; skill: string };
  * files (`rules/core/skill-lifecycle.mdc`, `rules/core/model-selection.mdc`,
  * `.metaproject/rules/core/execution-metrics.md`). Nothing in them is
  * Claude-specific, so all five builds should carry all three.
+ *
+ * FLOW 209'S VERDICT ON THE OTHER 36
+ *
+ * All 36 diverging skills were read hunk by hunk, and the divergences were
+ * classified by asking one question of each: does this text name a harness-only
+ * command, path, tool, or invocation syntax? For 35 of them the answer was no in
+ * every hunk — the builds were stale ancestors of their own `SKILL.md`, carrying
+ * pre-extraction inline scripts (`code-*-review`), a superseded output format
+ * (`issue-analyzer`'s Gherkin against `SKILL.md`'s JSON), hard-coded
+ * `.metaproject/jobs` where `SKILL.md` had moved to `<JOBS_ROOT>`, a
+ * seven-phase pipeline against `SKILL.md`'s eight (`feature-dev`), and
+ * pre-split monolithic bodies (`feature-analyzer`). Those are drift and were
+ * reconciled by writing the canonical build into every variant. The text that
+ * looked harness-specific pointed the WRONG way — `.cursor/rules/core/*.mdc` in
+ * a Codex build is not a Cursor accommodation, it is an old path `SKILL.md` had
+ * already replaced.
+ *
+ * The one surviving class is below. Seven `gproject-*` subagent skills declare
+ * `metadata.compatible_harnesses: "cursor,codex,zed,opencode"` in their
+ * non-Claude builds. That field's entire purpose is to name harnesses
+ * (`rules/core/skills-storage-workflow.mdc` defines it as the machine-readable
+ * CSV of supported harnesses), and its value cannot be shared with the Claude
+ * build without that build claiming compatibility with four harnesses and not
+ * with the one reading it. It is the only field in this tree whose correct
+ * value differs per build.
  */
 type ParityAllowance = {
   /** Substring that must appear in the hunk for this allowance to cover it. */
@@ -71,8 +144,31 @@ type ParityAllowance = {
   reason: string;
 };
 
+/**
+ * The non-Claude harness family, declared by the builds that serve it.
+ *
+ * One shared allowance rather than seven copies: they are the same decision
+ * about the same field, and a per-skill restatement would let six of them drift
+ * from the seventh without anything noticing.
+ */
+const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
+  anchor: 'compatible_harnesses: "cursor,codex,zed,opencode"',
+  builds: HARNESS_BUILD_NAMES,
+  reason:
+    "`metadata.compatible_harnesses` is the machine-readable CSV of supported harnesses (rules/core/skills-storage-workflow.mdc). These builds serve the four non-Claude harnesses and say so; SKILL.md is the Claude build and cannot carry a list that excludes Claude. The value differs per build BECAUSE the field names harnesses — it is the only such field in the tree.",
+};
+
 const BUILD_PARITY_ALLOWANCES: Record<string, readonly ParityAllowance[]> = {
   "job-orchestrator": [],
+  // The seven gproject-* subagents. Named one by one rather than matched by
+  // prefix: an allowance that covers a pattern covers skills nobody looked at.
+  "project-discovery": [HARNESS_FAMILY_DECLARATION],
+  "problem-definer": [HARNESS_FAMILY_DECLARATION],
+  "patterns-researcher": [HARNESS_FAMILY_DECLARATION],
+  planner: [HARNESS_FAMILY_DECLARATION],
+  "consistency-checker": [HARNESS_FAMILY_DECLARATION],
+  "spec-writer": [HARNESS_FAMILY_DECLARATION],
+  "stack-advisor": [HARNESS_FAMILY_DECLARATION],
 };
 
 // --- diff engine -----------------------------------------------------------
@@ -326,26 +422,91 @@ function locateSkill(location: SkillLocation): string[] {
  * an empty set — the exact defect class this flow exists to remove.
  */
 test("build-parity: the enforced sweep has a real denominator", () => {
-  expect(PARITY_ENFORCED_SKILLS.length).toBeGreaterThan(0);
   expect(SKILL_ROOTS.length).toBe(2);
   for (const root of SKILL_ROOTS) {
     expect(existsSync(root)).toBe(true);
     expect(readdirSync(root).length).toBeGreaterThan(0);
   }
 
+  // The census floor. One enrolled skill is what flow 205 shipped and what the
+  // measurement then showed to be disjoint from the defect; anything near that
+  // number again means enrolment has stopped working.
+  expect(PARITY_ENFORCED_SKILLS.length).toBeGreaterThanOrEqual(CENSUS_FLOOR);
+
+  // Named members, so a sweep that enrolled 37 of the wrong directories fails.
+  // `job-orchestrator` was the only clean skill and `task-implementer` the worst
+  // offender: a denominator containing both is one that covers the range.
+  const enrolled = new Set(PARITY_ENFORCED_SKILLS.map((location) => `${location.category}/${location.skill}`));
+  expect(enrolled.has("orchestration/job-orchestrator")).toBe(true);
+  expect(enrolled.has("orchestration/task-implementer")).toBe(true);
+
   for (const location of PARITY_ENFORCED_SKILLS) {
     const dirs = locateSkill(location);
-    // Both the bundled source and its .metaproject mirror must be found.
-    expect(dirs.length).toBe(2);
+    // The bundled source at minimum. The `.metaproject` mirror is a partial
+    // copy of the tree, so its absence for a given skill is normal; what is not
+    // normal is a location that resolves nowhere.
+    expect(dirs.length).toBeGreaterThan(0);
     for (const dir of dirs) {
-      const builds = readdirSync(dir).filter((name) => name.startsWith("SKILL") && name.endsWith(".md"));
-      // Five builds: SKILL.md plus one per non-Claude harness.
-      expect(builds.length).toBe(HARNESS_SKILL_RUNTIMES.length);
-      expect(builds.sort()).toEqual(
-        [...HARNESS_SKILL_RUNTIMES].map((runtime) => skillBuildFileName(runtime)).sort(),
-      );
+      // Enrolment is by shape, so re-check the shape at the point of use: a
+      // SKILL.md and at least one harness build, all with known names.
+      expect(existsSync(path.join(dir, "SKILL.md"))).toBe(true);
+      const builds = readdirSync(dir).filter((name) => HARNESS_BUILD_NAMES.includes(name));
+      expect(builds.length).toBeGreaterThan(0);
     }
   }
+});
+
+/**
+ * Every allowance states why it is one, and every allowance is USED.
+ *
+ * `bundled-eval.test.ts` established the first half; the second half matters
+ * more here. An allowance that no longer matches any hunk is a decision that
+ * has outlived its subject — usually because the text it excused was rewritten
+ * — and left in place it quietly widens the permitted surface for whatever
+ * lands on that anchor next.
+ */
+describe("build-parity: the allow-list", () => {
+  test("every entry names a real skill, its builds, and its reason", () => {
+    const enrolled = new Set(PARITY_ENFORCED_SKILLS.map((location) => location.skill));
+    for (const [skill, allowances] of Object.entries(BUILD_PARITY_ALLOWANCES)) {
+      expect(enrolled.has(skill)).toBe(true);
+      for (const allowance of allowances) {
+        expect(allowance.anchor.trim().length).toBeGreaterThan(0);
+        expect(allowance.builds.length).toBeGreaterThan(0);
+        for (const build of allowance.builds) expect(HARNESS_BUILD_NAMES).toContain(build);
+        // A reason, not a label. The bar is a sentence that survives being read
+        // out loud in a review.
+        expect(allowance.reason.length).toBeGreaterThan(60);
+      }
+    }
+  });
+
+  test("every allowance still covers a hunk that exists", () => {
+    const unused: string[] = [];
+    for (const [skill, allowances] of Object.entries(BUILD_PARITY_ALLOWANCES)) {
+      if (allowances.length === 0) continue;
+      const location = PARITY_ENFORCED_SKILLS.find((candidate) => candidate.skill === skill);
+      const dirs = location === undefined ? [] : locateSkill(location);
+      const text = dirs
+        .flatMap((dir) => HARNESS_BUILD_NAMES.filter((name) => existsSync(path.join(dir, name))).map((name) => readFileSync(path.join(dir, name), "utf8")))
+        .join("\n");
+      for (const allowance of allowances) {
+        if (!text.includes(allowance.anchor)) unused.push(`${skill}: ${allowance.anchor}`);
+      }
+    }
+    expect(unused).toEqual([]);
+  });
+
+  test("the harness-family allowance is the only class flow 209 kept", () => {
+    // 36 skills diverged; 35 of them were drift and were reconciled outright.
+    // If a later change adds allowances, this assertion is where the widening
+    // has to be argued for rather than absorbed.
+    const entries = Object.values(BUILD_PARITY_ALLOWANCES).flat();
+    expect(entries.length).toBe(7);
+    for (const allowance of entries) {
+      expect(allowance.anchor).toBe(HARNESS_FAMILY_DECLARATION.anchor);
+    }
+  });
 });
 
 /**
@@ -375,18 +536,20 @@ test("build-parity: the comparator detects removals and additions with correct l
 });
 
 /**
- * The guard itself. Expected red until the three named hunks are reconciled
- * across all five builds — see BUILD_PARITY_ALLOWANCES above for why none of
- * them qualifies for an allowance.
+ * The guard itself, over every skill that ships harness builds.
  */
 test("build-parity: every build of an enforced skill matches SKILL.md", () => {
   const sections: string[] = [];
   let comparisons = 0;
+  let expected = 0;
 
   for (const location of PARITY_ENFORCED_SKILLS) {
     const dirs = locateSkill(location);
     expect(dirs.length).toBeGreaterThan(0);
     for (const dir of dirs) {
+      // What SHOULD be compared, counted from the filesystem independently of
+      // what the comparator says it did.
+      expected += HARNESS_BUILD_NAMES.filter((name) => existsSync(path.join(dir, name))).length;
       const result = checkSkillDirectory(location.skill, dir);
       comparisons += result.comparisons;
       if (result.report.length > 0) {
@@ -395,9 +558,12 @@ test("build-parity: every build of an enforced skill matches SKILL.md", () => {
     }
   }
 
-  // Denominator again, at the point of use: four variants per directory, two
-  // directories, per enforced skill.
-  expect(comparisons).toBe(PARITY_ENFORCED_SKILLS.length * 2 * (HARNESS_SKILL_RUNTIMES.length - 1));
+  // Denominator again, at the point of use. Builds per skill vary (some ship
+  // two, some four) and the mirror holds only part of the tree, so the count is
+  // derived rather than assumed — but it is still asserted, because a
+  // comparator that quietly compared nothing is what this whole file guards.
+  expect(comparisons).toBe(expected);
+  expect(comparisons).toBeGreaterThanOrEqual(CENSUS_FLOOR);
 
   if (sections.length > 0) {
     throw new Error(
@@ -410,17 +576,18 @@ test("build-parity: every build of an enforced skill matches SKILL.md", () => {
         "src/gdskills/build-parity.test.ts). An allowance is legitimate only when",
         "the text names a harness-only command, path, tool, or capability.",
         "",
-        "job-orchestrator's allow-list is EMPTY on purpose: none of the hunks below",
-        "is harness-specific. They call generic `keryx` commands (`keryx skills",
-        "learn`) and harness-agnostic rule files (`rules/core/skill-lifecycle.mdc`,",
-        "`rules/core/model-selection.mdc`,",
-        "`.metaproject/rules/core/execution-metrics.md`), so every build should",
-        "carry them. All five builds declare metadata.version 3.2.0 and the same",
-        "compatible_harnesses, which is exactly the claim these differences break.",
+        "Almost every allow-list here is EMPTY, and that is the finding rather",
+        "than an oversight. Flow 209 read all 36 diverging skills hunk by hunk:",
+        "35 were stale ancestors of their own SKILL.md — pre-extraction inline",
+        "scripts, a superseded output format, hard-coded paths SKILL.md had",
+        "already replaced — and none of that is harness-specific. The single",
+        "surviving class is `metadata.compatible_harnesses`, whose value names",
+        "harnesses and therefore cannot be shared with the Claude build.",
         "",
         "FIX: add each hunk below to the builds listed as missing it (do not delete",
-        "it from SKILL.md), keeping the bundled source and its .metaproject mirror",
-        "byte-identical as round-bound.test.ts requires.",
+        "it from SKILL.md — the Claude build is the complete one), keeping the",
+        "bundled source and its .metaproject mirror byte-identical as",
+        "round-bound.test.ts requires.",
         "",
         ...sections,
       ].join("\n"),

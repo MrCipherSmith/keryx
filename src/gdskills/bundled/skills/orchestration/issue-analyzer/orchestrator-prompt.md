@@ -135,7 +135,7 @@ DO NOT ask questions. DO NOT stop for user input. Run to completion.
 ```javascript
 Task({
   description: "Issue analysis: #4141",
-  subagent_type: "general",
+  subagent_type: "general-purpose",
   prompt: "<generated prompt from template above>"
 })
 ```

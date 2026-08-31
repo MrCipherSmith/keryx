@@ -10,6 +10,7 @@ metadata:
   version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode"
+  stack_requires: "mobx"
 license: "MIT"
 ---
 
@@ -28,30 +29,11 @@ license: "MIT"
 - Не ревьюй легаси вне измененного скоупа.
 - Привязывай замечания к измененным строкам в diff.
 
-## Git workflow (определение parent и merge-base)
+## Scope Detection
 
-```bash
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-UPSTREAM_REF="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
+See shared script: `skills/shared/git-merge-base.md`
 
-PARENT=""
-if git rev-parse --verify -q "origin/main" >/dev/null; then
-  PARENT="origin/main"
-elif git rev-parse --verify -q "origin/master" >/dev/null; then
-  PARENT="origin/master"
-elif git rev-parse --verify -q "main" >/dev/null; then
-  PARENT="main"
-elif git rev-parse --verify -q "master" >/dev/null; then
-  PARENT="master"
-elif [ -n "$UPSTREAM_REF" ] && [ "$UPSTREAM_REF" != "$BRANCH" ] && [ "$UPSTREAM_REF" != "origin/$BRANCH" ]; then
-  PARENT="@{upstream}"
-else
-  echo "Cannot determine parent ref" >&2
-  exit 1
-fi
-
-BASE_SHA="$(git merge-base HEAD "$PARENT")"
-```
+Run the script from that file to determine MERGE_BASE and SCOPE before proceeding with the review.
 
 ### Команды сбора изменений
 
@@ -243,6 +225,20 @@ if (executor?.id !== this.executorId) {
 - Не предлагай новые библиотеки без запроса.
 - Если есть несколько вариантов, дай один default и один краткий альтернативный.
 - Исправления предлагай как минимальные патчи, не переписывай крупные блоки без необходимости.
+
+---
+
+## Scope Boundaries
+
+This skill covers **MobX store and state logic** — targeted review of store internals following `mobx-store-template.mdc` and `code-style-patterns.mdc`.
+
+| Concern | This skill | Use instead |
+|---------|-----------|-------------|
+| Store structure, actions, computed, reactions, async runInAction | ✅ YES | — |
+| View↔Store boundary violations | ✅ YES | — |
+| General code quality, readability, tests | ❌ NO | `code-ai-review` |
+| Learned-convention enforcement | ❌ NO | `code-learned-review` |
+| Naming/style/architecture patterns outside stores | ❌ NO | `code-style-review` |
 
 ---
 
