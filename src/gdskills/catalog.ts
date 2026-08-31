@@ -180,6 +180,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check public graph surface and internal helper boundaries.",
     "Look for lifecycle, selection, and large-graph performance risks.",
   ], ["flow graph review", "graph ui review", "reactflow review"]),
+  skill("review-layout", "review", ["recommended", "full"], "Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry.", [
+    "Measure in a real layout engine; a DOM stub loads no stylesheet, so toHaveClass observes a string and never a pixel.",
+    "Report host width, element width or offset in pixels, and the command or probe that produced them.",
+    "Measure the worst real case: the longest translation, the narrowest supported host, the state where the sibling is absent.",
+    "An unmeasured layout claim is info, marked unverified — never promoted on confidence.",
+  ], ["layout review", "review layout", "does this render correctly"]),
   skill("review-style", "review", ["recommended", "full"], "Review naming, readability, duplication, dead code, and maintainability.", [
     "Focus on clarity and local consistency.",
     "Separate style findings from correctness findings.",

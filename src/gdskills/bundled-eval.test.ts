@@ -46,9 +46,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
   test("the sweep walks the whole shipped tree", () => {
     // `bundledSkillFiles` returns `[]` for a missing root, so every assertion
     // below would pass vacuously over a renamed directory. The count is the
-    // guard on the guard, and 65 is the number the roadmap names.
+    // guard on the guard: 65 from the roadmap, plus `review-layout`, the lane
+    // added after a review round missed two measured rendering defects.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(65);
+    expect(files.length).toBe(66);
 
     const evaluation = evaluateBundledTree();
     expect(evaluation.skills).toBe(files.length);

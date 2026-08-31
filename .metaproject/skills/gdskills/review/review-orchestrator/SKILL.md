@@ -427,11 +427,64 @@ Required content:
 - Git/PR metadata: repo, branch, base, head, merge-base, PR number/URL when available.
 - Scope summary: changed files grouped by domain, high-risk files, generated/ignored files.
 - Requirements: issue URL, linked task docs, acceptance criteria extracted from `context_doc` when available.
+- **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`. See below.
+- **Cross-repo contracts the diff depends on**, each pinned to the SHA you read it at. See below.
 - Rules: matched repository rules and convention docs by path.
 - **Memory: accepted project memory intersecting the changed paths.** See below — this step is required, not best-effort.
 - Decisions: why each reviewer was selected or skipped.
 - Token policy: effective budget, truncation decisions, files summarized instead of fully inlined.
 - Legacy/profile reviewer availability and selection state.
+
+### The PR description is evidence, not decoration
+
+Fetch the body into `review_context.pr.body` and hand it to every reviewer. It is
+the author's own statement of what the change does, and it is checkable against
+the diff.
+
+**A description that promises an approach the diff does not take is a `minor`
+finding** — file it, do not merely mention it. The failure this catches is
+specific: over a multi-round review the code moves and the description does not,
+so by round three the PR body describes an approach that was deleted in round one.
+Whoever reads the merge commit a year later reads the description, not the rounds.
+
+It is `minor` and not `major` because nothing at runtime is wrong. It is a finding
+and not a pleasantry because unfiled housekeeping is raised again every round and
+fixed in none — three consecutive rounds of "still worth rewriting" is the
+recorded outcome of leaving it out of the findings array.
+
+Same class, same severity: an approach that depends on another repository's change
+being deployed first, with no deploy note saying so.
+
+### Cross-repo contracts are read, not assumed
+
+When the diff consumes a contract owned by another service — a payload shape, a
+status enum, a timeout, a permission, a default — **read the producer** and pin
+the SHA:
+
+```yaml
+cross_repo:
+  - repo: vantage-backend
+    sha: f5219d5d4
+    reason: "DQ report payload: which halves are null vs 0"
+    facts:
+      - "sqlScore/schemaDriftScore stay null when the half is absent"
+      - "sqlWeightPercentage/schemaDriftWeightPercentage init to 0.0 and are set unconditionally"
+```
+
+Put the facts in `review_context` so every reviewer shares one reading, and so a
+later round can tell a contract that moved from a reviewer that misread it.
+
+The rule that follows for reviewers, and that belongs in the dispatch prompt:
+
+> **A claim about another service's behaviour, with no `file:line` at a pinned SHA
+> behind it, is `info`.** Not `major`, however confident. The two failure modes are
+> symmetric and both recorded: a finding asserted from the consuming side that the
+> producer disproves, and a defect missed because the producer's actual default was
+> assumed rather than read.
+
+If the other repository is not available to you, say so in `cross_repo` and leave
+the dependent findings at `info`. An unavailable producer is a result. Assuming
+one is not.
 
 ### Memory (required)
 
@@ -570,6 +623,62 @@ seven rounds on PR #215 and four on PR #216:
 Recording the enumeration matters as much as doing it: a round that searched and
 found nothing is a different fact from a round that never searched, and only the
 recorded list distinguishes them.
+
+#### Every prior finding leaves the round with a disposition
+
+A fix round that reports only new findings is unreadable: the author cannot tell
+which of their fixes landed. Close the loop explicitly — one line per prior
+finding, in the report, before the new findings:
+
+| Disposition | Meaning |
+|---|---|
+| `closed` | Checked against the code, not against the commit message, and the defect is gone |
+| `open` | The fix does not reach the defect; say what is still true |
+| `partial` | One site of the class was fixed and the enumeration named others |
+| `regressed` | The fix removed this defect and introduced another — file the new one separately |
+| `withdrawn` | The finding was wrong. See below |
+
+**Check the code, not the commit message.** A commit titled *"report an abandoned
+sync as abandoned"* is a claim; the disposition is whether the branch it renamed
+is reachable and pinned. On a recorded round, two such commits asserted behaviour
+on lines no test could reach.
+
+#### A fix is a change, and changes get reviewed
+
+The most expensive class in a multi-round review is **the defect the fix
+introduced**. It is systematically under-found, for a structural reason: the fix
+arrives framed as the answer to a finding, so it is read as an answer rather than
+as new code. It is new code.
+
+So scope A of a fix round includes the fix, reviewed on its own merits, and the
+report carries its own section:
+
+```markdown
+## Regressions the fixes introduced
+<[F-NNN] — the finding it was answering, and the new defect it created>
+```
+
+Recorded shapes, all from fixes that correctly closed the finding they answered:
+an early return added to stop a fall-through, which then skipped the work the
+caller needed; a persistence call added to save expanded state, which then
+persisted the broken state on the error path too. Both were closed correctly and
+both shipped a new bug in the same commit.
+
+#### Withdrawing your own earlier finding
+
+A finding from a previous round that this round disproves is **withdrawn**,
+explicitly, at the top of the report, with the evidence — before any new finding.
+
+This is not a courtesy. An uncorrected wrong finding costs the author a fix they
+did not need, and it stays in `prior_findings` steering later rounds. Withdrawal
+is also the one self-correction this pipeline permits, and it is permitted because
+it is asymmetric: it *deletes* a claim, so it cannot inflate the finding count,
+which is the failure mode that removed the re-scoring pass from Wave C.
+
+State what made the original claim wrong, in one sentence, and if the same
+reasoning error has now happened twice in one review, say that too. A reviewer
+that names its own recurring error is calibrating; one that quietly drops a
+finding is hiding a result.
 
 ### Step 1: Determine Review Mode
 
@@ -766,6 +875,7 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 | `**/*.test.*`, `**/*.spec.*`, `**/*.integration.test.*`, `**/*.msw.ts`, `src/test/**`, `test/**`, `e2e/**` | `review-testing-practices` |
 | `src/core/**`, `core/**`, `shared/**`, `foundation/**` | `review-core-boundaries` |
 | `src/core/flow/**`, `src/graph/**`, `src/shared/flow/**` | `review-flow-graph` |
+| A `.tsx`/`.jsx`/`.css`/`.scss` hunk that adds or changes a sizing or spacing utility on a rendered element — `w-*`, `min-w-*`, `max-w-*`, `flex-*`, `basis-*`, `grid-cols-*`, `truncate`, `line-clamp-*`, `overflow-*`, `p*`/`m*`/`gap-*` and their logical `ps-*`/`pe-*`/`ms-*`/`me-*` forms, or an inline `style` carrying a dimension | `review-layout` |
 
 These convention reviewers are additive: keep the generic reviewers selected by normal detection,
 then add the matching convention pass. Deduplicate reviewer names before dispatch.
@@ -796,6 +906,31 @@ reviewer wrongly skipped hides a real defect, and that asymmetry is not close.
 
 Record the exclusions with their reasons alongside the pre-filter drops. A
 reviewer silently absent from a report reads as "it had nothing to say".
+
+### Path gate — the second filter, same asymmetry
+
+Stack scoping asks *does this repository have the thing*. The path gate asks *does
+this diff*. A reviewer whose path triggers match **no file in scope A** is not
+dispatched; it goes to `Skipped reviewers` with reason `no-matching-paths`.
+
+This is worth its own step because `--all` is the common case and it is where the
+waste is: a run of sixteen reviewers over a fourteen-file frontend diff dispatched
+`review-core-boundaries` and `review-flow-graph` against a diff containing no
+`src/core/**` file at all. Two agents, full prompt each, guaranteed empty.
+
+Three bounds keep it from deleting coverage:
+
+- **Only path-triggered reviewers.** A reviewer selected by an explicit flag, or
+  one whose scope is the whole change rather than a path set — `review-logic`,
+  `review-regression`, `review-verifier` — is never path-gated.
+- **Scope A only.** Scope B is the blast radius; it is *supposed* to name files the
+  diff never touched.
+- **Ambiguity includes.** If you cannot decide whether a path matches, dispatch.
+  Same asymmetry as stack scoping: a needless reviewer costs tokens, a missing one
+  costs a defect.
+
+Record every gated reviewer with the trigger set that found nothing. "Skipped:
+no matching paths" is a result the reader can check; an absent reviewer is not.
 
 ### Convention Reviewer Confirmation
 
@@ -880,6 +1015,7 @@ Skipped reviewers:
 | `--testing-practices` | `review-testing-practices` |
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
+| `--layout` | `review-layout` |
 | `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, and project convention reviewers when local convention docs exist) |
 | `--verify` | `review-verifier`, AFTER all others; checks the consolidated findings by running something. Delete-only. |
 | (auto) | detected from diff file extensions — see Auto-detection table |
@@ -911,6 +1047,20 @@ Dispatch selected reviewers in parallel when independent. Use waves when token b
 2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files.
 3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
    exist, `--verify` is set, or the PR is high-risk. See below.
+
+**Execution belongs to both B and C, and they execute for opposite reasons.**
+Wave C runs a command to *decide the fate of a finding that exists*; it is
+delete-only and can produce nothing. Wave B runs commands to *make findings* —
+`review-testing-practices` deletes each gate the diff added and records whether
+the suite goes red, and `review-layout` measures rendered geometry in a real
+engine.
+
+The consequence is directional and easy to get wrong: **a surviving mutation is
+not something Wave C can hand you.** If Wave B skips its mutation pass, that
+finding class is unreachable for the entire round, and no amount of verification
+downstream recovers it. When a testing reviewer returns without a mutation table,
+treat it the way you would treat a reviewer that returned without findings *and*
+without evidence: ask once, then record that the pass did not run.
 
 ### Wave C — verification, and what it replaced
 
@@ -1178,6 +1328,42 @@ is a claim that the class has exactly one member — make it deliberately, becau
 `minor` and `info` may omit it: enumerating the class for every low-severity
 observation is theatre, not rigour.
 
+#### Negative enumeration — the empty set is also a class scope
+
+Some of the strongest findings assert that something is **absent**: nothing clears
+this state, nothing reads this field, this prop can never fire, no test builds this
+shape. Those are claims about a set being empty, and an empty set is exactly as
+enumerable as a full one — the same `class_scope` machinery carries it.
+
+```yaml
+class_scope:
+  sites: []
+  enumeration_method: "all 5 clearSubmitExecutionState() call sites are onUnmount,
+    setActiveControl, setActiveTemplate, submitActiveControl, resetActiveControlForm;
+    none reachable from a check-section edit, and there is no reaction/autorun"
+```
+
+The `enumeration_method` is the whole finding here, so it carries more weight than
+usual: it must name the complete candidate set and why each member fails to apply.
+"I looked and did not find one" is not that. A search that returned nothing, with
+the query, is.
+
+This form covers a class of defect nothing else in this pipeline reaches:
+
+- **The inert change.** The diff adds a prop, a guard, a field or a branch that
+  nothing can reach — a `disabled` prop on a component its parent unmounts instead
+  of disabling; a field added to two type `Pick`s and never read; a `=== undefined`
+  guard against a producer that never emits `undefined`. The diff looks like it
+  does something and does nothing, and the reviewer that checks whether the change
+  is *correct* passes it, because it is.
+- **The missing clear.** State is set on one path and no path unsets it.
+- **The unreachable branch.** A value the code handles that its producer cannot
+  emit.
+
+An inert change is `minor` when it is merely dead, and `major` when its deadness
+means the bug it was added to fix is still live — the second is the common case
+when the change was written to answer an earlier round's finding.
+
 All findings from all sub-reviewers must be normalized to this format before consolidation:
 
 ```markdown
@@ -1272,9 +1458,37 @@ STATUS: DONE | DONE_WITH_CONCERNS
 ## Minor & Info
 <[F-NNN] findings with severity=minor or info>
 
+## Checked and cleared
+<Required whenever a reviewer tested a hypothesis and it did not hold. One line
+each: the defect that was looked for, and the evidence that rules it out. Not a
+list of virtues — a list of hypotheses that died, so no later round spends a
+reviewer re-raising them.>
+
 ## Positive Notes
 <Optional. Highlight things done well. Keep brief.>
 ```
+
+### Why `Checked and cleared` is separate from `Positive Notes`
+
+They read alike and do opposite work. "Both entry points read the score from the
+same report" is a virtue; it tells a later round nothing, because no round was
+going to claim otherwise. "The drift bar cannot contradict the drift badge —
+`schema-drift-table.ts:61` always seeds `ddl` and `distributed` is a primitive
+boolean that is always serialized, so a backend match implies a `ddlTextDiffers`
+match" is a **retired hypothesis**: it names the bug that was hunted and the fact
+that kills it.
+
+The cost of omitting them is paid in rounds. A plausible-but-wrong finding that
+was investigated and dropped in round 1 is investigated again in round 2 by a
+different reviewer, and the author answers it twice. Writing the negative down
+once ends that loop; it is also the only artifact that distinguishes *checked and
+clean* from *never looked at*, which is the distinction an approving verdict rests
+on.
+
+Entries come from the reviewers, not from you: a reviewer that dropped a candidate
+returns it with the evidence, and consolidation collects them. A reviewer that
+returns zero findings and zero cleared hypotheses has told you nothing about the
+code, and should be asked once what it examined.
 
 ---
 
