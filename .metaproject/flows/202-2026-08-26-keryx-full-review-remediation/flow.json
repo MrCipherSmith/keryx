@@ -5,7 +5,7 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-26T06:07:16.357Z",
+  "updatedAt": "2026-08-31T11:38:12.668Z",
   "source": {
     "type": "description",
     "ref": null
@@ -252,6 +252,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Repair rebase integration for injected fleet sink",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -437,6 +452,16 @@
       "at": "2026-08-26T06:07:16.357Z",
       "event": "ac-confirmed",
       "detail": "AC14: Validation, requirements, change report, managed review, baseline comparison, and metrics persisted."
+    },
+    {
+      "at": "2026-08-31T11:29:49.355Z",
+      "event": "task-added",
+      "detail": "T13: Repair rebase integration for injected fleet sink"
+    },
+    {
+      "at": "2026-08-31T11:38:12.668Z",
+      "event": "task-done",
+      "detail": "T13: Repair rebase integration for injected fleet sink"
     }
   ]
 }

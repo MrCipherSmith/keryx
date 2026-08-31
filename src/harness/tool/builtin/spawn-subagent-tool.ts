@@ -623,7 +623,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       if (tierRecord !== undefined) {
         // The run trace is where this is read back from afterwards; it goes out
         // on the same diagnostics channel every other per-dispatch fact uses.
-        emitSubagentFleet({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
+        emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
       }
 
       // Placed here because `spawnSubagent` above has already applied admission,
@@ -1039,8 +1039,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                   // message) with a fold-specific failure. Finding 3 (fix round,
                   // error-handling IRON LAW 1 — a bare `catch {}` is forbidden):
                   // still log the failure so it is at least observable, via this
-                  // file's own established `emitSubagentFleet({ kind: "log",
-                  // ... })` diagnostics channel (same one every other
+                  // file's own established injected fleet `log` diagnostics
+                  // channel (the same one every other
                   // `invoke()` branch already uses for the parent-facing Workers
                   // panel/inspector) rather than a fresh `console.error` seam.
                   const foldMsg = foldCause instanceof Error ? foldCause.message : String(foldCause);

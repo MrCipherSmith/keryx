@@ -37,3 +37,5 @@
 - 2026-08-26T06:07:13.078Z - ac-confirmed: AC12: 195 focused pass, tsc/build/diff gates pass; full suite has no new failure identity.
 - 2026-08-26T06:07:14.756Z - ac-confirmed: AC13: Graph contains only documented type-only modal-host/shell-chrome cycle; target runtime cycles absent.
 - 2026-08-26T06:07:16.357Z - ac-confirmed: AC14: Validation, requirements, change report, managed review, baseline comparison, and metrics persisted.
+- 2026-08-31T11:29:49.355Z - task-added: T13: Repair rebase integration for injected fleet sink
+- 2026-08-31T11:38:12.668Z - task-done: T13: Repair rebase integration for injected fleet sink
