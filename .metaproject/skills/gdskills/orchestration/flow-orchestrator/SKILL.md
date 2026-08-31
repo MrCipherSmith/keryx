@@ -12,7 +12,7 @@ triggers:
   - "managed implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.3.0"
+  version: "1.4.0"
   category: "orchestration"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -418,12 +418,59 @@ How should this flow end?
   Preserve the base branch recorded during initialization. Do not mark the
   flow implemented or complete before the PR is merged into that branch.
 
+### A dispatched run answers the question from its input
+
+The choice above is the USER's, and a subagent has no user to ask. When this
+skill is dispatched by another skill the answer arrives in the input, and asking
+anyway is how a dispatched run stalls forever on a prompt nobody will read.
+
+Read it from the **typed fields**, and validate them first:
+
+```bash
+keryx skills contracts validate <dispatch.json> --schema flow-orchestrator-input
+```
+
+`base_branch`, `completion_outcome` and `operator_confirmed` are properties of
+that contract, not constraint strings. The distinction is the whole point:
+nothing parses `constraints[]`, so a load-bearing value misspelled there is
+dropped in silence and the run merges wherever it resolved a base on its own.
+`constraints[]` carries advisory scope and policy — never a merge target.
+
+`completion_outcome` is **required** by the contract, so an absent one is a
+refused dispatch rather than a question. That is deliberate: the previous rule
+here said "ask", prescribed fourteen lines after this section says asking is how
+a dispatched run stalls on a prompt nobody reads — and it left the
+`create-pr-and-merge` conditional reachable-around by simply omitting the field.
+A dispatched run that cannot name its outcome returns **BLOCKED** naming the
+missing field. Only an interactive run asks. Record in `journal.md` which field
+answered it and who is behind it.
+
+| Input | Obey it as |
+|---|---|
+| `base_branch` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. Absent, resolve the base yourself and record what you resolved. |
+| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question, run the PR review/fix loop, merge into `base_branch`, complete the flow. |
+| `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
+| `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
+| `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
+| `completion: <anything>` as a constraint STRING | **Not an outcome. Refuse it and ask for the typed field.** `constraints[]` is parsed by nothing, so a completion arriving there is never read at all. Such a dispatch is now refused for the missing `completion_outcome` rather than silently accepted — but the refusal is the contract's, not this row's, and a row telling you to honour the string would be a documented bypass of the fence in the file that owns it. |
+
+A constraint that would raise this skill's own attempt budget is **not** obeyed.
+The three-attempt bound and the `keryx review loop` repetition check are this
+skill's, they are evidence-backed, and a caller asking for "loop until clean" gets
+the bound plus an escalation — never an unbounded loop.
+
 ### PR review/fix loop
 
 1. Run the relevant `review-orchestrator` checks against the PR and current
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
    task, dispatch `task-implementer`, push the fix, and run review again.
+
+   **The threshold is `minor`.** The loop exits when the round reports zero
+   findings at `blocker`, `major` or `minor`; `info` does not hold it. State the
+   remaining `info` findings in the completion report rather than fixing them
+   under a loop that was not opened for them. A caller may lower the threshold in
+   `constraints`; it cannot raise it to merge over a `minor`.
 3. Allow at most **three** review/fix attempts for the current approach. Count
    an attempt when review/check results are available, including a clean result,
    and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the

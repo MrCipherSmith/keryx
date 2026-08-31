@@ -50,7 +50,7 @@ const EXEMPT: Record<string, string> = {
     "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "review-pr-feedback":
-    "classifies INCOMING human PR comments by severity; it reports on other people's findings and produces none of its own, so it has no finding for these laws to govern",
+    "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
   "review-verifier":
     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so there is no finding of its own to hold to the laws",
 };

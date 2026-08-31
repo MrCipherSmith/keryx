@@ -33,7 +33,7 @@ triggers:
   - "review --mobx-store"
 metadata:
   author: "MrCipherSmith"
-  version: "1.8.0"
+  version: "1.9.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -66,7 +66,7 @@ Review Orchestrator Progress:
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
 - [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, retained
-- [ ] Step 14: AFTER THE FINAL ROUND ONLY — answer every external comment once, `keryx review comments reply --final`
+- [ ] Step 14: AFTER THE FINAL ROUND ONLY — answer every external comment once, `keryx review comments reply --final` — never against a pull request the dispatch named as the caller's
 ```
 
 Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They are
@@ -393,6 +393,41 @@ later changes is worse. If a comment **blocks** progress rather than reporting a
 problem, mark its outcome `escalate: true`: it leaves the reply queue, is reported
 to the operator immediately, and the command exits non-zero. Answering a blocking
 question at the end answers the wrong question late.
+
+### A round never answers a pull request another skill is answering
+
+`review-pr-feedback` is the entry point for the other direction of this pipe: a
+human or a bot has already reviewed pull request `#A`, and someone wants those
+comments interpreted, checked against the code, fixed and answered. Under its
+`--fix` mode it dispatches `flow-orchestrator`, which opens a **second** pull
+request `#B` carrying the fix, based on `#A`'s own head branch, and dispatches
+**this** orchestrator on every round against `#B`.
+
+`#B` is its own conversation. Collect and reply on it exactly as always: someone
+reviewing the fix deserves an answer from the run that made the fix, and its
+record is filed under `#B`'s own number, so nothing about `#A` is touched.
+
+The rule is about the other pull request:
+
+- **Never run a reply pass against a pull request the dispatch named as the
+  caller's.** When `constraints` says the caller owns the reply for `#A` — or
+  the target resolves onto a pull request another skill declared — collect if the
+  round needs the record and stop there. `review-pr-feedback` answers `#A` once,
+  after the merge, from the outcomes its own verdicts produced.
+
+  The harm is not a duplicate. `collectPrComments` skips a comment whose record
+  carries a `reply_url` as `already-handled`, rescuing it only when somebody else
+  posts later in the thread — so a round that answered mid-loop writes that record
+  FIRST, and the post-merge reply citing the merge SHA is then skipped as already
+  answered. The reviewer keeps the interim answer, which by then has stopped being
+  true, and `replies.posted` counts only what went out. A suppressed correction is
+  worse than a duplicate, because nothing shows it is missing.
+- **Absent such a constraint this orchestrator owns the reply**, as it always
+  has. A top-level review of a pull request is the normal case; a caller holding
+  the conversation is the exception, and the exception declares itself.
+- The reply is the only thing that moves. Collection, severity classification,
+  the refusal to let the verifier refute an external comment, and the cap
+  exemption are unchanged in both shapes.
 
 ---
 

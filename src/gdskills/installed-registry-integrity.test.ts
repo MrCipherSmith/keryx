@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { CONTRACTS } from "./contracts";
 
 // This repository's OWN `.metaproject` — the installed copy an agent reads, as
 // opposed to `src/gdskills/bundled`, which is the source that produces it.
@@ -94,4 +95,40 @@ describe("the installed metaproject is internally consistent", () => {
 
     expect(missing).toEqual([]);
   });
+});
+
+/**
+ * The third hand-maintained index, and the reason it needed the same gate.
+ *
+ * `src/lib/templates.ts` derives this line from `CONTRACTS` — but deriving it in
+ * the GENERATOR does nothing for a checkout whose index was written before the
+ * derivation existed. This repository's own copy still named five contracts
+ * while the registry held eleven, so six were invisible in the file every agent
+ * is hard-gated to read first, including the one whose conditional is the fence
+ * before a `--fix` run merges third-party review comments.
+ *
+ * Derived from the same registry the template uses, so the two cannot disagree.
+ */
+test("the installed index names every registered contract, and no others", () => {
+  // `index.includes(name)` was unsound twice over, and three of eleven contracts
+  // could be deleted from the inventory with the gate green: `orchestrator-state`
+  // is a substring of `job-orchestrator-state`, and `subagent-dispatch` /
+  // `subagent-result` both occur again in the workflow prose further up the file.
+  // A gate written because six contracts went invisible could not see three go.
+  //
+  // So: find the one bullet, parse its list, compare SETS. Set equality also
+  // catches the reverse — a name left behind after a contract is renamed —
+  // which no containment test can see.
+  const index = readFileSync(path.join(METAPROJECT, "index.md"), "utf8");
+  const bullet = index
+    .split("\n")
+    .find((line) => line.startsWith("- `core/gdskills/contracts/`"));
+  expect(bullet).toBeDefined();
+  const listed = /\(skill\/worker communication schemas: ([^)]*)\)/
+    .exec(bullet as string)?.[1]
+    ?.split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  expect(listed).toBeDefined();
+  expect([...(listed as string[])].sort()).toEqual([...CONTRACTS.map((c) => c.name)].sort());
 });

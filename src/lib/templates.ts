@@ -1,5 +1,6 @@
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
+import { CONTRACTS } from "../gdskills/contracts";
 
 export function renderIndexMarkdown({
   enableGdgraph,
@@ -73,7 +74,16 @@ export function renderIndexMarkdown({
           "- `skills/catalog.md`",
           "- `skills/gdskills/`",
           "- `project-skills/`",
-          "- `core/gdskills/contracts/` (skill/worker communication schemas: subagent-dispatch, subagent-result, agent-event, orchestrator-state, review-finding)",
+          // Derived, not restated: a hand-written list drifted from the registry
+          // and left contracts invisible in the file every agent is hard-gated to
+          // read first — including the one that gates a dispatch before it merges
+          // third-party content. `installContracts` was derived from `CONTRACTS`
+          // for exactly this reason; this is the same fix one file over. No count
+          // is quoted here on purpose: the drift was found twice, at different
+          // sizes, and a number in a comment is one more thing to go stale.
+          `- \`core/gdskills/contracts/\` (skill/worker communication schemas: ${CONTRACTS.map(
+            (contract) => contract.name,
+          ).join(", ")})`,
           "- `rules/core/` (shared engineering rules library)",
           "- `data/gdskills/artifacts/latest.md`",
         ]

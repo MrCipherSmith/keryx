@@ -29,7 +29,7 @@ const EXEMPT: Record<string, string> = {
     "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
   "review-pr-feedback":
-    "classifies INCOMING human PR comments by severity; it reports on other people's findings and produces none of its own, so there is no class for it to enumerate",
+    "reports on other people's findings rather than raising its own into the review pipeline, so it emits no finding that could carry a `class_scope` object. It does enumerate classes — Step 8 requires every plan item to name the shape and every site holding it, with how they were enumerated — but in plan items, under different field names, which this schema-field contract does not reach",
   "review-verifier":
     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so it produces no finding whose class it could enumerate; it READS class_scope to check that the named sites exist",
 };

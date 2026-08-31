@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 
 export type ContractName =
   | "agent-event"
+  | "flow-orchestrator-input"
+  | "review-pr-feedback-input"
+  | "review-pr-feedback-output"
   | "job-orchestrator-state"
   | "orchestrator-state"
   | "review-finding"
@@ -92,6 +95,49 @@ export const CONTRACTS: ContractInfo[] = [
     name: "agent-event",
     fileName: "agent-event.schema.json",
     description: "Append-only lifecycle event emitted by orchestrators and subagents.",
+  },
+  /**
+   * `flow-orchestrator`'s input, on the `task-implementer-input` precedent.
+   *
+   * It shipped unregistered while the skill was dispatched with a payload that
+   * decides where the work LANDS — which branch the fix is cut from, which
+   * branch it merges into, whether a human authorised the merge at all. None of
+   * that could be validated, because nothing could load the schema; a dispatch
+   * that dropped `base_branch` merged to whatever base the orchestrator resolved
+   * on its own and reported success.
+   */
+  {
+    name: "flow-orchestrator-input",
+    fileName: "flow-orchestrator-input-contract.schema.json",
+    description:
+      "Dispatch payload handed to flow-orchestrator (request + base branch + completion outcome + constraints).",
+    sourcePath:
+      "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+  },
+  /**
+   * `review-pr-feedback`'s two, registered for the same reason its sibling was.
+   *
+   * Its input schema carried the rule "operator_confirmed is REQUIRED whenever
+   * `fix` is true" as a property DESCRIPTION and nothing else — the fence that
+   * matters most, since `--fix` merges third-party review comments into somebody
+   * else's pull request. The conditional is now expressed, and registering the
+   * file is what lets anything point a validator at it: unregistered, `keryx
+   * skills contracts validate --schema review-pr-feedback-input` exits with the
+   * usage banner, so the refusal the skill describes had no way to fire.
+   */
+  {
+    name: "review-pr-feedback-input",
+    fileName: "review-pr-feedback-input-contract.schema.json",
+    description:
+      "Request handed to review-pr-feedback (PR reference, --fix, and the operator confirmation --fix requires).",
+    sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
+  },
+  {
+    name: "review-pr-feedback-output",
+    fileName: "review-pr-feedback-output-contract.schema.json",
+    description:
+      "Result review-pr-feedback returns: verdict counts, the injection-screen record, and what the fix run merged.",
+    sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
   },
   {
     name: "job-orchestrator-state",
