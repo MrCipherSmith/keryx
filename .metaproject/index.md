@@ -106,7 +106,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 - `skills/catalog.md`
 - `skills/gdskills/`
 - `project-skills/`
-- `core/gdskills/contracts/` (skill/worker communication schemas: subagent-dispatch, subagent-result, agent-event, orchestrator-state, review-finding)
+- `core/gdskills/contracts/` (skill/worker communication schemas: agent-event, flow-orchestrator-input, review-pr-feedback-input, review-pr-feedback-output, job-orchestrator-state, orchestrator-state, review-finding, subagent-dispatch, subagent-result, task-implementer-input, task-implementer-output)
 - `rules/core/` (shared engineering rules library)
 - `data/gdskills/artifacts/latest.md`
 - `data/health/artifacts/latest.md`

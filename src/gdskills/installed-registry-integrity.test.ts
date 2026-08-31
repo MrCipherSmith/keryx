@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { CONTRACTS } from "./contracts";
 
 // This repository's OWN `.metaproject` — the installed copy an agent reads, as
 // opposed to `src/gdskills/bundled`, which is the source that produces it.
@@ -94,4 +95,21 @@ describe("the installed metaproject is internally consistent", () => {
 
     expect(missing).toEqual([]);
   });
+});
+
+/**
+ * The third hand-maintained index, and the reason it needed the same gate.
+ *
+ * `src/lib/templates.ts` derives this line from `CONTRACTS` — but deriving it in
+ * the GENERATOR does nothing for a checkout whose index was written before the
+ * derivation existed. This repository's own copy still named five contracts
+ * while the registry held eleven, so six were invisible in the file every agent
+ * is hard-gated to read first, including the one whose conditional is the fence
+ * before a `--fix` run merges third-party review comments.
+ *
+ * Derived from the same registry the template uses, so the two cannot disagree.
+ */
+test("the installed index names every registered contract", () => {
+  const index = readFileSync(path.join(METAPROJECT, "index.md"), "utf8");
+  expect(CONTRACTS.filter((contract) => !index.includes(contract.name)).map((c) => c.name)).toEqual([]);
 });

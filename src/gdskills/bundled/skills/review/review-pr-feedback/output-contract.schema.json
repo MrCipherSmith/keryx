@@ -192,7 +192,7 @@
             "confirmed_at",
             "plan_digest"
           ],
-          "description": "Who authorised the merge and the replies, and against which plan. REQUIRED in fix mode: the field exists to separate an approved run from an assumed one, and a schema that lets it be omitted cannot make that separation. Null only for an interactive run whose confirmation was spoken rather than recorded; a dispatched run cannot reach a merge without it.",
+          "description": "Who authorised the merge and the replies, and against which plan. REQUIRED in fix mode and NOT nullable: the field exists to separate an approved run from an assumed one, and both an omitted field and a null one are the assumed run wearing the approved one's shape. An interactive run records the operator it asked; there is no merge without somebody behind it.",
           "properties": {
             "confirmed_by": {
               "type": "string"

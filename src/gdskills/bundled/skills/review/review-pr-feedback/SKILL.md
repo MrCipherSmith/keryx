@@ -763,7 +763,7 @@ fix:                    # present only in fix mode
   merge_sha: "<sha>"
   review_rounds: N
   remaining_findings: { blocker: 0, major: 0, minor: 0, info: N }
-  operator_confirmed: { confirmed_by: "<who>", confirmed_at: "<iso8601>", plan_digest: "<digest>" } | null
+  operator_confirmed: { confirmed_by: "<who>", confirmed_at: "<iso8601>", plan_digest: "<digest>" }
 replies:                # present only in fix mode
   posted: N
   escalated: [ "<comment id>" ]

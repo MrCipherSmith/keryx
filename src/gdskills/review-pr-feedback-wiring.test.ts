@@ -229,16 +229,37 @@ describe("the skill no longer claims a contract two other guards exempt it from"
     expect(schema.required.filter((key) => !keys.includes(key))).toEqual([]);
     expect(keys.filter((key) => !(key in schema.properties))).toEqual([]);
 
-    // Nested keys too. The column-0 regex could not see anything under `fix:`,
-    // so `fix.operator_confirmed` — the field that separates an approved merge
-    // from an assumed one — was required by the schema, absent from the
-    // documented block, and invisible to this test.
-    const indented = [...yaml.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1] as string);
+    // Nested keys too, PER PARENT. Two bugs lived here in turn: a column-0 anchor
+    // that could not see anything under `fix:` at all, and then a flat list of
+    // every indented key in the block — which `fix.operator_confirmed` satisfied
+    // while documented under `replies:`, a block the schema rejects twice over.
+    // The character class is broad on purpose: `[a-z_]+` silently skipped any
+    // hyphenated or capitalised required key.
+    // Walk lines, not a regex window: `^` under /m matches at index 0 too, so
+    // slicing past the parent line and searching for the next top-level key
+    // matched the parent's own remainder and collapsed the window to one char.
+    const lines = yaml.split("\n");
+    const childrenOf = (parent: string): string[] => {
+      const at = lines.findIndex((line) => line.startsWith(`${parent}:`));
+      if (at < 0) return [];
+      const out: string[] = [];
+      for (const line of lines.slice(at + 1)) {
+        if (/^[A-Za-z_]/.test(line)) break;
+        const child = /^ {2}([A-Za-z0-9_-]+):/.exec(line);
+        if (child) out.push(child[1] as string);
+      }
+      return out;
+    };
+    let checkedNested = 0;
     for (const [name, sub] of Object.entries(schema.properties)) {
       const nested = (sub as { required?: string[] }).required;
       if (!nested || !keys.includes(name)) continue;
-      expect(nested.filter((key) => !indented.includes(key))).toEqual([]);
+      checkedNested += 1;
+      expect(nested.filter((key) => !childrenOf(name).includes(key))).toEqual([]);
     }
+    // Non-vacuity: if no parent carried nested `required`, the loop above proved
+    // nothing and the next schema change would go unguarded.
+    expect(checkedNested).toBeGreaterThan(0);
   });
 
   test("the canonical STATUS line survives outside that block", () => {
