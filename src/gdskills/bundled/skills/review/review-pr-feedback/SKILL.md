@@ -771,6 +771,7 @@ replies:                # present only in fix mode
 action_items:
   - "fix X in path/to/file.ts:42"
 learning_proposal: "<path>" | null   # proposed, never applied
+screen_status: ran | unavailable     # required: `screened: 0` cannot say which
 screened: N                          # required: absent and 0 are different claims
 excluded_for_injection: [ "<comment id>" ]
 filtered: [ { comment: "<id>", reason: "<why the collection or comment_ids removed it>" } ]

@@ -13,6 +13,7 @@
     "verdicts",
     "plan_items",
     "summary",
+    "screen_status",
     "screened",
     "excluded_for_injection",
     "filtered"
@@ -184,10 +185,7 @@
           "description": "A merge requires blocker, major and minor to be zero. info does not hold the loop."
         },
         "operator_confirmed": {
-          "type": [
-            "object",
-            "null"
-          ],
+          "type": "object",
           "additionalProperties": false,
           "required": [
             "confirmed_by",
@@ -273,6 +271,34 @@
       },
       "default": [],
       "description": "Comment ids carrying a prompt-injection finding. They produce no plan item and skip Steps 6 and 7; they are still answered in Step 10."
+    },
+    "screen_status": {
+      "type": "string",
+      "enum": [
+        "ran",
+        "unavailable"
+      ],
+      "description": "Whether the injection screen ran at all. REQUIRED, because `screened: 0` is ambiguous on its own: the documented fallback path \u2014 keryx CLI unavailable \u2014 screens nothing and would otherwise emit exactly what a run that screened and found nothing emits. `unavailable` obliges the report to carry the line saying so."
+    }
+  },
+  "if": {
+    "required": [
+      "mode"
+    ],
+    "properties": {
+      "mode": {
+        "const": "fix"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "fix"
+    ],
+    "properties": {
+      "fix": {
+        "type": "object"
+      }
     }
   }
 }

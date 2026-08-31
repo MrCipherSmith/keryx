@@ -43,7 +43,7 @@
         "confirmed_at",
         "plan_digest"
       ],
-      "description": "REQUIRED whenever `fix` is true and this skill is running under dispatch. A subagent has no user to answer the Step 9 confirmation, and --fix merges third-party review comments into somebody's pull request: without this the run is BLOCKED, never defaulted. `plan_digest` binds the approval to the plan that was actually shown.",
+      "description": "REQUIRED whenever `fix` is true and this skill is running under dispatch. A subagent has no user to answer the Step 9 confirmation, and --fix merges third-party review comments into somebody's pull request: without this the run is BLOCKED, never defaulted. What `plan_digest` is worth is stated on the field itself; do not infer a replay defence from its presence here.",
       "properties": {
         "confirmed_by": {
           "type": "string",

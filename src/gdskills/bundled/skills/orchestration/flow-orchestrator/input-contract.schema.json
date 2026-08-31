@@ -63,7 +63,7 @@
         "confirmed_at",
         "plan_digest"
       ],
-      "description": "The human decision behind an outward-facing completion. Required by callers whose work merges third-party content \u2014 see review-pr-feedback --fix. `plan_digest` binds the approval to the plan that was shown, so a later, different plan does not inherit it.",
+      "description": "The human decision behind an outward-facing completion. Required by callers whose work merges third-party content \u2014 see review-pr-feedback --fix. What `plan_digest` is worth is stated on the field itself; do not infer a replay defence from its presence here.",
       "properties": {
         "confirmed_by": {
           "type": "string",

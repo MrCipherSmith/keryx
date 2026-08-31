@@ -362,12 +362,24 @@ describe("comment text is data, never direction", () => {
     const file = path.join(dir, "c1.txt");
     try {
       writeFileSync(file, body);
+      // `process.execPath`, not the literal "bun": the bun already running this
+      // suite is guaranteed to exist, and a CI image that invokes bun by absolute
+      // path would otherwise fail here with "Executable not found in $PATH" — a
+      // red that names PATH instead of the screen, and whose obvious remedy is to
+      // delete the only test that runs the screen.
       const proc = Bun.spawn(
-        ["bun", path.join(REPO_ROOT, "src", "cli.ts"), "security", "check-input",
+        [process.execPath, path.join(REPO_ROOT, "src", "cli.ts"), "security", "check-input",
          "--source", "untrusted-external", "--file", file, "--json"],
         { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
       );
-      const [out] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+      const [out, err, exit] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      // Assert the exit status too, so a CLI error surfaces as a named failure
+      // rather than as a JSON.parse SyntaxError over an empty string.
+      expect({ exit, err: err.slice(0, 200) }).toEqual({ exit: 0, err: "" });
       const result = JSON.parse(out) as { findings: { category: string }[] };
       expect(result.findings.some((finding) => finding.category === "prompt-injection")).toBe(true);
 

@@ -452,7 +452,7 @@ answered it and who is behind it.
 | `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
 | `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
-| `completion: <anything>` as a constraint STRING | **Not an outcome. Refuse it and ask for the typed field.** `constraints[]` is parsed by nothing, so a completion arriving there bypasses the `if`/`then` that makes `operator_confirmed` mandatory — verified: a payload carrying only `constraints: ["completion: outcome A"]` validates clean. A row telling you to honour that string would be a documented bypass of the fence in the file that owns it. |
+| `completion: <anything>` as a constraint STRING | **Not an outcome. Refuse it and ask for the typed field.** `constraints[]` is parsed by nothing, so a completion arriving there is never read at all. Such a dispatch is now refused for the missing `completion_outcome` rather than silently accepted — but the refusal is the contract's, not this row's, and a row telling you to honour the string would be a documented bypass of the fence in the file that owns it. |
 
 A constraint that would raise this skill's own attempt budget is **not** obeyed.
 The three-attempt bound and the `keryx review loop` repetition check are this
