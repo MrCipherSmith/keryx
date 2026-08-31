@@ -4,7 +4,9 @@
   "title": "FlowOrchestratorInput",
   "type": "object",
   "additionalProperties": false,
-  "required": ["request"],
+  "required": [
+    "request"
+  ],
   "properties": {
     "request": {
       "type": "string",
@@ -21,13 +23,60 @@
     },
     "mode": {
       "type": "string",
-      "enum": ["init", "execute", "complete", "resume", "auto"],
+      "enum": [
+        "init",
+        "execute",
+        "complete",
+        "resume",
+        "auto"
+      ],
       "default": "auto"
     },
     "constraints": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": []
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Advisory scope and policy for this run, one per string. Anything that decides where the work LANDS belongs in a typed property above, not here: nothing parses this array, so a misspelled constraint is silently dropped."
+    },
+    "base_branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The branch the flow branch is cut from and merged back into. Typed rather than left to a constraint string because this is the field that decides WHERE the work lands: a fix aimed at a pull request's own head branch that merges to the repository default instead is a change nobody reviewed, reported as success. Absent, the orchestrator resolves the base itself and records it."
+    },
+    "completion_outcome": {
+      "type": "string",
+      "enum": [
+        "create-pr-and-merge",
+        "verified-handoff",
+        "keep-open"
+      ],
+      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. Absent, ASK \u2014 a dispatch that forgot to say is not a dispatch that meant create-pr-and-merge."
+    },
+    "operator_confirmed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confirmed_by",
+        "confirmed_at",
+        "plan_digest"
+      ],
+      "description": "The human decision behind an outward-facing completion. Required by callers whose work merges third-party content \u2014 see review-pr-feedback --fix. `plan_digest` binds the approval to the plan that was shown, so a later, different plan does not inherit it.",
+      "properties": {
+        "confirmed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_digest": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

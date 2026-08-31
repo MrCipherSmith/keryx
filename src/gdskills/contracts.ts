@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export type ContractName =
   | "agent-event"
+  | "flow-orchestrator-input"
   | "job-orchestrator-state"
   | "orchestrator-state"
   | "review-finding"
@@ -92,6 +93,24 @@ export const CONTRACTS: ContractInfo[] = [
     name: "agent-event",
     fileName: "agent-event.schema.json",
     description: "Append-only lifecycle event emitted by orchestrators and subagents.",
+  },
+  /**
+   * `flow-orchestrator`'s input, on the `task-implementer-input` precedent.
+   *
+   * It shipped unregistered while the skill was dispatched with a payload that
+   * decides where the work LANDS — which branch the fix is cut from, which
+   * branch it merges into, whether a human authorised the merge at all. None of
+   * that could be validated, because nothing could load the schema; a dispatch
+   * that dropped `base_branch` merged to whatever base the orchestrator resolved
+   * on its own and reported success.
+   */
+  {
+    name: "flow-orchestrator-input",
+    fileName: "flow-orchestrator-input-contract.schema.json",
+    description:
+      "Dispatch payload handed to flow-orchestrator (request + base branch + completion outcome + constraints).",
+    sourcePath:
+      "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
   },
   {
     name: "job-orchestrator-state",

@@ -413,8 +413,15 @@ The rule is about the other pull request:
   caller's.** When `constraints` says the caller owns the reply for `#A` — or
   the target resolves onto a pull request another skill declared — collect if the
   round needs the record and stop there. `review-pr-feedback` answers `#A` once,
-  after the merge, from the outcomes its own verdicts produced, and a round that
-  also answered would reply twice to the same person about the same comment.
+  after the merge, from the outcomes its own verdicts produced.
+
+  The harm is not a duplicate. `collectPrComments` skips a comment whose record
+  carries a `reply_url` as `already-handled`, rescuing it only when somebody else
+  posts later in the thread — so a round that answered mid-loop writes that record
+  FIRST, and the post-merge reply citing the merge SHA is then skipped as already
+  answered. The reviewer keeps the interim answer, which by then has stopped being
+  true, and `replies.posted` counts only what went out. A suppressed correction is
+  worse than a duplicate, because nothing shows it is missing.
 - **Absent such a constraint this orchestrator owns the reply**, as it always
   has. A top-level review of a pull request is the normal case; a caller holding
   the conversation is the exception, and the exception declares itself.

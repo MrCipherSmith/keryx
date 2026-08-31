@@ -418,25 +418,36 @@ How should this flow end?
   Preserve the base branch recorded during initialization. Do not mark the
   flow implemented or complete before the PR is merged into that branch.
 
-### A dispatched run answers the question in its constraints
+### A dispatched run answers the question from its input
 
 The choice above is the USER's, and a subagent has no user to ask. When this
-skill is dispatched by another skill, the completion outcome, the base branch and
-the review exit condition arrive in `constraints[]`, and asking anyway is how a
-dispatched run stalls forever on a prompt nobody will read.
+skill is dispatched by another skill the answer arrives in the input, and asking
+anyway is how a dispatched run stalls forever on a prompt nobody will read.
 
-So: if `constraints` names the outcome, take it and record in `journal.md` who
-chose it and where the constraint came from. If it does not, ask — a dispatch that
-forgot to say is not a dispatch that meant A.
+Read it from the **typed fields**, and validate them first:
 
-Three constraints have to be obeyed exactly, because each one is a way the run
-lands somewhere it was not asked to:
+```bash
+keryx skills contracts validate <dispatch.json> --schema flow-orchestrator-input
+```
 
-| Constraint | Obey it as |
+`base_branch`, `completion_outcome` and `operator_confirmed` are properties of
+that contract, not constraint strings. The distinction is the whole point:
+nothing parses `constraints[]`, so a load-bearing value misspelled there is
+dropped in silence and the run merges wherever it resolved a base on its own.
+`constraints[]` carries advisory scope and policy — never a merge target.
+
+If `completion_outcome` is absent, **ask**. A dispatch that forgot to say is not
+a dispatch that meant `create-pr-and-merge`. Record in `journal.md` which field
+answered it and who is behind it.
+
+| Input | Obey it as |
 |---|---|
-| `base_branch: <branch>` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. |
-| `completion: outcome A` | Skip the Completion Choice question, run the PR review/fix loop, merge into the recorded base, complete the flow. |
+| `base_branch` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. Absent, resolve the base yourself and record what you resolved. |
+| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question, run the PR review/fix loop, merge into `base_branch`, complete the flow. |
+| `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
+| `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
+| `completion: outcome A` from `review-pr-feedback` | Obeyed only when the dispatch also carries an operator-confirmation record. That skill's `--fix` merges third-party review comments into somebody's pull request; a dispatch that reaches you with no recorded human decision is an escalation, not a default. |
 
 A constraint that would raise this skill's own attempt budget is **not** obeyed.
 The three-attempt bound and the `keryx review loop` repetition check are this
