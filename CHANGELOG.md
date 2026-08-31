@@ -3,6 +3,86 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.73] — 2026-08-31
+
+A correction release. 0.2.72 completed the orchestrator-hardening roadmap; this
+one fixes what measuring that work afterwards revealed — including two defects in
+0.2.72 itself, one of them destructive.
+
+**Upgrade if you are on 0.2.72.** It ships an instruction that can destroy
+uncommitted work, and a command that reports a clean result for a tree it never
+read.
+
+### Fixed
+
+- **`task-implementer` told every implementer to run `git reset --hard` on fatal
+  failure.** `job-orchestrator` dispatches implementers in parallel waves that
+  share one worktree, so an agent failing its third attempt would discard a
+  wave-mate's uncommitted work — work it does not own, cannot restore, and cannot
+  observe the loss of, because the other agent's failure surfaces elsewhere. It
+  now restores only the files that task changed and refuses unscoped reverts. A
+  guard sweeps every shipped document for unscoped `reset --hard`, `clean -fd`,
+  `checkout -- .` and `restore .`, excusing lines that forbid them so the
+  correction cannot fail on itself.
+
+- **`keryx skills verify --bundled` reported `skills_evaluated: 0` from an
+  installed copy.** The root resolved to `dist/bundled`; the tree ships at
+  `src/gdskills/bundled`. It surfaced only because the sweep refuses to call an
+  empty result clean — it printed `NOTHING WAS EVALUATED` instead of reporting a
+  clean tree. A second guard now builds the package from `package.json`'s own
+  `files` and `bin` lists and runs the real binary against it.
+
+- **Build parity was enforced on one skill of thirty-seven.** A census found
+  thirty-six diverging, and the divergence ran opposite to the assumption: the
+  harness builds are stale *ancestors* of their own `SKILL.md`, and text that
+  looked harness-specific was an old path the canonical file had already replaced.
+  Seven hunks are genuinely deliberate and allow-listed with the reason; the rest
+  are reconciled. Enrolment is now computed from the filesystem, because a
+  hand-listed frontier is what produced a denominator disjoint from the defect.
+
+- **Nine `SKILL.claude.md` files shipped in 0.2.72 that no runtime addresses.**
+  Deleted, with a check against any future unaddressable build.
+
+- **Four of five `task-implementer` builds omitted the reporting contract** while
+  production code throws unless a child's first line is `STATUS: <TOKEN>`.
+
+- **`cross_family_review` shipped with no consumer**, in the commit whose own
+  criteria forbid fields nothing reads. `review ingest --cross-family-review`
+  accepts it and `review status` reads it back in a later invocation, exiting
+  non-zero on a self-contradictory record.
+
+- **`dependsOn` and `attempts.count` were written and read by nothing.**
+  `dependsOn` now drives `keryx flow next` and dependency validation — which
+  immediately found a task in an older flow depending on itself. `attempts.count`
+  is recorded when a task closes `failed` or `blocked`.
+
+- **A dangling agent name lived in code, not only prose**: `agent: "code-review"`
+  in `src/job/plans.ts` was writing an unresolvable label into every implement job
+  on disk. A new guard fails the build on any skill naming an agent outside the
+  catalogue, and immediately found `subagent_type: "general"` — a value no
+  dispatcher accepts — in twelve files.
+
+- **Loop detection could never fire**, for two independent reasons: finding
+  identity was led by a per-round `global_id`, and a date-keyed review id let a
+  second same-day round overwrite the first.
+
+- **Both `task-implementer` contract schemas declared `minItems` and `maximum`
+  while the validator silently ignored them.** Registering the schemas without
+  implementing the keywords would have moved the defect up a layer rather than
+  removing it.
+
+### Changed
+
+- `task-implementer` goes from 7 documented mechanisms reachable from production
+  code to 55 of 109; its six-phase core from 2 of 54 to 20 of 54. Forty-eight
+  claims wired, sixteen deleted, none softened. All four orchestrators have now
+  been inventoried and hardened by the same method.
+
+- Five places where a skill restated logic that already exists now call it:
+  contract assertions, job document recording, the automation table, lint and
+  type-check, and the test runner that already resolves the package manager the
+  skill was reimplementing in shell.
+
 ## [0.2.72] — 2026-08-30
 
 Phases 5 and 7 of the orchestrator-hardening programme, which completes it: all
