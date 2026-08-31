@@ -228,6 +228,17 @@ describe("the skill no longer claims a contract two other guards exempt it from"
     expect(keys.length).toBeGreaterThan(5);
     expect(schema.required.filter((key) => !keys.includes(key))).toEqual([]);
     expect(keys.filter((key) => !(key in schema.properties))).toEqual([]);
+
+    // Nested keys too. The column-0 regex could not see anything under `fix:`,
+    // so `fix.operator_confirmed` — the field that separates an approved merge
+    // from an assumed one — was required by the schema, absent from the
+    // documented block, and invisible to this test.
+    const indented = [...yaml.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1] as string);
+    for (const [name, sub] of Object.entries(schema.properties)) {
+      const nested = (sub as { required?: string[] }).required;
+      if (!nested || !keys.includes(name)) continue;
+      expect(nested.filter((key) => !indented.includes(key))).toEqual([]);
+    }
   });
 
   test("the canonical STATUS line survives outside that block", () => {
@@ -264,9 +275,18 @@ describe("the fix run lands inside the pull request it answers", () => {
     expect(skill).toMatch(/Do \*\*not\*\* create the\s+branch, the flow, the PR, or the commits from here/);
   });
 
-  test("the exit condition is zero at minor and above, and info does not hold the loop", () => {
-    expect(flat(rules(skill))).toContain("zero findings at severity minor or above");
-    expect(rules(skill)).toMatch(/info findings do not hold the loop/);
+  test("the exit threshold is defined by its owner, and the caller points at it", () => {
+    // This guard used to assert the caller CONTAINED the threshold, which pinned
+    // a duplicate in place: centralising it the way the bound was centralised
+    // would have failed the build. The owner holds the level; the caller holds a
+    // path to the owner.
+    for (const file of bothTrees("orchestration", "flow-orchestrator")) {
+      const owner = read(file);
+      expect(owner).toContain("**The threshold is `minor`.**");
+      expect(owner).toMatch(/`info` does not hold it/);
+    }
+    expect(skill).toContain("skills/orchestration/flow-orchestrator/SKILL.md");
+    expect(rules(skill)).toMatch(/Do not restate the level here/);
   });
 
   test("the loop is bounded, the bound is not raised here, and it is not restated here", () => {
@@ -276,7 +296,13 @@ describe("the fix run lands inside the pull request it answers", () => {
     // bound are two things to edit when the evidence changes, and the copy nobody
     // edits is the one an agent reads.
     expect(skill).toContain("skills/orchestration/flow-orchestrator/SKILL.md");
+    // The citation was a proxy for the number, and a proxy is not the rule:
+    // re-adding "at most three review/fix attempts" without it passed green.
     expect(skill).not.toContain("arXiv:2607.24604");
+    expect(skill).not.toMatch(/at most \*{0,2}three\*{0,2} review\/fix attempts/i);
+    // Same for the threshold, which was left copied four ways while the bound
+    // was centralised — and one of those copies was pinned in place by a guard.
+    expect(rules(skill)).not.toMatch(/zero findings at severity minor or above/);
     for (const file of bothTrees("orchestration", "flow-orchestrator")) {
       const owner = read(file);
       expect(owner).toContain("arXiv:2607.24604");

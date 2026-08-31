@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 export type ContractName =
   | "agent-event"
   | "flow-orchestrator-input"
+  | "review-pr-feedback-input"
+  | "review-pr-feedback-output"
   | "job-orchestrator-state"
   | "orchestrator-state"
   | "review-finding"
@@ -111,6 +113,31 @@ export const CONTRACTS: ContractInfo[] = [
       "Dispatch payload handed to flow-orchestrator (request + base branch + completion outcome + constraints).",
     sourcePath:
       "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+  },
+  /**
+   * `review-pr-feedback`'s two, registered for the same reason its sibling was.
+   *
+   * Its input schema carried the rule "operator_confirmed is REQUIRED whenever
+   * `fix` is true" as a property DESCRIPTION and nothing else — the fence that
+   * matters most, since `--fix` merges third-party review comments into somebody
+   * else's pull request. The conditional is now expressed, and registering the
+   * file is what lets anything point a validator at it: unregistered, `keryx
+   * skills contracts validate --schema review-pr-feedback-input` exits with the
+   * usage banner, so the refusal the skill describes had no way to fire.
+   */
+  {
+    name: "review-pr-feedback-input",
+    fileName: "review-pr-feedback-input-contract.schema.json",
+    description:
+      "Request handed to review-pr-feedback (PR reference, --fix, and the operator confirmation --fix requires).",
+    sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
+  },
+  {
+    name: "review-pr-feedback-output",
+    fileName: "review-pr-feedback-output-contract.schema.json",
+    description:
+      "Result review-pr-feedback returns: verdict counts, the injection-screen record, and what the fix run merged.",
+    sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
   },
   {
     name: "job-orchestrator-state",

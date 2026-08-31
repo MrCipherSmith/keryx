@@ -436,8 +436,13 @@ nothing parses `constraints[]`, so a load-bearing value misspelled there is
 dropped in silence and the run merges wherever it resolved a base on its own.
 `constraints[]` carries advisory scope and policy — never a merge target.
 
-If `completion_outcome` is absent, **ask**. A dispatch that forgot to say is not
-a dispatch that meant `create-pr-and-merge`. Record in `journal.md` which field
+`completion_outcome` is **required** by the contract, so an absent one is a
+refused dispatch rather than a question. That is deliberate: the previous rule
+here said "ask", prescribed fourteen lines after this section says asking is how
+a dispatched run stalls on a prompt nobody reads — and it left the
+`create-pr-and-merge` conditional reachable-around by simply omitting the field.
+A dispatched run that cannot name its outcome returns **BLOCKED** naming the
+missing field. Only an interactive run asks. Record in `journal.md` which field
 answered it and who is behind it.
 
 | Input | Obey it as |
@@ -447,7 +452,7 @@ answered it and who is behind it.
 | `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
 | `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
-| `completion: outcome A` from `review-pr-feedback` | Obeyed only when the dispatch also carries an operator-confirmation record. That skill's `--fix` merges third-party review comments into somebody's pull request; a dispatch that reaches you with no recorded human decision is an escalation, not a default. |
+| `completion: <anything>` as a constraint STRING | **Not an outcome. Refuse it and ask for the typed field.** `constraints[]` is parsed by nothing, so a completion arriving there bypasses the `if`/`then` that makes `operator_confirmed` mandatory — verified: a payload carrying only `constraints: ["completion: outcome A"]` validates clean. A row telling you to honour that string would be a documented bypass of the fence in the file that owns it. |
 
 A constraint that would raise this skill's own attempt budget is **not** obeyed.
 The three-attempt bound and the `keryx review loop` repetition check are this

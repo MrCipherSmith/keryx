@@ -477,10 +477,17 @@ it into a fix the reviewer did not ask for.
    that turns text written by people outside the repository into a merge with no
    human anywhere in the chain. So the fence is explicit: `fix: true` requires
    `operator_confirmed: {confirmed_by, confirmed_at, plan_digest}` in the input,
-   the digest binds the approval to the plan that was actually shown, and a
-   dispatch without it is `BLOCKED` — never a default, never an escalation the
-   run resolves for itself. The output contract records it, so a reader
-   downstream can tell an approved run from an assumed one.
+   and a dispatch without it is refused by the schema — `keryx skills contracts
+   validate --schema review-pr-feedback-input` returns
+   `$.operator_confirmed: Missing required property`. Never a default, never an
+   escalation the run resolves for itself. The output contract requires it back,
+   so a reader downstream can tell an approved run from an assumed one.
+
+   `plan_digest` is a **record, not a control**: nothing computes or verifies a
+   digest, so it says which plan the human reported reading and cannot prove the
+   plan did not change afterwards. The presence of `operator_confirmed` is
+   enforced; the digest's value is not. Say that rather than implying a binding
+   that does not exist.
 
 ### Dispatch
 
@@ -509,7 +516,7 @@ branch on purpose.
   "operator_confirmed": { "confirmed_by": "<who>", "confirmed_at": "<iso8601>", "plan_digest": "<digest of the plan shown>" },
   "constraints": [
     "pr: open it as a draft, titled 'fix(review): address feedback on #<n>', body linking #<n> and listing which plan item answers which comment.",
-    "review: run review-orchestrator with --all on every round. The loop exits when the round reports zero findings at severity minor or above; info findings do not hold the loop.",
+    "review: run review-orchestrator with --all on every round. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string.",
     "review: the fix PR is its own conversation — collect and reply on IT as normal. The round MUST NOT run a reply pass against #<n>: a reply there writes the durable record, so the post-merge answer citing the merge SHA is skipped as already-handled and the reviewer is left holding a mid-loop answer that has since stopped being true.",
     "attempt budget: at most <max_fix_rounds> review/fix attempts. This LOWERS your bound and never raises it; absent the value, your own bound stands. The `keryx review loop` repetition check applies either way. Do not raise anything to reach a clean round; escalate instead.",
     "scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow."
@@ -524,9 +531,11 @@ criterion rather than by an author's assertion.
 
 ### The loop, and its bound
 
-The review→fix→review loop belongs to `flow-orchestrator`; this skill states only
-its exit condition — **zero findings at `minor` or above** — and then stays out of
-it.
+The review→fix→review loop belongs to `flow-orchestrator`, and so does its exit
+threshold: `skills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix
+loop** defines it once, beside the bound. Do not restate the level here — the
+bound was centralised and the threshold was left copied four ways in the same
+edit, which is how one of them ends up stale while every guard stays green.
 
 The bound is defined once, in
 `skills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix loop**, along
@@ -754,6 +763,7 @@ fix:                    # present only in fix mode
   merge_sha: "<sha>"
   review_rounds: N
   remaining_findings: { blocker: 0, major: 0, minor: 0, info: N }
+  operator_confirmed: { confirmed_by: "<who>", confirmed_at: "<iso8601>", plan_digest: "<digest>" } | null
 replies:                # present only in fix mode
   posted: N
   escalated: [ "<comment id>" ]
@@ -761,8 +771,9 @@ replies:                # present only in fix mode
 action_items:
   - "fix X in path/to/file.ts:42"
 learning_proposal: "<path>" | null   # proposed, never applied
-screened: N                          # comments passed through the injection screen
+screened: N                          # required: absent and 0 are different claims
 excluded_for_injection: [ "<comment id>" ]
+filtered: [ { comment: "<id>", reason: "<why the collection or comment_ids removed it>" } ]
 summary: "<one paragraph: what the reviewers asked for, what was true, what changed>"
 ```
 

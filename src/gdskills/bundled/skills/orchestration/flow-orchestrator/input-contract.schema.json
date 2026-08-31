@@ -5,7 +5,8 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "request"
+    "request",
+    "completion_outcome"
   ],
   "properties": {
     "request": {
@@ -52,7 +53,7 @@
         "verified-handoff",
         "keep-open"
       ],
-      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. Absent, ASK \u2014 a dispatch that forgot to say is not a dispatch that meant create-pr-and-merge."
+      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. REQUIRED: an absent outcome used to mean 'ask', prescribed by the same section that says asking is how a dispatched run stalls on a prompt nobody reads \u2014 and it left the create-pr-and-merge conditional below unreachable by simply omitting the field. A dispatch that cannot name its outcome is BLOCKED, not questioned."
     },
     "operator_confirmed": {
       "type": "object",
@@ -74,7 +75,8 @@
         },
         "plan_digest": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "A record of WHICH plan the human said they read \u2014 not a control. Nothing in this tree computes or verifies a digest, and the schema constrains it only to a non-empty string, so an agent composing the dispatch chooses the value and a plan mutated after approval carries the same one. `operator_confirmed`'s PRESENCE is enforced; this field's VALUE is not. Making it a control means hashing the rendered plan and having the receiver recompute over what it got."
         }
       }
     }
