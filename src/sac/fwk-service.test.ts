@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FwkReadService, createLocalFwkReadService, resolvePolicySelectionSafely, diagnosePolicyReadiness } from "./fwk-service";
 import { createSacAuthorizationServer, type SacVerifiedPrincipal } from "./index";
-import { verifyAccessReceiptLedger } from "./receipt-integrity";
+import { verifyAccessReceiptLedger, type IntegrityLinkedAccessReceipt } from "./receipt-integrity";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 
 const stamp = "2026-08-11T00:00:00Z";
@@ -451,6 +451,98 @@ test("a ledger truncated to a valid prefix is refused instead of silently shorte
   expect(verifyAccessReceiptLedger([JSON.parse(lines[0]!)])).toMatchObject({ ok: true });
   await expect(read(service, { requestCorrelationId: "fwk-truncated-third-0001" }))
     .rejects.toThrow("invalid access receipt ledger: truncated-ledger");
+});
+
+test("a ledger that grew past its checkpoint is re-audited, so the next receipt chains from the real tail", async () => {
+  // Found by a mutation pass over the merged fix: deleting the `ledgerBytes !==
+  // checkpoint.ledgerBytes` guard in `fastCheckpointState` left the whole suite
+  // green. The guard is not cosmetic. Without it the fast path reads the tail
+  // record at the STALE `tailOffset`, returns the stale `headHash`, and the next
+  // append chains from a record that is no longer last — a silently broken
+  // integrity chain, written by the code whose job is to keep it intact.
+  //
+  // The state is reachable: an append commits to the ledger before its
+  // checkpoint refresh, and that refresh is allowed to fail (see the
+  // "checkpoint refresh failure after append" test). A stale checkpoint over a
+  // longer ledger is exactly what survives that window.
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-grew-past-checkpoint-"));
+  const service = receiptService(root);
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-grew-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-grew-second-0001" });
+
+  const lines = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  expect(lines).toHaveLength(2);
+  const first = JSON.parse(lines[0]!) as IntegrityLinkedAccessReceipt;
+  const second = JSON.parse(lines[1]!) as IntegrityLinkedAccessReceipt;
+
+  // Rewind the checkpoint to describe only the first record, leaving both on
+  // disk. Every field is honest about that prefix — including the content
+  // digest — so nothing but the length comparison can notice the ledger moved.
+  const prefix = `${lines[0]!}\n`;
+  const body = {
+    schemaVersion: "1.1" as const,
+    ledgerBytes: Buffer.byteLength(prefix, "utf8"),
+    recordCount: 1,
+    headHash: first.integrity.recordHash,
+    tailOffset: 0,
+    contentDigest: createHash("sha256").update(Buffer.from(prefix, "utf8")).digest("hex"),
+  };
+  await writeFile(checkpoint, `${JSON.stringify({ ...body, integrity: { checkpointHash: createHash("sha256").update(JSON.stringify(body), "utf8").digest("hex") } })}\n`);
+
+  await read(service, { requestCorrelationId: "fwk-grew-third-0001" });
+  const after = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  expect(after).toHaveLength(3);
+  const third = JSON.parse(after[2]!) as IntegrityLinkedAccessReceipt;
+  // The assertion that fails when the guard is removed: the new record must
+  // chain from the record that is actually last, not from the one the stale
+  // checkpoint still named.
+  expect(third.integrity.previousRecordHash).toBe(second.integrity.recordHash);
+  expect(third.integrity.previousRecordHash).not.toBe(first.integrity.recordHash);
+  // And the whole ledger still verifies as one chain.
+  expect(verifyAccessReceiptLedger(after.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt))).toMatchObject({ ok: true });
+});
+
+test("an append whose post-write size does not match the audited prefix drops the checkpoint instead of sealing it", async () => {
+  // The third gate the mutation pass found unguarded. `state.digest` holds the
+  // audited pre-append bytes and the checkpoint folds the written line into it
+  // WITHOUT re-reading the file. That shortcut is only honest while the file is
+  // exactly the audited prefix plus that line; the size check is what holds it
+  // to that. Delete it and the checkpoint commits to a byte sequence that was
+  // never on disk — the precise failure this whole flow exists to remove,
+  // reintroduced one layer down.
+  //
+  // The window is reached through the verifier, which runs inside the audit
+  // between the read and the append. Anything that lands in the ledger there is
+  // invisible to the state the append then builds on.
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-append-size-"));
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await mkdir(path.dirname(ledger), { recursive: true });
+  let interfered = false;
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+    verifyReceiptLedger: async (receipts) => {
+      const verification = verifyAccessReceiptLedger(receipts);
+      if (!interfered) { interfered = true; await appendFile(ledger, `${JSON.stringify({ stray: true })}\n`); }
+      return verification;
+    },
+  });
+
+  // The first receipt takes the no-ledger path and never audits, so it cannot
+  // reach the verifier. Dropping its checkpoint forces the second one through a
+  // real audit, which is where the interference lands.
+  await read(service, { requestCorrelationId: "fwk-append-size-first-0001" });
+  await unlink(checkpoint);
+  await read(service, { requestCorrelationId: "fwk-append-size-second-0001" });
+  expect(interfered).toBe(true);
+  // The receipt is committed either way — the append is the commit point. What
+  // the gate decides is whether a checkpoint gets to vouch for bytes nobody
+  // audited. It must not exist.
+  await expect(stat(checkpoint)).rejects.toThrow();
 });
 
 test("runtime policy experiment resolver prefers candidate when full pinned chain is valid", async () => {
