@@ -1,0 +1,278 @@
+[
+  {
+    "id": "r209-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "blocker",
+    "problem": "keryx skills verify --bundled returned 0 skills from an installed copy: the root resolved to dist/bundled while the tree ships at src/gdskills/bundled.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "line": 482,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-02",
+    "reviewer": "review-core-boundaries",
+    "severity": "major",
+    "problem": "Build parity was enforced on 1 skill of 37; 36 diverged, and the harness builds were stale ancestors of their own SKILL.md.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/gdskills/build-parity.test.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/build-parity.test.ts"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-03",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Four of five builds omitted the reporting contract while production code throws unless a child's first line is STATUS: <TOKEN>.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/task-implementer",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/task-implementer"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-04",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "cross_family_review shipped with no consumer, in the commit whose own AC3 forbids fields nothing reads.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "line": 598,
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-05",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The dangling agent label code-review lived in code as well as prose, writing an unresolvable name into every implement job on disk.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/job/plans.ts",
+    "line": 22,
+    "class_scope": {
+      "sites": [
+        "src/job/plans.ts"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-07",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Loop detection could never fire: finding identity was led by a per-round global_id, and the date-keyed review id let a second same-day round overwrite the first.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/review/loop.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/review/loop.ts"
+      ],
+      "enumeration_method": "Enrolment computed from the filesystem; the catalogue guard scans both skill and rule trees including harness builds."
+    },
+    "global_id": "2026-08-31-regressions#r209-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-08",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "dependsOn and attempts.count were written and read by nothing — the fourth sighting of that shape.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/flow/machine.ts",
+    "line": 1,
+    "global_id": "2026-08-31-regressions#r209-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-09",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "Nine SKILL.claude.md files shipped in 0.2.72 that no runtime addresses.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills",
+    "line": 1,
+    "global_id": "2026-08-31-regressions#r209-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-10",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A false sentence claimed the schema rejects a dispatch missing prior_findings; nothing loads that schema.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 538,
+    "global_id": "2026-08-31-regressions#r209-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r209-11",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The status block still claimed only phases 0 and 1 were delivered.",
+    "impact": "A mechanism that measured nothing, a claim nothing enforced, or a name that resolved nowhere.",
+    "suggested_fix": "Wire it or delete the claim; prove each fix with a mutation.",
+    "evidence": "Found by the 2026-08-31 measurement, or by the guards written to fix it.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-orchestrator-hardening/README.md",
+    "line": 1,
+    "global_id": "2026-08-31-regressions#r209-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Resolved in 9ef30c6f (PR #417). Twelve mutations across the two halves, each observed red and restored."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 9ef30c6f: skills verify --bundled reports 65 from the installed layout, the catalogue guard passes 6/6, flow next runs, and the full suite is 6242/0. Reverting any fix turns a named test red.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

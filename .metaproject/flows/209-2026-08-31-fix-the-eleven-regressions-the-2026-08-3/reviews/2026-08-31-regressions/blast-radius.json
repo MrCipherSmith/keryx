@@ -1,0 +1,2613 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/acceptance-criteria.md",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/context.md",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/description.md",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/flow.json",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/journal.md",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/plan.md",
+    ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/tasks.md",
+    ".metaproject/keryx-dashboard.html",
+    ".metaproject/metaproject.json",
+    ".metaproject/rules/core/gproject-contracts.mdc",
+    ".metaproject/rules/core/subagent-context-construction.md",
+    ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/context-collector/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/feature-analyzer/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/issue-analyzer/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.codex.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.zed.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/planning/brainstorm/SKILL.codex.md",
+    ".metaproject/skills/gdskills/planning/brainstorm/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/planning/interview/SKILL.codex.md",
+    ".metaproject/skills/gdskills/planning/interview/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/planning/interviewer/SKILL.codex.md",
+    ".metaproject/skills/gdskills/planning/interviewer/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/planning/prd-creator/SKILL.codex.md",
+    ".metaproject/skills/gdskills/planning/prd-creator/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/planning/prd-creator/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/planning/prd-creator/SKILL.zed.md",
+    ".metaproject/skills/gdskills/quality/perf-check/SKILL.codex.md",
+    ".metaproject/skills/gdskills/quality/perf-check/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.codex.md",
+    ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.zed.md",
+    ".metaproject/skills/gdskills/quality/security-audit/SKILL.codex.md",
+    ".metaproject/skills/gdskills/quality/security-audit/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/quality/test-gen/SKILL.codex.md",
+    ".metaproject/skills/gdskills/quality/test-gen/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.codex.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.cursor.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.opencode.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.zed.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "docs/docs/cli-reference.md",
+    "docs/requirements/keryx-orchestrator-hardening/README.md",
+    "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+    "package.json",
+    "src/commands/flow.ts",
+    "src/commands/providers.ts",
+    "src/commands/review.ts",
+    "src/commands/skills.bundled-verify.installed.test.ts",
+    "src/commands/skills.bundled-verify.test.ts",
+    "src/flow/depends-and-attempts.test.ts",
+    "src/flow/machine.ts",
+    "src/flow/service.ts",
+    "src/flow/types.ts",
+    "src/gdskills/agent-catalogue-xref.test.ts",
+    "src/gdskills/build-parity.test.ts",
+    "src/gdskills/bundled-eval.test.ts",
+    "src/gdskills/bundled-eval.ts",
+    "src/gdskills/bundled/rules/core/gproject-contracts.mdc",
+    "src/gdskills/bundled/rules/core/subagent-context-construction.md",
+    "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/context-collector/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/feature-analyzer/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/issue-analyzer/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.zed.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/planning/brainstorm/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/brainstorm/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/consistency-checker/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/consistency-checker/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/interview/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/interview/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/interviewer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/interviewer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/patterns-researcher/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/patterns-researcher/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/planner/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/planner/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/prd-creator/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/prd-creator/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/prd-creator/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/planning/prd-creator/SKILL.zed.md",
+    "src/gdskills/bundled/skills/planning/problem-definer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/problem-definer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/project-discovery/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/project-discovery/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/spec-writer/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/spec-writer/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/planning/stack-advisor/SKILL.codex.md",
+    "src/gdskills/bundled/skills/planning/stack-advisor/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/platform/claude-md-management/SKILL.codex.md",
+    "src/gdskills/bundled/skills/platform/claude-md-management/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/platform/hookify/SKILL.codex.md",
+    "src/gdskills/bundled/skills/platform/hookify/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/changelog/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/changelog/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/commit/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/commit/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/db-migrate/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/db-migrate/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/dependency-update/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/dependency-update/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/deploy/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/deploy/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/perf-check/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/perf-check/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.zed.md",
+    "src/gdskills/bundled/skills/quality/pr/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/pr/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/push/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/push/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/security-audit/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/security-audit/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/test-gen/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/test-gen/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.codex.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.zed.md",
+    "src/gdskills/bundled/skills/review/code-ai-review/SKILL.codex.md",
+    "src/gdskills/bundled/skills/review/code-ai-review/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/review/code-ai-review/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/review/code-ai-review/SKILL.zed.md",
+    "src/gdskills/bundled/skills/review/code-learned-review/SKILL.codex.md",
+    "src/gdskills/bundled/skills/review/code-learned-review/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/review/code-learned-review/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/review/code-learned-review/SKILL.zed.md",
+    "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.codex.md",
+    "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.zed.md",
+    "src/gdskills/bundled/skills/review/code-style-review/SKILL.codex.md",
+    "src/gdskills/bundled/skills/review/code-style-review/SKILL.cursor.md",
+    "src/gdskills/bundled/skills/review/code-style-review/SKILL.opencode.md",
+    "src/gdskills/bundled/skills/review/code-style-review/SKILL.zed.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/enforcement-claims.test.ts",
+    "src/gdskills/status-contract.test.ts",
+    "src/harness/child/contract.ts",
+    "src/harness/child/spawn.test.ts",
+    "src/harness/flow/managed-flow-port.test.ts",
+    "src/harness/flow/parity.test.ts",
+    "src/job/plans.ts",
+    "src/review/cross-family.test.ts",
+    "src/review/cross-family.ts",
+    "src/review/loop-real-path.test.ts",
+    "src/review/managed.ts",
+    "src/review/types.ts"
+  ],
+  "files": [
+    {
+      "file": "src/flow/store.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/flow/store.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/single-turn.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/harness/provider/single-turn.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/harness/tool/builtin/shell-exec-tool.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/make-provider.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/harness/provider/make-provider.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/inspector-sources.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/tui/inspector-sources.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/fwk-service.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/sac/fwk-service.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/commands/harness.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/select.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/commands/select.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/child/orchestrate.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/child/contract.ts",
+      "path": [
+        "src/harness/child/orchestrate.ts",
+        "src/harness/child/contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/extension/execute.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/child/contract.ts",
+      "path": [
+        "src/harness/extension/execute.ts",
+        "src/harness/child/contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/mcp/tools.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/commands/goal-command.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/child/model.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/harness/child/model.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/flow/managed-flow-port.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/harness/flow/managed-flow-port.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/narrate.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/lib/narrate.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/caps.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/caps.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verification.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/verification.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "package.json",
+      "path": [
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/context.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/flow/context.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/tracker/github.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/flow/tracker/github.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/child/spawn.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/child/contract.ts",
+      "path": [
+        "src/harness/child/spawn.ts",
+        "src/harness/child/contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/tui/balance-panel.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "package.json",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/version.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/version.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/extension/bound-wave.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/child/contract.ts",
+      "path": [
+        "src/harness/extension/bound-wave.ts",
+        "src/harness/child/contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/loop.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/child/escalation.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/child/contract.ts",
+      "path": [
+        "src/harness/child/escalation.ts",
+        "src/harness/child/contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/flow/parity.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/flow/types.ts",
+      "path": [
+        "src/harness/flow/parity.ts",
+        "src/flow/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/providers.balance.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/commands/providers.balance.test.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.custom.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/commands/providers.custom.test.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "path": [
+        "src/commands/providers.test.ts",
+        "src/commands/providers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/allocation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/flow/allocation.test.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/attempts.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/flow/attempts.test.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/disposition.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/machine.ts",
+      "path": [
+        "src/flow/disposition.test.ts",
+        "src/flow/machine.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/duplicate-ids.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "path": [
+        "src/flow/duplicate-ids.test.ts",
+        "src/flow/service.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/machine.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/machine.ts",
+      "path": [
+        "src/flow/machine.test.ts",
+        "src/flow/machine.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/flow/migration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 142 at hop 1, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/security-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 142 at hop 1, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/service.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 142 at hop 1, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/store.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 142 at hop 1, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/task-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/machine.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 142 at hop 1, fan-in 0, reached via src/flow/machine.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/contract.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 142 at hop 1, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/escalation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 142 at hop 1, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/model.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 142 at hop 1, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/extension/execute.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 142 at hop 1, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/migration.hardening.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 142 at hop 1, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 142 at hop 1, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/caps.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 142 at hop 1, fan-in 0, reached via src/review/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 142 at hop 1, fan-in 0, reached via src/review/managed.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 142 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 142 at hop 1, fan-in 0, reached via src/review/managed.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 142 at hop 1, fan-in 0, reached via src/review/managed.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 142 at hop 1, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/background-job-registry.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 142 at hop 2, fan-in 16, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 142 at hop 2, fan-in 11, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/types.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 142 at hop 2, fan-in 11, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/slate-course.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 142 at hop 2, fan-in 8, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/machine-wrap-up.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 142 at hop 2, fan-in 7, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/memory.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 142 at hop 2, fan-in 6, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/dispatch.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 142 at hop 2, fan-in 6, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/parallel/scheduler.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 142 at hop 2, fan-in 5, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/metaproject-tools.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 142 at hop 2, fan-in 5, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 142 at hop 2, fan-in 4, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-info.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 142 at hop 2, fan-in 4, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 142 at hop 2, fan-in 4, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/decision-dedup.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 142 at hop 2, fan-in 3, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/workspace-resolve.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 142 at hop 2, fan-in 3, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 142 at hop 2, fan-in 2, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-context-tool.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 142 at hop 2, fan-in 2, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-runner.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 142 at hop 2, fan-in 2, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/fwk-explain.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 142 at hop 2, fan-in 2, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/model-turn.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 142 at hop 2, fan-in 2, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 142 at hop 2, fan-in 2, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 142 at hop 2, fan-in 2, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 142 at hop 2, fan-in 2, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/health.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 142 at hop 2, fan-in 1, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/test.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 142 at hop 2, fan-in 1, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 142 at hop 2, fan-in 1, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/allocation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 142 at hop 2, fan-in 1, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/extension/provenance.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 142 at hop 2, fan-in 1, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/service.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 142 at hop 2, fan-in 1, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 142 at hop 2, fan-in 1, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 142 at hop 2, fan-in 1, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-extension-wave.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-restricted.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-network-posture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/context-inject.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/context-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/tracker/github.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/round-bound.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/orchestrate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 142 at hop 2, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/extension/bound-wave.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 142 at hop 2, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/single-turn.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-background.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-timeout.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/child/contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 142 at hop 2, fan-in 0, reached via src/harness/child/contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/memory-recall-p3.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/sac-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/slate-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 142 at hop 2, fan-in 0, reached via src/flow/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/fwk-authorization.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/fwk-explain.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/fwk-service.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/inspector-sources.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 142 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/flow/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 142 at hop 2, fan-in 0, reached via src/flow/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 142 at hop 2, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/providers.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 142 at hop 3, fan-in 0, reached via src/commands/providers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 141 of 142 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 142 of 142 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/209-2026-08-31-fix-the-eleven-regressions-the-2026-08-3/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/keryx-dashboard.html",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/metaproject.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/rules/core/gproject-contracts.mdc",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/rules/core/subagent-context-construction.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/code-verifier/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/context-collector/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/context-collector/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-analyzer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/issue-analyzer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/issue-analyzer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-documenter/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/brainstorm/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/brainstorm/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/interview/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/interview/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/interviewer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/interviewer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/prd-creator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/prd-creator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/prd-creator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/planning/prd-creator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/perf-check/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/perf-check/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/pr-issue-documenter/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/security-audit/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/security-audit/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/test-gen/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/test-gen/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-orchestrator-hardening/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/flow/depends-and-attempts.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/agent-catalogue-xref.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/build-parity.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/rules/core/gproject-contracts.mdc",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/rules/core/subagent-context-construction.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/context-collector/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/context-collector/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-analyzer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-analyzer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/issue-analyzer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/issue-analyzer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-documenter/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/brainstorm/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/brainstorm/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/consistency-checker/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/consistency-checker/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/interview/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/interview/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/interviewer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/interviewer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/patterns-researcher/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/patterns-researcher/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/planner/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/planner/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/prd-creator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/prd-creator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/prd-creator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/prd-creator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/problem-definer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/problem-definer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/project-discovery/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/project-discovery/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/spec-writer/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/spec-writer/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/stack-advisor/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/planning/stack-advisor/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/platform/claude-md-management/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/platform/claude-md-management/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/platform/hookify/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/platform/hookify/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/changelog/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/changelog/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/commit/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/commit/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/db-migrate/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/db-migrate/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/dependency-update/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/dependency-update/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/deploy/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/deploy/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/perf-check/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/perf-check/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr-issue-documenter/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/pr/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/push/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/push/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/security-audit/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/security-audit/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/test-gen/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/test-gen/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-ai-review/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-ai-review/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-ai-review/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-ai-review/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-learned-review/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-learned-review/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-learned-review/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-learned-review/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-mobx-store-review/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-style-review/SKILL.codex.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-style-review/SKILL.cursor.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-style-review/SKILL.opencode.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/code-style-review/SKILL.zed.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/enforcement-claims.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/status-contract.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/job/plans.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/review/cross-family.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 208,
+    "changedFilesResolved": 13,
+    "changedFilesUnresolved": 195,
+    "candidates": 142,
+    "retained": 40,
+    "droppedByCap": 102,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 3,
+    "testsRetained": 9,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 1041,
+    "edges": 3147
+  }
+}

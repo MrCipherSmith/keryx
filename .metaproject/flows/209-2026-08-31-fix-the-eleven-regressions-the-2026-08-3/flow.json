@@ -7,24 +7,77 @@
   "id": "209",
   "slug": "fix-the-eleven-regressions-the-2026-08-3",
   "title": "Fix the eleven regressions the 2026-08-31 measurement found, including two that contradict claims made while shipping",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T03:48:41.544Z",
-  "updatedAt": "2026-08-31T03:49:09.677Z",
+  "updatedAt": "2026-08-31T05:36:27.082Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e1dcb7917ade54cdee398952613113b0255398e804dfe592080dd96a0446b2b9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-31T05:35:35.320Z",
+      "note": "defaultBundledRoot resolves the installed layout too; a second guard builds the package from package.json's own files/bin lists and runs the real binary, asserting 65 evaluated. The repo-tree assertion was left intact — it is structurally unable to see this."
+    },
+    "AC2": {
+      "at": "2026-08-31T05:35:35.441Z",
+      "note": "cross_family_review wired, not removed: review ingest --cross-family-review accepts it, review status reads it back off disk in a LATER invocation and exits 1 on a self-contradictory record."
+    },
+    "AC3": {
+      "at": "2026-08-31T05:35:35.566Z",
+      "note": "Enrolment computed from the filesystem, not hand-listed. 37 skills with harness builds, 36 diverged: 7 hunks deliberate (the harness CSV) and allow-listed with the reason, 29 drift reconciled outward."
+    },
+    "AC4": {
+      "at": "2026-08-31T05:35:35.685Z",
+      "note": "All four non-Claude task-implementer builds carry the reporting contract. Scope is derived — a skill is in scope when its own SKILL.md instructs the STATUS first line — and the token vocabulary is read from contract.ts, not restated."
+    },
+    "AC5": {
+      "at": "2026-08-31T05:35:35.802Z",
+      "note": "bundledSkillDocuments walks SKILL.md and every SKILL.<runtime>.md, names imported from skillBuildFileName; report prints documents_evaluated: 167 alongside skills: 65."
+    },
+    "AC6": {
+      "at": "2026-08-31T05:35:35.922Z",
+      "note": "Both kept and given consumers. dependsOn drives nextTask, keryx flow next and flow check — which immediately found flow 178 T10 self-dependent. attempts.count is recorded by taskDone on failed/blocked, since the failure was that nothing called the incrementer."
+    },
+    "AC7": {
+      "at": "2026-08-31T05:35:36.047Z",
+      "note": "agent: code-review removed from the skill AND from src/job/plans.ts, where it was writing the label into every implement job on disk. New catalogue guard scans both skill and rule trees and found subagent_type: general live in twelve files — a class the measurement had recorded as fixed."
+    },
+    "AC8": {
+      "at": "2026-08-31T05:35:36.167Z",
+      "note": "Root cause was two independent defects, both already repaired in 860535e3. The proof was missing: a test now drives keryx review loop over packages from real ingests, asserts it fires, asserts it stays quiet when rounds genuinely differ using the same display id, and distinguishes cannot-be-observed-yet from no-loop."
+    },
+    "AC9": {
+      "at": "2026-08-31T05:35:36.288Z",
+      "note": "The false sentence is replaced with what is true — nothing loads reviewer-input.schema.json and it is not in the CONTRACTS registry — and the guard is bidirectional, so building enforcement turns the test red and asks for the prose back."
+    },
+    "AC10": {
+      "at": "2026-08-31T05:35:36.407Z",
+      "note": "README status block rewritten: all seven phases delivered, released 0.2.72, with the eleven measured regressions named as open so it does not over-correct into everything-is-fine."
+    },
+    "AC11": {
+      "at": "2026-08-31T05:35:36.536Z",
+      "note": "Twelve mutations, each applied, observed red, restored. Two initially stayed green and were test defects: a negative case varying both id and content, and a parity check passing on five builds equal to each other and all wrong."
+    },
+    "AC12": {
+      "at": "2026-08-31T05:35:36.661Z",
+      "note": "Recorded in the flow journal: the 34 historical unfinished tasks are untouched, and whether the non-Claude harnesses work end to end is still unestablished — nothing in production delivers a task to them."
+    },
+    "AC13": {
+      "at": "2026-08-31T05:35:36.783Z",
+      "note": "typecheck clean; bun test 6242 pass / 18 skip / 0 fail against a 6185/1 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/417"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -32,13 +85,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,13 +100,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -60,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -90,6 +147,105 @@
     {
       "at": "2026-08-31T03:49:09.677Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-31T05:35:14.423Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T05:35:14.548Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T05:35:14.666Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T05:35:14.790Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T05:35:35.321Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: defaultBundledRoot resolves the installed layout too; a second guard builds the package from package.json's own files/bin lists and runs the real binary, asserting 65 evaluated. The repo-tree assertion was left intact — it is structurally unable to see this."
+    },
+    {
+      "at": "2026-08-31T05:35:35.441Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: cross_family_review wired, not removed: review ingest --cross-family-review accepts it, review status reads it back off disk in a LATER invocation and exits 1 on a self-contradictory record."
+    },
+    {
+      "at": "2026-08-31T05:35:35.567Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Enrolment computed from the filesystem, not hand-listed. 37 skills with harness builds, 36 diverged: 7 hunks deliberate (the harness CSV) and allow-listed with the reason, 29 drift reconciled outward."
+    },
+    {
+      "at": "2026-08-31T05:35:35.685Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: All four non-Claude task-implementer builds carry the reporting contract. Scope is derived — a skill is in scope when its own SKILL.md instructs the STATUS first line — and the token vocabulary is read from contract.ts, not restated."
+    },
+    {
+      "at": "2026-08-31T05:35:35.803Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bundledSkillDocuments walks SKILL.md and every SKILL.<runtime>.md, names imported from skillBuildFileName; report prints documents_evaluated: 167 alongside skills: 65."
+    },
+    {
+      "at": "2026-08-31T05:35:35.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Both kept and given consumers. dependsOn drives nextTask, keryx flow next and flow check — which immediately found flow 178 T10 self-dependent. attempts.count is recorded by taskDone on failed/blocked, since the failure was that nothing called the incrementer."
+    },
+    {
+      "at": "2026-08-31T05:35:36.047Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: agent: code-review removed from the skill AND from src/job/plans.ts, where it was writing the label into every implement job on disk. New catalogue guard scans both skill and rule trees and found subagent_type: general live in twelve files — a class the measurement had recorded as fixed."
+    },
+    {
+      "at": "2026-08-31T05:35:36.167Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Root cause was two independent defects, both already repaired in 860535e3. The proof was missing: a test now drives keryx review loop over packages from real ingests, asserts it fires, asserts it stays quiet when rounds genuinely differ using the same display id, and distinguishes cannot-be-observed-yet from no-loop."
+    },
+    {
+      "at": "2026-08-31T05:35:36.288Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: The false sentence is replaced with what is true — nothing loads reviewer-input.schema.json and it is not in the CONTRACTS registry — and the guard is bidirectional, so building enforcement turns the test red and asks for the prose back."
+    },
+    {
+      "at": "2026-08-31T05:35:36.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: README status block rewritten: all seven phases delivered, released 0.2.72, with the eleven measured regressions named as open so it does not over-correct into everything-is-fine."
+    },
+    {
+      "at": "2026-08-31T05:35:36.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Twelve mutations, each applied, observed red, restored. Two initially stayed green and were test defects: a negative case varying both id and content, and a parity check passing on five builds equal to each other and all wrong."
+    },
+    {
+      "at": "2026-08-31T05:35:36.661Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Recorded in the flow journal: the 34 historical unfinished tasks are untouched, and whether the non-Claude harnesses work end to end is still unestablished — nothing in production delivers a task to them."
+    },
+    {
+      "at": "2026-08-31T05:35:36.783Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: typecheck clean; bun test 6242 pass / 18 skip / 0 fail against a 6185/1 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken."
+    },
+    {
+      "at": "2026-08-31T05:36:23.166Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/417 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-31T05:36:23.373Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-31T05:36:27.082Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

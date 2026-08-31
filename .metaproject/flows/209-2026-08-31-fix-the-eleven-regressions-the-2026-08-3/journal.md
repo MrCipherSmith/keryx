@@ -3,3 +3,23 @@
 - 2026-08-31T03:48:41.544Z - flow created
 - 2026-08-31T03:49:09.107Z - frozen: 13 criteria; checksum recorded
 - 2026-08-31T03:49:09.677Z - started
+- 2026-08-31T05:35:14.423Z - task-done: T1: Collect remaining context
+- 2026-08-31T05:35:14.548Z - task-done: T2: Implement per plan
+- 2026-08-31T05:35:14.666Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-31T05:35:14.790Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-31T05:35:35.321Z - ac-confirmed: AC1: defaultBundledRoot resolves the installed layout too; a second guard builds the package from package.json's own files/bin lists and runs the real binary, asserting 65 evaluated. The repo-tree assertion was left intact — it is structurally unable to see this.
+- 2026-08-31T05:35:35.441Z - ac-confirmed: AC2: cross_family_review wired, not removed: review ingest --cross-family-review accepts it, review status reads it back off disk in a LATER invocation and exits 1 on a self-contradictory record.
+- 2026-08-31T05:35:35.567Z - ac-confirmed: AC3: Enrolment computed from the filesystem, not hand-listed. 37 skills with harness builds, 36 diverged: 7 hunks deliberate (the harness CSV) and allow-listed with the reason, 29 drift reconciled outward.
+- 2026-08-31T05:35:35.685Z - ac-confirmed: AC4: All four non-Claude task-implementer builds carry the reporting contract. Scope is derived — a skill is in scope when its own SKILL.md instructs the STATUS first line — and the token vocabulary is read from contract.ts, not restated.
+- 2026-08-31T05:35:35.803Z - ac-confirmed: AC5: bundledSkillDocuments walks SKILL.md and every SKILL.<runtime>.md, names imported from skillBuildFileName; report prints documents_evaluated: 167 alongside skills: 65.
+- 2026-08-31T05:35:35.922Z - ac-confirmed: AC6: Both kept and given consumers. dependsOn drives nextTask, keryx flow next and flow check — which immediately found flow 178 T10 self-dependent. attempts.count is recorded by taskDone on failed/blocked, since the failure was that nothing called the incrementer.
+- 2026-08-31T05:35:36.047Z - ac-confirmed: AC7: agent: code-review removed from the skill AND from src/job/plans.ts, where it was writing the label into every implement job on disk. New catalogue guard scans both skill and rule trees and found subagent_type: general live in twelve files — a class the measurement had recorded as fixed.
+- 2026-08-31T05:35:36.167Z - ac-confirmed: AC8: Root cause was two independent defects, both already repaired in 860535e3. The proof was missing: a test now drives keryx review loop over packages from real ingests, asserts it fires, asserts it stays quiet when rounds genuinely differ using the same display id, and distinguishes cannot-be-observed-yet from no-loop.
+- 2026-08-31T05:35:36.288Z - ac-confirmed: AC9: The false sentence is replaced with what is true — nothing loads reviewer-input.schema.json and it is not in the CONTRACTS registry — and the guard is bidirectional, so building enforcement turns the test red and asks for the prose back.
+- 2026-08-31T05:35:36.407Z - ac-confirmed: AC10: README status block rewritten: all seven phases delivered, released 0.2.72, with the eleven measured regressions named as open so it does not over-correct into everything-is-fine.
+- 2026-08-31T05:35:36.536Z - ac-confirmed: AC11: Twelve mutations, each applied, observed red, restored. Two initially stayed green and were test defects: a negative case varying both id and content, and a parity check passing on five builds equal to each other and all wrong.
+- 2026-08-31T05:35:36.661Z - ac-confirmed: AC12: Recorded in the flow journal: the 34 historical unfinished tasks are untouched, and whether the non-Claude harnesses work end to end is still unestablished — nothing in production delivers a task to them.
+- 2026-08-31T05:35:36.783Z - ac-confirmed: AC13: typecheck clean; bun test 6242 pass / 18 skip / 0 fail against a 6185/1 baseline; test:guards 173/0; check:doc-links 1138 links / 0 broken.
+- 2026-08-31T05:36:23.166Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/417 (warning: PR is not a draft)
+- 2026-08-31T05:36:23.373Z - completing
+- 2026-08-31T05:36:27.082Z - done: all gates passed
