@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, type Hash } from "node:crypto";
+import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import {
@@ -74,33 +74,77 @@ const isImmutableVersion = (value: unknown): value is string =>
   && /\d/.test(value)
   && !immutableVersionPattern.test(value);
 
-type LedgerIdentity = Readonly<{ ledgerBytes: number; device: string; inode: string; modifiedNs: string; changedNs: string }>;
-type CheckpointBody = LedgerIdentity & Readonly<{ schemaVersion: "1.0"; recordCount: number; headHash: string; tailOffset: number }>;
+/**
+ * Checkpoint schema v1.1. `contentDigest` is sha256 over the ledger's first
+ * `ledgerBytes` bytes exactly as they stood when a full audit accepted them, so
+ * the checkpoint's confidence is derived from the ledger's CONTENT.
+ *
+ * v1.0 pinned the checkpoint to `stat` metadata instead — `device`, `inode`,
+ * `modifiedNs`, `changedNs` — and then re-verified only the tail record. That is
+ * not a tamper signal: an in-place same-size rewrite of a historical record
+ * leaves every one of those fields identical (measured here: 189 of 200
+ * attempts left both `mtimeNs` and `ctimeNs` untouched), the tail record stays
+ * internally consistent, and the edit was accepted. The chain in
+ * `receipt-integrity` does not rescue the shortcut either: `recordHash`
+ * commits to `previousRecordHash`, but a mid-ledger edit leaves every STORED
+ * hash in place, so only recomputing a hash from the record's own bytes can
+ * expose it. Those stat fields are therefore gone from the checkpoint entirely,
+ * not merely unused, so no future fast path can reach for them again.
+ */
+type CheckpointBody = Readonly<{ schemaVersion: "1.1"; ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number; contentDigest: string }>;
 type Checkpoint = CheckpointBody & Readonly<{ integrity: Readonly<{ checkpointHash: string }> }>;
-type LedgerState = Readonly<{ identity: LedgerIdentity; recordCount: number; headHash: string; tailOffset: number }>;
+/**
+ * `digest` is a sha256 already primed with exactly the `ledgerBytes` verified
+ * bytes this state was derived from. The append path folds the appended line
+ * into it, so sealing the next checkpoint costs nothing and the ledger is read
+ * once per append rather than twice.
+ */
+type LedgerState = Readonly<{ ledgerBytes: number; recordCount: number; headHash: string; tailOffset: number; digest: Hash }>;
 type LedgerVerifier = (receipts: readonly IntegrityLinkedAccessReceipt[]) => AccessReceiptLedgerVerification | Promise<AccessReceiptLedgerVerification>;
 const receiptHashPattern = /^[a-f0-9]{64}$/;
-const missingIdentity: LedgerIdentity = Object.freeze({ ledgerBytes: 0, device: "0", inode: "0", modifiedNs: "0", changedNs: "0" });
+const ledgerDigestChunkBytes = 64 * 1024;
 const isMissing = (error: unknown): boolean => error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 const checkpointHash = (body: CheckpointBody): string => createHash("sha256").update(JSON.stringify(body), "utf8").digest("hex");
 
-async function ledgerIdentity(ledger: string): Promise<LedgerIdentity> {
+async function ledgerByteLength(ledger: string): Promise<number> {
   const value = await stat(ledger, { bigint: true });
   if (value.size > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("invalid access receipt ledger: ledger-too-large");
-  return { ledgerBytes: Number(value.size), device: value.dev.toString(), inode: value.ino.toString(), modifiedNs: value.mtimeNs.toString(), changedNs: value.ctimeNs.toString() };
+  return Number(value.size);
+}
+/**
+ * sha256 over the ledger's first `byteLength` bytes, read in bounded chunks so a
+ * large ledger is never materialised. Returns `undefined` when the file ends
+ * early: a short read is a truncated ledger, and the caller refuses rather than
+ * hashing whatever prefix happened to survive.
+ */
+async function digestLedgerPrefix(handle: FileHandle, byteLength: number): Promise<Hash | undefined> {
+  const digest = createHash("sha256");
+  if (byteLength === 0) return digest;
+  const buffer = Buffer.alloc(Math.min(ledgerDigestChunkBytes, byteLength));
+  let position = 0;
+  while (position < byteLength) {
+    const result = await handle.read(buffer, 0, Math.min(buffer.length, byteLength - position), position);
+    if (result.bytesRead === 0) return undefined;
+    digest.update(buffer.subarray(0, result.bytesRead));
+    position += result.bytesRead;
+  }
+  return digest;
 }
 function parseCheckpoint(value: unknown): Checkpoint | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const document = value as Record<string, unknown>;
-  const expected = ["schemaVersion", "ledgerBytes", "device", "inode", "modifiedNs", "changedNs", "recordCount", "headHash", "tailOffset", "integrity"];
-  if (Object.keys(document).length !== expected.length || !expected.every((key) => Object.hasOwn(document, key)) || document.schemaVersion !== "1.0") return undefined;
+  const expected = ["schemaVersion", "ledgerBytes", "recordCount", "headHash", "tailOffset", "contentDigest", "integrity"];
+  // A v1.0 checkpoint fails here on both shape and version. It carries no
+  // content commitment, so it cannot support the new guarantee and is never
+  // trusted under it: the caller falls through to a full re-audit.
+  if (Object.keys(document).length !== expected.length || !expected.every((key) => Object.hasOwn(document, key)) || document.schemaVersion !== "1.1") return undefined;
   if (![document.ledgerBytes, document.recordCount, document.tailOffset].every((entry) => Number.isSafeInteger(entry) && Number(entry) >= 0)) return undefined;
-  if (![document.device, document.inode, document.modifiedNs, document.changedNs].every((entry) => typeof entry === "string" && /^\d+$/.test(entry))) return undefined;
+  if (typeof document.contentDigest !== "string" || !receiptHashPattern.test(document.contentDigest)) return undefined;
   if (typeof document.headHash !== "string" || (document.headHash !== "GENESIS" && !receiptHashPattern.test(document.headHash))) return undefined;
   if (typeof document.integrity !== "object" || document.integrity === null || Array.isArray(document.integrity)) return undefined;
   const integrity = document.integrity as Record<string, unknown>;
   if (Object.keys(integrity).length !== 1 || typeof integrity.checkpointHash !== "string" || !receiptHashPattern.test(integrity.checkpointHash)) return undefined;
-  const body: CheckpointBody = { schemaVersion: "1.0", ledgerBytes: document.ledgerBytes as number, device: document.device as string, inode: document.inode as string, modifiedNs: document.modifiedNs as string, changedNs: document.changedNs as string, recordCount: document.recordCount as number, headHash: document.headHash, tailOffset: document.tailOffset as number };
+  const body: CheckpointBody = { schemaVersion: "1.1", ledgerBytes: document.ledgerBytes as number, recordCount: document.recordCount as number, headHash: document.headHash, tailOffset: document.tailOffset as number, contentDigest: document.contentDigest };
   return checkpointHash(body) === integrity.checkpointHash ? { ...body, integrity: { checkpointHash: integrity.checkpointHash } } : undefined;
 }
 async function readCheckpoint(checkpointPath: string): Promise<{ present: boolean; checkpoint?: Checkpoint }> {
