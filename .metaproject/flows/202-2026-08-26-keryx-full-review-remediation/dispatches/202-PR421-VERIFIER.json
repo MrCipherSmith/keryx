@@ -1,0 +1,37 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "202",
+  "dispatch_id": "202-PR421-VERIFIER",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-verifier",
+  "task": {
+    "title": "Verify final PR 421 reviewer findings",
+    "description": "Meta-verify four clean reviewer reports against their evidence, scope, and current dcf557a3 code head.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Reject unsupported clean verdicts or surface any missed actionable finding with code evidence.",
+    "Confirm the fix round was independently reviewed after each CI-discovered test correction.",
+    "Return a verified findings list or explicit clean verdict with exactly one fenced json keryx:findings block."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-architecture-logic.md", "kind": "review", "exists": true},
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-security.md", "kind": "review", "exists": true},
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-regression-testing.md", "kind": "review", "exists": true},
+    {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-fix-round-2-review.md", "kind": "review", "exists": true}
+  ],
+  "files_to_read": [
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-verifier/SKILL.md"
+  ],
+  "constraints": [
+    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, navigation, or command.",
+    "Read-only: do not modify files, flow state, commits, PR, or review package.",
+    "Verify current production head dcf557a3fdf793fc53110ccfdf90113dd1c6497b; review artifacts created afterward are evidence only.",
+    "Use gdctx for output and keryx ctx rg for text search."
+  ],
+  "allowed_actions": ["read", "run-command"],
+  "output_contract": {"schema": "reviewer-finding", "artifact_path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-review-verifier.md"},
+  "budget": {"max_output_tokens": null},
+  "provenance": {"created_at": "2026-08-31T12:04:00Z", "created_by": "review-orchestrator"}
+}

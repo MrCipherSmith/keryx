@@ -1,0 +1,12 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier (luna)",
+  "summary": "All four clean reports were rechecked against production head dcf557a3; no finding exists to confirm or refute.",
+  "verifications": [],
+  "stats": {
+    "confirmed": 0,
+    "refuted": 0,
+    "unverifiable": 0,
+    "not_checked": 0
+  }
+}

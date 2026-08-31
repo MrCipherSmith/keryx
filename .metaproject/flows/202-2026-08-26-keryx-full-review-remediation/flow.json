@@ -5,7 +5,7 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-31T12:01:19.600Z",
+  "updatedAt": "2026-08-31T12:09:15.906Z",
   "source": {
     "type": "description",
     "ref": null
@@ -289,7 +289,7 @@
       "id": "T15",
       "title": "Run managed final PR review and merge gate",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
@@ -299,7 +299,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
@@ -537,6 +538,11 @@
       "at": "2026-08-31T12:01:19.600Z",
       "event": "task-done",
       "detail": "T16: Align advisory project-skill test with redacted persistence"
+    },
+    {
+      "at": "2026-08-31T12:09:15.906Z",
+      "event": "task-done",
+      "detail": "T15: Run managed final PR review and merge gate"
     }
   ]
 }

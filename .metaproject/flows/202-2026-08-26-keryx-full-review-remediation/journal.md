@@ -44,3 +44,4 @@
 - 2026-08-31T11:55:40.079Z - task-added: T15: Run managed final PR review and merge gate
 - 2026-08-31T12:00:32.756Z - task-added: T16: Align advisory project-skill test with redacted persistence
 - 2026-08-31T12:01:19.600Z - task-done: T16: Align advisory project-skill test with redacted persistence
+- 2026-08-31T12:09:15.906Z - task-done: T15: Run managed final PR review and merge gate
