@@ -9,7 +9,9 @@ export type ContractName =
   | "orchestrator-state"
   | "review-finding"
   | "subagent-dispatch"
-  | "subagent-result";
+  | "subagent-result"
+  | "task-implementer-input"
+  | "task-implementer-output";
 
 export type ContractInfo = {
   name: ContractName;
@@ -40,6 +42,22 @@ type JsonSchema = {
   enum?: unknown[];
   const?: unknown;
   minimum?: number;
+  /**
+   * Upper bound on a number, and `minItems` the lower bound on an array length.
+   *
+   * Both are here for the reason the `if`/`then` comment below gives, observed a
+   * second time: this validator IGNORES a keyword it does not implement, so a
+   * schema that had already been written with them was enforcing nothing while
+   * reading as enforced. `task-implementer`'s input contract carried
+   * `target_files: { minItems: 1 }` — the machine form of its own
+   * `ASSERT target_files IS NOT EMPTY → ABORT("No target files")` — and
+   * `max_self_fix_attempts: { maximum: 5 }`, and registering that contract
+   * without these two keywords would have shipped the same defect one layer up.
+   * `subagent-dispatch` and `review-finding` were already relying on `minItems`
+   * and got the same silent pass.
+   */
+  maximum?: number;
+  minItems?: number;
   minLength?: number;
   pattern?: string;
   // Conditional application. Added for the `class_scope` rule on
@@ -101,6 +119,33 @@ export const CONTRACTS: ContractInfo[] = [
     name: "subagent-result",
     fileName: "subagent-result.schema.json",
     description: "Subagent-to-orchestrator result payload.",
+  },
+  /**
+   * `task-implementer`'s two contracts, on the `job-orchestrator-state`
+   * precedent: the authoritative file stays inside the skill that owns it and
+   * the registry points at it, so there is no second copy to drift.
+   *
+   * They shipped for a year unregistered, which meant
+   * `keryx skills contracts validate` could not load either one — while the
+   * skill's Phase 1.4 listed five `ASSERT … → ABORT(…)` refusals and its task
+   * request template said "Валидация: input-contract.schema.json". Nothing could
+   * perform either. Registered, the refusals are the validator's.
+   */
+  {
+    name: "task-implementer-input",
+    fileName: "task-implementer-input-contract.schema.json",
+    description:
+      "Task request handed to task-implementer (task + workspace + automation), validated before dispatch.",
+    sourcePath:
+      "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+  },
+  {
+    name: "task-implementer-output",
+    fileName: "task-implementer-output-contract.schema.json",
+    description:
+      "JSON result task-implementer writes in Phase 6.1 before it emits its STATUS line.",
+    sourcePath:
+      "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
   },
 ];
 
@@ -240,6 +285,20 @@ async function validateValue(
     errors.push({
       path: valuePath,
       message: `Expected number >= ${schema.minimum}`,
+    });
+  }
+
+  if (typeof value === "number" && schema.maximum !== undefined && value > schema.maximum) {
+    errors.push({
+      path: valuePath,
+      message: `Expected number <= ${schema.maximum}`,
+    });
+  }
+
+  if (Array.isArray(value) && schema.minItems !== undefined && value.length < schema.minItems) {
+    errors.push({
+      path: valuePath,
+      message: `Expected array length >= ${schema.minItems}`,
     });
   }
 
