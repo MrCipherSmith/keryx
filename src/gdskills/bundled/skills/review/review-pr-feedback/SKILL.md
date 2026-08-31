@@ -703,9 +703,18 @@ carries what actually happened.
 
 ## Output Contract
 
-The `STATUS:` line other reviewer skills print for a human goes OUTSIDE this block.
-Inside it every key is a schema property, because the schema sets
-`additionalProperties: false` and a block that cannot validate is not a contract.
+Emit the canonical status line first, on its own, the way every other skill in
+this tree does — a caller parses it, and lowercasing it into the block below to
+satisfy the schema would leave nothing to parse:
+
+```text
+STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+```
+
+Then the machine-readable block. Inside it every key is a schema property,
+because the schema sets `additionalProperties: false` and a block that cannot
+validate is not a contract — which is why `status` here is lowercase and the line
+above is not a duplicate of it but the thing the block cannot be.
 
 ```yaml
 status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED

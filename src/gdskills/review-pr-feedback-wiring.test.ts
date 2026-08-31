@@ -193,6 +193,29 @@ describe("the skill no longer claims a contract two other guards exempt it from"
     }
   });
 
+  test("the documented output block validates against the schema beside it", () => {
+    // The block opened with `STATUS:` against a schema declaring `status` under
+    // additionalProperties:false, and omitted required `summary` — so an agent
+    // emitting exactly what the skill documents produced output the skill's own
+    // schema rejects.
+    const schema = JSON.parse(
+      readFileSync(path.join(SKILL_DIR, "output-contract.schema.json"), "utf8"),
+    ) as { required: string[]; properties: Record<string, unknown> };
+    const block = section(skill, "## Output Contract", "Full markdown report structure");
+    const yaml = block.slice(block.indexOf("```yaml"), block.indexOf("```", block.indexOf("```yaml") + 7));
+    const keys = [...yaml.matchAll(/^([A-Za-z_]+):/gm)].map((m) => m[1] as string);
+    expect(keys.length).toBeGreaterThan(5);
+    expect(schema.required.filter((key) => !keys.includes(key))).toEqual([]);
+    expect(keys.filter((key) => !(key in schema.properties))).toEqual([]);
+  });
+
+  test("the canonical STATUS line survives outside that block", () => {
+    // Lowercasing `status` into the block to satisfy the schema removed the line
+    // a caller actually parses. Both belong: the line for the caller, the key for
+    // the schema.
+    expect(skill).toMatch(/^STATUS: DONE \| DONE_WITH_CONCERNS \| NEEDS_CONTEXT \| BLOCKED$/m);
+  });
+
   test("it does not claim an enforcement nobody wrote", () => {
     // Same rule as `enforcement-claims.test.ts`: no production TypeScript loads
     // these files, so the skill must say so rather than imply a refusal.
