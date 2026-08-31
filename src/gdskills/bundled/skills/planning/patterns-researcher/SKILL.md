@@ -1,5 +1,5 @@
 ---
-name: gproject-patterns-researcher
+name: patterns-researcher
 description: >
   Researches best practices per technology in the chosen stack and defines
   application architecture patterns. Produces constraints that PRD must follow.

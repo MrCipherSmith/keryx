@@ -1,5 +1,5 @@
 ---
-name: gproject-problem-definer
+name: problem-definer
 description: >
   Defines core problems, goals, non-goals, and success metrics from discovery data.
   Use when: dispatched by gproject-orchestrator Phase 1.

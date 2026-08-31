@@ -1,5 +1,5 @@
 ---
-name: gproject-stack-advisor
+name: stack-advisor
 description: >
   Determines project level (MVP/pet/startup/production) and recommends optimal
   technology stack with trade-off analysis.
