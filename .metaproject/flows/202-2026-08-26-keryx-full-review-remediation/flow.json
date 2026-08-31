@@ -5,7 +5,7 @@
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "in-progress",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-31T11:38:12.668Z",
+  "updatedAt": "2026-08-31T11:54:27.161Z",
   "source": {
     "type": "description",
     "ref": null
@@ -267,6 +267,23 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Make C-14 proxy fallback test portable across Bun hosts",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -462,6 +479,16 @@
       "at": "2026-08-31T11:38:12.668Z",
       "event": "task-done",
       "detail": "T13: Repair rebase integration for injected fleet sink"
+    },
+    {
+      "at": "2026-08-31T11:53:44.566Z",
+      "event": "task-added",
+      "detail": "T14: Make C-14 proxy fallback test portable across Bun hosts"
+    },
+    {
+      "at": "2026-08-31T11:54:27.161Z",
+      "event": "task-done",
+      "detail": "T14: Make C-14 proxy fallback test portable across Bun hosts"
     }
   ]
 }

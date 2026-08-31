@@ -39,3 +39,5 @@
 - 2026-08-26T06:07:16.357Z - ac-confirmed: AC14: Validation, requirements, change report, managed review, baseline comparison, and metrics persisted.
 - 2026-08-31T11:29:49.355Z - task-added: T13: Repair rebase integration for injected fleet sink
 - 2026-08-31T11:38:12.668Z - task-done: T13: Repair rebase integration for injected fleet sink
+- 2026-08-31T11:53:44.566Z - task-added: T14: Make C-14 proxy fallback test portable across Bun hosts
+- 2026-08-31T11:54:27.161Z - task-done: T14: Make C-14 proxy fallback test portable across Bun hosts
