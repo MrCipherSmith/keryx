@@ -787,3 +787,79 @@ test("an actor's role revoked strictly between the flow resource's two re-author
   expect(result.manifest).toEqual({ facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" });
   expect(result.receipt.decision).toBe("denied");
 });
+
+/** A v1.1 checkpoint body plus its integrity hash, for hand-built cases. */
+const sealCheckpoint = (body: Record<string, unknown>): string =>
+  `${JSON.stringify({ ...body, integrity: { checkpointHash: createHash("sha256").update(JSON.stringify(body), "utf8").digest("hex") } })}\n`;
+
+test("a checkpoint carrying an unexpected key is re-audited, not parsed leniently", async () => {
+  // The key-set/version check in `parseCheckpoint` survived deletion with the
+  // whole suite green. It is not decoration: it is what keeps the fast path from
+  // trusting a record whose shape it does not recognise, and a shape it does not
+  // recognise is one written by something other than this build.
+  //
+  // Made observable by pairing the extra key with a WRONG contentDigest. With
+  // the check, the checkpoint is rejected before the digest is ever compared and
+  // the honest ledger re-audits cleanly. Without it, the record is accepted and
+  // the bad digest throws. So a PASSING read is the assertion.
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-extra-key-"));
+  const service = receiptService(root);
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-extra-key-first-0001" });
+
+  const current = JSON.parse(await readFile(checkpoint, "utf8")) as Record<string, unknown>;
+  // The integrity hash is sealed over the CANONICAL six-field body, then the
+  // extra key is added alongside it. That matters: sealing over the extra key
+  // too would make the record fail its hash check, and the test would pass for
+  // a reason that has nothing to do with the key-set gate — which is exactly
+  // how the first draft of this test passed while the mutation went unnoticed.
+  const canonical = {
+    schemaVersion: "1.1",
+    ledgerBytes: current.ledgerBytes, recordCount: current.recordCount,
+    headHash: current.headHash, tailOffset: current.tailOffset,
+    contentDigest: "f".repeat(64),
+  };
+  await writeFile(checkpoint, `${JSON.stringify({
+    ...canonical,
+    unexpected: "a key this build does not write",
+    integrity: { checkpointHash: createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex") },
+  })}\n`);
+
+  await read(service, { requestCorrelationId: "fwk-extra-key-second-0001" });
+  const receipts = (await readFile(ledger, "utf8")).trimEnd().split("\n").map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt);
+  expect(verifyAccessReceiptLedger(receipts)).toMatchObject({ ok: true, verifiedCount: 2 });
+  const rewritten = JSON.parse(await readFile(checkpoint, "utf8")) as Record<string, unknown>;
+  expect(rewritten.unexpected).toBeUndefined();
+  expect(rewritten.contentDigest).not.toBe("f".repeat(64));
+});
+
+test("a checkpoint whose tail offset is out of range is re-audited, not read past the end of the file", async () => {
+  // The `tailOffset`/`tailBytes` bounds check also survived deletion. Without
+  // it, `Buffer.alloc` is handed a negative length and throws a RangeError —
+  // an internal crash surfacing from a code path whose whole job is to decide
+  // calmly that a checkpoint cannot be trusted.
+  //
+  // The digest here is CORRECT, so nothing else can reject this record: the
+  // bounds check is the only thing standing between a nonsense offset and that
+  // crash. A passing read is again the assertion.
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-tail-bounds-"));
+  const service = receiptService(root);
+  const { ledger, checkpoint } = ledgerPaths(root);
+  await read(service, { requestCorrelationId: "fwk-tail-bounds-first-0001" });
+
+  const current = JSON.parse(await readFile(checkpoint, "utf8")) as Record<string, unknown>;
+  await writeFile(checkpoint, sealCheckpoint({
+    schemaVersion: "1.1",
+    ledgerBytes: current.ledgerBytes, recordCount: current.recordCount,
+    headHash: current.headHash,
+    // Past the end of the audited prefix, so `ledgerBytes - tailOffset` is negative.
+    tailOffset: (current.ledgerBytes as number) + 4096,
+    contentDigest: current.contentDigest,
+  }));
+
+  await read(service, { requestCorrelationId: "fwk-tail-bounds-second-0001" });
+  const receipts = (await readFile(ledger, "utf8")).trimEnd().split("\n").map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt);
+  expect(verifyAccessReceiptLedger(receipts)).toMatchObject({ ok: true, verifiedCount: 2 });
+  const rewritten = JSON.parse(await readFile(checkpoint, "utf8")) as { tailOffset: number; ledgerBytes: number };
+  expect(rewritten.tailOffset).toBeLessThan(rewritten.ledgerBytes);
+});

@@ -122,12 +122,29 @@ async function digestLedgerPrefix(handle: FileHandle, byteLength: number): Promi
   if (byteLength === 0) return digest;
   const buffer = Buffer.alloc(Math.min(ledgerDigestChunkBytes, byteLength));
   let position = 0;
-  while (position < byteLength) {
+  // Bounded by construction, not only by the short-read check below.
+  //
+  // A mutation pass over this release deleted BOTH the `bytesRead === 0` check
+  // here and the size comparison in `fastCheckpointState`, and the suite did not
+  // fail — it HUNG. With neither, `position` never advances on a short read and
+  // `while (position < byteLength)` spins forever. A test suite that hangs is
+  // worse than one that fails: CI reports a timeout, which reads as
+  // infrastructure trouble rather than a defect.
+  //
+  // The chunk count is knowable up front, so the loop is written against it. The
+  // short-read check stays and is still correct — but removing it can now only
+  // produce a WRONG DIGEST, which a test can catch, instead of a hang, which no
+  // test can survive to report.
+  const maxChunks = Math.ceil(byteLength / buffer.length);
+  for (let chunk = 0; chunk < maxChunks && position < byteLength; chunk += 1) {
     const result = await handle.read(buffer, 0, Math.min(buffer.length, byteLength - position), position);
     if (result.bytesRead === 0) return undefined;
     digest.update(buffer.subarray(0, result.bytesRead));
     position += result.bytesRead;
   }
+  // Reached only if the file ended early without a zero-length read ever being
+  // observed. Refuse rather than return a digest over a prefix nobody audited.
+  if (position < byteLength) return undefined;
   return digest;
 }
 function parseCheckpoint(value: unknown): Checkpoint | undefined {
