@@ -26,9 +26,9 @@ Resolution order:
 | entity-skill-creator | core | Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity. | gdskills/core/entity-skill-creator/SKILL.md |
 | entity-skill-learner | core | Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports. | gdskills/core/entity-skill-learner/SKILL.md |
 | entity-skill-router | core | Select relevant project-skills for known modules, components, stores, services, and domain entities. | gdskills/core/entity-skill-router/SKILL.md |
-| reviewer-skill-creator | core | Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard. | gdskills/core/reviewer-skill-creator/SKILL.md |
 | entity-skill-verifier | core | Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons. | gdskills/core/entity-skill-verifier/SKILL.md |
 | metaproject-router | core | Choose which Metaproject module, working skill, or project-skill should be used for a user request. | gdskills/core/metaproject-router/SKILL.md |
+| reviewer-skill-creator | core | Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard. | gdskills/core/reviewer-skill-creator/SKILL.md |
 | code-verifier | orchestration | Run and summarize verification gates: typecheck, lint, tests, build, imports, and changed-scope checks. | gdskills/orchestration/code-verifier/SKILL.md |
 | context-collector | orchestration | Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files. | gdskills/orchestration/context-collector/SKILL.md |
 | feature-analyzer | orchestration | Analyze a feature, module, branch, or migration area and produce an implementation map. | gdskills/orchestration/feature-analyzer/SKILL.md |
