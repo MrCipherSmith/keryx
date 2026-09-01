@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "214",
+  "slug": "the-flow-record-carries-no-base-branch-s",
+  "title": "The flow record carries no base branch, so completion cannot ask where the merge landed",
+  "status": "in-progress",
+  "createdAt": "2026-09-01T01:24:39.290Z",
+  "updatedAt": "2026-09-01T01:26:04.267Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:09e140e1b3ddb9a1ffdf998f379178fcce551f15cb0bf026aad978ea611111f4",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T11, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T11, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T11, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T11, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T5",
+      "title": "Add optional baseBranch to the flow record; write it at init and at implemented --pr (AC1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Prove a pre-existing package still loads and behaves, using a real copied package (AC2)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Sixth completion condition: refuse a merge that landed off the recorded base (AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Drive the real command to unobserved with the tracker unreachable and check the message (AC4)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Pin that not-recorded, violated and pass are three states, not two (AC5)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Point flow-orchestrator Phase 4 at the gate instead of the agent's eyes; sweep for claims (AC6)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "One failing case per existing condition 1-5 to prove nothing regressed (AC7)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-01T01:24:39.290Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-01T01:25:54.251Z",
+      "event": "task-added",
+      "detail": "T5: Add optional baseBranch to the flow record; write it at init and at implemented --pr (AC1)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.388Z",
+      "event": "task-added",
+      "detail": "T6: Prove a pre-existing package still loads and behaves, using a real copied package (AC2)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.512Z",
+      "event": "task-added",
+      "detail": "T7: Sixth completion condition: refuse a merge that landed off the recorded base (AC3)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.621Z",
+      "event": "task-added",
+      "detail": "T8: Drive the real command to unobserved with the tracker unreachable and check the message (AC4)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.726Z",
+      "event": "task-added",
+      "detail": "T9: Pin that not-recorded, violated and pass are three states, not two (AC5)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.827Z",
+      "event": "task-added",
+      "detail": "T10: Point flow-orchestrator Phase 4 at the gate instead of the agent's eyes; sweep for claims (AC6)"
+    },
+    {
+      "at": "2026-09-01T01:25:54.920Z",
+      "event": "task-added",
+      "detail": "T11: One failing case per existing condition 1-5 to prove nothing regressed (AC7)"
+    },
+    {
+      "at": "2026-09-01T01:26:03.701Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-01T01:26:03.816Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-01T01:26:03.921Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-01T01:26:04.043Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-01T01:26:04.161Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-01T01:26:04.267Z",
+      "event": "started"
+    }
+  ]
+}

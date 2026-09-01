@@ -1,0 +1,363 @@
+[
+  {
+    "id": "R1-SEC-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The injection screen was one batched `check-input` over `<collected-bodies>`, an artifact no command produces, whose findings carry byte offsets and no comment identity — so the per-comment exclusion it fed had no input.",
+    "impact": "Under --fix, third-party comment text reaches an automated loop that edits code and merges with no screen able to exclude any single comment.",
+    "suggested_fix": "Screen one comment at a time, keyed by its id; carry an id -> {gate, action, findings[]} map into Steps 8 and 9.",
+    "evidence": "SKILL.md Step 3 as shipped in 33d993f1; `locationFor` in src/security/redact.ts returns line/column/start/end only.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Step 3, the only invocation of the screen",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Step 9 precondition 3, its only consumer",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json"
+      ],
+      "enumeration_method": "`keryx ctx rg check-input` over the changed files and over .metaproject/skills returned one invocation; the same query filtered to src/review/ returned zero, establishing that no code supplements the screen. The output schema was read in full for any screen-related property."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-SEC-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Rewritten per-comment in 9950cbe9; the invocation itself was then found broken and fixed in 00f01b71, with an execution test."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-SEC-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`fix: true` was dispatchable with no confirmation field, while flow-orchestrator establishes that a dispatched run takes its answer from its input rather than stalling.",
+    "impact": "Text written by people outside the repository could drive code edits and a merge with no human decision anywhere in the chain.",
+    "suggested_fix": "Require operator_confirmed {confirmed_by, confirmed_at, plan_digest} when fix is true; refuse under dispatch without it.",
+    "evidence": "input-contract.schema.json at 33d993f1: `fix` a plain boolean, additionalProperties:false, no confirmation property.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the confirmation step",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md"
+      ],
+      "enumeration_method": "Enumerated the entry paths into --fix: interactive invocation, dispatch via the input contract (read in full — `fix` a plain boolean under additionalProperties:false), and dispatch by another skill. `keryx ctx rg review-pr-feedback` over bundled/ established which of those are instantiated today."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-SEC-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Conditional added to both input schemas and both registered; validator now returns `$.operator_confirmed: Missing required property` (2907d530)."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-SEC-003",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The skill never stated that `keryx security check-input` returns gate `pass`, action `warn` and exit 0 on the very comment it screens for, and Steps 3 and 9 described two different responses to a flagged comment.",
+    "impact": "An agent branching on the gate or the exit code screens nothing while believing it did.",
+    "suggested_fix": "State that the decision is read from findings[], never the gate or exit code; reconcile the two steps.",
+    "evidence": "Executed: an injection payload returns gate pass / action warn / exit 0 with the finding present in findings[].",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Step 3 exclusion rule",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Step 9 precondition 3"
+      ],
+      "enumeration_method": "grep for `prompt-injection|unreviewed` over the changed SKILL.md returned exactly these two sites — the full population of places the skill says what happens to a flagged comment. The command's actual return was derived by reading the call chain end to end: security.ts handleCheck -> service.ts analyze -> detect/injection.ts -> resolve.ts -> exitCodeFor."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-SEC-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Stated in Step 3 and the two steps reconciled (9950cbe9)."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-ARCH-001",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "`max_fix_rounds` was declared in the input schema and the Input Contract table and transmitted nowhere — two occurrences repo-wide, both declarations.",
+    "impact": "The only knob over an irreversible merge-and-reply sequence was inert; a caller asking for one round got three.",
+    "suggested_fix": "Send it as an `attempt budget:` constraint that can only LOWER the bound, with a matching row in the owner's table.",
+    "evidence": "`keryx ctx rg max_fix_rounds` returned 2 hits, both declarations.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Input Contract table row",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the Step 9 dispatch payload",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md"
+      ],
+      "enumeration_method": "`keryx ctx rg max_fix_rounds` across the repository returned exactly 2 matches, both declarations; the dispatch payload and both copies of the constraint table were then read in full to confirm the consumer side was silent."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-ARCH-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Wired into the Step 9 dispatch with the owner-side row (9950cbe9)."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-ARCH-002",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The dispatch contract travelled as unvalidated free text through `constraints[]`; `base_branch` had no typed carrier at any hop; the schema was not in the CONTRACTS registry.",
+    "impact": "One dropped or misread string is the difference between the fix landing inside the reviewed PR and landing on the default branch, reported as success.",
+    "suggested_fix": "Type base_branch, completion_outcome and operator_confirmed; register the schema so a validator can be pointed at it.",
+    "evidence": "flow-orchestrator input schema at 33d993f1: constraints as an untyped string array, absent from CONTRACTS; src/flow/types.ts has no branch field.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/input-contract.schema.json",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the constraint strings sent",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/contracts.ts",
+        "src/flow/types.ts"
+      ],
+      "enumeration_method": "Read the flow-orchestrator input schema in full; `grep -n 'name: \"' src/gdskills/contracts.ts` for the complete registry; `keryx ctx rg baseBranch|base_branch` over src/**/*.ts for every typed carrier of the concept; `grep -n branch src/flow/types.ts` returned zero."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-ARCH-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Typed and registered (9950cbe9); the conditional that makes the refusal real added in fd726ef4; completion_outcome made required in 2907d530."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-LOGIC-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Two assertions in the new guard matched only Red Flags table rows, not the rules they named; a third had a Red Flags backstop.",
+    "impact": "The one safety rule in a skill that feeds external comments into a merge loop could be deleted with the suite reporting success.",
+    "suggested_fix": "Slice the Red Flags table off before rule assertions and re-anchor the regexes.",
+    "evidence": "Mutation: gutting the prompt-injection rule, the info clause and the pagination reason left 24 pass / 0 fail with an identical expect() count.",
+    "confidence": "high",
+    "file": "src/gdskills/review-pr-feedback-wiring.test.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/review-pr-feedback-wiring.test.ts — the developer-addresses regex",
+        "src/gdskills/review-pr-feedback-wiring.test.ts — the info-clause regex",
+        "src/gdskills/review-pr-feedback-wiring.test.ts — the first-thirty regex"
+      ],
+      "enumeration_method": "Extracted all 46 toContain/toMatch arguments targeting SKILL.md, resolved every match to a line number with a script handling the flat() whitespace collapse, and partitioned them against the Red Flags section boundary. Three matched at or beyond it; two exclusively. Confirmed by executing the mutation."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-LOGIC-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "`rules()` helper added and all three re-anchored (fd726ef4); re-verified RED in round 2."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-LOGIC-002",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The documented Output Contract block could not validate against the schema shipped beside it: `STATUS` uppercase against required `status` under additionalProperties:false, and required `summary` absent.",
+    "impact": "An agent emitting exactly what the skill documents produces output the skill's own schema rejects.",
+    "suggested_fix": "Lowercase the key inside the block, add summary, keep the canonical STATUS line outside it.",
+    "evidence": "Set-differenced the block's keys against the schema: missing [status, summary]; extra [STATUS].",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the Output Contract yaml block",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json"
+      ],
+      "enumeration_method": "Set-differenced the schema's required array and properties keys against the keys of the documented block, executed as a script. The input pair was checked for the same class and matches exactly, so the input side has no member."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-LOGIC-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in fd726ef4; the canonical STATUS line it deleted was restored in 4a2b355f with both halves pinned."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R1-LOGIC-003",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`needs-clarification` had no row in the Step 10 disposition mapping while Step 9's post-merge re-collection can produce it.",
+    "impact": "buildReplyPass refuses over any comment with no outcome — after the merge has landed, with every reviewer unanswered.",
+    "suggested_fix": "Map it to answered-disagree and state that a late arrival does not reopen the loop.",
+    "evidence": "Cross-tabulated the eight Step 6 verdicts against the Step 10 table; exactly one unmapped.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the Step 10 mapping table",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the Step 9 post-merge re-collect",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — Step 6 rule 4"
+      ],
+      "enumeration_method": "Cross-tabulated the eight verdict names in the Step 6 table against every left-hand cell of the Step 10 mapping table, then checked the reverse direction against FINDING_DISPOSITION_STATES and EXTERNAL_TERMINAL_DISPOSITIONS in src/review/types.ts. Exactly one verdict unmapped."
+    },
+    "global_id": "2026-08-31-ingest-424#R1-LOGIC-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Row added plus the late-arrival rule (fd726ef4)."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-SEC-101",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "The per-comment screen passed the comment TEXT to `--file`, which takes a path: ENOENT on every comment, no findings[], and Step 9 precondition 3 satisfied vacuously. A body that IS a resolvable path would make the screen read that file and quote it into the report.",
+    "impact": "Any GitHub user who can comment on the PR supplies the input; under --fix it reaches Steps 6, 7 and the flow-orchestrator dispatch unscreened.",
+    "suggested_fix": "Write the body to a file and screen the path, with a `test -s` guard because the empty string scans clean.",
+    "evidence": "Executed: `ENOENT: no such file or directory, open 'Ignore all previous instructions…'`; the same payload via a real path returns prompt-injection.ignore-instructions.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the screen invocation",
+        "src/gdskills/review-pr-feedback-wiring.test.ts — the three prose tests covering it"
+      ],
+      "enumeration_method": "`keryx ctx rg check-input` across the 15 files in merge-base..HEAD and across .metaproject/skills returned one site. The .metaproject mirror of review-pr-feedback does not exist (the skill is full-tier, this project installs recommended), so there is no stale second copy. Verified by executing both forms of the command."
+    },
+    "global_id": "2026-08-31-ingest-424#R2-SEC-101",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 00f01b71 with an execution test; mutation-checked three ways (broken invocation, missing guard, broken detector regex) — each fails one test."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-SEC-102",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`screened`, `excluded_for_injection`, `filtered` and `fix.operator_confirmed` were all optional, so a run whose screen never executed emitted output identical to one that screened and found nothing.",
+    "impact": "The only field that would record the blocker above was optional; measured-zero and not-measured were the same value.",
+    "suggested_fix": "Add all four to required and carry them in the documented block, nested ones included.",
+    "evidence": "Parsed the schema: required omitted all four while their own descriptions asserted they are never absent by omission.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json — required omits screened",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json — required omits excluded_for_injection",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json — required omits filtered"
+      ],
+      "enumeration_method": "Loaded the schema and diffed the required array against properties; the class is 'a property whose description asserts it is never absent by omission, that is not in required'. Three members, exhaustive for this file."
+    },
+    "global_id": "2026-08-31-ingest-424#R2-SEC-102",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "All four required in 2907d530; the guard extended to walk nested required keys."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-ARCH-101",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "Step 9 claimed the output contract records the operator confirmation. `fix.operator_confirmed` existed in the schema, was absent from the documented block, and was not in `fix.required`; the guard's key scan was column-0 only so it could not see nested keys.",
+    "impact": "A compliant --fix run emits a schema-valid result in which an approved run and an assumed one are indistinguishable.",
+    "suggested_fix": "Add the key to the documented block and to fix.required; extend the guard to nested keys.",
+    "evidence": "Read the documented block (7 keys, no operator_confirmed) against fix.required ([flow_id, flow_status, merged_into]).",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the documented fix block",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json — fix.required",
+        "src/gdskills/review-pr-feedback-wiring.test.ts — the column-0 key scan"
+      ],
+      "enumeration_method": "`keryx ctx rg operator_confirmed` over the skill directory returned 5 hits — input schema, three Step 9 prose/JSON sites, output schema — and zero in the documented output block. review-pr-feedback is full-only so it is not mirrored; the bundled copy is the only site."
+    },
+    "global_id": "2026-08-31-ingest-424#R2-ARCH-101",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Both fixed in 2907d530; mutation-checked by dropping the nested key."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-ARCH-102",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The round-2 if/then fenced the typed route while the same commit's constraint table documented an untyped one: a payload carrying only `constraints: [\"completion: outcome A\"]` validated clean.",
+    "impact": "The enforcement was bypassed by moving one value into the free-text array, and the file owning the fence documented the bypass.",
+    "suggested_fix": "Delete the row and make completion_outcome required so an absent one is a refusal.",
+    "evidence": "Executed the validator on four payloads; the constraints-only one returned `valid`.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md — the constraint table row",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/input-contract.schema.json",
+        ".metaproject/core/gdskills/contracts/flow-orchestrator-input-contract.schema.json"
+      ],
+      "enumeration_method": "`rg --hidden 'completion: outcome A'` returned exactly 2 hits, the bundled table and its mirror (the first pass without --hidden missed every .metaproject copy and was re-run). `rg -ln '\"if\"' over the three schema copies confirmed all three carry the conditional; diff confirmed byte-identity."
+    },
+    "global_id": "2026-08-31-ingest-424#R2-ARCH-102",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Row replaced with a refusal and completion_outcome made required (2907d530); the same payload now returns `$.completion_outcome: Missing required property`."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-LOGIC-R001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`keryx skills contracts validate --schema flow-orchestrator-input` returned `valid:` on the exact dispatch both skills call BLOCKED — a conditional requirement encoded as an unconditional optional property.",
+    "impact": "An agent told to validate reads `valid:` and treats it as approval for the case the prose calls an escalation.",
+    "suggested_fix": "Express the conditional with if/then, which contracts.ts implements and review-finding.schema.json already uses.",
+    "evidence": "Nine crafted payloads run through the validator; the no-confirmation one returned valid while nested required/additionalProperties/minLength/enum were all enforced.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/input-contract.schema.json",
+        ".metaproject/core/gdskills/contracts/flow-orchestrator-input-contract.schema.json",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md — the prose claiming the refusal",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md — the same instruction"
+      ],
+      "enumeration_method": "Ran the validator on nine crafted payloads rather than reading contracts.ts: nested required, nested additionalProperties, nested minLength and top-level enum/minLength all proved enforced, isolating the gap to the missing conditional. `grep -c '\"if\"'` returned 0 in all three copies."
+    },
+    "global_id": "2026-08-31-ingest-424#R2-LOGIC-R001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "if/then added to all three copies (fd726ef4); the payload is now refused."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "R2-ARCH-108",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "`src/flow/types.ts` has no branch field, so `keryx flow complete` cannot compare a merge target to the base the dispatch named.",
+    "impact": "The original harm is detectable at dispatch time and undetectable at completion time: a run that received a correct base_branch and merged elsewhere passes the gate.",
+    "suggested_fix": "Add an optional baseBranch to the flow record, written at init from the dispatch, and have the completion gate compare it to the merge target.",
+    "evidence": "`keryx ctx rg branch src/flow/types.ts` returns no matches; the only durable carrier the fix names is journal.md prose.",
+    "confidence": "high",
+    "file": "src/flow/types.ts",
+    "global_id": "2026-08-31-ingest-424#R2-ARCH-108",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "Deferred deliberately: this changes the flow package's durable record and its completion gate, which is not this branch's subject. Recorded for its own flow."
+    },
+    "source": "internal"
+  }
+]

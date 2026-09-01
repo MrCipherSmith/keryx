@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "213",
+  "slug": "make-registered-contracts-refuse-in-prod",
+  "title": "Make registered contracts refuse in production, not only when an agent remembers to validate",
+  "status": "in-progress",
+  "createdAt": "2026-08-31T23:32:32.688Z",
+  "updatedAt": "2026-08-31T23:34:28.808Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d4e40fc55d08a34b141cd2938677d1fc3167ef1b82b605bd096f89a0f2ed8f55",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T10, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T10, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T10, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T5-T10, which name the specific work and each carry an acceptance criterion; the scaffold defaults were generic placeholders"
+    },
+    {
+      "id": "T5",
+      "title": "Enumerate the enforcement point of every registered contract and record it machine-readably (AC1)",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Refuse review-pr-feedback-output at the keryx-owned write path, on the job/store.ts precedent (AC2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Record enforcement: none plus its reason for every contract with no keryx-owned path (AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Guard deriving the split from CONTRACTS; verify by adding a fake registration in memory (AC4)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Sweep skills and schemas for enforcement claims the recorded state does not back (AC5)",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Run one rejecting payload per already-enforced contract to prove nothing regressed (AC6)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-31T23:32:32.688Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-31T23:34:11.704Z",
+      "event": "task-added",
+      "detail": "T5: Enumerate the enforcement point of every registered contract and record it machine-readably (AC1)"
+    },
+    {
+      "at": "2026-08-31T23:34:11.823Z",
+      "event": "task-added",
+      "detail": "T6: Refuse review-pr-feedback-output at the keryx-owned write path, on the job/store.ts precedent (AC2)"
+    },
+    {
+      "at": "2026-08-31T23:34:11.934Z",
+      "event": "task-added",
+      "detail": "T7: Record enforcement: none plus its reason for every contract with no keryx-owned path (AC3)"
+    },
+    {
+      "at": "2026-08-31T23:34:12.043Z",
+      "event": "task-added",
+      "detail": "T8: Guard deriving the split from CONTRACTS; verify by adding a fake registration in memory (AC4)"
+    },
+    {
+      "at": "2026-08-31T23:34:12.149Z",
+      "event": "task-added",
+      "detail": "T9: Sweep skills and schemas for enforcement claims the recorded state does not back (AC5)"
+    },
+    {
+      "at": "2026-08-31T23:34:12.258Z",
+      "event": "task-added",
+      "detail": "T10: Run one rejecting payload per already-enforced contract to prove nothing regressed (AC6)"
+    },
+    {
+      "at": "2026-08-31T23:34:20.680Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-31T23:34:20.765Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-31T23:34:20.855Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-31T23:34:20.941Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-31T23:34:28.721Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-31T23:34:28.808Z",
+      "event": "started"
+    }
+  ]
+}
