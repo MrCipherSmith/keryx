@@ -65,3 +65,32 @@ describe("createProjectSkill security guard", () => {
     }
   });
 });
+
+test("createProjectSkill refuses a prose target on the CLI path, not only the wrap-up path", () => {
+  // The routable-target guard was added after two prose-target skills reached
+  // `main`, and wired into `skill-owner-writer` alone. `keryx skills create` —
+  // the path `reviewer-skill-creator` tells agents to use — never called it, so
+  // the entry point most likely to be handed a sentence was the unguarded one.
+  //
+  // `--dry-run` is asserted too: the refusal must come BEFORE any inference or
+  // write, otherwise a rejected target could still leave a slug derived from
+  // prose behind.
+  return (async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-prose-target-"));
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+
+    const prose = "This is a wrap-up summary, not a target.";
+    await expect(createProjectSkill(root, { target: prose, module: "review", name: "prose-test" }))
+      .rejects.toThrow(/reads as prose, not a routing key/);
+    await expect(createProjectSkill(root, { target: prose, module: "review", name: "prose-test", dryRun: true }))
+      .rejects.toThrow(/reads as prose, not a routing key/);
+
+    // And the shapes a target legitimately takes still pass: a concept, a symbol
+    // and a path. A guard that rejected these would be excepted on first honest
+    // use and then deleted.
+    for (const target of ["auth flow", "IResultDqReport", "src/dq/components/DqScoreCard.tsx"]) {
+      const result = await createProjectSkill(root, { target, module: "review", name: `ok-${target.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`, dryRun: true });
+      expect(result).toBeTruthy();
+    }
+  })();
+});

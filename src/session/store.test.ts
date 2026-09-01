@@ -329,3 +329,37 @@ test("SessionSummary: omitting runMode/courseStatus entirely still parses cleanl
     rmSync(proj, { recursive: true, force: true });
   }
 });
+
+test("persisted history redacts secrets in tool-call arguments, not only in message content", () => {
+  // The first version of `redactHistory` rewrote `content` and let the spread
+  // carry `toolCalls` through untouched, while `writeJsonl` serialises
+  // `toolCalls` verbatim into three files. A credential the model read from one
+  // tool result and passed into the NEXT call's arguments therefore landed on
+  // disk in the clear — through the function written to prevent exactly that.
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-redact-toolcall-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    const secret = `ghp_${"A".repeat(36)}`;
+    persistHistory(handle, [
+      { role: "user" as const, content: "deploy it", provenance: "project" as const },
+      {
+        role: "assistant" as const,
+        content: "calling the tool",
+        provenance: "model" as const,
+        toolCalls: [{ id: "call-1", name: "shell_exec", arguments: JSON.stringify({ command: `curl -H "Authorization: Bearer ${secret}" https://example.test` }) }],
+      },
+    ]);
+
+    // All three files writeJsonl targets, because a leak in any one of them is a
+    // leak. The legacy transcript mirror is the easiest to forget.
+    for (const file of ["context.jsonl", "archive.jsonl", "transcript.jsonl"]) {
+      const raw = readFileSync(path.join(handle.dir, file), "utf8");
+      expect(raw).not.toContain(secret);
+      expect(raw).toContain("shell_exec");
+    }
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});

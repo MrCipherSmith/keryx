@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { formatFwkExplain } from "../sac/fwk-explain";
-import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
+import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, readProposalSecurityGate } from "../sac/proposal-lifecycle";
 import { createLocalCollaborationService } from "../sac/collaboration-service";
 import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
@@ -131,17 +131,42 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2)); return;
     }
     if (subcommand === "confirm-review") {
-      rejectUnknownOptions(args.slice(3), new Set());
+      rejectUnknownOptions(args.slice(3), new Set(["--acknowledge-security"]));
       const workspaceId = args[1]; const proposalId = args[2];
-      if (!workspaceId || !proposalId) throw new Error("Usage: keryx workspace confirm-review <workspace-id> <proposal-id>");
+      if (!workspaceId || !proposalId) throw new Error("Usage: keryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]");
       // SLATE-20: mints the short-lived, single-use token `review --decision
       // accepted` requires. Deliberately its own separate shell command
       // (never an agent-native/MCP tool, never folded into `review` itself)
       // so accepting a proposal always takes two distinct approval-gated
       // shell_exec invocations, not one — an agent that only has MCP/tool
       // access, with no shell_exec at all, cannot mint this on its own.
-      const { token, expiresAt } = await mintConfirmToken(process.cwd(), workspaceId, proposalId, { securityAcknowledged: true });
-      console.log(JSON.stringify({ token, expiresAt }, null, 2)); return;
+      // The acknowledgement has to be EARNED, not assumed. This argument used to
+      // be the literal `{ securityAcknowledged: true }` on every invocation,
+      // which meant `consumeConfirmToken`'s `needs-approval` gate could never
+      // fire and the promise in its error message — "explicit human
+      // acknowledgement of the proposal security findings" — described something
+      // that never took place.
+      //
+      // A reviewer cannot acknowledge what they were never shown, so the gate is
+      // read first and printed, and the flag only counts as an answer to THAT.
+      // An unreadable proposal refuses rather than defaulting to clean: not
+      // knowing the gate is not the same as knowing it passed.
+      const security = await readProposalSecurityGate(process.cwd(), workspaceId, proposalId);
+      if (!security) throw new Error(`keryx workspace confirm-review: cannot read proposal ${proposalId} in workspace ${workspaceId} — refusing to mint a token for a proposal whose security gate is unknown`);
+      const acknowledgeSecurity = booleanFlag(args, "--acknowledge-security");
+      if (security.gate === "needs-approval" && !acknowledgeSecurity) {
+        throw new Error(
+          [
+            `keryx workspace confirm-review: proposal ${proposalId} is gated \`needs-approval\` — its evidence tripped the security scan.`,
+            ...(security.evidenceRefs.length > 0 ? [`Evidence: ${security.evidenceRefs.join(", ")}`] : []),
+            "Read the evidence, then re-run with --acknowledge-security to state that you have.",
+            "Accepting without reading it is the thing this gate exists to prevent.",
+          ].join("\n"),
+        );
+      }
+      // A `pass` proposal never needed acknowledgement, so it does not claim one.
+      const { token, expiresAt } = await mintConfirmToken(process.cwd(), workspaceId, proposalId, { securityAcknowledged: security.gate === "needs-approval" && acknowledgeSecurity });
+      console.log(JSON.stringify({ token, expiresAt, securityGate: security.gate, securityAcknowledged: security.gate === "needs-approval" && acknowledgeSecurity }, null, 2)); return;
     }
     if (subcommand === "review") {
       rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key", "--confirm-token"]));

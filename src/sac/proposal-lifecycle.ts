@@ -673,3 +673,49 @@ function authorityFor(manifest: { members: Array<{ subject: string; role: "owner
 }
 
 export function normalizeProposalLifecycleResult<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
+
+/**
+ * The proposal's recorded security gate and the evidence refs behind it, read
+ * for the CLI so `confirm-review` can SHOW a reviewer what they are being asked
+ * to acknowledge.
+ *
+ * This exists because the acknowledgement was previously a lie. `consumeConfirmToken`
+ * refuses a `needs-approval` proposal unless the token carries
+ * `securityAcknowledged: true`, and the only production minter passed that
+ * literal unconditionally — so the gate could not fire, and the error text
+ * promising "explicit human acknowledgement of the proposal security findings"
+ * described something that never happened.
+ *
+ * Reverting to the pre-0.2.74 shape is NOT the fix: with no flag at all, a
+ * `needs-approval` proposal could never be accepted by any route, which is why
+ * the literal was added. A dead end and a silent bypass are both wrong. The
+ * acknowledgement has to be real, which means the reviewer has to be told what
+ * the gate found and has to say yes to that specific thing.
+ *
+ * Returns `undefined` when the proposal cannot be read: the caller then refuses
+ * rather than assuming a clean gate, because "I could not check" and "there is
+ * nothing to check" are different answers.
+ */
+export async function readProposalSecurityGate(
+  cwd: string,
+  workspaceId: string,
+  proposalId: string,
+): Promise<{ gate: "pass" | "needs-approval"; evidenceRefs: string[] } | undefined> {
+  const file = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.json`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const record = parsed as { security?: { gate?: unknown }; evidence?: unknown };
+  const gate = record.security?.gate;
+  if (gate !== "pass" && gate !== "needs-approval") return undefined;
+  const evidenceRefs = Array.isArray(record.evidence)
+    ? record.evidence
+        .map((entry) => (typeof entry === "object" && entry !== null ? (entry as { uri?: unknown }).uri : undefined))
+        .filter((uri): uri is string => typeof uri === "string")
+    : [];
+  return { gate, evidenceRefs };
+}

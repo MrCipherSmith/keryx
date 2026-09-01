@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createProjectSkill } from "../gdskills/project-skills";
-import { collectReviewers, renderReviewerInventoryMarkdown } from "./reviewers";
+import { escapeRegexLiteral, collectReviewers, renderReviewerInventoryMarkdown } from "./reviewers";
 
 let cwd: string;
 
@@ -144,4 +144,27 @@ describe("renderReviewerInventoryMarkdown", () => {
     // wrong — the wording has to carry that or it becomes noise people mute.
     expect(rendered).toContain("does not make the reviewer wrong");
   });
+});
+
+test("escapeRegexLiteral escapes every regex metacharacter, so a label can never become a pattern", () => {
+  // The inlined version this replaced had a character class that closed at its
+  // first `]`, making the escape a complete no-op. It was invisible because all
+  // three real labels ("Origin", "Origin Hash", "Imported At") need no escaping
+  // at all — so this test drives the metacharacters directly rather than through
+  // the labels, which is the only way the difference shows.
+  for (const meta of [".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]) {
+    expect(escapeRegexLiteral(meta)).toBe(`\\${meta}`);
+  }
+
+  // The property that matters: an escaped literal matches ITSELF and nothing
+  // else. Unescaped, `a.b` would match `aXb`.
+  const pattern = new RegExp(`^${escapeRegexLiteral("a.b")}$`);
+  expect(pattern.test("a.b")).toBe(true);
+  expect(pattern.test("aXb")).toBe(false);
+
+  // And the real labels still pass through unchanged, so the fix cannot have
+  // altered today's behaviour.
+  for (const label of ["Origin", "Origin Hash", "Imported At"]) {
+    expect(escapeRegexLiteral(label)).toBe(label);
+  }
 });
