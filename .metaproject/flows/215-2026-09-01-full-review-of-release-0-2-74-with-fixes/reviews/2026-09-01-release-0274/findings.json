@@ -1,0 +1,310 @@
+[
+  {
+    "id": "r-01",
+    "reviewer": "review-core-boundaries",
+    "severity": "major",
+    "problem": "The security-acknowledgement gate cannot fire in production: the only minter of the confirm token passes securityAcknowledged unconditionally.",
+    "impact": "consumeConfirmToken refuses a needs-approval proposal unless the token says a human acknowledged the findings, and its error text promises exactly that. The sole production caller hardcoded the literal, so a proposal whose evidence tripped the security scan was accepted through the ordinary two-step flow with the reviewer never shown, and never asked about, the finding. Pre-0.2.74 the same call had no flag and needs-approval could not be accepted by any route: the release replaced a visible dead end with a silent bypass, which is worse because the refusal used to be observable.",
+    "suggested_fix": "Read the gate, print what the scan found and in which evidence, and require an explicit --acknowledge-security. A clean proposal claims no acknowledgement; an unreadable proposal refuses rather than assuming a pass.",
+    "evidence": "Traced the full call chain; the only production call site is src/commands/workspace.ts:143, every other is a test. Found independently by two reviewers approaching from SAC and from the CLI.",
+    "confidence": "high",
+    "file": "src/commands/workspace.ts",
+    "line": 143,
+    "class_scope": {
+      "sites": [
+        "src/commands/workspace.ts:143"
+      ],
+      "enumeration_method": "Every production call site of mintConfirmToken enumerated with keryx ctx rg across src, excluding tests."
+    },
+    "global_id": "2026-09-01-release-0274#r-01",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f): confirm-review reads the gate, prints the findings, and requires --acknowledge-security; the stored token is asserted, not the printed line."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: restoring the exact shipped line turns the named test red 3/3 in isolation, and the test reads the persisted token rather than stdout. The bypass no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-02",
+    "reviewer": "review-clean-code",
+    "severity": "major",
+    "problem": "Session-history redaction covered message content but not tool-call arguments, so secrets reached disk in three files.",
+    "impact": "redactHistory rewrote content and let the object spread carry toolCalls through untouched, while writeJsonl serialises them verbatim into context.jsonl, archive.jsonl and the legacy transcript.jsonl. A credential the model read from one tool result and passed into the next call's arguments was written unmasked \u2014 through the function whose own comment says a command that reads a credential must not leak the raw value.",
+    "suggested_fix": "Redact arguments as text rather than parsing the JSON, since arguments are kept byte-exact as the provider emitted them and masks are fixed-width.",
+    "evidence": "Read the type, the spread and the serialisation path; redactHistory was introduced in 508f7b2d and has no test coverage anywhere.",
+    "confidence": "high",
+    "file": "src/session/store.ts",
+    "line": 291,
+    "class_scope": {
+      "sites": [
+        "src/session/store.ts:291"
+      ],
+      "enumeration_method": "Traced every field writeJsonl serialises against every field redactHistory rewrites."
+    },
+    "global_id": "2026-09-01-release-0274#r-02",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f); the test asserts all three files, including the legacy mirror."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: restoring the shipped redactHistory turns the named test red 3/3. The secret no longer appears in any of the three files.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-03",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "A contract registered this release declares maxItems, which the validator has no branch for \u2014 the third instance of a declared-but-ignored keyword.",
+    "impact": "review-pr-feedback-output says excluded_for_injection maxItems 0 when screen_status is unavailable \u2014 the machine form of 'if the injection screen never ran you may not claim it excluded anything'. A record asserting both validated clean at the enforcement point its own doc-comment names. minItems and maximum were the first two instances, each fixed by hand.",
+    "suggested_fix": "Fix the class, not the instance: a guard that no shipped schema may declare a keyword validateValue ignores, with the implemented set derived from the validator source rather than hand-listed.",
+    "evidence": "keryx skills contracts validate reported a self-contradictory record as valid; zero matches for maxItems in the validator.",
+    "confidence": "high",
+    "file": "src/gdskills/contracts.ts",
+    "line": 344,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/contracts.ts:344",
+        "src/gdskills/contracts.ts:352",
+        "src/gdskills/contracts.ts:362"
+      ],
+      "enumeration_method": "Structural guard walks every schema in CONTRACTS and compares declared keywords against those the validator source reads."
+    },
+    "global_id": "2026-09-01-release-0274#r-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f): maxItems implemented plus a structural guard, which immediately found exclusiveMinimum and `not` ignored in the contracts agents exchange."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: deleting the maxItems branch turns the guard red (2 fail), and deleting exclusiveMinimum or `not` each turn it red as well. The self-contradictory record is now refused.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-04",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The routable-target guard was wired into one of two write paths, and the unguarded one is the path agents are told to use.",
+    "impact": "isRoutableSkillTarget was added after two prose-target skills reached main \u2014 matching no skills route query and verifying as permanently stale. createProjectSkill, which backs keryx skills create, never called it, and reviewer-skill-creator instructs agents to run exactly that command.",
+    "suggested_fix": "Check the target before anything is inferred or written, so a rejection cannot leave a slug derived from prose.",
+    "evidence": "Reviewer demonstrated with --dry-run that a full sentence was accepted as a target.",
+    "confidence": "high",
+    "file": "src/gdskills/project-skills.ts",
+    "line": 76,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/project-skills.ts:76"
+      ],
+      "enumeration_method": "Both write paths enumerated: the SAC wrap-up writer and the CLI create command."
+    },
+    "global_id": "2026-09-01-release-0274#r-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f); legitimate concept, symbol and path targets still pass."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: removing the guard turns the named test red 3/3, and the three legitimate target shapes still pass, so the guard was not made over-broad.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-05",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "renderRiskHints reported '- none' for an output shape that carried a file count but no per-file rows.",
+    "impact": "The count proves files changed and the empty row set proves none were inspected, yet the section said no risky files. Live: Changed files 2, Risk Hints none, with package.json among the two and matching the risk regex. Same false-clean class as the Changed files 0 fix this release made, one section further down \u2014 and the comment above it warned the class could recur there.",
+    "suggested_fix": "Distinguish examined-and-clean from counted-but-unexamined; keep '- none' for a genuinely empty diff so the section stays useful.",
+    "evidence": "Reproduced live against the real repo range, then confirmed the fix from source.",
+    "confidence": "high",
+    "file": "src/commands/ctx.ts",
+    "line": 1053,
+    "class_scope": {
+      "sites": [
+        "src/commands/ctx.ts:1053"
+      ],
+      "enumeration_method": "Both no-hint branches examined against all three shapes: empty diff, counted-but-unlisted, and listed-but-not-risky."
+    },
+    "global_id": "2026-09-01-release-0274#r-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f)."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: the exact reported invocation now reports unknown with the file count and the re-run advice; an empty diff still reports none; restoring the shipped branch turns the tests red 3/3.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-06",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "The regex-escaping expression in metadataLine escaped nothing: its character class closed at the first bracket.",
+    "impact": "The class ended early, so the pattern became one metacharacter followed by two backslashes and a bracket, matching essentially nothing. Latent today because all three labels are metacharacter-free \u2014 but the next label added is the one that breaks it, and the failure would be a silently mis-extracted provenance field rather than an error.",
+    "suggested_fix": "Fix the class and lift it to an exported helper, since through the public surface a fixed and a broken version are indistinguishable.",
+    "evidence": "Ran the shipped expression against the intended one side by side; the shipped one is a no-op on a probe string of every metacharacter.",
+    "confidence": "high",
+    "file": "src/review/reviewers.ts",
+    "line": 63,
+    "class_scope": {
+      "sites": [
+        "src/review/reviewers.ts:63"
+      ],
+      "enumeration_method": "Single expression; all three call-site labels checked."
+    },
+    "global_id": "2026-09-01-release-0274#r-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #427 (bc4e193f) and exported as escapeRegexLiteral so it can be tested at all."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f: restoring the shipped character class turns the named test red 3/3, and the three real labels still pass through unchanged, so today's behaviour is unaltered.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-07",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Four gates the release added could be deleted with the full suite green, and deleting both SAC truncation gates made the suite hang rather than fail.",
+    "impact": "A hanging suite is worse than a failing one: CI reports a timeout, which reads as infrastructure trouble rather than a defect. The four unwatched gates were parseCheckpoint's key-set/version check, the tailOffset bounds check, and the blocked-note refusal in both the harness tool and the CLI \u2014 a guard duplicated across write paths with only one copy covered.",
+    "suggested_fix": "Pin each gate with a test that fails when it is removed, and bound the read loop by a computed chunk count so removal can only produce a wrong digest, never a hang.",
+    "evidence": "Mutation sweep over all fourteen gates, escalating each survivor to the full suite so under-targeting could not produce a false 'unguarded'.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.ts",
+    "line": 120,
+    "class_scope": {
+      "sites": [
+        "src/sac/fwk-service.ts:120",
+        "src/sac/fwk-service.ts:140",
+        "src/harness/tool/builtin/workspace-lifecycle-tool.ts:226",
+        "src/commands/workspace.ts:119"
+      ],
+      "enumeration_method": "All fourteen gates the release added were mutated; survivors escalated to the full suite."
+    },
+    "global_id": "2026-09-01-release-0274#r-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in #428 (10741e10): four gates pinned, loop bounded."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 10741e10: each of the four turns its named test red 3/3 when removed, and the double mutation that used to hang now completes.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-08",
+    "reviewer": "review-verifier",
+    "severity": "minor",
+    "problem": "Two SAC truncation lines remain individually removable with the suite green.",
+    "impact": "They are genuinely redundant \u2014 each refuses a truncated ledger alone, and a third check now backs both \u2014 so no test can discriminate them: same refusal for the same input. Reporting this as fixed would be a claim wider than the evidence, which is the class this programme exists to remove.",
+    "suggested_fix": "State it rather than write a test that only appears to discriminate, and remove the hang risk separately by bounding the loop.",
+    "evidence": "Removing either alone leaves 30 tests green; removing both used to hang and now completes.",
+    "confidence": "high",
+    "file": "src/sac/fwk-service.ts",
+    "line": 127,
+    "class_scope": {
+      "sites": [
+        "src/sac/fwk-service.ts:127",
+        "src/sac/fwk-service.ts:140"
+      ],
+      "enumeration_method": "Both lines mutated individually and together."
+    },
+    "global_id": "2026-09-01-release-0274#r-08",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "human: altsay \u2014 the operator asked to close everything closable; this pair is not closable by a test without fabricating a distinction that does not exist. Named in PR #428 and carried openly rather than silently."
+    },
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Confirmed as a real and accurate description of the remaining state: both lines still delete cleanly, and the hang no longer occurs.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-09",
+    "reviewer": "review-verifier",
+    "severity": "minor",
+    "problem": "Three tests written during this flow initially passed for the wrong reason, and one added guard produced a false positive.",
+    "impact": "One asserted printed output instead of the stored token, so restoring the shipped bug left it green; one sealed a checkpoint hash over the key it was testing, so the record failed its hash check instead of the gate; one omitted the session, so the command exited 1 with and without the guard. Separately, the new contract-keyword guard reported $ref as unimplemented because its scrape pattern missed a leading dollar. A guard that cries wolf earns an allow-list entry and is then deleted, so a false positive is the same class of error as a miss.",
+    "suggested_fix": "Run the mutation before believing the test, and add a control to any test whose failure could have more than one cause.",
+    "evidence": "All four caught by mutation rather than by reading, and corrected before landing.",
+    "confidence": "high",
+    "file": ".metaproject/flows/215-2026-09-01-full-review-of-release-0-2-74-with-fixes",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        ".metaproject/flows/215-2026-09-01-full-review-of-release-0-2-74-with-fixes"
+      ],
+      "enumeration_method": "Every test added by this flow was mutation-checked before the branch was pushed."
+    },
+    "global_id": "2026-09-01-release-0274#r-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "All three tests corrected and re-proved 3/3 before landing: the token test in bc4e193f, the checkpoint-hash and session-control tests in 10741e10. The contract-keyword guard's $ref false positive was fixed in bc4e193f before the branch was pushed."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at bc4e193f and 10741e10: each of the three corrected tests now turns red on the exact shipped line 3/3 in isolation, and the guard no longer reports $ref as unimplemented.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r-10",
+    "reviewer": "review-core-boundaries",
+    "severity": "info",
+    "problem": "The release also fixes three older leaks, which the checked-and-cleared lists recorded rather than missed.",
+    "impact": "Memory, wiki and wiki-enrichment previously computed a guard decision and then wrote the ORIGINAL unredacted content to disk; wiki enrichment had no guard at all, so model-generated content reached disk unchecked. All three are genuinely fixed in this release. Recording them matters: a review that reports only defects gives a one-sided picture of a release that closed three real holes and opened two.",
+    "suggested_fix": "None \u2014 no action needed.",
+    "evidence": "Reviewer verified each against the v0.2.73 source rather than assuming.",
+    "confidence": "high",
+    "file": "src/memory/write.ts",
+    "line": 97,
+    "class_scope": {
+      "sites": [
+        "src/memory/write.ts:97",
+        "src/wiki/service.ts:806",
+        "src/wiki/enrich.ts:830"
+      ],
+      "enumeration_method": "Each compared against its v0.2.73 source."
+    },
+    "global_id": "2026-09-01-release-0274#r-10",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "Not a defect: these are fixes, recorded so the release's balance is stated honestly rather than as findings-only."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "inspection",
+      "evidence": "Confirmed against v0.2.73 that each of the three previously wrote unredacted content and now writes the redacted form.",
+      "verifier": "review-verifier"
+    },
+    "source": "internal"
+  }
+]

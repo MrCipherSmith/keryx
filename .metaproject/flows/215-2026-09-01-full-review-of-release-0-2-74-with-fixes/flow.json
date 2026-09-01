@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "215",
+  "slug": "full-review-of-release-0-2-74-with-fixes",
+  "title": "Full review of release 0.2.74, with fixes: six findings, two of them security controls that did not control anything",
+  "status": "done",
+  "createdAt": "2026-09-01T09:32:47.536Z",
+  "updatedAt": "2026-09-01T09:35:47.686Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fdbcdd382e689501e441b931c8a6a01c8665c3daa30e9a95c1396781d43f56c4",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-01T09:33:36.471Z",
+      "note": "Denominator stated and measured: 43 non-test source files, 36 test files, v0.2.73..v0.2.74. Six reviewers by area with distinct lenses — SAC integrity, harness process/lifecycle, flow+review wiring, CLI false-clean, skills registry, and the ten small scattered files that a large-diff-focused review stops reading. That last group produced the session-redaction finding."
+    },
+    "AC2": {
+      "at": "2026-09-01T09:33:36.591Z",
+      "note": "Fourteen gates mutated. Non-vacuity established first by deleting the digest comparison, which returned 26 pass / 2 fail — a sweep that can only return green proves nothing. Result: 4 guarded by tests, 3 guarded by the compiler, 5 removable with the suite green, 1 multi-line throw not uniquely anchorable."
+    },
+    "AC3": {
+      "at": "2026-09-01T09:33:36.713Z",
+      "note": "All six reviewers ran read-only and named mutation candidates instead of running them; mutations were executed centrally, one at a time. The reason is the defect this programme fixed in task-implementer: parallel agents sharing one worktree, where one destroys a wave-mate's uncommitted work it cannot observe."
+    },
+    "AC4": {
+      "at": "2026-09-01T09:33:36.835Z",
+      "note": "Every finding carries a concrete failure scenario; reviewers dropped candidates that had none. Each also returned a checked-and-cleared list with reasons — which is how three fixes the release makes to OLDER leaks (memory, wiki, wiki-enrichment writing unredacted content despite computing a guard decision) were recorded rather than missed."
+    },
+    "AC5": {
+      "at": "2026-09-01T09:33:36.956Z",
+      "note": "Two reviewers converged independently on the security-acknowledgement bypass from different directions (SAC and CLI), and the second added the decisive framing: pre-0.2.74 was a dead end where needs-approval could never be accepted, so the release traded permanently-broken for silently-defeated. I verified both security findings myself in the code before acting: the sole production minter, and the field-by-field redaction path."
+    },
+    "AC6": {
+      "at": "2026-09-01T09:33:37.076Z",
+      "note": "Each of the ten fixes proved by restoring the exact shipped line and watching a named test go red 3/3 in isolation. Three of my own tests initially passed for the wrong reason and were caught by exactly this: one asserted printed output instead of the stored token, one sealed a checkpoint hash over the key it was testing, one omitted the session so the command failed identically with and without the guard. All three corrected, then re-proved."
+    },
+    "AC7": {
+      "at": "2026-09-01T09:33:47.746Z",
+      "note": "The ignored-validator-keyword defect was fixed structurally rather than as a third instance: a guard asserting no shipped schema declares a keyword validateValue ignores, with the implemented set scraped from the validator source rather than hand-listed. It found two further real defects on its first run — exclusiveMinimum on a dispatch budget (zero and negative validated clean), and the \"not\" keyword, the only way a schema expresses a prohibition, which was decorative: the branch accepted exactly what it forbade."
+    },
+    "AC8": {
+      "at": "2026-09-01T09:33:37.320Z",
+      "note": "The guard's first version reported $ref as unimplemented when it is implemented — the scrape pattern started at [a-zA-Z] and missed the leading dollar. Fixed before landing. A guard that cries wolf earns an allow-list entry and is then deleted, so the false positive was treated as the same class of error as a miss."
+    },
+    "AC9": {
+      "at": "2026-09-01T09:33:37.440Z",
+      "note": "Named in PR #428 and here: two truncation lines remain individually removable because they are genuinely redundant — same refusal, same input — with a third check now backing both. The earlier flow-212 disposition claiming 'checked and cleared' for that pair is corrected: it rested on one being redundant without checking whether the other was pinned, and neither was. The hang is separately removed by bounding the loop."
+    },
+    "AC10": {
+      "at": "2026-09-01T09:33:37.561Z",
+      "note": "typecheck clean; bun test 6399 pass / 18 skip / 0 fail against a 6386/0 baseline; test:guards 173/0; check:doc-links 1144 links / 0 broken; CI 12/12 on #427 and #428."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-01T09:32:47.536Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-01T09:33:06.133Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-01T09:33:12.637Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-01T09:33:12.762Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-01T09:33:12.882Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-01T09:33:13.005Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-01T09:33:13.123Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-01T09:33:36.471Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Denominator stated and measured: 43 non-test source files, 36 test files, v0.2.73..v0.2.74. Six reviewers by area with distinct lenses — SAC integrity, harness process/lifecycle, flow+review wiring, CLI false-clean, skills registry, and the ten small scattered files that a large-diff-focused review stops reading. That last group produced the session-redaction finding."
+    },
+    {
+      "at": "2026-09-01T09:33:36.591Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Fourteen gates mutated. Non-vacuity established first by deleting the digest comparison, which returned 26 pass / 2 fail — a sweep that can only return green proves nothing. Result: 4 guarded by tests, 3 guarded by the compiler, 5 removable with the suite green, 1 multi-line throw not uniquely anchorable."
+    },
+    {
+      "at": "2026-09-01T09:33:36.713Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: All six reviewers ran read-only and named mutation candidates instead of running them; mutations were executed centrally, one at a time. The reason is the defect this programme fixed in task-implementer: parallel agents sharing one worktree, where one destroys a wave-mate's uncommitted work it cannot observe."
+    },
+    {
+      "at": "2026-09-01T09:33:36.835Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Every finding carries a concrete failure scenario; reviewers dropped candidates that had none. Each also returned a checked-and-cleared list with reasons — which is how three fixes the release makes to OLDER leaks (memory, wiki, wiki-enrichment writing unredacted content despite computing a guard decision) were recorded rather than missed."
+    },
+    {
+      "at": "2026-09-01T09:33:36.956Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Two reviewers converged independently on the security-acknowledgement bypass from different directions (SAC and CLI), and the second added the decisive framing: pre-0.2.74 was a dead end where needs-approval could never be accepted, so the release traded permanently-broken for silently-defeated. I verified both security findings myself in the code before acting: the sole production minter, and the field-by-field redaction path."
+    },
+    {
+      "at": "2026-09-01T09:33:37.076Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Each of the ten fixes proved by restoring the exact shipped line and watching a named test go red 3/3 in isolation. Three of my own tests initially passed for the wrong reason and were caught by exactly this: one asserted printed output instead of the stored token, one sealed a checkpoint hash over the key it was testing, one omitted the session so the command failed identically with and without the guard. All three corrected, then re-proved."
+    },
+    {
+      "at": "2026-09-01T09:33:37.199Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: The ignored-validator-keyword defect was fixed structurally rather than as a third instance: a guard asserting no shipped schema declares a keyword validateValue ignores, with the implemented set scraped from the validator's own source rather than hand-listed. It found two further real defects on its first run — exclusiveMinimum on a dispatch budget, and , the only way a schema expresses a prohibition, which was decorative."
+    },
+    {
+      "at": "2026-09-01T09:33:37.320Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: The guard's first version reported $ref as unimplemented when it is implemented — the scrape pattern started at [a-zA-Z] and missed the leading dollar. Fixed before landing. A guard that cries wolf earns an allow-list entry and is then deleted, so the false positive was treated as the same class of error as a miss."
+    },
+    {
+      "at": "2026-09-01T09:33:37.440Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Named in PR #428 and here: two truncation lines remain individually removable because they are genuinely redundant — same refusal, same input — with a third check now backing both. The earlier flow-212 disposition claiming 'checked and cleared' for that pair is corrected: it rested on one being redundant without checking whether the other was pinned, and neither was. The hang is separately removed by bounding the loop."
+    },
+    {
+      "at": "2026-09-01T09:33:37.561Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: typecheck clean; bun test 6399 pass / 18 skip / 0 fail against a 6386/0 baseline; test:guards 173/0; check:doc-links 1144 links / 0 broken; CI 12/12 on #427 and #428."
+    },
+    {
+      "at": "2026-09-01T09:33:47.746Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: The ignored-validator-keyword defect was fixed structurally rather than as a third instance: a guard asserting no shipped schema declares a keyword validateValue ignores, with the implemented set scraped from the validator source rather than hand-listed. It found two further real defects on its first run — exclusiveMinimum on a dispatch budget (zero and negative validated clean), and the \"not\" keyword, the only way a schema expresses a prohibition, which was decorative: the branch accepted exactly what it forbade."
+    },
+    {
+      "at": "2026-09-01T09:35:36.778Z",
+      "event": "completing",
+      "detail": "merged commit: 10741e10"
+    },
+    {
+      "at": "2026-09-01T09:35:36.792Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-01-release-0274#r-09 (minor, round 2026-09-01-release-0274): marked fixed (`acted-on`) but its evidence names no commit SHA"
+    },
+    {
+      "at": "2026-09-01T09:35:47.672Z",
+      "event": "completing",
+      "detail": "merged commit: 10741e10"
+    },
+    {
+      "at": "2026-09-01T09:35:47.686Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "merged": {
+    "commit": "10741e10",
+    "ref": "origin/main",
+    "at": "2026-09-01T09:35:47.686Z"
+  }
+}
