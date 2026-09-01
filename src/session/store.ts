@@ -288,10 +288,36 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
   atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
 }
 
+/**
+ * Redaction covers every field that reaches disk, not only `content`.
+ *
+ * The first version rewrote `content` and let the spread carry `toolCalls`
+ * through untouched — and `writeJsonl` serialises `toolCalls` verbatim into
+ * `context.jsonl`, `archive.jsonl` and the legacy `transcript.jsonl` mirror. So
+ * a credential the model read from one tool result and passed into the NEXT
+ * tool call's arguments landed on disk in the clear, in three files, through
+ * the very function written to stop exactly that: "a contained shell command
+ * that reads a credential must not leak the raw value".
+ *
+ * `arguments` is raw provider-emitted JSON text, never parsed here (parsing it
+ * to redact field-by-field would mean re-serialising a payload we deliberately
+ * keep byte-exact). Masking the text directly preserves that: the masks are
+ * fixed-width literals, so the string stays valid JSON-ish text of the same
+ * shape, and a reader that does parse it sees a masked value rather than a
+ * secret.
+ */
 function redactHistory(history: readonly NormalizedMessage[]): NormalizedMessage[] {
   return history.map((message) => ({
     ...message,
     content: redactSensitiveText(message.content),
+    ...(message.toolCalls === undefined
+      ? {}
+      : {
+          toolCalls: message.toolCalls.map((call) => ({
+            ...call,
+            arguments: redactSensitiveText(call.arguments),
+          })),
+        }),
   }));
 }
 

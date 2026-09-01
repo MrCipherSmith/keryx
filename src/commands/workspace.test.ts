@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WorkspaceManifest } from "../sac/workspace-service";
+import { confirmTokenPath } from "../sac/review-confirm-token";
 
 const cli = path.join(import.meta.dir, "..", "cli.ts");
 async function invoke(cwd: string, args: string[]) {
@@ -134,4 +135,70 @@ test("F-001 fix: workspace list-proposals denies access for actor with no role i
   // The authorization gate throws WorkspaceServiceError with code "access_denied",
   // but the message is the authorization result code ("role_revoked" for no role)
   expect(listResult.stderr).toContain("role_revoked");
+});
+
+// The security acknowledgement has to be REAL. `consumeConfirmToken` refuses a
+// `needs-approval` proposal unless the token carries `securityAcknowledged:
+// true`, and the CLI used to pass that literal on every invocation — so the gate
+// could not fire, and the error text promising "explicit human acknowledgement
+// of the proposal security findings" described something that never happened.
+//
+// Reverting to the pre-0.2.74 shape is not the fix either: with no flag at all,
+// a `needs-approval` proposal could never be accepted by any route. A dead end
+// and a silent bypass are both wrong. These two tests pin the middle: the gate
+// refuses without the flag, and honours it with one.
+async function seedProposal(cwd: string, workspaceId: string, proposalId: string, gate: "pass" | "needs-approval"): Promise<void> {
+  const dir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, `${proposalId}.json`),
+    `${JSON.stringify({ schemaVersion: "1.0", id: proposalId, workspaceId, security: { gate, redacted: true }, evidence: [{ uri: "./evidence/secret.txt" }] })}\n`,
+  );
+}
+
+test("confirm-review refuses a needs-approval proposal until the reviewer acknowledges the finding", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-gate-"));
+  await seedProposal(cwd, "workspace-a", "proposal-a", "needs-approval");
+
+  const refused = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-a"]);
+  expect(refused.exitCode).toBe(1);
+  // The reviewer is told WHAT they would be acknowledging — an acknowledgement
+  // of something never shown is the defect, not the fix.
+  expect(refused.stderr).toContain("needs-approval");
+  expect(refused.stderr).toContain("./evidence/secret.txt");
+  expect(refused.stderr).toContain("--acknowledge-security");
+
+  const acknowledged = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-a", "--acknowledge-security"]);
+  expect(acknowledged.exitCode).toBe(0);
+  const minted = JSON.parse(acknowledged.stdout) as { token: string; securityGate: string; securityAcknowledged: boolean };
+  expect(minted.token).toBeTruthy();
+  expect(minted.securityGate).toBe("needs-approval");
+  expect(minted.securityAcknowledged).toBe(true);
+  // Assert the STORED token, not the printed line. The first draft of this test
+  // checked stdout only, and restoring the exact shipped
+  // `securityAcknowledged: true` left it green — a test that reads the report
+  // instead of the thing, which is the same defect it was written to catch.
+  const stored = JSON.parse(await readFile(confirmTokenPath(cwd, "workspace-a", "proposal-a"), "utf8")) as { securityAcknowledged?: boolean };
+  expect(stored.securityAcknowledged).toBe(true);
+});
+
+test("confirm-review does not claim an acknowledgement a clean proposal never needed, and refuses one it cannot read", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-pass-"));
+  await seedProposal(cwd, "workspace-a", "proposal-clean", "pass");
+
+  const clean = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-clean"]);
+  expect(clean.exitCode).toBe(0);
+  const minted = JSON.parse(clean.stdout) as { securityGate: string; securityAcknowledged: boolean };
+  expect(minted.securityGate).toBe("pass");
+  // Not `true`: a token for a clean proposal must not carry a claim that a human
+  // reviewed findings, because there were none and nobody did. Checked on disk,
+  // because the printed value and the persisted value are different claims.
+  expect(minted.securityAcknowledged).toBe(false);
+  const storedClean = JSON.parse(await readFile(confirmTokenPath(cwd, "workspace-a", "proposal-clean"), "utf8")) as { securityAcknowledged?: boolean };
+  expect(storedClean.securityAcknowledged).toBeUndefined();
+
+  // "I could not read the gate" is not "the gate passed".
+  const missing = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-absent"]);
+  expect(missing.exitCode).toBe(1);
+  expect(missing.stderr).toContain("security gate is unknown");
 });

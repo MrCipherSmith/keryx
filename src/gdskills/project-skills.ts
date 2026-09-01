@@ -82,6 +82,24 @@ export async function createProjectSkill(
     throw new Error("Metaproject is not initialized. Run: keryx init");
   }
 
+  // The routable-target guard belongs on EVERY write path, not just the
+  // automatic one. It was added after two prose-target skills reached `main` —
+  // matching no `skills route` query and verifying as permanently stale — and
+  // wired into `skill-owner-writer` (the SAC wrap-up path) only. `keryx skills
+  // create` is the other path, and it is the one an agent is told to use:
+  // `reviewer-skill-creator` instructs exactly that command. So the entry point
+  // most likely to be handed a sentence was the one left unguarded.
+  //
+  // Checked before anything is inferred or written, so a rejected target cannot
+  // leave a half-made package or a slug derived from prose.
+  if (!isRoutableSkillTarget(options.target)) {
+    throw new Error(
+      `keryx skills create: target ${JSON.stringify(options.target)} reads as prose, not a routing key. ` +
+        "A target is what `keryx skills route` matches against — a concept (\"auth flow\"), a symbol (`IResultDqReport`), " +
+        "or a path (`src/dq/DqScoreCard.tsx`). A sentence matches nothing and verifies as permanently stale.",
+    );
+  }
+
   const moduleName = slugify(options.module ?? inferModule(options.target));
   const skillName = slugify(options.name ?? inferSkillName(options.target));
   const format = options.format ?? "auto";

@@ -542,7 +542,7 @@ ${renderDiffFiles(shape, config)}
 ${untracked ? `\n## Untracked\n\n${renderUntrackedFiles(untracked, config)}\n` : ""}
 ## Risk Hints
 
-${renderRiskHints(risky, shape)}
+${renderRiskHints(risky, shape, shape.files)}
 
 ## Hunks
 
@@ -1050,7 +1050,7 @@ function renderDiffCounts(file: DiffFileStat): string {
 // prefixes like `src/commands/` — cannot fire on paths that no longer carry one.
 // Reporting "- none" there would be the same false-clean the file-count fix
 // removed, one section further down.
-function renderRiskHints(risky: DiffFileStat[], shape: DiffOutputShape): string {
+function renderRiskHints(risky: DiffFileStat[], shape: DiffOutputShape, files: DiffFileStat[]): string {
   const hints = risky.map((file) => `- ${file.path}`);
   if (shape.pathsAbbreviated) {
     hints.push(
@@ -1058,7 +1058,28 @@ function renderRiskHints(risky: DiffFileStat[], shape: DiffOutputShape): string 
     );
   }
   if (hints.length === 0) {
-    return shape.mode === "unenumerable" ? "- unknown: no file list in this output shape" : "- none";
+    // "- none" may ONLY be said when a file list was actually examined. Three
+    // states get confused otherwise, and two of them are lies:
+    //
+    //   - `unenumerable`: no list at all — already handled.
+    //   - a shape that reports a COUNT but no rows (`--shortstat`, or a `--stat`
+    //     whose rows all failed to parse): the count proves files changed and
+    //     the empty row set proves none were inspected. This printed "- none".
+    //   - a genuinely empty diff: nothing changed, so nothing is risky, and
+    //     "- none" is the honest answer.
+    //
+    // The middle case is what shipped: `keryx ctx diff v0.2.73 v0.2.74
+    // --shortstat -- package.json src/commands/ctx.ts` said `Changed files: 2`
+    // and `Risk Hints: - none`, while `package.json` — which the risk regexes
+    // match — was one of the two. Same false-clean class as the `Changed files:
+    // 0` fix this section sits below, twenty lines further down.
+    if (shape.mode === "unenumerable") {
+      return "- unknown: no file list in this output shape";
+    }
+    if (files.length === 0 && (shape.reportedFileCount ?? 0) > 0) {
+      return `- unknown: ${shape.reportedFileCount} file(s) changed but this output shape lists no per-file rows — nothing was checked. Re-run with \`--numstat\` or \`--name-only\`.`;
+    }
+    return "- none";
   }
   return hints.join("\n");
 }

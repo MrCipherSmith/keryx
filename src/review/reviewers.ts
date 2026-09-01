@@ -60,8 +60,27 @@ export type ReviewerInventory = {
  * shared: that one parses a different set of labels for a different purpose,
  * and coupling them would make either one's field list the other's problem.
  */
+/**
+ * Escape a literal so it can be embedded in a regex source.
+ *
+ * Extracted and exported for one reason: the version inlined here was broken and
+ * nothing could tell. The class was written `[.*+?^${}()|[\\]\\\\]`, which closes
+ * at the FIRST `]` — so the pattern became "one metacharacter, then two
+ * backslashes, then a bracket", matching essentially nothing. The escape was a
+ * complete no-op rather than a partial one.
+ *
+ * It never misbehaved because all three call-site labels ("Origin", "Origin
+ * Hash", "Imported At") contain no metacharacters, so escaping them is identity
+ * either way. That is exactly why it needed lifting out: through the public
+ * surface, fixed and broken are indistinguishable, and a fix nothing can observe
+ * is a fix that silently rots. Here it is directly testable.
+ */
+export function escapeRegexLiteral(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function metadataLine(content: string, label: string): string | undefined {
-  const match = content.match(new RegExp(`^${label.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+)$`, "m"));
+  const match = content.match(new RegExp(`^${escapeRegexLiteral(label)}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim();
 }
 

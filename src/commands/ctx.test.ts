@@ -196,6 +196,44 @@ test("summarizeDiff reports --shortstat's count even though it lists no rows", (
   );
   expect(out).toContain("Changed files: `14`");
   expect(out).toContain("no per-file rows");
+  // The Risk Hints section must not claim a clean result for a file list it
+  // never had. This assertion is the gap that let the defect ship: the test
+  // above pinned the count and the row message, and nothing in the suite
+  // asserted on Risk Hints at all, so "- none" over 14 unexamined files read as
+  // correct.
+  expect(out).not.toContain("- none");
+  expect(out).toContain("nothing was checked");
+});
+
+test("Risk Hints says `- none` only when a file list was actually examined", () => {
+  // Three states, two of which "- none" was covering for:
+  //
+  //   a truly empty diff  -> none, honestly
+  //   a count with no rows -> unknown; files changed, none inspected
+  //   a list with no risky files -> none, honestly
+  const empty = summarizeDiff("git diff HEAD", result(""), CONFIG, null);
+  expect(empty).toContain("- none");
+
+  const countedButUnlisted = summarizeDiff(
+    "git diff --shortstat HEAD",
+    result(" 2 files changed, 3 insertions(+), 1 deletion(-)"),
+    CONFIG,
+    null,
+  );
+  expect(countedButUnlisted).toContain("2 file(s) changed");
+  expect(countedButUnlisted).toContain("Re-run with");
+
+  // A real list whose files are simply not risky still reports none — the fix
+  // must not turn every diff into "unknown", which would make the section
+  // useless and get it ignored.
+  const listedAndSafe = summarizeDiff(
+    "git diff --name-only HEAD",
+    result("docs/readme.md\ndocs/guide.md"),
+    CONFIG,
+    null,
+  );
+  expect(listedAndSafe).toContain("Changed files: `2`");
+  expect(listedAndSafe).toContain("- none");
 });
 
 test("summarizeDiff says unknown, never zero, for a shape it cannot enumerate", () => {

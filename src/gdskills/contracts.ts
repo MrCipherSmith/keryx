@@ -61,6 +61,35 @@ type JsonSchema = {
    */
   maximum?: number;
   minItems?: number;
+  /**
+   * Upper bound on an array length — and the THIRD time this exact defect has
+   * been found here, which is why it is called out rather than quietly added.
+   *
+   * `minItems` and `maximum` were declared-but-ignored once and fixed; the
+   * comment above records that. Then 0.2.74 registered
+   * `review-pr-feedback-output`, whose schema uses
+   * `excluded_for_injection: { maxItems: 0 }` under
+   * `screen_status: "unavailable"` — the machine form of "if the injection
+   * screen never ran, you may not claim it excluded anything". The validator
+   * had no `maxItems` branch, so that self-contradiction validated clean: a
+   * record could say the screen did not run AND that it excluded two comments,
+   * and `keryx skills contracts validate` — the enforcement point the contract's
+   * own doc-comment names — called it valid.
+   *
+   * The pattern is not "we forgot a keyword". It is that adding a keyword to a
+   * schema is easy and adding it to the validator is a separate act nobody is
+   * forced to perform, so the two drift apart silently. The guard below
+   * (`schemasDeclareOnlyImplementedKeywords`) is the structural answer.
+   */
+  maxItems?: number;
+  /** Strict lower bound on a number. See the `exclusiveMinimum` branch below. */
+  exclusiveMinimum?: number;
+  /**
+   * The value must NOT match this subschema. It is how a schema expresses a
+   * prohibition — `subagent-dispatch` uses `not: { required: ["agent"] }` to say
+   * a field must be absent in one branch — and there is no other way to say it.
+   */
+  not?: JsonSchema;
   minLength?: number;
   pattern?: string;
   // Conditional application. Added for the `class_scope` rule on
@@ -346,6 +375,39 @@ async function validateValue(
       path: valuePath,
       message: `Expected array length >= ${schema.minItems}`,
     });
+  }
+
+  if (Array.isArray(value) && schema.maxItems !== undefined && value.length > schema.maxItems) {
+    errors.push({
+      path: valuePath,
+      message: `Expected array length <= ${schema.maxItems}`,
+    });
+  }
+
+  // Surfaced by `contract-keywords.test.ts` on its first run, in a schema nobody
+  // had re-read: `subagent-dispatch` declares `maxCostUnits: { exclusiveMinimum:
+  // 0 }`, so a dispatch claiming a budget of exactly 0 — or a negative one —
+  // validated clean while the schema said it must be positive.
+  if (typeof value === "number" && schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) {
+    errors.push({
+      path: valuePath,
+      message: `Expected number > ${schema.exclusiveMinimum}`,
+    });
+  }
+
+  // Also surfaced by the same guard. `subagent-dispatch` uses
+  // `then: { not: { required: ["agent"] } }` — a PROHIBITION, the only way the
+  // schema can say "this field must be absent here". Ignored, the prohibition
+  // was decorative: the branch it guards accepted exactly what it forbade.
+  if (schema.not !== undefined) {
+    const negated: ValidationError[] = [];
+    await validateValue(value, schema.not, valuePath, negated, rootSchema, schemaCache);
+    if (negated.length === 0) {
+      errors.push({
+        path: valuePath,
+        message: "Expected value NOT to match the prohibited subschema",
+      });
+    }
   }
 
   if (typeof value === "string") {
