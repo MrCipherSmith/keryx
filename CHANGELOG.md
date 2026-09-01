@@ -3,6 +3,83 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.74] — 2026-09-01
+
+Twelve commits since 0.2.73, and the theme running through most of them is the
+one 0.2.73 started: a mechanism that reports success without having done
+anything is the mechanism that fails. Four of these were found by measuring a
+claim rather than reading it.
+
+### Added
+
+- **`review-pr-feedback` 2.0.0 — the skill that reads other people's PR comments
+  now checks them and can act on them.** It collects through
+  `keryx review comments collect` instead of three hand-rolled `gh api` calls
+  (which returned the first thirty comments and wrote no durable record), gives
+  every comment a verdict against the code at the head SHA with the evidence
+  that settled it, and plans by class rather than by comment — six comments
+  about one shape become one plan item that fixes every site holding it.
+
+  With `--fix` it executes that plan through `flow-orchestrator`: a branch cut
+  from the reviewed PR's own head branch, a draft PR based on it, a review/fix
+  loop to zero findings at `minor` or above, and a merge back into that branch.
+  Anywhere else and the pull request the reviewer is reading never changes.
+  Every comment then gets one short answer, in English, once, after the merge.
+
+- **`keryx review reviewers`** — the reviewer set is asked for rather than
+  recited. A project can define its own reviewers and, before this, nothing
+  dispatched them: a team could write one, register it, and watch it never run.
+
+- **`reviewer-skill-creator`** — a skill for writing project-local reviewers.
+
+- **Three registered contracts** — `flow-orchestrator-input`,
+  `review-pr-feedback-input`, `review-pr-feedback-output`. Registration is what
+  lets a validator be pointed at a schema at all; before it,
+  `keryx skills contracts validate --schema review-pr-feedback-input` exited
+  with a usage banner. See *Known limitations* for what that is and is not.
+
+### Fixed
+
+- **The SAC ledger missed a same-size rewrite inside one filesystem timestamp
+  tick.** `fastCheckpointState` trusted the checkpoint whenever identity matched
+  and then verified only the tail record. Measured on one machine: an in-place
+  same-size rewrite left both timestamps unchanged in **189 of 200 attempts**.
+  Nanosecond field names do not imply nanosecond granularity.
+
+- **Seven `planning/` skills declared a frontmatter `name` their directory
+  lacked.** Two naming systems are live and disagreed — installation copies by
+  directory, harnesses register by frontmatter name — so those skills installed
+  and then failed to resolve when dispatched.
+
+- **A skill's `target` was carrying prose**, and the registry promised skills
+  that were neither present nor reachable.
+
+- **The task scaffold stays, and is marked.** The four rows `flow init`
+  generates were proposed for removal on the premise that flows replace them.
+  Measured across all 206 packages the premise is false: zero have a task list
+  without those rows, and 91.5% of scaffold rows reach `done`. The measurement
+  is the deliverable.
+
+- Full-project review remediation, and the historical unfinished-task debt cut
+  from 59 to 9.
+
+### Known limitations
+
+- **A registered contract is not an enforced one.** Of eleven registered
+  contracts, four refuse a bad value in production — `review-finding`
+  (`src/review/managed.ts`), `subagent-dispatch` and `subagent-result` (the
+  harness), and `job-orchestrator-state` (`src/job/store.ts`). The other seven,
+  including the three added here, are refused only when an agent runs
+  `keryx skills contracts validate` itself. The four that work do so because
+  keryx sits on the path — it writes the file, or it spawns the child; a
+  dispatch between two agents has no keryx in it. Tracked as flow 213.
+
+- **`flow complete` does not ask where a merge landed.** The record carries no
+  base branch. Its condition 3 compares the reviewed tree against the merged
+  tree, which catches a wrong-target merge whenever the targets' content
+  differs — the residual is the case where they have converged. Tracked as
+  flow 214.
+
 ## [0.2.73] — 2026-08-31
 
 A correction release. 0.2.72 completed the orchestrator-hardening roadmap; this
