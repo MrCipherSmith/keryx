@@ -3,6 +3,87 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.75] — 2026-09-01
+
+A security patch. A full review of 0.2.74 — six reviewers over the release diff,
+plus a mutation pass over every gate it added — found that **0.2.74 shipped two
+security controls that did not control anything**, both in the same commit, the
+one titled "remediate validated full-project review findings".
+
+**Upgrade if you are on 0.2.74**, particularly if you use the SAC workspace
+proposal flow or persist agent sessions to disk.
+
+### Fixed
+
+- **The security acknowledgement never happened.** `consumeConfirmToken` refuses
+  a `needs-approval` proposal unless the confirm token records that a human
+  acknowledged the security findings — and the only production minter passed
+  that literal unconditionally, on every invocation. The gate could not fire,
+  while the error text behind it promised "explicit human acknowledgement of the
+  proposal security findings". A proposal whose evidence tripped the scanner was
+  accepted through the ordinary two-step flow with the reviewer never shown, and
+  never asked about, the finding.
+
+  Before 0.2.74 the same call passed no flag at all, so a `needs-approval`
+  proposal could not be accepted by any route — a dead end, which is why the
+  literal was added. 0.2.74 replaced a visible refusal with a silent bypass, the
+  worse of the two. `keryx workspace confirm-review` now reads the gate, prints
+  what the scan found and in which evidence, and requires an explicit
+  `--acknowledge-security`; a clean proposal claims no acknowledgement, and a
+  proposal that cannot be read is refused rather than assumed to have passed.
+
+- **Session-history redaction covered message content but not tool-call
+  arguments.** `redactHistory` rewrote `content` and let the object spread carry
+  `toolCalls` through untouched, while the writer serialises them verbatim into
+  `context.jsonl`, `archive.jsonl` and the legacy `transcript.jsonl`. A
+  credential the model read from one tool result and passed into the next call's
+  arguments was written to disk in the clear, in three files — through the
+  function whose own comment says a command that reads a credential must not leak
+  the raw value.
+
+- **A validation keyword declared but ignored, for the third time.** A contract
+  registered in 0.2.74 declares `maxItems: 0` on the list of comments excluded by
+  the prompt-injection screen when that screen never ran — the machine form of
+  "you may not claim it excluded anything". The validator had no `maxItems`
+  branch, so a record asserting both validated clean. `minItems` and `maximum`
+  were the first two instances, each repaired by hand.
+
+  Fixed as a class instead: a guard now refuses any shipped schema that declares
+  a keyword the validator ignores, deriving the implemented set from the
+  validator's own source rather than a hand-maintained list. It found two more on
+  its first run — `exclusiveMinimum` on a dispatch budget (zero and negative
+  validated clean) and `not`, the only way a schema expresses a prohibition,
+  which was decorative: the branch accepted exactly what it forbade.
+
+- **The routable-target guard sat on one write path of two.** Added in 0.2.74
+  after two prose-target skills reached `main`, and wired into the automatic
+  wrap-up path only. `keryx skills create` — the path agents are instructed to
+  use — never called it, so the entry point most likely to be handed a sentence
+  was the unguarded one.
+
+- **`keryx ctx diff` reported "no risky files" for a file list it never had.**
+  For an output shape carrying a file count but no per-file rows (`--shortstat`),
+  the risk section printed `- none`, conflating "examined, nothing risky" with
+  "files changed, none examined". The same false-clean class 0.2.74 fixed one
+  section higher up.
+
+- **A regex escape that escaped nothing.** The character class closed at its
+  first `]`, so the expression matched essentially nothing. Latent — all current
+  labels are metacharacter-free — but the next label added is the one that breaks
+  it, silently.
+
+### Changed
+
+- **Four gates the release added had no test that noticed their removal**, and
+  deleting both ledger-truncation checks made the suite **hang** rather than
+  fail — a timeout reads as infrastructure trouble, not a defect. The four are
+  now pinned, and the digest read loop is bounded by a computed chunk count so
+  the same double removal can only produce a wrong digest, never a hang.
+
+  Two truncation lines remain individually removable and are recorded as such:
+  they are genuinely redundant, producing the same refusal for the same input,
+  so no test can discriminate them.
+
 ## [0.2.74] — 2026-09-01
 
 Twelve commits since 0.2.73, and the theme running through most of them is the
