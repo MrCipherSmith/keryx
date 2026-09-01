@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "./workspace-lifecycle-tool";
@@ -120,6 +120,38 @@ describe("workspaceProposeTool", () => {
   // (`keryx workspace confirm-review`), which this tool has no path to. This
   // test only proves the proposal record itself lands, matching
   // src/mcp/sac-tools.test.ts's "propose ... lands ... end-to-end" shape.
+  test("a note the security gate blocks is refused, and no proposal is created", async () => {
+    // The `!materializedNote.allowed` refusal survived deletion with the full
+    // suite green — no test drove a note that the guard actually blocks, so the
+    // branch that stops a secret-bearing note from becoming a durable proposal
+    // was never executed.
+    //
+    // What makes this worth pinning rather than trusting: the refusal has to
+    // happen BEFORE `lifecycle.create`, because create is the commit point. If
+    // the order ever inverts, the tool reports failure while a live proposal
+    // exists — the "half-committed" shape this file's own comments warn about.
+    await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode: "enforced" }), "utf8");
+
+    const created = await workspaceCreateTool(cwd).invoke({ title: "Blocked note" });
+    const { id: workspaceId } = JSON.parse(created.output) as { id: string };
+    const session = realSession("Propose with a leaking note");
+
+    const result = await workspaceProposeTool(cwd, noSession).invoke({
+      workspaceId,
+      kind: "memory-entry",
+      sessionId: session.summary.id,
+      note: `aws_key = AKIA${"A".repeat(16)}`,
+    });
+    expect(result.isError).toBe(true);
+
+    // And nothing durable was created: the refusal is not merely a message.
+    const proposalsDir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
+    const landed = await readdir(proposalsDir).catch(() => [] as string[]);
+    expect(landed.filter((entry) => entry.endsWith(".json"))).toEqual([]);
+  });
+
   test("proposes from a real session and lands a real, schema-valid proposed record", async () => {
     const created = await workspaceCreateTool(cwd).invoke({ title: "Propose target" });
     const { id: workspaceId } = JSON.parse(created.output) as { id: string };

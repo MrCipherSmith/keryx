@@ -1,13 +1,17 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WorkspaceManifest } from "../sac/workspace-service";
 import { confirmTokenPath } from "../sac/review-confirm-token";
+import { createSession, persistHistory } from "../session/index";
 
 const cli = path.join(import.meta.dir, "..", "cli.ts");
-async function invoke(cwd: string, args: string[]) {
-  const child = Bun.spawn([process.execPath, cli, "workspace", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+async function invoke(cwd: string, args: string[], dataDir?: string) {
+  const child = Bun.spawn([process.execPath, cli, "workspace", ...args], {
+    cwd, stdout: "pipe", stderr: "pipe",
+    ...(dataDir ? { env: { ...process.env, KERYX_DATA_DIR: dataDir } } : {}),
+  });
   return { exitCode: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() };
 }
 
@@ -201,4 +205,47 @@ test("confirm-review does not claim an acknowledgement a clean proposal never ne
   const missing = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-absent"]);
   expect(missing.exitCode).toBe(1);
   expect(missing.stderr).toContain("security gate is unknown");
+});
+
+test("workspace propose refuses a note the security gate blocks, and creates no proposal", async () => {
+  // The same guard exists in two places — this CLI handler and the harness
+  // `workspace_propose` tool — and only the harness copy had a test. A guard
+  // duplicated across write paths is only as good as its least-tested copy, and
+  // this is the copy a human runs.
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-"));
+  await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+  await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
+  await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode: "enforced" }), "utf8");
+  await mkdir(path.join(cwd, "src"), { recursive: true });
+  await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
+
+  const created = await invoke(cwd, ["create", "--title", "Blocked note workspace", "--component", "./src/a.ts"]);
+  expect(created.exitCode).toBe(0);
+  const { id: workspaceId } = JSON.parse(created.stdout) as { id: string };
+
+  // A REAL session, in a data dir the child process shares. Without it, propose
+  // fails on "no session matching" — which is exit 1 either way, so the first
+  // draft of this test passed while the mutation went unnoticed. The control
+  // below proves the session is good, so the failure that follows can only come
+  // from the note.
+  const dataDir = await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-data-"));
+  const handle = createSession({ cwd, title: "Blocked note session", dataDir, provider: "deepseek", model: "deepseek-v4-flash" });
+  persistHistory(handle, [
+    { role: "user", content: "What does the WorktreePort interface do?", provenance: "project" },
+    { role: "assistant", content: "It's the create/remove/merge git-worktree lifecycle seam.", provenance: "model" },
+  ]);
+
+  const clean = await invoke(cwd, ["propose", workspaceId, "--kind", "memory-entry", "--session", handle.summary.id, "--note", "an ordinary note"], dataDir);
+  if (clean.exitCode !== 0) throw new Error(`control propose failed: ${clean.stderr}`);
+  expect(clean.exitCode).toBe(0);
+
+  const proposed = await invoke(cwd, [
+    "propose", workspaceId, "--kind", "memory-entry", "--session", handle.summary.id, "--note", `aws_key = AKIA${"A".repeat(16)}`,
+  ], dataDir);
+  expect(proposed.exitCode).toBe(1);
+
+  // Refusal must be more than a message: nothing durable may exist afterwards.
+  // Exactly one proposal exists — the clean one. The blocked note added nothing.
+  const landed = await readdir(path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals")).catch(() => [] as string[]);
+  expect(landed.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);
 });
