@@ -767,3 +767,38 @@ test("T10 finding #2 — a writeFile failure for one deep-tier page does not fai
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("flow 219: RLM preparation stops immediately after cancellation and returns deterministic cancelled pages", async () => {
+  const root = await seedRlmRoot();
+  const controller = new AbortController();
+  const phases: string[] = [];
+  try {
+    await writeWikiConfig(root, {
+      rlm: {
+        enabled: true,
+        classify: { skipMaxBytes: 0, deepMinPageRank: 1, deepMinFanIn: 1 },
+        deep: { maxToolCalls: 5, maxRuntimeMs: 5_000 },
+      },
+    });
+
+    const result = await wikiEnrich({
+      cwd: root,
+      signal: controller.signal,
+      providerFactory: forbiddenProviderFactory(),
+      validate: false,
+      onPage: (info) => {
+        phases.push(`${info.phase}:${info.path}`);
+        if (info.phase === "start") controller.abort("cancel during RLM preparation");
+      },
+    });
+
+    expect(phases).toHaveLength(1);
+    expect(result.pages).toHaveLength(3);
+    expect(result.cancelled).toBe(3);
+    expect(result.enriched).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.pages.every((page) => page.action === "cancelled")).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

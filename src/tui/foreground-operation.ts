@@ -31,6 +31,10 @@ export class ForegroundOperationOwner {
     return this.active !== undefined;
   }
 
+  accepts(token: ForegroundOperationToken): boolean {
+    return !this.disposed && this.active?.token === token;
+  }
+
   begin(): ForegroundOperationToken {
     if (this.disposed) {
       throw new Error("foreground operation owner is disposed");
@@ -76,3 +80,69 @@ export class ForegroundOperationOwner {
 export function createForegroundOperationOwner(): ForegroundOperationOwner {
   return new ForegroundOperationOwner();
 }
+
+/**
+ * Waits for the current operation once and only dispatches follow-up work when
+ * the shell remains live. This is the queue Force handoff boundary.
+ */
+export async function runAfterForegroundSettlement(
+  owner: ForegroundOperationOwner,
+  action: () => void,
+): Promise<void> {
+  await owner.settled();
+  if (!owner.isDisposed) {
+    action();
+  }
+}
+
+/**
+ * Prevents late events from a completed or disposed foreground turn from
+ * mutating the TUI. Each callback reads the current delegate at call time so
+ * shell-installed hooks remain live during a valid operation.
+ */
+export function createForegroundAgentIoFacade(
+  owner: ForegroundOperationOwner,
+  token: ForegroundOperationToken,
+  io: AgentIO,
+): AgentIO {
+  const accepts = (): boolean => owner.accepts(token);
+  return {
+    write: (text) => {
+      if (accepts()) io.write(text);
+    },
+    onHistoryChange: (kind) => {
+      if (accepts()) io.onHistoryChange?.(kind);
+    },
+    onAssistantText: (text) => {
+      if (accepts()) io.onAssistantText?.(text);
+    },
+    onReasoning: (text) => {
+      if (accepts()) io.onReasoning?.(text);
+    },
+    onUsage: (usage) => {
+      if (accepts()) io.onUsage?.(usage);
+    },
+    onToolCall: (name, input) => {
+      if (accepts()) io.onToolCall?.(name, input);
+    },
+    onToolResult: (name, result) => {
+      if (accepts()) io.onToolResult?.(name, result);
+    },
+    onSystem: (text) => {
+      if (accepts()) io.onSystem?.(text);
+    },
+    onTerminalState: (state) => {
+      if (accepts()) io.onTerminalState?.(state);
+    },
+    requestApproval: async (tool, input, meta) => {
+      if (!accepts()) return false;
+      const response = await io.requestApproval?.(tool, input, meta);
+      return accepts() ? response ?? false : false;
+    },
+    onAutoApproved: (tool, input, meta) => {
+      if (accepts()) io.onAutoApproved?.(tool, input, meta);
+    },
+    permissionMode: () => (accepts() ? io.permissionMode?.() ?? "ask" : "ask"),
+  };
+}
+import type { AgentIO } from "../commands/agent";

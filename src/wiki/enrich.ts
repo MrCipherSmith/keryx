@@ -1538,8 +1538,19 @@ async function runLightBatch(ctx: RlmCtx, items: readonly LightBatchItem[]): Pro
 async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrichPageResult[]> {
   const { pages, wikiConfig, input } = ctxInput;
 
+  const cancelled = (): WikiEnrichPageResult[] =>
+    pages.map((page) => ({ path: page.relativePath, action: "cancelled" as const, reason: "enrichment cancelled" }));
+  if (input.signal?.aborted) {
+    return cancelled();
+  }
   const graph = await loadGraph(ctxInput.cwd);
+  if (input.signal?.aborted) {
+    return cancelled();
+  }
   const gdgraphConfig = await loadGdgraphConfig(ctxInput.cwd);
+  if (input.signal?.aborted) {
+    return cancelled();
+  }
   const fileNodes = graph.nodes.filter((node) => node.kind === "file").map((node) => node.path);
   const rankEdges = buildRankEdges(graph, gdgraphConfig);
   const ranked = personalizedPageRank(fileNodes, rankEdges, {
@@ -1582,11 +1593,20 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
 
   const prepared: Prepared[] = [];
   for (const page of pages) {
+    if (input.signal?.aborted) {
+      return cancelled();
+    }
     const index = pageIndex(page.relativePath);
     const status = page.status ?? "draft";
     ctx.onPage({ index, total: ctx.total, path: page.relativePath, status, phase: "start" });
+    if (input.signal?.aborted) {
+      return cancelled();
+    }
     try {
       const originalRaw = await readFile(page.absolutePath, "utf8");
+      if (input.signal?.aborted) {
+        return cancelled();
+      }
       const ensured = ensureWikiFrontmatter(originalRaw, { title: page.title, pageType: page.pageType });
       const original = ensured.markdown;
       const keyFiles = keyFilesForPage(moduleKeyFilesIndex, page);
@@ -1617,6 +1637,9 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
       // always correct.
       if (previousHash !== undefined && keyFiles.length > 0) {
         const currentHash = await computePageNodeHash(ctx.cwd, keyFiles, graph);
+        if (input.signal?.aborted) {
+          return cancelled();
+        }
         unchanged = isPageUnchangedSinceLastEnrich(page.relativePath, currentHash, resumeState.completedNodeHashes);
       }
 
@@ -1666,6 +1689,10 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
     }
   }
 
+  if (input.signal?.aborted) {
+    return cancelled();
+  }
+
   type Unit =
     | { kind: "resolved"; result: WikiEnrichPageResult }
     | { kind: "deep"; item: LightBatchItem }
@@ -1706,6 +1733,9 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
   }
   flushLight();
 
+  if (input.signal?.aborted) {
+    return cancelled();
+  }
   const unitResults = await mapPool(units, ctxInput.concurrency, async (unit): Promise<WikiEnrichPageResult[]> => {
     try {
       if (unit.kind === "resolved") {

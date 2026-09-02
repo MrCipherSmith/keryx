@@ -134,7 +134,11 @@ import {
   type PermissionMode,
 } from "../commands/permission-mode";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
-import { createForegroundOperationOwner } from "./foreground-operation";
+import {
+  createForegroundAgentIoFacade,
+  createForegroundOperationOwner,
+  runAfterForegroundSettlement,
+} from "./foreground-operation";
 import {
   compactSession,
   createSession,
@@ -3764,9 +3768,11 @@ export async function launchTuiAgentShell(opts: {
         // Cancellation is cooperative. Do not run the forced item until the
         // current operation's finalizer has settled its own UI state.
         await foregroundOperation.settled();
-        if (foregroundOperation.isDisposed || priorityMainQuestion !== item) return;
-        priorityMainQuestion = undefined;
-        runLine(item.question);
+        await runAfterForegroundSettlement(foregroundOperation, () => {
+          if (priorityMainQuestion !== item) return;
+          priorityMainQuestion = undefined;
+          runLine(item.question);
+        });
       })();
     };
 
@@ -4790,7 +4796,8 @@ export async function launchTuiAgentShell(opts: {
           // fail-closed: never surface an error for an optional hint
         }
       };
-      void runAgentTurn(io, deps, history, line, {
+      const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+      void runAgentTurn(foregroundIo, deps, history, line, {
         signal: foregroundOperation.signal,
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
