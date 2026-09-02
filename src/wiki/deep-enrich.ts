@@ -432,16 +432,6 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
         input.signal?.removeEventListener("abort", onExternalAbort);
       }
     }
-    if (outcome === "cancelled") {
-      abort.abort(input.signal?.reason);
-      void turn.catch(() => {
-        // A provider may ignore cancellation; contain any late rejection from
-        // the abandoned turn after the caller has already returned.
-      });
-      composed.dispose();
-      releaseBudget();
-      return { fallback: true, reason: "deep enrich cancelled", toolCalls };
-    }
     if (outcome === "timeout") {
       abort.abort();
       void turn.catch(() => {
@@ -461,7 +451,9 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
 
     composed.dispose();
     releaseBudget();
-    if (input.signal?.aborted) {
+    // One authoritative external-cancellation return covers both an abort that
+    // won the race and one observed immediately after the model settled.
+    if (outcome === "cancelled" || input.signal?.aborted) {
       return {
         fallback: true,
         reason: "deep enrich cancelled",
