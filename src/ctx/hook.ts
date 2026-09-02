@@ -9,7 +9,7 @@
 // work it cannot confidently classify.
 
 import { classifyCommand } from "./hook-classify";
-import { getRuntime } from "./runtimes";
+import { getRuntime, nativeSearchMessage, parseToolName, refusalAction } from "./runtimes";
 
 // Re-exports kept for callers/tests that imported these from hook.ts.
 export { classifyCommand, buildBlockMessage, type HookClassification } from "./hook-classify";
@@ -38,7 +38,19 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
   const payload = await readStdin();
   const command = runtime.parseCommand(payload);
   if (command === null) {
-    return; // fail-open: not a shell call or unparseable payload.
+    // Not a shell call. Before failing open, check whether it is the runtime's
+    // OWN search tool: the matcher used to be `Bash` alone, so an agent that
+    // reached for the native tool went unguarded and the Bash guard still
+    // reported a clean run — compliance recorded in the routing audit that did
+    // not happen.
+    const nativeSearch = matchedNativeSearch(runtime.nativeSearchTools, payload);
+    if (nativeSearch) {
+      const action = refusalAction(runtime.id, nativeSearchMessage(nativeSearch));
+      if (action.stdout) process.stdout.write(action.stdout);
+      if (action.stderr) process.stderr.write(action.stderr);
+      if (action.exitCode) process.exitCode = action.exitCode;
+    }
+    return; // fail-open for anything else: unparseable, or a tool we do not claim.
   }
 
   const classification = classifyCommand(command);
@@ -49,4 +61,13 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
   if (action.stdout) process.stdout.write(action.stdout);
   if (action.stderr) process.stderr.write(action.stderr);
   if (action.exitCode) process.exitCode = action.exitCode;
+}
+
+/** The declared native search tool this payload invokes, or null. */
+function matchedNativeSearch(tools: readonly string[] | undefined, payload: string): string | null {
+  if (!tools || tools.length === 0) {
+    return null;
+  }
+  const name = parseToolName(payload);
+  return name && tools.includes(name) ? name : null;
 }

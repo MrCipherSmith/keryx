@@ -6,6 +6,7 @@ import { installRuntimeHook, uninstallRuntimeHook } from "./hook-install";
 import {
   CLAUDE_RUNTIME,
   CTX_HOOK_SENTINEL,
+  PRE_TOOL_USE_MATCHER,
   getRuntime,
   resolveRuntimes,
   runtimeIds,
@@ -58,7 +59,7 @@ test("installs the Bash routing guard into an absent settings file", async () =>
     expect(raw.endsWith("\n")).toBe(true);
     const settings = JSON.parse(raw) as Settings;
 
-    const group = preToolUse(settings).find((g) => g.matcher === "Bash");
+    const group = preToolUse(settings).find((g) => g.matcher === PRE_TOOL_USE_MATCHER);
     expect(group).toBeDefined();
     expect(group?._keryxManaged).toBe(CTX_HOOK_SENTINEL);
     expect(group?.hooks?.[0]?.command).toBe(CLAUDE_COMMAND);
@@ -109,7 +110,7 @@ test("preserves user keys and coexists with security hooks", async () => {
     const security = preToolUse(settings).find((g) => g.matcher === "Write|Edit");
     expect(security?._keryxManaged).toBe("security-agent-hooks");
     expect(settings.hooks?.UserPromptSubmit?.[0]?._keryxManaged).toBe("security-agent-hooks");
-    expect(preToolUse(settings).some((g) => g.matcher === "Bash")).toBe(true);
+    expect(preToolUse(settings).some((g) => g.matcher === PRE_TOOL_USE_MATCHER)).toBe(true);
     expect(settings._keryxManaged).toEqual(["security-agent-hooks", CTX_HOOK_SENTINEL]);
   });
 });
@@ -136,7 +137,7 @@ test("uninstall removes only the ctx group, leaving security hooks intact", asyn
     expect(removed).toBe(true);
 
     const settings = await readSettings(root);
-    expect(preToolUse(settings).some((g) => g.matcher === "Bash")).toBe(false);
+    expect(preToolUse(settings).some((g) => g.matcher === PRE_TOOL_USE_MATCHER)).toBe(false);
     expect(preToolUse(settings).some((g) => g.matcher === "Write|Edit")).toBe(true);
     expect(settings._keryxManaged).toEqual(["security-agent-hooks"]);
   });
