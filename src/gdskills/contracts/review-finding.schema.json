@@ -95,6 +95,10 @@
       }
     },
     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
+    "repo": {
+      "type": ["string", "null"],
+      "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
+    },
     "file": { "type": ["string", "null"] },
     "line": { "type": ["integer", "null"], "minimum": 1 },
     "symbol": { "type": ["string", "null"] },

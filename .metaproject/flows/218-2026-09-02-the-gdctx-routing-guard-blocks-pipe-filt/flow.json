@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "218",
+  "slug": "the-gdctx-routing-guard-blocks-pipe-filt",
+  "title": "the gdctx routing guard blocks pipe filters, and its Bash-only matcher lets the native search tool bypass it",
+  "status": "in-progress",
+  "createdAt": "2026-09-02T16:10:14.360Z",
+  "updatedAt": "2026-09-02T16:18:04.791Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:151b9e5041b42795b524b08628a474f2154b8618ea6221ae611c1f421a269977",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-02T16:18:04.026Z"
+    },
+    "AC2": {
+      "at": "2026-09-02T16:18:04.151Z"
+    },
+    "AC3": {
+      "at": "2026-09-02T16:18:04.241Z"
+    },
+    "AC4": {
+      "at": "2026-09-02T16:18:04.329Z"
+    },
+    "AC5": {
+      "at": "2026-09-02T16:18:04.425Z"
+    },
+    "AC6": {
+      "at": "2026-09-02T16:18:04.509Z"
+    },
+    "AC7": {
+      "at": "2026-09-02T16:18:04.600Z"
+    },
+    "AC8": {
+      "at": "2026-09-02T16:18:04.693Z"
+    },
+    "AC9": {
+      "at": "2026-09-02T16:18:04.791Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context came from measuring the shipped guard directly: classifier probed on every specimen, matcher and parseCommand read, refusal exercised end to end."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "statements()+firstStages() replace the flat segments() split; nativeSearchTools declared (Grep, not Glob); hook.ts refuses a native search before failing open; matcher widened to Bash|Grep with validate reporting a stale install; repo's own settings.json updated."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "31 new tests across hook-pipeline and hook-native-search, including the outside proposal's five specimens with the one divergence asserted. Two existing tests rebound from the literal Bash to the exported constant."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review confirmed the expensive direction is guarded: grep -rn foo src/ | head stays blocked, and only the first pipeline stage of each statement is classified so cd x && rg y still fires."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-02T16:10:14.360Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-02T16:11:09.695Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-02T16:11:09.787Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-02T16:18:03.601Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-02T16:18:03.711Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-02T16:18:03.827Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-02T16:18:03.930Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-02T16:18:04.026Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-02T16:18:04.151Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-02T16:18:04.241Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-02T16:18:04.329Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-02T16:18:04.425Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-02T16:18:04.509Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-02T16:18:04.600Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-02T16:18:04.693Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-02T16:18:04.791Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    }
+  ]
+}

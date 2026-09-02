@@ -1,0 +1,21 @@
+# Flow Journal
+
+- 2026-09-02T15:37:01.384Z - flow created
+- 2026-09-02T15:38:06.457Z - frozen: 11 criteria; checksum recorded
+- 2026-09-02T15:38:06.562Z - started
+- 2026-09-02T15:47:59.925Z - task-done: T1: Collect remaining context
+- 2026-09-02T15:48:00.021Z - task-done: T2: Implement per plan
+- 2026-09-02T15:48:00.122Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-02T15:48:00.218Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-02T15:48:00.312Z - ac-confirmed: AC1
+- 2026-09-02T15:48:00.402Z - ac-confirmed: AC2
+- 2026-09-02T15:48:00.495Z - ac-confirmed: AC3
+- 2026-09-02T15:48:00.589Z - ac-confirmed: AC4
+- 2026-09-02T15:48:00.681Z - ac-confirmed: AC5
+- 2026-09-02T15:48:00.773Z - ac-confirmed: AC6
+- 2026-09-02T15:48:00.868Z - ac-confirmed: AC7
+- 2026-09-02T15:48:00.961Z - ac-confirmed: AC8
+- 2026-09-02T15:48:01.058Z - ac-confirmed: AC9
+- 2026-09-02T15:48:01.150Z - ac-confirmed: AC10
+- 2026-09-02T15:48:01.246Z - ac-confirmed: AC11
+- 2026-09-02T19:56:06.061Z - blocked: Routing work removed from PR #431 in ff0ea1e6 and returned to design. Round 3 measured the change as net-negative: word-boundary padding removed 29 one-word triggers' inflected matching (run the deployment / reviewing the diff now / commits are failing all went to SILENCE); asymmetric trigger tokenisation took order-free matching from 11 triggers to 17 (15 lost, 9 gained); провер lost its review mapping while the sibling stem проверк kept it; routePrompt's project-skill inclusion is inert because it filters on a trigger reason that scoreProjectSkillRoute never emits. ROOT CAUSE, and the reason this is a redesign rather than a fix: the corpus had NO NEGATIVE PAIRS, so every round could see improvements and none could see losses. AC1-AC11 are confirmed against code that is no longer on the branch — treat them as void. Restart condition: build the corpus with negative pairs (queries expected to route to nothing, plus inflected forms of every one-word trigger) FIRST, then change the scorer. The diagnosis is sound and unchanged: review-frontend's 'ui review' trigger degenerates to ['review'] and hijacks every review request in every language.
