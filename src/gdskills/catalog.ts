@@ -131,11 +131,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Use gdgraph affected context for exported symbols and shared surfaces.",
     "Dispatch specialized review passes conceptually or as separate skill loads.",
     "Report findings first, ordered by severity, with concrete file references.",
-    // A bare "review" belongs to the ORCHESTRATOR — which is what this skill's
-    // own description says: use it when a review is requested and the user does
-    // NOT name a specialist. A one-word trigger scores below any two-word
-    // specialist trigger, so "frontend review" still reaches review-frontend.
-  ], ["review", "ревью", "review code", "full review", "полное ревью", "review changes"]),
+  ], ["review code", "full review", "review changes"]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
@@ -150,12 +146,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Map inputs, trust boundaries, and sensitive outputs.",
     "Check injection, auth, crypto, secrets, and unsafe filesystem/network behavior.",
     "Prioritize exploitable findings with concrete remediation.",
-  ], ["security review", "secure code", "vulnerability", "проверь безопасность", "безопасность кода"]),
+  ], ["security review", "secure code", "vulnerability"]),
   skill("review-performance", "review", ["recommended", "full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
     "Find changed hot paths and repeated operations.",
     "Check loops, rendering, async blocking, large imports, and caching behavior.",
     "Prioritize measurable or high-likelihood regressions.",
-  ], ["performance review", "perf check", "slow", "узкие места", "проседает производительность"]),
+  ], ["performance review", "perf check", "slow"]),
   skill("review-frontend", "review", ["recommended", "full"], "Review frontend components, state boundaries, rendering behavior, and UI integration patterns.", [
     "Identify component, store, hook, route, and UI boundary changes.",
     "Check data flow, state ownership, rendering cost, accessibility, and local conventions.",
@@ -288,7 +284,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Detect migration tooling and existing conventions.",
     "Create minimal reversible migrations where possible.",
     "Run or describe verification and rollback steps.",
-  ], ["database migration", "db migrate", "migrate database", "migration status"]),
+  ], ["database migration", "db migrate", "migration status"]),
   skill("deploy", "quality", ["full"], "Run deployment pre-flight checks and deployment workflow summaries.", [
     "Detect deployment target and required pre-flight checks.",
     "Run verification before deployment unless explicitly skipped.",
@@ -298,17 +294,17 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Inspect staged and unstaged changes.",
     "Group related changes without staging unrelated work.",
     "Create a conventional commit message with verification summary.",
-  ], ["commit", "commit changes", "git commit", "conventional commit"]),
+  ], ["commit changes", "git commit", "conventional commit"]),
   skill("push", "quality", ["full"], "Push branches with safety checks, upstream handling, and concise result summary.", [
     "Check branch and remote state.",
     "Push the current branch with upstream when needed.",
     "Report remote branch and any follow-up needed.",
-  ], ["push", "push branch", "git push", "publish branch"]),
+  ], ["push branch", "git push", "publish branch"]),
   skill("pr", "quality", ["full"], "Prepare pull request creation or update context from local changes.", [
     "Collect branch, commits, diff summary, tests, and risks.",
     "Draft concise PR title and description.",
     "Use project issue links when available.",
-  ], ["open PR", "open pull request", "create pull request", "draft PR"]),
+  ], ["open PR", "create pull request", "draft PR"]),
   skill("pr-issue-documenter", "quality", ["recommended", "full"], "Create PR descriptions and linked issue documentation from branch changes.", [
     "Analyze commits and changed files.",
     "Group changes by area and user-visible behavior.",

@@ -66,8 +66,19 @@ function statements(command: string): string[] {
  * compliant, which is the false-clean defect the native-tool half of this same
  * change was written to close.
  *
- * Position was never the right discriminator. Whether the stage NAMES A FILE
- * is — see `readsStdin`.
+ * Position was the wrong discriminator; whether the stage NAMES A FILE is a
+ * better one — see `readsStdin`. It is not a complete one, and the difference
+ * matters: the block decision still requires `tokens[0]` to be a member of a
+ * fixed name list, so `sh -c 'grep -rn foo src/'`, `$(…)`, backticks, `eval`
+ * and `xargs` pass unclassified, exactly as they did before this rule existed.
+ * The accepted lesson `allowlist-not-a-boundary.md` says why that ceiling is
+ * structural: a list of command names is incomplete by construction, and the
+ * shell re-interprets text the pattern already matched.
+ *
+ * So this is a better nudge, not a boundary. The honest next step is not a
+ * larger parser — it is for the routing audit to distinguish
+ * classified-and-allowed from could-not-classify, so `ctx_used` stops asserting
+ * compliance it never observed.
  */
 interface Stage {
   readonly text: string;
@@ -175,16 +186,32 @@ function readsStdin(tokens: readonly string[], isFirst: boolean): boolean {
   }
   const searchLike = /^(rg|grep|egrep|fgrep|ripgrep)$/.test(command);
   const valueFlags = valueFlagsFor(command, searchLike);
-  // A search takes its pattern as the first operand; a reader does not.
-  let operandsAllowed = searchLike ? 1 : 0;
+  // The first operand of a search is its PATTERN, and of sed/awk its SCRIPT —
+  // neither is a path. Giving the allowance only to search-like commands refused
+  // `bun test | sed -n '1,5p'` and `bun test | awk '{print $1}'`: exactly the
+  // false-block class this whole rule exists to prevent, moved one command over.
+  let operandsAllowed = searchLike || /^(sed|awk)$/.test(command) ? 1 : 0;
   for (let i = 0; i < rest.length; i += 1) {
     const token = rest[i] ?? "";
-    if (valueFlags.has(token)) {
-      i += 1; // the value belongs to the flag, not to the operand list
+    const [flag, attached] = splitFlagValue(token);
+    // Scoped to commands that HAVE a pattern or script. Applying it to every
+    // command reintroduced the `tail -f app.log` bug one layer up: `-f` is
+    // "follow" to tail and the check ate the filename as its value. The same
+    // mistake the per-command VALUE_FLAGS table exists to prevent.
+    if (operandsAllowed > 0 && PATTERN_FLAGS.has(flag)) {
+      // The pattern came from the flag, so the operand allowance was never
+      // spent on it — and every remaining operand is a path. Without this,
+      // `grep -e foo file.ts` passed: the allowance absorbed the FILE.
+      operandsAllowed = 0;
+      if (attached === null) i += 1;
+      continue;
+    }
+    if (valueFlags.has(flag)) {
+      if (attached === null) i += 1; // the value is the next token, not an operand
       continue;
     }
     if (token.startsWith("-")) {
-      if (searchLike && /^-[a-zA-Z]*[rR]/.test(token)) {
+      if (searchLike && isRecursiveFlag(token)) {
         return false; // recursive: walks the tree with or without a path
       }
       continue;
@@ -196,6 +223,41 @@ function readsStdin(tokens: readonly string[], isFirst: boolean): boolean {
     return false; // a path operand: this stage reads files
   }
   return true;
+}
+
+/**
+ * Flags that SUPPLY the pattern or script, so no operand is spent on it.
+ *
+ * Only consulted while an operand allowance is still outstanding, which is the
+ * same thing as "this command takes a pattern or a script".
+ */
+const PATTERN_FLAGS = new Set(["-e", "--regexp", "-f", "--file", "--expression"]);
+
+/** `--flag=value` and `-fvalue` split into the flag and its attached value. */
+function splitFlagValue(token: string): [string, string | null] {
+  if (token.startsWith("--")) {
+    const eq = token.indexOf("=");
+    return eq === -1 ? [token, null] : [token.slice(0, eq), token.slice(eq + 1)];
+  }
+  if (token.startsWith("-") && token.length > 2) {
+    return [token.slice(0, 2), token.slice(2)];
+  }
+  return [token, null];
+}
+
+/**
+ * Recursive in any spelling.
+ *
+ * The short-only `/^-[a-zA-Z]*[rR]/` could never match a long option — after
+ * `^-` the next character is `-`, which `[a-zA-Z]*` cannot consume — so
+ * `grep --recursive foo` walked the tree unguarded while `grep -r foo` blocked.
+ */
+function isRecursiveFlag(token: string): boolean {
+  return (
+    token === "--recursive" ||
+    token === "--dereference-recursive" ||
+    /^-[a-zA-Z]*[rR]/.test(token)
+  );
 }
 
 // The meaningful leading tokens of a segment: skip env assignments (`FOO=bar`)

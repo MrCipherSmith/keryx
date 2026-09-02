@@ -3,7 +3,6 @@ import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { optionValue } from "../lib/args";
 import { buildOrientation } from "../ctx/orient";
-import { formatRoutingBlock, routePrompt } from "../ctx/orient-routing";
 import {
   getOrientRuntime,
   orientRuntimeIds,
@@ -42,111 +41,7 @@ export async function orientCommand(args: string[]): Promise<void> {
   // Default: emit the orientation for a runtime (invoked by the installed hook).
   const runtime = getOrientRuntime(first ?? "claude") ?? getOrientRuntime("claude");
   const orientation = await buildOrientation(process.cwd());
-  // Folded in BEFORE formatting, because `format` owns the runtime's envelope.
-  // Appending after it emitted raw markdown behind `cursorAdditionalContext`'s
-  // closing brace — `{"additional_context":"…"}## Routing…` — which is not
-  // parseable JSON, so cursor would have dropped the ORIENTATION too, not just
-  // the routing block. Latent only because cursor's sessionStart payload
-  // carries no `prompt`; the runtime that does carry one happens to be the one
-  // using plainStdout.
-  const full = `${orientation}${await routingBlockForStdin()}`;
-  process.stdout.write(`${runtime ? runtime.format(full) : full}\n`);
-}
-
-// This command is installed as a `UserPromptSubmit` hook and its stdout is added
-// to the turn's context. It never read the payload: its output was byte-identical
-// for "сделай полное ревью" and "what is 2+2", so what reached the agent was the
-// static Intent Router table — the same prose that failed to route the session
-// which reported this. Reading the prompt turns a table of ten rows into one
-// name.
-//
-// Advisory by construction. "The agent did not invoke a skill" is the ABSENCE of
-// an action and `PreToolUse` intercepts actions, so there is nothing here to
-// block; this injects a suggestion and blocks nothing.
-async function routingBlockForStdin(): Promise<string> {
-  try {
-    const prompt = await readPromptFromStdin();
-    if (!prompt) {
-      return "";
-    }
-    return formatRoutingBlock(prompt, await routePrompt(prompt));
-  } catch {
-    // A hook that runs on every prompt must never fail the turn. Losing the
-    // routing block is the correct failure; losing the turn is not.
-    return "";
-  }
-}
-
-/**
- * The prompt from a `UserPromptSubmit` payload, or null.
- *
- * Absent, empty, non-JSON, or JSON without a prompt all return null, and the
- * caller then emits exactly the pre-change output — a runtime that pipes this
- * command nothing must keep working.
- */
-/** Long enough for a harness that writes then closes; short enough to never be felt. */
-const STDIN_DEADLINE_MS = 250;
-
-/**
- * Read stdin to EOF, or give up at the deadline and CANCEL the read.
- *
- * `Bun.stdin.text()` on a pipe that is never closed waits forever, and it waits
- * after buildOrientation has done its work, so nothing is written at all. Racing
- * it against a timer is not enough on its own: the abandoned read keeps its own
- * handle on the event loop, so the orientation gets written and the process
- * still never exits — and a hook that never exits hangs the harness just as
- * surely as one that never writes. Cancelling the reader releases it.
- *
- * `keryx orient` printed immediately before this feature existed; a CI step or
- * `ssh host \'keryx orient\'` inherits exactly the stdin that reintroduced the wait.
- */
-async function readAllBounded(): Promise<string | null> {
-  const reader = Bun.stdin.stream().getReader();
-  const timer = setTimeout(() => void reader.cancel().catch(() => {}), STDIN_DEADLINE_MS);
-  timer.unref?.();
-  const chunks: Uint8Array[] = [];
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-  } catch {
-    return null; // cancelled at the deadline, or an unreadable stdin
-  } finally {
-    clearTimeout(timer);
-    reader.releaseLock?.();
-  }
-  if (chunks.length === 0) return null;
-  return new TextDecoder().decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
-}
-
-async function readPromptFromStdin(): Promise<string | null> {
-  if (process.stdin.isTTY) {
-    return null;
-  }
-  // Bounded, because `Bun.stdin.text()` on a pipe that is never closed waits
-  // forever — and it waits AFTER buildOrientation has done its work, so nothing
-  // is written at all. The try/catch around this cannot help: a block is not a
-  // throw. `keryx orient` printed immediately before this change; a CI step or
-  // `ssh host 'keryx orient'` inherits exactly such a stdin. A hook that runs on
-  // every prompt must never fail the turn, and expiry is treated as the
-  // no-prompt case the caller already handles correctly.
-  const raw = await readAllBounded();
-  if (raw === null || !raw.trim()) {
-    return null;
-  }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
-  const prompt = (payload as { prompt?: unknown }).prompt;
-  return typeof prompt === "string" && prompt.trim() ? prompt : null;
+  process.stdout.write(`${runtime ? runtime.format(orientation) : orientation}\n`);
 }
 
 function parseRuntimeArg(args: string[]): string[] {

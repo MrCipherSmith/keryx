@@ -52,6 +52,52 @@ describe("the first stage of a statement is still classified", () => {
   }
 });
 
+describe("round-3 siblings: the fix repaired the named site and left these", () => {
+  // Every string below is one a reviewer produced by running the guard, and
+  // every one of them appears here because the previous round's comment named
+  // the regression and no test contained it. That is the defect class this
+  // whole PR is about, reproduced three rounds running.
+  const CASES: ReadonlyArray<readonly [string, "pass" | "block", string]> = [
+    // A stream filter whose first operand is a SCRIPT, not a path. The fix gave
+    // the operand allowance only to search-like commands, so it moved the
+    // false-block class from grep to sed/awk.
+    ["bun test | sed -n '1,5p'", "pass", "sed script is not a path"],
+    ["bun test | awk '{print $1}'", "pass", "awk program is not a path"],
+    ["true | sed 's/a/b/'", "pass", "inline sed expression"],
+    ["true | awk -F, '{print $2}'", "pass", "awk with a value flag"],
+    ["sed -n '1,50p' src/cli.ts", "block", "sed READING a file still blocks"],
+    ["awk '{print}' src/cli.ts", "block", "awk reading a file still blocks"],
+    // The pattern supplied by a flag never spends the operand allowance, so the
+    // allowance was absorbing the FILE instead.
+    ["grep -e foo src/cli.ts", "block", "-e supplies the pattern"],
+    ["grep --regexp=foo src/cli.ts", "block", "attached long form"],
+    ["grep -efoo src/cli.ts", "block", "attached short form"],
+    ["grep -f pats.txt src/cli.ts", "block", "-f supplies the pattern"],
+    ["grep --file=pats.txt src/cli.ts", "block", "attached --file"],
+    // `-f` is "follow" to tail: the pattern-flag rule must not reach a command
+    // that has no pattern. This is the same per-command asymmetry as VALUE_FLAGS
+    // and it was re-broken once while fixing the line above.
+    ["tail -f app.log", "block", "tail -f is not a pattern flag"],
+    // The short-only recursive regex could never match a long option.
+    ["true | grep --recursive foo", "block", "long-form recursive"],
+    ["true | grep --dereference-recursive foo", "block", "long-form recursive alias"],
+    ["cd src && grep --recursive foo", "block", "long form after a statement split"],
+    // Over-blocking is the direction that gets a hook uninstalled, and it had no
+    // coverage: none of the ALLOWED cases exercised a value flag or a piped rg.
+    ["bun test | head -n 20", "pass", "head value flag"],
+    ["bun test | tail -n 5", "pass", "tail value flag"],
+    ["npm test | grep -m 3 error", "pass", "grep -m takes a value"],
+    ["bun test | grep -C 2 fail", "pass", "grep -C takes a value"],
+    ["echo hi | rg hi", "pass", "rg downstream is a filter"],
+  ];
+
+  for (const [command, want, why] of CASES) {
+    test(`${want}: ${command} — ${why}`, () => {
+      expect(verdict(command)).toBe(want);
+    });
+  }
+});
+
 describe("the outside proposal's own specimens", () => {
   // A proposal filed from another session listed five pass/block cases as the
   // detail that "decides whether the hook survives its first day". Four are now
