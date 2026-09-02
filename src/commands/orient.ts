@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { optionValue } from "../lib/args";
 import { buildOrientation } from "../ctx/orient";
+import { formatRoutingBlock, routePrompt } from "../ctx/orient-routing";
 import {
   getOrientRuntime,
   orientRuntimeIds,
@@ -41,7 +42,61 @@ export async function orientCommand(args: string[]): Promise<void> {
   // Default: emit the orientation for a runtime (invoked by the installed hook).
   const runtime = getOrientRuntime(first ?? "claude") ?? getOrientRuntime("claude");
   const orientation = await buildOrientation(process.cwd());
-  process.stdout.write(`${runtime ? runtime.format(orientation) : orientation}\n`);
+  const routing = await routingBlockForStdin();
+  const body = runtime ? runtime.format(orientation) : orientation;
+  process.stdout.write(`${body}${routing}\n`);
+}
+
+// This command is installed as a `UserPromptSubmit` hook and its stdout is added
+// to the turn's context. It never read the payload: its output was byte-identical
+// for "сделай полное ревью" and "what is 2+2", so what reached the agent was the
+// static Intent Router table — the same prose that failed to route the session
+// which reported this. Reading the prompt turns a table of ten rows into one
+// name.
+//
+// Advisory by construction. "The agent did not invoke a skill" is the ABSENCE of
+// an action and `PreToolUse` intercepts actions, so there is nothing here to
+// block; this injects a suggestion and blocks nothing.
+async function routingBlockForStdin(): Promise<string> {
+  try {
+    const prompt = await readPromptFromStdin();
+    if (!prompt) {
+      return "";
+    }
+    return formatRoutingBlock(prompt, routePrompt(prompt));
+  } catch {
+    // A hook that runs on every prompt must never fail the turn. Losing the
+    // routing block is the correct failure; losing the turn is not.
+    return "";
+  }
+}
+
+/**
+ * The prompt from a `UserPromptSubmit` payload, or null.
+ *
+ * Absent, empty, non-JSON, or JSON without a prompt all return null, and the
+ * caller then emits exactly the pre-change output — a runtime that pipes this
+ * command nothing must keep working.
+ */
+async function readPromptFromStdin(): Promise<string | null> {
+  if (process.stdin.isTTY) {
+    return null;
+  }
+  const raw = await Bun.stdin.text();
+  if (!raw.trim()) {
+    return null;
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+  const prompt = (payload as { prompt?: unknown }).prompt;
+  return typeof prompt === "string" && prompt.trim() ? prompt : null;
 }
 
 function parseRuntimeArg(args: string[]): string[] {

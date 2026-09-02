@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "217",
+  "slug": "skills-route-mis-routes-a-generic-review",
+  "title": "skills route mis-routes a generic review request to a specialist, and orient never reads the prompt",
+  "status": "in-progress",
+  "createdAt": "2026-09-02T15:37:01.384Z",
+  "updatedAt": "2026-09-02T15:48:01.246Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9c0d2ef86c7681f38df4efa129258cf7bfdb001ce7d232efca8e5b03e84f31b2",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-02T15:48:00.312Z"
+    },
+    "AC2": {
+      "at": "2026-09-02T15:48:00.402Z"
+    },
+    "AC3": {
+      "at": "2026-09-02T15:48:00.494Z"
+    },
+    "AC4": {
+      "at": "2026-09-02T15:48:00.589Z"
+    },
+    "AC5": {
+      "at": "2026-09-02T15:48:00.681Z"
+    },
+    "AC6": {
+      "at": "2026-09-02T15:48:00.773Z"
+    },
+    "AC7": {
+      "at": "2026-09-02T15:48:00.868Z"
+    },
+    "AC8": {
+      "at": "2026-09-02T15:48:00.961Z"
+    },
+    "AC9": {
+      "at": "2026-09-02T15:48:01.058Z"
+    },
+    "AC10": {
+      "at": "2026-09-02T15:48:01.150Z"
+    },
+    "AC11": {
+      "at": "2026-09-02T15:48:01.246Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context came from the live diagnosis: router probed in both languages, scorer and synonym map read, orient's stdin behaviour measured against origin/main."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "triggerSpecificity replaces the flat trigger hit; RU prefix map extended with prefixed verb forms; review-orchestrator/commit/push given the one-word triggers their intent needs; orient reads the UserPromptSubmit payload and appends a routing block."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "45-pair routing corpus (19 RU / 26 EN) + degeneration unit tests + orient-routing tests + end-to-end stdin contract tests. 67 new tests, all green."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review caught two: a greedy провер->4-token mapping inflating every review-* score, and a real 10-vs-10 tie on 'сделай коммит' that the first rule resolved alphabetically — which produced the sharper rule (degeneration is losing words, not having one)."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-02T15:37:01.384Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-02T15:38:06.457Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-02T15:38:06.562Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-02T15:47:59.925Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-02T15:48:00.021Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-02T15:48:00.122Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-02T15:48:00.218Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-02T15:48:00.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-02T15:48:00.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-02T15:48:00.495Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-02T15:48:00.589Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-02T15:48:00.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-02T15:48:00.773Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-02T15:48:00.868Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-02T15:48:00.961Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-02T15:48:01.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-09-02T15:48:01.150Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-09-02T15:48:01.246Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    }
+  ]
+}

@@ -378,6 +378,48 @@ async function routeProjectSkills(args: string[]): Promise<void> {
   console.log(`Next: ${matches[0]?.next}`);
 }
 
+/**
+ * How specifically `trigger` matches the query: the number of words the match
+ * accounts for, or 0 when it does not fire.
+ *
+ * Verbatim matches count the trigger's RAW words, because a verbatim match
+ * accounted for all of them — including the short ones `routeTokens` drops. The
+ * order-free path counts only surviving tokens and requires at least two of
+ * them, which is what stops a short-token trigger from degenerating into a bare
+ * generic word.
+ */
+export function triggerSpecificity(
+  trigger: string,
+  normalizedQuery: string,
+  queryTokens: Set<string>,
+): number {
+  if (!trigger) {
+    return 0;
+  }
+  if (normalizedQuery.includes(trigger)) {
+    return trigger.split(" ").filter(Boolean).length;
+  }
+  const rawWordCount = trigger.split(" ").filter(Boolean).length;
+  const triggerTokens = [...routeTokens(trigger)];
+  // The defect is DEGENERATION — a multi-word trigger losing words to the
+  // short-token filter until one generic word is left. A trigger the author
+  // wrote as a single word ("brainstorm", "commit") lost nothing and always
+  // meant to fire on that word, and it is the only path that can see synonym
+  // expansion: the verbatim test reads the raw query, so an English trigger can
+  // never match Russian text verbatim.
+  if (triggerTokens.length < 2 && triggerTokens.length !== rawWordCount) {
+    return 0;
+  }
+  if (triggerTokens.length === 0) {
+    return 0;
+  }
+  return triggerTokens.every((token) => queryTokens.has(token)) ? triggerTokens.length : 0;
+}
+
+/** A one-word trigger scores 55, as every trigger did before specificity. */
+const TRIGGER_BASE = 40;
+const TRIGGER_PER_TOKEN = 15;
+
 export function scoreBundledSkillRoute(
   entry: BundledSkill,
   query: string,
@@ -413,15 +455,26 @@ export function scoreBundledSkillRoute(
   // meaningful token of the trigger is present in the query (order-free) — so
   // "requirements package" still matches "prepare requirements documentation
   // package". Triggers carry both EN and RU phrasings.
-  const triggerHit = triggers.some((trigger) => {
-    if (normalizedQuery.includes(trigger)) {
-      return true;
-    }
-    const triggerTokens = [...routeTokens(trigger)];
-    return triggerTokens.length > 0 && triggerTokens.every((token) => queryTokens.has(token));
-  });
-  if (triggerHit) {
-    score += 55;
+  //
+  // The order-free path is gated on the trigger keeping at least TWO meaningful
+  // tokens, and this is the whole point of `triggerSpecificity`. `routeTokens`
+  // drops tokens under three characters, so "ui review" reduced to ["review"]
+  // and `every` over a one-element list is satisfied by ANY query containing
+  // "review" — `review-frontend` therefore claimed a full trigger hit on every
+  // review request in every language and outscored `review-orchestrator`, whose
+  // triggers are honest two-word phrases. That inverts the orchestrator's own
+  // contract, which is to take the request that names no specialist. The same
+  // collapse hits "open PR" -> "open" and "db migrate" -> "migrate".
+  //
+  // Longer matches outrank shorter ones so the direction stays right in both
+  // cases: a request naming a specialist reaches the specialist, and a generic
+  // one reaches the orchestrator.
+  const specificity = triggers.reduce<number>(
+    (best, trigger) => Math.max(best, triggerSpecificity(trigger, normalizedQuery, queryTokens)),
+    0,
+  );
+  if (specificity > 0) {
+    score += TRIGGER_BASE + specificity * TRIGGER_PER_TOKEN;
     reasons.push("trigger");
   }
   if (name && normalizedQuery.includes(name)) {
@@ -559,6 +612,49 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["оркестр", ["orchestrator", "orchestrate"]],
   ["анализ", ["analyze", "analysis"]],
   ["ревьюир", ["review"]],
+  // Words that decide WHICH skill wins, not merely that the query is on-topic.
+  // "полное ревью" carried no `full`, so it never earned the `full+review`
+  // match that puts review-orchestrator on top in English, and every Russian
+  // review request fell through to whichever specialist scored on `review`
+  // alone.
+  ["полн", ["full", "complete"]],
+  ["целик", ["full", "whole"]],
+  ["весь", ["all", "full"]],
+  ["всего", ["all", "full"]],
+  ["напиш", ["write", "create"]],
+  ["напис", ["write", "create"]],
+  ["начн", ["start", "begin"]],
+  ["начат", ["start", "begin"]],
+  ["исправ", ["fix"]],
+  ["почин", ["fix"]],
+  ["найд", ["find"]],
+  ["ищи", ["find", "search"]],
+  ["поиск", ["find", "search"]],
+  ["объясн", ["explain"]],
+  ["опиш", ["describe", "document"]],
+  ["измен", ["change", "changes"]],
+  ["правк", ["change", "changes"]],
+  // Russian verbs take prefixes (про-, за-, об-, от-), and matching is
+  // `startsWith`, so a root alone does not reach the inflected form the user
+  // actually types: "проанализируй" does not start with "анализ", and "проверь"
+  // does not start with "проверк". Each of these is a form observed in the
+  // routing corpus, not a guess at the language.
+  ["провер", ["check", "verify", "review"]],
+  ["проанализ", ["analyze", "analysis"]],
+  ["ишь", ["issue"]],
+  ["завед", ["create", "start"]],
+  ["обнов", ["update", "upgrade"]],
+  ["коммит", ["commit"]],
+  ["откр", ["open"]],
+  ["пулл", ["pull"]],
+  ["реквест", ["request"]],
+  ["мерж", ["merge"]],
+  ["влив", ["merge"]],
+  ["пуш", ["push"]],
+  ["ветк", ["branch"]],
+  ["запуст", ["run"]],
+  ["собер", ["build"]],
+  ["сборк", ["build"]],
 ];
 
 function routeTokens(normalized: string, expand = false): Set<string> {
