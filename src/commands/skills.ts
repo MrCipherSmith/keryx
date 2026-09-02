@@ -391,34 +391,46 @@ async function routeProjectSkills(args: string[]): Promise<void> {
 export function triggerSpecificity(
   trigger: string,
   normalizedQuery: string,
-  queryTokens: Set<string>,
+  queryTokens: ReadonlyMap<string, string>,
 ): number {
   if (!trigger) {
     return 0;
   }
-  if (normalizedQuery.includes(trigger)) {
-    return trigger.split(" ").filter(Boolean).length;
-  }
-  const rawWordCount = trigger.split(" ").filter(Boolean).length;
-  const triggerTokens = [...routeTokens(trigger)];
-  // The defect is DEGENERATION — a multi-word trigger losing words to the
-  // short-token filter until one generic word is left. A trigger the author
-  // wrote as a single word ("brainstorm", "commit") lost nothing and always
-  // meant to fire on that word, and it is the only path that can see synonym
-  // expansion: the verbatim test reads the raw query, so an English trigger can
-  // never match Russian text verbatim.
-  if (triggerTokens.length < 2 && triggerTokens.length !== rawWordCount) {
-    return 0;
-  }
+  const triggerTokens = triggerTokensOf(trigger);
   if (triggerTokens.length === 0) {
     return 0;
   }
-  return triggerTokens.every((token) => queryTokens.has(token)) ? triggerTokens.length : 0;
+  // Word-boundary padded: this change added one-word triggers ("review",
+  // "commit", "push") and a bare substring test matched inside longer words —
+  // "commitment issues" scored commit at 85, "preview the deck" reached
+  // review-orchestrator. Both sides are space-normalized, so padding is exact.
+  if (` ${normalizedQuery} `.includes(` ${trigger} `)) {
+    return triggerTokens.length;
+  }
+  if (!triggerTokens.every((token) => queryTokens.has(token))) {
+    return 0;
+  }
+  // Every token is present — but they must come from as many DISTINCT query
+  // WORDS as the trigger has tokens. Synonym expansion turns one Russian word
+  // into several English tokens: `провер*` yields check+verify+review, which
+  // covered review-verifier's two-word trigger "review --verify" by itself, so
+  // "проверь почту" ("check the mail") routed there at 100 and the orient hook
+  // injected it as a confident single arrow.
+  const sources = new Set(triggerTokens.map((token) => queryTokens.get(token)));
+  return sources.size >= triggerTokens.length ? triggerTokens.length : 0;
 }
 
-/** A one-word trigger scores 55, as every trigger did before specificity. */
-const TRIGGER_BASE = 40;
-const TRIGGER_PER_TOKEN = 15;
+/**
+ * Trigger score = BASE + PER_TOKEN x specificity, so a longer match outranks a
+ * shorter one and a one-word trigger scores 55 — what every trigger scored
+ * before specificity existed.
+ *
+ * Exported because `ROUTING_FLOOR` is derived from them. It used to restate the
+ * sum as a bare `55` in another file, so retuning either constant silently
+ * changed what that floor meant, with no compile error and no failing test.
+ */
+export const TRIGGER_BASE = 40;
+export const TRIGGER_PER_TOKEN = 15;
 
 export function scoreBundledSkillRoute(
   entry: BundledSkill,
@@ -442,7 +454,7 @@ export function scoreBundledSkillRoute(
     ].join(" "),
   );
 
-  const queryTokens = routeTokens(normalizedQuery, true);
+  const queryTokens = expandTokens(normalizedQuery, true);
 
   let score = 0;
   const reasons: string[] = [];
@@ -483,7 +495,7 @@ export function scoreBundledSkillRoute(
   }
 
   const haystackTokens = routeTokens(haystack);
-  const overlap = [...queryTokens].filter((token) => haystackTokens.has(token));
+  const overlap = [...queryTokens.keys()].filter((token) => haystackTokens.has(token));
   if (overlap.length > 0) {
     score += overlap.length * 10;
     reasons.push(`tokens:${overlap.slice(0, 4).join("+")}`);
@@ -557,6 +569,13 @@ const ROUTE_STOPWORDS = new Set([
   "out", "run", "use", "used", "make", "get", "can", "please", "help", "want",
   "для", "при", "что", "как", "это", "под", "над", "или", "все", "мне", "нам",
   "нужно", "надо", "мой", "моя", "мои", "чтобы", "его", "them",
+  // Two-letter filler, now that the length floor is 2 rather than 3. The floor
+  // moved because the old one deleted meaningful short words from the query —
+  // "pr", "ui", "db", "md" — so a trigger that legitimately names one could
+  // never be satisfied and the skill became unreachable.
+  "an", "of", "to", "in", "is", "it", "on", "at", "by", "be", "do", "we", "me",
+  "my", "as", "or", "if", "so", "up", "no",
+  "на", "по", "из", "не", "об", "во", "ко", "мы", "вы", "их", "ее", "её", "им",
 ]);
 
 // Bundled skills carry mostly English metadata, so a Russian intent would never
@@ -602,6 +621,7 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["созда", ["create"]],
   ["деплой", ["deploy"]],
   ["разверт", ["deploy"]],
+  ["разверн", ["deploy"]],
   ["зависим", ["dependency", "dependencies"]],
   ["интервью", ["interview"]],
   ["опрос", ["interview"]],
@@ -639,7 +659,7 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   // actually types: "проанализируй" does not start with "анализ", and "проверь"
   // does not start with "проверк". Each of these is a form observed in the
   // routing corpus, not a guess at the language.
-  ["провер", ["check", "verify", "review"]],
+  ["провер", ["check", "verify"]],
   ["проанализ", ["analyze", "analysis"]],
   ["ишь", ["issue"]],
   ["завед", ["create", "start"]],
@@ -650,6 +670,8 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["реквест", ["request"]],
   ["мерж", ["merge"]],
   ["влив", ["merge"]],
+  ["влей", ["merge"]],
+  ["влит", ["merge"]],
   ["пуш", ["push"]],
   ["ветк", ["branch"]],
   ["запуст", ["run"]],
@@ -657,18 +679,53 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["сборк", ["build"]],
 ];
 
+/** Exposed so the prefix table can be tested directly rather than only through end-to-end routing. */
+export function expandQueryTokens(normalized: string): ReadonlyMap<string, string> {
+  return expandTokens(normalized, true);
+}
+
 function routeTokens(normalized: string, expand = false): Set<string> {
-  const tokens = new Set(
-    normalized
-      .split(" ")
-      .filter((token) => token.length >= 3 && !ROUTE_STOPWORDS.has(token)),
-  );
+  return new Set(expandTokens(normalized, expand).keys());
+}
+
+/**
+ * Meaningful tokens of an AUTHOR-WRITTEN trigger — the noise filter does not
+ * apply.
+ *
+ * `length >= 3` exists to keep filler out of a free-text QUERY. Applied to a
+ * trigger it silently deleted words: "ui review" became ["review"], "open pr"
+ * became ["open"], "db migrate" became ["migrate"], and an `every()` over the
+ * one survivor then matched any query containing that word. Keeping every word
+ * an author wrote is what makes the >= 1 rule below sufficient with no special
+ * case: a trigger cannot degenerate if nothing is dropped from it.
+ */
+function triggerTokensOf(trigger: string): string[] {
+  return trigger.split(" ").filter(Boolean);
+}
+
+/**
+ * Query tokens mapped to the SOURCE WORD each came from.
+ *
+ * The map, rather than a bare set, is what stops one word from satisfying a
+ * multi-word trigger. A single `провер*` word expands to check+verify+review,
+ * which covered review-verifier's two-word trigger "review --verify" on its
+ * own — so "проверь почту" ("check the mail") routed to review-verifier at 100
+ * and the orient hook injected it as a confident single arrow. The gate has to
+ * count how many words of the QUERY were consumed, not how many tokens the
+ * trigger has.
+ */
+function expandTokens(normalized: string, expand = false): Map<string, string> {
+  const tokens = new Map<string, string>();
+  const words = normalized.split(" ").filter((word) => word.length >= 2 && !ROUTE_STOPWORDS.has(word));
+  for (const word of words) {
+    if (!tokens.has(word)) tokens.set(word, word);
+  }
   if (expand) {
-    for (const token of [...tokens]) {
+    for (const word of words) {
       for (const [prefix, synonyms] of RU_SYNONYM_PREFIXES) {
-        if (token.startsWith(prefix)) {
+        if (word.startsWith(prefix)) {
           for (const synonym of synonyms) {
-            tokens.add(synonym);
+            if (!tokens.has(synonym)) tokens.set(synonym, word);
           }
         }
       }

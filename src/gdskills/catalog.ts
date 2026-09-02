@@ -150,12 +150,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Map inputs, trust boundaries, and sensitive outputs.",
     "Check injection, auth, crypto, secrets, and unsafe filesystem/network behavior.",
     "Prioritize exploitable findings with concrete remediation.",
-  ], ["security review", "secure code", "vulnerability"]),
+  ], ["security review", "secure code", "vulnerability", "проверь безопасность", "безопасность кода"]),
   skill("review-performance", "review", ["recommended", "full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
     "Find changed hot paths and repeated operations.",
     "Check loops, rendering, async blocking, large imports, and caching behavior.",
     "Prioritize measurable or high-likelihood regressions.",
-  ], ["performance review", "perf check", "slow"]),
+  ], ["performance review", "perf check", "slow", "узкие места", "проседает производительность"]),
   skill("review-frontend", "review", ["recommended", "full"], "Review frontend components, state boundaries, rendering behavior, and UI integration patterns.", [
     "Identify component, store, hook, route, and UI boundary changes.",
     "Check data flow, state ownership, rendering cost, accessibility, and local conventions.",
@@ -288,7 +288,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Detect migration tooling and existing conventions.",
     "Create minimal reversible migrations where possible.",
     "Run or describe verification and rollback steps.",
-  ], ["database migration", "db migrate", "migration status"]),
+  ], ["database migration", "db migrate", "migrate database", "migration status"]),
   skill("deploy", "quality", ["full"], "Run deployment pre-flight checks and deployment workflow summaries.", [
     "Detect deployment target and required pre-flight checks.",
     "Run verification before deployment unless explicitly skipped.",
@@ -308,7 +308,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Collect branch, commits, diff summary, tests, and risks.",
     "Draft concise PR title and description.",
     "Use project issue links when available.",
-  ], ["open PR", "create pull request", "draft PR"]),
+  ], ["open PR", "open pull request", "create pull request", "draft PR"]),
   skill("pr-issue-documenter", "quality", ["recommended", "full"], "Create PR descriptions and linked issue documentation from branch changes.", [
     "Analyze commits and changed files.",
     "Group changes by area and user-visible behavior.",

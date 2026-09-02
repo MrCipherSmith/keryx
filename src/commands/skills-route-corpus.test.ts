@@ -19,6 +19,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
+import { routePrompt } from "../ctx/orient-routing";
 import { scoreBundledSkillRoute, triggerSpecificity, normalizeRouteText } from "./skills";
 
 function topSkill(query: string): { name: string; category: string; score: number } | null {
@@ -111,8 +112,39 @@ describe("routing corpus", () => {
   }
 });
 
+// Ranking is not what ships. `topSkill` above filters `score > 0`; the surface a
+// user meets is `routePrompt`, which filters `score >= ROUTING_FLOOR` and is what
+// the orient hook prints. Three pairs of this corpus were green while the hook
+// emitted NOTHING for them — including `open a PR`, one of the very collapses
+// this file's header says the change fixed. Asserting ranking alone let the
+// headline regression asset pass while the feature was silent.
+describe("the corpus holds through the surface that actually ships", () => {
+  for (const [query, expected] of [...RU_CORPUS, ...EN_CORPUS]) {
+    test(`routePrompt: ${query} -> ${expected}`, () => {
+      const emitted = routePrompt(query);
+      expect(emitted.length).toBeGreaterThan(0);
+      expect(emitted[0]?.name).toBe(expected);
+    });
+  }
+
+  test("ranking and emission agree on every pair — no pair ranks one way and emits another", () => {
+    const disagreements = [...RU_CORPUS, ...EN_CORPUS]
+      .map(([query]) => ({ query, ranked: topSkill(query)?.name, emitted: routePrompt(query)[0]?.name }))
+      .filter((row) => row.ranked !== row.emitted);
+    expect(disagreements).toEqual([]);
+  });
+});
+
 describe("a trigger cannot fire on fewer words than it was written with", () => {
-  const tokensOf = (q: string) => new Set(normalizeRouteText(q).split(" ").filter((t) => t.length >= 3));
+  // The scorer now needs token -> source-word, so one query word cannot satisfy
+  // a multi-word trigger through synonym expansion.
+  const tokensOf = (q: string) =>
+    new Map(
+      normalizeRouteText(q)
+        .split(" ")
+        .filter((t) => t.length >= 3)
+        .map((t) => [t, t] as const),
+    );
 
   test('"ui review" no longer degenerates to "review"', () => {
     // The regression in one line: before the fix this returned a hit, because

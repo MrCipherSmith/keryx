@@ -369,7 +369,7 @@ function preToolUseGroup(id: string): Settings {
 
 export const CLAUDE_RUNTIME: CtxRuntime = {
   id: "claude",
-  label: ".claude/settings.json (PreToolUse/Bash)",
+  label: `.claude/settings.json (PreToolUse/${PRE_TOOL_USE_MATCHER})`,
   confidence: "verified",
   nativeSearchTools: ["Grep"],
   parseCommand: parseToolInputCommand,
@@ -383,7 +383,7 @@ export const CLAUDE_RUNTIME: CtxRuntime = {
 
 export const CODEX_RUNTIME: CtxRuntime = {
   id: "codex",
-  label: ".codex/hooks.json (PreToolUse/Bash)",
+  label: `.codex/hooks.json (PreToolUse/${PRE_TOOL_USE_MATCHER})`,
   confidence: "verified",
   nativeSearchTools: ["Grep"],
   parseCommand: parseToolInputCommand,

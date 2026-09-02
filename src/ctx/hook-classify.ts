@@ -54,33 +54,154 @@ function statements(command: string): string[] {
 }
 
 /**
- * The first pipeline stage of each statement — the only stage that can be
- * operating on files.
+ * Every pipeline stage of every statement, in order.
  *
- * Everything downstream of a `|` reads STDIN. It is filtering a stream, not
- * searching a tree, and classifying it as though it named a file is what made
- * the guard unusable: `npm test | grep -E 'Tests'`, `bun test 2>&1 | tail -5`
- * and even `keryx ctx rg 'foo' | grep -c 'bar'` were all refused. The last one
- * is the tell — routing the search exactly as the rule demands and then counting
- * the results was refused.
+ * The first version of this kept only the first stage, on the premise that
+ * "everything downstream of a `|` reads STDIN". That premise is FALSE, and the
+ * recorded lesson `allowlist-not-a-boundary.md` predicted exactly this: a
+ * pattern matches text and the shell re-interprets that text. `grep -rn P DIR`,
+ * `cat FILE`, `find`, `sed -n … FILE` and `git log` all take operands and never
+ * read stdin, so a one-token prefix disabled the guard for its entire target
+ * set — `true | grep -rn foo src/` ran a full tree search and was recorded as
+ * compliant, which is the false-clean defect the native-tool half of this same
+ * change was written to close.
  *
- * Only the first stage is dropped from consideration downstream, never the
- * first: `grep -rn foo src/ | head -20` is still a code search, and a rule that
- * allowed any piped command would disable the guard for its most common shape.
- *
- * `cat f | rg y` stays blocked, now at `cat f` rather than at `rg y`, which is
- * the more accurate place to catch it anyway.
+ * Position was never the right discriminator. Whether the stage NAMES A FILE
+ * is — see `readsStdin`.
  */
-function firstStages(command: string): string[] {
-  return statements(command)
-    .map((statement) => statement.split("|")[0]?.trim() ?? "")
-    .filter(Boolean);
+interface Stage {
+  readonly text: string;
+  /** First in its pipeline: nothing upstream, so nothing to read from stdin. */
+  readonly isFirst: boolean;
+}
+
+function stages(command: string): Stage[] {
+  const out: Stage[] = [];
+  for (const statement of statements(command)) {
+    const parts = splitPipeline(statement);
+    parts.forEach((text, index) => {
+      const trimmed = text.trim();
+      if (trimmed) out.push({ text: trimmed, isFirst: index === 0 });
+    });
+  }
+  return out;
+}
+
+/**
+ * Split on `|`, ignoring pipes inside quotes.
+ *
+ * `grep -E 'Test Files|Tests '` is ONE stage; splitting inside the quoted
+ * pattern invented a second one and blocked a command the guard is meant to
+ * allow. Still a shallow parser — it does not handle escapes or here-docs — but
+ * the quoted-pipe case is the one that occurs in real commands.
+ */
+function splitPipeline(statement: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | null = null;
+  for (const char of statement) {
+    if (quote) {
+      if (char === quote) quote = null;
+      current += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "|") {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** Tokens of a stage, treating a quoted run as a single token. */
+function stageTokens(stage: string): string[] {
+  return (stage.match(/'[^']*'|"[^"]*"|\S+/g) ?? []).filter(Boolean);
+}
+
+/**
+ * Flags that take a value, so the token after them is NOT a path operand.
+ *
+ * Per command, not one shared set: `-f` means "read patterns from a file" to
+ * grep and "follow" to tail, so a shared list swallowed `app.log` in
+ * `tail -f app.log` and let a file read through. Getting this wrong is silent in
+ * exactly one direction — it under-blocks — which is why it is spelled out.
+ */
+const VALUE_FLAGS: Record<string, ReadonlySet<string>> = {
+  search: new Set(["-e", "--regexp", "-f", "--file", "-m", "--max-count", "-A", "-B", "-C", "--context"]),
+  head: new Set(["-n", "--lines", "-c", "--bytes"]),
+  tail: new Set(["-n", "--lines", "-c", "--bytes"]),
+  sed: new Set(["-e", "--expression", "-f", "--file"]),
+  awk: new Set(["-f", "-v"]),
+};
+
+function valueFlagsFor(command: string, searchLike: boolean): ReadonlySet<string> {
+  return searchLike ? VALUE_FLAGS.search! : (VALUE_FLAGS[command] ?? new Set<string>());
+}
+
+/**
+ * True when this stage is filtering a stream rather than reading the tree.
+ *
+ * The distinction the change was actually reaching for: `grep -E 'Tests'` has a
+ * pattern and no path, so it can only be reading stdin; `grep -rn foo src/`
+ * names a directory. A recursive flag settles it on its own — `-r` with no path
+ * still walks the working directory.
+ *
+ * `find`, `ls` and `git log|diff|show` never read stdin in any useful sense and
+ * are therefore never filters, whatever their position.
+ */
+function readsStdin(tokens: readonly string[], isFirst: boolean): boolean {
+  const [command, ...rest] = tokens;
+  if (!command) {
+    return true;
+  }
+  if (/^(find|ls|git)$/.test(command)) {
+    return false;
+  }
+  // `rg` defaults to a RECURSIVE search of the working directory, so `rg y` with
+  // no path is a tree search — unlike `grep y`, which reads stdin. It is a
+  // filter only when something upstream is feeding it. This is the one place
+  // position legitimately matters, and getting it wrong let `cd x && rg y`
+  // through, which is the case the statement split exists to catch.
+  if (/^(rg|ripgrep)$/.test(command) && isFirst) {
+    return false;
+  }
+  const searchLike = /^(rg|grep|egrep|fgrep|ripgrep)$/.test(command);
+  const valueFlags = valueFlagsFor(command, searchLike);
+  // A search takes its pattern as the first operand; a reader does not.
+  let operandsAllowed = searchLike ? 1 : 0;
+  for (let i = 0; i < rest.length; i += 1) {
+    const token = rest[i] ?? "";
+    if (valueFlags.has(token)) {
+      i += 1; // the value belongs to the flag, not to the operand list
+      continue;
+    }
+    if (token.startsWith("-")) {
+      if (searchLike && /^-[a-zA-Z]*[rR]/.test(token)) {
+        return false; // recursive: walks the tree with or without a path
+      }
+      continue;
+    }
+    if (operandsAllowed > 0) {
+      operandsAllowed -= 1;
+      continue;
+    }
+    return false; // a path operand: this stage reads files
+  }
+  return true;
 }
 
 // The meaningful leading tokens of a segment: skip env assignments (`FOO=bar`)
 // and benign wrappers (`sudo`, `env`, …).
 function leadingTokens(segment: string): string[] {
-  const tokens = segment.split(/\s+/).filter(Boolean);
+  const tokens = stageTokens(segment);
   let i = 0;
   while (i < tokens.length) {
     const token = tokens[i] ?? "";
@@ -104,8 +225,11 @@ export function classifyCommand(command: string): HookClassification {
     return { block: false, escapeReason: (escape[1] ?? "").trim() };
   }
 
-  for (const segment of firstStages(command)) {
-    const tokens = leadingTokens(segment);
+  for (const stage of stages(command)) {
+    const tokens = leadingTokens(stage.text);
+    if (readsStdin(tokens, stage.isFirst)) {
+      continue;
+    }
     const first = tokens[0];
     if (!first || ALREADY_ROUTED.has(first)) {
       continue;

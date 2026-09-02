@@ -1,5 +1,5 @@
 import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
-import { scoreBundledSkillRoute } from "../commands/skills";
+import { TRIGGER_BASE, TRIGGER_PER_TOKEN, scoreBundledSkillRoute } from "../commands/skills";
 
 export interface RoutedSkill {
   readonly name: string;
@@ -9,18 +9,26 @@ export interface RoutedSkill {
 }
 
 /**
- * The floor below which nothing is said.
+ * The floor below which nothing is said: the score of a one-word trigger.
  *
- * A router that answers every prompt is a router the agent learns to ignore, and
- * a confident wrong name costs more than silence. A bare token overlap scores 10
- * per token and carries no trigger; requiring a real trigger match (>= 55) means
- * the block appears when the request actually looks like one of these skills.
+ * A router that answers every prompt is one the agent learns to ignore, and a
+ * confident wrong name costs more than silence.
+ *
+ * Note what this does NOT promise. An earlier version of this comment claimed
+ * the floor "requires a real trigger match"; it does not, and never did — six
+ * overlapping tokens score 60 and clear it with no trigger at all. The floor is
+ * a score threshold, and `requireTrigger` below is what actually makes a trigger
+ * necessary. Derived from the scoring constants rather than restated, so
+ * retuning them cannot silently change what this means.
  */
-export const ROUTING_FLOOR = 55;
+export const ROUTING_FLOOR = TRIGGER_BASE + TRIGGER_PER_TOKEN;
 
 export function routePrompt(prompt: string): RoutedSkill[] {
   return BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, prompt))
-    .filter((match) => match.score >= ROUTING_FLOOR)
+    // Both conditions, because the floor alone is a score and vocabulary overlap
+    // can reach it: naming a skill off shared words is the "confident wrong
+    // name" this is supposed to prevent.
+    .filter((match) => match.score >= ROUTING_FLOOR && match.reasons.includes("trigger"))
     .sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name))
     .slice(0, 2)
     .map((match) => ({

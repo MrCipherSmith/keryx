@@ -4,12 +4,14 @@
 // block/allow signal. All harness-specific behavior lives in runtimes.ts; the
 // classification logic lives in hook-classify.ts.
 //
-// Fail-open by construction: an unknown runtime, a non-shell tool, or an
-// unparseable payload always allows the command (exit 0). The guard never blocks
-// work it cannot confidently classify.
+// Fail-open by construction, with ONE exception: a tool named in the runtime's
+// `nativeSearchTools` is refused, because a native code search bypasses the
+// shell entirely and the Bash guard would report a clean run over it. An unknown
+// runtime, an unparseable payload, or any other non-shell tool still allows the
+// command (exit 0). The guard never blocks work it cannot confidently classify.
 
 import { classifyCommand } from "./hook-classify";
-import { getRuntime, nativeSearchMessage, parseToolName, refusalAction } from "./runtimes";
+import { getRuntime, nativeSearchMessage, parseToolName, refusalAction, type HookAction } from "./runtimes";
 
 // Re-exports kept for callers/tests that imported these from hook.ts.
 export { classifyCommand, buildBlockMessage, type HookClassification } from "./hook-classify";
@@ -45,10 +47,7 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
     // not happen.
     const nativeSearch = matchedNativeSearch(runtime.nativeSearchTools, payload);
     if (nativeSearch) {
-      const action = refusalAction(runtime.id, nativeSearchMessage(nativeSearch));
-      if (action.stdout) process.stdout.write(action.stdout);
-      if (action.stderr) process.stderr.write(action.stderr);
-      if (action.exitCode) process.exitCode = action.exitCode;
+      emit(refusalAction(runtime.id, nativeSearchMessage(nativeSearch)));
     }
     return; // fail-open for anything else: unparseable, or a tool we do not claim.
   }
@@ -58,6 +57,11 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
     ? runtime.block(command, classification)
     : runtime.allow(classification);
 
+  emit(action);
+}
+
+/** The single place a HookAction becomes process output. */
+function emit(action: HookAction): void {
   if (action.stdout) process.stdout.write(action.stdout);
   if (action.stderr) process.stderr.write(action.stderr);
   if (action.exitCode) process.exitCode = action.exitCode;
