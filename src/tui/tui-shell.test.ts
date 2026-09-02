@@ -2934,7 +2934,7 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     const block = source.slice(start, start + 1_400);
     expect(block).toContain("mainQueue = removeMainQueueItem(mainQueue, index)");
     expect(block).toMatch(/foregroundOperation\.cancel\(/);
-    expect(block).toMatch(/await\s+foregroundOperation\.(settled|whenSettled)\(/);
+    expect(block).toMatch(/await\s+runAfterForegroundSettlement\(foregroundOperation/);
     expect(block).toMatch(/priorityMainQuestion[\s\S]{0,250}runLine\(/);
   });
 

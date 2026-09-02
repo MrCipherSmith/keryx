@@ -1677,6 +1677,9 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
       const item: LightBatchItem = { page, original, originalRaw, keyFiles };
       prepared.push({ kind: tier === "deep" ? "deep" : "light", item });
     } catch (cause) {
+      if (input.signal?.aborted) {
+        return cancelled();
+      }
       ctx.onPage({ index, total: ctx.total, path: page.relativePath, status, phase: "failed" });
       prepared.push({
         kind: "resolved",

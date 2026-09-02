@@ -3767,7 +3767,6 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
         // Cancellation is cooperative. Do not run the forced item until the
         // current operation's finalizer has settled its own UI state.
-        await foregroundOperation.settled();
         await runAfterForegroundSettlement(foregroundOperation, () => {
           if (priorityMainQuestion !== item) return;
           priorityMainQuestion = undefined;

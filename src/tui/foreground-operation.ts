@@ -1,3 +1,5 @@
+import type { AgentIO } from "../commands/agent";
+
 /**
  * Owns the single cancellable operation that may keep the interactive shell
  * busy. Tokens make cleanup identity-safe: an older operation cannot clear a
@@ -145,4 +147,3 @@ export function createForegroundAgentIoFacade(
     permissionMode: () => (accepts() ? io.permissionMode?.() ?? "ask" : "ask"),
   };
 }
-import type { AgentIO } from "../commands/agent";
