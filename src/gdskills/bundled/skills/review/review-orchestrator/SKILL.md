@@ -52,7 +52,7 @@ unified report sorted by severity. It does not perform any review logic itself.
 ```
 Review Orchestrator Progress:
 - [ ] Step 0: On a PR target, collect external comments — `keryx review comments collect`
-- [ ] Step 1: Build Review Context Pack (PR metadata, scope, rules, context_doc summary)
+- [ ] Step 1: Build Review Context Pack — PR metadata AND the PR's own description, scope, rules, context_doc summary, accepted memory, and the cross-repo contracts the diff consumes
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
 - [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
@@ -462,8 +462,8 @@ Required content:
 - Git/PR metadata: repo, branch, base, head, merge-base, PR number/URL when available.
 - Scope summary: changed files grouped by domain, high-risk files, generated/ignored files.
 - Requirements: issue URL, linked task docs, acceptance criteria extracted from `context_doc` when available.
-- **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`. See below.
-- **Cross-repo contracts the diff depends on**, each pinned to the SHA you read it at. See below.
+- **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`, into the typed `pr.body`. See below.
+- **Cross-repo contracts the diff depends on**, in the typed `cross_repo`: each pinned to the ref you read it at, and each recording whether the producer has merged. See below.
 - Rules: matched repository rules and convention docs by path.
 - **Memory: accepted project memory intersecting the changed paths.** See below — this step is required, not best-effort.
 - Decisions: why each reviewer was selected or skipped.
@@ -487,8 +487,17 @@ and not a pleasantry because unfiled housekeeping is raised again every round an
 fixed in none — three consecutive rounds of "still worth rewriting" is the
 recorded outcome of leaving it out of the findings array.
 
+**The Stage 1 gate files it.** Handing the body to every reviewer is what makes
+the body available; it is not what makes the comparison happen. A rule addressed
+to everyone is owned by no one, and that is the state this finding sat in for
+three rounds. The gate already holds the stated intent and the diff side by side,
+so the comparison belongs there — see `## Stage 1 Gate — Spec Compliance`.
+
 Same class, same severity: an approach that depends on another repository's change
-being deployed first, with no deploy note saying so.
+being deployed first, with no deploy note saying so. Note the boundary — that
+`minor` is about the *description*. When the dependency is real and this change
+can merge first, the blocker is filed against the call site instead; see
+`### A producer that has not merged yet`.
 
 ### Cross-repo contracts are read, not assumed
 
@@ -499,15 +508,21 @@ the SHA:
 ```yaml
 cross_repo:
   - repo: vantage-backend
+    state: merged
     sha: f5219d5d4
+    merge_order: independent
     reason: "DQ report payload: which halves are null vs 0"
+    facts_pinned_round: 1
     facts:
       - "sqlScore/schemaDriftScore stay null when the half is absent"
       - "sqlWeightPercentage/schemaDriftWeightPercentage init to 0.0 and are set unconditionally"
 ```
 
-Put the facts in `review_context` so every reviewer shares one reading, and so a
-later round can tell a contract that moved from a reviewer that misread it.
+Put the facts in `review_context.cross_repo` so every reviewer shares one reading,
+and so a later round can tell a contract that moved from a reviewer that misread
+it. The shape is typed in `review-context.schema.json`: `repo`, `reason`, `facts`
+and `state` are required, `state: merged` requires the `sha`, and `state: open`
+requires the `pr`.
 
 The rule that follows for reviewers, and that belongs in the dispatch prompt:
 
@@ -517,9 +532,49 @@ The rule that follows for reviewers, and that belongs in the dispatch prompt:
 > producer disproves, and a defect missed because the producer's actual default was
 > assumed rather than read.
 
-If the other repository is not available to you, say so in `cross_repo` and leave
-the dependent findings at `info`. An unavailable producer is a result. Assuming
-one is not.
+If the other repository is not available to you, record it as
+`state: unavailable` in `cross_repo` and leave the dependent findings at `info`.
+An unavailable producer is a result. Assuming one is not.
+
+A finding whose evidence lives in the producer sets `repo` on the finding itself.
+`file` and `line` alone name a path in the repository under review, so without
+`repo` a cross-repo claim cannot say where its evidence is — and the `info` rule
+above then rests on nothing a later round can check.
+
+### A producer that has not merged yet
+
+`state: merged` is the easy case: the contract is on the producer's base branch,
+you pin the SHA, and it stays where you pinned it. A **parallel pull request** —
+the backend change your change was written against, still open — is a different
+object, and pinning it the same way is wrong in three separate ways.
+
+**Pin the pull request, not just the commit.** An open branch gets rebased and
+squashed. A SHA read from it today names a commit that will not exist after the
+merge, so `state: open` requires `pr` and the SHA becomes a note about when you
+read it rather than an address a later reader can follow.
+
+**Merge order is a `blocker`, not a note.** A missing deploy note in the PR body
+is `minor` — that is a documentation finding and it stays where it is. The
+operational case is not that one: when an entry is `state: open` with
+`merge_order: producer_first`, and this change can merge without the producer,
+**production breaks the moment it does**. That is a `blocker` under the existing
+enumeration, not a new shape — the consumer calls what is not there, or reads a
+default the producer has not changed yet, which is shape 1 or shape 2 in
+`### \`blocker\` — merge-blocking, and nothing else`. File it against the consuming
+call site rather than the description, and write the fix as what it is: a merge
+gate, a flag, or a fallback, never an edit to a diff that may be perfectly
+correct. Scope it exactly — both facts have to be recorded, an open producer AND
+a producer-first order, and no gate already holding the merge. A
+`merge_order: unknown` is a question to resolve, not a blocker to file.
+
+**Re-read an open producer every round.** `facts` pinned in round 1 are a
+statement about a branch that is still being written; by round 3 the contract may
+have changed under a finding that still cites it. On each round, re-read every
+entry with `state: open` and set `revalidated_round`. An entry whose
+`revalidated_round` is behind the current round has not been checked this round,
+and findings resting on it drop to `info` until it is. This is the same discipline
+`prior_findings` already imposes on the local diff, applied to the one input that
+is most likely to have moved.
 
 ### Memory (required)
 
@@ -1117,13 +1172,35 @@ local frontend conventions reviewer.
 
 ## Stage 1 Gate — Spec Compliance
 
-**Run this FIRST, before dispatching quality reviewers, when an `issue_url` or task doc is provided.**
+**Run this FIRST, before dispatching quality reviewers, whenever the change has a
+stated intent — an `issue_url`, a task doc, or a PR body.**
 
 1. Fetch issue or task requirements.
 2. Map changed files and functions to acceptance criteria.
 3. Identify any criteria that are not addressed by the diff.
 4. If there are unimplemented criteria: emit them as `blocker` findings in the final report and note them in `## Blockers`.
 5. Continue dispatching the remaining reviewers regardless (spec gaps + quality issues both belong in the report).
+
+### With no issue and no task doc, the PR body is the spec
+
+A pull request with nothing linked is the common case, not the exception, and the
+gate used to skip entirely on it — which meant the only written statement of what
+the change was for went unchecked precisely when it was the only one there. When
+`issue_url` and `context_doc` are both absent, read `pr.body` as the spec and run
+steps 2-4 against it. Nothing at all to read — no issue, no task doc, an empty
+body — is itself the finding: `minor`, that the change states no intent.
+
+### This gate owns the description-vs-diff comparison
+
+The `minor` for a description that promises an approach the diff does not take
+(see the Context Pack) is **filed here**. It was previously stated as a rule for
+"every reviewer" and owned by none, which is how it stayed a remark instead of a
+finding across three rounds. A domain reviewer reviews its domain; the one step
+that already holds intent and diff side by side is this one.
+
+Run it on every round, not only the first. The drift the finding catches is
+created BY the rounds: the code moves to answer findings, the body does not, and
+whoever reads the merge commit a year later reads the body.
 
 ---
 
@@ -1328,6 +1405,18 @@ Everything else is at most `major`. "This will definitely cause problems later"
 is not one of the four. Neither is "this violates the architecture", "this fails
 the linter", or "this is how the last outage started".
 
+**An unshipped dependency is shape 1 or shape 2, and the list stays closed.**
+When a producer is recorded `state: open` with `merge_order: producer_first` and
+nothing stops this change merging first, ask the enumeration's own question —
+what happens at runtime. The consumer calls what is not there (shape 1) or reads
+the default the producer has not changed yet (shape 2). That is why it is a
+`blocker` without a fifth shape being invented for it. Two things follow from
+its being an ordering fault rather than a coding one: file it against the
+consuming call site, and say in the fix that the remedy is a merge gate, a flag,
+or a fallback — never a change to the diff, which may be entirely correct. A
+missing deploy note with no recorded producer state behind it is not this; that
+is the `minor` in the Context Pack. See `### A producer that has not merged yet`.
+
 ### `major` / `minor` / `info` — the boundary test
 
 Ask one question, and ask it of the **finding**, not of the code:
@@ -1459,6 +1548,7 @@ All findings from all sub-reviewers must be normalized to this format before con
 
 - **Severity**: blocker | major | minor | info
 - **File**: path/to/file.ts:line
+- **Repo**: producer repository — only when the evidence is not in the repository under review
 - **Problem**: what is wrong
 - **Why it matters**: impact on correctness / safety / maintainability / UX
 - **Fix**: concrete suggestion
