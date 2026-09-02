@@ -40,6 +40,19 @@ export interface CtxRuntime {
   readonly confidence: Confidence;
   // --- hook side (invoked by `keryx ctx hook <id>`) ---
   parseCommand(payload: string): string | null;
+  /**
+   * Tool names that are a code search in their own right, bypassing the shell.
+   *
+   * The matcher used to be `Bash` alone and `parseCommand` returned null for
+   * everything else, so an agent that reached for its runtime's own search tool
+   * was not guarded at all — and the Bash guard then reported a clean run,
+   * which is worse than no guard, because the routing audit records compliance
+   * that did not happen.
+   *
+   * An explicit list, never a heuristic: anything not named here keeps failing
+   * open, and that is the property that makes the guard safe to leave installed.
+   */
+  readonly nativeSearchTools?: readonly string[];
   block(command: string, classification: HookClassification): HookAction;
   allow(classification: HookClassification): HookAction;
   // --- install side ---
@@ -141,6 +154,29 @@ function stripFromHookArray(settings: Settings, key: string): Settings {
   return settings;
 }
 
+/**
+ * True when a managed group exists whose matcher still covers only what the
+ * pre-widening install covered.
+ *
+ * Reported as needing reinstall rather than passing: an install written before
+ * the native search tool was guarded looks identical to a current one from the
+ * outside, and reporting it clean would make the fix invisible to everyone who
+ * already ran `install-hook`.
+ */
+function hasStaleMatcher(settings: Settings, key: string, command: string): boolean {
+  const hooks = settings.hooks as Settings | undefined;
+  const groups = Array.isArray(hooks?.[key]) ? (hooks?.[key] as unknown[]) : [];
+  return groups.some((g) => {
+    if (!isManagedGroup(g)) return false;
+    const group = g as { hooks?: unknown; command?: unknown; matcher?: unknown };
+    const mine =
+      group.command === command ||
+      (Array.isArray(group.hooks) &&
+        (group.hooks as Array<{ command?: unknown }>).some((h) => h?.command === command));
+    return mine && typeof group.matcher === "string" && group.matcher !== PRE_TOOL_USE_MATCHER;
+  });
+}
+
 function hasManagedInArray(settings: Settings, key: string, command: string): boolean {
   const hooks = settings.hooks as Settings | undefined;
   const groups = Array.isArray(hooks?.[key]) ? (hooks?.[key] as unknown[]) : [];
@@ -174,6 +210,30 @@ function parseToolInputCommand(payload: string): string | null {
   if (typeof input !== "object" || input === null) return null;
   const command = (input as Record<string, unknown>).command;
   return typeof command === "string" ? command : null;
+}
+
+/** The `tool_name` of a PreToolUse payload, for runtimes that shape it that way. */
+export function parseToolName(payload: string): string | null {
+  const record = parseJson(payload);
+  const name = record?.tool_name;
+  return typeof name === "string" ? name : null;
+}
+
+/**
+ * Refusal for a native search tool. It names the replacement rather than only
+ * denying, and it is escapable in practice even though it carries no in-line
+ * marker of its own: `keryx ctx rg` does the same job, and a Bash command with
+ * `# keryx:raw <reason>` remains available for anything raw.
+ */
+export function nativeSearchMessage(tool: string): string {
+  return [
+    `[keryx ctx] The \`${tool}\` tool searches project code without the gdctx routing layer.`,
+    `Use instead:  keryx ctx rg "<pattern>" [path]`,
+    `The routed form is compressed and recorded in the routing audit (ctx_used).`,
+    `Structural question (callers, usages, blast radius)? Use gdgraph first.`,
+    `If raw output is genuinely required, run it through Bash with an escape marker:`,
+    `  rg "<pattern>" <path>   # keryx:raw <why raw is needed>`,
+  ].join("\n");
 }
 
 // Cursor beforeShellExecution: top-level { command }.
@@ -281,9 +341,25 @@ function antigravityAllow(_c: HookClassification): HookAction {
 // --- JSON group builders (install artifacts) ---------------------------------
 
 // Claude/Codex PreToolUse group: { matcher, hooks:[{type,command}], _keryxManaged }.
+export const PRE_TOOL_USE_MATCHER = "Bash|Grep";
+
+function validatePreToolUse(settings: Settings, id: string): string[] {
+  const command = hookCommand(id);
+  if (!hasManagedInArray(settings, "PreToolUse", command)) {
+    return [`${id}: missing PreToolUse(${PRE_TOOL_USE_MATCHER}) guard`];
+  }
+  if (hasStaleMatcher(settings, "PreToolUse", command)) {
+    return [
+      `${id}: PreToolUse guard matches only Bash; the native search tool bypasses it. ` +
+        `Re-run \`keryx ctx install-hook --runtime ${id}\`.`,
+    ];
+  }
+  return [];
+}
+
 function preToolUseGroup(id: string): Settings {
   return {
-    matcher: "Bash",
+    matcher: PRE_TOOL_USE_MATCHER,
     hooks: [{ type: "command", command: hookCommand(id) }],
     [MANAGED_KEY]: CTX_HOOK_SENTINEL,
   };
@@ -295,26 +371,28 @@ export const CLAUDE_RUNTIME: CtxRuntime = {
   id: "claude",
   label: ".claude/settings.json (PreToolUse/Bash)",
   confidence: "verified",
+  nativeSearchTools: ["Grep"],
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
   locate: (root) => path.join(root, ".claude", "settings.json"),
   merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup("claude")),
   strip: (s) => stripFromHookArray(s, "PreToolUse"),
-  validate: (s) => (hasManagedInArray(s, "PreToolUse", hookCommand("claude")) ? [] : ["claude: missing PreToolUse(Bash) guard"]),
+  validate: (s) => validatePreToolUse(s, "claude"),
 };
 
 export const CODEX_RUNTIME: CtxRuntime = {
   id: "codex",
   label: ".codex/hooks.json (PreToolUse/Bash)",
   confidence: "verified",
+  nativeSearchTools: ["Grep"],
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
   locate: (root) => path.join(root, ".codex", "hooks.json"),
   merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup("codex")),
   strip: (s) => stripFromHookArray(s, "PreToolUse"),
-  validate: (s) => (hasManagedInArray(s, "PreToolUse", hookCommand("codex")) ? [] : ["codex: missing PreToolUse(Bash) guard"]),
+  validate: (s) => validatePreToolUse(s, "codex"),
 };
 
 export const CURSOR_RUNTIME: CtxRuntime = {

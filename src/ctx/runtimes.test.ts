@@ -6,6 +6,7 @@ import { installRuntimeHook, uninstallRuntimeHook } from "./hook-install";
 import {
   ANTIGRAVITY_RUNTIME,
   CODEX_RUNTIME,
+  PRE_TOOL_USE_MATCHER,
   CURSOR_RUNTIME,
   OPENCODE_RUNTIME,
   WINDSURF_RUNTIME,
@@ -77,7 +78,7 @@ test("codex installs a PreToolUse group into .codex/hooks.json", async () => {
     const s = JSON.parse(await readFile(file, "utf8")) as {
       hooks: { PreToolUse: Array<{ matcher?: string; hooks?: Array<{ command?: string }> }> };
     };
-    const g = s.hooks.PreToolUse.find((x) => x.matcher === "Bash");
+    const g = s.hooks.PreToolUse.find((x) => x.matcher === PRE_TOOL_USE_MATCHER);
     expect(g?.hooks?.[0]?.command).toBe("keryx ctx hook codex");
     expect(await uninstallRuntimeHook(root, CODEX_RUNTIME)).toBe(true);
   });

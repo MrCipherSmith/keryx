@@ -43,13 +43,37 @@ const ROUTES: readonly Route[] = [
 // `git <sub>` sub-commands whose output is long enough to route through ctx.
 const GIT_ROUTABLE = /^(diff|log|show)$/;
 
-// Split a command line into independently-executed segments. A shallow split on
-// shell connectors is enough to catch `cd x && rg y` and `cat f | rg y` without
-// a full shell parser.
-function segments(command: string): string[] {
+// Split a command line into independently-executed STATEMENTS. A shallow split
+// on sequencing connectors is enough to catch `cd x && rg y` without a full
+// shell parser. `|` is deliberately NOT a separator here — see `firstStages`.
+function statements(command: string): string[] {
   return command
-    .split(/\|\||&&|;|\||\n/)
+    .split(/\|\||&&|;|\n/)
     .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The first pipeline stage of each statement — the only stage that can be
+ * operating on files.
+ *
+ * Everything downstream of a `|` reads STDIN. It is filtering a stream, not
+ * searching a tree, and classifying it as though it named a file is what made
+ * the guard unusable: `npm test | grep -E 'Tests'`, `bun test 2>&1 | tail -5`
+ * and even `keryx ctx rg 'foo' | grep -c 'bar'` were all refused. The last one
+ * is the tell — routing the search exactly as the rule demands and then counting
+ * the results was refused.
+ *
+ * Only the first stage is dropped from consideration downstream, never the
+ * first: `grep -rn foo src/ | head -20` is still a code search, and a rule that
+ * allowed any piped command would disable the guard for its most common shape.
+ *
+ * `cat f | rg y` stays blocked, now at `cat f` rather than at `rg y`, which is
+ * the more accurate place to catch it anyway.
+ */
+function firstStages(command: string): string[] {
+  return statements(command)
+    .map((statement) => statement.split("|")[0]?.trim() ?? "")
     .filter(Boolean);
 }
 
@@ -80,7 +104,7 @@ export function classifyCommand(command: string): HookClassification {
     return { block: false, escapeReason: (escape[1] ?? "").trim() };
   }
 
-  for (const segment of segments(command)) {
+  for (const segment of firstStages(command)) {
     const tokens = leadingTokens(segment);
     const first = tokens[0];
     if (!first || ALREADY_ROUTED.has(first)) {
