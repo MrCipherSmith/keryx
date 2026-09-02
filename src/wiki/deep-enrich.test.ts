@@ -185,6 +185,62 @@ test("enrichPageDeep falls back (never throws) when the child exceeds its runtim
   }
 });
 
+test("flow 219: deep enrichment composes external cancellation into its provider signal", async () => {
+  const external = new AbortController();
+  let seenSignal: AbortSignal | undefined;
+  let releaseTurn!: () => void;
+  const turnMayFinish = new Promise<void>((resolve) => {
+    releaseTurn = resolve;
+  });
+  let markStreamStarted!: () => void;
+  const streamStarted = new Promise<void>((resolve) => {
+    markStreamStarted = resolve;
+  });
+  const providerFactory: ProviderFactory = () => ({
+    describe: () => ({
+      capabilities: {
+        streaming: true,
+        toolCalls: true,
+        parallelToolCalls: false,
+        structuredOutput: false,
+        reasoningMetadata: false,
+        promptCaching: false,
+        vision: false,
+        tokenCounting: false,
+        modelListing: false,
+      },
+      descriptor: { providerId: "controlled" },
+    }),
+    stream: (_request, opts) => {
+      seenSignal = opts.signal;
+      markStreamStarted();
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        await turnMayFinish;
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "late text" };
+        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+      })();
+    },
+  });
+  const input = {
+    ...baseInput({ providerFactory }),
+    signal: external.signal,
+  } as EnrichPageDeepInput & { signal: AbortSignal };
+  const run = enrichPageDeep(input);
+
+  try {
+    await streamStarted;
+    external.abort("user interrupted deep enrich");
+    expect(seenSignal).toBeDefined();
+    // Deep still owns its timeout controller, so provider sees a composed
+    // signal; aborting the user signal must abort that composition too.
+    expect(seenSignal).not.toBe(external.signal);
+    expect(seenSignal?.aborted).toBe(true);
+  } finally {
+    releaseTurn();
+    await run;
+  }
+});
+
 test("enrichPageDeep falls back with no credential and no injected providerFactory", async () => {
   const result = await enrichPageDeep(baseInput({ env: {} }));
   expect("fallback" in result).toBe(true);
