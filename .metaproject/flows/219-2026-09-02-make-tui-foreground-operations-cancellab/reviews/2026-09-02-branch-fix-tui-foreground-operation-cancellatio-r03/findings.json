@@ -1,0 +1,63 @@
+[
+  {
+    "id": "F-NEW-002",
+    "reviewer": "review-logic,review-regression",
+    "severity": "major",
+    "problem": "The wiki-enrichment finalizer treats an ordinary abort like renderer disposal and returns before clearing busy state.",
+    "impact": "After /interrupt the live shell remains busy and subsequent input is misrouted.",
+    "suggested_fix": "Return early only on disposal; for a live abort clear busy state and restore idle semantics without post-abort result rendering or unintended queue drain.",
+    "evidence": "The finalizer snapshots signal.aborted, settles, and returns on operationAborted before stopBusy; logic and regression reviewers independently identified the same path.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4728,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:4728"
+      ],
+      "enumeration_method": "Enumerated all foreground settle/finally paths; the normal agent finalizer clears busy unless disposed, while this is the sole abort-specific early return."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03#F-NEW-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_round3_probe.ts -> {\"fNew002\":{\"finalizerFound\":true,\"abortReturnBeforeStopBusy\":true,\"abortGuardOffset\":148,\"stopBusyOffset\":637},...}; the live-abort/disposal return precedes the only finalizer stopBusy call, so an ordinary abort leaves busy cleanup unreachable.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d7197cba"
+    }
+  },
+  {
+    "id": "F-T001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Three cancellation-decision mutations leave their nearest suites green.",
+    "impact": "Abort-vs-dispose cleanup and deep/RLM cancellation semantics can regress without failing tests.",
+    "suggested_fix": "Add outcome assertions and an injectable or pure finalizer/busy-cleanup seam for the surviving temporal checkpoints.",
+    "evidence": "Bounded mutations survived in deep-enrich.ts:435, enrich.ts:1602 and tui-shell.ts:4730.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4730,
+    "class_scope": {
+      "sites": [
+        "src/wiki/deep-enrich.ts:435",
+        "src/wiki/enrich.ts:1602",
+        "src/tui/tui-shell.ts:4730",
+        "src/tui/tui-shell.test.ts:2941"
+      ],
+      "enumeration_method": "Bounded deletion/replacement mutation pass over changed cancellation checkpoints."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03#F-T001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_round3_probe.ts -> {...\"fT001\":{\"focusedRuntimeSuitePassesExpected\":true,\"tuiAbortBusyBehaviorTest\":false,\"rlmPostStartCancellationTest\":false,\"deepCancellationOutcomeTest\":true,\"tuiCheckpointIsSourceAuditOnly\":true}}; the focused suites pass (151 pass, 0 fail), but no direct TUI abort/busy or RLM post-start cancellation behavior test is present; deep cancellation has only an outcome assertion.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d7197cba"
+    }
+  }
+]

@@ -1,0 +1,124 @@
+[
+  {
+    "id": "F-NEW-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The wiki-enrichment catch mutates the TUI without checking whether the foreground operation was aborted or disposed.",
+    "impact": "A late rejected wiki operation can mutate a disposed renderer.",
+    "suggested_fix": "Return from the catch when the foreground operation is aborted or disposed, and add rejection-after-dispose coverage.",
+    "evidence": "The catch invokes stopBusy and transcript.add without an abort/disposal guard; the verifier executed a deterministic source probe.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4717,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:4717"
+      ],
+      "enumeration_method": "Enumerated all foreground-operation completion and catch paths in tui-shell.ts; this is the only renderer-mutating wiki catch without a lifecycle guard."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-NEW-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_disposal_probe.ts -> {\"catchFound\":true,\"transcriptMutationInCatch\":true,\"disposalGuardInCatch\":false,\"mutationBeforeGuard\":true}; the wikiEnrich rejection catch mutates transcript before any disposal guard.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bcde5869"
+    }
+  },
+  {
+    "id": "F-ARCH-HL-001",
+    "reviewer": "review-architecture,review-highload",
+    "severity": "major",
+    "problem": "Two Force actions before settlement overwrite a single priority slot after both source items have been removed.",
+    "impact": "Concurrent Force requests can silently lose a queued user command.",
+    "suggested_fix": "Use an ordered pending-force queue or preserve displaced priority work and test double Force.",
+    "evidence": "Two concurrent Force-style handoffs removed both inputs and dispatched only the second in the verifier probe.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 3765,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:3717",
+        "src/tui/tui-shell.ts:3761",
+        "src/tui/tui-shell.ts:3847"
+      ],
+      "enumeration_method": "Enumerated both Force entry points and the sole priorityMainQuestion handoff implementation."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-ARCH-HL-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_queue_probe.ts -> {\"queue\":[],\"dispatched\":[\"second\"]}; two concurrent Force-style handoffs remove both items but only the second priority item dispatches.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bcde5869"
+    }
+  },
+  {
+    "id": "F-ARCH-HL-002",
+    "reviewer": "review-highload",
+    "severity": "major",
+    "problem": "The non-RLM worker does not re-check cancellation after awaiting the page read and before starting the provider turn.",
+    "impact": "A cancelled default worker can consume a provider request and delay settlement.",
+    "suggested_fix": "Add a post-read/pre-provider abort fence and a deterministic regression test.",
+    "evidence": "The verifier aborted at the start callback and still observed one model call.",
+    "confidence": "high",
+    "file": "src/wiki/enrich.ts",
+    "line": 780,
+    "class_scope": {
+      "sites": [
+        "src/wiki/enrich.ts:780-790"
+      ],
+      "enumeration_method": "Compared every page read and runModelTurn site in enrich.ts; the RLM equivalent is already fenced and the default path is not."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-ARCH-HL-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_probe.ts -> {\"modelCalls\":1,\"enriched\":0,\"cancelled\":1,\"pages\":[\"cancelled\"]}; the onPage(start) cancellation occurs before the worker's awaited read completes, yet the default path invokes one model turn.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bcde5869"
+    }
+  },
+  {
+    "id": "F-T001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Five changed cancellation guards can be deleted while their nearest test suites remain green.",
+    "impact": "Cancellation guards can regress while the nearest suites remain green.",
+    "suggested_fix": "Add deferred disposal, approval, deep-result, and post-abort checkpoint tests.",
+    "evidence": "Five bounded deletion mutations survived; the verifier confirmed missing independent disposal/handoff coverage.",
+    "confidence": "high",
+    "file": "src/tui/foreground-operation.ts",
+    "line": 95,
+    "class_scope": {
+      "sites": [
+        "src/tui/foreground-operation.ts:95",
+        "src/tui/foreground-operation.ts:142",
+        "src/wiki/deep-enrich.ts:435",
+        "src/wiki/enrich.ts:854",
+        "src/wiki/enrich.ts:1602"
+      ],
+      "enumeration_method": "Bounded deletion mutations of the high-risk Flow 219 cancellation gates."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-T001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx ctx run -- bun /tmp/flow219_testing_gap_probe.ts -> {\"handoffDispositionTest\":false,\"disposeSignalTest\":false,\"productionCancellationTokenReferences\":20}; the targeted test source has no independent runAfterForegroundSettlement-plus-dispose or dispose-plus-signal assertion.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bcde5869"
+    }
+  }
+]

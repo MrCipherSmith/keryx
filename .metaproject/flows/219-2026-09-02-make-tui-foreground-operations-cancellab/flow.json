@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "219",
+  "slug": "make-tui-foreground-operations-cancellab",
+  "title": "Make TUI foreground operations cancellable and preserve wiki enrich command semantics",
+  "status": "in-progress",
+  "createdAt": "2026-09-02T20:25:57.044Z",
+  "updatedAt": "2026-09-02T22:50:21.799Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7a043bbb8e17c92924c439dcefea9aa4388dd63520dfea78fa740f3de72efc93",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-02T20:45:54.194Z",
+            "outcome": "started",
+            "detail": "219-T2-implement after RED commit 31104555"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-02T20:35:39.379Z",
+            "outcome": "started",
+            "detail": "219-T3-red-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Run branch-source verifier, focused/full tests, and strict Code Health",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-02T20:54:02.577Z",
+            "outcome": "started",
+            "detail": "independent code-verifier after 9a46d09d"
+          },
+          {
+            "at": "2026-09-02T21:05:51.009Z",
+            "outcome": "failed",
+            "detail": "full bun test: 6357 passed, 49 failed, 18 skipped; focused 177 pass, typecheck/strict health pass"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run managed review/fix loop until clean through minor severity",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-02T21:19:31.145Z",
+            "outcome": "started",
+            "detail": "managed review round 1 at 394df267"
+          },
+          {
+            "at": "2026-09-02T21:52:54.753Z",
+            "outcome": "started",
+            "detail": "Managed review round 2 after cancellation fix round"
+          },
+          {
+            "at": "2026-09-02T22:18:24.138Z",
+            "outcome": "started",
+            "detail": "Final managed review round 3 after bcde5869"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Create PR, verify required checks, merge to main, and verify remote",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Write change report and metrics, confirm AC evidence, and complete flow",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-02T20:25:57.044Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-02T20:34:02.226Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-02T20:34:02.376Z",
+      "event": "task-added",
+      "detail": "T5: Run branch-source verifier, focused/full tests, and strict Code Health"
+    },
+    {
+      "at": "2026-09-02T20:34:02.517Z",
+      "event": "task-added",
+      "detail": "T6: Run managed review/fix loop until clean through minor severity"
+    },
+    {
+      "at": "2026-09-02T20:34:02.610Z",
+      "event": "task-added",
+      "detail": "T7: Create PR, verify required checks, merge to main, and verify remote"
+    },
+    {
+      "at": "2026-09-02T20:34:02.711Z",
+      "event": "task-added",
+      "detail": "T8: Write change report and metrics, confirm AC evidence, and complete flow"
+    },
+    {
+      "at": "2026-09-02T20:34:02.922Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-02T20:34:03.030Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-02T20:35:39.379Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 219-T3-red-tests"
+    },
+    {
+      "at": "2026-09-02T20:45:54.194Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 219-T2-implement after RED commit 31104555"
+    },
+    {
+      "at": "2026-09-02T20:54:02.361Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-02T20:54:02.473Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-02T20:54:02.577Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — independent code-verifier after 9a46d09d"
+    },
+    {
+      "at": "2026-09-02T21:05:51.009Z",
+      "event": "task-attempt",
+      "detail": "T5: failed (attempt 2) — full bun test: 6357 passed, 49 failed, 18 skipped; focused 177 pass, typecheck/strict health pass"
+    },
+    {
+      "at": "2026-09-02T21:13:53.797Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-02T21:15:44.363Z",
+      "event": "task-done",
+      "detail": "T5: Run branch-source verifier, focused/full tests, and strict Code Health"
+    },
+    {
+      "at": "2026-09-02T21:19:31.145Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — managed review round 1 at 394df267"
+    },
+    {
+      "at": "2026-09-02T21:52:54.753Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 2) — Managed review round 2 after cancellation fix round"
+    },
+    {
+      "at": "2026-09-02T22:18:24.138Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 3) — Final managed review round 3 after bcde5869"
+    },
+    {
+      "at": "2026-09-02T22:50:21.799Z",
+      "event": "task-done",
+      "detail": "T6: Run managed review/fix loop until clean through minor severity"
+    }
+  ]
+}

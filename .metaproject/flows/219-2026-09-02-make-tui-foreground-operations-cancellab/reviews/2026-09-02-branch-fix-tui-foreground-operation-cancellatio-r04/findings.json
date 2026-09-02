@@ -1,0 +1,32 @@
+[
+  {
+    "id": "F-T001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Two behaviorally equivalent deep-cancellation return gates make either individual branch mutation survive.",
+    "impact": "The duplicated guards obscure which cancellation return is contract-bearing.",
+    "suggested_fix": "Use one authoritative cancellation return path and retain the exact-reason test.",
+    "evidence": "Deleting either the outcome-cancelled branch or the later signal-aborted return leaves deep-enrich.test.ts green because the other returns the same exact reason.",
+    "confidence": "high",
+    "file": "src/wiki/deep-enrich.ts",
+    "line": 435,
+    "class_scope": {
+      "sites": [
+        "src/wiki/deep-enrich.ts:435",
+        "src/wiki/deep-enrich.ts:464"
+      ],
+      "enumeration_method": "Bounded independent deletion mutations of both deep cancellation fallback gates."
+    },
+    "global_id": "2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r04#F-T001",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "execution",
+      "evidence": "bun test src/wiki/deep-enrich.test.ts -t 'external cancellation' -> 1 pass, 0 fail (original); after temporarily removing the post-race input.signal?.aborted fallback gate, the same command still returned 1 pass, 0 fail. The test exercises the outcome === cancelled gate, but does not distinguish whether the two gates can fail independently. The source mutation was restored; git diff --check reported no source changes.",
+      "verifier": "flow219_verify_r4_fast"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b99290b6"
+    }
+  }
+]
