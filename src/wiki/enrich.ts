@@ -96,6 +96,8 @@ export interface WikiEnrichInput {
     status: string;
     phase: "start" | "model" | "validate" | "done" | "failed";
   }) => void;
+  /** Test seam invoked immediately before RLM page preparation begins. */
+  onRlmPreparation?: (path: string) => void;
   // Injected, all-optional for deterministic offline tests:
   fetch?: typeof fetch;
   env?: Record<string, string | undefined>;
@@ -1618,6 +1620,7 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
     if (input.signal?.aborted) {
       return cancelled();
     }
+    input.onRlmPreparation?.(page.relativePath);
     try {
       const originalRaw = await readFile(page.absolutePath, "utf8");
       if (input.signal?.aborted) {

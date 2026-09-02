@@ -4,6 +4,7 @@ import {
   createForegroundAgentIoFacade,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
+  finalizeWikiForegroundOperation,
   runAfterForegroundSettlement,
 } from "./foreground-operation";
 
@@ -62,6 +63,21 @@ test("flow 219: disposal before settlement suppresses a deferred Force handoff",
   await handoff;
 
   expect(runs).toBe(0);
+});
+
+test("flow 219: wiki finalization clears live abort busy state without rendering or draining", () => {
+  const events: string[] = [];
+  const callbacks = {
+    stopBusy: () => events.push("stopBusy"),
+    complete: () => events.push("render-and-drain"),
+  };
+
+  expect(finalizeWikiForegroundOperation({ aborted: true, disposed: false }, callbacks)).toBe("aborted");
+  expect(events).toEqual(["stopBusy"]);
+
+  events.length = 0;
+  expect(finalizeWikiForegroundOperation({ aborted: true, disposed: true }, callbacks)).toBe("disposed");
+  expect(events).toEqual([]);
 });
 
 test("flow 219: a stale or disposed foreground AgentIO facade suppresses every callback and defaults approvals to deny", async () => {

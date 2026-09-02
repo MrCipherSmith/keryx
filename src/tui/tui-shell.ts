@@ -138,6 +138,7 @@ import {
   createForegroundAgentIoFacade,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
+  finalizeWikiForegroundOperation,
   runAfterForegroundSettlement,
 } from "./foreground-operation";
 import {
@@ -4727,25 +4728,28 @@ export async function launchTuiAgentShell(opts: {
           } finally {
             const operationAborted = foregroundOperation.signal.aborted;
             foregroundOperation.settle(operation);
-            if (operationAborted || foregroundOperation.isDisposed) return;
-            const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `w${uid++}`,
-                content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
-                marginTop: 1,
-              }),
+            finalizeWikiForegroundOperation(
+              { aborted: operationAborted, disposed: foregroundOperation.isDisposed },
+              {
+                stopBusy,
+                complete: () => {
+                  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+                  transcript.add(
+                    new otui.TextRenderable(r, {
+                      id: `w${uid++}`,
+                      content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
+                      marginTop: 1,
+                    }),
+                  );
+                  focusComposer(); // never steal focus from an active block-nav mode (R3)
+                  if (!forceHandoff.isAwaitingSettlement) {
+                    const next = forceHandoff.takeNext() ?? mainQueue.shift();
+                    paintMainQueue();
+                    if (next !== undefined) runLine(next.question);
+                  }
+                },
+              },
             );
-            // Belt and braces: the paths above are believed to have stopped the
-            // spinner already, but `stopBusy()` is idempotent and a missed one
-            // leaves a live 120ms interval painting over an idle shell.
-            stopBusy();
-            focusComposer(); // never steal focus from an active block-nav mode (R3)
-            if (!forceHandoff.isAwaitingSettlement) {
-              const next = forceHandoff.takeNext() ?? mainQueue.shift();
-              paintMainQueue();
-              if (next !== undefined) runLine(next.question);
-            }
           }
         })();
         return;

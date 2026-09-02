@@ -122,6 +122,23 @@ export function createForegroundForceHandoff<T>(): ForegroundForceHandoff<T> {
 }
 
 /**
+ * Finalizes an in-process wiki operation without conflating user interruption
+ * with renderer teardown. A live interrupt must clear busy state, but neither
+ * render completion nor dispatch queued work; disposal must touch no renderer
+ * callback at all.
+ */
+export function finalizeWikiForegroundOperation(
+  state: { aborted: boolean; disposed: boolean },
+  callbacks: { stopBusy: () => void; complete: () => void },
+): "disposed" | "aborted" | "completed" {
+  if (state.disposed) return "disposed";
+  callbacks.stopBusy();
+  if (state.aborted) return "aborted";
+  callbacks.complete();
+  return "completed";
+}
+
+/**
  * Waits for the current operation once and only dispatches follow-up work when
  * the shell remains live. This is the queue Force handoff boundary.
  */

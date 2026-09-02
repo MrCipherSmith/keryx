@@ -235,16 +235,14 @@ test("flow 219: deep enrichment composes external cancellation into its provider
     // signal; aborting the user signal must abort that composition too.
     expect(seenSignal).not.toBe(external.signal);
     expect(seenSignal?.aborted).toBe(true);
-    expect(
-      await Promise.race([
-        run.then(() => "settled" as const),
-        Bun.sleep(50).then(() => "pending" as const),
-      ]),
-    ).toBe("settled");
+    const result = await Promise.race([
+      run,
+      Bun.sleep(50).then(() => ({ fallback: true, reason: "did not settle" }) as const),
+    ]);
+    expect(result).toMatchObject({ fallback: true, reason: "deep enrich cancelled" });
   } finally {
     releaseTurn();
-    const result = await run;
-    expect(result).toMatchObject({ fallback: true, reason: "deep enrich cancelled" });
+    await run;
   }
 });
 

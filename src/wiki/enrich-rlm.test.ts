@@ -772,6 +772,7 @@ test("flow 219: RLM preparation stops immediately after cancellation and returns
   const root = await seedRlmRoot();
   const controller = new AbortController();
   const phases: string[] = [];
+  const preparationPaths: string[] = [];
   try {
     await writeWikiConfig(root, {
       rlm: {
@@ -790,9 +791,11 @@ test("flow 219: RLM preparation stops immediately after cancellation and returns
         phases.push(`${info.phase}:${info.path}`);
         if (info.phase === "start") controller.abort("cancel during RLM preparation");
       },
+      onRlmPreparation: (path) => preparationPaths.push(path),
     });
 
     expect(phases).toHaveLength(1);
+    expect(preparationPaths).toEqual([]);
     expect(result.pages).toHaveLength(3);
     expect(result.cancelled).toBe(3);
     expect(result.enriched).toBe(0);

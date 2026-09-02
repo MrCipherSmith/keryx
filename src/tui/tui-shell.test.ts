@@ -2946,6 +2946,9 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
       /if \(foregroundOperation\.signal\.aborted \|\| foregroundOperation\.isDisposed\) return;[\s\S]{0,200}stopBusy\(\)/,
     );
   });
+  test("wiki finalization delegates abort-versus-disposal cleanup to the behavioral lifecycle seam", () => {
+    expect(source).toContain("finalizeWikiForegroundOperation(");
+  });
 
   test("busy exit and renderer destruction cancel before disposal and cannot drain queued work afterwards", () => {
     const busyExit = source.slice(source.indexOf('case "exit": {'), source.indexOf('case "exit": {') + 1_200);
