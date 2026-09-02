@@ -7,9 +7,9 @@
   "id": "217",
   "slug": "skills-route-mis-routes-a-generic-review",
   "title": "skills route mis-routes a generic review request to a specialist, and orient never reads the prompt",
-  "status": "in-progress",
+  "status": "blocked",
   "createdAt": "2026-09-02T15:37:01.384Z",
-  "updatedAt": "2026-09-02T15:48:01.246Z",
+  "updatedAt": "2026-09-02T19:56:06.061Z",
   "source": {
     "type": "description",
     "ref": null
@@ -211,6 +211,12 @@
       "at": "2026-09-02T15:48:01.246Z",
       "event": "ac-confirmed",
       "detail": "AC11"
+    },
+    {
+      "at": "2026-09-02T19:56:06.061Z",
+      "event": "blocked",
+      "detail": "Routing work removed from PR #431 in ff0ea1e6 and returned to design. Round 3 measured the change as net-negative: word-boundary padding removed 29 one-word triggers' inflected matching (run the deployment / reviewing the diff now / commits are failing all went to SILENCE); asymmetric trigger tokenisation took order-free matching from 11 triggers to 17 (15 lost, 9 gained); провер lost its review mapping while the sibling stem проверк kept it; routePrompt's project-skill inclusion is inert because it filters on a trigger reason that scoreProjectSkillRoute never emits. ROOT CAUSE, and the reason this is a redesign rather than a fix: the corpus had NO NEGATIVE PAIRS, so every round could see improvements and none could see losses. AC1-AC11 are confirmed against code that is no longer on the branch — treat them as void. Restart condition: build the corpus with negative pairs (queries expected to route to nothing, plus inflected forms of every one-word trigger) FIRST, then change the scorer. The diagnosis is sound and unchanged: review-frontend's 'ui review' trigger degenerates to ['review'] and hijacks every review request in every language."
     }
-  ]
+  ],
+  "previousStatus": "in-progress"
 }
