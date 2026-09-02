@@ -84,6 +84,44 @@ export function createForegroundOperationOwner(): ForegroundOperationOwner {
 }
 
 /**
+ * Holds Force selections made while an active foreground operation is settling.
+ * The first enqueue owns the settlement handoff; later enqueues retain their
+ * FIFO position for the following foreground-operation finalizers.
+ */
+export class ForegroundForceHandoff<T> {
+  private readonly pending: T[] = [];
+  private awaitingSettlement = false;
+
+  enqueue(item: T): boolean {
+    this.pending.push(item);
+    if (this.awaitingSettlement) return false;
+    this.awaitingSettlement = true;
+    return true;
+  }
+
+  get isAwaitingSettlement(): boolean {
+    return this.awaitingSettlement;
+  }
+
+  get hasPending(): boolean {
+    return this.pending.length > 0;
+  }
+
+  takeAfterSettlement(): T | undefined {
+    this.awaitingSettlement = false;
+    return this.pending.shift();
+  }
+
+  takeNext(): T | undefined {
+    return this.pending.shift();
+  }
+}
+
+export function createForegroundForceHandoff<T>(): ForegroundForceHandoff<T> {
+  return new ForegroundForceHandoff<T>();
+}
+
+/**
  * Waits for the current operation once and only dispatches follow-up work when
  * the shell remains live. This is the queue Force handoff boundary.
  */

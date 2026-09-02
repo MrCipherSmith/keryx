@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { AgentIO } from "../commands/agent";
 import {
   createForegroundAgentIoFacade,
+  createForegroundForceHandoff,
   createForegroundOperationOwner,
   runAfterForegroundSettlement,
 } from "./foreground-operation";
@@ -21,6 +22,46 @@ test("flow 219: a Force-style handoff runs exactly once after the active operati
   await handoff;
 
   expect(runs).toBe(1);
+});
+
+test("flow 219: Force handoffs preserve every pre-settlement selection in order", async () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const handoff = createForegroundForceHandoff<string>();
+  const dispatched: string[] = [];
+
+  expect(handoff.enqueue("first")).toBe(true);
+  expect(handoff.enqueue("second")).toBe(false);
+
+  const settleFirst = runAfterForegroundSettlement(owner, () => {
+    const next = handoff.takeAfterSettlement();
+    if (next !== undefined) dispatched.push(next);
+  });
+
+  owner.cancel("first item forced");
+  owner.settle(operation);
+  await settleFirst;
+
+  const next = handoff.takeNext();
+  if (next !== undefined) dispatched.push(next);
+
+  expect(dispatched).toEqual(["first", "second"]);
+  expect(handoff.takeNext()).toBeUndefined();
+});
+
+test("flow 219: disposal before settlement suppresses a deferred Force handoff", async () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  let runs = 0;
+  const handoff = runAfterForegroundSettlement(owner, () => {
+    runs += 1;
+  });
+
+  owner.dispose();
+  owner.settle(operation);
+  await handoff;
+
+  expect(runs).toBe(0);
 });
 
 test("flow 219: a stale or disposed foreground AgentIO facade suppresses every callback and defaults approvals to deny", async () => {
@@ -60,4 +101,21 @@ test("flow 219: a stale or disposed foreground AgentIO facade suppresses every c
   expect(await disposed.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
 
   expect(received).toEqual(["write:before", "approval:shell_exec"]);
+});
+
+test("flow 219: an approval resolved after disposal remains denied", async () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  let resolveApproval!: (approved: boolean) => void;
+  const approval = new Promise<boolean>((resolve) => {
+    resolveApproval = resolve;
+  });
+  const io: AgentIO = { write: () => {}, requestApproval: async () => approval };
+  const facade = createForegroundAgentIoFacade(owner, operation, io);
+
+  const result = facade.requestApproval?.("shell_exec", "{}", undefined);
+  owner.dispose();
+  resolveApproval(true);
+
+  expect(await result).toBe(false);
 });

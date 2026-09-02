@@ -2928,14 +2928,23 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
   });
 
-  test("Force removes its selected item, cancels the active operation, and waits for settlement before priority dispatch", () => {
+  test("Force queues every selected item, cancels the active operation, and waits for settlement before ordered dispatch", () => {
     const start = source.indexOf("const forceMainQueue =");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = source.slice(start, start + 1_400);
     expect(block).toContain("mainQueue = removeMainQueueItem(mainQueue, index)");
     expect(block).toMatch(/foregroundOperation\.cancel\(/);
     expect(block).toMatch(/await\s+runAfterForegroundSettlement\(foregroundOperation/);
-    expect(block).toMatch(/priorityMainQuestion[\s\S]{0,250}runLine\(/);
+    expect(block).toContain("forceHandoff.enqueue(item)");
+    expect(block).toMatch(/forceHandoff\.takeAfterSettlement\(\)[\s\S]{0,250}runLine\(/);
+  });
+  test("a disposed or aborted wiki-enrichment rejection returns before catch-side UI work", () => {
+    const errorText = source.indexOf("wiki enrich failed:");
+    expect(errorText).toBeGreaterThanOrEqual(0);
+    const catchBlock = source.slice(Math.max(0, errorText - 500), errorText + 300);
+    expect(catchBlock).toMatch(
+      /if \(foregroundOperation\.signal\.aborted \|\| foregroundOperation\.isDisposed\) return;[\s\S]{0,200}stopBusy\(\)/,
+    );
   });
 
   test("busy exit and renderer destruction cancel before disposal and cannot drain queued work afterwards", () => {

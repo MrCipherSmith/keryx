@@ -101,6 +101,7 @@ export interface WikiEnrichInput {
   env?: Record<string, string | undefined>;
   baseUrl?: string;
   providerFactory?: ProviderFactory;
+  guardOutput?: typeof guardOutput;
   /** Cancels scheduling, model work, and persistence for this enrichment run. */
   signal?: AbortSignal;
 }
@@ -778,6 +779,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
 
     try {
       const originalRaw = await readFile(page.absolutePath, "utf8");
+      if (input.signal?.aborted) {
+        return { path: page.relativePath, action: "cancelled" as const, reason: "enrichment cancelled" };
+      }
       // Pre-normalize legacy pages (H1 + Version/Type/Status without ---) so the
       // model always sees real YAML frontmatter and validation can stay strict.
       const ensured = ensureWikiFrontmatter(originalRaw, {
@@ -848,7 +852,13 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
 
       const output = enriched.endsWith("\n") ? enriched : `${enriched}\n`;
       const materialized = prepareOutputForPersistence(
-        await guardOutput({ cwd: input.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
+        await (input.guardOutput ?? guardOutput)({
+          cwd: input.cwd,
+          content: output,
+          target: "wiki",
+          source: "generated",
+          path: page.relativePath,
+        }),
         output,
       );
       if (input.signal?.aborted) {
@@ -1119,7 +1129,13 @@ async function finishSuccess(
 
   const output = content.endsWith("\n") ? content : `${content}\n`;
   const materialized = prepareOutputForPersistence(
-    await guardOutput({ cwd: ctx.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
+    await (ctx.input.guardOutput ?? guardOutput)({
+      cwd: ctx.cwd,
+      content: output,
+      target: "wiki",
+      source: "generated",
+      path: page.relativePath,
+    }),
     output,
   );
   if (ctx.input.signal?.aborted) {

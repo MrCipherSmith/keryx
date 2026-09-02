@@ -19,6 +19,7 @@ import {
   type ResumeState,
 } from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
+import { guardOutput as defaultGuardOutput } from "../security/guard";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
 
@@ -157,6 +158,71 @@ test("flow 219: abort stops the pool before another page starts and fences post-
       const content = await readFile(path.join(root, ".metaproject", "wiki", relativePath), "utf8");
       expect(content).not.toContain("Full prose body");
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("flow 219: a non-RLM abort during page preparation starts no provider turn", async () => {
+  const root = await seedDrafts();
+  const controller = new AbortController();
+  let calls = 0;
+  const providerFactory: ProviderFactory = () => ({
+    describe: stubProvider(GOOD_PAGE).describe,
+    async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      calls += 1;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: GOOD_PAGE };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  });
+  try {
+    const result = await wikiEnrich({
+      cwd: root,
+      providerFactory,
+      signal: controller.signal,
+      validate: false,
+      onPage: (info) => {
+        if (info.phase === "start") controller.abort("cancel during page preparation");
+      },
+    });
+
+    expect(calls).toBe(0);
+    expect(result.pages.every((page) => page.action === "cancelled")).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("flow 219: a non-RLM abort during output guarding persists no late page", async () => {
+  const root = await seedDrafts();
+  const controller = new AbortController();
+  let releaseGuard!: () => void;
+  const guardMayFinish = new Promise<void>((resolve) => {
+    releaseGuard = resolve;
+  });
+  let markGuardStarted!: () => void;
+  const guardStarted = new Promise<void>((resolve) => {
+    markGuardStarted = resolve;
+  });
+  try {
+    const run = wikiEnrich({
+      cwd: root,
+      providerFactory: () => stubProvider(GOOD_PAGE),
+      signal: controller.signal,
+      validate: false,
+      guardOutput: async (input) => {
+        markGuardStarted();
+        await guardMayFinish;
+        return defaultGuardOutput(input);
+      },
+    });
+    await guardStarted;
+    controller.abort("cancel during output guarding");
+    releaseGuard();
+
+    const result = await run;
+    const page = result.pages[0];
+    expect(page?.action).toBe("cancelled");
+    const content = await readFile(path.join(root, ".metaproject", "wiki", page!.path), "utf8");
+    expect(content).not.toContain("Full prose body");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

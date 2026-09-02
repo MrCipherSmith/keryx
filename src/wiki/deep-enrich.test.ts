@@ -243,7 +243,8 @@ test("flow 219: deep enrichment composes external cancellation into its provider
     ).toBe("settled");
   } finally {
     releaseTurn();
-    await run;
+    const result = await run;
+    expect(result).toMatchObject({ fallback: true, reason: "deep enrich cancelled" });
   }
 });
 

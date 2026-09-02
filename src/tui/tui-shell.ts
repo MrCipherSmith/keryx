@@ -136,6 +136,7 @@ import {
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
   createForegroundAgentIoFacade,
+  createForegroundForceHandoff,
   createForegroundOperationOwner,
   runAfterForegroundSettlement,
 } from "./foreground-operation";
@@ -3539,10 +3540,10 @@ export async function launchTuiAgentShell(opts: {
     // this item at its original position instead of opening the recipient
     // selector again (AC5 — edit must preserve position).
     let pendingQueueEdit: { id: string; at: number } | undefined;
-    // Set by `forceMainQueue` when a turn is in flight: `abort()` only signals
-    // cancellation, it does not synchronously stop the turn, so the item is
-    // handed to the turn's `finally` to run next once it has settled (AC6).
-    let priorityMainQuestion: QueuedMainQuestion | undefined;
+    // Force can be selected more than once while cancellation is settling.
+    // Retain every selection in order; only the first schedules the current
+    // operation's settlement handoff (AC3).
+    const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -3762,15 +3763,15 @@ export async function launchTuiAgentShell(opts: {
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
       void (async () => {
-        priorityMainQuestion = item;
+        const waitsForSettlement = forceHandoff.enqueue(item);
         foregroundOperation.cancel("queue item forced");
         io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
+        if (!waitsForSettlement) return;
         // Cancellation is cooperative. Do not run the forced item until the
         // current operation's finalizer has settled its own UI state.
         await runAfterForegroundSettlement(foregroundOperation, () => {
-          if (priorityMainQuestion !== item) return;
-          priorityMainQuestion = undefined;
-          runLine(item.question);
+          const next = forceHandoff.takeAfterSettlement();
+          if (next !== undefined) runLine(next.question);
         });
       })();
     };
@@ -4715,6 +4716,7 @@ export async function launchTuiAgentShell(opts: {
               // best-effort
             }
           } catch (cause) {
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             stopBusy();
             transcript.add(
               new otui.TextRenderable(r, {
@@ -4723,8 +4725,9 @@ export async function launchTuiAgentShell(opts: {
               }),
             );
           } finally {
+            const operationAborted = foregroundOperation.signal.aborted;
             foregroundOperation.settle(operation);
-            if (foregroundOperation.isDisposed) return;
+            if (operationAborted || foregroundOperation.isDisposed) return;
             const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
             transcript.add(
               new otui.TextRenderable(r, {
@@ -4738,8 +4741,8 @@ export async function launchTuiAgentShell(opts: {
             // leaves a live 120ms interval painting over an idle shell.
             stopBusy();
             focusComposer(); // never steal focus from an active block-nav mode (R3)
-            if (priorityMainQuestion === undefined && mainQueue.length > 0) {
-              const next = mainQueue.shift();
+            if (!forceHandoff.isAwaitingSettlement) {
+              const next = forceHandoff.takeNext() ?? mainQueue.shift();
               paintMainQueue();
               if (next !== undefined) runLine(next.question);
             }
@@ -4830,15 +4833,15 @@ export async function launchTuiAgentShell(opts: {
         focusComposer(); // never steal focus from an active block-nav mode (R3)
         // Only suggest a next step when nothing is already queued — a queued
         // turn is the real next step and would immediately overwrite the hint.
-        if (priorityMainQuestion === undefined && mainQueue.length === 0 && !turnFailed) {
+        if (!forceHandoff.hasPending && mainQueue.length === 0 && !turnFailed) {
           void suggestNextStep();
         }
         // A forced item (AC6) wins over FIFO order — it is the reason the
         // turn just settled. Otherwise FIFO-drain the head of the main queue
         // (AC7), once the current one has fully settled (stopBusy/setMainAgent
         // already ran).
-        if (priorityMainQuestion === undefined && mainQueue.length > 0) {
-          const next = mainQueue.shift();
+        if (!forceHandoff.isAwaitingSettlement) {
+          const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
           if (next !== undefined) runLine(next.question);
         }
