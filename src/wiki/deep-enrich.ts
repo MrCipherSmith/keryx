@@ -242,6 +242,10 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
   const clock = input.clock ?? (() => new Date().toISOString());
   const toolCalls: DeepEnrichToolCall[] = [];
 
+  if (input.signal?.aborted) {
+    return { fallback: true, reason: "deep enrich cancelled", toolCalls };
+  }
+
   try {
     const env = envWithSavedApiKeys(input.env ?? process.env);
     const credentialAvailable = hasCredential(input.provider, env);
@@ -393,8 +397,8 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
       // outcome a real timeout produces, instead of waiting on it at all.
       abort.abort();
       void turn.catch(() => {
-        // Abandoned turn — `runAgentTurn` has no cancellation seam; its
-        // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
+        // A provider may ignore cancellation; contain any late rejection from
+        // the abandoned turn after the caller has already fallen back.
       });
       composed.dispose();
       releaseBudget();
@@ -409,17 +413,40 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     const expired = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), deadlineMs);
     });
-    let outcome: "done" | "timeout";
+    let onExternalAbort: (() => void) | undefined;
+    const cancelled = new Promise<"cancelled">((resolve) => {
+      if (input.signal === undefined) return;
+      onExternalAbort = () => resolve("cancelled");
+      if (input.signal.aborted) {
+        onExternalAbort();
+      } else {
+        input.signal.addEventListener("abort", onExternalAbort, { once: true });
+      }
+    });
+    let outcome: "done" | "timeout" | "cancelled";
     try {
-      outcome = await Promise.race([turn.then(() => "done" as const), expired]);
+      outcome = await Promise.race([turn.then(() => "done" as const), expired, cancelled]);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      if (onExternalAbort !== undefined) {
+        input.signal?.removeEventListener("abort", onExternalAbort);
+      }
+    }
+    if (outcome === "cancelled") {
+      abort.abort(input.signal?.reason);
+      void turn.catch(() => {
+        // A provider may ignore cancellation; contain any late rejection from
+        // the abandoned turn after the caller has already returned.
+      });
+      composed.dispose();
+      releaseBudget();
+      return { fallback: true, reason: "deep enrich cancelled", toolCalls };
     }
     if (outcome === "timeout") {
       abort.abort();
       void turn.catch(() => {
-        // Abandoned turn — `runAgentTurn` has no cancellation seam; its
-        // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
+        // A provider may ignore cancellation; contain any late rejection from
+        // the abandoned turn after the caller has already fallen back.
       });
       composed.dispose();
       releaseBudget();

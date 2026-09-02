@@ -4035,15 +4035,13 @@ export async function launchTuiAgentShell(opts: {
         });
         switch (decision) {
           case "exit": {
-            // SLATE-5 close trigger: shell exit (explicit command, while busy).
+            // Cancel synchronously; close/sweep may block (SLATE-5, F-002).
+            foregroundOperation.cancel("shell exit");
+            foregroundOperation.dispose();
             void (async () => {
               await closeSlateSession(slateSession, mintTimestampAttemptId);
-              // F-002: this busy-dispatch `/exit` branch is a SEPARATE real
-              // exit path from the non-busy one below — it must sweep too.
               await deps.sweepBackgroundJobs?.();
               jobs.removeAll();
-              foregroundOperation.cancel("shell exit");
-              foregroundOperation.dispose();
               r.off("theme_mode", onThemeMode);
               r.destroy();
             })();
@@ -4673,6 +4671,7 @@ export async function launchTuiAgentShell(opts: {
                 });
               },
             });
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             stopBusy();
             setMainAgent(
               result.failed > 0 && result.enriched === 0 ? "failed" : "done",

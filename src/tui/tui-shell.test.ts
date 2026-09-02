@@ -2942,6 +2942,9 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     const busyExit = source.slice(source.indexOf('case "exit": {'), source.indexOf('case "exit": {') + 1_200);
     const onDestroy = source.slice(source.indexOf("onDestroy: () => {"), source.indexOf("onDestroy: () => {") + 1_200);
     expect(busyExit).toMatch(/foregroundOperation\.cancel\(/);
+    expect(busyExit.indexOf("foregroundOperation.cancel(")).toBeLessThan(
+      busyExit.indexOf("await closeSlateSession("),
+    );
     expect(onDestroy).toMatch(/foregroundOperation\.cancel\(/);
     expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
   });
