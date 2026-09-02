@@ -142,6 +142,36 @@ export interface EnrichPageDeepInput {
   metaprojectPort?: MetaprojectPort;
   idSeq?: () => string;
   clock?: () => string;
+  /** Cancellation inherited from the shell/wiki operation. */
+  signal?: AbortSignal;
+}
+
+function composeAbortSignals(external: AbortSignal | undefined, timeout: AbortSignal): {
+  signal: AbortSignal;
+  dispose: () => void;
+} {
+  if (external === undefined) {
+    return { signal: timeout, dispose: () => {} };
+  }
+  const controller = new AbortController();
+  const abortFrom = (signal: AbortSignal): void => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal.reason);
+    }
+  };
+  const onExternalAbort = (): void => abortFrom(external);
+  const onTimeoutAbort = (): void => abortFrom(timeout);
+  external.addEventListener("abort", onExternalAbort, { once: true });
+  timeout.addEventListener("abort", onTimeoutAbort, { once: true });
+  if (external.aborted) abortFrom(external);
+  if (timeout.aborted) abortFrom(timeout);
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      external.removeEventListener("abort", onExternalAbort);
+      timeout.removeEventListener("abort", onTimeoutAbort);
+    },
+  };
 }
 
 function errorMessage(cause: unknown): string {
@@ -304,6 +334,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     let assistant = "";
     let pending: DeepEnrichToolCall | undefined;
     const abort = new AbortController();
+    const composed = composeAbortSignals(input.signal, abort.signal);
     const io: AgentIO = {
       write: (s) => {
         assistant += s;
@@ -348,7 +379,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
 
     const history: NormalizedMessage[] = [];
     const userLine = buildDeepUserPrompt(input.page, input.original, input.extraInstruction);
-    const turn = runAgentTurn(io, deps, history, userLine, { signal: abort.signal });
+    const turn = runAgentTurn(io, deps, history, userLine, { signal: composed.signal });
 
     const deadlineMs = spawned.reservation.maxRuntimeMs;
     if (deadlineMs <= 0) {
@@ -365,6 +396,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
         // Abandoned turn — `runAgentTurn` has no cancellation seam; its
         // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
       });
+      composed.dispose();
       releaseBudget();
       return {
         fallback: true,
@@ -389,6 +421,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
         // Abandoned turn — `runAgentTurn` has no cancellation seam; its
         // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
       });
+      composed.dispose();
       releaseBudget();
       const partial = assistant.trim();
       return {
@@ -399,7 +432,15 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
       };
     }
 
+    composed.dispose();
     releaseBudget();
+    if (input.signal?.aborted) {
+      return {
+        fallback: true,
+        reason: "deep enrich cancelled",
+        toolCalls,
+      };
+    }
     const raw =
       assistant.trim().length > 0
         ? assistant.trim()

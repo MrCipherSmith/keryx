@@ -157,6 +157,8 @@ export interface ModelTurnInput {
   fetch?: typeof fetch;
   baseUrl?: string;
   providerFactory?: ProviderFactory;
+  /** Cancels the underlying provider stream when the owning operation stops. */
+  signal?: AbortSignal;
   /**
    * When false, skip reading shell auth.json for auto provider selection
    * (tests). Default true.
@@ -233,7 +235,10 @@ export async function runModelTurn(input: ModelTurnInput): Promise<ModelTurnResu
   let reasoning = false;
   const startedAt = performance.now();
   let firstByteAt: number | undefined;
-  for await (const event of port.stream(request, { attemptId: request.requestId })) {
+  for await (const event of port.stream(request, {
+    attemptId: request.requestId,
+    ...(input.signal !== undefined ? { signal: input.signal } : {}),
+  })) {
     if (firstByteAt === undefined) {
       firstByteAt = performance.now();
     }

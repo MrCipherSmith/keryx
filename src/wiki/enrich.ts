@@ -101,6 +101,8 @@ export interface WikiEnrichInput {
   env?: Record<string, string | undefined>;
   baseUrl?: string;
   providerFactory?: ProviderFactory;
+  /** Cancels scheduling, model work, and persistence for this enrichment run. */
+  signal?: AbortSignal;
 }
 
 /** Draft vs accepted (and other) split for planning / agent prompts. */
@@ -114,7 +116,7 @@ export interface WikiEnrichPlan {
   forceTargets: WikiPage[];
 }
 
-export type WikiEnrichAction = "enriched" | "dry-run" | "skipped" | "failed";
+export type WikiEnrichAction = "enriched" | "dry-run" | "skipped" | "cancelled" | "failed";
 
 export interface WikiEnrichPageResult {
   path: string;
@@ -162,6 +164,8 @@ export interface WikiEnrichResult {
    * counted here.
    */
   skipped: number;
+  /** Pages that were not accepted because the owning operation was aborted. */
+  cancelled: number;
   failed: number;
 }
 
@@ -323,6 +327,9 @@ export async function planWikiEnrich(cwd: string): Promise<WikiEnrichPlan> {
 export function isWikiEnrichIntent(line: string): boolean {
   const t = line.trim().toLowerCase();
   if (t.length === 0) {
+    return false;
+  }
+  if (/^keryx\s+wiki\s+enrich(?:\s|$)/.test(t)) {
     return false;
   }
   const ru = t.includes("вики") && (t.includes("обогат") || t.includes("обогащ"));
@@ -700,6 +707,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     enriched: 0,
     dryRun: 0,
     skipped: 0,
+    cancelled: 0,
     failed: 0,
   };
 
@@ -761,9 +769,12 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   let pageResults: WikiEnrichPageResult[];
   if (!wikiConfig.rlm.enabled) {
     pageResults = await mapPool(pages, concurrency, async (page, i) => {
-    const index = i + 1;
-    const status = page.status ?? "draft";
-    onPage({ index, total, path: page.relativePath, status, phase: "start" });
+      const index = i + 1;
+      const status = page.status ?? "draft";
+      if (input.signal?.aborted) {
+        return { path: page.relativePath, action: "cancelled" as const, reason: "enrichment cancelled" };
+      }
+      onPage({ index, total, path: page.relativePath, status, phase: "start" });
 
     try {
       const originalRaw = await readFile(page.absolutePath, "utf8");
@@ -787,7 +798,11 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         ...(input.fetch ? { fetch: input.fetch } : {}),
         ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
         ...(input.providerFactory ? { providerFactory: input.providerFactory } : {}),
+        ...(input.signal !== undefined ? { signal: input.signal } : {}),
       });
+      if (input.signal?.aborted) {
+        return { path: page.relativePath, action: "cancelled" as const, reason: "enrichment cancelled" };
+      }
 
       if (turn.error) {
         onPage({ index, total, path: page.relativePath, status, phase: "failed" });
@@ -836,6 +851,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         await guardOutput({ cwd: input.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
         output,
       );
+      if (input.signal?.aborted) {
+        return { path: page.relativePath, action: "cancelled" as const, reason: "enrichment cancelled" };
+      }
       if (!materialized.allowed) {
         onPage({ index, total, path: page.relativePath, status, phase: "failed" });
         return { path: page.relativePath, action: "failed" as const, reason: materialized.reason };
@@ -901,6 +919,8 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       }
     } else if (entry.action === "dry-run") {
       result.dryRun += 1;
+    } else if (entry.action === "cancelled") {
+      result.cancelled += 1;
     } else if (entry.action === "failed") {
       result.failed += 1;
       resumeState.failed.push({ path: entry.path, reason: entry.reason ?? "failed" });
@@ -1070,6 +1090,9 @@ async function finishSuccess(
 ): Promise<WikiEnrichPageResult> {
   const index = ctx.pageIndex(page.relativePath);
   const status = page.status ?? "draft";
+  if (ctx.input.signal?.aborted) {
+    return { path: page.relativePath, action: "cancelled", reason: "enrichment cancelled", tier: extra.tier };
+  }
   // Cache the key-files hash on success only when this page HAS resolvable
   // key files. Grounding note: `collect.ts`'s `keyFilesForPage` returns `[]`
   // for non-`component` pages — hashing an empty list is a CONSTANT value
@@ -1099,6 +1122,9 @@ async function finishSuccess(
     await guardOutput({ cwd: ctx.cwd, content: output, target: "wiki", source: "generated", path: page.relativePath }),
     output,
   );
+  if (ctx.input.signal?.aborted) {
+    return { path: page.relativePath, action: "cancelled", reason: "enrichment cancelled", tier: extra.tier };
+  }
   if (!materialized.allowed) {
     ctx.onPage({ index, total: ctx.total, path: page.relativePath, status, phase: "failed" });
     return {
@@ -1143,6 +1169,9 @@ async function runDeepSingle(ctx: RlmCtx, item: LightBatchItem): Promise<WikiEnr
   const { page, original, originalRaw, keyFiles } = item;
   const index = ctx.pageIndex(page.relativePath);
   const status = page.status ?? "draft";
+  if (ctx.input.signal?.aborted) {
+    return { path: page.relativePath, action: "cancelled", reason: "enrichment cancelled", tier: "deep" };
+  }
   ctx.onPage({ index, total: ctx.total, path: page.relativePath, status, phase: "model" });
 
   try {
@@ -1156,11 +1185,15 @@ async function runDeepSingle(ctx: RlmCtx, item: LightBatchItem): Promise<WikiEnr
       model: ctx.model,
       maxToolCalls: ctx.wikiConfig.rlm.deep.maxToolCalls,
       maxRuntimeMs: ctx.wikiConfig.rlm.deep.maxRuntimeMs,
+      ...(ctx.input.signal !== undefined ? { signal: ctx.input.signal } : {}),
       env: ctx.env,
       ...(ctx.input.fetch ? { fetch: ctx.input.fetch } : {}),
       ...(ctx.input.baseUrl !== undefined ? { baseUrl: ctx.input.baseUrl } : {}),
       ...(ctx.input.providerFactory ? { providerFactory: ctx.input.providerFactory } : {}),
     });
+    if (ctx.input.signal?.aborted) {
+      return { path: page.relativePath, action: "cancelled", reason: "enrichment cancelled", tier: "deep" };
+    }
 
     const deepToolCalls = deepResult.toolCalls.length;
     let rawText: string | null = null;
@@ -1357,6 +1390,14 @@ export function groupLightPagesIntoBatches(
  * item in the same batch as failed.
  */
 async function runLightBatch(ctx: RlmCtx, items: readonly LightBatchItem[]): Promise<WikiEnrichPageResult[]> {
+  if (ctx.input.signal?.aborted) {
+    return items.map((item) => ({
+      path: item.page.relativePath,
+      action: "cancelled" as const,
+      reason: "enrichment cancelled",
+      tier: "light" as const,
+    }));
+  }
   for (const item of items) {
     ctx.onPage({
       index: ctx.pageIndex(item.page.relativePath),
@@ -1386,6 +1427,7 @@ async function runLightBatch(ctx: RlmCtx, items: readonly LightBatchItem[]): Pro
       ...(ctx.input.fetch ? { fetch: ctx.input.fetch } : {}),
       ...(ctx.input.baseUrl !== undefined ? { baseUrl: ctx.input.baseUrl } : {}),
       ...(ctx.input.providerFactory ? { providerFactory: ctx.input.providerFactory } : {}),
+      ...(ctx.input.signal !== undefined ? { signal: ctx.input.signal } : {}),
     });
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
@@ -1404,6 +1446,14 @@ async function runLightBatch(ctx: RlmCtx, items: readonly LightBatchItem[]): Pro
         tier: "light" as const,
       };
     });
+  }
+  if (ctx.input.signal?.aborted) {
+    return items.map((item) => ({
+      path: item.page.relativePath,
+      action: "cancelled" as const,
+      reason: "enrichment cancelled",
+      tier: "light" as const,
+    }));
   }
 
   if (turn.error) {
