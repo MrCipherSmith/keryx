@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "216",
+  "slug": "review-orchestrator-context-pack-the-pr-",
+  "title": "review-orchestrator context pack: the PR description and cross-repo contracts are prose, not contract",
+  "status": "in-progress",
+  "createdAt": "2026-09-02T13:22:47.586Z",
+  "updatedAt": "2026-09-02T14:03:53.224Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ff62ef88a8022ed45c6e1d0cbe70569df9a6ff24482f1b56a3b10ca80d700e01",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-02T14:03:37.645Z"
+    },
+    "AC2": {
+      "at": "2026-09-02T14:03:37.776Z"
+    },
+    "AC3": {
+      "at": "2026-09-02T14:03:37.888Z"
+    },
+    "AC4": {
+      "at": "2026-09-02T14:03:37.994Z"
+    },
+    "AC5": {
+      "at": "2026-09-02T14:03:38.102Z"
+    },
+    "AC6": {
+      "at": "2026-09-02T14:03:44.747Z"
+    },
+    "AC7": {
+      "at": "2026-09-02T14:03:44.849Z"
+    },
+    "AC8": {
+      "at": "2026-09-02T14:03:44.967Z"
+    },
+    "AC9": {
+      "at": "2026-09-02T14:03:45.081Z"
+    },
+    "AC10": {
+      "at": "2026-09-02T14:03:45.197Z"
+    },
+    "AC11": {
+      "at": "2026-09-02T14:03:45.308Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context was collected in the analysis that produced this flow: schemas read, SKILL.md sectioned, installed copy diffed against source, keyword coverage of the validator scraped. Nothing further to collect."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Typed pr and added cross_repo in review-context.schema.json; added repo to both finding schemas; rewrote the cross-repo section and Stage 1 gate in SKILL.md; synced the installed copies."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "src/gdskills/review-context-pr-cross-repo.test.ts: 20 tests, all passing. Non-vacuity verified against the pre-change schema from git."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review found and fixed a real defect in the first draft: a fifth blocker shape that would have falsified 'the four shapes' in five other reviewer skills. Mapped onto shapes 1/2 instead and added a guard test. Full suite compared against origin/main in a clean worktree: all 48 failures are pre-existing."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-02T13:22:47.586Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-02T13:25:24.280Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-02T13:25:30.205Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-02T14:01:08.210Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-02T14:01:08.344Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-02T14:01:08.467Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-02T14:03:37.645Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-02T14:03:37.776Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-02T14:03:37.888Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-02T14:03:37.994Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-02T14:03:38.102Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-02T14:03:44.747Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-02T14:03:44.849Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-02T14:03:44.967Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-02T14:03:45.081Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-09-02T14:03:45.197Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-09-02T14:03:45.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-09-02T14:03:53.224Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

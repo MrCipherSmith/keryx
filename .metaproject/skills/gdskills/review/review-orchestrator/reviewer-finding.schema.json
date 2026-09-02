@@ -60,6 +60,13 @@
               "info"
             ]
           },
+          "repo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Kept identical to src/gdskills/contracts/review-finding.schema.json, which is stricter (additionalProperties: false) and would reject a finding carrying `repo` if the property were declared only here."
+          },
           "file": {
             "type": [
               "string",
