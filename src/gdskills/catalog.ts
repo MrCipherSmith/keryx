@@ -131,7 +131,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Use gdgraph affected context for exported symbols and shared surfaces.",
     "Dispatch specialized review passes conceptually or as separate skill loads.",
     "Report findings first, ordered by severity, with concrete file references.",
-  ], ["review code", "full review", "review changes"]),
+    // A bare "review" belongs to the ORCHESTRATOR — which is what this skill's
+    // own description says: use it when a review is requested and the user does
+    // NOT name a specialist. A one-word trigger scores below any two-word
+    // specialist trigger, so "frontend review" still reaches review-frontend.
+  ], ["review", "ревью", "review code", "full review", "полное ревью", "review changes"]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
@@ -294,12 +298,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Inspect staged and unstaged changes.",
     "Group related changes without staging unrelated work.",
     "Create a conventional commit message with verification summary.",
-  ], ["commit changes", "git commit", "conventional commit"]),
+  ], ["commit", "commit changes", "git commit", "conventional commit"]),
   skill("push", "quality", ["full"], "Push branches with safety checks, upstream handling, and concise result summary.", [
     "Check branch and remote state.",
     "Push the current branch with upstream when needed.",
     "Report remote branch and any follow-up needed.",
-  ], ["push branch", "git push", "publish branch"]),
+  ], ["push", "push branch", "git push", "publish branch"]),
   skill("pr", "quality", ["full"], "Prepare pull request creation or update context from local changes.", [
     "Collect branch, commits, diff summary, tests, and risks.",
     "Draft concise PR title and description.",
