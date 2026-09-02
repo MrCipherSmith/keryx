@@ -87,7 +87,7 @@ const EN_CORPUS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 describe("routing corpus", () => {
-  test("the corpus is real — an empty catalog would pass every assertion vacuously", () => {
+  test("the corpus is real — an empty catalog would pass every assertion vacuously", async () => {
     expect(BUNDLED_GDSKILLS.length).toBeGreaterThan(50);
     expect(RU_CORPUS.length + EN_CORPUS.length).toBeGreaterThanOrEqual(30);
     // Russian is not a token afterthought: the reported failure was a Russian
@@ -100,13 +100,13 @@ describe("routing corpus", () => {
   });
 
   for (const [query, expected] of RU_CORPUS) {
-    test(`ru: ${query} -> ${expected}`, () => {
+    test(`ru: ${query} -> ${expected}`, async () => {
       expect(topSkill(query)?.name).toBe(expected);
     });
   }
 
   for (const [query, expected] of EN_CORPUS) {
-    test(`en: ${query} -> ${expected}`, () => {
+    test(`en: ${query} -> ${expected}`, async () => {
       expect(topSkill(query)?.name).toBe(expected);
     });
   }
@@ -120,17 +120,20 @@ describe("routing corpus", () => {
 // headline regression asset pass while the feature was silent.
 describe("the corpus holds through the surface that actually ships", () => {
   for (const [query, expected] of [...RU_CORPUS, ...EN_CORPUS]) {
-    test(`routePrompt: ${query} -> ${expected}`, () => {
-      const emitted = routePrompt(query);
+    test(`routePrompt: ${query} -> ${expected}`, async () => {
+      const emitted = await routePrompt(query);
       expect(emitted.length).toBeGreaterThan(0);
       expect(emitted[0]?.name).toBe(expected);
     });
   }
 
-  test("ranking and emission agree on every pair — no pair ranks one way and emits another", () => {
-    const disagreements = [...RU_CORPUS, ...EN_CORPUS]
-      .map(([query]) => ({ query, ranked: topSkill(query)?.name, emitted: routePrompt(query)[0]?.name }))
-      .filter((row) => row.ranked !== row.emitted);
+  test("ranking and emission agree on every pair — no pair ranks one way and emits another", async () => {
+    const disagreements: Array<{ query: string; ranked: string | undefined; emitted: string | undefined }> = [];
+    for (const [query] of [...RU_CORPUS, ...EN_CORPUS]) {
+      const ranked = topSkill(query)?.name;
+      const emitted = (await routePrompt(query))[0]?.name;
+      if (ranked !== emitted) disagreements.push({ query, ranked, emitted });
+    }
     expect(disagreements).toEqual([]);
   });
 });
@@ -158,18 +161,18 @@ describe("a trigger cannot fire on fewer words than it was written with", () => 
     expect(triggerSpecificity("open pr", "open the file", tokensOf("open the file"))).toBe(0);
   });
 
-  test("a genuine one-word trigger still works, because verbatim is what it meant", () => {
+  test("a genuine one-word trigger still works, because verbatim is what it meant", async () => {
     expect(triggerSpecificity("brainstorm", "brainstorm options", tokensOf("brainstorm options"))).toBe(1);
   });
 
-  test("a two-token trigger still matches order-free", () => {
+  test("a two-token trigger still matches order-free", async () => {
     // The behaviour the order-free path exists for, unchanged.
     expect(
       triggerSpecificity("requirements package", "prepare a requirements documentation package", tokensOf("prepare a requirements documentation package")),
     ).toBe(2);
   });
 
-  test("a longer match outranks a shorter one, which is what keeps both directions right", () => {
+  test("a longer match outranks a shorter one, which is what keeps both directions right", async () => {
     const generic = triggerSpecificity("review", "frontend review", tokensOf("frontend review"));
     const specific = triggerSpecificity("frontend review", "frontend review", tokensOf("frontend review"));
     expect(specific).toBeGreaterThan(generic);
@@ -177,7 +180,7 @@ describe("a trigger cannot fire on fewer words than it was written with", () => 
 });
 
 describe("the orchestrator takes the request that names no specialist", () => {
-  test("a generic review outranks every specialist reviewer", () => {
+  test("a generic review outranks every specialist reviewer", async () => {
     const generic = topSkill("review");
     expect(generic?.name).toBe("review-orchestrator");
     const frontend = scoreBundledSkillRoute(
@@ -188,7 +191,7 @@ describe("the orchestrator takes the request that names no specialist", () => {
     expect(frontend.score).toBeLessThan(generic!.score);
   });
 
-  test("naming a specialist still reaches it — the direction that is easy to break while fixing the other", () => {
+  test("naming a specialist still reaches it — the direction that is easy to break while fixing the other", async () => {
     for (const [query, expected] of [
       ["frontend review", "review-frontend"],
       ["security review", "review-security-code"],

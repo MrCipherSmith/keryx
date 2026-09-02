@@ -69,7 +69,7 @@ async function routingBlockForStdin(): Promise<string> {
     if (!prompt) {
       return "";
     }
-    return formatRoutingBlock(prompt, routePrompt(prompt));
+    return formatRoutingBlock(prompt, await routePrompt(prompt));
   } catch {
     // A hook that runs on every prompt must never fail the turn. Losing the
     // routing block is the correct failure; losing the turn is not.

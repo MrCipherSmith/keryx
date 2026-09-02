@@ -248,8 +248,14 @@ describe("the skill states the rules the schemas now carry", () => {
   });
 
   test("an open producer that must ship first is a blocker, kept distinct from the deploy-note minor", () => {
+    // Matched on IDENTIFIERS, not on the sentence around them. Asserting the
+    // colon-joined literal made this a spell-check: a rewrite preserving the
+    // meaning exactly — "merge order of `producer_first`" — turned it red, which
+    // trains the next author to edit the test instead of thinking about the rule.
     const section = SKILL.slice(SKILL.indexOf("### A producer that has not merged yet"));
-    expect(section).toContain("merge_order: producer_first");
+    expect(section).toMatch(/merge_order/);
+    expect(section).toMatch(/producer_first/);
+    expect(section).toMatch(/state:\s*open|`state: open`|state `open`/);
     expect(section).toContain("`blocker`");
     // The pre-existing `minor` is about the DESCRIPTION and must survive: the two
     // findings have different subjects and collapsing them loses the operational one.
@@ -266,8 +272,11 @@ describe("the skill states the rules the schemas now carry", () => {
     expect(rubric).toContain("Exactly four shapes");
     expect(SKILL).not.toContain("Exactly five shapes");
     const closed = rubric.slice(0, rubric.indexOf("### `major`"));
-    expect(closed).toContain("shape 1 or shape 2");
-    expect(closed).toContain("merge_order: producer_first");
+    // "Exactly four shapes" IS a contract — five other reviewer skills cite that
+    // count — so it stays a literal. The rest matches identifiers only.
+    expect(closed).toMatch(/shape 1 or shape 2/);
+    expect(closed).toMatch(/merge_order/);
+    expect(closed).toMatch(/producer_first/);
   });
 
   test("no reviewer skill's reference to the four shapes was falsified", () => {
@@ -289,8 +298,10 @@ describe("the skill states the rules the schemas now carry", () => {
 
   test("the Stage 1 gate falls back to the PR body and owns the description-vs-diff check", () => {
     const gate = SKILL.slice(SKILL.indexOf("## Stage 1 Gate — Spec Compliance"));
-    expect(gate).toContain("### With no issue and no task doc, the PR body is the spec");
-    expect(gate).toContain("### This gate owns the description-vs-diff comparison");
+    // The two facts, not the two headings verbatim: that the body is the spec
+    // when nothing else is, and that this gate owns the comparison.
+    expect(gate).toMatch(/no issue[\s\S]{0,80}task doc[\s\S]{0,80}spec/i);
+    expect(gate).toMatch(/description-vs-diff/i);
     expect(gate).toContain("pr.body");
   });
 });

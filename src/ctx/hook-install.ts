@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import type { CtxRuntime, Settings } from "./runtimes";
+import { describeExistingGuard, type CtxRuntime, type Settings } from "./runtimes";
 
 // Opt-in, merge-safe installer for the gdctx routing guard across harnesses.
 // The per-runtime merge/strip lives in runtimes.ts; this module only owns the
@@ -35,7 +35,7 @@ async function writeSettings(file: string, settings: Settings): Promise<void> {
 export async function installRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
-): Promise<{ path: string; errors: string[] }> {
+): Promise<{ path: string; errors: string[]; upgraded?: string }> {
   const file = runtime.locate(projectRoot);
   if (runtime.customInstall) {
     const errors = await runtime.customInstall(projectRoot);
@@ -47,9 +47,12 @@ export async function installRuntimeHook(
     return { path: file, errors: [`${runtime.id}: no installer defined`] };
   }
   const settings = await readSettings(file);
+  // Read BEFORE the merge: this is the only moment the pre-install state exists,
+  // and the drift it reports is overwritten by the very next line.
+  const upgraded = describeExistingGuard(settings, runtime);
   await writeSettings(file, merge(settings));
   const errors = validate(await readSettings(file));
-  return { path: file, errors };
+  return { path: file, errors, ...(upgraded ? { upgraded } : {}) };
 }
 
 // Remove ONLY the managed guard for one runtime; false if nothing was present.

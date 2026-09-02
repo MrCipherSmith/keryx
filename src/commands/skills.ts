@@ -304,6 +304,58 @@ function parseProjectSkillMetadata(content: string): {
   };
 }
 
+export interface RankedSkill {
+  readonly source: "catalog" | "project";
+  readonly name: string;
+  readonly module: string;
+  readonly score: number;
+  readonly reasons: string[];
+  readonly path: string;
+}
+
+/**
+ * One ranking over both skill sources, for every caller.
+ *
+ * There were three copies of this pipeline — `routeProjectSkills`, the per-prompt
+ * router, and a helper duplicated across two test files — and they did not
+ * agree. The per-prompt one omitted project-skills entirely, so the hook could
+ * never name a project-defined skill or reviewer even though the project's own
+ * routing rule says to prefer them; that exclusion was never recorded as a
+ * decision anywhere, which is how it read as an omission.
+ */
+export async function rankSkillsForQuery(query: string): Promise<RankedSkill[]> {
+  const catalog = BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, query))
+    .filter((match) => match.score > 0)
+    .map((match): RankedSkill => ({
+      source: "catalog",
+      name: match.entry.name,
+      module: match.entry.category,
+      score: match.score,
+      reasons: match.reasons,
+      path: `.metaproject/skills/gdskills/${match.entry.category}/${match.entry.name}/SKILL.md`,
+    }));
+
+  const registry = await readProjectSkillRegistryFromManifest();
+  const project = registry
+    .map((entry) => scoreProjectSkillRoute(entry, query))
+    .filter((match) => match.score > 0)
+    .map((match): RankedSkill => ({
+      source: "project",
+      name: match.entry.name,
+      module: match.entry.module,
+      score: match.score,
+      reasons: match.reasons,
+      path: match.entry.path,
+    }));
+
+  return [...catalog, ...project].sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.source.localeCompare(b.source) ||
+      `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`),
+  );
+}
+
 async function routeProjectSkills(args: string[]): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printRouteHelp();

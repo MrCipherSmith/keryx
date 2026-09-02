@@ -10,46 +10,46 @@ import { describe, expect, test } from "bun:test";
 import { formatRoutingBlock, routePrompt, ROUTING_FLOOR } from "./orient-routing";
 
 describe("routePrompt", () => {
-  test("a full-review request routes to the orchestrator", () => {
-    const [top] = routePrompt("сделай мне полное ревью без исправления");
+  test("a full-review request routes to the orchestrator", async () => {
+    const [top] = await routePrompt("сделай мне полное ревью без исправления");
     expect(top?.name).toBe("review-orchestrator");
     expect(top?.path).toBe(".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md");
   });
 
-  test("a request naming a specialist routes to the specialist", () => {
-    expect(routePrompt("frontend review")[0]?.name).toBe("review-frontend");
+  test("a request naming a specialist routes to the specialist", async () => {
+    expect((await routePrompt("frontend review"))[0]?.name).toBe("review-frontend");
   });
 
-  test("an ordinary question routes nowhere — the floor is the point", () => {
+  test("an ordinary question routes nowhere — the floor is the point", async () => {
     // A router that answers every prompt is one the agent learns to ignore, and
     // a confident wrong name costs more than silence.
-    expect(routePrompt("what is 2+2")).toEqual([]);
-    expect(routePrompt("hi")).toEqual([]);
+    expect(await routePrompt("what is 2+2")).toEqual([]);
+    expect(await routePrompt("hi")).toEqual([]);
   });
 
-  test("bare token overlap does not clear the floor", () => {
+  test("bare token overlap does not clear the floor", async () => {
     // 10 points per overlapping token and no trigger: on-topic words alone must
     // not produce a recommendation.
     expect(ROUTING_FLOOR).toBeGreaterThan(10 * 4);
-    for (const match of routePrompt("сделай мне полное ревью без исправления")) {
+    for (const match of await routePrompt("сделай мне полное ревью без исправления")) {
       expect(match.score).toBeGreaterThanOrEqual(ROUTING_FLOOR);
     }
   });
 
-  test("at most two candidates are returned", () => {
-    expect(routePrompt("review the code changes").length).toBeLessThanOrEqual(2);
+  test("at most two candidates are returned", async () => {
+    expect((await routePrompt("review the code changes")).length).toBeLessThanOrEqual(2);
   });
 });
 
 describe("formatRoutingBlock", () => {
   const prompt = "сделай мне полное ревью без исправления";
 
-  test("no match produces no block at all", () => {
+  test("no match produces no block at all", async () => {
     expect(formatRoutingBlock(prompt, [])).toBe("");
   });
 
-  test("the block names the skill, its path, and stays advisory", () => {
-    const block = formatRoutingBlock(prompt, routePrompt(prompt));
+  test("the block names the skill, its path, and stays advisory", async () => {
+    const block = formatRoutingBlock(prompt, await routePrompt(prompt));
     expect(block).toContain("Routing for THIS request");
     expect(block).toContain("review-orchestrator");
     expect(block).toContain(".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md");
@@ -60,7 +60,7 @@ describe("formatRoutingBlock", () => {
     expect(block).not.toContain("blocked");
   });
 
-  test("the runner-up is named when there is one", () => {
+  test("the runner-up is named when there is one", async () => {
     const block = formatRoutingBlock("review code", [
       { name: "review-orchestrator", category: "review", score: 90, path: "a" },
       { name: "code-ai-review", category: "review", score: 75, path: "b" },
@@ -68,16 +68,16 @@ describe("formatRoutingBlock", () => {
     expect(block).toContain("Runner-up: code-ai-review");
   });
 
-  test("a long prompt is truncated rather than pasted whole into every turn", () => {
+  test("a long prompt is truncated rather than pasted whole into every turn", async () => {
     const long = "проведи полное ревью ".repeat(40);
-    const block = formatRoutingBlock(long, routePrompt(long));
+    const block = formatRoutingBlock(long, await routePrompt(long));
     const requestLine = block.split("\n").find((l) => l.startsWith("Request:")) ?? "";
     expect(requestLine.length).toBeLessThan(200);
     expect(requestLine).toContain("…");
   });
 
-  test("a prompt with newlines stays on one line", () => {
-    const block = formatRoutingBlock("сделай полное ревью\n\nи ничего не чини", routePrompt("сделай полное ревью"));
+  test("a prompt with newlines stays on one line", async () => {
+    const block = formatRoutingBlock("сделай полное ревью\n\nи ничего не чини", await routePrompt("сделай полное ревью"));
     const requestLine = block.split("\n").filter((l) => l.startsWith("Request:"));
     expect(requestLine).toHaveLength(1);
   });

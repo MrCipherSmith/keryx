@@ -1,5 +1,4 @@
-import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
-import { TRIGGER_BASE, TRIGGER_PER_TOKEN, scoreBundledSkillRoute } from "../commands/skills";
+import { TRIGGER_BASE, TRIGGER_PER_TOKEN, rankSkillsForQuery } from "../commands/skills";
 
 export interface RoutedSkill {
   readonly name: string;
@@ -23,19 +22,19 @@ export interface RoutedSkill {
  */
 export const ROUTING_FLOOR = TRIGGER_BASE + TRIGGER_PER_TOKEN;
 
-export function routePrompt(prompt: string): RoutedSkill[] {
-  return BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, prompt))
+export async function routePrompt(prompt: string): Promise<RoutedSkill[]> {
+  const ranked = await rankSkillsForQuery(prompt);
+  return ranked
     // Both conditions, because the floor alone is a score and vocabulary overlap
     // can reach it: naming a skill off shared words is the "confident wrong
     // name" this is supposed to prevent.
     .filter((match) => match.score >= ROUTING_FLOOR && match.reasons.includes("trigger"))
-    .sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name))
     .slice(0, 2)
     .map((match) => ({
-      name: match.entry.name,
-      category: match.entry.category,
+      name: match.name,
+      category: match.module,
       score: match.score,
-      path: `.metaproject/skills/gdskills/${match.entry.category}/${match.entry.name}/SKILL.md`,
+      path: match.path,
     }));
 }
 

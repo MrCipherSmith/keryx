@@ -348,13 +348,17 @@ async function handleInstallHook(args: string[]): Promise<void> {
   console.log("escape: append `# keryx:raw <reason>` to run a raw command anyway");
   console.log("");
   for (const runtime of runtimes) {
-    const { path: file, errors } = await installRuntimeHook(cwd, runtime);
+    const { path: file, errors, upgraded } = await installRuntimeHook(cwd, runtime);
     const tag = runtime.confidence === "experimental" ? " (experimental — verify on a live install)" : "";
     if (errors.length > 0) {
       for (const error of errors) console.error(`  ✗ ${error}`);
       process.exitCode = 1;
     } else {
       console.log(`  ✓ ${runtime.id} -> ${path.relative(cwd, file)}${tag}`);
+      // Said out loud, because the install silently overwrites it: an operator
+      // who ran install-hook before a tool was added has no other way to learn
+      // that their guard had stopped covering one.
+      if (upgraded) console.log(`    ${upgraded}`);
     }
   }
   reportUnsupported(unsupported);

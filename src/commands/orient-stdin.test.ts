@@ -53,3 +53,56 @@ describe("orient reads the UserPromptSubmit payload", () => {
     expect(out).not.toContain("Routing for THIS request");
   }, 30000);
 });
+
+describe("the fail-safes on a hook that runs on every prompt", () => {
+  test("a stdin that never closes does not hang the process", async () => {
+    // `Bun.stdin.text()` waited forever on an open pipe, AFTER buildOrientation
+    // had done its work, so nothing was written at all. Racing a timer was not
+    // enough on its own either: the abandoned read holds the event loop, so the
+    // orientation got written and the process still never exited — and a hook
+    // that never exits hangs the harness just as surely as one that never
+    // writes. This drives a real pipe that is opened and never fed.
+    const proc = Bun.spawn(["bun", CLI, "orient", "claude"], {
+      cwd: REPO,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const settled = await Promise.race([
+      Promise.all([new Response(proc.stdout).text(), proc.exited]).then(([out, code]) => ({ out, code })),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000)),
+    ]);
+    if (settled === null) {
+      proc.kill();
+      throw new Error("orient did not exit with an open stdin — the deadline did not release the read");
+    }
+    expect(settled.code).toBe(0);
+    // It still produced the orientation; the deadline costs the routing block,
+    // which is the correct thing to lose.
+    expect(settled.out.length).toBeGreaterThan(100);
+    expect(settled.out).not.toContain("Routing for THIS request");
+  }, 30000);
+
+  test("the no-prompt output is exactly the orientation, not merely self-consistent", async () => {
+    // The suite used to assert only that the eight no-prompt forms agreed with
+    // EACH OTHER, so a change to the body or to the body/routing concatenation
+    // passed for all of them at once — the invariant the test was named for was
+    // the one it did not check.
+    const { out, code } = await orient("");
+    expect(code).toBe(0);
+    const { buildOrientation } = await import("../ctx/orient");
+    const { getOrientRuntime } = await import("../ctx/orient-runtimes");
+    const orientation = await buildOrientation(REPO);
+    const runtime = getOrientRuntime("claude");
+    expect(out).toBe(`${runtime ? runtime.format(orientation) : orientation}\n`);
+  }, 30000);
+
+  test("a routed prompt is the orientation PLUS the block, inside the envelope", async () => {
+    // The block used to be appended after `runtime.format(...)`, outside the
+    // envelope that function exists to own — which for cursor produced
+    // unparseable JSON and lost the orientation too.
+    const { out } = await orient(JSON.stringify({ prompt: "сделай полное ревью" }));
+    expect(out).toContain("Routing for THIS request");
+    expect(out).toContain("review-orchestrator");
+  }, 30000);
+});

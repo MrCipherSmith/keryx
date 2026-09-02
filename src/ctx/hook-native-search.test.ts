@@ -12,7 +12,9 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import {
   CLAUDE_RUNTIME,
-  PRE_TOOL_USE_MATCHER,
+  CODEX_RUNTIME,
+  describeExistingGuard,
+  preToolUseMatcher,
   nativeSearchMessage,
   parseToolName,
 } from "./runtimes";
@@ -81,40 +83,116 @@ describe("the native search tool is guarded", () => {
   });
 });
 
-describe("an install written before the widening is reported stale", () => {
-  const managed = (matcher: string) => ({
+describe("an install that would not do its job is reported, not called clean", () => {
+  const group = (overrides: Record<string, unknown> = {}) => ({
+    matcher: preToolUseMatcher(CLAUDE_RUNTIME),
+    hooks: [{ type: "command", command: "keryx ctx hook claude" }],
+    _keryxManaged: "ctx-agent-hooks",
+    ...overrides,
+  });
+  const settings = (overrides?: Record<string, unknown>) => ({ hooks: { PreToolUse: [group(overrides)] } });
+  const validate = (s: unknown) => CLAUDE_RUNTIME.validate?.(s as never) ?? [];
+
+  test("the matcher is derived from the runtime's own tool list, not declared twice", () => {
+    // It used to be a module constant beside a per-runtime `nativeSearchTools`
+    // with nothing tying them together, so adding a tool without editing the
+    // constant meant the refusal never ran and validate still said clean.
+    expect(preToolUseMatcher(CLAUDE_RUNTIME)).toBe("Bash|Grep");
+    expect(preToolUseMatcher({})).toBe("Bash");
+    expect(preToolUseMatcher({ nativeSearchTools: ["Grep", "Search"] })).toBe("Bash|Grep|Search");
+  });
+
+  test("a fresh install validates clean", () => {
+    expect(validate(settings())).toEqual([]);
+  });
+
+  test("every shape that would silently under-cover is reported", () => {
+    // All four were reported CLEAN before. The module fails toward reporting: a
+    // guard that covers less than it claims is the defect this check exists for.
+    for (const [label, overrides] of [
+      ["a Bash-only matcher", { matcher: "Bash" }],
+      ["an absent matcher", { matcher: undefined }],
+      ["a non-string matcher", { matcher: 123 }],
+      ["a null matcher", { matcher: null }],
+    ] as const) {
+      const errors = validate(settings(overrides as Record<string, unknown>));
+      expect(errors.length, label).toBe(1);
+      expect(errors[0], label).toContain("install-hook");
+    }
+  });
+
+  test('a hook entry of type "prompt" is not an installed guard', () => {
+    // A harness executes only `type: "command"` entries, so a one-word edit left
+    // an install that validate called current and that never ran. Matching on
+    // the command alone reported it clean.
+    const errors = validate({
+      hooks: {
+        PreToolUse: [
+          { ...group(), hooks: [{ type: "prompt", command: "keryx ctx hook claude" }] },
+        ],
+      },
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("missing");
+  });
+
+  test("a missing guard is still reported as missing", () => {
+    expect(validate({})).toHaveLength(1);
+    expect(validate({})[0]).toContain("missing");
+  });
+});
+
+describe("the drift check can actually reach a pre-install state", () => {
+  // `installRuntimeHook` merges and THEN validates what it just wrote, so
+  // `validate` never sees a stale install and its stale branch could not fire in
+  // production at all — the tests reached it only by calling validate directly
+  // with an object the installer can never produce. `describeExistingGuard` is
+  // read before the merge, which is the only moment the old state exists.
+  const stale = {
     hooks: {
       PreToolUse: [
         {
-          matcher,
+          matcher: "Bash",
           hooks: [{ type: "command", command: "keryx ctx hook claude" }],
           _keryxManaged: "ctx-agent-hooks",
         },
       ],
     },
+  };
+
+  test("it names what would be replaced", () => {
+    const described = describeExistingGuard(stale as never, CLAUDE_RUNTIME);
+    expect(described).toContain("Bash");
+    expect(described).toContain("Bash|Grep");
   });
 
-  test("the current matcher covers both the shell and the native tool", () => {
-    expect(PRE_TOOL_USE_MATCHER).toContain("Bash");
-    expect(PRE_TOOL_USE_MATCHER).toContain("Grep");
+  test("it says nothing when there is nothing to upgrade", () => {
+    expect(describeExistingGuard({} as never, CLAUDE_RUNTIME)).toBeNull();
+    const current = {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: preToolUseMatcher(CLAUDE_RUNTIME),
+            hooks: [{ type: "command", command: "keryx ctx hook claude" }],
+            _keryxManaged: "ctx-agent-hooks",
+          },
+        ],
+      },
+    };
+    expect(describeExistingGuard(current as never, CLAUDE_RUNTIME)).toBeNull();
+  });
+});
+
+describe("codex declares only what is evidenced", () => {
+  test("codex does not claim a Grep tool", () => {
+    // Nothing in the repo evidences that codex names a search tool `Grep`; the
+    // only `--tools Read Grep Glob` reference is about `claude`. Declaring it
+    // widened codex's installed matcher for something that never fires.
+    expect(CODEX_RUNTIME.nativeSearchTools).toBeUndefined();
+    expect(preToolUseMatcher(CODEX_RUNTIME)).toBe("Bash");
   });
 
-  test("a fresh install validates clean", () => {
-    expect(CLAUDE_RUNTIME.validate?.(managed(PRE_TOOL_USE_MATCHER))).toEqual([]);
-  });
-
-  test("a Bash-only install is reported as needing reinstall, not as valid", () => {
-    // Reporting it clean would make the fix invisible to everyone who already
-    // ran install-hook — the settings file looks identical from the outside.
-    const errors = CLAUDE_RUNTIME.validate?.(managed("Bash")) ?? [];
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("only Bash");
-    expect(errors[0]).toContain("install-hook");
-  });
-
-  test("a missing guard is still reported as missing", () => {
-    const errors = CLAUDE_RUNTIME.validate?.({}) ?? [];
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("missing");
+  test("claude still declares Grep, so the mechanism is live", () => {
+    expect(CLAUDE_RUNTIME.nativeSearchTools).toContain("Grep");
   });
 });
