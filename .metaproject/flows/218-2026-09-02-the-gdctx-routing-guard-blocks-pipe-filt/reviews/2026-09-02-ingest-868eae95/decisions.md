@@ -1,0 +1,21 @@
+# Decisions
+
+- F-101: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-102: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-103: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-104: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-105: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-106: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-107: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-108: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-109: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-201: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-202: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-203: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-204: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-205: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-206: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-207: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-301: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-302: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-401: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
