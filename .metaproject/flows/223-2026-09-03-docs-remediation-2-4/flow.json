@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "222",
+  "id": "223",
   "slug": "docs-remediation-2-4",
   "title": "Documentation remediation phases 2-4: one honest install story, Slate and SAC visibility, stale-warning repair",
   "status": "done",
   "createdAt": "2026-09-03T19:00:16.505Z",
-  "updatedAt": "2026-09-03T21:21:02.486Z",
+  "updatedAt": "2026-09-03T21:25:50.604Z",
   "source": {
     "type": "description",
     "ref": null
@@ -307,6 +307,11 @@
       "at": "2026-09-03T21:21:02.486Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-03T21:25:50.604Z",
+      "event": "renumbered",
+      "detail": "222 -> 223: Second collision on id 222. The tie-break convention would have moved the OTHER flow (mine landed first, in #440), but moving it is the unsafe half of the choice: 222-2026-09-03-prompt-audit-narration-and-tool-contract is in-progress at 16/20 tasks with another session actively writing to it, and if its id moved then a bare 'flow 222' from that session would silently resolve to THIS flow and write into it. This flow is done and closed through the gate, so nothing writes here again. Renumbering the finished one leaves 222 resolving to the active flow, which is what its session expects."
     }
   ],
   "merged": {
