@@ -1,16 +1,16 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "002",
   "slug": "gdgraph-java-python-import-resolution",
   "title": "gdgraph Java/Python import resolution",
   "status": "done",
   "createdAt": "2026-07-10T10:18:23.628Z",
-  "updatedAt": "2026-07-10T17:02:43.041Z",
+  "updatedAt": "2026-09-03T21:43:34.086Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:f2e7956c714eda57adc3de8220e391668196f609cbc4f5a2f67cd72886481ae4",
+  "acChecksum": "sha256:270ce5a23fa11c0aeba444633cf07aa25a7c893b8067ca94b4d64f00321f99ce",
   "acConfirmed": {
     "AC1": {
       "at": "2026-07-10T17:01:50.321Z",
@@ -61,55 +61,181 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:56.121Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:55:17.494Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:28:00.265Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T12:18:47.597Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T5",
       "title": "Gradle source-root resolver (Groovy + Kotlin DSL)",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:36.084Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T6",
       "title": "Python resolver + relative-import extraction fix",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:36.199Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T7",
       "title": "Seed tree-sitter-java/python grammars in src/assets/seed.ts",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:36.293Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T8",
       "title": "Dead-code decision: wire or remove detectSupportedLanguages/renderGdgraphConfig",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:36.421Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T9",
       "title": "Update requirements package status, roadmap line, version bumps",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T10:21:36.521Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -273,6 +399,11 @@
       "at": "2026-07-10T17:02:43.041Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-03T21:43:34.086Z",
+      "event": "ac-resealed",
+      "detail": "The recorded checksum is stale, not the criteria. acceptance-criteria.md is byte-identical to its first commit (git diff fd43d35a on that path is empty) and acChecksum has not changed since that same commit (git log -L over the function returns only fd43d35a), so both inputs are constant while the values differ: the seal was taken against content predating the squashed 0.1.0 import and is not recoverable. ac update would have re-sealed it too, at the cost of voiding ten confirmations that each carry a dated evidence note from 2026-07-10 — evidence traded for a green check. Resealed with the confirmations kept; git confirms the file tracked and unchanged against HEAD."
     }
   ]
 }

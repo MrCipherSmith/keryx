@@ -992,6 +992,7 @@ keryx flow task done <id> <taskId> [--disposition <d>] [--reason "<why>"]
 keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what>"]
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"]
 keryx flow ac update <id> --reason "<why>"
+keryx flow ac reseal <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment]
 keryx flow block <id> --reason "<why>"
@@ -1014,7 +1015,8 @@ keryx flow schema [--out <path>]
 | `task done <id> <taskId>` | `--disposition completed\|blocked\|failed\|skipped`, `--reason "<why>"` | Mark a task `done`. A `failed` or `blocked` close **records an attempt automatically** — those two dispositions are attempts by definition, and requiring a second command is why the counter read zero across seven flows. |
 | `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
 | `ac confirm <id> <ACn>` | `--note "<evidence>"` | Confirm one acceptance criterion. |
-| `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum; void prior confirmations. |
+| `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. |
+| `ac reseal <id>` | `--reason "<why>"` (required) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment` | Run completion gates; on pass `→ done` (optionally comment the issue), on fail `→ in-progress`. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |

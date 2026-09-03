@@ -10,6 +10,7 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
+import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
 import { DEFAULT_TASKS } from "./default-tasks";
@@ -402,6 +403,51 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    /**
+     * Re-seal a checksum whose FILE did not change — the case `acUpdate` cannot
+     * serve without destroying the record.
+     *
+     * `acUpdate` voids every confirmation, and that is right when the criteria
+     * changed: a criterion nobody confirmed in its current wording has not been
+     * confirmed. It is wrong when only the seal is stale. Flow 002 is the live
+     * example: ten confirmations, each with a dated evidence note, against a
+     * criteria file byte-identical to its first commit. Clearing them to
+     * silence a mismatch would trade the evidence for a green check.
+     *
+     * The guard is git, not the caller's assertion: it refuses unless the file
+     * is tracked and unchanged against HEAD, and refuses when git cannot answer
+     * at all rather than treating silence as assent.
+     */
+    async acReseal({ cwd, id, reason }): Promise<FlowState> {
+      if (!reason?.trim()) {
+        throw new Error('flow ac reseal requires --reason "<why the checksum is stale>"');
+      }
+      return mutate(cwd, id, async ({ dir, flow }) => {
+        if (!flow.acChecksum) {
+          throw new Error("flow ac reseal: the criteria are not frozen yet, so there is no checksum to re-seal.");
+        }
+        const current = await acChecksum(cwd, dir);
+        if (current === flow.acChecksum) {
+          throw new Error(
+            "flow ac reseal: the checksum already matches the file. Nothing is stale, so nothing is re-sealed.",
+          );
+        }
+        const evidence = await acFileUnchangedSinceHead(cwd, acRelativePathFor(".metaproject/flows", dir));
+        if (!evidence.clean) {
+          throw new Error(
+            `flow ac reseal: refusing — ${evidence.reason}. ` +
+              "Reseal only re-seals a stale checksum over an unchanged file; it is not a way to " +
+              'accept an edit. If the criteria really changed, use `keryx flow ac update <id> --reason "..."`, ' +
+              "which re-seals AND voids the prior confirmations.",
+          );
+        }
+        flow.acChecksum = current;
+        // acConfirmed is deliberately preserved: the criteria this flow was
+        // confirmed against are the criteria on disk right now.
+        return save(cwd, dir, flow, "ac-resealed", reason);
+      });
+    },
+
     async implemented({ cwd, id, prUrl }): Promise<FlowState> {
       if (!prUrl?.trim()) {
         throw new Error("flow implemented requires --pr <draft PR url>");
@@ -726,10 +772,21 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (flow.acChecksum && (await pathExists(acPath(cwd, dir)))) {
           const current = await acChecksum(cwd, dir);
           if (current !== flow.acChecksum) {
+            // What is observed is a mismatch. "Modified outside task-manager"
+            // is one CAUSE of that, and the message used to assert it as the
+            // fact. Flow 002 is the counter-example: its criteria file is
+            // byte-identical to its first commit and `acChecksum` has never
+            // changed since that same commit, yet the recorded value differs —
+            // it was sealed against content that predates the squashed 0.1.0
+            // import. Nothing was edited, and the report said it was.
             issues.push({
               flow: dir,
               kind: "checksum",
-              message: "acceptance criteria modified outside task-manager (checksum mismatch)",
+              message:
+                "acceptance criteria checksum does not match the file. " +
+                "Either the criteria were edited outside `keryx flow ac`, or the recorded " +
+                "checksum is stale. `keryx flow ac reseal <id>` distinguishes them: it " +
+                "refuses unless git shows the file unchanged since HEAD.",
             });
           }
         }
