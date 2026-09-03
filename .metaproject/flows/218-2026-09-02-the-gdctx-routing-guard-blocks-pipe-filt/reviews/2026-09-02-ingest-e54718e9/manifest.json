@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-02-ingest-e54718e9",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "e54718e9",
+    "head": "5ce72d3567616e28e3cdb037a1fde0fff33d5da1"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/scope.md",
+    "coverage": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/coverage.md",
+    "report": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/report.md",
+    "findings": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/findings.json",
+    "learning": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/learning.md",
+    "decisions": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/reviews/2026-09-02-ingest-e54718e9/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 0,
+    "dropped_prefilter": null,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "retained": 0,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "prefilter",
+        "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "createdAt": "2026-09-02T21:44:22.209Z",
+  "updatedAt": "2026-09-02T21:44:22.209Z",
+  "flow": {
+    "id": "218",
+    "path": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt"
+  }
+}

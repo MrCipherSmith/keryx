@@ -7,9 +7,9 @@
   "id": "216",
   "slug": "review-orchestrator-context-pack-the-pr-",
   "title": "review-orchestrator context pack: the PR description and cross-repo contracts are prose, not contract",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-02T13:22:47.586Z",
-  "updatedAt": "2026-09-02T14:03:53.224Z",
+  "updatedAt": "2026-09-02T21:44:38.452Z",
   "source": {
     "type": "description",
     "ref": null
@@ -51,7 +51,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/431"
   },
   "tasks": [
     {
@@ -211,6 +211,132 @@
       "at": "2026-09-02T14:03:53.224Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-02T20:26:26.212Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T20:26:36.387Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T20:26:41.631Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#431 was last collected against 868eae95a283d7bdde3789876189e08377252e4c (round 1), but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. Everything anyone said after 868eae95a283d7bdde3789876189e08377252e4c is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 431 --sha <pr-head>`. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-02T20:27:12.940Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T20:27:13.049Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T20:27:17.984Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-02T20:27:43.372Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T20:27:43.458Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T20:27:48.736Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-02T21:37:52.913Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:37:53.058Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:37:58.655Z",
+      "event": "completion-failed",
+      "detail": "review: 3 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-02-ingest-origin-main#F-001 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#F-002 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#CC-001 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#CC-002 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#CC-003 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#CC-004 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#A-001 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#A-002 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#A-003 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-001 (major, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-002 (major, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-003 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-004 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-005 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-006 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-origin-main#T-008 (minor, round 2026-09-02-ingest-origin-main): no disposition recorded | 2026-09-02-ingest-868eae95#F-101 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-102 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-103 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-104 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-105 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-106 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-107 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-108 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-109 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-201 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-202 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-203 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-204 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-205 (minor, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-206 (minor, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-301 (minor, round 2026-09-02-ingest-868eae95): no disposition recorded | 2026-09-02-ingest-868eae95#F-401 (major, round 2026-09-02-ingest-868eae95): no disposition recorded | head-commit (violated): the latest round ran against e54718e94945efe9bce7526fe9ba034355a1a235, but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | verifier-stats (violated): round `2026-09-02-ingest-868eae95` ran with `verification_mode: annotate` and received 0 claims while retaining 17 finding(s) at or above `minor` (2026-09-02-ingest-868eae95#F-101, 2026-09-02-ingest-868eae95#F-102, 2026-09-02-ingest-868eae95#F-103, 2026-09-02-ingest-868eae95#F-104, 2026-09-02-ingest-868eae95#F-105, 2026-09-02-ingest-868eae95#F-106, 2026-09-02-ingest-868eae95#F-107, 2026-09-02-ingest-868eae95#F-108, 2026-09-02-ingest-868eae95#F-109, 2026-09-02-ingest-868eae95#F-201, 2026-09-02-ingest-868eae95#F-202, 2026-09-02-ingest-868eae95#F-203, 2026-09-02-ingest-868eae95#F-204, 2026-09-02-ingest-868eae95#F-205, 2026-09-02-ingest-868eae95#F-206, 2026-09-02-ingest-868eae95#F-301, 2026-09-02-ingest-868eae95#F-401). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-02T21:39:18.027Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:39:18.156Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:39:23.554Z",
+      "event": "completion-failed",
+      "detail": "review: 3 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-02-ingest-origin-main#F-001 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#F-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#CC-001 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#CC-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#CC-003 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#CC-004 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#A-001 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#A-002 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#A-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#T-001 (major, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#T-002 (major, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#T-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#T-004 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-origin-main#T-005 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#T-006 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-origin-main#T-008 (minor, round 2026-09-02-ingest-origin-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-101 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-102 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-103 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-104 (major, round 2026-09-02-ingest-868eae95): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-105 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-106 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-107 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-108 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-109 (major, round 2026-09-02-ingest-868eae95): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-201 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-202 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-203 (major, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-204 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-205 (minor, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-206 (minor, round 2026-09-02-ingest-868eae95): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-02-ingest-868eae95#F-301 (minor, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-02-ingest-868eae95#F-401 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) but its evidence names no commit SHA | head-commit (violated): the latest round ran against e54718e94945efe9bce7526fe9ba034355a1a235, but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | verifier-stats (violated): round `2026-09-02-ingest-868eae95` ran with `verification_mode: annotate` and received 0 claims while retaining 17 finding(s) at or above `minor` (2026-09-02-ingest-868eae95#F-101, 2026-09-02-ingest-868eae95#F-102, 2026-09-02-ingest-868eae95#F-103, 2026-09-02-ingest-868eae95#F-104, 2026-09-02-ingest-868eae95#F-105, 2026-09-02-ingest-868eae95#F-106, 2026-09-02-ingest-868eae95#F-107, 2026-09-02-ingest-868eae95#F-108, 2026-09-02-ingest-868eae95#F-109, 2026-09-02-ingest-868eae95#F-201, 2026-09-02-ingest-868eae95#F-202, 2026-09-02-ingest-868eae95#F-203, 2026-09-02-ingest-868eae95#F-204, 2026-09-02-ingest-868eae95#F-205, 2026-09-02-ingest-868eae95#F-206, 2026-09-02-ingest-868eae95#F-301, 2026-09-02-ingest-868eae95#F-401). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-02T21:41:03.207Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:41:03.298Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:41:08.374Z",
+      "event": "completion-failed",
+      "detail": "review: 3 of 5 conditions failed — terminal-dispositions (violated): 15 finding(s) at or above `minor` are not terminal: 2026-09-02-ingest-origin-main#F-001 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#F-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#CC-001 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#CC-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#CC-004 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#A-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#T-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-origin-main#T-004 (minor, round 2026-09-02-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-101 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-102 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-103 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-107 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-204 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-301 (minor, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-868eae95#F-401 (major, round 2026-09-02-ingest-868eae95): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against e54718e94945efe9bce7526fe9ba034355a1a235, but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | verifier-stats (violated): round `2026-09-02-ingest-868eae95` ran with `verification_mode: annotate` and received 0 claims while retaining 17 finding(s) at or above `minor` (2026-09-02-ingest-868eae95#F-101, 2026-09-02-ingest-868eae95#F-102, 2026-09-02-ingest-868eae95#F-103, 2026-09-02-ingest-868eae95#F-104, 2026-09-02-ingest-868eae95#F-105, 2026-09-02-ingest-868eae95#F-106, 2026-09-02-ingest-868eae95#F-107, 2026-09-02-ingest-868eae95#F-108, 2026-09-02-ingest-868eae95#F-109, 2026-09-02-ingest-868eae95#F-201, 2026-09-02-ingest-868eae95#F-202, 2026-09-02-ingest-868eae95#F-203, 2026-09-02-ingest-868eae95#F-204, 2026-09-02-ingest-868eae95#F-205, 2026-09-02-ingest-868eae95#F-206, 2026-09-02-ingest-868eae95#F-301, 2026-09-02-ingest-868eae95#F-401). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-02T21:42:30.363Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:42:30.451Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:42:36.176Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 9 finding(s) at or above `minor` are not terminal: 2026-09-02-ingest-origin-main#F-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed at e54718e9, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-origin-main#CC-002 (minor, round 2026-09-02-ingest-origin-main): marked fixed at ff0ea1e6, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-origin-main#A-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed at e54718e9, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-origin-main#T-003 (minor, round 2026-09-02-ingest-origin-main): marked fixed at e54718e9, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-origin-main#T-004 (minor, round 2026-09-02-ingest-origin-main): marked fixed at e54718e9, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-868eae95#F-102 (major, round 2026-09-02-ingest-868eae95): marked fixed at ff0ea1e6, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-868eae95#F-103 (major, round 2026-09-02-ingest-868eae95): marked fixed at ff0ea1e6, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-868eae95#F-204 (major, round 2026-09-02-ingest-868eae95): marked fixed at ff0ea1e6, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-02-ingest-868eae95#F-301 (minor, round 2026-09-02-ingest-868eae95): marked fixed at ff0ea1e6, 7ee65c96 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | head-commit (violated): the latest round ran against e54718e94945efe9bce7526fe9ba034355a1a235, but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+    },
+    {
+      "at": "2026-09-02T21:43:27.408Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:43:27.507Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:43:32.797Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against e54718e94945efe9bce7526fe9ba034355a1a235, but the PR head is 5ce72d3567616e28e3cdb037a1fde0fff33d5da1. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+    },
+    {
+      "at": "2026-09-02T21:44:33.063Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/431 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-02T21:44:33.152Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-02T21:44:38.452Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

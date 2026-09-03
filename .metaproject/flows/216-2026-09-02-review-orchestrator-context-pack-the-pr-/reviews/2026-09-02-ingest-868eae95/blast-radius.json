@@ -1,0 +1,498 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/flow.json",
+    ".metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/journal.md",
+    ".metaproject/flows/217-2026-09-02-skills-route-mis-routes-a-generic-review/flow.json",
+    ".metaproject/flows/217-2026-09-02-skills-route-mis-routes-a-generic-review/journal.md",
+    ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/flow.json",
+    ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/journal.md",
+    "src/commands/ctx.ts",
+    "src/commands/orient.ts",
+    "src/commands/skills.ts",
+    "src/ctx/hook-classify.ts",
+    "src/ctx/hook-install.test.ts",
+    "src/ctx/hook-install.ts",
+    "src/ctx/hook-native-search.test.ts",
+    "src/ctx/hook-pipeline.test.ts",
+    "src/ctx/hook.ts",
+    "src/ctx/runtimes.test.ts",
+    "src/ctx/runtimes.ts",
+    "src/gdskills/catalog.ts",
+    "src/gdskills/review-context-pr-cross-repo.test.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/init.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/install.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/install.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/update.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/security.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/ctx/runtimes.ts",
+      "path": [
+        "src/commands/security.ts",
+        "src/ctx/runtimes.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/ctx.rg-argv.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/commands/ctx.rg-argv.test.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/ctx.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/commands/ctx.test.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/orient.dry-run.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/orient.ts",
+      "path": [
+        "src/commands/orient.dry-run.test.ts",
+        "src/commands/orient.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/skills-route.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/ctx/hook.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/ctx/hook-classify.ts",
+      "path": [
+        "src/ctx/hook.test.ts",
+        "src/ctx/hook-classify.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/agent-hooks.coexistence.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/ctx/runtimes.ts",
+      "path": [
+        "src/security/agent-hooks.coexistence.test.ts",
+        "src/ctx/runtimes.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/modules.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/modules.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/dashboard.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/dashboard.ts",
+        "src/commands/update.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/capability/golden-rule.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/capability/golden-rule.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/cli.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init-mcp-offer.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/init-mcp-runtimes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init-mcp-runtimes.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/init.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.escape.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/init.no-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.no-git.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/mcp-install.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/module-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/module-commands.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/security-hooks-init.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/update.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/update.test.ts",
+        "src/commands/update.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/commands/version.test.ts",
+        "src/cli.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/gdskills/install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/install.test.ts",
+        "src/gdskills/install.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/ctx.ts",
+      "path": [
+        "src/standard/command-registry.coverage.test.ts",
+        "src/cli.ts",
+        "src/commands/ctx.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/standard/standard.test.ts",
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/skills.bundled-verify.installed.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "related-test",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/skills.bundled-verify.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "related-test",
+      "isTest": true
+    },
+    {
+      "file": "src/ctx/orient-runtimes.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/ctx/runtimes.test.ts",
+      "path": [
+        "src/ctx/orient-runtimes.test.ts",
+        "src/ctx/runtimes.test.ts"
+      ],
+      "source": "related-test",
+      "isTest": true
+    },
+    {
+      "file": "src/gdskills/agent-catalogue-xref.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/agent-catalogue-xref.test.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "related-test",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/217-2026-09-02-skills-route-mis-routes-a-generic-review/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/217-2026-09-02-skills-route-mis-routes-a-generic-review/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/218-2026-09-02-the-gdctx-routing-guard-blocks-pipe-filt/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/ctx/hook-native-search.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/ctx/hook-pipeline.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/review-context-pr-cross-repo.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 19,
+    "changedFilesResolved": 10,
+    "changedFilesUnresolved": 9,
+    "candidates": 32,
+    "retained": 32,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 4,
+    "testsRetained": 25,
+    "hopHistogram": {
+      "1": 11,
+      "2": 17,
+      "3": 4
+    }
+  },
+  "graph": {
+    "nodes": 984,
+    "edges": 2987
+  }
+}
