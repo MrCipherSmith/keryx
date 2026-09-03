@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/freshness-queue-entry.schema.json",
+  "title": "Wiki Freshness Queue Entry",
+  "description": "One line of .metaproject/data/wiki/freshness-queue.jsonl. Written by a git hook, which must not read the file, build the graph, or call a model. Consumed by `keryx wiki freshness`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "event",
+    "rev",
+    "recordedAt",
+    "paths"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "event": {
+      "description": "Which hook produced the entry. `manual` is a human-run `keryx wiki freshness --record`.",
+      "enum": ["post-commit", "post-merge", "post-checkout", "manual"]
+    },
+    "rev": {
+      "description": "Full 40-character git sha of the commit this entry describes. For post-merge, the resulting merge commit.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "previousRev": {
+      "description": "Full git sha the change is measured from. Absent for the first recorded entry.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "paths": {
+      "description": "Repository-relative paths touched by this revision, as reported by git. Not classified: classification happens at drain time, because the hook has no budget for it.",
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "truncated": {
+      "description": "True when `paths` was capped by the hook's size limit. A truncated entry forces the drain to fall back to `git diff` for this revision rather than trusting the list.",
+      "type": "boolean",
+      "default": false
+    },
+    "branch": {
+      "type": "string"
+    }
+  }
+}

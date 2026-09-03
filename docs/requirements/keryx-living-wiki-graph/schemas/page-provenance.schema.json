@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/page-provenance.schema.json",
+  "title": "Wiki Page Provenance",
+  "description": "Machine projection of a wiki page's frontmatter and managed-block state (specification.md section 4). Produced by the wiki reader, consumed by validate, freshness and the MCP wiki resource. Not a file on disk of its own.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "path",
+    "version",
+    "status",
+    "describes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "path": {
+      "description": "Wiki-relative page path.",
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "type": {
+      "description": "WikiPageType (src/wiki/types.ts).",
+      "enum": [
+        "architecture",
+        "domain-model",
+        "business-rule",
+        "user-scenario",
+        "component",
+        "service",
+        "integration",
+        "decision"
+      ]
+    },
+    "status": {
+      "enum": ["draft", "accepted"]
+    },
+    "verifiedAt": {
+      "description": "Git sha the page was last verified against. Null means never verified, which is NOT the same as fresh.",
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "describes": {
+      "description": "Resolved describe-set for this page. Empty is legal (an architecture page may describe no single path) but makes the page undecidable for freshness.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "origin"],
+        "properties": {
+          "pattern": {
+            "description": "Repository-relative path or glob.",
+            "type": "string",
+            "minLength": 1
+          },
+          "origin": {
+            "description": "Precedence, highest first: frontmatter beats related-code beats key-files (specification.md section 3.2).",
+            "enum": ["frontmatter", "related-code", "key-files"]
+          },
+          "resolvedPaths": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "managedBlock": {
+      "description": "State of the keryx:reference managed region.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "markerVersion": { "type": "integer", "minimum": 1 },
+        "recordedHash": {
+          "description": "sha256 recorded in the opening marker at the last machine write.",
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "currentHash": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "handEdited": {
+          "description": "True when recordedHash and currentHash differ: someone edited inside the machine region. `wiki refresh` must refuse without --force.",
+          "type": "boolean"
+        }
+      }
+    },
+    "humanAnchors": {
+      "description": "Count of keryx:human anchored regions that automation must reproduce byte-identically.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "proseSections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["heading", "volatility"],
+        "properties": {
+          "heading": { "type": "string" },
+          "volatility": {
+            "enum": ["durable", "volatile"]
+          },
+          "isDraftPlaceholder": {
+            "description": "True while the section still holds the generated `_Draft - ..._` placeholder.",
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

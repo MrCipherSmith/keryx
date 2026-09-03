@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/freshness-report.schema.json",
+  "title": "Wiki Freshness Report",
+  "description": "Output of `keryx wiki freshness --json` and the content of .metaproject/data/wiki/freshness/latest.json. Read-only: producing this report never mutates a wiki page.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "range",
+    "totals",
+    "pages",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "range": {
+      "description": "Revision range the report covers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toRev"],
+      "properties": {
+        "fromRev": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "toRev": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "queueEntriesConsumed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pagesTotal", "pagesFresh", "pagesAffected"],
+      "properties": {
+        "pagesTotal": { "type": "integer", "minimum": 0 },
+        "pagesFresh": {
+          "description": "Pages whose Describes-set saw no non-cosmetic change since their VerifiedAt. A page with no VerifiedAt is never counted here.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pagesAffected": { "type": "integer", "minimum": 0 },
+        "filesChanged": { "type": "integer", "minimum": 0 },
+        "filesCosmetic": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "category", "confidence", "reasons"],
+        "properties": {
+          "path": {
+            "description": "Wiki-relative page path, e.g. components/flow-canvas.md. For category `undocumented` no such page exists yet: `path` then carries the path the page WOULD take, and `subjectPath` carries the code it would describe. A consumer must not assume this file is on disk without checking `category`.",
+            "type": "string",
+            "minLength": 1
+          },
+          "subjectPath": {
+            "description": "Repository-relative path of the code this entry is about. Required in practice for `undocumented`, where the page does not exist; informational for other categories.",
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "description": "stale-reference: the managed Reference block no longer matches the graph; deterministic `wiki refresh` can fix it. stale-prose: prose may be wrong; needs enrich or a human. undocumented: code with no page describing it. orphan: page describes code that no longer exists. unknown: page carries no VerifiedAt, so freshness is undecidable.",
+            "enum": [
+              "stale-reference",
+              "stale-prose",
+              "undocumented",
+              "orphan",
+              "unknown"
+            ]
+          },
+          "confidence": {
+            "description": "Decays with propagation distance (specification.md section 6.2).",
+            "enum": ["must-refresh", "review-suggested", "fyi"]
+          },
+          "verifiedAt": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "commitsBehind": {
+            "description": "Number of commits touching this page's Describes-set since verifiedAt.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasons": {
+            "description": "Why this page is listed. Never empty: an entry without a traceable cause is a defect, not a warning.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sourcePath", "changeClass"],
+              "properties": {
+                "sourcePath": { "type": "string" },
+                "changeClass": {
+                  "enum": [
+                    "added",
+                    "removed",
+                    "moved",
+                    "signature",
+                    "body",
+                    "cosmetic"
+                  ]
+                },
+                "edgePath": {
+                  "description": "Graph edge kinds traversed from the changed file to this page, nearest first.",
+                  "type": "array",
+                  "items": {
+                    "enum": ["describes", "imports", "calls", "asset", "unresolved"]
+                  }
+                },
+                "symbols": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "limitations": {
+      "description": "Known incompleteness of THIS report. Must be emitted, not suppressed: a silent gap reads as `nothing is stale`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "detail"],
+        "properties": {
+          "code": {
+            "enum": [
+              "symbol-layer-unavailable",
+              "graph-stale",
+              "unresolved-edges-present",
+              "queue-truncated",
+              "page-without-describes",
+              "not-a-git-repository"
+            ]
+          },
+          "detail": { "type": "string" },
+          "affectedCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}
