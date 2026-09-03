@@ -2053,36 +2053,37 @@ what to show a user who asks mid-run.
 
 ## Rules of Engagement
 
-1. **DO** ALWAYS collect context in Phase 0 — project directory is MANDATORY, never assume.
-2. **DO** build plans dynamically based on intent — not a fixed 8-phase pipeline.
-3. **DO** run `keryx job init` before executing any step.
-4. **DO** record every step with `keryx job step` and every document with `keryx job document` — the package, not this session, is the record.
-5. **DO** parallelize independent tasks and reviewers where safe.
-6. **DO** respect dependency order — use wave-based execution for implementation.
-7. **DO** limit review → fix loop to max_review_iterations, and stop earlier on repetition.
-8. **DO** present PR proposal to user before creating (unless auto_create_pr).
-9. **DO** tell user where the job package is at completion.
-10. **DO** ALWAYS use `git worktree add` for feature branches — NEVER `git checkout -b`.
-11. **DO** run ALL commands in the **worktree directory**, never in the original project.
-12. **DO** ask user for confirmation before extending plan (e.g., analyze → implement).
-13. **DO** send progress notifications at phase and step transitions.
-14. **DO** use auto-detected `package_manager` and `run_command` — never hardcode `npm`.
-15. **DO NOT** ask the user anything during execution (after Phase 0) — except for critical failures and plan extension decisions.
-16. **DO NOT** push the branch until user confirms (or auto_create_pr).
-17. **DO NOT** hand-write `state.json`, or let a sub-agent write it. `keryx job` is the only writer, and it validates every write.
-18. **DO NOT** let a sub-agent record its own result in the package — the orchestrator runs `keryx job document`.
-19. **DO** run `keryx review start` before a fix round and `keryx review ingest` after synthesis, so the round is citable.
-20. **DO** give every finding a terminal disposition with `keryx review complete --finding … --disposition … --evidence …`. A finding never leaves the loop by being absent from the next round.
-21. **DO** classify every step failure as `terminal`, `retryable`, or `recoverable` — never just abort or ask without classifying first.
-22. **DO** show agent-explicit plan in 1.3 and ask approve/adjust — unless `plan_approval: false`.
-23. **DO** run `sanity-check` after every implement step before dispatching review.
-24. **DO** auto-trigger `test-gen` if implementer produced no test files (unless `run_test_gen: false`).
-25. **DO** auto-trigger `security-audit` if diff touches auth/API/DB/env files (unless `run_security_audit: false`).
-26. **DO** include changelog entry in PR body (unless `run_changelog: false`).
-27. **DO** dispatch with `subagent_type: "general-purpose"` — `"general"` is not a value any dispatcher accepts.
-28. **DO** compute every dispatch's model with `keryx review tier` — never assign a tier by hand, and never write a model id into a dispatch.
-29. **DO** pass `--outstanding <n>` on `keryx review budget` and `keryx review ingest` — this orchestrator is the outermost of the three nesting levels the concurrency cap was sized for, and the cap binds the nested total only when the parent declares its in-flight count.
-30. **DO NOT** deploy without user confirmation (unless `run_deploy: true` explicitly set).
+Everything this orchestrator does is described once, with its reason, in the
+section that owns it. This section is not a second copy of that. It carries the
+three rules stated nowhere else, and the four whose cost, when you get them
+wrong, cannot be undone by trying again.
+
+### Stated only here
+
+- **Do not ask the user anything between Phase 0 and completion.** Two
+  exceptions: a critical failure, and a decision to extend the plan (analyze →
+  implement). Everything else was settled in Phase 0, or is settled by the
+  package rather than by asking.
+- **Do not push the branch until the user confirms**, unless `auto_create_pr` is
+  set. A push is visible to everyone watching the repository, and there is no
+  version of un-pushing it that they do not see.
+- **Say where the job package is when the job ends.** It is the only durable
+  record of the run, and a user who cannot find it is left with nothing to read.
+
+### Unrecoverable if wrong
+
+- **Branch with `git worktree add`** — never `git checkout -b` or
+  `git switch -c`. Those switch the main working directory out from under the
+  user's own session, mid-run.
+- **Run every later command in the worktree directory**, not the project root.
+  A build, test or commit that lands in the wrong tree is attributed to work
+  nobody did.
+- **`keryx job` is the only writer of `state.json`**, this orchestrator
+  included. It validates each write against the `job-orchestrator-state`
+  contract; a hand-written file satisfies no contract, and the next session
+  resumes into a state that never existed.
+- **Ask for the project directory in Phase 0.** There is no default. A wrong
+  guess writes a job package into somebody else's repository.
 
 ---
 
