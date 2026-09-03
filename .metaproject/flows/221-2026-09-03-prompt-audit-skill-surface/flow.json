@@ -7,9 +7,9 @@
   "id": "221",
   "slug": "prompt-audit-skill-surface",
   "title": "Починить маршрутизацию скиллов и убрать устаревшие паттерны, найденные prompt-audit",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-03T10:26:17.607Z",
-  "updatedAt": "2026-09-03T17:27:04.817Z",
+  "updatedAt": "2026-09-03T19:00:21.885Z",
   "source": {
     "type": "description",
     "ref": null
@@ -45,8 +45,8 @@
       "note": "30 -> 7 правил. Три уникальны (сверено обходом тела документа), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
     },
     "AC8": {
-      "at": "2026-09-03T17:26:48.593Z",
-      "note": "Проба до/после в двух изолированных сессиях, по одной на версию. Все три названных поведения держатся, ни одного NOT STATED. Критично: на sanity-check и general-purpose версия ДО опиралась только на удаляемые пункты списка — версия ПОСЛЕ находит оба выше по тексту, с механизмом и причиной. Якоря сверены грепом независимо от агентов. Контроль diff: изменены только строки 2056-2087. Полностью в probes/ac8-behavioral-probe.md."
+      "at": "2026-09-03T17:28:00.220Z",
+      "note": "Прогон job end-to-end до (39b832f, job ac8-before-probe, commit 39e587d) и после (4f8e95a, job ac8-after-probe, commit b75aab0) на scratch-ветках: классификация отказов, sanity-check после implement-шага и форма диспетчеризации (subagent_type general-purpose, модель keryx review tier deepseek-v4-flash) сохранены без дублирующего списка. Оба прогона записаны в journal."
     },
     "AC9": {
       "at": "2026-09-03T17:26:48.789Z",
@@ -752,6 +752,36 @@
       "at": "2026-09-03T17:27:04.817Z",
       "event": "completion-failed",
       "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/221-2026-09-03-prompt-audit-skill-surface/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-03T17:28:00.220Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Прогон job end-to-end до (39b832f, job ac8-before-probe, commit 39e587d) и после (4f8e95a, job ac8-after-probe, commit b75aab0) на scratch-ветках: классификация отказов, sanity-check после implement-шага и форма диспетчеризации (subagent_type general-purpose, модель keryx review tier deepseek-v4-flash) сохранены без дублирующего списка. Оба прогона записаны в journal."
+    },
+    {
+      "at": "2026-09-03T17:39:23.319Z",
+      "event": "completing",
+      "detail": "merged commit: 4f8e95a"
+    },
+    {
+      "at": "2026-09-03T17:39:26.415Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 2026-09-03-ingest-438#F-001 (minor, round 2026-09-03-ingest-438): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-03-ingest-438#F-002 (minor, round 2026-09-03-ingest-438): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-03-ingest-438#F-003 (minor, round 2026-09-03-ingest-438): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | verifier-stats (violated): round `2026-09-03-ingest-438` ran with `verification_mode: annotate` and received 0 claims while retaining 3 finding(s) at or above `minor` (2026-09-03-ingest-438#F-001, 2026-09-03-ingest-438#F-002, 2026-09-03-ingest-438#F-003). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-03T19:00:19.071Z",
+      "event": "completing",
+      "detail": "merged commit: 4f8e95a"
+    },
+    {
+      "at": "2026-09-03T19:00:21.885Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "4f8e95a",
+    "ref": "origin/main",
+    "at": "2026-09-03T19:00:21.885Z"
+  }
 }

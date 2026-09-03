@@ -1,0 +1,68 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The regression test for `parseSkillFrontmatter` exercises `|`, `>`, and `>-`, but the `|-`, `|+`, `>+` spellings AC1 names have zero coverage. A regression in the `+` (keep) or `-` (strip) chomping branch would pass the suite silently.",
+    "impact": "The parser change is exactly the kind that a spelling-specific branch breaks; the criterion AC1 enumerates all six spellings, so the test should enumerate them too.",
+    "suggested_fix": "parametrized unit test over all six AC1 spellings plus termination/indentation edges, asserting folded prose.",
+    "evidence": "Read the test file; `bun run` edge probe against the real module confirms all six spellings currently parse correctly, so this is a coverage gap, not a live defect.",
+    "confidence": "low",
+    "file": "src/harness/tool/metaproject-adapter.test",
+    "global_id": "2026-09-03-ingest-438#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "rg over src/harness/tool/metaproject-adapter.test.ts and src/gdskills/*.test.ts for 'description: |-', '|+', '>+' finds zero occurrences; the six AC1 spellings are not all exercised. Live parser probe (11 cases) passes all six, so this is a coverage gap, not a live defect.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no coverage of |-,|+,>+ spellings). Live parser handles all six AC1 spellings (11-case probe green). Parametrized unit test logged as follow-up; not a defect of this PR."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "A control-comment describing a fixture as a block-scalar case sits next to a fixture that is actually a plain scalar (`control-example`), so the comment promises more than the fixture exercises.",
+    "impact": "A later reader may believe the block-scalar parse is negatively controlled when it is not; cosmetic, but the mismatch is the exact \"looks recorded\" shape this flow's other work removes.",
+    "suggested_fix": "align the comment with the fixture, or give the control a real block scalar.",
+    "evidence": "Read the fixture and its comment in the current tree.",
+    "confidence": "low",
+    "file": "src/gdskills/bundled-eval.test",
+    "global_id": "2026-09-03-ingest-438#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "bundled-eval.test.ts:381-384 comment says 'The control: a normal block scalar with text under it is NOT flagged', but CONTROL_SKILL (line 218) uses a one-line description 'A structurally correct skill...' — a plain scalar, not a block scalar. Comment overstates the fixture.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: CONTROL_SKILL is a plain scalar, comment says block scalar). Cosmetic comment mismatch; optional wording polish deferred."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The parser's block-termination edges (first non-indented line ends the block; blank lines inside; chomping) are covered only indirectly through the adapter test and the real-tree gate, not by a unit file targeting the parser itself.",
+    "impact": "Termination and indentation edges are the load-bearing part of the fix (F-1's \"triggers swallowed by the block\"); an indirect-only net can drift from the parser's actual contract.",
+    "suggested_fix": "a unit file for `parseSkillFrontmatter` covering termination on first unindented line, blank-line handling, and the `+`/`-` chomping indicators.",
+    "evidence": "Confirmed no `skill-frontmatter.test.ts` exists; edge probe against the real module passes all 11 cases today.",
+    "confidence": "low",
+    "file": "src/gdskills/skill-frontmatter.ts",
+    "global_id": "2026-09-03-ingest-438#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "ls src/gdskills/skill-frontmatter.test.ts: no such file. Parser termination edges covered only indirectly via metaproject-adapter.test.ts and the real-tree bundled-eval gate.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no skill-frontmatter.test.ts). Edges covered via adapter regression test + real-tree bundled-eval gate + manual probe; dedicated unit file logged as follow-up."
+    }
+  }
+]
