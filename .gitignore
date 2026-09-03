@@ -25,6 +25,15 @@ coverage/
 # `.keryx/`.
 .keryx/external-slates/
 
+# MCP client config, written by `keryx mcp install`. It embeds the ABSOLUTE path
+# of the project on the machine that ran the install (`--cwd /home/you/keryx`),
+# so a committed copy is correct on exactly one machine and silently dead on
+# every other. It was committed once, with a macOS path, and sat broken on Linux
+# from 2026-08-13 until it was noticed on 2026-09-02 — the server simply never
+# started, and nothing said so. Re-run `keryx mcp install --runtime claude` to
+# regenerate it locally.
+.mcp.json
+
 # keryx-shell-benchmark harness: raw run output (thousands of per-scenario
 # files), not curated docs. Keep locally for analysis; do not commit.
 docs/requirements/keryx-shell-benchmark/harness/logs/
