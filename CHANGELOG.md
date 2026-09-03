@@ -3,6 +3,118 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.76] — 2026-09-03
+
+Six commits since 0.2.75, and four of them are about one object: the ctx routing
+guard. It refused the pipelines the routing rule itself demands, it could be
+wedged by a stdin that never closed, it honoured its own escape marker inside
+quotes, and it never watched the search tool a runtime provides natively. That is
+the class the last three releases have circled — a mechanism asserting a
+compliance it never observed — arriving this time in the thing that does the
+enforcing.
+
+### Added
+
+- **Foreground operations in the TUI can be cancelled.** A single owner holds the
+  one operation that may keep the interactive shell busy, with identity-safe
+  tokens so an operation that settles late cannot clear the one that replaced it.
+  Forcing a queued item interrupts the running main turn instead of waiting it
+  out, and the cancellation is cooperative: the forced item does not start until
+  the interrupted operation's finalizer has settled its own UI state. Destroying
+  the renderer cancels and disposes rather than leaving the operation running.
+  Wiki enrichment moved onto the same cancellation path instead of keeping a
+  second one.
+
+### Fixed
+
+- **The ctx guard refused pipe filters.** Every stage of a pipeline was
+  classified as though it named a file, so `npm test | grep -E 'Tests'`,
+  `bun test 2>&1 | tail -5` and even `keryx ctx rg 'foo' | grep -c 'bar'` were
+  blocked — routing a search exactly as the rule demands and then counting the
+  results was refused. That is the failure mode that gets a hook uninstalled.
+  Position was the wrong discriminator; a stage is now judged by whether it names
+  a file. Three siblings found by a later round are closed with it: `sed`/`awk`
+  take a script as their first operand, so an allowance given only to search-like
+  commands moved the false-block class one command over; `-e`/`-f`/`--regexp`/
+  `--file` supply the pattern, so the allowance absorbed the file instead and
+  `grep -e foo file.ts` passed where it used to block; and a short-option regex
+  could not match a long option, so `grep --recursive foo` walked the tree.
+
+- **The guard never watched a runtime's own search tool.** The matcher was `Bash`
+  alone and everything else failed open, so an agent using its harness's native
+  search went unguarded while the Bash guard reported a clean run. Runtimes now
+  declare `nativeSearchTools` and the matcher is derived from that declaration.
+  `validate` had reported five under-covering shapes as clean, and its drift
+  branch could not fire in production at all, because the installer merged before
+  validating.
+
+- **The escape marker was honoured inside quotes.** `grep -rn '#keryx:raw' src/`
+  and `git log --grep='# keryx:raw'` both passed, so searching the guard's own
+  source for its marker disabled the guard. It is now recognised only where a
+  shell would start a comment. The asymmetry is what gave it away: the same file
+  already knew that a `|` inside quotes is not a pipe.
+
+- **`ctx hook` could be wedged by a stdin that never closes.** Measured still
+  running at 14s, and once past 120s, where the equivalent read in `keryx orient`
+  exited in 1202ms. For a PreToolUse gate that is worse than allowing — it wedges
+  the tool call instead of failing open, the opposite of what its own header
+  promises. `readStdinBounded` now lives in `src/lib` and both entry points use
+  it. Cancelling the reader is load-bearing and not obvious: racing a timer
+  resolves the race while the abandoned read keeps its own handle on the event
+  loop, so the process writes its output and still never exits.
+
+- **Guard ownership was decided in two places, and one of them was wrong.** A
+  second hand-rolled walker still matched on `command` alone — exactly what the
+  comment on the shared walker had predicted: "when a fourth settings shape
+  arrives, one copy gets updated and the other keeps reporting the install
+  clean". The fourth shape was already in the file. Every `validate` now routes
+  through one walker, and flat-versus-nested is a per-runtime fact rather than
+  either counting for everyone, which had let a flat-shaped group validate clean
+  for a runtime that executes only nested ones.
+
+- **A specialist skill claimed every review request in every language.**
+  `review-frontend` carries the trigger "ui review"; the router drops tokens
+  under three characters, reducing it to `["review"]`, and an all-words match
+  over a one-element list matches any query containing "review". The specialist
+  hijacked every review request, inverting `review-orchestrator`'s own contract.
+  A trigger's dropped words are now matched too, against the query's raw words,
+  which is where a short word like "ui", "db" or "pr" still exists.
+
+- **The Context Pack described rules it had no carrier for.**
+  `review-orchestrator` told reviewers to read `review_context.pr.body` and to
+  record producers in `review_context.cross_repo`; `pr` was a bare object with no
+  properties, and `cross_repo` was not declared at all, surviving on
+  `additionalProperties: true`. Neither rule could be violated, which is not the
+  same as neither being broken — a body never fetched and a body that was empty
+  were one value. Both are typed now, `cross_repo` can describe a producer that
+  has not merged, and findings carry `repo` in both schemas, since the registered
+  contract is `additionalProperties: false` and would have rejected a finding
+  that only the reviewer-side schema knew could carry one.
+
+### Changed
+
+- **The router has a baseline that records what it gets wrong.** Three earlier
+  attempts each introduced regressions the round before them had introduced,
+  because the corpus asserted only cases expected to work: every round could see
+  its improvements and none could see its losses. `routing-baseline.ts` is
+  written first — 25 entries, 10 marked `wrong` — and was green against the
+  untouched scorer before a line of the scorer changed, so a scorer change either
+  leaves that file alone or produces a diff someone has to justify. The result is
+  10 of 10 wrong entries moved with zero `ok` entries lost. The first
+  hand-written draft disagreed with reality in 10 of its 25 rows; it is generated
+  by measurement now.
+
+  The synonym table is a closed contract in the same spirit: each row states what
+  a phrase must produce *and* must not, and writing that down immediately exposed
+  three missing prefixed verb forms.
+
+- **Ceiling, stated rather than papered over.** The guard's block decision still
+  requires the first token to be in a fixed name list, so `sh -c`, `$(…)`, `eval`
+  and `xargs` pass unclassified. This is a better nudge, not a boundary. The next
+  step is not a larger parser but teaching the routing audit to distinguish
+  classified-and-allowed from could-not-classify, so `ctx_used` stops asserting a
+  compliance it never observed.
+
 ## [0.2.75] — 2026-09-01
 
 A security patch. A full review of 0.2.74 — six reviewers over the release diff,
