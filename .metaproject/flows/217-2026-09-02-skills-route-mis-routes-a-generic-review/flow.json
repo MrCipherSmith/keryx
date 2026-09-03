@@ -7,49 +7,15 @@
   "id": "217",
   "slug": "skills-route-mis-routes-a-generic-review",
   "title": "skills route mis-routes a generic review request to a specialist, and orient never reads the prompt",
-  "status": "blocked",
+  "status": "in-progress",
   "createdAt": "2026-09-02T15:37:01.384Z",
-  "updatedAt": "2026-09-02T19:56:06.061Z",
+  "updatedAt": "2026-09-03T05:48:10.892Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:9c0d2ef86c7681f38df4efa129258cf7bfdb001ce7d232efca8e5b03e84f31b2",
-  "acConfirmed": {
-    "AC1": {
-      "at": "2026-09-02T15:48:00.312Z"
-    },
-    "AC2": {
-      "at": "2026-09-02T15:48:00.402Z"
-    },
-    "AC3": {
-      "at": "2026-09-02T15:48:00.494Z"
-    },
-    "AC4": {
-      "at": "2026-09-02T15:48:00.589Z"
-    },
-    "AC5": {
-      "at": "2026-09-02T15:48:00.681Z"
-    },
-    "AC6": {
-      "at": "2026-09-02T15:48:00.773Z"
-    },
-    "AC7": {
-      "at": "2026-09-02T15:48:00.868Z"
-    },
-    "AC8": {
-      "at": "2026-09-02T15:48:00.961Z"
-    },
-    "AC9": {
-      "at": "2026-09-02T15:48:01.058Z"
-    },
-    "AC10": {
-      "at": "2026-09-02T15:48:01.150Z"
-    },
-    "AC11": {
-      "at": "2026-09-02T15:48:01.246Z"
-    }
-  },
+  "acChecksum": "sha256:e93476fdedf0369f6fcca676ef3790b34fbf4df409de0dd2d9559bf155acbf88",
+  "acConfirmed": {},
   "pr": {
     "url": null
   },
@@ -121,6 +87,62 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Self-review caught two: a greedy провер->4-token mapping inflating every review-* score, and a real 10-vs-10 tie on 'сделай коммит' that the first rule resolved alphabetically — which produced the sharper rule (degeneration is losing words, not having one)."
+    },
+    {
+      "id": "T5",
+      "title": "Build the negative + inflected-form corpus and prove it green against the CURRENT scorer",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Fix the degeneration defect with the corpus watching",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Mutation-verify every new guard and record it in the journal",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Self-review against round 3's findings before dispatching a review round",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -216,7 +238,36 @@
       "at": "2026-09-02T19:56:06.061Z",
       "event": "blocked",
       "detail": "Routing work removed from PR #431 in ff0ea1e6 and returned to design. Round 3 measured the change as net-negative: word-boundary padding removed 29 one-word triggers' inflected matching (run the deployment / reviewing the diff now / commits are failing all went to SILENCE); asymmetric trigger tokenisation took order-free matching from 11 triggers to 17 (15 lost, 9 gained); провер lost its review mapping while the sibling stem проверк kept it; routePrompt's project-skill inclusion is inert because it filters on a trigger reason that scoreProjectSkillRoute never emits. ROOT CAUSE, and the reason this is a redesign rather than a fix: the corpus had NO NEGATIVE PAIRS, so every round could see improvements and none could see losses. AC1-AC11 are confirmed against code that is no longer on the branch — treat them as void. Restart condition: build the corpus with negative pairs (queries expected to route to nothing, plus inflected forms of every one-word trigger) FIRST, then change the scorer. The diagnosis is sound and unchanged: review-frontend's 'ui review' trigger degenerates to ['review'] and hijacks every review request in every language."
+    },
+    {
+      "at": "2026-09-03T05:46:55.787Z",
+      "event": "unblocked",
+      "detail": "resumed as in-progress"
+    },
+    {
+      "at": "2026-09-03T05:47:59.944Z",
+      "event": "ac-updated",
+      "detail": "First attempt's AC1-AC11 were confirmed against code removed from PR #431 in ff0ea1e6 and are void. Replaced with corpus-first criteria: AC1-AC3 require the negative and inflected-form corpus to exist and pass BEFORE the scorer changes. Round 3 measured the first attempt as net-negative (29 one-word triggers lost inflected matching, order-free path lost by 15 triggers and gained by 9, проверк kept the review mapping провер lost, the project-skill inclusion inert) and traced every one of them to a single cause: the corpus had no negative pairs, so each round optimised what was observable and broke what was not."
+    },
+    {
+      "at": "2026-09-03T05:48:10.610Z",
+      "event": "task-added",
+      "detail": "T5: Build the negative + inflected-form corpus and prove it green against the CURRENT scorer"
+    },
+    {
+      "at": "2026-09-03T05:48:10.705Z",
+      "event": "task-added",
+      "detail": "T6: Fix the degeneration defect with the corpus watching"
+    },
+    {
+      "at": "2026-09-03T05:48:10.798Z",
+      "event": "task-added",
+      "detail": "T7: Mutation-verify every new guard and record it in the journal"
+    },
+    {
+      "at": "2026-09-03T05:48:10.892Z",
+      "event": "task-added",
+      "detail": "T8: Self-review against round 3's findings before dispatching a review round"
     }
-  ],
-  "previousStatus": "in-progress"
+  ]
 }
