@@ -63,6 +63,7 @@ import path from "node:path";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
+import { parseSkillFrontmatter } from "./skill-frontmatter";
 
 // ---------------------------------------------------------------------------
 // Findings
@@ -86,6 +87,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "xref:skill",
   "xref:path",
   "document:addressable",
+  "document:build-parity",
 ] as const;
 
 export type BundledSkillCheck = (typeof BUNDLED_SKILL_CHECKS)[number];
@@ -264,6 +266,57 @@ function frontmatterKeys(block: string): Map<string, string> {
     out.set(match[1] as string, (match[2] ?? "").trim());
   }
   return out;
+}
+
+/**
+ * Where the evaluator's own code lives, for the report header.
+ *
+ * Reported relative to the working directory whenever it sits inside it, which
+ * is both what the reader needs — "this is the checkout I am editing", versus an
+ * absolute path somewhere else that is the installed build — and what keeps an
+ * operator's home directory out of a report people paste into issues. This file
+ * flags `path:personal-home` in skill text; its own output should not add one.
+ * Falls back to a plain marker where `import.meta.url` is not a file URL.
+ */
+function evaluatorSource(): string {
+  try {
+    const here = new URL(".", import.meta.url);
+    if (here.protocol !== "file:") return "unknown";
+    const dir = decodeURIComponent(here.pathname);
+    const rel = path.relative(process.cwd(), dir);
+    return rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : dir;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Frontmatter fields a harness build may legitimately differ from its `SKILL.md`
+ * on.
+ *
+ * `compatible_harnesses` is per-build metadata by construction — the exporter
+ * writes it, and 14 shipped builds differ from their canonical file in that one
+ * line and nothing else. Everything outside this set diverging means the build
+ * has fallen behind.
+ */
+const BUILD_DIVERGENCE_ALLOWED_FIELDS: ReadonlySet<string> = new Set(["compatible_harnesses"]);
+
+/**
+ * A document reduced to what a build and its `SKILL.md` must share: the whole
+ * body, plus every frontmatter line except the fields a build may set itself.
+ */
+function buildComparableText(markdown: string): string {
+  const block = frontmatterBlock(markdown);
+  if (block === undefined) return markdown;
+  const body = markdown.slice(block.length + 3);
+  const kept = block
+    .split("\n")
+    .filter((line) => {
+      const match = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(line);
+      return match === null || !BUILD_DIVERGENCE_ALLOWED_FIELDS.has(match[1] as string);
+    })
+    .join("\n");
+  return `${kept}${body}`;
 }
 
 /**
@@ -557,13 +610,20 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
           );
         }
       }
-      const description = keys.get("description");
-      if (description !== undefined && description.replace(/^["']|["']$/g, "").length === 0) {
-        add(
-          "frontmatter:description",
-          1,
-          "frontmatter `description` is present but empty; it is the text a harness matches a request against.",
-        );
+      // Assert the description the RUNTIME will serve, not merely that the line
+      // exists. `keys` is a shallow read: for a block scalar it holds the bare
+      // indicator ("|"), which is non-empty and so passed this check while
+      // `skills_catalog` handed that indicator to an agent as the skill's whole
+      // description. Both sides now read through `parseSkillFrontmatter`.
+      if (keys.has("description")) {
+        const served = parseSkillFrontmatter(text).description ?? "";
+        if (served.length === 0) {
+          add(
+            "frontmatter:description",
+            1,
+            "frontmatter `description` is present but resolves to nothing a harness can match a request against; a block scalar (`description: |`) needs its text on the following indented lines.",
+          );
+        }
       }
       if (keys.has("metadata")) {
         const metadataVersion = /^\s{2,}version\s*:\s*(.+)$/m.exec(block);
@@ -670,6 +730,45 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     }
   }
 
+  // --- a harness build must still carry its SKILL.md's content --------------
+  //
+  // Every other check reads each document on its own, so a build that has simply
+  // fallen behind its `SKILL.md` is structurally perfect and reports nothing. That
+  // is not hypothetical: editing one `SKILL.md` left its four builds serving the
+  // previous description while this sweep printed `findings: 0`. The installed
+  // mirror already has a test asserting it matches the source; the builds ship to
+  // the same agents and had nothing.
+  for (const file of canonical) {
+    const dir = path.dirname(file);
+    let canonicalComparable: string;
+    try {
+      canonicalComparable = buildComparableText(readFileSync(file, "utf8"));
+    } catch {
+      continue;
+    }
+    for (const runtime of HARNESS_SKILL_RUNTIMES) {
+      const buildName = skillBuildFileName(runtime);
+      // `skillBuildFileName("claude")` IS `SKILL.md` — the canonical file itself.
+      if (buildName === path.basename(file)) continue;
+      const buildPath = path.join(dir, buildName);
+      if (!existsSync(buildPath)) continue;
+      let buildComparable: string;
+      try {
+        buildComparable = buildComparableText(readFileSync(buildPath, "utf8"));
+      } catch {
+        continue;
+      }
+      if (buildComparable === canonicalComparable) continue;
+      findings.push({
+        check: "document:build-parity",
+        skill: path.basename(dir),
+        file: path.relative(skillsRoot, buildPath).split(path.sep).join("/"),
+        line: null,
+        message: `\`${buildName}\` no longer carries the content of its \`SKILL.md\`, ignoring the fields a build may set for itself (${[...BUILD_DIVERGENCE_ALLOWED_FIELDS].join(", ")}). An agent on that runtime reads this file, not the canonical one — re-export the build.`,
+      });
+    }
+  }
+
   return { root, skills: canonical.length, documents: files.length, skillNames, findings };
 }
 
@@ -686,6 +785,15 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   lines.push("# bundled skill evaluation (layer 1 of 3: structural)");
   lines.push("");
   lines.push(`root: ${evaluation.root}`);
+  // Which CODE produced this report, not just which tree it read.
+  //
+  // `--root` points the scan at a working tree; it does not change the
+  // evaluator doing the scanning. Run from an installed `keryx`, this report
+  // describes a checkout using checks the installed build happens to carry —
+  // which reads as a clean bill of health for changes it never executed. That
+  // mistake was made against this very file. In a checkout, run
+  // `bun run keryx skills verify --bundled`.
+  lines.push(`evaluator: ${evaluatorSource()}`);
   lines.push(`skills_evaluated: ${evaluation.skills}`);
   // Both denominators, always. `skills_evaluated` alone read as full coverage
   // while 111 harness builds went unread; printing the document count is what

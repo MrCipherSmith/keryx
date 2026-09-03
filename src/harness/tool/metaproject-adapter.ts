@@ -26,6 +26,7 @@ import {
   type RepomapOptions,
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
+import { parseSkillFrontmatter } from "../../gdskills/skill-frontmatter";
 import { createMemoryService } from "../../memory/service";
 import { acceptedCurrentSearchFilters, clipAutomaticRecallText, MAX_AUTOMATIC_RECALL_RESULTS } from "../../memory/relevant";
 import { MEMORY_CLASS_VALUES, type MemoryClass, type MemoryService, type SearchFilters } from "../../memory/types";
@@ -171,58 +172,6 @@ function confineToSkills(cwd: string, candidate: string): string | null {
     return null; // escapes the gdskills root
   }
   return target;
-}
-
-/** Strip a single layer of matching `"`/`'` quotes, if present. */
-function stripSkillFieldQuotes(value: string): string {
-  if (value.length >= 2) {
-    const first = value[0];
-    const last = value[value.length - 1];
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-      return value.slice(1, -1);
-    }
-  }
-  return value;
-}
-
-/**
- * Forgiving frontmatter parse for a SKILL.md's `description`/`triggers` fields.
- * Never throws: a malformed or absent frontmatter block yields `{}`, degrading
- * that one catalog entry rather than failing the whole `skillsCatalog` call.
- */
-function parseSkillFrontmatter(content: string): { description?: string; triggers?: string[] } {
-  if (!content.startsWith("---")) {
-    return {};
-  }
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) {
-    return {};
-  }
-  const lines = content.slice(3, end).split("\n");
-  let description: string | undefined;
-  const triggers: string[] = [];
-  let inTriggers = false;
-  for (const line of lines) {
-    const descMatch = /^description:\s*(.*)$/.exec(line);
-    if (descMatch !== null && descMatch[1] !== undefined) {
-      description = stripSkillFieldQuotes(descMatch[1].trim());
-      inTriggers = false;
-      continue;
-    }
-    if (/^triggers:\s*$/.test(line)) {
-      inTriggers = true;
-      continue;
-    }
-    if (inTriggers) {
-      const itemMatch = /^\s+-\s*(.+)$/.exec(line);
-      if (itemMatch !== null && itemMatch[1] !== undefined) {
-        triggers.push(stripSkillFieldQuotes(itemMatch[1].trim()));
-        continue;
-      }
-      inTriggers = false;
-    }
-  }
-  return { ...(description !== undefined ? { description } : {}), ...(triggers.length > 0 ? { triggers } : {}) };
 }
 
 /**

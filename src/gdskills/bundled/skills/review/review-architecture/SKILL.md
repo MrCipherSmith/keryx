@@ -5,8 +5,7 @@ description: |
   Use when: reviewing code for architectural violations — layer violations, dependency direction
   mistakes, module boundary coupling, SOLID principle breaches, NestJS module/provider structure,
   React MVVM boundary violations, or MobX store layer misplacement.
-  Triggered by: "review architecture", "check architecture", "architectural review",
-  or dispatched by review-orchestrator with --architecture or --backend.
+  Dispatched by review-orchestrator with --architecture or --backend.
   NOT for: style/naming preferences, logic correctness bugs, or security vulnerabilities.
 triggers:
   - "review architecture"

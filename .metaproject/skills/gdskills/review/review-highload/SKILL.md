@@ -6,8 +6,7 @@ description: |
   race conditions, connection pool exhaustion, cache invalidation, missing indexes,
   unbounded queues, missing backpressure, retry storms, idempotency gaps,
   hot-path blocking I/O, and distributed systems anti-patterns.
-  Triggered by: "review highload", "review scalability", "highload review",
-  "review concurrency", "review --highload", or dispatched by review-orchestrator.
+  Dispatched by review-orchestrator.
   NOT for: frontend re-render performance (review-performance), general N+1 queries
   (review-performance), clean code style (review-clean-code), or NestJS module structure
   (review-architecture).

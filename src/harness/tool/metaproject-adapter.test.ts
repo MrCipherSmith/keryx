@@ -558,6 +558,85 @@ test("skillsCatalog degrades a skill with no/malformed frontmatter instead of fa
   });
 });
 
+test("skillsCatalog reads a description written as a YAML block scalar, not its indicator", async () => {
+  // Regression: the frontmatter parse read only the `description:` line, so a
+  // block scalar yielded the indicator itself. 15 bundled skills rendered in
+  // the catalog with the description "|", and the four that also lack
+  // `triggers:` were left with no routing signal at all.
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-skills-blockscalar-"));
+  try {
+    const gdskillsRoot = path.join(root, ".metaproject", "skills", "gdskills");
+
+    const pipeDir = path.join(gdskillsRoot, "review", "review-core-boundaries");
+    await mkdir(pipeDir, { recursive: true });
+    await writeFile(
+      path.join(pipeDir, "SKILL.md"),
+      [
+        "---",
+        "name: review-core-boundaries",
+        "description: |",
+        "  Use when reviewing shared core/infrastructure module changes for dependency",
+        "  direction, feature-boundary leakage, and blast-radius risks.",
+        "metadata:",
+        '  category: "review"',
+        "---",
+        "",
+        "# Review: Core Boundaries",
+        "",
+      ].join("\n"),
+    );
+
+    // A folded scalar with a chomping indicator, and triggers after it — the
+    // block must end at `triggers:`, not swallow it.
+    const foldedDir = path.join(gdskillsRoot, "review", "review-flow-graph");
+    await mkdir(foldedDir, { recursive: true });
+    await writeFile(
+      path.join(foldedDir, "SKILL.md"),
+      [
+        "---",
+        "name: review-flow-graph",
+        "description: >-",
+        "  Use when reviewing generic ReactFlow or graph-surface abstraction changes.",
+        "triggers:",
+        '  - "review flow graph"',
+        "---",
+        "",
+        "# Review: Flow Graph",
+        "",
+      ].join("\n"),
+    );
+
+    // A plain scalar, to prove the common path is untouched.
+    const plainDir = path.join(gdskillsRoot, "review", "review-logic");
+    await mkdir(plainDir, { recursive: true });
+    await writeFile(
+      path.join(plainDir, "SKILL.md"),
+      '---\nname: review-logic\ndescription: "Use when reviewing code for logic correctness."\n---\n\n# Review: Logic\n',
+    );
+
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.skillsCatalog?.({});
+    const byName = new Map(result?.skills.map((s) => [s.name, s]));
+
+    expect(byName.get("review-core-boundaries")?.description).toBe(
+      "Use when reviewing shared core/infrastructure module changes for dependency direction, feature-boundary leakage, and blast-radius risks.",
+    );
+    expect(byName.get("review-flow-graph")?.description).toBe(
+      "Use when reviewing generic ReactFlow or graph-surface abstraction changes.",
+    );
+    expect(byName.get("review-flow-graph")?.triggers).toEqual(["review flow graph"]);
+    expect(byName.get("review-logic")?.description).toBe("Use when reviewing code for logic correctness.");
+
+    // The defect this test exists for: no entry may carry a bare block indicator.
+    for (const skill of result?.skills ?? []) {
+      expect(skill.description).not.toBe("|");
+      expect(skill.description).not.toBe(">-");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("skillsCatalog falls back to catalog.md's one-line summary when a SKILL.md has no description", async () => {
   await withSkillsFixture(async (root) => {
     await mkdir(path.join(root, ".metaproject", "skills"), { recursive: true });

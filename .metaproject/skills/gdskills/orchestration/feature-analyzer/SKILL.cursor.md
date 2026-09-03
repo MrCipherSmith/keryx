@@ -1,6 +1,6 @@
 ---
 name: feature-analyzer
-description: "Use when analyzing feature branch changes across repos, planning implementation, or understanding backend→frontend contracts. NEVER start without explicit user confirmation of source, target, and branch."
+description: "Use when analyzing feature branch changes across repos, planning implementation, or understanding backend→frontend contracts. Requires the source repository, target repository, and branch as confirmed input; the skill's PRE-STEP validates them before any analysis."
 triggers:
   - "Analyze branch"
   - "Analyze changes"

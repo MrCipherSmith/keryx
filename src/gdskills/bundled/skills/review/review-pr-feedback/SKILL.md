@@ -4,9 +4,8 @@ model_tier: standard
 description: |
   Use when: a developer has received PR review comments and wants to understand them,
   check whether they are still true of the code, act on them, or extract patterns
-  from them. Covers "analyze PR comments", "review PR feedback", "what did reviewers
-  say", "parse PR #N", "explain PR comments", and — with `--fix` — validating every
-  comment, planning the fix, driving it to a merged state and answering each reviewer.
+  from them. With `--fix`, also validates every comment, plans the fix, drives it to
+  a merged state and answers each reviewer.
   NOT for: reviewing code directly — this skill reads human or bot PR feedback and
   makes it actionable. To review code, use the domain review skills.
 triggers:

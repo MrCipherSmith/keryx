@@ -3,9 +3,8 @@ name: review-style
 model_tier: light
 description: |
   Use when: reviewing code for style, naming conventions, readability, and DRY violations —
-  without touching logic, architecture, security, or performance. Covers "review style",
-  "style review", "check naming", "check readability", or dispatched by review-orchestrator
-  with --style flag.
+  without touching logic, architecture, security, or performance. Dispatched by
+  review-orchestrator with the --style flag.
   NOT for: logic bugs, architectural violations, security vulnerabilities, performance
   anti-patterns, or any finding that could cause a functional regression.
 triggers:

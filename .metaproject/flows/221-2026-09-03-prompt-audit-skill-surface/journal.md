@@ -1,0 +1,58 @@
+# Flow Journal
+
+- 2026-09-03T10:26:17.607Z - flow created
+- 2026-09-03T10:34:42.789Z - task-added: T5: F-1: разбор блочного скаляра description в parseSkillFrontmatter
+- 2026-09-03T10:34:42.894Z - task-added: T6: F-2: дописать triggers четырём ревьюерам без сигнала маршрутизации
+- 2026-09-03T10:34:42.974Z - task-added: T7: F-3: убрать прозаический Triggered by из description в 11 файлах
+- 2026-09-03T10:34:43.057Z - task-added: T8: F-5: вынести поведенческое правило из description feature-analyzer
+- 2026-09-03T10:34:43.142Z - task-added: T9: F-4: сжать Rules of Engagement в job-orchestrator до правил с причинами
+- 2026-09-03T10:34:43.237Z - task-added: T10: Перегенерировать harness-сборки и прогнать sweep bundled-eval
+- 2026-09-03T10:34:43.339Z - task-added: T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после
+- 2026-09-03T10:35:04.247Z - task-done: T1: Collect remaining context
+- 2026-09-03T10:35:04.330Z - task-done: T2: Implement per plan
+- 2026-09-03T10:35:09.367Z - frozen: 10 criteria; checksum recorded
+- 2026-09-03T10:35:14.877Z - started
+- 2026-09-03T10:39:38.214Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-03T10:39:38.296Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-03T10:39:38.365Z - task-added: T12: Регрессионный тест на блочный скаляр description (AC2)
+- 2026-09-03T10:39:38.439Z - task-added: T13: Self-review и подготовка draft PR
+- 2026-09-03T10:40:11.010Z - task-attempt: T5: started (attempt 1) — Правка parseSkillFrontmatter: поддержка YAML-блочного скаляра для description
+- 2026-09-03T10:41:26.704Z - task-done: T5: F-1: разбор блочного скаляра description в parseSkillFrontmatter
+- 2026-09-03T10:41:26.813Z - task-done: T12: Регрессионный тест на блочный скаляр description (AC2)
+- 2026-09-03T10:42:27.100Z - task-done: T6: F-2: дописать triggers четырём ревьюерам без сигнала маршрутизации
+- 2026-09-03T10:44:37.672Z - task-done: T7: F-3: убрать прозаический Triggered by из description в 11 файлах
+- 2026-09-03T10:44:37.789Z - task-done: T8: F-5: вынести поведенческое правило из description feature-analyzer
+- 2026-09-03T10:45:55.126Z - task-added: T14: F-6 (найдено при имплементации): bundled-eval не ловит расхождение harness-сборки с её SKILL.md
+- 2026-09-03T10:45:55.208Z - task-done: T10: Перегенерировать harness-сборки и прогнать sweep bundled-eval
+- 2026-09-03T11:19:56.659Z - ac-confirmed: AC1: parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке. Однострочный путь не тронут — покрыт кейсом review-logic в новом тесте.
+- 2026-09-03T11:19:56.761Z - ac-confirmed: AC2: Тест 'skillsCatalog reads a description written as a YAML block scalar' в metaproject-adapter.test.ts. Проверен через git stash: на старом парсере падает с Received: "|", на новом проходит.
+- 2026-09-03T11:19:56.856Z - ac-confirmed: AC4: Проверено обходом всех review-скиллов: у каждого есть ключ triggers. Четырём добавлено вручную.
+- 2026-09-03T11:19:56.950Z - ac-confirmed: AC5: keryx ctx rg 'Triggered by:|Covers "' по src/gdskills/bundled/skills — ноль совпадений. Область уточнена по ходу: 7 файлов, не 11.
+- 2026-09-03T11:19:57.037Z - ac-confirmed: AC6: description feature-analyzer переписано; правило сохранено в теле как PRE-STEP 'User explicitly confirmed' (строки 131-137).
+- 2026-09-03T11:19:57.125Z - ac-confirmed: AC9: keryx skills verify --bundled --root src/gdskills/bundled: 67 скиллов, 169 документов, 0 findings. Harness-сборки feature-analyzer пропагированы; зеркало .metaproject синхронизировано (15 файлов), тест review-skills-iron-laws зелёный.
+- 2026-09-03T11:33:51.630Z - task-added: T15: F-7: bundled-eval валидирует наличие ключа, а не разобранное значение — использовать парсер рантайма
+- 2026-09-03T11:33:51.721Z - task-added: T16: F-2b: дописать triggers 14 скиллам в planning/ и platform/
+- 2026-09-03T11:33:51.800Z - task-added: T17: Сделать frontmatter:triggers обязательной проверкой
+- 2026-09-03T11:46:09.034Z - task-done: T15: F-7: bundled-eval валидирует наличие ключа, а не разобранное значение — использовать парсер рантайма
+- 2026-09-03T11:47:19.980Z - task-done: T16: F-2b: дописать triggers 14 скиллам в planning/ и platform/
+- 2026-09-03T11:47:20.080Z - task-done: T17: Сделать frontmatter:triggers обязательной проверкой
+- 2026-09-03T11:51:51.241Z - task-done: T14: F-6 (найдено при имплементации): bundled-eval не ловит расхождение harness-сборки с её SKILL.md
+- 2026-09-03T11:51:51.333Z - ac-confirmed: AC9: ПОПРАВКА к первому подтверждению: та проверка гоняла ГЛОБАЛЬНО установленный keryx, а --root меняет только сканируемое дерево, не сканирующий код — то есть мои изменения ею не исполнялись. Перепроверено локальным кодом через bun -e с импортом evaluateBundledTree из src: 0 findings на дереве ветки.
+- 2026-09-03T11:51:51.413Z - task-added: T18: F-8: keryx skills verify в dev-чекауте валидирует установленным бинарником, а не рабочим деревом
+- 2026-09-03T12:26:52.463Z - task-attempt: T9: started (attempt 1) — Сверка 30 пунктов с телом документа: 26 изложены выше, пункты 9/15/16 — нет
+- 2026-09-03T12:29:05.813Z - task-done: T9: F-4: сжать Rules of Engagement в job-orchestrator до правил с причинами
+- 2026-09-03T12:29:05.905Z - ac-confirmed: AC7: Секция не содержит пунктов, дословно повторяющих изложенное выше: три правила уникальны (проверено обходом тела документа), четыре оставлены как повтор невосстановимых ошибок, каждое с причиной.
+- 2026-09-03T12:35:10.816Z - task-done: T18: F-8: keryx skills verify в dev-чекауте валидирует установленным бинарником, а не рабочим деревом
+- 2026-09-03T12:35:10.904Z - ac-confirmed: AC3: Через локальный код (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору блока. Вживую через MCP-инструмент skills_catalog проверить нельзя до переустановки бинарника — сервер работает от глобальной сборки.
+- 2026-09-03T12:35:32.036Z - ac-updated: AC10 в исходной формулировке ('тесты проходят') фактически недостижим: в main 49 преднайденных падений, не связанных с этой работой. Переформулирован в проверяемое 'не хуже базы' с двумя прогонами. Остальные девять критериев не тронуты.
+- 2026-09-03T12:36:27.191Z - ac-confirmed: AC1: parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке, поэтому идущий следом triggers: не проглатывается. Однострочный путь покрыт кейсом review-logic.
+- 2026-09-03T12:36:27.272Z - ac-confirmed: AC2: Тест 'skillsCatalog reads a description written as a YAML block scalar'. Проверен git stash: на старом парсере Received: "|", на новом проходит.
+- 2026-09-03T12:36:27.354Z - ac-confirmed: AC3: Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору. Через MCP вживую — только после переустановки бинарника.
+- 2026-09-03T12:36:27.431Z - ac-confirmed: AC4: Обход всех review-скиллов: у каждого есть triggers. Четырём добавлено.
+- 2026-09-03T12:36:27.518Z - ac-confirmed: AC5: rg 'Triggered by:|Covers "' по src/gdskills/bundled/skills — ноль. Область уточнена: 7 файлов, не 11; 4 матчились на маршрут диспетчеризации, а это контракт.
+- 2026-09-03T12:36:27.614Z - ac-confirmed: AC6: description feature-analyzer переписано; правило живёт в теле как PRE-STEP 'User explicitly confirmed'.
+- 2026-09-03T12:36:27.708Z - ac-confirmed: AC7: 30 -> 7 правил. Три уникальны (сверено обходом тела), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0.
+- 2026-09-03T12:36:27.805Z - ac-confirmed: AC9: Локальным кодом: 0 findings, 67 скиллов / 169 документов. Harness-сборки job-orchestrator и feature-analyzer пропагированы, зеркало .metaproject синхронизировано, review-skills-iron-laws зелёный. Новая проверка document:build-parity доказана на подложенном дрейфе.
+- 2026-09-03T12:36:27.906Z - ac-confirmed: AC10: typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста.
+- 2026-09-03T12:43:34.355Z - task-done: T13: Self-review и подготовка draft PR
+- 2026-09-03T12:43:34.443Z - task-done: T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после

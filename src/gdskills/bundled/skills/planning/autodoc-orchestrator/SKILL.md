@@ -3,13 +3,17 @@ name: autodoc-orchestrator
 description: >
   Autonomous reverse-engineering documentation pipeline — scans an existing codebase
   and produces comprehensive developer documentation without user involvement after initial setup.
-  Use when: "autodoc", "generate docs for my project", "document this codebase",
-  "reverse engineer documentation", "create project documentation from code",
-  "сгенерируй документацию проекта", "задокументируй кодовую базу",
-  "автодок", "autodoc".
-  Trigger on: user provides a repo path, asks to document existing code, wants
-  onboarding docs, API reference, or architecture overview generated automatically.
+  Use when the user provides a repo path, asks to document existing code, or wants
+  onboarding docs, an API reference, or an architecture overview generated automatically.
   NOT for: writing new PRDs or planning new features (use gproject-orchestrator).
+triggers:
+  - "autodoc"
+  - "автодок"
+  - "document this codebase"
+  - "generate docs for my project"
+  - "reverse engineer documentation"
+  - "задокументируй кодовую базу"
+  - "сгенерируй документацию проекта"
 metadata:
   version: 1.0.0
 ---
