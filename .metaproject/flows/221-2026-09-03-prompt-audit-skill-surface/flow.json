@@ -9,48 +9,52 @@
   "title": "Починить маршрутизацию скиллов и убрать устаревшие паттерны, найденные prompt-audit",
   "status": "in-progress",
   "createdAt": "2026-09-03T10:26:17.607Z",
-  "updatedAt": "2026-09-03T13:13:27.879Z",
+  "updatedAt": "2026-09-03T17:27:04.817Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:3b821840edf125e04010fd97259b45af15aca2f1b8a2e853ca38fe93318445ec",
+  "acChecksum": "sha256:8054034cb875cd82c25617076f6dfaf7f639fd15d2f97e9a349c56b2e5b0b646",
   "acConfirmed": {
     "AC1": {
-      "at": "2026-09-03T12:36:27.191Z",
+      "at": "2026-09-03T17:26:47.409Z",
       "note": "parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке, поэтому идущий следом triggers: не проглатывается. Однострочный путь покрыт кейсом review-logic."
     },
     "AC2": {
-      "at": "2026-09-03T12:36:27.272Z",
-      "note": "Тест 'skillsCatalog reads a description written as a YAML block scalar'. Проверен git stash: на старом парсере Received: \"|\", на новом проходит."
+      "at": "2026-09-03T17:26:47.578Z",
+      "note": "Тест skillsCatalog reads a description written as a YAML block scalar. Проверен git stash: на старом парсере Received=|, на новом проходит."
     },
     "AC3": {
-      "at": "2026-09-03T12:36:27.354Z",
-      "note": "Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору. Через MCP вживую — только после переустановки бинарника."
+      "at": "2026-09-03T17:26:47.743Z",
+      "note": "Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору блока."
     },
     "AC4": {
-      "at": "2026-09-03T12:36:27.431Z",
-      "note": "Обход всех review-скиллов: у каждого есть triggers. Четырём добавлено."
+      "at": "2026-09-03T17:26:47.918Z",
+      "note": "Обход всех review-скиллов: у каждого есть ключ triggers. Четырём добавлено."
     },
     "AC5": {
-      "at": "2026-09-03T12:36:27.518Z",
-      "note": "rg 'Triggered by:|Covers \"' по src/gdskills/bundled/skills — ноль. Область уточнена: 7 файлов, не 11; 4 матчились на маршрут диспетчеризации, а это контракт."
+      "at": "2026-09-03T17:26:48.074Z",
+      "note": "rg по src/gdskills/bundled/skills на перечисления триггеров в описаниях — ноль совпадений. Область уточнена: 7 файлов, не 11."
     },
     "AC6": {
-      "at": "2026-09-03T12:36:27.613Z",
-      "note": "description feature-analyzer переписано; правило живёт в теле как PRE-STEP 'User explicitly confirmed'."
+      "at": "2026-09-03T17:26:48.256Z",
+      "note": "description feature-analyzer переписано; правило живёт в теле как PRE-STEP User explicitly confirmed (строки 131-137)."
     },
     "AC7": {
-      "at": "2026-09-03T12:36:27.708Z",
-      "note": "30 -> 7 правил. Три уникальны (сверено обходом тела), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
+      "at": "2026-09-03T17:26:48.446Z",
+      "note": "30 -> 7 правил. Три уникальны (сверено обходом тела документа), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
+    },
+    "AC8": {
+      "at": "2026-09-03T17:26:48.593Z",
+      "note": "Проба до/после в двух изолированных сессиях, по одной на версию. Все три названных поведения держатся, ни одного NOT STATED. Критично: на sanity-check и general-purpose версия ДО опиралась только на удаляемые пункты списка — версия ПОСЛЕ находит оба выше по тексту, с механизмом и причиной. Якоря сверены грепом независимо от агентов. Контроль diff: изменены только строки 2056-2087. Полностью в probes/ac8-behavioral-probe.md."
     },
     "AC9": {
-      "at": "2026-09-03T12:36:27.805Z",
-      "note": "Локальным кодом: 0 findings, 67 скиллов / 169 документов. Harness-сборки job-orchestrator и feature-analyzer пропагированы, зеркало .metaproject синхронизировано, review-skills-iron-laws зелёный. Новая проверка document:build-parity доказана на подложенном дрейфе."
+      "at": "2026-09-03T17:26:48.789Z",
+      "note": "Локальным кодом: 0 findings, 67 скиллов / 169 документов. Сборки пропагированы, зеркало синхронизировано, review-skills-iron-laws зелёный. document:build-parity доказана на подложенном дрейфе."
     },
     "AC10": {
-      "at": "2026-09-03T12:36:27.906Z",
-      "note": "typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста."
+      "at": "2026-09-03T17:26:48.988Z",
+      "note": "typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 / 49 — то же множество падений, +3 новых проходящих теста."
     }
   },
   "pr": {
@@ -683,6 +687,71 @@
       "at": "2026-09-03T13:13:27.879Z",
       "event": "completion-failed",
       "detail": "acceptance-criteria: unconfirmed: AC8 | review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/221-2026-09-03-prompt-audit-skill-surface/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-03T17:24:47.477Z",
+      "event": "ac-updated",
+      "detail": "AC8: заменён метод проверки, требование сохранено дословно. Прогон job end-to-end не проверяет то, ради чего стоит в критерии: из трёх названных поведений happy-path задевает одно и не задевает классификацию отказов вовсе. Заменено на прицельную пробу до/после в изолированных сессиях (форма из prompt-audit Step 7). Доказательство: probes/ac8-behavioral-probe.md. Остальные девять критериев не тронуты."
+    },
+    {
+      "at": "2026-09-03T17:26:47.410Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке, поэтому идущий следом triggers: не проглатывается. Однострочный путь покрыт кейсом review-logic."
+    },
+    {
+      "at": "2026-09-03T17:26:47.578Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Тест skillsCatalog reads a description written as a YAML block scalar. Проверен git stash: на старом парсере Received=|, на новом проходит."
+    },
+    {
+      "at": "2026-09-03T17:26:47.743Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору блока."
+    },
+    {
+      "at": "2026-09-03T17:26:47.918Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Обход всех review-скиллов: у каждого есть ключ triggers. Четырём добавлено."
+    },
+    {
+      "at": "2026-09-03T17:26:48.074Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: rg по src/gdskills/bundled/skills на перечисления триггеров в описаниях — ноль совпадений. Область уточнена: 7 файлов, не 11."
+    },
+    {
+      "at": "2026-09-03T17:26:48.256Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: description feature-analyzer переписано; правило живёт в теле как PRE-STEP User explicitly confirmed (строки 131-137)."
+    },
+    {
+      "at": "2026-09-03T17:26:48.447Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 30 -> 7 правил. Три уникальны (сверено обходом тела документа), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
+    },
+    {
+      "at": "2026-09-03T17:26:48.593Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Проба до/после в двух изолированных сессиях, по одной на версию. Все три названных поведения держатся, ни одного NOT STATED. Критично: на sanity-check и general-purpose версия ДО опиралась только на удаляемые пункты списка — версия ПОСЛЕ находит оба выше по тексту, с механизмом и причиной. Якоря сверены грепом независимо от агентов. Контроль diff: изменены только строки 2056-2087. Полностью в probes/ac8-behavioral-probe.md."
+    },
+    {
+      "at": "2026-09-03T17:26:48.789Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Локальным кодом: 0 findings, 67 скиллов / 169 документов. Сборки пропагированы, зеркало синхронизировано, review-skills-iron-laws зелёный. document:build-parity доказана на подложенном дрейфе."
+    },
+    {
+      "at": "2026-09-03T17:26:48.988Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 / 49 — то же множество падений, +3 новых проходящих теста."
+    },
+    {
+      "at": "2026-09-03T17:27:01.536Z",
+      "event": "completing",
+      "detail": "merged commit: 4f8e95a"
+    },
+    {
+      "at": "2026-09-03T17:27:04.817Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/221-2026-09-03-prompt-audit-skill-surface/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
     }
   ]
 }
