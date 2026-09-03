@@ -126,5 +126,13 @@
     "toDir": "222-2026-09-03-docs-remediation-2-4",
     "at": "2026-09-03T19:03:21.041Z",
     "reason": "id 221 was taken by 221-2026-09-03-prompt-audit-skill-surface, created concurrently in another session and merged to main first; this flow is the untracked one and yields the id"
+  },
+  {
+    "from": "222",
+    "to": "223",
+    "fromDir": "222-2026-09-03-docs-remediation-2-4",
+    "toDir": "223-2026-09-03-docs-remediation-2-4",
+    "at": "2026-09-03T21:25:50.603Z",
+    "reason": "Second collision on id 222. The tie-break convention would have moved the OTHER flow (mine landed first, in #440), but moving it is the unsafe half of the choice: 222-2026-09-03-prompt-audit-narration-and-tool-contract is in-progress at 16/20 tasks with another session actively writing to it, and if its id moved then a bare 'flow 222' from that session would silently resolve to THIS flow and write into it. This flow is done and closed through the gate, so nothing writes here again. Renumbering the finished one leaves 222 resolving to the active flow, which is what its session expects."
   }
 ]
