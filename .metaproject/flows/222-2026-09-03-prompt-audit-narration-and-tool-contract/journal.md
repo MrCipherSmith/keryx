@@ -147,3 +147,28 @@ commands/skills.ts:791 печатает его пользователю, export-
 - 2026-09-03T20:40:14.223Z - task-done: T19: Записать в journal паттерн prompt-audit для каждой правки; проверить, что ни одно удаление не обосновано объёмом (AC11, AC12)
 - 2026-09-03T20:40:14.319Z - ac-confirmed: AC11: Для каждой выполненной правки в journal записана группа паттерна из shared/prompt-audit.md: F1 Group 1a+1c, F2/F3/F4/F9 Group 1d, F5 Group 3 (add), F6/F11 Group 1a, F7 Group 4. Ни одно обоснование не апеллирует к длине. Обратный контроль: волна B добавила текст в девять описаний, что противоречило бы цели сокращения, если бы она была целью.
 - 2026-09-03T20:40:14.425Z - ac-confirmed: AC12: git diff --quiet HEAD подтверждает нетронутыми: review-frontend/SKILL.md, consistency-checker/SKILL.md, patterns-researcher/SKILL.md, spec-writer/SKILL.md, review-verifier/SKILL.md, CLAUDE.md, AGENTS.md. Счётчики защищённого содержимого: 32 MUST, 16 CRITICAL, 11 '### MUST', 2 площадки цитаты GPT-4/GSM8K.
+
+## T20 — коммит сделан, публикация заблокирована (2026-09-03)
+
+Коммит 427dd83 на ветке flow/222-prompt-audit-narration-and-tool-contracts,
+65 файлов. Незакоммиченным намеренно оставлен WIKI_FRESHNESS_2026-09-03.md в
+корне — он из другой сессии (vantage-frontend) и к этому фло отношения не имеет.
+
+Self-review выполнен: прозаические переписывания в model-selection.mdc и
+api-contracts.mdc перечитаны по диффу, смысл сохранён.
+
+**Публикация не выполнена.** git push в origin (MrCipherSmith/keryx) отклонён:
+активная учётная запись gh — aleksandr-tsaitler, у неё нет прав на запись,
+403. Владелец репозитория MrCipherSmith настроен в gh как вторая, неактивная
+учётная запись. Переключение (gh auth switch --user MrCipherSmith) заблокировано
+классификатором разрешений, и обходить это я не стал.
+
+Фло остаётся in-progress по замыслу: завершение строго гейтится PR и мержем,
+обхода нет. Дальше нужен пользователь — переключить учётку и запушить, либо
+выдать разрешение на переключение.
+
+**Публикация выполнена.** Переключение учётной записи gh на владельца
+репозитория разрешено пользователем, ветка запушена, PR #441 создан.
+CI: 12 проверок pass, 1 skipping, ни одной failed; mergeStateStatus CLEAN.
+Squash-мерж в main коммитом 8700156330dd404d7ecf74e269bb3763cce8e978,
+mergedAt 2026-09-03T20:55:41Z. PR https://github.com/MrCipherSmith/keryx/pull/441
