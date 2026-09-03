@@ -534,10 +534,8 @@ second copy of a schema is how that happens.
 9. **DO** verify your work before reporting.
 10. **DO** make `STATUS: <TOKEN>` the first line of your final message, and put no
     JSON in the response body. The full JSON result is the file Phase 6.1 writes
-    and records. (This rule used to say the opposite — "return the JSON result
-    object as your final message" — which contradicted 6.2, `## Reporting
-    Results`, and `parseChildResult`, the production function that throws on any
-    first line that is not a canonical STATUS token.)
+    and records. `parseChildResult` throws on any first line that is not a
+    canonical STATUS token.
 
 ---
 

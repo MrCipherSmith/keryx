@@ -160,6 +160,4 @@ At each phase transition, report progress:
 | "This phase isn't needed for such a straightforward feature" | Every skipped phase is a deferred bug report |
 | "I understand the requirements, confirmation is just a formality" | The confirmation step exists to catch the gap between what you understood and what was meant |
 
-**IRON LAW 1: NEVER START IMPLEMENTING BEFORE THE SPEC IS WRITTEN AND CONFIRMED.**
-**IRON LAW 2: NEVER WRITE IMPLEMENTATION CODE BEFORE TESTS-CREATOR HAS GENERATED FAILING STUBS.**
-**IRON LAW 3: NEVER DELIVER WITHOUT A PASSING CODE-VERIFIER GATE AND A CHANGE REPORT.**
+**The three constraints that hold the pipeline together:** no implementation before the spec is written and confirmed; no implementation code before tests-creator has generated failing stubs; no delivery without a passing code-verifier gate and a Change Report.

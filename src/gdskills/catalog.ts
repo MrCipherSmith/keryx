@@ -342,12 +342,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Compare pragmatic, innovative, and critical perspectives.",
     "Recommend a path with risks and next steps.",
   ], ["brainstorm", "explore options", "architecture decision"]),
-  skill("interviewer", "planning", ["recommended", "full"], "Ask focused clarification questions before expensive or ambiguous work.", [
+  skill("interviewer", "planning", ["recommended", "full"], "Scope a vague or expensive request before any context is collected (job-orchestrator 0.1.5, custom intent); for implementation specifics after context exists, use interview.", [
     "Ask only questions that materially affect implementation.",
     "Prefer short multiple-choice options with a recommended default.",
     "Stop once the task is specific enough to execute.",
   ], ["ask questions", "clarify requirements", "interview"]),
-  skill("interview", "planning", ["recommended", "full"], "Run implementation-specific structured interview used by job-orchestrator before planning.", [
+  skill("interview", "planning", ["recommended", "full"], "Clarify implementation ambiguities after context is collected and the goal is known (job-orchestrator 0.3, implement intent); to scope the request itself, use interviewer.", [
     "Clarify implementation ambiguities from the issue or task.",
     "Trigger brainstorm for unresolved architecture decisions.",
     "Return answers in a form the orchestrator can use for planning.",

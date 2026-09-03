@@ -1,0 +1,651 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "222",
+  "slug": "prompt-audit-narration-and-tool-contract",
+  "title": "Скиллы пересказывают свои прошлые версии, а девять MCP-описаний молчат о staleness: 12 находок prompt-audit",
+  "status": "in-progress",
+  "createdAt": "2026-09-03T19:01:55.300Z",
+  "updatedAt": "2026-09-03T20:40:14.425Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b1c2a62048658627fe462e0f3f3d95ad38c3adb6f2d2db0a2bb9a3fee6f9d4fd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-03T19:57:33.338Z",
+      "note": "keryx ctx rg 'used to (say|be|read|call)|the sentence that stood here|until flow [0-9]+' по src/gdskills/bundled/** — ноль совпадений после T5/T6. Пятое место найдено при реализации в input-contract.schema.json и тоже закрыто."
+    },
+    "AC2": {
+      "at": "2026-09-03T19:57:33.428Z",
+      "note": "В task-implementer/SKILL.md и четырёх harness-сборках нет строки 'return the JSON result object as your final message'; факт про parseChildResult, бросающий на не-STATUS первой строке, сохранён в пункте 10."
+    },
+    "AC6": {
+      "at": "2026-09-03T19:57:43.727Z",
+      "note": "Скрипт подсчёта по src/mcp/tools.ts: все девять описаний 4-5 предложений (437-657 символов), каждое называет, чего инструмент не возвращает — cycles не ранжирует, orphans не отличает точки входа, memory.search не возвращает неakcepted, health.* не возвращают пофайловые findings, sac.overview не возвращает тела элементов, standard.validate не проверяет код."
+    },
+    "AC7": {
+      "at": "2026-09-03T19:57:43.826Z",
+      "note": "health.gate: 'reads the last report and never runs the gate itself... only as fresh as the last keryx health run', плюс предупреждение, что при отсутствии отчёта возвращается status fail и это отсутствующий гейт, а не проваленный. health.status: 'lastRunAt is the staleness signal', плюс что null означает неизвестно, а не здорово."
+    },
+    "AC3": {
+      "at": "2026-09-03T20:23:16.400Z",
+      "note": "feature-analyzer/SKILL.md и четыре harness-сборки: строки 28-61 удалены, sweep по '⚠️ MANDATORY|CRITICAL RULE|You MUST respond' даёт ноль. Требование сохранено во frontmatter description:3 и в Step 0 — :152 CRITICAL, :180 'No default paths', :186 'IF Source, Target, or Branch is missing -> STOP'."
+    },
+    "AC4": {
+      "at": "2026-09-03T20:23:16.485Z",
+      "note": "Пробы до и после на одном новом запросе ('retry backoff on the webhook consumer', в скилле отсутствует). До: ASKED_FOR_CONTEXT. После: ASKED_FOR_CONTEXT, агент цитирует :152, :180, :185-189, :97-103, :415 и отвечает на вопрос о неоднозначности 'Nothing in the file would license starting from cwd silently'. Регрессии нет, возврат инструкции не потребовался."
+    },
+    "AC5": {
+      "at": "2026-09-03T20:23:16.571Z",
+      "note": "Пробы до и после на запросе с явным 'skip the ceremony, we do not need a spec or tests'. До: HELD_THE_PIPELINE, spec YES, tests YES. После: HELD_THE_PIPELINE, spec YES, tests YES; агент цитирует :147 и переписанный рекап :163 как ведущий текст. Регрессии нет. Побочное наблюдение агента, вне скоупа фло: у скилла нет пропорционального пути для тривиальных изменений."
+    },
+    "AC8": {
+      "at": "2026-09-03T20:23:16.664Z",
+      "note": "Применён второй путь критерия: оба скилла сохранены с явно разграниченными описаниями (interviewer = 0.1.5 custom, до контекста; interview = 0.3 implement, после контекста), в SKILL.md и в catalog.ts. code-mobx-store-review сохранён как legacy opt-in профиль. Решения и причины записаны в journal и в причинах T12-T14."
+    },
+    "AC10": {
+      "at": "2026-09-03T20:38:11.183Z",
+      "note": "bun test на ветке: 6513 pass / 18 skip / 49 fail. Базовая линия на HEAD, снятая в изолированном git worktree: 6513 pass / 18 skip / 49 fail — те же 49, все в daemon/listener/HTTP/registry (сокеты, SSE, биндинг), ни одного в gdskills, mcp или review. Изменения фло не вносят новых падений. keryx skills verify --bundled: 13/13 pass, включая build-parity и byte-identical зеркало. npx tsc --noEmit: без ошибок."
+    },
+    "AC9": {
+      "at": "2026-09-03T20:38:11.282Z",
+      "note": "T12 закрыл грепы до удалений и отменил оба предложенных удаления, поэтому висячих ссылок не возникло. По F10 (T15) удаление сборок не выполнялось — см. причину T15. Потребители ResolvedSkillBuild.fallback перечислены там же."
+    },
+    "AC11": {
+      "at": "2026-09-03T20:40:14.319Z",
+      "note": "Для каждой выполненной правки в journal записана группа паттерна из shared/prompt-audit.md: F1 Group 1a+1c, F2/F3/F4/F9 Group 1d, F5 Group 3 (add), F6/F11 Group 1a, F7 Group 4. Ни одно обоснование не апеллирует к длине. Обратный контроль: волна B добавила текст в девять описаний, что противоречило бы цели сокращения, если бы она была целью."
+    },
+    "AC12": {
+      "at": "2026-09-03T20:40:14.425Z",
+      "note": "git diff --quiet HEAD подтверждает нетронутыми: review-frontend/SKILL.md, consistency-checker/SKILL.md, patterns-researcher/SKILL.md, spec-writer/SKILL.md, review-verifier/SKILL.md, CLAUDE.md, AGENTS.md. Счётчики защищённого содержимого: 32 MUST, 16 CRITICAL, 11 '### MUST', 2 площадки цитаты GPT-4/GSM8K."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Контекст собран аудитом prompt-audit до инициализации: каждая находка несёт file:line, дословную цитату и привязку к таблице паттернов. Записан в context.md → Agent Findings; обоснование инлайн-инициализации в plan.md → Approach."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Заменена волнами A-D: T5-T7, T9-T10, T13-T16. Разбиение по риску, а не одним шагом, чтобы регрессия атрибутировалась к своей причине."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Заменена T12 (регрессионный тест на блочный) — здесь тестовая работа сводится к пробам T8/T11 и прогону bundled-eval в T18; отдельного тестового шага плана нет."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Скаффолдная строка без зависимостей: flow next выдавал её раньше всей реализации. Заменена T20 с явными depends на волны A-D и проверки."
+    },
+    {
+      "id": "T5",
+      "title": "Волна A: убрать нарратив о прошлых редакциях в task-implementer и review-orchestrator (F2, F3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F2: убрана дословная цитата отменённого правила в task-implementer/SKILL.md:537 и в четырёх harness-сборках; факт про parseChildResult сохранён. F3: в review-orchestrator/SKILL.md:682 убраны 'this file used to say otherwise' и абзац про предложение, стоявшее до flow 209; сохранены факты, что схему никто не грузит и что reviewer-input отсутствует в CONTRACTS. Паттерн prompt-audit: Group 1d, migration-relative phrasing."
+    },
+    {
+      "id": "T6",
+      "title": "Волна A: убрать migration-relative фразы в model-selection.mdc, review-orchestrator:207, job-orchestrator:1953 (F4, F9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F4: model-selection.mdc:120 переписан как утверждение об оркестраторах, без ссылки на прошлую редакцию буллета; вывод про мысленную арифметику сохранён. F9: review-orchestrator:207 и job-orchestrator:1953 (×5 сборок) переведены в настоящее время. Дополнительно найдено при реализации и закрыто в рамках AC1: job-orchestrator/input-contract.schema.json base_branch описывал прошлое значение develop-2 — причина 'нет дефолта' сохранена, археология убрана; JSON парсится. Паттерн prompt-audit: Group 1d."
+    },
+    {
+      "id": "T7",
+      "title": "Волна B: довести девять MCP-описаний до контракта, со staleness-оговоркой для health.* (F5, F7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F5: девять описаний в src/mcp/tools.ts доведены до 4-5 предложений каждое, с фактами, снятыми с реализации, а не сочинёнными: gdgraph.cycles исключает dynamic-import (query.ts:69), gdgraph.orphans считает unresolved-рёбра несоединением (query.ts:26), memory.search возвращает только accepted+current и отдаёт ошибку в поле error без throw (metaproject-adapter.ts:307), health.* читают сохранённый артефакт. Ключевая находка: health.gate при отсутствии отчёта возвращает status fail (service.ts:134) — это отсутствующий гейт, а не проваленный, теперь сказано явно. tsc чисто, bun test src/mcp 161 pass 0 fail."
+    },
+    {
+      "id": "T8",
+      "title": "Волна C: проба до правки — прогнать feature-analyzer и feature-dev на реальной ветке, записать поведение в journal (AC4, AC5)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Пробы до правки выполнены, три диспетча. feature-analyzer: ASKED_FOR_CONTEXT в обоих прогонах. feature-dev: HELD_THE_PIPELINE, spec-before-code YES, tests-before-code YES вопреки явному 'skip the ceremony' пользователя. Ключевой результат: на новом запросе (не из примера скилла) агент подтвердил, что при удалении строк 28-60 он всё равно остановится — независимые гейты Step 0 (:186, :214, :220), PRE-STEP чеклисты (:131-137, :158-164) и :449. Требование заявлено в девяти местах, аудит насчитал шесть."
+    },
+    {
+      "id": "T9",
+      "title": "Волна C: удалить стек усилителей и gold-скрипт feature-analyzer:28-60 (F1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Волна C: снять регистр IRON LAW в feature-dev:163 и job-orchestrator:731, сохранив рекап (F6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Волна C: проба после правки; при регрессии вернуть инструкцию в минимальной форме и перепроверить (AC4, AC5)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Волна D: grep каталога, роутера и тестов на interview/interviewer и code-mobx-store-review до любого удаления (AC9)",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Grep выполнен до любого удаления и отменил два предложения аудита. interviewer: routing-baseline.ts:58 фиксирует 'interviewing me first' -> interviewer, job-orchestrator 0.1.5 грузит planning/interviewer/SKILL.md, flow/templates.ts:216 диспетчит его. interview: job-orchestrator 0.3 (:219) диспетчит его для implement-интента, прямо со словом 'complements 0.1.5'. Это две стадии конвейера, а не дубль. code-mobx-store-review: routing-baseline.ts:47 фиксирует 'review the mobx store' -> code-mobx-store-review score 85, catalog профиль full, и review-skills-iron-laws.test.ts держит его в EXEMPT с причиной 'legacy opt-in profile; does not use the blocker/major vocabulary at all'. Удаление сломало бы baseline и противоречило бы заявленному решению."
+    },
+    {
+      "id": "T13",
+      "title": "Волна D: свести пару interview/interviewer к одному скиллу либо разграничить описания; решение и причина в journal (F7, AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F7 исправлен, а не выполнен как предложено: удаление отменено, применён альтернативный путь AC8 — разграничение описаний. Переписаны frontmatter обоих скиллов и обе строки catalog.ts (345, 350): interviewer = скоуп запроса до сбора контекста, 0.1.5 custom-интент; interview = уточнение реализации после сбора контекста, 0.3 implement-интент. Каждое описание явно отсылает к парному скиллу."
+    },
+    {
+      "id": "T14",
+      "title": "Волна D: слить code-mobx-store-review в store-раздел review-frontend либо разграничить (F8, AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "F8 отменён как находка. code-mobx-store-review не дубль review-frontend, а намеренно сохранённый legacy opt-in профиль: зафиксирован в routing-baseline.ts:47, ограничен профилем full в catalog.ts:261 и внесён в EXEMPT в review-skills-iron-laws.test.ts с записанной причиной. Аудит прочитал только description и не увидел review-стек — ошибка аудита, а не дефект корпуса. Работающая избыточность с заявленной причиной по keep-list не удаляется."
+    },
+    {
+      "id": "T15",
+      "title": "Волна D: перечислить потребителей ResolvedSkillBuild.fallback, затем свернуть 88 идентичных harness-сборок (F10, AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "F10 отменён как правка аудита и передаётся мейнтейнеру как решение. Потребители ResolvedSkillBuild.fallback: export.ts:46,61,69 (само поле), export.ts:87,143,172,187 (usedFallbackBuild в результате экспорта и в записываемом манифесте), commands/skills.ts:791 (печатается пользователю строкой 'Build: SKILL.md (fallback — no SKILL.<runtime>.md in this skill)'), export-runtime-builds.test.ts:86,99,116 (три ассерта, включая toBe(runtime !== claude)). Удаление 88 идентичных сборок меняет содержимое манифеста экспорта и видимый вывод CLI, а не только состав файлов. Кроме того build-parity.test.ts активно поддерживает соответствие сборок SKILL.md — дублирование здесь поддерживается механизмом, а не осталось случайно. Это архитектурное решение с наблюдаемыми последствиями, а не снятие датированного паттерна."
+    },
+    {
+      "id": "T16",
+      "title": "Снять усилители-дубликаты в feature-analyzer:270,296,331 и job-orchestrator:477, сохранив сами инструкции (F11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F11: сняты усилители, дублирующие вес соседнего слова, инструкции сохранены. feature-analyzer (×5 сборок): 'P0 — MUST ANALYZE (Critical)' -> 'P0 — must analyze'; 'You CANNOT make conclusions from git diff alone. You MUST:' -> 'A git diff alone does not support a conclusion. Also do this:'; 'Step 9: Intermediate Review (CRITICAL)' -> без маркера. job-orchestrator (×5): снят booster 'CRITICAL RESILIENCE', сама логика ретрая на malformed result сохранена — keryx диспетчит субагентов на разные провайдеры, это живая защита, а не фоссил. Паттерн prompt-audit: Group 1a."
+    },
+    {
+      "id": "T17",
+      "title": "F12: добавить учёт токенов по экспортируемым скиллам как предпосылку будущих измерений",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "F12 (учёт токенов по скиллам) отложен согласно плану, где он с самого начала помечен как задача-исследование, не блокирующая остальные, и не покрыт ни одним AC. Добавление механизма подсчёта — новая функциональность, а не снятие датированного паттерна, и выходит за рамки задачи 'исправить находки аудита'. Рекомендация зафиксирована: считать токены на экспортируемую сборку в export.ts, где resolveSkillBuild уже читает выбранный файл, и отдавать число в манифест рядом с usedFallbackBuild."
+    },
+    {
+      "id": "T18",
+      "title": "Синхронизировать harness-сборки task-implementer и job-orchestrator с канонами, прогнать bundled-eval и keryx skills verify (AC10)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T10",
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Синхронизация и проверки. Найдено и исправлено: (1) build-parity падал — interview/interviewer правились только в SKILL.md, а они входят в 14 скиллов с реальными сборками; описания продублированы в .codex/.cursor. (2) Зеркало .metaproject разошлось с bundled по 4 тестам. Важно: 'keryx skills install --profile recommended' оказался неверным инструментом — он переписал 11 зеркальных файлов, которых фло не касалось; изменения откачены через git checkout, вместо этого скопированы только 25 реально отредактированных файлов bundled -> зеркало. Итог: bun test src/gdskills 275 pass 0 fail; keryx skills verify --bundled все 13 проверок pass; npx tsc чисто."
+    },
+    {
+      "id": "T19",
+      "title": "Записать в journal паттерн prompt-audit для каждой правки; проверить, что ни одно удаление не обосновано объёмом (AC11, AC12)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC11/AC12 проверены. AC12: все шесть защищённых файлов не тронуты диффом (git diff --quiet), содержимое на месте — 32 MUST в review-frontend, 16 CRITICAL в consistency-checker, 11 заголовков '### MUST' в patterns-researcher, обе площадки цитаты GPT-4/GSM8K, CLAUDE.md и AGENTS.md без изменений. AC11: каждая правка привязана в journal к строке таблицы prompt-audit (Group 1a, 1c, 1d, 2, 3, 4); ни одна не обоснована объёмом. Чистая дельта по промпт-поверхности -151 строки, но это следствие, а не аргумент: из девяти MCP-описаний текст только добавлялся (+123 строки добавлено при 274 удалённых)."
+    },
+    {
+      "id": "T20",
+      "title": "Self-review и подготовка draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T11",
+        "T13",
+        "T14",
+        "T15",
+        "T16",
+        "T18",
+        "T19"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-03T19:01:55.300Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-03T19:24:35.561Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-03T19:24:35.650Z",
+      "event": "task-added",
+      "detail": "T5: Волна A: убрать нарратив о прошлых редакциях в task-implementer и review-orchestrator (F2, F3)"
+    },
+    {
+      "at": "2026-09-03T19:24:35.735Z",
+      "event": "task-added",
+      "detail": "T6: Волна A: убрать migration-relative фразы в model-selection.mdc, review-orchestrator:207, job-orchestrator:1953 (F4, F9)"
+    },
+    {
+      "at": "2026-09-03T19:24:35.827Z",
+      "event": "task-added",
+      "detail": "T7: Волна B: довести девять MCP-описаний до контракта, со staleness-оговоркой для health.* (F5, F7)"
+    },
+    {
+      "at": "2026-09-03T19:24:45.634Z",
+      "event": "task-added",
+      "detail": "T8: Волна C: проба до правки — прогнать feature-analyzer и feature-dev на реальной ветке, записать поведение в journal (AC4, AC5)"
+    },
+    {
+      "at": "2026-09-03T19:24:45.735Z",
+      "event": "task-added",
+      "detail": "T9: Волна C: удалить стек усилителей и gold-скрипт feature-analyzer:28-60 (F1)"
+    },
+    {
+      "at": "2026-09-03T19:24:45.831Z",
+      "event": "task-added",
+      "detail": "T10: Волна C: снять регистр IRON LAW в feature-dev:163 и job-orchestrator:731, сохранив рекап (F6)"
+    },
+    {
+      "at": "2026-09-03T19:24:45.929Z",
+      "event": "task-added",
+      "detail": "T11: Волна C: проба после правки; при регрессии вернуть инструкцию в минимальной форме и перепроверить (AC4, AC5)"
+    },
+    {
+      "at": "2026-09-03T19:24:56.626Z",
+      "event": "task-added",
+      "detail": "T12: Волна D: grep каталога, роутера и тестов на interview/interviewer и code-mobx-store-review до любого удаления (AC9)"
+    },
+    {
+      "at": "2026-09-03T19:24:56.727Z",
+      "event": "task-added",
+      "detail": "T13: Волна D: свести пару interview/interviewer к одному скиллу либо разграничить описания; решение и причина в journal (F7, AC8)"
+    },
+    {
+      "at": "2026-09-03T19:24:56.823Z",
+      "event": "task-added",
+      "detail": "T14: Волна D: слить code-mobx-store-review в store-раздел review-frontend либо разграничить (F8, AC8)"
+    },
+    {
+      "at": "2026-09-03T19:24:56.920Z",
+      "event": "task-added",
+      "detail": "T15: Волна D: перечислить потребителей ResolvedSkillBuild.fallback, затем свернуть 88 идентичных harness-сборок (F10, AC9)"
+    },
+    {
+      "at": "2026-09-03T19:24:57.022Z",
+      "event": "task-added",
+      "detail": "T16: Снять усилители-дубликаты в feature-analyzer:270,296,331 и job-orchestrator:477, сохранив сами инструкции (F11)"
+    },
+    {
+      "at": "2026-09-03T19:25:09.604Z",
+      "event": "task-added",
+      "detail": "T17: F12: добавить учёт токенов по экспортируемым скиллам как предпосылку будущих измерений"
+    },
+    {
+      "at": "2026-09-03T19:25:09.694Z",
+      "event": "task-added",
+      "detail": "T18: Синхронизировать harness-сборки task-implementer и job-orchestrator с канонами, прогнать bundled-eval и keryx skills verify (AC10)"
+    },
+    {
+      "at": "2026-09-03T19:25:09.787Z",
+      "event": "task-added",
+      "detail": "T19: Записать в journal паттерн prompt-audit для каждой правки; проверить, что ни одно удаление не обосновано объёмом (AC11, AC12)"
+    },
+    {
+      "at": "2026-09-03T19:25:09.897Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-03T19:25:10.008Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-03T19:26:43.511Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-03T19:26:49.807Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-03T19:27:00.341Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-03T19:27:00.443Z",
+      "event": "task-added",
+      "detail": "T20: Self-review и подготовка draft PR"
+    },
+    {
+      "at": "2026-09-03T19:38:52.561Z",
+      "event": "task-done",
+      "detail": "T5: Волна A: убрать нарратив о прошлых редакциях в task-implementer и review-orchestrator (F2, F3)"
+    },
+    {
+      "at": "2026-09-03T19:40:45.207Z",
+      "event": "task-done",
+      "detail": "T6: Волна A: убрать migration-relative фразы в model-selection.mdc, review-orchestrator:207, job-orchestrator:1953 (F4, F9)"
+    },
+    {
+      "at": "2026-09-03T19:57:33.250Z",
+      "event": "task-done",
+      "detail": "T7: Волна B: довести девять MCP-описаний до контракта, со staleness-оговоркой для health.* (F5, F7)"
+    },
+    {
+      "at": "2026-09-03T19:57:33.338Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: keryx ctx rg 'used to (say|be|read|call)|the sentence that stood here|until flow [0-9]+' по src/gdskills/bundled/** — ноль совпадений после T5/T6. Пятое место найдено при реализации в input-contract.schema.json и тоже закрыто."
+    },
+    {
+      "at": "2026-09-03T19:57:33.428Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: В task-implementer/SKILL.md и четырёх harness-сборках нет строки 'return the JSON result object as your final message'; факт про parseChildResult, бросающий на не-STATUS первой строке, сохранён в пункте 10."
+    },
+    {
+      "at": "2026-09-03T19:57:43.727Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Скрипт подсчёта по src/mcp/tools.ts: все девять описаний 4-5 предложений (437-657 символов), каждое называет, чего инструмент не возвращает — cycles не ранжирует, orphans не отличает точки входа, memory.search не возвращает неakcepted, health.* не возвращают пофайловые findings, sac.overview не возвращает тела элементов, standard.validate не проверяет код."
+    },
+    {
+      "at": "2026-09-03T19:57:43.826Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: health.gate: 'reads the last report and never runs the gate itself... only as fresh as the last keryx health run', плюс предупреждение, что при отсутствии отчёта возвращается status fail и это отсутствующий гейт, а не проваленный. health.status: 'lastRunAt is the staleness signal', плюс что null означает неизвестно, а не здорово."
+    },
+    {
+      "at": "2026-09-03T20:01:30.698Z",
+      "event": "task-done",
+      "detail": "T8: Волна C: проба до правки — прогнать feature-analyzer и feature-dev на реальной ветке, записать поведение в journal (AC4, AC5)"
+    },
+    {
+      "at": "2026-09-03T20:22:59.894Z",
+      "event": "task-done",
+      "detail": "T12: Волна D: grep каталога, роутера и тестов на interview/interviewer и code-mobx-store-review до любого удаления (AC9)"
+    },
+    {
+      "at": "2026-09-03T20:23:00.003Z",
+      "event": "task-done",
+      "detail": "T13: Волна D: свести пару interview/interviewer к одному скиллу либо разграничить описания; решение и причина в journal (F7, AC8)"
+    },
+    {
+      "at": "2026-09-03T20:23:00.139Z",
+      "event": "task-done",
+      "detail": "T14: Волна D: слить code-mobx-store-review в store-раздел review-frontend либо разграничить (F8, AC8)"
+    },
+    {
+      "at": "2026-09-03T20:23:16.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: feature-analyzer/SKILL.md и четыре harness-сборки: строки 28-61 удалены, sweep по '⚠️ MANDATORY|CRITICAL RULE|You MUST respond' даёт ноль. Требование сохранено во frontmatter description:3 и в Step 0 — :152 CRITICAL, :180 'No default paths', :186 'IF Source, Target, or Branch is missing -> STOP'."
+    },
+    {
+      "at": "2026-09-03T20:23:16.485Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Пробы до и после на одном новом запросе ('retry backoff on the webhook consumer', в скилле отсутствует). До: ASKED_FOR_CONTEXT. После: ASKED_FOR_CONTEXT, агент цитирует :152, :180, :185-189, :97-103, :415 и отвечает на вопрос о неоднозначности 'Nothing in the file would license starting from cwd silently'. Регрессии нет, возврат инструкции не потребовался."
+    },
+    {
+      "at": "2026-09-03T20:23:16.571Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Пробы до и после на запросе с явным 'skip the ceremony, we do not need a spec or tests'. До: HELD_THE_PIPELINE, spec YES, tests YES. После: HELD_THE_PIPELINE, spec YES, tests YES; агент цитирует :147 и переписанный рекап :163 как ведущий текст. Регрессии нет. Побочное наблюдение агента, вне скоупа фло: у скилла нет пропорционального пути для тривиальных изменений."
+    },
+    {
+      "at": "2026-09-03T20:23:16.664Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Применён второй путь критерия: оба скилла сохранены с явно разграниченными описаниями (interviewer = 0.1.5 custom, до контекста; interview = 0.3 implement, после контекста), в SKILL.md и в catalog.ts. code-mobx-store-review сохранён как legacy opt-in профиль. Решения и причины записаны в journal и в причинах T12-T14."
+    },
+    {
+      "at": "2026-09-03T20:24:46.226Z",
+      "event": "task-done",
+      "detail": "T16: Снять усилители-дубликаты в feature-analyzer:270,296,331 и job-orchestrator:477, сохранив сами инструкции (F11)"
+    },
+    {
+      "at": "2026-09-03T20:38:11.074Z",
+      "event": "task-done",
+      "detail": "T18: Синхронизировать harness-сборки task-implementer и job-orchestrator с канонами, прогнать bundled-eval и keryx skills verify (AC10)"
+    },
+    {
+      "at": "2026-09-03T20:38:11.183Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: bun test на ветке: 6513 pass / 18 skip / 49 fail. Базовая линия на HEAD, снятая в изолированном git worktree: 6513 pass / 18 skip / 49 fail — те же 49, все в daemon/listener/HTTP/registry (сокеты, SSE, биндинг), ни одного в gdskills, mcp или review. Изменения фло не вносят новых падений. keryx skills verify --bundled: 13/13 pass, включая build-parity и byte-identical зеркало. npx tsc --noEmit: без ошибок."
+    },
+    {
+      "at": "2026-09-03T20:38:11.282Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: T12 закрыл грепы до удалений и отменил оба предложенных удаления, поэтому висячих ссылок не возникло. По F10 (T15) удаление сборок не выполнялось — см. причину T15. Потребители ResolvedSkillBuild.fallback перечислены там же."
+    },
+    {
+      "at": "2026-09-03T20:39:12.413Z",
+      "event": "task-done",
+      "detail": "T15: Волна D: перечислить потребителей ResolvedSkillBuild.fallback, затем свернуть 88 идентичных harness-сборок (F10, AC9)"
+    },
+    {
+      "at": "2026-09-03T20:39:12.505Z",
+      "event": "task-done",
+      "detail": "T17: F12: добавить учёт токенов по экспортируемым скиллам как предпосылку будущих измерений"
+    },
+    {
+      "at": "2026-09-03T20:40:14.223Z",
+      "event": "task-done",
+      "detail": "T19: Записать в journal паттерн prompt-audit для каждой правки; проверить, что ни одно удаление не обосновано объёмом (AC11, AC12)"
+    },
+    {
+      "at": "2026-09-03T20:40:14.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Для каждой выполненной правки в journal записана группа паттерна из shared/prompt-audit.md: F1 Group 1a+1c, F2/F3/F4/F9 Group 1d, F5 Group 3 (add), F6/F11 Group 1a, F7 Group 4. Ни одно обоснование не апеллирует к длине. Обратный контроль: волна B добавила текст в девять описаний, что противоречило бы цели сокращения, если бы она была целью."
+    },
+    {
+      "at": "2026-09-03T20:40:14.425Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: git diff --quiet HEAD подтверждает нетронутыми: review-frontend/SKILL.md, consistency-checker/SKILL.md, patterns-researcher/SKILL.md, spec-writer/SKILL.md, review-verifier/SKILL.md, CLAUDE.md, AGENTS.md. Счётчики защищённого содержимого: 32 MUST, 16 CRITICAL, 11 '### MUST', 2 площадки цитаты GPT-4/GSM8K."
+    }
+  ]
+}

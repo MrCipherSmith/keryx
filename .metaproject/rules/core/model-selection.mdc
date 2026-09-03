@@ -117,12 +117,11 @@ Two places, and they are not the same shape:
   resolved provider/model, `tier_resolution` and `model_discovery`. `--json`
   prints the block alone.
 
-That second bullet used to say the orchestrator "calls `decideDispatchModel`".
 An orchestrator is an agent following prose and **cannot call a TypeScript
-function**, so what actually happened was a model reading a table of signals and
-doing the arithmetic in its head — the exact mechanical work this programme moves
-out of skills and into the code that consumes them. `keryx review tier` is that
-code's entry point; `decideDispatchModel` is what it calls.
+function**: asked for a tier by hand it reads a table of signals and does the
+arithmetic in its head — the exact mechanical work this programme moves out of
+skills and into the code that consumes them. `keryx review tier` is that code's
+entry point; `decideDispatchModel` is what it calls.
 
 Nothing reads a recorded resolution back and checks it. These fields explain a
 finished run; they do not gate one.

@@ -204,9 +204,8 @@ keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 ```
 
-**An unrecognised option is refused, not ignored.** A misspelling used to be
-accepted with exit 0, so `review complete --disposition ...` printed
-`status: closed` and wrote nothing at all.
+**An unrecognised option is refused, not ignored** — a misspelled flag exits
+non-zero rather than printing `status: closed` and writing nothing at all.
 
 `--verifications` takes what `review-verifier` returned. `--scope` takes the
 whole `--json` output of `keryx review scope`, so the package records what the
@@ -679,16 +678,12 @@ A **fix round** is any review of work produced to answer earlier findings. Set
 `is_fix_round: true` on every reviewer input, and populate `prior_findings` with
 the earlier findings and the disposition the fix claimed for each.
 
-**Nothing refuses a dispatch that omits them, and this file used to say
-otherwise.** `reviewer-input.schema.json` states the rule and no production
-TypeScript loads that schema; reviewer dispatch is an action the host agent
-takes, not a `keryx` invocation, so there is no point at which a malformed
-dispatch could be rejected. `reviewer-input` is also absent from the `CONTRACTS`
-registry (`src/gdskills/contracts.ts`), so `keryx skills contracts validate`
-cannot be pointed at it either. The sentence that stood here until flow 209 told
-you the schema would reject a dispatch without `prior_findings`; it asserted an
-enforcement that has never existed, which is the same class of claim this whole
-package was written to delete.
+**Nothing refuses a dispatch that omits them.** `reviewer-input.schema.json`
+states the rule and no production TypeScript loads that schema; reviewer
+dispatch is an action the host agent takes, not a `keryx` invocation, so there
+is no point at which a malformed dispatch could be rejected. `reviewer-input` is
+also absent from the `CONTRACTS` registry (`src/gdskills/contracts.ts`), so
+`keryx skills contracts validate` cannot be pointed at it either.
 
 So this is a requirement on you, unenforced, and the only evidence it was met is
 the `prior_findings` array the reviewer actually receives. A reviewer that cannot

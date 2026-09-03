@@ -126,11 +126,13 @@ POST/PUT/PATCH endpoints that create or modify state MUST support idempotency vi
 
 ---
 
-## Iron Laws
+## The three that are not negotiable
 
-**IRON LAW 1: NO breaking change may be deployed without a major version bump and a deprecation period.**
-**IRON LAW 2: The OpenAPI spec is updated BEFORE the implementation — not after as documentation.**
-**IRON LAW 3: Error responses MUST use the standard ApiError envelope — no raw exceptions, no ad-hoc shapes.**
+Of the rules above, three carry consequences that outlive the change: no breaking
+change ships without a major version bump and a deprecation period; the OpenAPI
+spec is updated before the implementation, not after it as documentation; and
+error responses use the standard `ApiError` envelope — never a raw exception or
+an ad-hoc shape.
 
 ---
 
