@@ -339,8 +339,18 @@ Grouped by what you are trying to do, not by internal module layout.
 - **shared agent context** *(experimental)* — a local-first, off-by-default layer
   for a reproducible entry into a piece of work: a bounded FWK
   (Facts / Work / Know-how) overview, evidence-linked wrap-up proposals with owner
-  review, and a fail-closed runtime policy guard. See the
+  review, and a fail-closed runtime policy guard. Driven by `keryx workspace`
+  (`keryx modules enable sac` to turn it on); accepting a proposal into real
+  project knowledge always passes through a human `confirm-review`, which
+  refuses a security-flagged proposal until `--acknowledge-security` records
+  that someone read the findings. See the
   [Shared Agent Context guide](docs/docs/guides/shared-agent-context.md).
+- **slate** — the task-local scratchpad (Anchors, Course, model-written Seeds)
+  a working session keeps, plus an external hand onto it: the `slate.open` /
+  `slate.writeSeed` / `slate.close` MCP tools let any MCP-connected harness open
+  one scoped to its own session id and close it into the same review pipeline.
+  Local stdio only; there is no CLI verb. See the
+  [Slate guide](docs/docs/guides/slate.md).
 
 **Run agents inside boundaries**
 
@@ -378,9 +388,10 @@ module automatically.
 > npm belongs to [an unrelated project](https://github.com/actionhero/keryx).
 > Install `@mrciphersmith/keryx`; the executable it installs is called `keryx`.
 
-Alternative install paths — the managed installer (`~/.keryx` with a wrapper in
-`~/.local/bin`), project-local installs, and running from source — are in the
-[onboarding guide](docs/docs/onboarding.md).
+All four install paths — the npm package above, the standalone binary, the
+managed installer (`~/.keryx` with a wrapper in `~/.local/bin`) and a
+project-local install — are compared side by side, with what each one needs on
+the machine first, in the [onboarding guide](docs/docs/onboarding.md).
 
 Bare `keryx` prints the main commands; `keryx shell` starts the agent harness
 described [above](#the-agent-harness).

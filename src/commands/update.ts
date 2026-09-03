@@ -1145,22 +1145,9 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/sac",
             data: ".metaproject/data/sac",
             manifest: ".metaproject/modules/sac.md",
-            // See the matching comment in src/commands/init.ts buildManifest:
-            // no src/commands/sac.ts router exists (the CLI namespace is
-            // `workspace`), so this list is hand-written rather than sourced
-            // from moduleCommands().
-            commands: [
-              "create",
-              "list",
-              "show",
-              "add-resource",
-              "overview",
-              "read",
-              "propose",
-              "review",
-              "collaboration",
-              "policy-readiness",
-            ],
+            // Same source as init.ts's manifest builder — see the comment
+            // there, and MODULE_COMMANDS.sac in module-commands.ts.
+            commands: moduleCommands("sac"),
           }
         : { enabled: false },
     },

@@ -959,18 +959,29 @@ tools (`sac.overview`, `sac.read`, `sac.collaboration`, `sac.propose`,
 a file-backed workspace registry, a budgeted Facts / Work / Know-how read path,
 and a propose/review lifecycle that promotes a completed session into wiki,
 memory, or skills through guarded owner writers. It stores workspace-relative
-references, not copies. It is **not** one of the nine default `init` modules
-and has no `modules.sac` toggle — the CLI verb is always on `CLI_ROUTES`.
+references, not copies. It is **not** one of the nine default `init` modules —
+`init` writes it as `{ enabled: false }` — but it *is* toggleable:
+`keryx modules enable sac` writes a full `modules.sac` entry with
+`enabled: true`. The CLI verb is always on `CLI_ROUTES` regardless, so the
+toggle governs the manifest entry and the module's scaffolding, not whether the
+command exists.
 
-**CLI surface.** `workspaceCommand` (`src/commands/workspace.ts`):
+**CLI surface.** `workspaceCommand` (`src/commands/workspace.ts`) — seventeen
+subcommands, mirrored in `MODULE_COMMANDS.sac` and checked against this router
+by `module-commands.test.ts`:
 
 | Subcommand | Behavior |
 |---|---|
 | `workspace create --title <t> [--component <ref>]` | create `workspace.json` |
-| `workspace list` / `show <id>` | list or print the manifest |
+| `workspace list [--include-archived]` / `show <id>` | list or print the manifest |
 | `workspace add-resource <id> --kind --uri [--revision]` | attach a typed `./…` ref |
+| `workspace remove-resource <id> --uri` | detach a resource |
+| `workspace rename <id> --title` / `archive <id>` | retitle or archive a workspace |
 | `workspace overview` / `read` | FWK read path (`--max-items`, `--max-tokens`, `--explain`) |
-| `workspace propose` / `review` | session wrap-up → terminal review + owner write |
+| `workspace propose` / `list-proposals` | session wrap-up → proposal record; list them |
+| `workspace confirm-review <id> <proposal> [--acknowledge-security]` | mint the confirm token `review --decision accepted` requires; refuses a `needs-approval` proposal without the acknowledgement flag |
+| `workspace review` | terminal review + owner write |
+| `workspace catch-up` / `dismiss-candidate` | pull-based digest; dismiss an unbound wrap-up candidate |
 | `workspace collaboration <id>` | read-only collaboration overview |
 | `workspace policy-readiness` | diagnose the opt-in policy-experiment chain |
 
@@ -1005,6 +1016,55 @@ Identity is the local OS user. Accept is possible only through
 (Know-how + owner writes), session store (`propose --session`), security
 guarded writes, MCP/harness adapters. POSIX required for source-content
 reads. Operator guide: [Shared Agent Context](./guides/shared-agent-context.md).
+
+---
+
+## slate
+
+**Purpose.** The task-local scratchpad a working session keeps while it works:
+Anchors (where it is), a Course pointer (what it is doing), and model-written
+Seeds (what it found worth keeping). keryx's own shell, TUI and `harness run`
+have always had one, living in `slate.json` next to the session. `slate` as a
+surface is the *external hand* onto it — three MCP tools that let any
+MCP-connected harness (Claude Code, Codex, anything speaking MCP) open a slate
+of its own and close it into the same SAC propose/review pipeline a
+keryx-native session uses.
+
+**Surface.** MCP tools only — there is no CLI verb and no manifest toggle. The
+module name appears in the manifest's `expose.modules` list, which is what
+governs whether the tools are visible to a client.
+
+| Tool | Mutating | Behavior |
+|---|---|---|
+| `slate.open` | yes | Open or return an `externalSessionId`-scoped slate. A second `open` for the same id is a no-op returning the existing slate — never a second file. |
+| `slate.writeSeed` | yes | Append a Seed with a `kind` from the SAC proposal kinds. `origin` and `trust` are server-written and a caller-supplied value is ignored; `text` is redacted for secret-shaped substrings before it is persisted, capped at 4,000 characters, 200 Seeds per slate. |
+| `slate.close` | yes | Close the slate. With a bound workspace its Seeds become a real SAC proposal through the machine-evidence wrap-up path; with none bound, nothing is lost — the Anchors and Seeds land in a local artifact and surface at the next `keryx workspace catch-up` as `unbound-candidate`. |
+
+**Key files.**
+- `src/session/external-slate.ts` — storage, `externalSessionId` scoping, stale-lock close.
+- `src/mcp/tools.ts` — the three tools and the transport refusal.
+
+**How it works.** Local stdio / in-process only: a call over HTTP is refused
+with `{ code: "slate_transport_denied" }` before it touches storage, exactly as
+`sac.*` is. One `externalSessionId`'s file is never reachable through another —
+enforced against the filesystem, and structurally reinforced by the *absence* of
+any `slate.list` or `slate.read` spanning ids. There is no background timer: a
+slate left untouched past the ordinary stale-lock window is closed on the next
+`slate.*` call that touches the project.
+
+**Trust model, stated precisely.** `trust: "external-unverified"` is a label for
+the human reviewer, not a filter — nothing scores it or blocks on it. A careless
+or compromised hand can still write a misleading Seed; the `confirm-review` gate
+is what catches that, unchanged. Deduping is exact-text only.
+
+**Data & artifacts.** `.keryx/external-slates/<externalSessionId>.json` —
+project-scoped, gitignored, one file per id.
+
+**Dependencies / integrations.** SAC (the propose/review pipeline every closed,
+bound slate dispatches into), session store, security redaction on Seed text.
+Guides: [Slate for external agents](./guides/slate.md),
+[`/goal`](./guides/goal.md) for the keryx-native lifecycle that predates this
+surface.
 
 ---
 

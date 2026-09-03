@@ -125,8 +125,8 @@ Two invariants define the system and recur across every module:
 | **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
 | **eval** | `src/eval/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
 | **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry (including mutating `sac.propose` / `sac.review`, HTTP-denied), read-only `metaproject://` Resources, single redaction choke point. |
-| **sac** | `src/sac/` | `workspace` | Shared Agent Context: file-backed workspace registry, FWK overview/read, propose/review via guarded wiki/memory/skill writers, hash-chained access receipts. Not a default `init` module. See [the operator guide](./guides/shared-agent-context.md). |
-
+| **sac** | `src/sac/` | `workspace` | Shared Agent Context: file-backed workspace registry, FWK overview/read, propose/review via guarded wiki/memory/skill writers, hash-chained access receipts. Not a default `init` module; toggled with `keryx modules enable sac`. See [the operator guide](./guides/shared-agent-context.md). |
+| **slate** | `src/session/external-slate.ts`, `slate.*` in `src/mcp/tools.ts` | — (MCP tools only) | The task-local scratchpad — Anchors, Course, Seeds — opened by keryx's own shell/TUI/`harness run`, plus the external hand: `slate.open` / `slate.writeSeed` / `slate.close` let any MCP-connected harness open one scoped to its own `externalSessionId`, and close it into the same SAC propose/review pipeline. Local stdio only; HTTP is refused with `slate_transport_denied` before storage is touched, exactly as `sac.*` is. No CLI verb. See [the guide](./guides/slate.md) and [`/goal`](./guides/goal.md). |
 | **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation, and (opt-in, off by default) the external child runtime that hosts a vendor coding CLI. See "The agent harness" above, and [the feature-level tour](./harness.md). |
 | **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |
 | **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. Slash inspectors: `/status`, `/flows`. |
@@ -137,14 +137,15 @@ Two invariants define the system and recur across every module:
 | **contracts** | `src/contracts/` | — (substrate) | A dependency-free JSON Schema validator covering the whole used-keyword set, with cross-file and local `$ref`/`$defs`. |
 
 **Module, or command?** A *module* has a manifest entry, a manifest file and a
-`src/<feature>` behind a verb. Nine are enabled by `init`; `mcp` is a tenth,
-real but **off by default**. `review`, `serve`, `orient` and `sync` are commands
-— no manifest entry, not toggleable by `keryx modules`. Conflating the two is a
-recurring documentation error, including in earlier revisions of this file.
+`src/<feature>` behind a verb. Nine are enabled by `init`; `mcp` and `sac` are a
+tenth and eleventh, real and **off by default** — both toggleable with
+`keryx modules enable <name>`, which is what separates them from the commands
+below. `review`, `serve`, `orient` and `sync` are commands — no manifest entry,
+not toggleable by `keryx modules`. Conflating the two is a recurring
+documentation error, including in earlier revisions of this file.
 
-Two live caveats about `keryx modules` itself: `security` is enabled by default
-but absent from that command's module list, so it cannot be toggled there; and
-toggling anything currently drops an enabled `mcp` from the manifest.
+`slate` is a third shape again: a real feature with an `expose.modules` entry
+and no CLI verb of its own, reached only through its MCP tools.
 
 The product modules are joined by cross-cutting command surfaces (`agents`,
 `orient`, and `review`), three opt-in substrates (`capability`, `assets`, and
