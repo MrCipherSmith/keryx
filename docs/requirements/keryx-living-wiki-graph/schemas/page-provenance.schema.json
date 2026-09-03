@@ -42,9 +42,18 @@
       "enum": ["draft", "accepted"]
     },
     "verifiedAt": {
-      "description": "Git sha the page was last verified against. Null means never verified, which is NOT the same as fresh.",
+      "description": "Git sha of the MAIN repository the page was last verified against. Null when git is unavailable or the page predates provenance. Null in both verifiedAt and verifiedScope means never verified, which is NOT the same as fresh.",
       "type": ["string", "null"],
       "pattern": "^[0-9a-f]{40}$"
+    },
+    "verifiedScope": {
+      "description": "VCS-free fallback: sha256 snapshot over the resolved describe-set at the time of verification (specification.md section 4.1, path 2). Used when git is absent or verifiedAt names a revision missing from the current history. Strictly coarser than the git path — it answers changed/unchanged with no commit count and no change classification, so findings derived from it are capped at review-suggested.",
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "freshnessBasis": {
+      "description": "Which mechanism actually decided this page's freshness on the last evaluation. Recorded so a report can explain why a page was capped at review-suggested.",
+      "enum": ["git-log", "scope-hash", "undecidable"]
     },
     "describes": {
       "description": "Resolved describe-set for this page. Empty is legal (an architecture page may describe no single path) but makes the page undecidable for freshness.",
