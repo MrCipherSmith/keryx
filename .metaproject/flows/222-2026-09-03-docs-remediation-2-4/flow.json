@@ -7,9 +7,9 @@
   "id": "222",
   "slug": "docs-remediation-2-4",
   "title": "Documentation remediation phases 2-4: one honest install story, Slate and SAC visibility, stale-warning repair",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-03T19:00:16.505Z",
-  "updatedAt": "2026-09-03T19:33:10.180Z",
+  "updatedAt": "2026-09-03T21:21:02.486Z",
   "source": {
     "type": "description",
     "ref": null
@@ -73,7 +73,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/440"
   },
   "tasks": [
     {
@@ -81,7 +81,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -89,14 +89,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context was collected before the flow existed: docs/requirements/keryx-docs-remediation/ is the review that produced the nine findings, and it shipped in #439."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -104,14 +106,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Install story on the site, slate sections in modules/architecture/cli-reference, SAC corrections incl. --acknowledge-security, MODULE_COMMANDS.sac consolidated from two hand-written copies, stale caveats removed, index/nav aligned."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -119,14 +123,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Four guards added, each proved by mutation: CLI_ROUTES verb coverage, workspace subcommand coverage from the router, index-vs-nav parity, module-map table contiguity. The subcommand guard found dismiss-candidate, a seventeenth subcommand reading had missed; the table guard's first version passed on the split it targeted and was rewritten after the mutation exposed it."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -134,7 +140,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #440 opened and merged; all 13 CI checks green including mkdocs build --strict, the one check that could not run locally. Self-review is recorded in the PR body and the commit message, including the two corrections to my own work."
     }
   ],
   "history": [
@@ -235,6 +243,75 @@
       "at": "2026-09-03T19:33:10.180Z",
       "event": "ac-confirmed",
       "detail": "AC14: bun run check exit 0: typecheck clean, 6568 pass / 18 skip / 0 fail across 531 files (baseline 6559/0). test:guards 173 pass / 0 fail. check:doc-links 1154 links across 405 files / 0 broken. mkdocs build --strict cannot run locally (python3-venv absent) and is left to the Docs job on the PR — recorded rather than claimed."
+    },
+    {
+      "at": "2026-09-03T19:34:19.452Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/440 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-03T19:37:37.644Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-03T19:37:37.756Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-03T19:37:43.952Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-03T19:37:44.053Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-03T19:37:48.069Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-03T19:37:49.781Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/222-2026-09-03-docs-remediation-2-4/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#440 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__440.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 440 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-03T19:40:32.204Z",
+      "event": "completing",
+      "detail": "merged commit: be70279e"
+    },
+    {
+      "at": "2026-09-03T19:40:33.985Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 2026-09-03-ingest-main#F-001 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-002 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-003 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-004 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-005 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-006 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-007 (major, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-008 (minor, round 2026-09-03-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-03-ingest-main#F-009 (minor, round 2026-09-03-ingest-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-03-ingest-main#F-010 (minor, round 2026-09-03-ingest-main): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | verifier-stats (violated): round `2026-09-03-ingest-main` ran with `verification_mode: annotate` and received 0 claims while retaining 10 finding(s) at or above `minor` (2026-09-03-ingest-main#F-001, 2026-09-03-ingest-main#F-002, 2026-09-03-ingest-main#F-003, 2026-09-03-ingest-main#F-004, 2026-09-03-ingest-main#F-005, 2026-09-03-ingest-main#F-006, 2026-09-03-ingest-main#F-007, 2026-09-03-ingest-main#F-008, 2026-09-03-ingest-main#F-009, 2026-09-03-ingest-main#F-010). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-03T21:20:47.990Z",
+      "event": "completing",
+      "detail": "merged commit: be70279e"
+    },
+    {
+      "at": "2026-09-03T21:20:49.847Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 8 finding(s) at or above `minor` are not terminal: 2026-09-03-ingest-main-r02#F-001 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-002 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-003 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-004 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-005 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-006 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-007 (major, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-03-ingest-main-r02#F-008 (minor, round 2026-09-03-ingest-main-r02): marked fixed at 80f15bc0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-03T21:21:00.150Z",
+      "event": "completing",
+      "detail": "merged commit: be70279e"
+    },
+    {
+      "at": "2026-09-03T21:21:02.486Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "be70279e",
+    "ref": "origin/main",
+    "at": "2026-09-03T21:21:02.485Z"
+  }
 }

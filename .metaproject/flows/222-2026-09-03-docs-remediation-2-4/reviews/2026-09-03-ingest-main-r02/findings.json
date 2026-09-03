@@ -1,0 +1,222 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "self-review (mutation pass)",
+    "severity": "major",
+    "problem": "The `the architecture module map is one contiguous table` guard walked forward from the header row while lines still began with `|`, then asserted every line it had seen began with `|`. A split table looks exactly like that from the inside: the walk stops at the blank line, every line it saw was a row, and the assertion holds. The guard passed on the precise defect it was written to catch.",
+    "impact": "A guard that cannot fail on its own target is worse than no guard: it converts an unchecked property into one that reads as checked. The `expect(end - start).toBeGreaterThan(20)` magnitude check did not help — the surviving first fragment was still 21 rows.",
+    "suggested_fix": "Span the header row to the last row before the next `##` heading, so a blank line falls inside the measured region rather than ending it.",
+    "evidence": "Injected a blank line before the `slate` row: 4 pass / 0 fail. Rewritten and re-mutated: 3 pass / 1 fail. Restored: 4 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/cli-reference-coverage.test.ts",
+    "global_id": "2026-09-03-ingest-main-r02#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). Re-injected the mutation the original guard survived — a blank line before the `slate` row of the module-map table — and ran `bun test src/cli-reference-coverage.test.ts`: 3 pass / 1 fail, with `the architecture module map is one contiguous table` as the failure. Restored: 5 pass / 0 fail. The guard that previously returned 4 pass / 0 fail on this exact mutation now fails on it.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 80f15bc0 before the PR was opened; the corrected guard and the reason it was wrong are in the test's own comment. Re-mutation went 3 pass / 1 fail."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "self-review (derived-expectation test)",
+    "severity": "major",
+    "problem": "`keryx workspace` has seventeen subcommands, not the sixteen the review document claimed. `dismiss-candidate` is fully implemented, takes `--reason` and `--evidence`, resolves a session id to its newest slate archive, and appeared in no manifest, no help banner and no documentation page.",
+    "impact": "A shipped, working subcommand that no surface names is unreachable in practice. The miscount also propagated into the flow's own specification, which stated the wrong total and the wrong number of undocumented subcommands.",
+    "suggested_fix": "Derive the subcommand list from `workspace.ts`'s own dispatch instead of restating it; add the subcommand to MODULE_COMMANDS, the help banner and the CLI reference; correct the specification in place.",
+    "evidence": "The AC7 test failed on its first run with `dismiss-candidate` as the only difference between the declared list and the scraped one. Reading the router had produced sixteen.",
+    "confidence": "high",
+    "file": "src/commands/workspace.ts",
+    "global_id": "2026-09-03-ingest-main-r02#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `keryx ctx rg dismiss-candidate docs/docs src/commands/module-commands.ts --count-matches`: module-commands.ts 2, modules.md 1, cli-reference.md 2. Previously zero outside workspace.ts. `keryx workspace --help` line 17 carries the subcommand with its options.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Added to MODULE_COMMANDS.sac, the `keryx workspace --help` banner and cli-reference.md's `## workspace` section in 80f15bc0. The specification's 'four'/'sixteen' were corrected in place with the correction stated, not silently."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "self-review",
+    "severity": "major",
+    "problem": "`MODULE_COMMANDS` is documented as the single source of truth for manifest `commands[]`, but for `sac` the list existed as two hand-written arrays — one in init.ts, one in update.ts — each with a comment explaining why it was written out by hand. Both listed ten of seventeen subcommands.",
+    "impact": "Every manifest written by `init` or `modules enable sac` under-reported the surface to any agent routing off it. Because both copies had drifted identically, comparing them would not have revealed the drift.",
+    "suggested_fix": "Consolidate into MODULE_COMMANDS.sac and have both generators call moduleCommands('sac').",
+    "evidence": "Read both files; both arrays present and identical at ten entries against a seventeen-subcommand router.",
+    "confidence": "high",
+    "file": "src/commands/module-commands.ts",
+    "global_id": "2026-09-03-ingest-main-r02#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `git init` + `keryx init --yes` + `keryx modules enable sac` in a throwaway directory: `modules.sac.commands.length` is 17, against 10 before the fix. Both generators now read MODULE_COMMANDS.sac, so the value cannot differ between init and update.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Consolidated in 80f15bc0; module-commands.test.ts now derives the expected set from workspace.ts and goes 2 pass / 1 fail when an entry is removed."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "self-review",
+    "severity": "major",
+    "problem": "`--acknowledge-security` on `keryx workspace confirm-review` — the human acknowledgement gate for a `needs-approval` proposal, shipped in 0.2.75 — was absent from cli-reference.md, from guides/shared-agent-context.md, and from the command's own usage banner. It appeared only inside a thrown error string.",
+    "impact": "An operator hitting the refusal had no documented way forward: the control exists, the escape hatch exists, and nothing a user reads says so.",
+    "suggested_fix": "Document it in the CLI reference, the operator guide and the usage banner, including what the refusal looks like.",
+    "evidence": "`rg acknowledge-security` over docs/ returned zero before the fix; over src/ it returned only workspace.ts and its test.",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "global_id": "2026-09-03-ingest-main-r02#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `keryx workspace --help` line 11 reads `confirm-review <workspace-id> <proposal-id> [--acknowledge-security]`; it previously printed the same line without the flag. `rg acknowledge-security docs/docs` returns cli-reference.md 3, guides/shared-agent-context.md 2, modules.md 1, against zero before.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Documented in all three in 80f15bc0, with the 0.2.74/0.2.75 history recorded in the guide. The coverage test asserts the flag by name."
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "self-review",
+    "severity": "major",
+    "problem": "`npm install -g @mrciphersmith/keryx` — the path the release pipeline publishes — appeared zero times as an install instruction on the built documentation site. The file carrying it is excluded from the build; the only other occurrence is the upgrade command. `scripts/install-binary.sh` appeared nowhere on the site at all.",
+    "impact": "A reader landing on Onboarding is told to pipe a shell script that clones the repository, and never learns the package exists.",
+    "suggested_fix": "One install section covering all four paths with their prerequisites, cross-linked with the README.",
+    "evidence": "`rg 'npm install|@mrciphersmith|install-binary'` over docs/docs/ returned two hits: one in the build-excluded README, one upgrade command.",
+    "confidence": "high",
+    "file": "docs/docs/onboarding.md",
+    "global_id": "2026-09-03-ingest-main-r02#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `rg 'npm install -g @mrciphersmith/keryx' docs/docs/onboarding.md` matches at line 36 as an install instruction (line 43 is the upgrade form). onboarding.md is listed in the mkdocs nav, so it ships in the built site. The count of install instructions on published pages went from zero to one.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Four-path table plus per-path subsections added to onboarding.md in 80f15bc0; README links to it and it links back."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "self-review",
+    "severity": "major",
+    "problem": "`slate` is listed in the manifest's `expose.modules` in real projects, but the word appeared zero times across README.md, modules.md, architecture.md, cli-reference.md, limitations.md and harness.md — everywhere except its own guide, goal.md and one line of shared-agent-context.md.",
+    "impact": "The manifest exported a module the documentation never named, and the guide was reachable only by scrolling the nav to a title that assumes the reader already knows the word.",
+    "suggested_fix": "Module-reference section, module-map row, its three MCP tools in the CLI reference beside the sac.* five, README bullet, and an index entry.",
+    "evidence": "`rg -i slate --count-matches` over README.md and docs/docs/ returned three files, none of them a core page.",
+    "confidence": "high",
+    "file": "docs/docs/modules.md",
+    "global_id": "2026-09-03-ingest-main-r02#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `rg -i slate --count-matches` over the three core pages: architecture.md 9, modules.md 21, cli-reference.md 10 — all previously zero. README carries a slate bullet; index.md lists the guide.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "All five surfaces added in 80f15bc0."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "self-review",
+    "severity": "major",
+    "problem": "modules.md stated SAC \"is not one of the nine default `init` modules and has no `modules.sac` toggle\". The first clause is true; the second is false.",
+    "impact": "A reader is told a supported way to enable the module does not exist.",
+    "suggested_fix": "State both facts: init writes it disabled, and `keryx modules enable sac` turns it on.",
+    "evidence": "`keryx modules --help` lists sac among enableable names.",
+    "confidence": "high",
+    "file": "docs/docs/modules.md",
+    "global_id": "2026-09-03-ingest-main-r02#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `rg \"has no .modules.sac. toggle\" docs/docs/modules.md`: no matches. The behaviour the sentence denied was re-run in a throwaway repo — `keryx modules enable sac` yields `modules.sac.enabled: true` — and the replacement text states exactly that.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Sentence replaced in 80f15bc0 with text matching the observed behaviour."
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "self-review",
+    "severity": "minor",
+    "problem": "architecture.md carried two live caveats — that `security` is absent from `keryx modules`' list and cannot be toggled there, and that toggling any module drops an enabled `mcp`. Both describe behaviour that no longer exists.",
+    "impact": "A stale warning teaches a reader to route around a working command, which is worse than silence.",
+    "suggested_fix": "Delete both, after re-confirming on the shipping revision that they are in fact fixed.",
+    "evidence": "Tested on 0.2.76 in a throwaway repo: `modules disable security` set enabled false; enabling sac with mcp already on left modules.mcp.enabled true.",
+    "confidence": "high",
+    "file": "docs/docs/architecture.md",
+    "global_id": "2026-09-03-ingest-main-r02#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked against 80f15bc0 (the round head, merged to main as be70279e). `rg \"absent from that command's module list|drops an enabled\" docs/docs/architecture.md`: no matches. Both behaviours were exercised on 0.2.76 before deletion — `modules disable security` sets enabled false, and `mcp` stays true across a toggle — so the caveats were removed against observed behaviour rather than against the changelog.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Both removed in 80f15bc0 and replaced with the current module/command taxonomy."
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "self-review",
+    "severity": "minor",
+    "problem": "`scripts/install-binary.sh` downloads and installs a binary without verifying any checksum.",
+    "impact": "A curl-to-bash install path with no integrity check on what it installs.",
+    "suggested_fix": "Publish and verify a digest, once there is a decision about where the expected digest comes from.",
+    "evidence": "Read the script: it curls the asset, checks only that the file is non-empty, then chmods and installs it.",
+    "confidence": "high",
+    "file": "scripts/install-binary.sh",
+    "global_id": "2026-09-03-ingest-main-r02#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in #442 (47d1cab1) after the operator chose repair over deferral. The script now verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Exercised on merged main, five cases: real install from v0.2.76 verified and installed; same with jq forced out of the code path, identical digest; download pointed at a different asset than the digest looked up, refused with exit 1 and nothing installed; digest made unreadable, refused with exit 1; same with KERYX_ACKNOWLEDGE_NO_CHECKSUM=1, installs with a warning naming what was given up.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): install-binary.sh verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Verifier: refuted by execution over five cases on merged main."
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "self-review",
+    "severity": "minor",
+    "problem": "The top-level `keryx` usage banner omits `orient` entirely, and its trailing Commands description list omits `workspace`, `metrics`, `job` and `orient`.",
+    "impact": "`orient` is documented at length in the README and in cli-reference.md, but a user reading `keryx` with no arguments cannot discover it.",
+    "suggested_fix": "Add the missing verbs to the banner and the description list.",
+    "evidence": "Read the live banner output; `orient` does not appear in either section.",
+    "confidence": "high",
+    "file": "src/cli.ts",
+    "global_id": "2026-09-03-ingest-main-r02#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in #442 (47d1cab1). `bun ./src/cli.ts` with no arguments now prints `keryx orient [<runtime>]` and `keryx orient install-hook ...` at lines 38-39, plus an `orient` entry under Commands. A new guard requiring the banner to name every verb the CLI reference documents then found three more of the same shape — health, providers, sync — all added in the same change.",
+      "verifier": "post-fix-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): orient, metrics and workspace added to the usage banner, and a new guard requiring the banner to name every reference-documented verb found health, providers and sync as well. Verifier: refuted by execution on merged main."
+    }
+  }
+]
