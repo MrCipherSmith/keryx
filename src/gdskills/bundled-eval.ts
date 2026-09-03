@@ -269,6 +269,25 @@ function frontmatterKeys(block: string): Map<string, string> {
 }
 
 /**
+ * Where the evaluator's own code lives, for the report header.
+ *
+ * Absolute paths differ per machine, so this reports the directory the module
+ * was loaded from rather than a full path: enough to tell "the checkout I am
+ * editing" from "the globally installed build", which is the only distinction
+ * the reader needs. Falls back to a plain marker where `import.meta.url` is not
+ * a file URL.
+ */
+function evaluatorSource(): string {
+  try {
+    const here = new URL(".", import.meta.url);
+    if (here.protocol !== "file:") return "unknown";
+    return decodeURIComponent(here.pathname);
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Frontmatter fields a harness build may legitimately differ from its `SKILL.md`
  * on.
  *
@@ -763,6 +782,15 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   lines.push("# bundled skill evaluation (layer 1 of 3: structural)");
   lines.push("");
   lines.push(`root: ${evaluation.root}`);
+  // Which CODE produced this report, not just which tree it read.
+  //
+  // `--root` points the scan at a working tree; it does not change the
+  // evaluator doing the scanning. Run from an installed `keryx`, this report
+  // describes a checkout using checks the installed build happens to carry —
+  // which reads as a clean bill of health for changes it never executed. That
+  // mistake was made against this very file. In a checkout, run
+  // `bun run keryx skills verify --bundled`.
+  lines.push(`evaluator: ${evaluatorSource()}`);
   lines.push(`skills_evaluated: ${evaluation.skills}`);
   // Both denominators, always. `skills_evaluated` alone read as full coverage
   // while 111 harness builds went unread; printing the document count is what
