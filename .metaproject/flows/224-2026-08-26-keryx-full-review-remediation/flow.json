@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "202",
+  "id": "224",
   "slug": "keryx-full-review-remediation",
   "title": "Validate and remediate findings from the 2026-08-24 full project review",
   "status": "done",
   "createdAt": "2026-08-26T05:21:02.408Z",
-  "updatedAt": "2026-08-31T12:19:26.672Z",
+  "updatedAt": "2026-09-03T21:31:02.733Z",
   "source": {
     "type": "description",
     "ref": null
@@ -571,6 +571,11 @@
       "at": "2026-08-31T12:19:26.672Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-03T21:31:02.733Z",
+      "event": "renumbered",
+      "detail": "202 -> 224: Duplicate id 202, shared with 202-2026-08-29-review-precision-measure-the-baseline-fi. Both flows are done, so neither is at risk from the move and the tie-break decides: the review-precision flow landed first (40d134a7), this one arrived later (508f7b2d, #421), so this one yields. Old references to 202 stay valid through id-map.json."
     }
   ]
 }

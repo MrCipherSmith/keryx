@@ -134,5 +134,13 @@
     "toDir": "223-2026-09-03-docs-remediation-2-4",
     "at": "2026-09-03T21:25:50.603Z",
     "reason": "Second collision on id 222. The tie-break convention would have moved the OTHER flow (mine landed first, in #440), but moving it is the unsafe half of the choice: 222-2026-09-03-prompt-audit-narration-and-tool-contract is in-progress at 16/20 tasks with another session actively writing to it, and if its id moved then a bare 'flow 222' from that session would silently resolve to THIS flow and write into it. This flow is done and closed through the gate, so nothing writes here again. Renumbering the finished one leaves 222 resolving to the active flow, which is what its session expects."
+  },
+  {
+    "from": "202",
+    "to": "224",
+    "fromDir": "202-2026-08-26-keryx-full-review-remediation",
+    "toDir": "224-2026-08-26-keryx-full-review-remediation",
+    "at": "2026-09-03T21:31:02.733Z",
+    "reason": "Duplicate id 202, shared with 202-2026-08-29-review-precision-measure-the-baseline-fi. Both flows are done, so neither is at risk from the move and the tie-break decides: the review-precision flow landed first (40d134a7), this one arrived later (508f7b2d, #421), so this one yields. Old references to 202 stay valid through id-map.json."
   }
 ]
