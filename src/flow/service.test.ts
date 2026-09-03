@@ -120,7 +120,15 @@ test("freeze locks AC; tampering blocks transitions and is caught by check", asy
 
   // Tamper outside the CLI.
   await writeAc(dir, ["Login succeeds within 20s (loosened!)"]);
-  await expect(service.start({ cwd: ROOT, id: flow.id })).rejects.toThrow(/outside the task-manager/);
+  // The refusal states the OBSERVATION (checksum does not match) and names both
+  // routes out, because a mismatch has two causes and only one of them is an
+  // edit. It used to assert the cause — "modified outside the task-manager" —
+  // which is false for a stale seal over an unchanged file.
+  await expect(service.start({ cwd: ROOT, id: flow.id })).rejects.toThrow(
+    /do not match their recorded checksum/,
+  );
+  await expect(service.start({ cwd: ROOT, id: flow.id })).rejects.toThrow(/ac update/);
+  await expect(service.start({ cwd: ROOT, id: flow.id })).rejects.toThrow(/ac reseal/);
 
   const check = await service.check({ cwd: ROOT });
   expect(check.ok).toBe(false);

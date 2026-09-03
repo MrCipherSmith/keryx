@@ -33,16 +33,63 @@ test("flowStateSchema validates EVERY on-disk flow.json (v1 and v2), zero failur
   expect(failures).toEqual([]);
 });
 
-test("flowStateSchema covers both schemaVersion 1 and 2 among the on-disk flows", () => {
-  const versions = new Set<number>();
-  for (const file of onDiskFlowFiles()) {
-    const data = JSON.parse(readFileSync(file, "utf8")) as { schemaVersion?: number };
-    if (typeof data.schemaVersion === "number") {
-      versions.add(data.schemaVersion);
-    }
-  }
-  expect(versions.has(1)).toBe(true);
-  expect(versions.has(2)).toBe(true);
+// This used to assert that the on-disk corpus still CONTAINED a v1 record, which
+// made the property depend on repository data rather than on the schema. Flow
+// 002 was the last v1 flow, and re-sealing its stale checksum migrated it to v2
+// through the ordinary write path — so the assertion failed on a legitimate
+// write that changed nothing about what the schema accepts.
+//
+// The property worth guarding is that the schema accepts BOTH shapes. Fixtures
+// state it directly, and cannot be invalidated by the next flow anyone touches.
+// The corpus is still covered, by the test above: every on-disk flow validates.
+test("flowStateSchema accepts both the v1 and the v2 record shape", () => {
+  const schema = flowStateSchema();
+
+  // v1, as flow 002 was written in 2026-07: no per-task `dependsOn`/`attempts`,
+  // no `merged`, tasks carrying only id/title/kind/status.
+  const v1 = {
+    schemaVersion: 1,
+    id: "002",
+    slug: "gdgraph-java-python-import-resolution",
+    title: "gdgraph Java/Python import resolution",
+    status: "done",
+    createdAt: "2026-07-10T00:00:00.000Z",
+    updatedAt: "2026-07-10T17:01:50.445Z",
+    source: { type: "description", ref: null },
+    acChecksum: "sha256:" + "a".repeat(64),
+    acConfirmed: { AC1: { at: "2026-07-10T17:01:50.321Z", note: "evidence" } },
+    pr: {},
+    tasks: [{ id: "T1", title: "Collect remaining context", kind: "context", status: "done" }],
+    history: [],
+  };
+
+  const v2 = {
+    schemaVersion: 2,
+    id: "223",
+    slug: "docs-remediation",
+    title: "Documentation remediation",
+    status: "done",
+    createdAt: "2026-09-03T19:00:16.505Z",
+    updatedAt: "2026-09-03T21:00:00.000Z",
+    source: { type: "description", ref: null },
+    acChecksum: "sha256:" + "b".repeat(64),
+    acConfirmed: {},
+    pr: {},
+    tasks: [
+      {
+        id: "T1",
+        title: "Collect remaining context",
+        kind: "context",
+        status: "done",
+        dependsOn: [],
+        attempts: { count: 0, log: [] },
+      },
+    ],
+    history: [],
+  };
+
+  expect(validateAgainstSchemaObject(schema, v1).valid).toBe(true);
+  expect(validateAgainstSchemaObject(schema, v2).valid).toBe(true);
 });
 
 test("flowStateSchema rejects a flow.json missing a required field", () => {

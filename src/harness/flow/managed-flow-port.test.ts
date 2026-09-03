@@ -269,6 +269,7 @@ function makeSpyService(
     next: notImplemented("next", calls),
     acConfirm: notImplemented("acConfirm", calls),
     acUpdate: notImplemented("acUpdate", calls),
+    acReseal: notImplemented("acReseal", calls),
     implemented: notImplemented("implemented", calls),
     complete: notImplemented("complete", calls),
     block: notImplemented("block", calls),

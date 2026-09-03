@@ -508,7 +508,20 @@ async function runAc(args: string[]): Promise<void> {
     console.log(`  ${style.green(symbols.ok)} Acceptance criteria re-frozen; ${style.dim("prior confirmations cleared")}.`);
     return;
   }
-  throw new Error("Usage: keryx flow ac <confirm|update> ...");
+  if (sub === "reseal") {
+    const id = requireId(args.slice(1));
+    const reason = optionValue(args, "--reason");
+    if (!reason) {
+      throw new Error('Usage: keryx flow ac reseal <id> --reason "<why the checksum is stale>"');
+    }
+    const flow = await getService().acReseal({ cwd: process.cwd(), id, reason });
+    console.log(
+      `  ${style.green(symbols.ok)} Checksum re-sealed over the unchanged file; ` +
+        `${style.dim(`${Object.keys(flow.acConfirmed).length} confirmation(s) kept`)}.`,
+    );
+    return;
+  }
+  throw new Error("Usage: keryx flow ac <confirm|update|reseal> ...");
 }
 
 async function runImplemented(args: string[]): Promise<void> {
@@ -646,7 +659,8 @@ function printHelp(): void {
     'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
-    'keryx flow ac update <id> --reason "<why>"',
+    'keryx flow ac update <id> --reason "<why>"   (criteria changed; VOIDS prior confirmations)',
+    'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
     "keryx flow implemented <id> --pr <url>",
     "keryx flow complete <id> [--comment] [--merged <commit>]",
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',

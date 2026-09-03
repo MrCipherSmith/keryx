@@ -268,9 +268,19 @@ export async function assertAcIntact(
   }
   const current = await acChecksum(cwd, dir);
   if (current !== flow.acChecksum) {
+    // The observation is the mismatch; the cause is not observed here. An edit
+    // outside `keryx flow ac` produces it, and so does a checksum sealed
+    // against content that no longer exists (flow 002: file byte-identical to
+    // its first commit, `acChecksum` unchanged since that commit, values still
+    // differ). Both routes out are named, because only one of them is right
+    // for each cause and `ac update` voids every prior confirmation.
     throw new Error(
-      "Acceptance criteria were modified outside the task-manager module. " +
-        "Use `keryx flow ac update <id> --reason \"...\"` to change them.",
+      "Acceptance criteria do not match their recorded checksum. " +
+        "If they were changed on purpose, use `keryx flow ac update <id> --reason \"...\"` " +
+        "— that re-seals them and VOIDS every prior confirmation, because criteria that " +
+        "changed have not been confirmed. If the file is unchanged and the checksum is " +
+        "stale, use `keryx flow ac reseal <id> --reason \"...\"`, which keeps the " +
+        "confirmations and refuses unless git shows the file unchanged since HEAD.",
     );
   }
 }

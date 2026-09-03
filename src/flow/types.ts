@@ -348,6 +348,7 @@ export interface FlowService {
     note?: string | undefined;
   }): Promise<FlowState>;
   acUpdate(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+  acReseal(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
   complete(input: {
     cwd: string;
