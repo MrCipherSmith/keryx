@@ -9,7 +9,7 @@
   "title": "Починить маршрутизацию скиллов и убрать устаревшие паттерны, найденные prompt-audit",
   "status": "in-progress",
   "createdAt": "2026-09-03T10:26:17.607Z",
-  "updatedAt": "2026-09-03T12:43:34.443Z",
+  "updatedAt": "2026-09-03T13:13:27.879Z",
   "source": {
     "type": "description",
     "ref": null
@@ -54,7 +54,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/438"
   },
   "tasks": [
     {
@@ -252,8 +252,8 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {},
-      "disposition": "blocked",
-      "dispositionReason": "Часть про skills_catalog выполнена локальным кодом (см. AC3). Прогон job end-to-end до/после для AC8 не сделан: требует реального job и решения пользователя о затратах. AC8 остаётся неподтверждённым сознательно."
+      "disposition": "skipped",
+      "dispositionReason": "Половина про skills_catalog проверена локальным кодом (AC3). Прогон job end-to-end для AC8 не выполнен и не будет в этой итерации: PR #438 смержен с явной пометкой в теле, что критерий не подтверждён. Задача закрыта как пропущенная, а не как выполненная, чтобы это не выглядело сделанным."
     },
     {
       "id": "T12",
@@ -654,6 +654,35 @@
       "at": "2026-09-03T12:43:34.443Z",
       "event": "task-done",
       "detail": "T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после"
+    },
+    {
+      "at": "2026-09-03T12:50:17.736Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/438 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-03T13:11:31.599Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-03T13:11:36.562Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC8 | tasks: blocked: T11 (a blocked task did not get done; resolve it, or close it as skipped with a reason) | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/221-2026-09-03-prompt-audit-skill-surface/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#438 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__438.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 438 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-03T13:12:46.622Z",
+      "event": "task-done",
+      "detail": "T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после"
+    },
+    {
+      "at": "2026-09-03T13:13:25.155Z",
+      "event": "completing",
+      "detail": "merged commit: 4f8e95a"
+    },
+    {
+      "at": "2026-09-03T13:13:27.879Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC8 | review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/221-2026-09-03-prompt-audit-skill-surface/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
     }
   ]
 }
