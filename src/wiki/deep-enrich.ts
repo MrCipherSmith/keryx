@@ -142,6 +142,36 @@ export interface EnrichPageDeepInput {
   metaprojectPort?: MetaprojectPort;
   idSeq?: () => string;
   clock?: () => string;
+  /** Cancellation inherited from the shell/wiki operation. */
+  signal?: AbortSignal;
+}
+
+function composeAbortSignals(external: AbortSignal | undefined, timeout: AbortSignal): {
+  signal: AbortSignal;
+  dispose: () => void;
+} {
+  if (external === undefined) {
+    return { signal: timeout, dispose: () => {} };
+  }
+  const controller = new AbortController();
+  const abortFrom = (signal: AbortSignal): void => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal.reason);
+    }
+  };
+  const onExternalAbort = (): void => abortFrom(external);
+  const onTimeoutAbort = (): void => abortFrom(timeout);
+  external.addEventListener("abort", onExternalAbort, { once: true });
+  timeout.addEventListener("abort", onTimeoutAbort, { once: true });
+  if (external.aborted) abortFrom(external);
+  if (timeout.aborted) abortFrom(timeout);
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      external.removeEventListener("abort", onExternalAbort);
+      timeout.removeEventListener("abort", onTimeoutAbort);
+    },
+  };
 }
 
 function errorMessage(cause: unknown): string {
@@ -211,6 +241,10 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const toolCalls: DeepEnrichToolCall[] = [];
+
+  if (input.signal?.aborted) {
+    return { fallback: true, reason: "deep enrich cancelled", toolCalls };
+  }
 
   try {
     const env = envWithSavedApiKeys(input.env ?? process.env);
@@ -304,6 +338,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     let assistant = "";
     let pending: DeepEnrichToolCall | undefined;
     const abort = new AbortController();
+    const composed = composeAbortSignals(input.signal, abort.signal);
     const io: AgentIO = {
       write: (s) => {
         assistant += s;
@@ -348,7 +383,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
 
     const history: NormalizedMessage[] = [];
     const userLine = buildDeepUserPrompt(input.page, input.original, input.extraInstruction);
-    const turn = runAgentTurn(io, deps, history, userLine, { signal: abort.signal });
+    const turn = runAgentTurn(io, deps, history, userLine, { signal: composed.signal });
 
     const deadlineMs = spawned.reservation.maxRuntimeMs;
     if (deadlineMs <= 0) {
@@ -362,9 +397,10 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
       // outcome a real timeout produces, instead of waiting on it at all.
       abort.abort();
       void turn.catch(() => {
-        // Abandoned turn — `runAgentTurn` has no cancellation seam; its
-        // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
+        // A provider may ignore cancellation; contain any late rejection from
+        // the abandoned turn after the caller has already fallen back.
       });
+      composed.dispose();
       releaseBudget();
       return {
         fallback: true,
@@ -377,18 +413,32 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     const expired = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), deadlineMs);
     });
-    let outcome: "done" | "timeout";
+    let onExternalAbort: (() => void) | undefined;
+    const cancelled = new Promise<"cancelled">((resolve) => {
+      if (input.signal === undefined) return;
+      onExternalAbort = () => resolve("cancelled");
+      if (input.signal.aborted) {
+        onExternalAbort();
+      } else {
+        input.signal.addEventListener("abort", onExternalAbort, { once: true });
+      }
+    });
+    let outcome: "done" | "timeout" | "cancelled";
     try {
-      outcome = await Promise.race([turn.then(() => "done" as const), expired]);
+      outcome = await Promise.race([turn.then(() => "done" as const), expired, cancelled]);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      if (onExternalAbort !== undefined) {
+        input.signal?.removeEventListener("abort", onExternalAbort);
+      }
     }
     if (outcome === "timeout") {
       abort.abort();
       void turn.catch(() => {
-        // Abandoned turn — `runAgentTurn` has no cancellation seam; its
-        // eventual settlement is ignored (mirrors spawn-subagent-tool.ts).
+        // A provider may ignore cancellation; contain any late rejection from
+        // the abandoned turn after the caller has already fallen back.
       });
+      composed.dispose();
       releaseBudget();
       const partial = assistant.trim();
       return {
@@ -399,7 +449,17 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
       };
     }
 
+    composed.dispose();
     releaseBudget();
+    // One authoritative external-cancellation return covers both an abort that
+    // won the race and one observed immediately after the model settled.
+    if (outcome === "cancelled" || input.signal?.aborted) {
+      return {
+        fallback: true,
+        reason: "deep enrich cancelled",
+        toolCalls,
+      };
+    }
     const raw =
       assistant.trim().length > 0
         ? assistant.trim()

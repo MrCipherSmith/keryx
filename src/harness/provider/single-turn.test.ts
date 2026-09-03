@@ -35,6 +35,32 @@ function stubProvider(reply: string): ProviderPort {
 }
 
 describe("runModelTurn", () => {
+  test("flow 219: forwards the caller's abort signal unchanged to ProviderPort.stream", async () => {
+    const controller = new AbortController();
+    let seenSignal: AbortSignal | undefined;
+    const factory: ProviderFactory = () => ({
+      describe: stubProvider("signal").describe,
+      async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        seenSignal = opts.signal;
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "signal" };
+        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+      },
+    });
+
+    await runModelTurn({
+      system: "s",
+      user: "u",
+      provider: "anthropic",
+      env: {},
+      preferSavedShell: false,
+      providerFactory: factory,
+      requestId: "flow-219-signal",
+      signal: controller.signal,
+    } as Parameters<typeof runModelTurn>[0]);
+
+    expect(seenSignal).toBe(controller.signal);
+  });
+
   test("assembles text from an injected provider", async () => {
     const factory: ProviderFactory = () => stubProvider("hello world");
     const result = await runModelTurn({

@@ -1,0 +1,96 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The RLM-enabled pipeline never observes input.signal while it prepares pages, so after cancellation it can still emit progress, read pages, compute hashes and classifications, build units, and invoke the worker pool.",
+    "impact": "Frozen AC2 and AC6 are unimplemented for rlm.enabled=true: cancelling a large enrichment permits new page work and callbacks after abort.",
+    "suggested_fix": "Make runRlmPipeline abort-aware at entry and after each preparation await, return deterministic cancelled entries without dispatching units, and add an RLM-enabled cancellation regression.",
+    "evidence": "The only preparation loop at src/wiki/enrich.ts:1584-1667 calls onPage and awaits read/hash work without a signal check; downstream checks begin only in runDeepSingle and runLightBatch.",
+    "confidence": "high",
+    "file": "src/wiki/enrich.ts",
+    "line": 1584,
+    "dedupe_key": "flow219-rlm-cancellation-preparation",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/wiki/enrich.ts:1584",
+        "src/wiki/enrich.ts:1587",
+        "src/wiki/enrich.ts:1589",
+        "src/wiki/enrich.ts:1696",
+        "src/wiki/enrich.ts:1709"
+      ],
+      "enumeration_method": "Enumerated the sole RLM preparation loop and sole unit-pool dispatch, then located every signal check with keryx ctx rg."
+    },
+    "global_id": "2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun /tmp/flow219_verify_f001.mts -> {\"providerCalls\":0,\"events\":[\"start:architecture/project-map.md\",\"done:architecture/project-map.md\",\"start:components/src-alpha.md\",\"done:components/src-alpha.md\",\"start:components/src-beta.md\",\"done:components/src-beta.md\"],\"actions\":[\"skipped\",\"skipped\",\"skipped\"],\"cancelled\":0}. The script aborts on the first RLM preparation start callback; preparation still emits done/start/done callbacks for all pages after abort and classifies them, reproducing the reported post-cancel preparation behavior.",
+      "verifier": "flow219_review_verify_r1"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "05cd3485"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "Renderer disposal cancels the foreground signal but does not fence foreground AgentIO callbacks, so a late provider abort/error event can still update destroyed TUI state.",
+    "impact": "Frozen AC4 is unimplemented for late callbacks: teardown can be followed by transcript, fleet, or persistence callbacks.",
+    "suggested_fix": "Pass a token- and disposal-guarded AgentIO facade to each foreground run and add a behavioral late-callback regression.",
+    "evidence": "onDestroy disposes at src/tui/tui-shell.ts:2032, while runAgentTurn's abort path calls system/onSystem and the wrappers around src/tui/tui-shell.ts:2570-2624 have no owner/token guard.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 2611,
+    "dedupe_key": "flow219-post-disposal-agentio-callback",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:2570",
+        "src/tui/tui-shell.ts:2595",
+        "src/tui/tui-shell.ts:2611",
+        "src/tui/tui-shell.ts:2624"
+      ],
+      "enumeration_method": "Enumerated the foreground TUI AgentIO write, history, reasoning/tool, system, approval, usage and auto-approval entry hooks installed for runAgentTurn."
+    },
+    "global_id": "2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-002",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'io\\.(onSystem|onAssistantText|onToolCall|onToolResult|write)|foregroundOperation\\.(dispose|settle)' src/tui/tui-shell.ts -> exit 0; matches include foregroundOperation.dispose at line 2032 and foreground AgentIO hook sites at lines 2570-2624 (the site list exists). No headless OpenTUI renderer/teardown harness was available, so this establishes the named sites but cannot execute a late provider callback to settle whether it reaches destroyed state.",
+      "verifier": "flow219_review_verify_r1"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "05cd3485"
+    }
+  },
+  {
+    "id": "F-T001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The new TUI lifecycle tests read source text and do not execute queue/lifecycle behavior.",
+    "impact": "Force exact-once/FIFO and suppression of late callbacks after destroy are not behaviorally pinned.",
+    "suggested_fix": "Add a deterministic behavioral lifecycle seam with direct tests for Force-after-settlement and post-dispose callback suppression.",
+    "evidence": "The flow-219 TUI describe block uses readFileSync and source string/regex assertions; the mutation pass killed all six existing guards but could not execute these TUI interactions.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.test.ts",
+    "line": 2921,
+    "dedupe_key": "flow219-tui-lifecycle-source-audit-not-behavioral",
+    "blocking_merge": false,
+    "global_id": "2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-T001",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'flow 219|source\\.indexOf|const source = readFileSync|foreground operation lifecycle' src/tui/tui-shell.test.ts -> exit 0; matches show the flow-219 block at lines 2921-2942 reads tui-shell.ts with readFileSync and uses source.indexOf/slices. bun test src/tui/tui-shell.test.ts -t 'foreground operation lifecycle wiring' -> 3 pass, 0 fail, but those passing tests are the source-text assertions themselves; no executable owner/Force/destroy behavior is available to prove or refute the coverage gap.",
+      "verifier": "flow219_review_verify_r1"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "05cd3485"
+    }
+  }
+]

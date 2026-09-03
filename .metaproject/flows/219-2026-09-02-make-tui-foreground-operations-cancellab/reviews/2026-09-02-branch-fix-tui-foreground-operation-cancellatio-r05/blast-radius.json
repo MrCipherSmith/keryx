@@ -1,0 +1,632 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 80,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    "src/harness/provider/single-turn.test.ts",
+    "src/harness/provider/single-turn.ts",
+    "src/tui/foreground-operation.test.ts",
+    "src/tui/foreground-operation.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts",
+    "src/wiki/deep-enrich.test.ts",
+    "src/wiki/deep-enrich.ts",
+    "src/wiki/enrich-rlm.test.ts",
+    "src/wiki/enrich.test.ts",
+    "src/wiki/enrich.ts"
+  ],
+  "files": [
+    {
+      "file": "src/tui/games/types.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/machine-wrap-up.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/narrate.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/lib/narrate.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/decision-dedup.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/decision-dedup.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/workspace-resolve.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/workspace-resolve.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/model-turn.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/model-turn.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/wiki.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/wiki/enrich.ts",
+      "path": [
+        "src/commands/wiki.ts",
+        "src/wiki/enrich.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/game-modal.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/modal.test-helpers.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/wiki/enrich.ts",
+      "path": [
+        "src/security/web-taint-durable-boundary.test.ts",
+        "src/wiki/enrich.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/game-modal.test.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/games/modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/modal.test.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 2,
+      "fanIn": 22,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/agent.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/proposal-lifecycle.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/proposal-lifecycle.ts",
+        "src/sac/decision-dedup.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/tic-tac-toe/core.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/tic-tac-toe/core.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/harness.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/catch-up.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/catch-up.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/memory.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/memory.ts",
+        "src/lib/narrate.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/external-slate.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/session/external-slate.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/review-inspector.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/flow.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/flow.ts",
+        "src/lib/narrate.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/modal.ts",
+        "src/tui/games/model-turn.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/registry.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/registry.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/health.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/health.ts",
+        "src/lib/narrate.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/lifecycle-flag.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/lifecycle-flag.ts",
+        "src/sac/decision-dedup.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/agent-panel.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/agent-panel.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/tic-tac-toe/game.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/tic-tac-toe/game.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/test.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/commands/test.ts",
+        "src/lib/narrate.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/service.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/service.ts",
+        "src/sac/workspace-resolve.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/index.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/index.ts",
+        "src/tui/games/model-turn.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/tic-tac-toe/input.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/tic-tac-toe/input.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/tic-tac-toe/render.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/tic-tac-toe/render.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/select.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-launch.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-slash-registry.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/sac/decision-dedup.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/decision-dedup.test.ts",
+        "src/sac/decision-dedup.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/sac/machine-wrap-up.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/machine-wrap-up.test.ts",
+        "src/sac/machine-wrap-up.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/sac/workspace-resolve.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/sac/workspace-resolve.test.ts",
+        "src/sac/workspace-resolve.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/chat-shell.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/games/tic-tac-toe/game.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/single-turn.ts",
+      "path": [
+        "src/tui/games/tic-tac-toe/game.test.ts",
+        "src/tui/games/types.ts",
+        "src/harness/provider/single-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 14,
+    "changedFilesResolved": 11,
+    "changedFilesUnresolved": 3,
+    "candidates": 45,
+    "retained": 45,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 13,
+    "hopHistogram": {
+      "1": 14,
+      "2": 31
+    }
+  },
+  "graph": {
+    "nodes": 1106,
+    "edges": 3363
+  }
+}

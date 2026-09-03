@@ -135,6 +135,13 @@ import {
 } from "../commands/permission-mode";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
+  createForegroundAgentIoFacade,
+  createForegroundForceHandoff,
+  createForegroundOperationOwner,
+  finalizeWikiForegroundOperation,
+  runAfterForegroundSettlement,
+} from "./foreground-operation";
+import {
   compactSession,
   createSession,
   findSession,
@@ -2021,11 +2028,14 @@ export async function launchTuiAgentShell(opts: {
   // external bridge pointing at a destroyed shell would let a still-settling
   // vendor run repaint a renderer that is gone.
   let detachExternal: (() => void) | undefined;
+  const foregroundOperation = createForegroundOperationOwner();
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
       onDestroy: () => {
+        foregroundOperation.cancel("renderer destroyed");
+        foregroundOperation.dispose();
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -2153,7 +2163,6 @@ export async function launchTuiAgentShell(opts: {
     const stopBusy = (): void => {
       chrome.stopBusy();
     };
-    let mainTurnAbortController: AbortController | undefined;
 
     // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
@@ -3532,10 +3541,10 @@ export async function launchTuiAgentShell(opts: {
     // this item at its original position instead of opening the recipient
     // selector again (AC5 — edit must preserve position).
     let pendingQueueEdit: { id: string; at: number } | undefined;
-    // Set by `forceMainQueue` when a turn is in flight: `abort()` only signals
-    // cancellation, it does not synchronously stop the turn, so the item is
-    // handed to the turn's `finally` to run next once it has settled (AC6).
-    let priorityMainQuestion: QueuedMainQuestion | undefined;
+    // Force can be selected more than once while cancellation is settling.
+    // Retain every selection in order; only the first schedules the current
+    // operation's settlement handoff (AC3).
+    const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -3754,19 +3763,18 @@ export async function launchTuiAgentShell(opts: {
       if (item === undefined) return;
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
-      if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
-        // `abort()` only signals cancellation — it does NOT synchronously stop
-        // the turn (`chrome.isBusy()` is still true right after this call), so
-        // running the item here would drop it. Stash it; the main turn's
-        // `finally` below runs it next, ahead of anything already queued.
-        priorityMainQuestion = item;
-        mainTurnAbortController.abort();
-        mainTurnAbortController = undefined;
+      void (async () => {
+        const waitsForSettlement = forceHandoff.enqueue(item);
+        foregroundOperation.cancel("queue item forced");
         io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
-        return;
-      }
-      // No turn in flight (e.g. forced right as the previous one settled).
-      runLine(item.question);
+        if (!waitsForSettlement) return;
+        // Cancellation is cooperative. Do not run the forced item until the
+        // current operation's finalizer has settled its own UI state.
+        await runAfterForegroundSettlement(foregroundOperation, () => {
+          const next = forceHandoff.takeAfterSettlement();
+          if (next !== undefined) runLine(next.question);
+        });
+      })();
     };
 
     /**
@@ -4034,11 +4042,11 @@ export async function launchTuiAgentShell(opts: {
         });
         switch (decision) {
           case "exit": {
-            // SLATE-5 close trigger: shell exit (explicit command, while busy).
+            // Cancel synchronously; close/sweep may block (SLATE-5, F-002).
+            foregroundOperation.cancel("shell exit");
+            foregroundOperation.dispose();
             void (async () => {
               await closeSlateSession(slateSession, mintTimestampAttemptId);
-              // F-002: this busy-dispatch `/exit` branch is a SEPARATE real
-              // exit path from the non-busy one below — it must sweep too.
               await deps.sweepBackgroundJobs?.();
               jobs.removeAll();
               r.off("theme_mode", onThemeMode);
@@ -4061,8 +4069,8 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "interrupt": {
-            if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
-              mainTurnAbortController.abort();
+            if (foregroundOperation.isActive) {
+              foregroundOperation.cancel("interrupted by user");
               io.onSystem?.("◇ main turn interrupted.\n");
               return;
             }
@@ -4561,6 +4569,7 @@ export async function launchTuiAgentShell(opts: {
       // wikiEnrich in-process (no model thrash on search_code).
       if (isWikiEnrichIntent(line)) {
         const startedAt = Date.now();
+        const operation = foregroundOperation.begin();
         // The busy flag is `startBusy`/`stopBusy` now (the chrome owns it); the
         // first statement of the IIFE below runs synchronously, so the shell is
         // marked busy before `runLine` returns, exactly as it was.
@@ -4568,6 +4577,7 @@ export async function launchTuiAgentShell(opts: {
           try {
             startBusy("planning wiki enrich…");
             const plan = await planWikiEnrich(process.cwd());
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             stopBusy();
 
             const maxList = 40;
@@ -4605,6 +4615,7 @@ export async function launchTuiAgentShell(opts: {
               acceptedCount: plan.accepted.length,
               total: plan.forceTargets.length,
             });
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             input.focus();
 
             if (choice === "cancel") {
@@ -4650,8 +4661,10 @@ export async function launchTuiAgentShell(opts: {
               force,
               provider: currentSel.provider,
               model: currentSel.model,
+              signal: foregroundOperation.signal,
               concurrency: 2, // small parallel swarm; raise via CLI for larger batches
               onPage: (info) => {
+                if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
                 setBusyPhase(`enrich ${info.index}/${info.total} [${info.phase}] ${info.path}`);
                 setMainAgent("running", `${info.index}/${info.total}`);
                 const status =
@@ -4665,6 +4678,7 @@ export async function launchTuiAgentShell(opts: {
                 });
               },
             });
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             stopBusy();
             setMainAgent(
               result.failed > 0 && result.enriched === 0 ? "failed" : "done",
@@ -4703,6 +4717,7 @@ export async function launchTuiAgentShell(opts: {
               // best-effort
             }
           } catch (cause) {
+            if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             stopBusy();
             transcript.add(
               new otui.TextRenderable(r, {
@@ -4711,19 +4726,30 @@ export async function launchTuiAgentShell(opts: {
               }),
             );
           } finally {
-            const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `w${uid++}`,
-                content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
-                marginTop: 1,
-              }),
+            const operationAborted = foregroundOperation.signal.aborted;
+            foregroundOperation.settle(operation);
+            finalizeWikiForegroundOperation(
+              { aborted: operationAborted, disposed: foregroundOperation.isDisposed },
+              {
+                stopBusy,
+                complete: () => {
+                  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+                  transcript.add(
+                    new otui.TextRenderable(r, {
+                      id: `w${uid++}`,
+                      content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
+                      marginTop: 1,
+                    }),
+                  );
+                  focusComposer(); // never steal focus from an active block-nav mode (R3)
+                  if (!forceHandoff.isAwaitingSettlement) {
+                    const next = forceHandoff.takeNext() ?? mainQueue.shift();
+                    paintMainQueue();
+                    if (next !== undefined) runLine(next.question);
+                  }
+                },
+              },
             );
-            // Belt and braces: the paths above are believed to have stopped the
-            // spinner already, but `stopBusy()` is idempotent and a missed one
-            // leaves a live 120ms interval painting over an idle shell.
-            stopBusy();
-            focusComposer(); // never steal focus from an active block-nav mode (R3)
           }
         })();
         return;
@@ -4736,6 +4762,7 @@ export async function launchTuiAgentShell(opts: {
       // of whatever the previous turn(s) left behind.
       sessions.clear();
       deps.resetSubagentBudget?.();
+      const operation = foregroundOperation.begin();
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();
@@ -4747,8 +4774,6 @@ export async function launchTuiAgentShell(opts: {
         }
         prevOnSystem?.(text);
       };
-      const controller = new AbortController();
-      mainTurnAbortController = controller;
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
       // short follow-up and show it as the composer placeholder. Fail-closed:
@@ -4777,11 +4802,13 @@ export async function launchTuiAgentShell(opts: {
           // fail-closed: never surface an error for an optional hint
         }
       };
-      void runAgentTurn(io, deps, history, line, {
-        signal: controller.signal,
+      const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+      void runAgentTurn(foregroundIo, deps, history, line, {
+        signal: foregroundOperation.signal,
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
-        mainTurnAbortController = undefined;
+        foregroundOperation.settle(operation);
+        if (foregroundOperation.isDisposed) return;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
         // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
@@ -4810,19 +4837,15 @@ export async function launchTuiAgentShell(opts: {
         focusComposer(); // never steal focus from an active block-nav mode (R3)
         // Only suggest a next step when nothing is already queued — a queued
         // turn is the real next step and would immediately overwrite the hint.
-        if (priorityMainQuestion === undefined && mainQueue.length === 0 && !turnFailed) {
+        if (!forceHandoff.hasPending && mainQueue.length === 0 && !turnFailed) {
           void suggestNextStep();
         }
         // A forced item (AC6) wins over FIFO order — it is the reason the
         // turn just settled. Otherwise FIFO-drain the head of the main queue
         // (AC7), once the current one has fully settled (stopBusy/setMainAgent
         // already ran).
-        if (priorityMainQuestion !== undefined) {
-          const next = priorityMainQuestion;
-          priorityMainQuestion = undefined;
-          runLine(next.question);
-        } else if (mainQueue.length > 0) {
-          const next = mainQueue.shift();
+        if (!forceHandoff.isAwaitingSettlement) {
+          const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
           if (next !== undefined) runLine(next.question);
         }

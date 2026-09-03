@@ -19,6 +19,7 @@ import {
   type ResumeState,
 } from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
+import { guardOutput as defaultGuardOutput } from "../security/guard";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
 
@@ -103,6 +104,137 @@ test("enrich rewrites every draft page with the model reply", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("flow 219: abort stops the pool before another page starts and fences post-abort writes", async () => {
+  const root = await seedDrafts();
+  const controller = new AbortController();
+  let releaseFirst!: () => void;
+  const firstMayFinish = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  let markFirstStarted!: () => void;
+  const firstStarted = new Promise<void>((resolve) => {
+    markFirstStarted = resolve;
+  });
+  let calls = 0;
+  const factory: ProviderFactory = () => ({
+    describe: stubProvider(GOOD_PAGE).describe,
+    stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      calls += 1;
+      if (calls === 1) markFirstStarted();
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        await firstMayFinish;
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: GOOD_PAGE };
+        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+      })();
+    },
+  });
+
+  const run = wikiEnrich({
+    cwd: root,
+    providerFactory: factory,
+    concurrency: 1,
+    validate: false,
+    signal: controller.signal,
+  } as Parameters<typeof wikiEnrich>[0]);
+
+  try {
+    await firstStarted;
+    controller.abort("user interrupted wiki enrich");
+  } finally {
+    releaseFirst();
+  }
+
+  const result = await run;
+  try {
+    // The provider can ignore abort. The scheduler and persistence boundary
+    // still must not accept its late result or dequeue a second page.
+    expect(calls).toBe(1);
+    expect(result.enriched).toBe(0);
+    expect(result.failed).toBe(0);
+    expect((result as typeof result & { cancelled?: number }).cancelled).toBe(result.pages.length);
+    for (const relativePath of ["components/src-alpha.md", "components/src-beta.md"]) {
+      const content = await readFile(path.join(root, ".metaproject", "wiki", relativePath), "utf8");
+      expect(content).not.toContain("Full prose body");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("flow 219: a non-RLM abort during page preparation starts no provider turn", async () => {
+  const root = await seedDrafts();
+  const controller = new AbortController();
+  let calls = 0;
+  const providerFactory: ProviderFactory = () => ({
+    describe: stubProvider(GOOD_PAGE).describe,
+    async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      calls += 1;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: GOOD_PAGE };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  });
+  try {
+    const result = await wikiEnrich({
+      cwd: root,
+      providerFactory,
+      signal: controller.signal,
+      validate: false,
+      onPage: (info) => {
+        if (info.phase === "start") controller.abort("cancel during page preparation");
+      },
+    });
+
+    expect(calls).toBe(0);
+    expect(result.pages.every((page) => page.action === "cancelled")).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("flow 219: a non-RLM abort during output guarding persists no late page", async () => {
+  const root = await seedDrafts();
+  const controller = new AbortController();
+  let releaseGuard!: () => void;
+  const guardMayFinish = new Promise<void>((resolve) => {
+    releaseGuard = resolve;
+  });
+  let markGuardStarted!: () => void;
+  const guardStarted = new Promise<void>((resolve) => {
+    markGuardStarted = resolve;
+  });
+  try {
+    const run = wikiEnrich({
+      cwd: root,
+      providerFactory: () => stubProvider(GOOD_PAGE),
+      signal: controller.signal,
+      validate: false,
+      guardOutput: async (input) => {
+        markGuardStarted();
+        await guardMayFinish;
+        return defaultGuardOutput(input);
+      },
+    });
+    await guardStarted;
+    controller.abort("cancel during output guarding");
+    releaseGuard();
+
+    const result = await run;
+    const page = result.pages[0];
+    expect(page?.action).toBe("cancelled");
+    const content = await readFile(path.join(root, ".metaproject", "wiki", page!.path), "utf8");
+    expect(content).not.toContain("Full prose body");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 219: natural-language wiki enrichment remains picker-eligible but explicit CLI syntax is not hijacked", () => {
+  expect(isWikiEnrichIntent("please enrich the wiki with the model")).toBe(true);
+  expect(
+    isWikiEnrichIntent(
+      "keryx wiki enrich --page components/src-alpha.md --limit 2 --resume --dry-run --concurrency 1 --provider openai --model gpt-test --force",
+    ),
+  ).toBe(false);
 });
 
 test("flow 194 / issue #391 regression: enrich never lands Status: accepted on a draft page, even when the model's own reply claims accepted", async () => {

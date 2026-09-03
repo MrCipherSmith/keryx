@@ -2914,3 +2914,50 @@ describe("flow 180 T5 — selectSearchProviderAndReport (real function invocatio
     await expect(selectSearchProviderAndReport(controller, undefined, "searxng")).resolves.toBeUndefined();
   });
 });
+
+// The complete OpenTUI REPL is not mountable under the unit harness. As with
+// the nearby /goal and exit coverage, this pins the lifecycle wiring here while
+// the provider/wiki suites exercise the cancellable work itself.
+describe("flow 219 — foreground operation lifecycle wiring (source-text audit)", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("normal turns and in-process wiki work use one identity-safe foreground owner", () => {
+    expect(source.includes("foregroundOperation")).toBe(true);
+    expect(source.includes("mainTurnAbortController")).toBe(false);
+    expect(source).toMatch(/runAgentTurn\([\s\S]{0,250}signal:\s*foregroundOperation\.signal/);
+    expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
+  });
+
+  test("Force queues every selected item, cancels the active operation, and waits for settlement before ordered dispatch", () => {
+    const start = source.indexOf("const forceMainQueue =");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = source.slice(start, start + 1_400);
+    expect(block).toContain("mainQueue = removeMainQueueItem(mainQueue, index)");
+    expect(block).toMatch(/foregroundOperation\.cancel\(/);
+    expect(block).toMatch(/await\s+runAfterForegroundSettlement\(foregroundOperation/);
+    expect(block).toContain("forceHandoff.enqueue(item)");
+    expect(block).toMatch(/forceHandoff\.takeAfterSettlement\(\)[\s\S]{0,250}runLine\(/);
+  });
+  test("a disposed or aborted wiki-enrichment rejection returns before catch-side UI work", () => {
+    const errorText = source.indexOf("wiki enrich failed:");
+    expect(errorText).toBeGreaterThanOrEqual(0);
+    const catchBlock = source.slice(Math.max(0, errorText - 500), errorText + 300);
+    expect(catchBlock).toMatch(
+      /if \(foregroundOperation\.signal\.aborted \|\| foregroundOperation\.isDisposed\) return;[\s\S]{0,200}stopBusy\(\)/,
+    );
+  });
+  test("wiki finalization delegates abort-versus-disposal cleanup to the behavioral lifecycle seam", () => {
+    expect(source).toContain("finalizeWikiForegroundOperation(");
+  });
+
+  test("busy exit and renderer destruction cancel before disposal and cannot drain queued work afterwards", () => {
+    const busyExit = source.slice(source.indexOf('case "exit": {'), source.indexOf('case "exit": {') + 1_200);
+    const onDestroy = source.slice(source.indexOf("onDestroy: () => {"), source.indexOf("onDestroy: () => {") + 1_200);
+    expect(busyExit).toMatch(/foregroundOperation\.cancel\(/);
+    expect(busyExit.indexOf("foregroundOperation.cancel(")).toBeLessThan(
+      busyExit.indexOf("await closeSlateSession("),
+    );
+    expect(onDestroy).toMatch(/foregroundOperation\.cancel\(/);
+    expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
+  });
+});
