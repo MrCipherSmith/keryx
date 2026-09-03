@@ -1,5 +1,5 @@
 # Living Wiki + Graph — Specification
-Version: 1.3.0
+Version: 1.4.0
 
 ## 1. Идентичность модуля
 
@@ -519,7 +519,10 @@ limits»).
 - **`keryx wiki freshness [--since <rev>] [--json] [--category <c>]`**
   (LWG-10). Read-only. Разбирает очередь (или диапазон `--since`), строит
   отчёт, пишет `data/wiki/freshness/latest.{json,md}`. Код возврата всегда 0 —
-  это отчёт, не гейт.
+  это отчёт, не гейт. Записи сортируются по убыванию `commitsBehind`:
+  замер на корпусе keryx (`metrics-and-validation.md` §2.1) показал крайне
+  перекошенное распределение — медиана 6, максимум 228, — при котором
+  алфавитный или случайный порядок скрывает весь реальный долг в хвосте.
 - **`keryx wiki refresh [--page <p>] [--from-queue] [--force] [--dry-run]`**
   (LWG-11). Детерминированно, без модели. Обновляет управляемые блоки, бампает
   patch, дописывает `## Changelog`, ставит `VerifiedAt`. `--force` нужен при
