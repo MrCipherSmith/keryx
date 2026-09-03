@@ -57,6 +57,19 @@ It installs to `~/.local/bin/keryx` by default (`KERYX_BIN_DIR` overrides,
 `KERYX_RELEASE_TAG` pins a tag instead of `latest`). Nothing else is required —
 this is the path to use when there is no bun, git or node on the machine.
 
+The download is verified against the sha256 digest GitHub records for that
+release asset, and a mismatch refuses the install rather than warning about it.
+Where the digest cannot be read, or the machine has neither `sha256sum` nor
+`shasum`, the script **refuses** — `KERYX_ACKNOWLEDGE_NO_CHECKSUM=1` installs
+anyway, as an explicit choice rather than a silent degradation.
+
+Be precise about what that buys, because it is easy to overstate: the expected
+digest comes from the GitHub API and the binary comes from the same GitHub
+release, so this catches a corrupted or truncated download and a tampered CDN
+copy. It does **not** defend against a compromised GitHub account or API — both
+halves would then come from the same attacker. An independently published
+digest would be a stronger claim, and this does not make it.
+
 ### Managed clone
 
 Clones into `~/.keryx/keryx` and writes `~/.local/bin/keryx`.

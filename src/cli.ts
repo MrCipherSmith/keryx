@@ -150,6 +150,16 @@ Usage:
   keryx dashboard open
   keryx dash
   keryx rules sync
+  keryx sync [--apply]
+  keryx sync install-hooks | uninstall-hooks
+  keryx providers list [--json]
+  keryx providers cross-family [--opt-in] [--json]
+  keryx health run [--strict] [--changed [--since <ref>]] [--scope <s>] [--source a,b]
+  keryx health status | gate [--strict-warn] | sources | trend
+  keryx health explain <file-or-module> [--narrate] [--json]
+  keryx health baseline update [--scope <s>]
+  keryx orient [<runtime>]
+  keryx orient install-hook [--runtime <id|all>] [--dry-run]
   keryx agents bootstrap status --runtime <claude|opencode|zcode|codex|antigravity|all>
   keryx agents bootstrap install --runtime <claude|opencode|zcode|codex|antigravity|all> [--dry-run]
   keryx gdgraph build
@@ -234,6 +244,9 @@ Commands:
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
+  sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
+  providers Providers this operator has configured, and cross-family review eligibility
+  orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
@@ -250,6 +263,8 @@ Commands:
   security  Policy-based scanning, redaction, guardrails and audit reports
   sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
+  metrics   Provenance-aware execution observability: run records, baselines, benchmarks
+  workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
 `);
 }
 
