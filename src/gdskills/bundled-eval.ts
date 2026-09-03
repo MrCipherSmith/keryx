@@ -271,17 +271,20 @@ function frontmatterKeys(block: string): Map<string, string> {
 /**
  * Where the evaluator's own code lives, for the report header.
  *
- * Absolute paths differ per machine, so this reports the directory the module
- * was loaded from rather than a full path: enough to tell "the checkout I am
- * editing" from "the globally installed build", which is the only distinction
- * the reader needs. Falls back to a plain marker where `import.meta.url` is not
- * a file URL.
+ * Reported relative to the working directory whenever it sits inside it, which
+ * is both what the reader needs — "this is the checkout I am editing", versus an
+ * absolute path somewhere else that is the installed build — and what keeps an
+ * operator's home directory out of a report people paste into issues. This file
+ * flags `path:personal-home` in skill text; its own output should not add one.
+ * Falls back to a plain marker where `import.meta.url` is not a file URL.
  */
 function evaluatorSource(): string {
   try {
     const here = new URL(".", import.meta.url);
     if (here.protocol !== "file:") return "unknown";
-    return decodeURIComponent(here.pathname);
+    const dir = decodeURIComponent(here.pathname);
+    const rel = path.relative(process.cwd(), dir);
+    return rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : dir;
   } catch {
     return "unknown";
   }
