@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "223",
+  "slug": "living-wiki-graph-phase-0-describes-edge",
+  "title": "Living Wiki + Graph phase 0: describes edge, content hashes, page provenance",
+  "status": "in-progress",
+  "createdAt": "2026-09-03T20:55:59.785Z",
+  "updatedAt": "2026-09-03T21:01:18.324Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5b75167d2d991404724b82397b18c318a68d343f42fb709b72dbd66b34099a65",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context already collected, reviewed and committed in docs/requirements/keryx-living-wiki-graph/ (README/PRD/spec/plan/metrics + probe-wiki-drift.py); folded into context.md inline rather than re-derived by workers"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Extend GraphNode/GraphEdge types: wiki-page kind, describes edge, contentHash/mtimeMs (AC1,AC2,AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "GraphNode.kind +wiki-page, language +markdown, optional contentHash/mtimeMs; GraphEdge.kind +describes, optional describesOrigin; DescribesOrigin exported. All additive-optional, typecheck clean"
+    },
+    {
+      "id": "T6",
+      "title": "Resolve a page describe-set with frontmatter>related-code>key-files precedence (AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "src/wiki/describes.ts: parseDescribesField, parseRelatedCodePaths, matchPattern, resolveDescribeSet with frontmatter>related-code>key-files precedence; 16 tests pass"
+    },
+    {
+      "id": "T7",
+      "title": "Emit wiki-page nodes and describes edges during build, incl. graph-unavailable guard (AC1,AC5,AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Page provenance: parse/write VerifiedAt+Describes, compute VerifiedScope over full describe-set (AC8,AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Reverse query: pages describing file X, over existing incoming-edge index (AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Undecidable pages: empty describe-set is neither fresh nor orphan (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Tests per AC incl. back-compat fixture and no-.git worktree (AC2,AC11)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Measure graph build time delta from hashing and record in journal (AC12)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-03T20:55:59.785Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-03T20:57:58.058Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-03T20:57:58.145Z",
+      "event": "task-added",
+      "detail": "T5: Extend GraphNode/GraphEdge types: wiki-page kind, describes edge, contentHash/mtimeMs (AC1,AC2,AC7)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.226Z",
+      "event": "task-added",
+      "detail": "T6: Resolve a page describe-set with frontmatter>related-code>key-files precedence (AC4)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.303Z",
+      "event": "task-added",
+      "detail": "T7: Emit wiki-page nodes and describes edges during build, incl. graph-unavailable guard (AC1,AC5,AC6)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.383Z",
+      "event": "task-added",
+      "detail": "T8: Page provenance: parse/write VerifiedAt+Describes, compute VerifiedScope over full describe-set (AC8,AC9)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.465Z",
+      "event": "task-added",
+      "detail": "T9: Reverse query: pages describing file X, over existing incoming-edge index (AC3)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.552Z",
+      "event": "task-added",
+      "detail": "T10: Undecidable pages: empty describe-set is neither fresh nor orphan (AC10)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.662Z",
+      "event": "task-added",
+      "detail": "T11: Tests per AC incl. back-compat fixture and no-.git worktree (AC2,AC11)"
+    },
+    {
+      "at": "2026-09-03T20:57:58.762Z",
+      "event": "task-added",
+      "detail": "T12: Measure graph build time delta from hashing and record in journal (AC12)"
+    },
+    {
+      "at": "2026-09-03T20:58:02.125Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-03T20:58:02.220Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-03T21:01:18.221Z",
+      "event": "task-done",
+      "detail": "T5: Extend GraphNode/GraphEdge types: wiki-page kind, describes edge, contentHash/mtimeMs (AC1,AC2,AC7)"
+    },
+    {
+      "at": "2026-09-03T21:01:18.324Z",
+      "event": "task-done",
+      "detail": "T6: Resolve a page describe-set with frontmatter>related-code>key-files precedence (AC4)"
+    }
+  ]
+}

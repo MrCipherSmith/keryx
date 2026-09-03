@@ -1,8 +1,19 @@
 export type GraphNode = {
   id: string;
-  kind: "file" | "asset";
+  // "wiki-page" (LWG-1, flow 223) makes a wiki page a first-class graph node
+  // so `describes` edges can be traversed in both directions. Its `id` is
+  // "wiki:<wiki-relative path>", e.g. "wiki:components/src-ctx.md".
+  kind: "file" | "asset" | "wiki-page";
   path: string;
-  language: "typescript" | "javascript" | "java" | "python" | "asset";
+  language: "typescript" | "javascript" | "java" | "python" | "asset" | "markdown";
+  // LWG-2 (flow 223): sha256 of the file's content and its mtime at build
+  // time. OPTIONAL on purpose — a graph written by an older keryx has
+  // neither, and must keep loading unchanged (same additive contract as the
+  // B1 symbol layer below). Absent ⇒ "not recorded", never "empty file".
+  // Only ever set for `file` and `wiki-page` nodes; an `asset` node is not
+  // read for content.
+  contentHash?: string;
+  mtimeMs?: number;
 };
 
 // Import classification straight from `Bun.Transpiler#scanImports` (P1
@@ -32,11 +43,23 @@ export const UNKNOWN_IMPORT_KIND = "unknown-static" as const;
 
 export type ImportKind = TranspilerImportKind | typeof UNKNOWN_IMPORT_KIND;
 
+/**
+ * Where a `describes` edge came from, highest precedence first (LWG-1,
+ * specification §3.3). An explicit `Describes:` frontmatter list REPLACES the
+ * derived set for that page rather than adding to it — a human who names the
+ * files a page covers is correcting the derivation, not supplementing it.
+ */
+export type DescribesOrigin = "frontmatter" | "related-code" | "key-files";
+
 export type GraphEdge = {
   id: string;
   from: string;
   to: string;
-  kind: "imports" | "asset" | "unresolved";
+  // "describes" (LWG-1, flow 223) points FROM a `wiki-page` node TO the file
+  // node it documents. Only one direction is stored; the reverse question
+  // ("which pages describe this file?") is answered from the incoming-edge
+  // index every consumer already builds, not from a mirrored edge.
+  kind: "imports" | "asset" | "unresolved" | "describes";
   specifier: string;
   // Provenance/kind of the specifier that produced this edge (P1, flow 140).
   // `buildGraph()` always sets this. Optional (not required) so edge literals
@@ -45,6 +68,11 @@ export type GraphEdge = {
   // `getCycles` treats a missing value as load-order, matching pre-fix
   // behavior rather than crashing or silently mis-classifying.
   importKind?: ImportKind;
+  // LWG-1 (flow 223): provenance of a `describes` edge. Absent on every other
+  // edge kind, and absent on `describes` edges written before this field
+  // existed — a missing value means "origin not recorded", and consumers must
+  // not infer `key-files` from its absence.
+  describesOrigin?: DescribesOrigin;
 };
 
 export type GraphData = {
