@@ -54,6 +54,29 @@ test("every top-level CLI verb has a section in the CLI reference", async () => 
   expect(undocumented).toEqual([]);
 });
 
+// The reference documented `orient` at length while `keryx` with no arguments
+// listed it nowhere — neither in the usage block nor in the Commands
+// descriptions — so a user could only find it by already knowing it existed.
+// The banner is a separate surface from the reference and needs its own check;
+// `printHelp` is a template literal, so this reads the source rather than
+// capturing stdout.
+test("the top-level usage banner names every verb the CLI reference documents", async () => {
+  const [source, reference] = await Promise.all([
+    readFile(new URL("./cli.ts", import.meta.url), "utf8"),
+    readFile(CLI_REFERENCE, "utf8"),
+  ]);
+
+  const banner = source.slice(source.indexOf("function printHelp"));
+  expect(banner.length).toBeGreaterThan(1000);
+
+  const documented = Object.keys(CLI_ROUTES).filter(
+    (verb) => !DOCUMENTED_ELSEWHERE.has(verb) && reference.includes(`\n## ${verb}`),
+  );
+  expect(documented.length).toBeGreaterThan(20);
+
+  expect(documented.filter((verb) => !banner.includes(`keryx ${verb}`)).sort()).toEqual([]);
+});
+
 test("the documented-elsewhere allowance never hides a verb that has no section", async () => {
   // An allow-list is only honest while each entry is still true. `dash` and
   // `session` are excused because another section covers them — if that
