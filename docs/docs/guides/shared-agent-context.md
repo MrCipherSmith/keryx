@@ -118,6 +118,36 @@ A failed owner write becomes `stale`, never `accepted`. The same
 `--idempotency-key` replays the original terminal event. Flow wrap-up as a
 propose source is **not** wired — only `source: "session"`.
 
+### When the proposal trips the security scanner
+
+`confirm-review` reads the proposal's security gate before it mints anything.
+On a clean proposal it mints and says nothing further. When the gate is
+`needs-approval` it prints **what the scan found and in which evidence**, and
+then refuses:
+
+```bash
+keryx workspace confirm-review <workspace-id> <proposal-id>
+# → security findings in this proposal's evidence:
+#   … findings and the evidence refs they came from …
+# Read the evidence, then re-run with --acknowledge-security to state that you have.
+
+keryx workspace confirm-review <workspace-id> <proposal-id> --acknowledge-security
+```
+
+The flag is the record that a human read the findings, and the minted token
+carries that fact forward: `review --decision accepted` refuses a token that
+does not. A clean proposal claims no acknowledgement even if the flag is
+passed, and a proposal whose gate **cannot be read** is refused outright rather
+than assumed to have passed — an unreadable gate is not a passing one.
+
+The history is worth stating, because two releases got this wrong in opposite
+directions. Before 0.2.75 no flag existed and the acceptance path passed no
+acknowledgement at all, so a `needs-approval` proposal could not be accepted by
+any route — a dead end, but a *visible* one. 0.2.74 replaced that by passing the
+acknowledgement unconditionally on every call, which made the refusal unfirable
+while its error text still promised "explicit human acknowledgement": a silent
+bypass, the worse of the two. 0.2.75 made the acknowledgement real.
+
 Collaboration is **read-only** on the shipped adapters:
 
 ```bash

@@ -1748,24 +1748,12 @@ function buildManifest({
             core: ".metaproject/core/sac",
             data: ".metaproject/data/sac",
             manifest: ".metaproject/modules/sac.md",
-            // The CLI namespace is `workspace`, not `sac` — moduleCommands()
-            // is keyed by src/commands/<module>.ts router names (see
-            // module-commands.ts), and there is no src/commands/sac.ts, so
-            // this list is hand-written here, mirroring how mcp's manifest
-            // entry hardcodes `commands: ["serve"]` in buildMcpModuleEntry()
-            // instead of going through moduleCommands().
-            commands: [
-              "create",
-              "list",
-              "show",
-              "add-resource",
-              "overview",
-              "read",
-              "propose",
-              "review",
-              "collaboration",
-              "policy-readiness",
-            ],
+            // The CLI namespace is `workspace`, not `sac`, so this cannot be
+            // keyed off a `src/commands/sac.ts` router name. It still comes
+            // from module-commands.ts rather than being written out here: the
+            // hand-written copy this replaces had drifted to ten of sixteen
+            // subcommands, and so had its twin in update.ts.
+            commands: moduleCommands("sac"),
           }
         : {
             enabled: false,

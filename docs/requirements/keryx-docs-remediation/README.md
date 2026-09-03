@@ -144,17 +144,33 @@ Deeper, three concrete errors:
    reference does not, and the command's own usage banner omits it too (only the
    thrown error string carries it).
 
-3. **Four subcommands are undocumented in both `cli-reference.md` and
-   `modules.md`:** `archive`, `rename`, `remove-resource`, `list-proposals`.
-   `list` is missing its `--include-archived` option. `modules.md`'s table also
-   omits `confirm-review` entirely — the one step that requires a human.
+3. **Five subcommands are undocumented in both `cli-reference.md` and
+   `modules.md`:** `archive`, `rename`, `remove-resource`, `list-proposals` and
+   `dismiss-candidate`. `list` is missing its `--include-archived` option.
+   `modules.md`'s table also omits `confirm-review` entirely — the one step that
+   requires a human.
+
+   **Correction.** This finding first said "four", and the CLI surface count in
+   F5 first said sixteen. Both were wrong: there are seventeen subcommands and
+   five undocumented. `dismiss-candidate` was found by the test written for AC7,
+   on its first run — it is fully implemented, has its own options, and appears
+   in no manifest, no help banner and no documentation page. Reading the router
+   missed it; deriving the list from the router did not. That is the argument
+   for AC6, AC7, AC10 and AC11 in one sentence, and it is left in the record
+   rather than quietly corrected because the miss is the evidence.
 
 ### F5 — `MODULE_COMMANDS` is stale for `sac` (code, not docs)
 
 `workspace-and-lifecycle.md:167` documents `commands[]` in the manifest as coming
-from `MODULE_COMMANDS`, "single source of truth". For `sac` that source lists ten
-subcommands; the CLI has sixteen. Missing: `confirm-review`, `catch-up`,
-`list-proposals`, `archive`, `rename`, `remove-resource`.
+from `MODULE_COMMANDS`, "single source of truth". For `sac` it did not come from
+there at all: the list existed as **two hand-written copies**, one in `init.ts`
+and one in `update.ts`, both listing ten subcommands where the CLI dispatches
+seventeen. Missing: `confirm-review`, `catch-up`, `list-proposals`, `archive`,
+`rename`, `remove-resource`, `dismiss-candidate`.
+
+A list duplicated across two write paths is only as accurate as its
+least-maintained copy — the same shape as the guard-on-one-write-path-of-two
+defect 0.2.75 fixed in code.
 
 Every manifest written by `init` or `modules enable sac` therefore under-reports
 the surface, and any agent routing off the manifest sees ten of sixteen. This one

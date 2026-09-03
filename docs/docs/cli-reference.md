@@ -550,11 +550,37 @@ deleted.
 
 ## commands
 
-The agent-facing command registry: every keryx command as a machine-readable
-descriptor, with the natural-language intents that resolve to it. This is the
-surface `.metaproject/index.md` points an agent at so it can pick the right
-command from a phrase instead of guessing, and it is the source of truth the
-curated intent table in that file is derived from.
+The agent-facing command registry: each described keryx command as a
+machine-readable descriptor, with the natural-language intents that resolve to
+it. This is the surface `.metaproject/index.md` points an agent at so it can
+pick the right command from a phrase instead of guessing, and it is the source
+of truth the curated intent table in that file is derived from.
+
+**Which verbs it covers, and which it does not.** The registry is *not* the full
+CLI surface, and the difference is deliberate rather than incidental. A verb
+earns a descriptor when it is a **single callable operation with a
+machine-consumable result**. Verbs are excluded when they are:
+
+- *interactive or long-running* — `shell`, `sessions`, `serve`, `harness`;
+- *lifecycle rather than operation* — `init`, `update`, `rules`, `orient`,
+  `sync`, `mcp`, `review`;
+- *aimed at a human or a maintainer* — `dashboard`/`dash`, `standard`,
+  `metrics`, `skills`;
+- *held back behind a security boundary* — `workspace`, whose offline SAC
+  registry mutation is intentionally local-CLI-only for now, because a
+  descriptor makes a verb eligible for later remote/MCP projection;
+- *the registry itself* — `commands`.
+
+The exclusions are not a comment: `src/standard/command-registry.coverage.test.ts`
+derives the verb list from `CLI_ROUTES` and fails when a new verb is neither
+described nor excluded **with a stated reason**, because an exclusion without a
+reason is indistinguishable from an oversight. The guard is verb-level; a new
+subcommand inside an already-described verb is not detected, which that file
+states rather than leaves to be discovered.
+
+Consumers treat the registry as exhaustive over what it covers — the remote
+maintenance surface projects it and refuses to invoke anything absent from it —
+so a silent gap is a command an operator cannot reach.
 
 ```
 keryx commands                        # Markdown registry
@@ -1136,6 +1162,57 @@ keryx rules distill
 
 Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h`.
 An unknown subcommand prints an error and exits `1`.
+
+---
+
+## job
+
+Agent-first job packages: the durable state a `job-orchestrator` run writes as
+it moves through its steps, so a job survives a process restart and a reader can
+tell what stage it reached without re-running anything. Distinct from `flow` —
+a flow is the managed work lifecycle with frozen acceptance criteria and
+completion gates; a job is the orchestrator's own step/document record.
+
+```
+keryx job init --name <slug> [--intent implement|analyze|review|custom] [--project <path>]
+keryx job list [--json]
+keryx job status <name> [--json]
+keryx job step <name> <step-id> --status pending|in-progress|completed|skipped|failed [--reason "<text>"]
+keryx job document <name> --type analysis|implementation-report|review|verification-report --file <path>
+keryx job complete <name>
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `init` | `--name <slug>`, `--intent implement\|analyze\|review\|custom`, `--project <path>` | Scaffold a job package. `--project` targets a root other than the cwd. |
+| `list` | `--json` | List job packages in the project. |
+| `status` | `<name>`, `--json` | Print one job's state: its steps, their statuses, and the documents attached. |
+| `step` | `<name> <step-id>`, `--status pending\|in-progress\|completed\|skipped\|failed`, `--reason "<text>"` | Move one step. `--reason` records why for the non-completed dispositions, so a skipped or failed step carries its own explanation rather than leaving a reader to infer one. |
+| `document` | `<name>`, `--type analysis\|implementation-report\|review\|verification-report`, `--file <path>` | Attach a typed document to the job. |
+| `complete` | `<name>` | Close the job package. |
+
+---
+
+## sandbox
+
+Report OS sandbox launcher availability and the per-capability containment
+matrix. **A report, not a gate** — it never runs a contained command and always
+exits `0`. The containment it describes is enforced by
+[`harness exec`](#harness), which is where a missing launcher actually refuses.
+
+```
+keryx sandbox status [--json]
+```
+
+For the current platform it states whether the launcher (bubblewrap on Linux,
+Seatbelt on macOS) is installed, and then, for each capability — filesystem
+containment, network-off, domain allowlist, credential masking — whether it is
+available, blocked only on the missing launcher, or **not implemented on this
+platform at all**. Those last two are different findings and are deliberately
+never worded the same way: "install bubblewrap and this works" and "this does
+not exist on Linux" lead to different actions, and collapsing them into one
+message is how an operator ends up installing something that was never going to
+help. `keryx init` prints the same matrix once, up front.
 
 ---
 
@@ -2086,6 +2163,19 @@ SAC tools registered in `src/mcp/tools.ts` (`sac.overview`, `sac.read`,
 `{ code: "sac_transport_denied" }` before workspace discovery. See
 [Shared Agent Context](./guides/shared-agent-context.md).
 
+Slate tools, registered in the same file, are the external hand onto the
+task-local scratchpad keryx's own shell/TUI/`harness run` already keep:
+`slate.open`, `slate.writeSeed` and `slate.close`. All three mutate, all three
+are `externalSessionId`-scoped and never reachable through a different id, and
+all three refuse HTTP with `{ code: "slate_transport_denied" }` before storage
+is touched — the same local-stdio-only boundary as `sac.*`. A closed slate with
+a bound workspace dispatches its Seeds into the ordinary SAC propose/review
+pipeline, so the human `confirm-review` gate above still stands between an
+external Seed and real project knowledge; a slate that never bound loses
+nothing, and surfaces at the next `keryx workspace catch-up` as an
+`unbound-candidate`. There is no CLI verb — the surface is these three tools
+only. See [Slate for external agents](./guides/slate.md).
+
 ---
 
 ## workspace
@@ -2097,15 +2187,20 @@ stderr. Actor is always the local OS user — there is no `--actor`. Full help:
 
 ```
 keryx workspace create --title <title> [--component <workspace-relative-ref>]
-keryx workspace list
+keryx workspace list [--include-archived]
 keryx workspace show <workspace-id>
 keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]
+keryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>
+keryx workspace rename <workspace-id> --title <title>
+keryx workspace archive <workspace-id>
 keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]
 keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]
 keryx workspace propose <workspace-id> --kind <decision|wiki-update|memory-entry|follow-up|contract-change|risk> --session <session-id> [--note <one-line>]
+keryx workspace list-proposals [<workspace-id>]
 keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]
-keryx workspace confirm-review <workspace-id> <proposal-id>
+keryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]
 keryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]
+keryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]
 keryx workspace collaboration <workspace-id>
 keryx workspace policy-readiness
 ```
@@ -2113,14 +2208,19 @@ keryx workspace policy-readiness
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `create` | `--title`, `--component` | Create `.metaproject/workspaces/<id>/workspace.json`. |
-| `list` | — | List workspaces visible to the local actor. |
+| `list` | `--include-archived` | List workspaces visible to the local actor. Archived ones are hidden unless asked for. |
 | `show` | `<workspace-id>` | Print the manifest. |
 | `add-resource` | `--kind`, `--uri`, `--revision` | Attach a workspace-relative typed ref. |
+| `remove-resource` | `<workspace-id>`, `--uri` | Detach a resource by its ref. |
+| `rename` | `<workspace-id>`, `--title` | Change the workspace title. |
+| `archive` | `<workspace-id>` | Archive a workspace. `list` hides archived ones unless `--include-archived` is passed. |
 | `overview` | `--max-items` (default 32), `--max-tokens` (default 4096), `--explain` | Bounded FWK overview + access receipt. Mandatory overflow → `context_overflow` and no receipt. |
 | `read` | `<item-id>`, `--max-items` (default 1), `--max-tokens` (default 4096), `--explain` | Progressive read of one overview item. |
 | `propose` | `--kind`, `--session`, `--note` | Immutable `proposed` record from a completed session wrap-up. |
 | `review` | `--decision`, `--reason`, `--idempotency-key`, `--confirm-token` | Terminal review. `accepted` goes through real wiki/memory/skill owner writers and requires `--confirm-token`, minted only by `confirm-review`. Same idempotency key replays. A `wiki-update`/`memory-entry` accept also returns a dedup/conflict hint (duplicates/conflicts against already-accepted entries) and, when non-empty, an optional model-judge annotation — both informational only. |
-| `confirm-review` | `<workspace-id>`, `<proposal-id>` | Mint the `--confirm-token` a `review --decision accepted` call needs. Run this yourself in a real, approval-gated shell — no tool call (MCP or `keryx-shell`) can mint one. |
+| `list-proposals` | `[<workspace-id>]` | List proposals — for one workspace, or across all of them when the id is omitted. |
+| `confirm-review` | `<workspace-id>`, `<proposal-id>`, `--acknowledge-security` | Mint the `--confirm-token` a `review --decision accepted` call needs. Run this yourself in a real, approval-gated shell — no tool call (MCP or `keryx-shell`) can mint one. **When the proposal's security gate is `needs-approval`, it prints what the scan found and in which evidence, and then refuses unless `--acknowledge-security` is passed** — the flag is the record that a human read the findings, and the token carries that fact to `review`. A clean proposal claims no acknowledgement; a proposal whose gate cannot be read is refused rather than assumed to have passed. Before 0.2.75 the flag did not exist and a `needs-approval` proposal could not be accepted by any route; 0.2.74 briefly passed the acknowledgement unconditionally, which made the gate unfirable. |
+| `dismiss-candidate` | `<evidence-path\|session-id>`, `--reason`, `--evidence` | Dismiss an `unbound-candidate` that `catch-up` surfaced — a wrap-up whose session never bound to a workspace. Takes either the evidence path directly or a session id, which resolves to that session's newest slate archive. |
 | `catch-up` | `--workspace`, `--json`, `--include-lifecycle-flags` (default on) | Pull-based `cwd`-scoped digest: pending proposals, blocked runs, unbound-candidate wrap-ups, sessions of unknown fate, and a lifecycle-flags section for any workspace/memory-entry/wiki-decision whose recorded module no longer resolves in the code graph. Report-only — never writes. |
 | `collaboration` | `<workspace-id>` | Read-only collaboration overview. No public `record` writer. |
 | `policy-readiness` | — | Diagnose the opt-in policy-experiment chain. Exit `1` when `!integrityReady`. |

@@ -6,18 +6,60 @@ The public command is `keryx`. This guide gets you from zero to a running worksp
 
 ## Requirements
 
-- `git`
-- `bun` (>= 1.1.0)
+Which of these you need depends on how you install — see the table below. In
+the common case (`npm install -g`) it is `bun >= 1.1.0`, plus `git` for hooks
+and `--changed` scopes.
+
+- `git` — required for git hooks, `--changed` scopes and the managed installer; the core runs without it
+- `bun` (>= 1.1.0) — required for every path except the standalone binary
 
 External tools like `gh` (GitHub CLI), `eslint`, and `tsc` are used opportunistically by some modules but are never hard dependencies.
 
 ## Install
 
-You can install `keryx` as a global command, as a project-local runtime, or run it straight from source for local development.
+There are four ways in. They install the same CLI; they differ in what has to be
+on the machine first and in what ends up on disk.
 
-### Global install
+| Path | Needs | Installs to | Use it when |
+|---|---|---|---|
+| **npm package** (default) | node/npm, `bun` at runtime | your global npm prefix | You have node and want the published, versioned package. |
+| **Standalone binary** | nothing — no bun, git or node | `~/.local/bin/keryx` | The machine has no toolchain, or you want one self-contained file. |
+| **Managed clone** | `git`, `bun` | `~/.keryx/keryx` + a wrapper in `~/.local/bin` | You want to track `main` and update by re-running one command. |
+| **Project-local clone** | `git`, `bun` | `.metaproject/runtime/keryx` in the project | You do not want a global command at all. |
 
-Managed layout: clones into `~/.keryx/keryx` and writes `~/.local/bin/keryx`.
+The same four are summarised in the [README](https://github.com/MrCipherSmith/keryx#readme),
+which leads with the npm package.
+
+### npm package (the default)
+
+```bash
+npm install -g @mrciphersmith/keryx
+```
+
+> **The package is scoped, and the scope matters.** The unscoped name `keryx` on
+> npm belongs to [an unrelated project](https://github.com/actionhero/keryx).
+> Install `@mrciphersmith/keryx`; the executable it installs is called `keryx`.
+
+Upgrade with `npm install -g @mrciphersmith/keryx@latest` — the same command
+`keryx version check` prints when a newer release is available.
+
+### Standalone binary (no runtime dependency)
+
+Compiled binaries are attached to every GitHub Release for macOS (arm64, x64)
+and Linux (x64, arm64). The script detects platform and architecture and
+installs the matching one:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install-binary.sh | bash
+```
+
+It installs to `~/.local/bin/keryx` by default (`KERYX_BIN_DIR` overrides,
+`KERYX_RELEASE_TAG` pins a tag instead of `latest`). Nothing else is required —
+this is the path to use when there is no bun, git or node on the machine.
+
+### Managed clone
+
+Clones into `~/.keryx/keryx` and writes `~/.local/bin/keryx`.
 Re-run either short command to update:
 
 ```bash
@@ -43,7 +85,8 @@ gh auth setup-git
 gh api repos/MrCipherSmith/keryx/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --global
 ```
 
-Make sure `~/.local/bin` is on your `PATH`:
+Make sure `~/.local/bin` is on your `PATH` — this applies to the standalone
+binary too, which installs to the same directory:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -55,7 +98,7 @@ Then:
 keryx init
 ```
 
-### Project-local install
+### Project-local clone
 
 Use this when you do not want a global command. It clones the runtime into the current project under `.metaproject/runtime/keryx` and immediately runs `init`.
 

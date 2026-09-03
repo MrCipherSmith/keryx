@@ -28,10 +28,13 @@ the one that describes shipped behaviour.
 
 - [Give an agent context about my repository](guides/give-an-agent-context.md)
 - [Use Shared Agent Context (workspaces, FWK, proposals)](guides/shared-agent-context.md)
+- [Choose an approval mode: ask, trust, auto](guides/permission-modes.md)
 - [Run an agent against a repository without giving it my machine](guides/contain-an-agent.md)
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
+- [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
+- [Slate for external agents](guides/slate.md)
 - [Run keryx in CI](guides/run-in-ci.md)
 
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),

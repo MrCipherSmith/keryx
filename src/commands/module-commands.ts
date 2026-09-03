@@ -54,6 +54,37 @@ export const MODULE_COMMANDS = {
     "policy",
     "incidents",
   ],
+  // The CLI namespace is `workspace`, not `sac` — `moduleCommands()` is keyed
+  // by `src/commands/<module>.ts` router names and there is no
+  // `src/commands/sac.ts`. The list still belongs here rather than inline in
+  // the generators: it previously existed as two hand-written copies, one in
+  // `init.ts` and one in `update.ts`, and both had drifted to ten of the
+  // sixteen subcommands `workspace.ts` actually dispatches. A list duplicated
+  // across write paths is only as accurate as its least-maintained copy.
+  // `module-commands.test.ts` derives the expected set from `workspace.ts`'s
+  // own dispatch and fails when the two diverge. On its first run it found a
+  // seventeenth, `dismiss-candidate`, which was absent from the manifest, from
+  // the help banner and from every documentation page — reading the router had
+  // missed it, which is the argument for deriving rather than restating.
+  sac: [
+    "create",
+    "list",
+    "show",
+    "add-resource",
+    "archive",
+    "remove-resource",
+    "rename",
+    "overview",
+    "read",
+    "propose",
+    "confirm-review",
+    "review",
+    "collaboration",
+    "policy-readiness",
+    "catch-up",
+    "list-proposals",
+    "dismiss-candidate",
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type ModuleId = keyof typeof MODULE_COMMANDS;
