@@ -131,7 +131,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Use gdgraph affected context for exported symbols and shared surfaces.",
     "Dispatch specialized review passes conceptually or as separate skill loads.",
     "Report findings first, ordered by severity, with concrete file references.",
-  ], ["review code", "full review", "review changes"]),
+      // A bare "review" belongs to the ORCHESTRATOR — which is what this skill's
+    // own description says: use it when a review is requested and the user does
+    // NOT name a specialist. Safe to add only now that a trigger cannot fire on
+    // fewer words than it was written with: before that, "ui review" degenerated
+    // to ["review"] and review-frontend took every review request.
+  ], ["review", "ревью", "review code", "full review", "review changes"]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
@@ -146,7 +151,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Map inputs, trust boundaries, and sensitive outputs.",
     "Check injection, auth, crypto, secrets, and unsafe filesystem/network behavior.",
     "Prioritize exploitable findings with concrete remediation.",
-  ], ["security review", "secure code", "vulnerability"]),
+  ], [
+    "security review",
+    // Explicit, because `провер*` means check and no longer implies review —
+    // "проверка почты" is not a review request. The specific case is carried by
+    // a trigger rather than by widening the synonym that broke it.
+    "проверь безопасность",
+    "безопасность кода",
+    "secure code",
+    "vulnerability",
+  ]),
   skill("review-performance", "review", ["recommended", "full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
     "Find changed hot paths and repeated operations.",
     "Check loops, rendering, async blocking, large imports, and caching behavior.",
@@ -289,7 +303,14 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Detect deployment target and required pre-flight checks.",
     "Run verification before deployment unless explicitly skipped.",
     "Summarize deployment status, rollback path, and health checks.",
-  ], ["deploy", "ship", "release"]),
+  ], [
+    "deploy",
+    // Explicit, because `-ment` is refused as an inflection: "deployment" and
+    // "commitment" are the same shape and only one is a routing request.
+    "deployment",
+    "ship",
+    "release",
+  ]),
   skill("commit", "quality", ["full"], "Prepare conventional commits with scope, summary, and verification notes.", [
     "Inspect staged and unstaged changes.",
     "Group related changes without staging unrelated work.",
