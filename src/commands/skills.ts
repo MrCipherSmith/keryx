@@ -378,6 +378,99 @@ async function routeProjectSkills(args: string[]): Promise<void> {
   console.log(`Next: ${matches[0]?.next}`);
 }
 
+/**
+ * Inflections a query word may add to a trigger word and still mean it.
+ *
+ * `-ment` is deliberately absent, and the pair that decides it is
+ * "deployment"/"commitment": both are a six-letter stem plus `ment`, and one is
+ * the skill while the other is not a routing request at all. No structural rule
+ * separates them, so the ambiguous suffix is refused and "run the deployment"
+ * is carried by an explicit trigger instead. Guessing would trade a false
+ * negative anyone can see for a false positive nobody does.
+ */
+const INFLECTIONS = ["s", "es", "ed", "d", "ing", "er", "ers", "ion", "ions", "ation"];
+
+/** The shortest stem an inflection may attach to, so "pr"/"prs" cannot match. */
+const MIN_STEM = 4;
+
+/**
+ * True when `phrase` appears in `text` as whole words, allowing the LAST word an
+ * inflected ending.
+ *
+ * A bare `includes` matched inside longer words: "commitment issues" scored the
+ * `commit` skill and "preview the deck" reached review-orchestrator. Anchoring
+ * on word boundaries alone fixes those and silently costs the true positives
+ * with them — "run the deployment", "brainstorming ideas", "interviewing me
+ * first" all stop matching. An earlier attempt made exactly that trade without
+ * noticing, across 29 one-word triggers. Allowing an inflected tail on the last
+ * word keeps both halves.
+ */
+function containsPhrase(text: string, phrase: string): boolean {
+  const words = text.split(" ").filter(Boolean);
+  const target = phrase.split(" ").filter(Boolean);
+  if (target.length === 0) return false;
+  for (let i = 0; i + target.length <= words.length; i += 1) {
+    let matched = true;
+    for (let j = 0; j < target.length; j += 1) {
+      const word = words[i + j]!;
+      const want = target[j]!;
+      const last = j === target.length - 1;
+      if (word === want) continue;
+      if (last && matchesInflected(word, want)) continue;
+      matched = false;
+      break;
+    }
+    if (matched) return true;
+  }
+  return false;
+}
+
+function matchesInflected(word: string, stem: string): boolean {
+  if (stem.length < MIN_STEM || !word.startsWith(stem)) return false;
+  return INFLECTIONS.includes(word.slice(stem.length));
+}
+
+/**
+ * Whether `trigger` fires for this query.
+ *
+ * Two paths, and the second one carries a repair. Verbatim inclusion is
+ * unchanged. The order-free path matches the trigger's MEANINGFUL tokens against
+ * the query's, which is what lets "requirements package" match "prepare
+ * requirements documentation package" — but `routeTokens` drops words under
+ * three characters, so a trigger could arrive at that test shorter than its
+ * author wrote it. "ui review" reduced to ["review"], and `every()` over a
+ * one-element list is satisfied by ANY query containing "review": the specialist
+ * claimed a full trigger hit on every review request in every language and
+ * outscored review-orchestrator, whose contract is to take the request that
+ * names no specialist.
+ *
+ * The repair is to require the dropped words too, against the query's RAW words
+ * rather than its filtered tokens — which is where a short word like "ui", "db"
+ * or "pr" still exists. The trigger keeps exactly the specificity its author
+ * gave it, and nothing is filtered on one side only. An earlier attempt instead
+ * DENIED the order-free path to any trigger that had lost a word, which took the
+ * count of triggers with no order-free path from 11 to 17 and cost 29 one-word
+ * triggers their inflected matching.
+ */
+function triggerFires(
+  trigger: string,
+  normalizedQuery: string,
+  queryWords: ReadonlySet<string>,
+  queryTokens: ReadonlySet<string>,
+): boolean {
+  if (containsPhrase(normalizedQuery, trigger)) {
+    return true;
+  }
+  const rawWords = trigger.split(" ").filter(Boolean);
+  if (rawWords.length === 0) {
+    return false;
+  }
+  const meaningful = routeTokens(trigger);
+  return rawWords.every((word) =>
+    meaningful.has(word) ? queryTokens.has(word) : queryWords.has(word),
+  );
+}
+
 export function scoreBundledSkillRoute(
   entry: BundledSkill,
   query: string,
@@ -413,18 +506,17 @@ export function scoreBundledSkillRoute(
   // meaningful token of the trigger is present in the query (order-free) — so
   // "requirements package" still matches "prepare requirements documentation
   // package". Triggers carry both EN and RU phrasings.
-  const triggerHit = triggers.some((trigger) => {
-    if (normalizedQuery.includes(trigger)) {
-      return true;
-    }
-    const triggerTokens = [...routeTokens(trigger)];
-    return triggerTokens.length > 0 && triggerTokens.every((token) => queryTokens.has(token));
-  });
+  const queryWords = new Set(normalizedQuery.split(" ").filter(Boolean));
+  const triggerHit = triggers.some((trigger) => triggerFires(trigger, normalizedQuery, queryWords, queryTokens));
   if (triggerHit) {
     score += 55;
     reasons.push("trigger");
   }
-  if (name && normalizedQuery.includes(name)) {
+  // Word-anchored for the same reason the trigger test is: a bare `includes`
+  // scored the `commit` skill for "commitment issues" and `pr` for "preview the
+  // deck". Fixing the trigger test and leaving this one is how a fix repairs the
+  // site a finding named and leaves its sibling.
+  if (name && containsPhrase(normalizedQuery, name)) {
     score += 30;
     reasons.push("skill name");
   }
@@ -513,7 +605,8 @@ const ROUTE_STOPWORDS = new Set([
 const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["ревью", ["review"]],
   ["ревьюер", ["review", "reviewer"]],
-  ["проверк", ["review", "verify", "check"]],
+  ["проверк", ["verify", "check"]],
+  ["провер", ["verify", "check"]],
   ["реализ", ["implement"]],
   ["имплемент", ["implement"]],
   ["внедр", ["implement"]],
@@ -549,6 +642,7 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["созда", ["create"]],
   ["деплой", ["deploy"]],
   ["разверт", ["deploy"]],
+  ["разверн", ["deploy"]],
   ["зависим", ["dependency", "dependencies"]],
   ["интервью", ["interview"]],
   ["опрос", ["interview"]],
@@ -558,8 +652,22 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
   ["фло", ["flow"]],
   ["оркестр", ["orchestrator", "orchestrate"]],
   ["анализ", ["analyze", "analysis"]],
+  ["проанализ", ["analyze", "analysis"]],
   ["ревьюир", ["review"]],
 ];
+
+/**
+ * Exposed so the synonym table can be asserted as a CLOSED contract.
+ *
+ * Tested only through end-to-end routing, the table's failure mode is invisible
+ * in one direction: a prefix mapped to an ADDITIONAL wrong token changes nothing
+ * a positive corpus pair can see. That is the exact defect that started this
+ * work — `провер` expanded to check+verify+REVIEW and every check request
+ * reached a review skill.
+ */
+export function expandQueryTokens(normalized: string): ReadonlySet<string> {
+  return routeTokens(normalized, true);
+}
 
 function routeTokens(normalized: string, expand = false): Set<string> {
   const tokens = new Set(
