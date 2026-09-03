@@ -1202,8 +1202,19 @@ surface. This release closes the six flows that came out of it.
   self-contained compiled binaries (darwin-arm64/x64, linux-x64/arm64),
   attached to every GitHub Release — no bun/git/node required to install
   or run. `scripts/install-binary.sh` fetches and installs the binary for
-  the current platform in one line; a Homebrew tap
-  (`MrCipherSmith/homebrew-keryx`) is also available. Fixed two real bugs
+  the current platform in one line. A Homebrew tap
+  (`MrCipherSmith/homebrew-keryx`) was published alongside it and described
+  here as available — **it never was**, and this line is corrected in place
+  rather than deleted, because the claim shipped. The tap's formula pins
+  `0.2.49` and carries literal `PLACEHOLDER_SHA256_*` strings where the
+  digests belong, so `brew install` fails the checksum comparison on every
+  platform; it also has no `on_linux` block at all. The formula itself said so
+  in a comment, and so did
+  `docs/requirements/keryx-native-distribution/README.md` — the honest note
+  sat where a maintainer looks while this entry announced the feature where a
+  user looks. See
+  [`docs/requirements/keryx-docs-remediation/`](docs/requirements/keryx-docs-remediation/README.md).
+  Fixed two real bugs
   found while verifying this: `web-tree-sitter` was silently falling back
   to the deterministic parser in every compiled binary (now a real parse,
   scoped fix to `gdgraph.treesitter`), and cross-platform compiles were
