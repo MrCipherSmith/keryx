@@ -1,0 +1,639 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "221",
+  "slug": "prompt-audit-skill-surface",
+  "title": "Починить маршрутизацию скиллов и убрать устаревшие паттерны, найденные prompt-audit",
+  "status": "in-progress",
+  "createdAt": "2026-09-03T10:26:17.607Z",
+  "updatedAt": "2026-09-03T12:36:27.906Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3b821840edf125e04010fd97259b45af15aca2f1b8a2e853ca38fe93318445ec",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-03T12:36:27.191Z",
+      "note": "parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке, поэтому идущий следом triggers: не проглатывается. Однострочный путь покрыт кейсом review-logic."
+    },
+    "AC2": {
+      "at": "2026-09-03T12:36:27.272Z",
+      "note": "Тест 'skillsCatalog reads a description written as a YAML block scalar'. Проверен git stash: на старом парсере Received: \"|\", на новом проходит."
+    },
+    "AC3": {
+      "at": "2026-09-03T12:36:27.354Z",
+      "note": "Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору. Через MCP вживую — только после переустановки бинарника."
+    },
+    "AC4": {
+      "at": "2026-09-03T12:36:27.431Z",
+      "note": "Обход всех review-скиллов: у каждого есть triggers. Четырём добавлено."
+    },
+    "AC5": {
+      "at": "2026-09-03T12:36:27.518Z",
+      "note": "rg 'Triggered by:|Covers \"' по src/gdskills/bundled/skills — ноль. Область уточнена: 7 файлов, не 11; 4 матчились на маршрут диспетчеризации, а это контракт."
+    },
+    "AC6": {
+      "at": "2026-09-03T12:36:27.613Z",
+      "note": "description feature-analyzer переписано; правило живёт в теле как PRE-STEP 'User explicitly confirmed'."
+    },
+    "AC7": {
+      "at": "2026-09-03T12:36:27.708Z",
+      "note": "30 -> 7 правил. Три уникальны (сверено обходом тела), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
+    },
+    "AC9": {
+      "at": "2026-09-03T12:36:27.805Z",
+      "note": "Локальным кодом: 0 findings, 67 скиллов / 169 документов. Harness-сборки job-orchestrator и feature-analyzer пропагированы, зеркало .metaproject синхронизировано, review-skills-iron-laws зелёный. Новая проверка document:build-parity доказана на подложенном дрейфе."
+    },
+    "AC10": {
+      "at": "2026-09-03T12:36:27.906Z",
+      "note": "typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Контекст собран прогоном /claude-api prompt-audit: 5 находок с file:line, поведенческое подтверждение F-1 вызовом skills_catalog, предложенный диф. Записан в context.md."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Заменён конкретными implement-задачами T5-T9, по одной на находку аудита."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Переоткрыт в правильном порядке как T12 с зависимостью от T5 — регрессионный тест пишется вместе с правкой парсера, а не до неё."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Переоткрыт в правильном порядке как T13 с зависимостью от верификации."
+    },
+    {
+      "id": "T5",
+      "title": "F-1: разбор блочного скаляра description в parseSkillFrontmatter",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-03T10:40:11.010Z",
+            "outcome": "started",
+            "detail": "Правка parseSkillFrontmatter: поддержка YAML-блочного скаляра для description"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "parseSkillFrontmatter распознаёт блочные скаляры |/> с индикаторами -/+; блок закрывается на первой неотступленной строке, так что triggers: после него не проглатывается."
+    },
+    {
+      "id": "T6",
+      "title": "F-2: дописать triggers четырём ревьюерам без сигнала маршрутизации",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "triggers добавлены четырём ревьюерам: обобщённая категория интента + точный флаг + маршрут диспетчеризации, без наращивания синонимов."
+    },
+    {
+      "id": "T7",
+      "title": "F-3: убрать прозаический Triggered by из description в 11 файлах",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Убрано перечисление синонимов из description в 7 файлах (не 11 — область находки уточнена: 4 файла матчились на 'Dispatched by ... for', а это маршрут диспетчеризации, то есть контракт, а не дубль). Каждая снятая фраза сверена с ключом triggers того же файла. Маршрут диспетчеризации сохранён прозой."
+    },
+    {
+      "id": "T8",
+      "title": "F-5: вынести поведенческое правило из description feature-analyzer",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "description feature-analyzer переписано как требование ко входу; правило про подтверждение источника/цели/ветки живёт в теле как PRE-STEP с пунктом 'User explicitly confirmed' (строки 131-137)."
+    },
+    {
+      "id": "T9",
+      "title": "F-4: сжать Rules of Engagement в job-orchestrator до правил с причинами",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-03T12:26:52.463Z",
+            "outcome": "started",
+            "detail": "Сверка 30 пунктов с телом документа: 26 изложены выше, пункты 9/15/16 — нет"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "30 пунктов -> 7. Сверка с телом документа показала, что 26 действительно изложены выше, а пункты 9/15/16 — нет: секция разделена на 'stated only here' (3 правила, которые пришлось сохранить как содержание) и 'unrecoverable if wrong' (4 повтора, каждый со своей причиной). Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0. Файл не стал короче — это правильно, метрика тут не длина."
+    },
+    {
+      "id": "T10",
+      "title": "Перегенерировать harness-сборки и прогнать sweep bundled-eval",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Из 12 правленых скиллов harness-сборки есть только у feature-analyzer (4 шт) — пропагированы, идентичность подтверждена. Sweep keryx skills verify --bundled --root src/gdskills/bundled: 67 скиллов, 169 документов, 0 findings."
+    },
+    {
+      "id": "T11",
+      "title": "Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Регрессионный тест на блочный скаляр description (AC2)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Тест на блочный скаляр добавлен; проверено git stash — на старом парсере падает с Received: \"|\", на новом проходит. 31/31 в файле."
+    },
+    {
+      "id": "T13",
+      "title": "Self-review и подготовка draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T10",
+        "T11",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "F-6 (найдено при имплементации): bundled-eval не ловит расхождение harness-сборки с её SKILL.md",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Добавлена проверка document:build-parity: сборка обязана нести содержимое своего SKILL.md, кроме полей из BUILD_DIVERGENCE_ALLOWED_FIELDS (compatible_harnesses). Доказано на реальном дереве локальным кодом: со сдвинутой сборкой feature-analyzer — 1 finding, после восстановления — 0. Фикстуры: позитив build-drift-example, негатив harness-field-only."
+    },
+    {
+      "id": "T15",
+      "title": "F-7: bundled-eval валидирует наличие ключа, а не разобранное значение — использовать парсер рантайма",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Парсер вынесен в src/gdskills/skill-frontmatter.ts (gdskills — нижний слой, harness импортирует оттуда). metaproject-adapter и bundled-eval используют один парсер; проверка frontmatter:description теперь утверждает разобранное значение. Тест на 'description: |' без тела добавлен, контроль на нормальный блок — тоже."
+    },
+    {
+      "id": "T16",
+      "title": "F-2b: дописать triggers 14 скиллам в planning/ и platform/",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Область пересмотрена по факту: из 14 без triggers 12 объявляют 'NOT for: direct user invocation' — это воркеры, диспетчеризуемые оркестратором, и список пользовательских фраз звал бы ровно то прямое обращение, которое их описание запрещает. Триггеры добавлены двум user-facing: autodoc-orchestrator (фразы перенесены из прозы описания, дубль 'autodoc' снят) и agent-entrypoint-distiller."
+    },
+    {
+      "id": "T17",
+      "title": "Сделать frontmatter:triggers обязательной проверкой",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Универсальная обязательность frontmatter:triggers противоречит дизайну: 12 из 67 скиллов сознательно dispatch-only. Это ровно тот страж, который bundled-eval.ts описывает как 'падающий с первого запуска и удаляемый'. Исходный дефект (нулевой сигнал маршрутизации) закрыт в T15 проверкой разобранного description — она ловит причину, а не следствие."
+    },
+    {
+      "id": "T18",
+      "title": "F-8: keryx skills verify в dev-чекауте валидирует установленным бинарником, а не рабочим деревом",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Отчёт sweep теперь печатает строку evaluator: — директорию, откуда загружен его собственный модуль. Различает 'чекаут, который я правлю' и 'глобально установленную сборку'. Проверено: локальный код ловит подложенный дрейф сборки через CLI (bun run keryx), глобальный бинарник — нет."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-03T10:26:17.607Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-03T10:34:42.789Z",
+      "event": "task-added",
+      "detail": "T5: F-1: разбор блочного скаляра description в parseSkillFrontmatter"
+    },
+    {
+      "at": "2026-09-03T10:34:42.894Z",
+      "event": "task-added",
+      "detail": "T6: F-2: дописать triggers четырём ревьюерам без сигнала маршрутизации"
+    },
+    {
+      "at": "2026-09-03T10:34:42.974Z",
+      "event": "task-added",
+      "detail": "T7: F-3: убрать прозаический Triggered by из description в 11 файлах"
+    },
+    {
+      "at": "2026-09-03T10:34:43.057Z",
+      "event": "task-added",
+      "detail": "T8: F-5: вынести поведенческое правило из description feature-analyzer"
+    },
+    {
+      "at": "2026-09-03T10:34:43.142Z",
+      "event": "task-added",
+      "detail": "T9: F-4: сжать Rules of Engagement в job-orchestrator до правил с причинами"
+    },
+    {
+      "at": "2026-09-03T10:34:43.237Z",
+      "event": "task-added",
+      "detail": "T10: Перегенерировать harness-сборки и прогнать sweep bundled-eval"
+    },
+    {
+      "at": "2026-09-03T10:34:43.339Z",
+      "event": "task-added",
+      "detail": "T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после"
+    },
+    {
+      "at": "2026-09-03T10:35:04.247Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-03T10:35:04.330Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-03T10:35:09.367Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-03T10:35:14.877Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-03T10:39:38.214Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-03T10:39:38.296Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-03T10:39:38.365Z",
+      "event": "task-added",
+      "detail": "T12: Регрессионный тест на блочный скаляр description (AC2)"
+    },
+    {
+      "at": "2026-09-03T10:39:38.439Z",
+      "event": "task-added",
+      "detail": "T13: Self-review и подготовка draft PR"
+    },
+    {
+      "at": "2026-09-03T10:40:11.010Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Правка parseSkillFrontmatter: поддержка YAML-блочного скаляра для description"
+    },
+    {
+      "at": "2026-09-03T10:41:26.704Z",
+      "event": "task-done",
+      "detail": "T5: F-1: разбор блочного скаляра description в parseSkillFrontmatter"
+    },
+    {
+      "at": "2026-09-03T10:41:26.813Z",
+      "event": "task-done",
+      "detail": "T12: Регрессионный тест на блочный скаляр description (AC2)"
+    },
+    {
+      "at": "2026-09-03T10:42:27.100Z",
+      "event": "task-done",
+      "detail": "T6: F-2: дописать triggers четырём ревьюерам без сигнала маршрутизации"
+    },
+    {
+      "at": "2026-09-03T10:44:37.672Z",
+      "event": "task-done",
+      "detail": "T7: F-3: убрать прозаический Triggered by из description в 11 файлах"
+    },
+    {
+      "at": "2026-09-03T10:44:37.789Z",
+      "event": "task-done",
+      "detail": "T8: F-5: вынести поведенческое правило из description feature-analyzer"
+    },
+    {
+      "at": "2026-09-03T10:45:55.126Z",
+      "event": "task-added",
+      "detail": "T14: F-6 (найдено при имплементации): bundled-eval не ловит расхождение harness-сборки с её SKILL.md"
+    },
+    {
+      "at": "2026-09-03T10:45:55.208Z",
+      "event": "task-done",
+      "detail": "T10: Перегенерировать harness-сборки и прогнать sweep bundled-eval"
+    },
+    {
+      "at": "2026-09-03T11:19:56.659Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке. Однострочный путь не тронут — покрыт кейсом review-logic в новом тесте."
+    },
+    {
+      "at": "2026-09-03T11:19:56.761Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Тест 'skillsCatalog reads a description written as a YAML block scalar' в metaproject-adapter.test.ts. Проверен через git stash: на старом парсере падает с Received: \"|\", на новом проходит."
+    },
+    {
+      "at": "2026-09-03T11:19:56.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Проверено обходом всех review-скиллов: у каждого есть ключ triggers. Четырём добавлено вручную."
+    },
+    {
+      "at": "2026-09-03T11:19:56.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: keryx ctx rg 'Triggered by:|Covers \"' по src/gdskills/bundled/skills — ноль совпадений. Область уточнена по ходу: 7 файлов, не 11."
+    },
+    {
+      "at": "2026-09-03T11:19:57.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: description feature-analyzer переписано; правило сохранено в теле как PRE-STEP 'User explicitly confirmed' (строки 131-137)."
+    },
+    {
+      "at": "2026-09-03T11:19:57.125Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: keryx skills verify --bundled --root src/gdskills/bundled: 67 скиллов, 169 документов, 0 findings. Harness-сборки feature-analyzer пропагированы; зеркало .metaproject синхронизировано (15 файлов), тест review-skills-iron-laws зелёный."
+    },
+    {
+      "at": "2026-09-03T11:33:51.630Z",
+      "event": "task-added",
+      "detail": "T15: F-7: bundled-eval валидирует наличие ключа, а не разобранное значение — использовать парсер рантайма"
+    },
+    {
+      "at": "2026-09-03T11:33:51.721Z",
+      "event": "task-added",
+      "detail": "T16: F-2b: дописать triggers 14 скиллам в planning/ и platform/"
+    },
+    {
+      "at": "2026-09-03T11:33:51.800Z",
+      "event": "task-added",
+      "detail": "T17: Сделать frontmatter:triggers обязательной проверкой"
+    },
+    {
+      "at": "2026-09-03T11:46:09.034Z",
+      "event": "task-done",
+      "detail": "T15: F-7: bundled-eval валидирует наличие ключа, а не разобранное значение — использовать парсер рантайма"
+    },
+    {
+      "at": "2026-09-03T11:47:19.980Z",
+      "event": "task-done",
+      "detail": "T16: F-2b: дописать triggers 14 скиллам в planning/ и platform/"
+    },
+    {
+      "at": "2026-09-03T11:47:20.080Z",
+      "event": "task-done",
+      "detail": "T17: Сделать frontmatter:triggers обязательной проверкой"
+    },
+    {
+      "at": "2026-09-03T11:51:51.241Z",
+      "event": "task-done",
+      "detail": "T14: F-6 (найдено при имплементации): bundled-eval не ловит расхождение harness-сборки с её SKILL.md"
+    },
+    {
+      "at": "2026-09-03T11:51:51.333Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: ПОПРАВКА к первому подтверждению: та проверка гоняла ГЛОБАЛЬНО установленный keryx, а --root меняет только сканируемое дерево, не сканирующий код — то есть мои изменения ею не исполнялись. Перепроверено локальным кодом через bun -e с импортом evaluateBundledTree из src: 0 findings на дереве ветки."
+    },
+    {
+      "at": "2026-09-03T11:51:51.413Z",
+      "event": "task-added",
+      "detail": "T18: F-8: keryx skills verify в dev-чекауте валидирует установленным бинарником, а не рабочим деревом"
+    },
+    {
+      "at": "2026-09-03T12:26:52.463Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Сверка 30 пунктов с телом документа: 26 изложены выше, пункты 9/15/16 — нет"
+    },
+    {
+      "at": "2026-09-03T12:29:05.813Z",
+      "event": "task-done",
+      "detail": "T9: F-4: сжать Rules of Engagement в job-orchestrator до правил с причинами"
+    },
+    {
+      "at": "2026-09-03T12:29:05.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Секция не содержит пунктов, дословно повторяющих изложенное выше: три правила уникальны (проверено обходом тела документа), четыре оставлены как повтор невосстановимых ошибок, каждое с причиной."
+    },
+    {
+      "at": "2026-09-03T12:35:10.816Z",
+      "event": "task-done",
+      "detail": "T18: F-8: keryx skills verify в dev-чекауте валидирует установленным бинарником, а не рабочим деревом"
+    },
+    {
+      "at": "2026-09-03T12:35:10.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Через локальный код (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору блока. Вживую через MCP-инструмент skills_catalog проверить нельзя до переустановки бинарника — сервер работает от глобальной сборки."
+    },
+    {
+      "at": "2026-09-03T12:35:32.036Z",
+      "event": "ac-updated",
+      "detail": "AC10 в исходной формулировке ('тесты проходят') фактически недостижим: в main 49 преднайденных падений, не связанных с этой работой. Переформулирован в проверяемое 'не хуже базы' с двумя прогонами. Остальные девять критериев не тронуты."
+    },
+    {
+      "at": "2026-09-03T12:36:27.191Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: parseSkillFrontmatter распознаёт |/>/|-/>-/|+/>+; блок закрывается на первой неотступленной строке, поэтому идущий следом triggers: не проглатывается. Однострочный путь покрыт кейсом review-logic."
+    },
+    {
+      "at": "2026-09-03T12:36:27.272Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Тест 'skillsCatalog reads a description written as a YAML block scalar'. Проверен git stash: на старом парсере Received: \"|\", на новом проходит."
+    },
+    {
+      "at": "2026-09-03T12:36:27.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Локальным кодом (bun run keryx skills verify + прямой импорт evaluateBundledTree): 0 findings, ни одного описания, равного индикатору. Через MCP вживую — только после переустановки бинарника."
+    },
+    {
+      "at": "2026-09-03T12:36:27.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Обход всех review-скиллов: у каждого есть triggers. Четырём добавлено."
+    },
+    {
+      "at": "2026-09-03T12:36:27.518Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: rg 'Triggered by:|Covers \"' по src/gdskills/bundled/skills — ноль. Область уточнена: 7 файлов, не 11; 4 матчились на маршрут диспетчеризации, а это контракт."
+    },
+    {
+      "at": "2026-09-03T12:36:27.614Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: description feature-analyzer переписано; правило живёт в теле как PRE-STEP 'User explicitly confirmed'."
+    },
+    {
+      "at": "2026-09-03T12:36:27.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 30 -> 7 правил. Три уникальны (сверено обходом тела), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0."
+    },
+    {
+      "at": "2026-09-03T12:36:27.805Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Локальным кодом: 0 findings, 67 скиллов / 169 документов. Harness-сборки job-orchestrator и feature-analyzer пропагированы, зеркало .metaproject синхронизировано, review-skills-iron-laws зелёный. Новая проверка document:build-parity доказана на подложенном дрейфе."
+    },
+    {
+      "at": "2026-09-03T12:36:27.906Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста."
+    }
+  ]
+}
