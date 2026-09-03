@@ -14,3 +14,4 @@
 - 2026-09-03T20:58:02.220Z - started
 - 2026-09-03T21:01:18.221Z - task-done: T5: Extend GraphNode/GraphEdge types: wiki-page kind, describes edge, contentHash/mtimeMs (AC1,AC2,AC7)
 - 2026-09-03T21:01:18.324Z - task-done: T6: Resolve a page describe-set with frontmatter>related-code>key-files precedence (AC4)
+- 2026-09-03T21:30:44.567Z - ac-updated: Design corrected during T7: wiki layer must be its own storage files, not new kinds inside nodes.jsonl/edges.jsonl. Five production call sites (wiki/service.ts:365,412; wiki/collect.ts:97; commands/update.ts:869) treat every non-asset node as a source file, so a wiki-page node would be grouped by moduleNameFromProjectPath into a fabricated module and would corrupt validModuleNames — the exact module set wikiPruneOrphans and sac/lifecycle-flag.ts rely on. AC1/AC2/AC7 restated against the layer files and a build manifest; AC13 added to pin the no-regression guarantee

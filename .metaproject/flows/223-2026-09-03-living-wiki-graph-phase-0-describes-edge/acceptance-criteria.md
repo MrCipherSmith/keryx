@@ -3,16 +3,17 @@
 Phase 0 of `docs/requirements/keryx-living-wiki-graph/` (specification 1.4.0).
 Each row names the package criterion it implements.
 
-- AC1: After a graph build, `nodes.jsonl` contains a node with
-  `kind: "wiki-page"` and `id: "wiki:<relativePath>"` for every page under
-  `.metaproject/wiki/`, and `edges.jsonl` contains at least one edge with
-  `kind: "describes"` for every page whose describe-set resolves non-empty.
+- AC1: After a graph build, `storage/wiki-pages.jsonl` contains a
+  `WikiPageNode` with `id: "wiki:<relativePath>"` for every page under
+  `.metaproject/wiki/`, and `storage/describes.jsonl` contains at least one
+  `DescribesEdge` for every page whose describe-set resolves non-empty.
+  `nodes.jsonl` and `edges.jsonl` are unchanged by the wiki layer.
   (package AC-1)
 
-- AC2: A graph fixture written before this change — file nodes without
-  `contentHash`/`mtimeMs`, edges without `describesOrigin` — loads through
-  `loadGraph` without error, and every existing gdgraph consumer behaves
-  identically on it. (package AC-2)
+- AC2: A graph fixture written before this change — no `wiki-pages.jsonl`,
+  no `describes.jsonl`, no `build-manifest.json` — loads through `loadGraph`
+  without error, with `wikiPages`/`describes` simply absent, and every
+  existing gdgraph consumer behaves identically on it. (package AC-2)
 
 - AC3: A reverse query for a file covered by more than one page returns all of
   those pages and no others. (package AC-3)
@@ -28,14 +29,23 @@ Each row names the package criterion it implements.
   `validModuleNames` changes the emitted wiki layer accordingly, proving no
   second derivation exists. (package AC-27)
 
+- AC13: No wiki-layer record ever reaches `nodes.jsonl` or `edges.jsonl`.
+  A build with the wiki layer active produces `nodes.jsonl`/`edges.jsonl`
+  byte-identical to a build with it inactive, and `validModuleNames` returns
+  the same module set either way — it must never mint a module from a wiki
+  path. This is the regression that forced the layer split: five call sites
+  treat every non-`asset` node as a source file.
+
 - AC6: When `validModuleNames()` returns `undefined` (graph not built), the
   build emits no `wiki-page` nodes and no `describes` edges, and does not
   error. An absent graph must never be read as "every page is orphaned".
   (package AC-24)
 
-- AC7: Every file node carries `contentHash` (sha256 of file content) and
-  `mtimeMs`; two builds with no intervening edit produce identical
-  `contentHash` values for every unchanged file. (package AC-2, LWG-2)
+- AC7: `storage/build-manifest.json` carries a `FileFingerprint`
+  (`contentHash` sha256 + `mtimeMs`) for every source file, and two builds
+  with no intervening edit produce identical `contentHash` values for every
+  unchanged file. `GraphNode` itself is not extended, so `nodes.jsonl` stays
+  byte-stable for its existing consumers. (LWG-2)
 
 - AC8: A page's frontmatter `VerifiedAt` and `Describes` round-trip: parsed
   into the page model, and written back without altering any other byte of

@@ -1,5 +1,5 @@
 # Living Wiki + Graph — Specification
-Version: 1.4.0
+Version: 2.0.0
 
 ## 1. Идентичность модуля
 
@@ -81,11 +81,13 @@ LWG — не новый модуль, а сквозная возможность
       enrich-resume.json          # существует; completedNodeHashes
     gdgraph/
       storage/
-        nodes.jsonl               # существует; +contentHash/+mtimeMs
-        edges.jsonl               # существует; +kind "describes"
+        nodes.jsonl               # существует; НЕ изменяется вики-слоем
+        edges.jsonl               # существует; НЕ изменяется вики-слоем
         symbols.jsonl             # существует (символьный слой)
         calls.jsonl               # существует
-        build-manifest.json       # LWG-3: хэши прошлой сборки
+        wiki-pages.jsonl          # LWG-1: узлы страниц (новый слой)
+        describes.jsonl           # LWG-1: рёбра describes (новый слой)
+        build-manifest.json       # LWG-2/3: contentHash + mtimeMs на файл
 ```
 
 Очередь — `.jsonl`, потому что писатель (git-хук) должен быть
@@ -122,60 +124,67 @@ append-only и не читать файл целиком. Ротация: при
 
 ## 3. Модель данных: граф
 
-### 3.1 Расширение `GraphNode`
+### 3.1 Вики-слой — отдельный слой, а не новые виды узлов
 
-Существующий тип (`src/gdgraph/types.ts:1-6`):
+**Исправлено по итогам реализации (flow 223, T7).** Версии 1.0–1.4 этой
+спецификации предписывали добавить `kind: "wiki-page"` в `GraphNode` и
+`kind: "describes"` в `GraphEdge`, то есть класть записи вики прямо в
+`nodes.jsonl` и `edges.jsonl`. Это привело бы к регрессу.
 
-```ts
-export type GraphNode = {
-  id: string;
-  kind: "file" | "asset";
-  path: string;
-  language: "typescript" | "javascript" | "java" | "python" | "asset";
-};
-```
+Пять продакшн-мест считают исходником **любой** узел, кроме `asset`:
+`validModuleNames` и `collectGraphWikiCandidates`
+(`src/wiki/service.ts:365,412`), `computeModuleKeyFiles`
+(`src/wiki/collect.ts:97`) и `src/commands/update.ts:869`. Узел страницы в
+`nodes.jsonl` был бы сгруппирован `moduleNameFromProjectPath` в
+несуществующий модуль `.metaproject/wiki/components` и **отравил бы
+множество модулей**, по которому `wikiPruneOrphans` и
+`src/sac/lifecycle-flag.ts` решают, что осиротело. Кроме того, сборка уже
+следует правилу «аддитивный слой не переписывает легаси-артефакты» — так
+устроен символьный слой (`src/gdgraph/build.ts`, enrichment после
+неизменённой файловой сборки).
 
-Расширение (все новые поля **опциональные** — граф, собранный предыдущей
-версией, обязан остаться валидным; это тот же приём, которым в своё время был
-добавлен символьный слой, см. комментарий к `GraphData.symbols`):
-
-```ts
-export type GraphNode = {
-  id: string;
-  kind: "file" | "asset" | "wiki-page";        // LWG-1
-  path: string;
-  language: "typescript" | "javascript" | "java" | "python" | "asset" | "markdown";
-  contentHash?: string;   // LWG-2: sha256 содержимого; только для file/wiki-page
-  mtimeMs?: number;       // LWG-2: mtime на момент сборки
-};
-```
-
-Узел страницы: `id = "wiki:" + relativePath` (например
-`wiki:components/flow-canvas.md`), `path` — путь относительно корня проекта,
-`language: "markdown"`.
-
-### 3.2 Расширение `GraphEdge`
+Поэтому вики — **отдельный слой**, по образцу символьного:
 
 ```ts
-export type GraphEdge = {
-  id: string;
-  from: string;
-  to: string;
-  kind: "imports" | "asset" | "unresolved" | "describes";  // LWG-1
-  specifier: string;
-  importKind?: ImportKind;
-  describesOrigin?: "frontmatter" | "related-code" | "key-files";  // LWG-1
+export type WikiPageNode = {
+  id: string;          // "wiki:components/src-ctx.md"
+  path: string;        // "components/src-ctx.md"
+  title: string;
+  pageType: string;
+  status: string | null;
+  version: string | null;
+  undecidable: boolean; // describe-множество пусто: не свежая и не сирота
 };
+
+export type DescribesEdge = {
+  id: string;
+  from: string;        // WikiPageNode.id
+  to: string;          // путь файлового GraphNode
+  pattern: string;
+  origin: DescribesOrigin;
+};
+
+export type WikiLayer = { pages: WikiPageNode[]; describes: DescribesEdge[] };
 ```
 
-`describes` направлено **от страницы к коду** (`from` — узел `wiki-page`,
-`to` — файловый узел). Обратный обход выполняется по уже существующему
-индексу входящих рёбер, отдельного ребра не заводится.
+`GraphData` получает опциональные `wikiPages?` и `describes?` — ровно тот же
+контракт, что у `symbols?`/`calls?`: отсутствуют ⇒ просто опущены, это не
+ошибка. `GraphNode` и `GraphEdge` **не меняются вовсе**.
 
-`describesOrigin` фиксирует происхождение и определяет приоритет при
-конфликте: `frontmatter` > `related-code` > `key-files`. Явный список во
-фронтматтере полностью замещает вычисленный для этой страницы — это ответ на
-риск «неточность `describes`» из PRD.
+Обратный обход («какие страницы описывают файл X») строится индексом по
+`DescribesEdge.to`, отдельного обратного ребра не заводится.
+
+### 3.2 Контент-хэши — в манифест, не в узлы
+
+`contentHash`/`mtimeMs` тоже не добавляются в `GraphNode`: это изменило бы
+`nodes.jsonl` для всех существующих потребителей ради данных, которые нужны
+одному будущему (инкрементальная сборка, LWG-3). Они пишутся в
+`storage/build-manifest.json` как `FileFingerprint { path, contentHash,
+mtimeMs }`.
+
+Стоимость близка к нулю: `buildGraph` уже читает содержимое каждого файла в
+`fileRecords` (`src/gdgraph/build.ts:104-107`), поэтому хэширование не
+добавляет ни одного обращения к диску.
 
 ### 3.3 Источники ребра `describes`
 

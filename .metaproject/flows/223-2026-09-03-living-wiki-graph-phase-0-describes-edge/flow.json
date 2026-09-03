@@ -9,12 +9,12 @@
   "title": "Living Wiki + Graph phase 0: describes edge, content hashes, page provenance",
   "status": "in-progress",
   "createdAt": "2026-09-03T20:55:59.785Z",
-  "updatedAt": "2026-09-03T21:01:18.324Z",
+  "updatedAt": "2026-09-03T21:30:44.567Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:5b75167d2d991404724b82397b18c318a68d343f42fb709b72dbd66b34099a65",
+  "acChecksum": "sha256:cd74deaaf46f9c9f46de8ebe63af3f299c40fba206f315b93ffbde5f2d1baab8",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -267,6 +267,11 @@
       "at": "2026-09-03T21:01:18.324Z",
       "event": "task-done",
       "detail": "T6: Resolve a page describe-set with frontmatter>related-code>key-files precedence (AC4)"
+    },
+    {
+      "at": "2026-09-03T21:30:44.567Z",
+      "event": "ac-updated",
+      "detail": "Design corrected during T7: wiki layer must be its own storage files, not new kinds inside nodes.jsonl/edges.jsonl. Five production call sites (wiki/service.ts:365,412; wiki/collect.ts:97; commands/update.ts:869) treat every non-asset node as a source file, so a wiki-page node would be grouped by moduleNameFromProjectPath into a fabricated module and would corrupt validModuleNames — the exact module set wikiPruneOrphans and sac/lifecycle-flag.ts rely on. AC1/AC2/AC7 restated against the layer files and a build manifest; AC13 added to pin the no-regression guarantee"
     }
   ]
 }
