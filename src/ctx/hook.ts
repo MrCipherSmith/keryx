@@ -10,6 +10,7 @@
 // runtime, an unparseable payload, or any other non-shell tool still allows the
 // command (exit 0). The guard never blocks work it cannot confidently classify.
 
+import { readStdinBounded } from "../lib/bounded-stdin";
 import { classifyCommand } from "./hook-classify";
 import { getRuntime, nativeSearchMessage, parseToolName, refusalAction, type HookAction } from "./runtimes";
 
@@ -19,15 +20,18 @@ export { CTX_HOOK_SENTINEL } from "./runtimes";
 
 export const CTX_HOOK_COMMAND = "keryx ctx hook claude";
 
+/**
+ * How long the harness gets to deliver its payload.
+ *
+ * Generous on purpose: this gate has no preamble to hide the wait behind, so the
+ * whole budget is felt by a caller that writes slowly. It is still bounded,
+ * because a `PreToolUse` gate that never exits wedges the tool call rather than
+ * failing open — the opposite of what the header above promises.
+ */
+const STDIN_DEADLINE_MS = 2_000;
+
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    return "";
-  }
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return (await readStdinBounded(STDIN_DEADLINE_MS)) ?? "";
 }
 
 export async function runCtxHook(runtimeId: string | undefined): Promise<void> {

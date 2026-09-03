@@ -21,8 +21,40 @@ export interface HookClassification {
   escapeReason?: string;
 }
 
-// `# keryx:raw <reason>` anywhere in the command opts out of the guard.
+// `# keryx:raw <reason>` opts out of the guard — but only where a shell would
+// read it as a comment. Matched against the raw string, a command that merely
+// CONTAINS the marker inside a quoted argument opted itself out:
+// `grep -rn '#keryx:raw' src/` and `git log --grep='# keryx:raw'` both passed.
+// The asymmetry is what gave it away — `splitPipeline` in this same file was
+// taught that a `|` inside quotes is not a pipe, and this was left quote-blind.
 const ESCAPE_MARKER = /#\s*keryx:raw\b[ \t]*([^\n]*)/i;
+
+/**
+ * The escape reason, or null when the command carries no unquoted marker.
+ *
+ * Scans for a `#` that is outside quotes, which is the only position a shell
+ * treats as starting a comment.
+ */
+function escapeReasonOf(command: string): string | null {
+  let quote: string | null = null;
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i]!;
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char !== "#") continue;
+    const match = ESCAPE_MARKER.exec(command.slice(i));
+    if (match && match.index === 0) {
+      return (match[1] ?? "").trim();
+    }
+  }
+  return null;
+}
 
 // Leading wrappers we skip past to find the real command in a segment.
 const LEADING_SKIP = new Set(["sudo", "command", "time", "nice", "env", "builtin"]);
@@ -282,9 +314,9 @@ export function classifyCommand(command: string): HookClassification {
     return { block: false };
   }
 
-  const escape = ESCAPE_MARKER.exec(command);
-  if (escape) {
-    return { block: false, escapeReason: (escape[1] ?? "").trim() };
+  const escapeReason = escapeReasonOf(command);
+  if (escapeReason !== null) {
+    return { block: false, escapeReason };
   }
 
   for (const stage of stages(command)) {
