@@ -9,7 +9,7 @@
   "title": "Починить маршрутизацию скиллов и убрать устаревшие паттерны, найденные prompt-audit",
   "status": "in-progress",
   "createdAt": "2026-09-03T10:26:17.607Z",
-  "updatedAt": "2026-09-03T12:36:27.906Z",
+  "updatedAt": "2026-09-03T12:43:34.443Z",
   "source": {
     "type": "description",
     "ref": null
@@ -237,15 +237,23 @@
       "id": "T11",
       "title": "Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-03T12:43:34.443Z",
+            "outcome": "blocked",
+            "detail": "Часть про skills_catalog выполнена локальным кодом (см. AC3). Прогон job end-to-end до/после для AC8 не сделан: требует реального job и решения пользователя о затратах. AC8 остаётся неподтверждённым сознательно."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "blocked",
+      "dispositionReason": "Часть про skills_catalog выполнена локальным кодом (см. AC3). Прогон job end-to-end до/после для AC8 не сделан: требует реального job и решения пользователя о затратах. AC8 остаётся неподтверждённым сознательно."
     },
     {
       "id": "T12",
@@ -269,7 +277,7 @@
       "id": "T13",
       "title": "Self-review и подготовка draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10",
         "T11",
@@ -281,7 +289,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Самопроверка диффа проведена, нашла один дефект в собственной правке: отчёт печатал абсолютный путь с домашним каталогом — исправлено на относительный (коммит a631b31). PR не создаю: пуш требует подтверждения пользователя — это же правило я сегодня оставил в job-orchestrator как одно из семи."
     },
     {
       "id": "T14",
@@ -634,6 +644,16 @@
       "at": "2026-09-03T12:36:27.906Z",
       "event": "ac-confirmed",
       "detail": "AC10: typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста."
+    },
+    {
+      "at": "2026-09-03T12:43:34.355Z",
+      "event": "task-done",
+      "detail": "T13: Self-review и подготовка draft PR"
+    },
+    {
+      "at": "2026-09-03T12:43:34.443Z",
+      "event": "task-done",
+      "detail": "T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после"
     }
   ]
 }

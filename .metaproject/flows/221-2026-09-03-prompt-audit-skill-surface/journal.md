@@ -54,3 +54,5 @@
 - 2026-09-03T12:36:27.708Z - ac-confirmed: AC7: 30 -> 7 правил. Три уникальны (сверено обходом тела), четыре — осознанный повтор невосстановимых ошибок, каждое с причиной. Эмфаза DO/ALWAYS/MANDATORY/NEVER: 30 -> 0.
 - 2026-09-03T12:36:27.805Z - ac-confirmed: AC9: Локальным кодом: 0 findings, 67 скиллов / 169 документов. Harness-сборки job-orchestrator и feature-analyzer пропагированы, зеркало .metaproject синхронизировано, review-skills-iron-laws зелёный. Новая проверка document:build-parity доказана на подложенном дрейфе.
 - 2026-09-03T12:36:27.906Z - ac-confirmed: AC10: typecheck чист. Ветка 6513 pass / 49 fail против базы main 6510 pass / 49 fail — то же множество падений, +3 новых проходящих теста.
+- 2026-09-03T12:43:34.355Z - task-done: T13: Self-review и подготовка draft PR
+- 2026-09-03T12:43:34.443Z - task-done: T11: Поведенческая проверка: skills_catalog без пустых описаний, job end-to-end до/после
