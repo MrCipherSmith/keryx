@@ -6,8 +6,7 @@ description: |
   function/class level — meaningful names, small functions, single level of abstraction,
   argument count, error handling, DRY, comment quality, and SOLID (SRP, OCP, LSP, ISP, DIP)
   as applied to individual classes and functions.
-  Triggered by: "review clean code", "check clean code", "Uncle Bob review", "SOLID review",
-  "review --clean-code", or dispatched by review-orchestrator.
+  Dispatched by review-orchestrator.
   NOT for: architectural layer violations (review-architecture), naming convention formatting
   (review-style), logic correctness bugs (review-logic), or security (review-security-code).
 triggers:

@@ -3,8 +3,8 @@ name: review-backend
 model_tier: standard
 description: |
   Use when: reviewing NestJS backend changes — API design, service layer, DTO validation,
-  database patterns, and TypeScript correctness. Covers "review backend", "backend review",
-  "review API", "review NestJS", or dispatched by review-orchestrator with --backend flag.
+  database patterns, and TypeScript correctness. Dispatched by review-orchestrator
+  with the --backend flag.
   NOT for: frontend patterns, MobX, React components, general security vulnerabilities
   (use review-security-code for XSS/injection/auth-bypass), or performance profiling
   (use review-performance).

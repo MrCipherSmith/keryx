@@ -4,8 +4,7 @@ model_tier: light
 description: |
   Use when: consolidated findings from other reviewers need to be checked before they are
   reported — by RUNNING something that fails if the finding is real, or by confirming the
-  sites the finding named actually exist. Covers "verify the findings", "check these
-  findings", "review --verify", or dispatched by review-orchestrator as Wave C.
+  sites the finding named actually exist. Dispatched by review-orchestrator as Wave C.
   This reviewer can only DELETE. It cannot raise a severity, add a finding, or change a
   finding's text.
   NOT for: first-pass review (run domain reviewers first); re-scoring findings by re-reading
