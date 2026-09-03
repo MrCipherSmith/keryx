@@ -8,6 +8,10 @@ description: |
   styling tokens, Storybook expectations, and local tooling rules. Dispatched
   by review-orchestrator for --frontend-conventions, --project-conventions,
   --all, or frontend src/**/*.ts(x) changes when local convention docs exist.
+triggers:
+  - "review frontend conventions"
+  - "review --frontend-conventions"
+  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

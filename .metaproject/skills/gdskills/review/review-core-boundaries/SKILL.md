@@ -6,6 +6,10 @@ description: |
   direction, feature-boundary leakage, abstraction stability, composition,
   and blast-radius risks. Dispatched by review-orchestrator for
   --core-boundaries, --project-conventions, --all, or src/core/** changes.
+triggers:
+  - "review core boundaries"
+  - "review --core-boundaries"
+  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
