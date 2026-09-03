@@ -1,5 +1,5 @@
 # Living Wiki + Graph (LWG)
-Version: 1.1.0
+Version: 1.2.0
 
 ## Назначение
 
@@ -74,7 +74,11 @@ git-хуке и дельта-инрич prose через существующи�
   обоих случаях.
 - **LWG-5 — управляемый блок `## Reference`.** Машинная территория, явно
   размеченная маркерами; обновляется детерминированно даже на `accepted`
-  страницах, prose не трогается.
+  страницах, prose не трогается. Это не новое правило: `skills/gdwiki/
+  SKILL.md:110` уже объявляет секцию graph-owned и «regenerated», а
+  `SKILL.md:113` тут же делает всю страницу неперезаписываемой — контракт
+  записан, но неисполним, пока владение не разделено (specification.md
+  §4.2.1).
 - **LWG-6 — два класса prose** по волатильности: долгоживущий и волатильный;
   авто-инрич по умолчанию трогает только второй.
 - **LWG-7 — классификация изменений** (`added`/`removed`/`signature`/`body`/
@@ -155,5 +159,12 @@ knowledge-graph-фреймворк инкрементального обновл
   переписывает.
 - [shared-agent-context](../shared-agent-context/README.md) — propose/review,
   guarded owner-writers, receipts.
+- [SAC RP-13 Decision Integrity](../shared-agent-context-decision-integrity/README.md)
+  — ближайший сосед: `src/sac/lifecycle-flag.ts` уже читает тот же
+  graph-diff сигнал (`validModuleNames`) в report-only режиме. LWG
+  переиспользует источник, не дублируя его; отчёты остаются раздельными.
+- [SAC RP-12 Documentation Truth](../shared-agent-context-documentation-truth/README.md)
+  — смежная, но другая область: там правдивость самих требовательных
+  документов, здесь — свежесть вики относительно кода.
 - [sac-workspace-lifecycle](../sac-workspace-lifecycle/README.md) — образец
   структуры пакета и границы non-goals.

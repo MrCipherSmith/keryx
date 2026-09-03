@@ -53,11 +53,17 @@
           "minimum": 0
         },
         "pagesAffected": { "type": "integer", "minimum": 0 },
+        "pagesUndecidable": {
+          "description": "Pages excluded from scoring because their describe-set is empty (architecture, decisions, pages in folders outside WIKI_PAGE_TYPES). They are NOT counted in pagesTotal's fresh ratio and each is declared via a page-without-describes limitation.",
+          "type": "integer",
+          "minimum": 0
+        },
         "filesChanged": { "type": "integer", "minimum": 0 },
         "filesCosmetic": { "type": "integer", "minimum": 0 }
       }
     },
     "pages": {
+      "description": "Empty when the graph is unavailable (validModuleNames returned undefined). An unbuilt graph means 'nothing to report yet', never 'everything is stale' — orphan and undocumented in particular are derived from a node's ABSENCE and must not be emitted when the graph itself is absent.",
       "type": "array",
       "items": {
         "type": "object",
