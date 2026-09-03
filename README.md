@@ -48,12 +48,6 @@ runtime dependency:
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install-binary.sh | bash
 ```
 
-or via Homebrew:
-
-```bash
-brew install MrCipherSmith/keryx/keryx
-```
-
 Local-first · deterministic core · offline by default · MIT
 
 ## Why keryx
