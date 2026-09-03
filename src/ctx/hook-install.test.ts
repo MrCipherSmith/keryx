@@ -189,3 +189,54 @@ test("an install over a stale guard says what it replaced", async () => {
     expect(preToolUse(settings).some((g) => g.matcher === preToolUseMatcher(CLAUDE_RUNTIME))).toBe(true);
   });
 });
+
+test("uninstall removes a guard written in every shape any build ever wrote", async () => {
+  // The shape test added for antigravity narrowed what counts as OWNED, so the
+  // regression question is whether an older install becomes invisible to
+  // removal. It does not: removal keys on the managed sentinel, never on the
+  // matcher, the entry type, or the group shape. Asserted by driving the real
+  // uninstaller over each shape rather than by reading stripManaged.
+  const SHAPES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+    ["the original Bash-only matcher", {
+      matcher: "Bash",
+      hooks: [{ type: "command", command: CLAUDE_COMMAND }],
+      _keryxManaged: CTX_HOOK_SENTINEL,
+    }],
+    ["the current matcher", {
+      matcher: "Bash|Grep",
+      hooks: [{ type: "command", command: CLAUDE_COMMAND }],
+      _keryxManaged: CTX_HOOK_SENTINEL,
+    }],
+    ["an inert type:prompt entry", {
+      matcher: "Bash|Grep",
+      hooks: [{ type: "prompt", command: CLAUDE_COMMAND }],
+      _keryxManaged: CTX_HOOK_SENTINEL,
+    }],
+    ["a flat entry", {
+      matcher: "Bash",
+      command: CLAUDE_COMMAND,
+      _keryxManaged: CTX_HOOK_SENTINEL,
+    }],
+    ["no matcher at all", {
+      hooks: [{ type: "command", command: CLAUDE_COMMAND }],
+      _keryxManaged: CTX_HOOK_SENTINEL,
+    }],
+  ];
+
+  for (const [label, group] of SHAPES) {
+    await withTempDir(async (root) => {
+      const file = claudeSettingsPath(root);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(
+        file,
+        `${JSON.stringify({ hooks: { PreToolUse: [group] }, _keryxManaged: [CTX_HOOK_SENTINEL] }, null, 2)}\n`,
+        "utf8",
+      );
+
+      const removed = await uninstallRuntimeHook(root, CLAUDE_RUNTIME);
+      expect(removed, label).toBe(true);
+      const settings = JSON.parse(await readFile(file, "utf8")) as Settings;
+      expect(preToolUse(settings), label).toHaveLength(0);
+    });
+  }
+});

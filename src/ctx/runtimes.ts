@@ -53,6 +53,12 @@ export interface CtxRuntime {
    * open, and that is the property that makes the guard safe to leave installed.
    */
   readonly nativeSearchTools?: readonly string[];
+  /** How this runtime spells an installed hook — see `GroupShape`. */
+  readonly groupShape: GroupShape;
+  /** The key its hook groups live under. */
+  readonly groupKey: string;
+  /** A top-level container other than `hooks`, when the runtime uses one. */
+  readonly groupContainer?: string;
   block(command: string, classification: HookClassification): HookAction;
   allow(classification: HookClassification): HookAction;
   // --- install side ---
@@ -161,28 +167,61 @@ function stripFromHookArray(settings: Settings, key: string): Settings {
  * two copies of it drift: when a fourth settings shape arrives, one copy gets
  * updated and the other keeps reporting the install clean.
  */
-function managedGroupsFor(settings: Settings, key: string, command: string): Array<Record<string, unknown>> {
-  const hooks = settings.hooks as Settings | undefined;
-  const groups = Array.isArray(hooks?.[key]) ? (hooks?.[key] as unknown[]) : [];
-  return groups.filter((group): group is Record<string, unknown> => {
+/**
+ * How a runtime spells an installed hook.
+ *
+ * `nested` is a group carrying `hooks: [{ type, command }]` (claude, codex,
+ * antigravity); `flat` is a group whose `command` sits on the group itself
+ * (cursor, windsurf). It is declared per runtime rather than accepted either
+ * way, because "either shape counts for everyone" let a flat-shaped group
+ * validate clean for claude — which executes only nested groups, so the guard
+ * was reported installed and never ran.
+ */
+export type GroupShape = "flat" | "nested";
+
+/** Where a runtime keeps its hook groups: `settings.hooks[key]` unless stated. */
+function groupContainer(settings: Settings, runtime: CtxRuntime): unknown[] {
+  const container = runtime.groupContainer
+    ? (settings[runtime.groupContainer] as Settings | undefined)
+    : (settings.hooks as Settings | undefined);
+  const list = container?.[runtime.groupKey];
+  return Array.isArray(list) ? (list as unknown[]) : [];
+}
+
+/**
+ * Managed groups that own this runtime's hook command, in THIS runtime's shape.
+ *
+ * One walker for every runtime. The comment that used to sit here predicted its
+ * own failure — "when a fourth settings shape arrives, one copy gets updated and
+ * the other keeps reporting the install clean" — and the fourth shape
+ * (antigravity, nested under a named top-level key) was already in the file,
+ * with its own hand-rolled validate that still matched on `command` alone.
+ */
+function managedGroupsFor(settings: Settings, runtime: CtxRuntime): Array<Record<string, unknown>> {
+  const command = hookCommand(runtime.id);
+  return groupContainer(settings, runtime).filter((group): group is Record<string, unknown> => {
     if (!isManagedGroup(group)) return false;
     const entry = group as { hooks?: unknown; command?: unknown };
-    if (entry.command === command) return true; // flat entry (cursor/windsurf)
+    if (runtime.groupShape === "flat") {
+      return entry.command === command;
+    }
     return (
       Array.isArray(entry.hooks) &&
       (entry.hooks as Array<{ command?: unknown; type?: unknown }>).some(
         // `type` matters: a harness executes only `type: "command"` entries, so
-        // a group whose entry says "prompt" is installed and inert. Matching on
-        // the command alone reported it clean.
+        // a group whose entry says "prompt" is installed and inert.
         (hook) => hook?.command === command && hook?.type === "command",
       )
     );
   });
 }
 
-function hasManagedInArray(settings: Settings, key: string, command: string): boolean {
-  return managedGroupsFor(settings, key, command).length > 0;
+/** True when this runtime's guard is installed in a shape that will actually run. */
+function hasRunnableGuard(settings: Settings, runtime: CtxRuntime): boolean {
+  return managedGroupsFor(settings, runtime).length > 0;
 }
+
+
 
 /**
  * True when an installed guard's matcher no longer covers what this build
@@ -194,7 +233,7 @@ function hasManagedInArray(settings: Settings, key: string, command: string): bo
  */
 function hasStalePreToolUseMatcher(settings: Settings, runtime: CtxRuntime): boolean {
   const expected = preToolUseMatcher(runtime);
-  return managedGroupsFor(settings, "PreToolUse", hookCommand(runtime.id)).some(
+  return managedGroupsFor(settings, runtime).some(
     (group) => typeof group.matcher !== "string" || group.matcher !== expected,
   );
 }
@@ -367,7 +406,7 @@ export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">
 function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
   const command = hookCommand(runtime.id);
   const expected = preToolUseMatcher(runtime);
-  if (!hasManagedInArray(settings, "PreToolUse", command)) {
+  if (!hasRunnableGuard(settings, runtime)) {
     return [`${runtime.id}: missing PreToolUse(${expected}) guard`];
   }
   if (hasStalePreToolUseMatcher(settings, runtime)) {
@@ -392,9 +431,9 @@ function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
  */
 export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): string | null {
   const command = hookCommand(runtime.id);
-  if (!hasManagedInArray(settings, "PreToolUse", command)) return null;
+  if (!hasRunnableGuard(settings, runtime)) return null;
   if (!hasStalePreToolUseMatcher(settings, runtime)) return null;
-  const found = managedGroupsFor(settings, "PreToolUse", command)
+  const found = managedGroupsFor(settings, runtime)
     .map((group) => (typeof group.matcher === "string" ? group.matcher : "(no matcher)"))
     .join(", ");
   return `upgraded an existing guard: ${found} -> ${preToolUseMatcher(runtime)}`;
@@ -415,6 +454,8 @@ export const CLAUDE_RUNTIME: CtxRuntime = {
   id: "claude",
   label: ".claude/settings.json (PreToolUse)",
   confidence: "verified",
+  groupShape: "nested",
+  groupKey: "PreToolUse",
   nativeSearchTools: ["Grep"],
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
@@ -429,6 +470,8 @@ export const CODEX_RUNTIME: CtxRuntime = {
   id: "codex",
   label: ".codex/hooks.json (PreToolUse)",
   confidence: "verified",
+  groupShape: "nested",
+  groupKey: "PreToolUse",
   // No `nativeSearchTools`: nothing in this repo evidences that codex names a
   // search tool `Grep`. The only `--tools Read Grep Glob` reference is about
   // `claude` (docs/docs/harness.md). Declaring a tool a runtime may not have is
@@ -447,6 +490,8 @@ export const CURSOR_RUNTIME: CtxRuntime = {
   id: "cursor",
   label: ".cursor/hooks.json (beforeShellExecution)",
   confidence: "verified",
+  groupShape: "flat",
+  groupKey: "beforeShellExecution",
   parseCommand: parseCursorCommand,
   block: cursorBlock,
   allow: cursorAllow,
@@ -459,13 +504,15 @@ export const CURSOR_RUNTIME: CtxRuntime = {
     });
   },
   strip: (s) => stripFromHookArray(s, "beforeShellExecution"),
-  validate: (s) => (hasManagedInArray(s, "beforeShellExecution", hookCommand("cursor")) ? [] : ["cursor: missing beforeShellExecution guard"]),
+  validate: (s) => (hasRunnableGuard(s, CURSOR_RUNTIME) ? [] : ["cursor: missing beforeShellExecution guard"]),
 };
 
 export const WINDSURF_RUNTIME: CtxRuntime = {
   id: "windsurf",
   label: ".windsurf/hooks.json (pre_run_command)",
   confidence: "verified",
+  groupShape: "flat",
+  groupKey: "pre_run_command",
   parseCommand: parseWindsurfCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
@@ -477,13 +524,16 @@ export const WINDSURF_RUNTIME: CtxRuntime = {
       [MANAGED_KEY]: CTX_HOOK_SENTINEL,
     }),
   strip: (s) => stripFromHookArray(s, "pre_run_command"),
-  validate: (s) => (hasManagedInArray(s, "pre_run_command", hookCommand("windsurf")) ? [] : ["windsurf: missing pre_run_command guard"]),
+  validate: (s) => (hasRunnableGuard(s, WINDSURF_RUNTIME) ? [] : ["windsurf: missing pre_run_command guard"]),
 };
 
 export const ANTIGRAVITY_RUNTIME: CtxRuntime = {
   id: "antigravity",
   label: ".agents/hooks.json (PreToolUse/run_command)",
   confidence: "experimental",
+  groupShape: "nested",
+  groupKey: "PreToolUse",
+  groupContainer: "keryx-ctx-guard",
   parseCommand: parseAntigravityCommand,
   block: antigravityBlock,
   allow: antigravityAllow,
@@ -515,16 +565,9 @@ export const ANTIGRAVITY_RUNTIME: CtxRuntime = {
     removeSentinel(s);
     return s;
   },
-  validate: (s) => {
-    const group = s["keryx-ctx-guard"] as Settings | undefined;
-    const list = Array.isArray(group?.PreToolUse) ? (group?.PreToolUse as unknown[]) : [];
-    const ok = list.some(
-      (g) => isManagedGroup(g) &&
-        Array.isArray((g as { hooks?: unknown[] }).hooks) &&
-        ((g as { hooks: Array<{ command?: unknown }> }).hooks.some((h) => h?.command === hookCommand("antigravity"))),
-    );
-    return ok ? [] : ["antigravity: missing run_command guard"];
-  },
+  // Was a second hand-rolled walker matching on `command` alone, so an inert
+  // `type: "prompt"` entry validated clean. Routed through the shared one.
+  validate: (s) => (hasRunnableGuard(s, ANTIGRAVITY_RUNTIME) ? [] : ["antigravity: missing run_command guard"]),
 };
 
 // OpenCode has no JSON hook config — it loads JS/TS plugins. We ship a small
@@ -553,6 +596,8 @@ export const OPENCODE_RUNTIME: CtxRuntime = {
   id: "opencode",
   label: ".opencode/plugin/keryx-ctx-guard.js",
   confidence: "experimental",
+  groupShape: "nested",
+  groupKey: "PreToolUse",
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
