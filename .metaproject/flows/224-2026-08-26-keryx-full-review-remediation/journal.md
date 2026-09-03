@@ -51,3 +51,4 @@
 - 2026-08-31T12:19:18.520Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/421 (warning: PR is not a draft)
 - 2026-08-31T12:19:23.177Z - completing
 - 2026-08-31T12:19:26.672Z - done: all gates passed
+- 2026-09-03T21:31:02.733Z - renumbered: 202 -> 224: Duplicate id 202, shared with 202-2026-08-29-review-precision-measure-the-baseline-fi. Both flows are done, so neither is at risk from the move and the tie-break decides: the review-precision flow landed first (40d134a7), this one arrived later (508f7b2d, #421), so this one yields. Old references to 202 stay valid through id-map.json.
