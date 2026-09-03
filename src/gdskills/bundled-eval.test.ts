@@ -172,6 +172,24 @@ metadata:
 # Empty Name
 `;
 
+/**
+ * The shape that shipped: a block scalar with nothing under it. The shallow key
+ * read sees the non-empty value "|" and passes; the runtime parse resolves it to
+ * nothing and the catalog serves a bare indicator as the skill's description.
+ * Only a check that reads what the runtime reads can tell these apart.
+ */
+const EMPTY_BLOCK_DESCRIPTION_SKILL = `---
+name: empty-block-description
+description: |
+metadata:
+  version: 1.0.0
+---
+
+# Empty Block Description
+
+VIOLATION frontmatter:description — the block scalar above carries no text.
+`;
+
 const VERSIONLESS_METADATA_SKILL = `---
 name: versionless-metadata
 description: A skill whose metadata block declares no version.
@@ -240,6 +258,35 @@ metadata:
 VIOLATION xref:skill — Launch \`only-in-the-codex-build\` skill on the diff.
 `;
 
+/**
+ * The control for `document:build-parity`: a build that differs from its
+ * `SKILL.md` ONLY in the frontmatter field the exporter owns.
+ *
+ * 14 shipped builds have exactly this shape. A parity check that flagged them
+ * would fire on arrival and be deleted, so the check has to tell "the exporter
+ * wrote its own field" apart from "the build fell behind".
+ */
+const HARNESS_FIELD_ONLY_CANONICAL = `---
+name: harness-field-only
+description: Its Codex build differs only in the field the exporter writes.
+metadata:
+  version: 1.0.0
+---
+
+# Harness Field Only
+`;
+
+const HARNESS_FIELD_ONLY_CODEX = `---
+name: harness-field-only
+description: Its Codex build differs only in the field the exporter writes.
+metadata:
+  version: 1.0.0
+  compatible_harnesses: "cursor,codex,zed,opencode"
+---
+
+# Harness Field Only
+`;
+
 /** A build no runtime addresses: nothing exports, installs, or reads it. */
 const UNADDRESSED_BUILD = `---
 name: unaddressed-build-example
@@ -271,6 +318,7 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "broken-example", BROKEN_SKILL);
   writeSkill(fixtureRoot, "quality", "no-frontmatter", NO_FRONTMATTER_SKILL);
   writeSkill(fixtureRoot, "quality", "empty-name", EMPTY_NAME_SKILL);
+  writeSkill(fixtureRoot, "quality", "empty-block-description", EMPTY_BLOCK_DESCRIPTION_SKILL);
   writeSkill(fixtureRoot, "quality", "versionless-metadata", VERSIONLESS_METADATA_SKILL);
   writeSkill(fixtureRoot, "quality", "collides-a", DUPLICATE_NAME_SKILL);
   writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL);
@@ -282,6 +330,14 @@ beforeAll(() => {
     "build-drift-example",
     skillBuildFileName("codex"),
     BUILD_ONLY_DEFECT_CODEX,
+  );
+  writeSkill(fixtureRoot, "quality", "harness-field-only", HARNESS_FIELD_ONLY_CANONICAL);
+  writeSkillFile(
+    fixtureRoot,
+    "quality",
+    "harness-field-only",
+    skillBuildFileName("codex"),
+    HARNESS_FIELD_ONLY_CODEX,
   );
   writeSkill(fixtureRoot, "quality", "unaddressed-build-example", UNADDRESSED_BUILD);
   writeSkillFile(
@@ -306,10 +362,28 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    expect(evaluation.skills).toBe(9);
-    // Nine skills, ten documents: `build-drift-example` also ships a Codex build.
-    expect(evaluation.documents).toBe(10);
+    expect(evaluation.skills).toBe(11);
+    // Eleven skills, thirteen documents: `build-drift-example` and
+    // `harness-field-only` each also ship a Codex build.
+    expect(evaluation.documents).toBe(13);
     expect(evaluation.findings.length).toBeGreaterThan(0);
+  });
+
+  test("a description that resolves to nothing is rejected, not just an absent one", () => {
+    // The shallow key read sees "|" — present and non-empty — and passes. The
+    // check has to resolve the value the way `skills_catalog` does, or a skill
+    // ships whose whole description, as served to an agent, is one character.
+    const found = findingsFor("empty-block-description").filter(
+      (finding) => finding.check === "frontmatter:description",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("resolves to nothing");
+
+    // The control: a normal block scalar with text under it is NOT flagged.
+    const control = findingsFor("control-example").filter(
+      (finding) => finding.check === "frontmatter:description",
+    );
+    expect(control).toEqual([]);
   });
 
   test("a defect that exists ONLY in a harness build is found", () => {
@@ -327,6 +401,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // Located in the BUILD, not in SKILL.md — otherwise the report sends the
     // reader to a file that is correct.
     expect(located?.file).toBe("quality/build-drift-example/SKILL.codex.md");
+  });
+
+  test("a build that has fallen behind its SKILL.md is found", () => {
+    // Every other check reads each document alone, so a build that is merely
+    // STALE is structurally perfect and reports nothing. That is how four builds
+    // kept serving a previous description while the sweep printed `findings: 0`.
+    const found = findingsFor("build-drift-example").filter(
+      (finding) => finding.check === "document:build-parity",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("no longer carries the content of its");
+
+    // The control: a skill whose only build difference is a field the exporter
+    // owns must NOT be flagged, or the check fails on arrival and gets deleted.
+    const clean = evaluateBundledTree(fixtureRoot).findings.filter(
+      (finding) => finding.check === "document:build-parity" && finding.skill === "harness-field-only",
+    );
+    expect(clean).toEqual([]);
   });
 
   test("the five builds of one skill are not read as five colliding skills", () => {
