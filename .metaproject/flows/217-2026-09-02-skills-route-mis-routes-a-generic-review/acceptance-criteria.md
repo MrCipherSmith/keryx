@@ -10,14 +10,20 @@ Rules:
 
 ## Criteria
 
-- AC1: A trigger whose meaningful tokens reduce to fewer than two no longer fires via the order-free token test; `review-frontend` does not claim a trigger hit on the query `review`, where before the change it did.
-- AC2: `keryx skills route "сделай мне полное ревью без исправления"` returns `review-orchestrator` as top-1. Before the change it returned `review-frontend` and did not list the orchestrator in the top ten.
-- AC3: `keryx skills route "do a full review without fixing"` still returns `review-orchestrator` as top-1 — the English case that already worked is not regressed.
-- AC4: A request naming a specialist still reaches that specialist: `frontend review` / `фронтенд ревью` returns `review-frontend` as top-1, and `review the MobX store` does not return `review-orchestrator` as top-1.
-- AC5: `RU_SYNONYM_PREFIXES` covers `полн`, `напиш`, `начн`, `исправ`, `найд`, `объясн`, and `напиши тесты для этого модуля` no longer returns a `review-*` skill as top-1.
-- AC6: A routing corpus of at least 30 (query, expected top-1) pairs, at least a third of them Russian, runs as a test over the real `BUNDLED_GDSKILLS` catalog and passes. The test fails if the catalog is empty or the corpus is smaller than declared.
-- AC7: `keryx orient` reads a `UserPromptSubmit` JSON payload from stdin and appends a routing block naming the top skill and the runner-up.
-- AC8: `keryx orient` output differs between a review request and `what is 2+2`; before the change the two were byte-identical.
-- AC9: With absent, empty, non-JSON, or JSON-without-a-prompt stdin, `keryx orient` exits 0 and its output is byte-identical to the pre-change output.
-- AC10: When no skill scores above the floor, no routing block is emitted at all — the hook stays silent rather than guessing.
-- AC11: `bun run typecheck` is clean and `bun test src/gdskills src/commands src/ctx --timeout 30000` passes with no failures introduced by this branch.
+These replace the first attempt's AC1-AC11, which were confirmed against code
+removed from PR #431 in ff0ea1e6. The ordering is the point: AC1-AC3 are the
+corpus, and they exist BEFORE any scorer change, because the first attempt could
+only ever observe improvements and that is what made three rounds of regressions
+invisible.
+
+- AC1: A routing corpus exists with NEGATIVE pairs — queries asserted to route to nothing — covering at minimum `commitment issues`, `pushback from the team`, `preview the deck`, `проверь почту`, `проверка почты`, `open the file`. It passes against the CURRENT scorer before any change to it.
+- AC2: The corpus covers INFLECTED forms of one-word triggers — at minimum `run the deployment`, `reviewing the diff now`, `commits are failing`, `brainstorming ideas`, `interviewing me first` — with each pair's expected top-1 recorded as the behaviour of the current scorer, so a later change that loses them fails rather than passing silently.
+- AC3: Every corpus pair is asserted through the SHIPPED surface, not through a test-local ranking helper, and a test asserts that no second copy of the ranking pipeline exists.
+- AC4: With the corpus in place and green, the degeneration defect is fixed: `review-frontend`'s `ui review` trigger no longer fires on a bare `review`, and a generic review request reaches `review-orchestrator` while a request naming a specialist still reaches that specialist.
+- AC5: No trigger loses a matching path it had before the change. A test enumerates every catalog trigger and asserts the reachable set does not shrink — the first attempt took the count of triggers without an order-free path from 11 to 17 and nothing noticed.
+- AC6: A single Russian word cannot satisfy a multi-word trigger through synonym expansion, and `проверк` does not imply `review` any more than `провер` does.
+- AC7: The synonym table is asserted as a closed contract per family — expected tokens present AND unexpected routing-hot tokens absent — so an over-expansion fails. The first attempt's table test caught deletions and remappings and could not see additions.
+- AC8: If `keryx orient` is taught to read the prompt again, its routing block is folded in BEFORE `runtime.format`, and a test asserts the cursor envelope parses as JSON with the block inside it. The first attempt's test could not observe this because every case it ran used a runtime whose format is the identity function.
+- AC9: If the per-prompt router includes project-skills, a project skill can actually be emitted — the first attempt filtered on a `trigger` reason that `scoreProjectSkillRoute` never emits, so the manifest read bought nothing. Otherwise the exclusion is recorded as a decision with its reason.
+- AC10: Every guard this flow adds is mutation-verified: reverting it makes a named test fail, and the result is recorded in the flow journal.
+- AC11: `bun run typecheck` is clean and the full suite introduces no failures beyond those reproducible on origin/main.
