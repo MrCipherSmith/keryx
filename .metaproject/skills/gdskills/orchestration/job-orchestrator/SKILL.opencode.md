@@ -474,7 +474,7 @@ FOR step in PLAN:
          — that counter is the attempt budget, and it survives a session restart.
 
   2.1.2  Execute step (see step-specific instructions below)
-         **CRITICAL RESILIENCE**: If the sub-agent returns a malformed result or fails to follow formatting rules, run an explicit retry:
+         If the sub-agent returns a malformed result or fails to follow formatting rules, run an explicit retry:
          "The previous output was malformed. Fix these errors: [errors] and try again." (Max 2 retries before counting as critical failure).
          Re-open the step before each retry so the retry is counted.
 
@@ -728,7 +728,7 @@ keryx job step <job-name> prepare --status completed --reason "feature/<branch-s
 
 ### 2.5 Step: TESTS-CREATOR + IMPLEMENT
 
-**IRON LAW: tests-creator MUST run before task-implementer for every task. No exceptions.**
+tests-creator runs before task-implementer for every task, with no exceptions.
 
 There is no `wave-executor` agent. Each wave is two dispatches the orchestrator makes
 itself — `tests-creator`, then `task-implementer` — and both are real, installed
@@ -1949,8 +1949,8 @@ What actually bounds this orchestrator:
 | reviewer fan-out | 4 in flight | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
 | spend | 3 USD by default | `keryx review budget --spent <usd>` — a non-zero exit means stop and ask |
 
-Each of these is a number some command reads or writes. A guard that no command can
-observe is not a guard, and this section no longer lists any.
+Each of these is a number some command reads or writes. A guard no command can
+observe is not a guard; this section lists only observable ones.
 
 **Context passing rules (minimal context principle):**
 - `issue-analyzer`: receives only issue data + codebase paths (NOT previous job state)

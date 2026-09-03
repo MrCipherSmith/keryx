@@ -25,40 +25,6 @@ Proceed directly with your assigned task.
 
 # Feature Analyzer
 
-## ⚠️ MANDATORY: DO NOT PROCEED WITHOUT CONTEXT
-
-**CRITICAL RULE: You CANNOT start analysis until user explicitly provides:**
-1. ✅ Source repository (local path)
-2. ✅ Target repository (local path)
-3. ✅ Branch to analyze
-4. ✅ Confirmation of analysis scope
-
-**DO NOT assume defaults. DO NOT use current directory. DO NOT proceed without asking.**
-
-**If user says:** "Analyze everything related to variables in pipelines"
-
-**You MUST respond:**
-```
-I'll help you analyze variables in pipelines. First, I need to clarify the context:
-
-**SOURCE Repository** (where the changes exist):
-- Local path: [user must provide, e.g., /Users/.../<PROJECT>]
-- GitHub repo: [owner/repo]
-- Branch to analyze: [branch-name]
-
-**TARGET Repository** (where implementation will happen):
-- Local path: [user must provide, e.g., /Users/.../<PROJECT>]
-- GitHub repo: [owner/repo]
-- Current branch: [branch-name]
-
-**FOCUS** (from your request): "variables in pipelines"
-- Keywords: variable, pipeline, param
-
-Once you provide these details, I'll begin the focused analysis.
-```
-
-**If user doesn't provide all required info → STOP and ask again.**
-
 ---
 
 ## Purpose
@@ -267,7 +233,7 @@ git diff "${BASE_SHA}..HEAD"
 
 ### Priority Levels
 
-**P0 — MUST ANALYZE (Critical)**:
+**P0 — must analyze**:
 - API contracts: DTOs, interfaces, type definitions
 - Public API endpoints (controllers, routes)
 - Database schema changes, auth changes, config changes
@@ -293,7 +259,7 @@ When focus specified: boost files matching focus keywords to P0; select ALL focu
 
 ## Step 5: Deep Dive Protocol
 
-**You CANNOT make conclusions from git diff alone. You MUST:**
+**A git diff alone does not support a conclusion. Also do this:**
 
 1. **Read selected files**:
    - Small/medium files: read completely
@@ -328,7 +294,7 @@ Before finalizing, consider running:
 
 ---
 
-## Step 9: Intermediate Review (CRITICAL)
+## Step 9: Intermediate Review
 
 After completing analysis, **show user** before generating full report:
 

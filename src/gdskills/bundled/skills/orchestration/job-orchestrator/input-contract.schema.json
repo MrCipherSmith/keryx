@@ -66,7 +66,7 @@
         },
         "base_branch": {
           "type": "string",
-          "description": "Base branch to create the feature branch from. NO DEFAULT, deliberately: SKILL.md 0.2 auto-detects the repository's own default branch and asks the operator to confirm it. The value shipped here used to be `develop-2`, a branch from an unrelated project, which a caller that omitted the field would silently have inherited."
+          "description": "Base branch to create the feature branch from. NO DEFAULT, deliberately: SKILL.md 0.2 auto-detects the repository's own default branch and asks the operator to confirm it. Any value shipped here would be silently inherited by a caller that omits the field, and a branch name is never portable between projects."
         },
         "additional_codebases": {
           "type": "array",

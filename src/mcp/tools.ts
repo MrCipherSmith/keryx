@@ -183,9 +183,9 @@ export function buildToolRegistry(): ToolEntry[] {
   // stability (see the flow 040 journal). No name collides with a legacy adapter.
   return [
     ...toMcpTools(),
-    { name: "sac.collaboration", module: "sac", description: "Read safe SAC collaboration references and activity.", inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]), mutating: false, async invoke(cwd, params, context) { if (context?.transport === "http") return { code: "sac_transport_denied" as const }; return normalizeCollaborationResult(await createLocalCollaborationService(cwd).overview({ workspaceId: stringParam(params, "workspaceId") ?? "", request: undefined, requestCorrelationId: randomUUID() })); } },
+    { name: "sac.collaboration", module: "sac", description: "Read the collaboration references and activity for one Shared Agent Context workspace — who is participating and what has moved recently, redacted to what this actor may see. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything, because HTTP has no verified principal and must not inherit the local OS actor. Returns references and activity, not the items themselves — use sac.overview to enumerate items and sac.read to fetch one. Discover the workspaceId with sac.workspaceList.", inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]), mutating: false, async invoke(cwd, params, context) { if (context?.transport === "http") return { code: "sac_transport_denied" as const }; return normalizeCollaborationResult(await createLocalCollaborationService(cwd).overview({ workspaceId: stringParam(params, "workspaceId") ?? "", request: undefined, requestCorrelationId: randomUUID() })); } },
     {
-      name: "sac.overview", module: "sac", description: "Read a bounded Shared Agent Context overview.",
+      name: "sac.overview", module: "sac", description: "Enumerate the items in one Shared Agent Context workspace, bounded by a budget: `maxItems` defaults to 32 and `maxTokens` to 4096, so a large workspace comes back truncated rather than whole — treat the result as a page, not an inventory. Returns item references and summaries, never full item bodies; call sac.read for one item's content. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything. This is the entry point for a workspace — call it before sac.read.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId"]),
       mutating: false,
       async invoke(cwd, params, context) {
@@ -199,7 +199,7 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
-      name: "sac.read", module: "sac", description: "Read one bounded Shared Agent Context item after overview.",
+      name: "sac.read", module: "sac", description: "Fetch one item from a Shared Agent Context workspace by `itemId`, as discovered through sac.overview — item ids are not guessable, so call overview first. The result is budget-bounded (`maxTokens` defaults to 4096), so a long item is truncated rather than refused; check the returned content before treating it as complete. Reads one item and does not search — there is no query parameter. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, itemId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId", "itemId"]),
       mutating: false,
       async invoke(cwd, params, context) {
@@ -490,7 +490,13 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "gdgraph.cycles",
       module: "gdgraph",
-      description: "Return every import cycle in the code graph.",
+      description:
+        "Return the import cycles in the code graph, each as an ordered list of file paths. " +
+        "Cycles closed only through a dynamic `await import()` are deliberately excluded: they " +
+        "resolve at call time, not module-load time, so they are not the load-order cycle this " +
+        "query answers. Reads the built graph, so results are as old as the last `keryx gdgraph " +
+        "build` and will not reflect uncommitted edits. Returns the cycles only — it does not " +
+        "rank them by severity and does not suggest where to break one.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
@@ -500,7 +506,12 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "gdgraph.orphans",
       module: "gdgraph",
-      description: "Return files with no inbound or outbound import edges.",
+      description:
+        "Return the sorted paths of files the graph connects to nothing — no resolved import in " +
+        "either direction. Unresolved edges do not count as connections, so a file whose only " +
+        "imports failed to resolve is reported as an orphan; check before treating a hit as dead " +
+        "code. Entry points, config and scripts legitimately have no inbound edge and appear here " +
+        "too. Reads the built graph, so results are as old as the last `keryx gdgraph build`.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
@@ -579,7 +590,14 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "memory.search",
       module: "memory",
-      description: "Deterministic search over long-term project memory.",
+      description:
+        "Deterministic ranked search over long-term project memory — lessons, decisions and " +
+        "constraints recorded by past sessions. Automatic recall is bounded to entries that are " +
+        "both `accepted` and current: drafts, rejected and superseded entries are never returned, " +
+        "so an empty result means nothing accepted matched, not that the project has no memory on " +
+        "the topic. The query must be non-empty and at most 4096 UTF-8 bytes, and the result count " +
+        "is capped. Invalid input comes back as an `error` field on a normal result with empty " +
+        "`hits` — it does not throw, so check `error` before reading `hits`.",
       inputSchema: OBJECT_SCHEMA(
         {
           query: { type: "string" },
@@ -595,7 +613,15 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "health.gate",
       module: "health",
-      description: "Read the latest Code Health artifact and return the quality-gate outcome.",
+      description:
+        "Return the quality-gate outcome (`status`, `exitCode`, `reasons`) from the stored Code " +
+        "Health report. This reads the last report and never runs the gate itself, so the verdict " +
+        "is only as fresh as the last `keryx health run` — read `lastRunAt` from health.status " +
+        "before reporting it as the current state. When no report exists at all it returns " +
+        "`status: \"fail\"` with the reason `no report; run keryx health run first`: that is an " +
+        "absent gate, not a failing one, and must not be reported as a quality failure. " +
+        "`strictWarn` makes a `warn` status exit non-zero. Returns the verdict and its reasons, " +
+        "not per-file findings — use health.explain for those.",
       inputSchema: OBJECT_SCHEMA({
         strictWarn: { type: "boolean" },
       }),
@@ -608,7 +634,13 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "health.status",
       module: "health",
-      description: "Read the latest Code Health status summary.",
+      description:
+        "Summarise the stored Code Health report: whether health is configured (`enabled`), when " +
+        "it last ran (`lastRunAt`), the gate status, per-source statuses, the project score and " +
+        "the counts of declining and regressed scopes. It reads the last report and never runs " +
+        "the checks, so `lastRunAt` is the staleness signal — check it before quoting any figure " +
+        "here as current. With no report the numeric fields come back `null` rather than zero; " +
+        "`null` means unknown, not healthy. Returns aggregates only, never per-file findings.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
@@ -658,7 +690,14 @@ export function buildToolRegistry(): ToolEntry[] {
     {
       name: "standard.validate",
       module: "standard",
-      description: "Validate the workspace against the Metaproject Standard.",
+      description:
+        "Validate this workspace's `.metaproject` layout against the Metaproject Standard — " +
+        "manifest, required files, module declarations and their consistency — and return the " +
+        "structured findings. This checks the Metaproject scaffolding, not the project's code: it " +
+        "says nothing about lint, types, tests or code quality, which belong to health.gate and " +
+        "health.status. It runs the checks live rather than reading a stored report, so the result " +
+        "always reflects the current working tree. Read-only: it reports problems and never fixes " +
+        "them.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
