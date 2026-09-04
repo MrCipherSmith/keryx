@@ -206,3 +206,6 @@ regressions.
 - 2026-09-04T08:25:41.855Z - task-done: T2: Implement per plan
 - 2026-09-04T08:25:41.950Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-04T08:25:42.038Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-04T08:34:24.531Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/452 (warning: PR is not a draft)
+- 2026-09-04T08:35:48.039Z - completing
+- 2026-09-04T08:35:50.833Z - done: all gates passed

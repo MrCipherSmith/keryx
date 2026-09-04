@@ -7,9 +7,9 @@
   "id": "226",
   "slug": "living-wiki-graph-phase-1-change-classif",
   "title": "Living Wiki + Graph phase 1: change classification, impact propagation, freshness queue and backlog",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-04T06:33:35.496Z",
-  "updatedAt": "2026-09-04T08:25:42.038Z",
+  "updatedAt": "2026-09-04T08:35:50.833Z",
   "source": {
     "type": "description",
     "ref": null
@@ -78,7 +78,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/452"
   },
   "tasks": [
     {
@@ -445,6 +445,25 @@
       "at": "2026-09-04T08:25:42.038Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-04T08:34:24.531Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/452 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-04T08:35:48.039Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-04T08:35:50.833Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "060453b6",
+    "ref": "origin/main",
+    "at": "2026-09-04T08:35:50.829Z"
+  }
 }

@@ -1,0 +1,118 @@
+[
+  {
+    "id": "F-NEW-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "changedSignatures keyed on SymbolNode.id, which appends @<startLine> when two symbols in a file share a name.",
+    "impact": "Any line shift made every same-named sibling look like one symbol vanishing and another appearing. Observed on the real corpus: adding a try/catch to src/gdgraph/build.ts reported twelve changed signatures (matchesAlias@455, candidateBases@484, ...) when none of those functions had changed. A signature verdict routes a page onto the expensive prose-enrichment path, so this is wasted model spend on every reflow.",
+    "suggested_fix": "Key on a position-free identity: path#container.name.",
+    "evidence": "First end-to-end run of `wiki freshness --since HEAD~5` against this repository. Every unit test passed throughout, because the fixtures use unique names — precisely the case the bug does not touch.",
+    "confidence": "high",
+    "file": "src/wiki/freshness/classify-change.ts",
+    "line": 155,
+    "class_scope": {
+      "sites": [
+        "src/wiki/freshness/classify-change.ts:155"
+      ],
+      "enumeration_method": "Only one place compares symbol sets."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Keys are now path#container.name, with the trade-off recorded at the site: same-named siblings collapse into one key, under-reporting a same-name overload change, which is the safe direction against firing on every reflow. Fixed on the reviewed branch at affe3337, merged into main as 060453b6."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked at affe3337 (merged as 060453b6): classify-change.ts builds its index from `${symbol.path}#${symbol.container}.${symbol.name}`; no reference to symbol.id remains in changedSignatures. Re-running `wiki freshness` over the same range reports build.ts as `body`, not twelve signature changes. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-NEW-002",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The post-commit hook silently dropped any commit touching a path that git renders in C-style quoting.",
+    "impact": "git quotes a path containing a quote, a backslash or a control byte, and core.quotePath=false does not disable that — it governs non-ASCII bytes only. The quoted line failed the ^src/ prefix filter, the hook returned 0, and one commit's worth of change vanished with no crash and no warning. Silent data loss in the accumulation layer is the worst failure mode this design has.",
+    "suggested_fix": "Detect the leading quote and mark the entry truncated, which already means 'do not trust this path list, re-read the revision from git'.",
+    "evidence": "Hook probe in a throwaway repository: three commits, one of them touching src/we\\\"ird.ts, produced only one queue line. Traced with sh -x to the prefix filter.",
+    "confidence": "high",
+    "file": "src/lib/templates.ts",
+    "line": 2050,
+    "class_scope": {
+      "sites": [
+        "src/lib/templates.ts:2050"
+      ],
+      "enumeration_method": "The hook is the only path-filtering shell in this change."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Quoted paths now set truncated=true and the entry is recorded rather than skipped; the probe reports two queue lines with the second carrying paths: []. Fixed on the reviewed branch at affe3337, merged into main as 060453b6."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the hook probe at affe3337 (merged as 060453b6): three commits including one touching a quoted path now produce two queue lines, the second with truncated=true and paths: []. The commit is no longer dropped. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-NEW-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "collectChanges diffed the base against the working tree while the report header printed 'base -> <sha>'.",
+    "impact": "Uncommitted edits were classified into a range whose label excluded them, so a clean commit could be reported as changed because of work still on disk. The label did not describe the measurement.",
+    "suggested_fix": "Diff fromRev..HEAD and read the after-side content from HEAD.",
+    "evidence": "Self-review of run.ts against the rendered range line in renderMarkdown.",
+    "confidence": "high",
+    "file": "src/wiki/freshness/run.ts",
+    "line": 111,
+    "class_scope": {
+      "sites": [
+        "src/wiki/freshness/run.ts:111"
+      ],
+      "enumeration_method": "Single diff invocation in the module."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Now diffs `<base> HEAD` and reads the after side via `git show HEAD:<file>`, falling back to the worktree only where git cannot answer. Fixed on the reviewed branch at affe3337, merged into main as 060453b6."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked at affe3337 (merged as 060453b6): the diff invocation is `[\"diff\",\"--name-status\",\"-M\",fromRev,\"HEAD\"]` and readCurrent consults `git show HEAD:<file>` first. The range label and the measurement agree. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-NEW-004",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "A page reachable from one change by several graph routes collected one near-identical reason row per route.",
+    "impact": "The duplicates buried the distinct causes the same page also had, making the backlog harder to read at exactly the moment it carries the most information.",
+    "suggested_fix": "One row per (source, change class), keeping the shortest path that reached it.",
+    "evidence": "Same first end-to-end run: components/src-tui.md showed the same src/flow/types.ts reason three times at different path lengths.",
+    "confidence": "high",
+    "file": "src/wiki/freshness/propagate.ts",
+    "line": 206,
+    "class_scope": {
+      "sites": [
+        "src/wiki/freshness/propagate.ts:206"
+      ],
+      "enumeration_method": "Single assembly point for reasons."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Reasons are deduplicated by source and class, keeping the shortest edge path. Fixed on the reviewed branch at affe3337, merged into main as 060453b6."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked at affe3337 (merged as 060453b6): propagate.ts passes reasons through dedupeReasons, keyed on source and change class. The live run shows one row per cause. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  }
+]
