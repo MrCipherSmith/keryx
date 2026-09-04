@@ -1,0 +1,60 @@
+[
+  {
+    "id": "F-NEW-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`wiki freshness` was registered with read: true while declaring that it writes data/wiki/freshness/latest.{json,md}.",
+    "impact": "The `read` flag feeds isAutoAllowable, so an agent could have invoked a writing command with no approval. The justification written at the time — read-only 'in the sense that matters to a caller' — treated a permission claim as a description of intent.",
+    "suggested_fix": "read: false, with the reasoning recorded at the site; the MCP surface is the genuinely read-only path.",
+    "evidence": "command-registry.coverage.test.ts: 'no descriptor claims read-only while declaring side effects' failed on the new entry.",
+    "confidence": "high",
+    "file": "src/standard/command-registry.ts",
+    "line": 129,
+    "class_scope": {
+      "sites": [
+        "src/standard/command-registry.ts:129"
+      ],
+      "enumeration_method": "All four new descriptors reviewed for the same claim; only this one made it."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at e8959bf1 (merged as 576c6535): read: false with an at-site note explaining why the earlier reasoning was wrong. The registry guard passes."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at e8959bf1, merged as 576c6535: the descriptor reads read: false and command-registry.coverage.test.ts passes. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-NEW-002",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Adding wikiFreshness as a required MetaprojectPort method broke eight test fakes and the adapter.",
+    "impact": "A required method forces every existing implementation to change for a capability most do not have, and would have made this change far larger than the value it adds.",
+    "suggested_fix": "Make it optional, following the existing loadSkill precedent, and have the caller report unavailability rather than fabricate an empty report.",
+    "evidence": "Eight typecheck errors across test fakes plus metaproject-adapter.ts on the first attempt.",
+    "confidence": "high",
+    "file": "src/harness/tool/metaproject-port.ts",
+    "line": 330,
+    "class_scope": {
+      "sites": [
+        "src/harness/tool/metaproject-port.ts:330"
+      ],
+      "enumeration_method": "The port has one other optional method, loadSkill, which set the precedent."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Made optional at e8959bf1 (merged as 576c6535); the operation returns an explicit unavailable message that says it is not evidence of freshness."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked at e8959bf1, merged as 576c6535: wikiFreshness is declared optional and typecheck passes with every pre-existing fake untouched. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  }
+]

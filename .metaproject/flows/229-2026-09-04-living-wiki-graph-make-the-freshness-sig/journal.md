@@ -53,3 +53,6 @@ tool. Updated rather than relaxed.
 - 2026-09-04T12:11:48.138Z - task-done: T4: Self-review and prepare draft PR
 - 2026-09-04T12:11:48.251Z - task-done: T2: Implement per plan
 - 2026-09-04T12:11:48.407Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T12:29:19.785Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/460 (warning: PR is not a draft)
+- 2026-09-04T12:29:20.097Z - completing
+- 2026-09-04T12:29:22.648Z - done: all gates passed

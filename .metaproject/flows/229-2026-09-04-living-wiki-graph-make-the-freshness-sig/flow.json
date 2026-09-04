@@ -7,9 +7,9 @@
   "id": "229",
   "slug": "living-wiki-graph-make-the-freshness-sig",
   "title": "Living Wiki + Graph: make the freshness signal reachable by agents",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-04T11:28:22.714Z",
-  "updatedAt": "2026-09-04T12:11:48.407Z",
+  "updatedAt": "2026-09-04T12:29:22.648Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/460"
   },
   "tasks": [
     {
@@ -290,6 +290,25 @@
       "at": "2026-09-04T12:11:48.407Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T12:29:19.785Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/460 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-04T12:29:20.097Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-04T12:29:22.648Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "576c6535",
+    "ref": "origin/main",
+    "at": "2026-09-04T12:29:22.647Z"
+  }
 }
