@@ -45,6 +45,7 @@ const EXPECTED_NAMES = [
   "test_related",
   "wiki_ask",
   "wiki_backlinks",
+  "wiki_freshness",
 ];
 
 interface PortCalls {

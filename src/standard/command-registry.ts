@@ -125,6 +125,83 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: ["writes wiki/** page bodies", "calls a model provider"],
   },
+  {
+    module: "gdwiki",
+    command: "wiki freshness",
+    summary: "Report which wiki pages a code change puts in doubt, and why. Read-only.",
+    intent: [
+      "какие страницы вики устарели",
+      "wiki freshness",
+      "свежесть вики",
+      "what documentation is stale",
+      "which wiki pages need updating",
+    ],
+    args: [
+      { name: "since", type: "string", required: false, desc: "base revision; defaults to the freshness queue, then HEAD~1" },
+      { name: "all", type: "bool", required: false, desc: "include advisory (fyi) rows, hidden by default" },
+      { name: "json", type: "bool", required: false, desc: "structured report (schemas/freshness-report.schema.json)" },
+    ],
+    json: true,
+    // `read: false`, despite changing no wiki page and no source file.
+    //
+    // I first set this `true` on the reasoning that it is read-only "in the
+    // sense that matters", and the registry's own coverage guard rejected it:
+    // a descriptor may not claim read-only while declaring side effects. The
+    // guard is right and the reasoning was not. `read` feeds `isAutoAllowable`,
+    // so `true` here would let an agent invoke it with no approval — and it
+    // writes. Whether the write is small is beside the point.
+    //
+    // The MCP surface `wiki_freshness` is the genuinely read-only way to ask
+    // this question: it reads the report and writes nothing at all.
+    read: false,
+    sideEffects: ["writes data/wiki/freshness/latest.{json,md}"],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki refresh",
+    summary: "Regenerate managed Reference blocks from the code graph. Deterministic; calls no model.",
+    intent: ["обнови reference вики", "wiki refresh", "перегенерируй справочник страницы", "refresh wiki reference"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path; default is every page with a managed block" },
+      { name: "force", type: "bool", required: false, desc: "overwrite a block that was edited by hand" },
+      { name: "dry-run", type: "bool", required: false, desc: "report what would change without writing" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "rewrites the managed Reference block of affected pages",
+      "bumps page Version and appends one Changelog line",
+      "stamps VerifiedAt and VerifiedScope on refreshed pages",
+    ],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki verify",
+    summary: "Stamp page provenance. --page records a review; --baseline sets a measurement starting line.",
+    intent: ["подтверди страницу вики", "wiki verify", "отметь страницу как проверенную", "stamp wiki provenance"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path — records that this page was reviewed" },
+      { name: "baseline", type: "bool", required: false, desc: "stamp the whole corpus as a starting line; NOT a claim the pages were read" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes VerifiedAt and VerifiedScope into page frontmatter"],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki migrate-markers",
+    summary: "One-off: wrap existing Reference sections in managed-block markers. Idempotent; authors no content.",
+    intent: ["добавь маркеры в вики", "wiki migrate markers", "разметь reference блоки"],
+    args: [
+      { name: "dry-run", type: "bool", required: false, desc: "report what would change without writing" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["inserts marker comments around the Reference section of pages that have one"],
+  },
   // ---- memory -----------------------------------------------------------
   {
     module: "memory",

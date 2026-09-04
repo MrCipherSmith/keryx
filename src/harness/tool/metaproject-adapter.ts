@@ -1,3 +1,4 @@
+import { freshnessReportPath, readWikiFreshnessMetric } from "../../health/metrics/wiki-freshness";
 // Reference MetaprojectPort adapter (flow 037 / MP-2).
 //
 // `createMetaprojectAdapter(cwd, deps?)` returns a `MetaprojectPort` backed by the
@@ -362,6 +363,53 @@ export function createMetaprojectAdapter(
           ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),
           hits: [],
           error: errorMessage(cause),
+        };
+      }
+    },
+
+    /**
+     * LWG: the last freshness report, projected for a caller deciding whether to
+     * trust a page. Reads ONE json file — never recomputes, because a traversal
+     * behind a call the caller thinks is a read is a cost they did not agree to.
+     *
+     * A missing or damaged report yields a status and a reason, never an empty
+     * `pages` list that reads as a clean wiki.
+     */
+    async wikiFreshness(input: { page?: string }) {
+      const metric = await readWikiFreshnessMetric(cwd);
+      if (metric.status !== "measured" && metric.status !== "stale-evidence") {
+        return {
+          status: metric.status,
+          ...(metric.reason ? { reason: metric.reason } : {}),
+          pages: [],
+          limitations: [],
+        };
+      }
+      try {
+        const raw = await readFile(freshnessReportPath(cwd), "utf8");
+        const report = JSON.parse(raw) as {
+          generatedAt?: string;
+          totals?: Record<string, number>;
+          pages?: Array<{ path: string; category: string; confidence: string; commitsBehind: number; verifiedAt: string | null }>;
+          limitations?: Array<{ code: string; detail: string }>;
+        };
+        const pages = (report.pages ?? []).filter(
+          (entry) => input.page === undefined || entry.path === input.page,
+        );
+        return {
+          status: metric.status,
+          ...(metric.reason ? { reason: metric.reason } : {}),
+          ...(report.generatedAt ? { generatedAt: report.generatedAt } : {}),
+          ...(report.totals ? { totals: report.totals } : {}),
+          pages,
+          limitations: report.limitations ?? [],
+        };
+      } catch (cause) {
+        return {
+          status: "unreadable-report",
+          reason: errorMessage(cause),
+          pages: [],
+          limitations: [],
         };
       }
     },
