@@ -37,7 +37,6 @@ model, and `keryx wiki verify --page <p>` records that someone reviewed a
 page. Do not stamp provenance on a human's behalf — the field means a person
 looked.
 
-
 Use this skill for project knowledge that is not a literal code detail:
 architecture, domain models, business rules, user scenarios, service/component
 responsibilities, integrations, and known decisions. The user does not need to
