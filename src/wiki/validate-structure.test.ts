@@ -103,3 +103,23 @@ describe("changelog ordering (AC10)", () => {
     expect(await issuesOf(cwd, "changelog")).toEqual([]);
   });
 });
+
+describe("the sentinel is not a path (regression)", () => {
+  test("`Describes: none` raises no describes issue", async () => {
+    // It did, on the very PR that introduced the sentinel: the resolver
+    // learned about it and the validator did not, so four pages were reported
+    // as naming a missing path called "none" and the CI gate refused the
+    // change. Pinned here so the two cannot drift apart again.
+    const cwd = await project({
+      "components/a.md": `${HEAD}Describes: none  # rendered from the graph, so its scope would be everything\n\n## Overview\n\nProse.\n`,
+    });
+    expect(await issuesOf(cwd, "describes")).toEqual([]);
+  });
+
+  test("a genuinely missing path is still reported", async () => {
+    const cwd = await project({
+      "components/a.md": `${HEAD}Describes:\n  - src/gone.ts\n\n## Overview\n\nProse.\n`,
+    });
+    expect((await issuesOf(cwd, "describes")).join(" ")).toContain("src/gone.ts");
+  });
+});
