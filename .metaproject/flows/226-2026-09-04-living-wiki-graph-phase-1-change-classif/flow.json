@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "226",
+  "slug": "living-wiki-graph-phase-1-change-classif",
+  "title": "Living Wiki + Graph phase 1: change classification, impact propagation, freshness queue and backlog",
+  "status": "in-progress",
+  "createdAt": "2026-09-04T06:33:35.496Z",
+  "updatedAt": "2026-09-04T06:34:58.037Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6a076db6d05d0517e419e3d5696ac3f6a1e432e78c0d192cf2ba69a8c21529c3",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context is the committed requirements package (specification 2.0.0) plus flow 225's journal and review rounds; re-deriving it through workers would duplicate reviewed work"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Freshness queue writer + post-commit hook body, append-only, 50ms budget (AC6,AC14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Change classification over SymbolNode.signature with honest degradation (AC1,AC2,AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Both freshness paths: git range and VerifiedScope fallback (AC11,AC12)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "keryx wiki freshness: categories, limitations, --json, exit 0 always (AC5,AC7,AC8,AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Orphan category projected from wikiPruneOrphans, not reimplemented (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Tests per AC incl. no-git, absent graph, corrupt queue line, hub-module propagation (AC15)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T06:33:35.496Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T06:34:57.211Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T06:34:57.303Z",
+      "event": "task-added",
+      "detail": "T5: Freshness queue writer + post-commit hook body, append-only, 50ms budget (AC6,AC14)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.378Z",
+      "event": "task-added",
+      "detail": "T6: Change classification over SymbolNode.signature with honest degradation (AC1,AC2,AC4)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.459Z",
+      "event": "task-added",
+      "detail": "T7: Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.534Z",
+      "event": "task-added",
+      "detail": "T8: Both freshness paths: git range and VerifiedScope fallback (AC11,AC12)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.635Z",
+      "event": "task-added",
+      "detail": "T9: keryx wiki freshness: categories, limitations, --json, exit 0 always (AC5,AC7,AC8,AC9)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.733Z",
+      "event": "task-added",
+      "detail": "T10: Orphan category projected from wikiPruneOrphans, not reimplemented (AC10)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.834Z",
+      "event": "task-added",
+      "detail": "T11: Tests per AC incl. no-git, absent graph, corrupt queue line, hub-module propagation (AC15)"
+    },
+    {
+      "at": "2026-09-04T06:34:57.938Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T06:34:58.037Z",
+      "event": "started"
+    }
+  ]
+}
