@@ -3,6 +3,64 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.79] — 2026-09-04
+
+One commit. It removes the last reason `.mcp.json` could not be committed: the
+absolute path of whoever ran the installer.
+
+### Fixed
+
+- **`keryx mcp serve` takes the project root from the runtime when no `--cwd` is
+  given.** Resolution order is now explicit `--cwd`, then `CLAUDE_PROJECT_DIR`,
+  then the process cwd. Nothing that worked before behaves differently; what
+  changes is that a config carrying **no `--cwd` at all** now serves the right
+  project, so there is no machine-specific string left to get wrong.
+
+  The defect this closes: `keryx mcp install` writes the installing machine's
+  absolute path. Committed, that file is correct on exactly one machine — this
+  repository's copy carried a macOS path from 2026-08-13 and the server silently
+  failed to start on Linux until 2026-09-02. 0.2.76 untracked the file, which
+  fixed the symptom by making every developer re-run the installer.
+
+  The documented cure — `${CLAUDE_PROJECT_DIR}` inside `args` — **does not
+  work**, measured against Claude Code 2.1.220 with a wrapper that logged its own
+  `argv`, `pwd` and environment before `exec`ing keryx. The bare form arrives
+  verbatim and unexpanded; the `${VAR:-.}` form expands to its *fallback*. The
+  same probe showed the way through: the variable is present and correct in the
+  spawned server's **environment**. The runtime does hand over the project root,
+  just not through argv.
+
+  A blank variable is ignored rather than honoured — `path.resolve("")` is the
+  process cwd, so honouring it would look identical to the fallback while
+  claiming to be the runtime's answer.
+
+  Evidence, and the control that kept it from being read wrong: `claude mcp get`
+  reports `✔ Connected` for a server pointed at a nonexistent path, so the status
+  line proves nothing about which root resolved. The discriminating observable is
+  the tool count — variable unset, cwd this repository: **39 tools**; variable set
+  to an empty directory: **0**.
+
+  **Not changed:** the installer still writes `--cwd <absolute>`. Dropping it is
+  only safe for a runtime that supplies the root in the environment, and only
+  Claude Code has been measured. Cursor, opencode and VS Code are unmeasured and
+  untouched.
+
+### Added
+
+- **An assessment of the Claude Code plugin system** as a possible fifth
+  connection interface, in `docs/requirements/keryx-claude-plugin/`. Its
+  conclusion is negative on the engineering case: everything a plugin would do
+  technically is reachable without one, and it still cannot install the binary or
+  create a workspace. The one argument that survives is distribution through the
+  plugin marketplace, which is a product decision rather than a technical one.
+
+  The document records its own strongest argument being wrong — it claimed only a
+  plugin could make the MCP config machine-independent — and keeps the failed
+  claim next to its refutation. It also notes that
+  `keryx skills export --runtime plugin` emits `marketplace.json` inside
+  `.claude-plugin/`, which makes `claude plugin validate` check the marketplace
+  manifest and never look at the plugin manifest.
+
 ## [0.2.78] — 2026-09-05
 
 One theme, arrived at from two directions: a generated document that says
