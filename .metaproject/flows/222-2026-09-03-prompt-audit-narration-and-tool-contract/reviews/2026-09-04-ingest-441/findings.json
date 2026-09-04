@@ -1,0 +1,248 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "major",
+    "problem": "health.status claimed that with no report the numeric fields come back `null` rather than zero.",
+    "impact": "regressions, decliningScopes and regressedScopes are typed `number` (health/types.ts:220-222) and computed `latest ? … : 0` (health/service.ts:112-117), so they return 0. An agent following the description reads 0 as \"no regressions\" when it actually means \"no report\" — the exact absent-vs-clean trap PR #441 named for health.gate, reintroduced one tool down.",
+    "suggested_fix": "State that lastRunAt, gate and projectScore are null while the three counts are 0, and that the guard is `lastRunAt !== null` before reading any count.",
+    "evidence": "src/health/types.ts:220-222; src/health/service.ts:112-117,126-128",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/mcp/tools.ts health.status description (held the defect)",
+        "src/mcp/tools.ts health.gate description (same absent-report family; states the status:\"fail\" shape and is correct)",
+        "src/mcp/tools.ts gdgraph.cycles description (same absent-source family; was silent — raised as F-006)",
+        "src/mcp/tools.ts gdgraph.orphans description (same absent-source family; was silent — raised as F-006)"
+      ],
+      "enumeration_method": "For each of the 23 registered tools in src/mcp/tools.ts, read the service method its invoke() calls and compared the description's stated absent-source return shape against the declared return type in that module's types.ts. Only these four read a stored or built artifact that can be absent; every other tool computes live and has no absent-source shape, so the class has exactly four members."
+    },
+    "global_id": "2026-09-03-pr-441#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (src/mcp/tools.ts, health.status description). Verified independently against health/types.ts before accepting the finding."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:648-651 distinguishes the null fields (lastRunAt, gate, projectScore) from the zero fields (regressions, decliningScopes, regressedScopes) and gates on lastRunAt !== null; health/service.ts:106-130 matches exactly. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "major",
+    "problem": "health.gate directed the caller to `health.explain` for per-file findings. No such MCP tool exists.",
+    "impact": "The MCP registry exposes only health.gate and health.status; `explain` is a CLI subcommand (src/commands/health.ts:37). The reference is written in the same dotted naming as the real tools, so it reads as a sibling tool and resolves to nothing — an agent calls a tool that is not there.",
+    "suggested_fix": "Name the `keryx health explain <file-or-module>` CLI command and say explicitly that there is no MCP tool for per-file findings.",
+    "evidence": "src/mcp/tools.ts:624 (the claim); src/commands/health.ts:37,143; registry has only health.gate/health.status",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "sac.collaboration -> sac.overview, sac.read, sac.workspaceList",
+        "sac.overview -> sac.read",
+        "sac.propose -> sac.review",
+        "sac.workspaceList -> sac.workspaceCreate",
+        "sac.workspaceShow -> sac.workspaceList",
+        "sac.workspaceCreate -> sac.workspaceList",
+        "health.gate -> health.status, health.explain (the defect)",
+        "standard.validate -> health.gate, health.status"
+      ],
+      "enumeration_method": "Script over src/mcp/tools.ts extracting the 23 registered tool names and every dotted <module>.<name> identifier appearing inside a description string, then set-membership against the registry. Twelve references, exactly one non-member: health.explain. Re-run after the fix reports zero non-members (the one remaining hit, receipt.contextAssembly, is a field path rather than a tool reference)."
+    },
+    "global_id": "2026-09-03-pr-441#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc. Verified independently: grep over src/mcp/tools.ts shows health.explain occurring only inside the description text itself."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:628-630 points at the `keryx health explain <file-or-module>` CLI command and states no MCP tool exposes it. No tool named health.explain is registered in buildToolRegistry or metaproject-tools; commands/health.ts:37 confirms the CLI command is real. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "major",
+    "problem": "sac.overview claimed an over-budget workspace comes back truncated, as a page.",
+    "impact": "The tool passes no `optional` ids, so every candidate is required (fwk-service.ts:599-601) and resolve returns the assembly error whole (`if (\"code\" in assembly) return assembly`): context_overflow, no manifest, no receipt. An agent expecting a partial page gets nothing and may read the empty result as an empty workspace.",
+    "suggested_fix": "State that the budget is all-or-nothing, that the failure shape is { code: \"context_overflow\", requiredId }, and that the caller must branch on `code` before reading the manifest.",
+    "evidence": "src/sac/fwk-service.ts:560-561,590,599-601,604; src/ctx/assembly.ts:11; src/sac/fwk-service.test.ts:118-122",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/mcp/tools.ts:198 sac.overview (held the defect)",
+        "src/mcp/tools.ts:211 sac.read (held the defect)"
+      ],
+      "enumeration_method": "grep for 'budget: { maxItems' across src/mcp/tools.ts returns exactly these two call sites into the FWK read service, which are therefore the only tools reaching the required-candidate overflow path at src/ctx/assembly.ts:11. sac.collaboration was checked and excluded: collaboration-service.ts:14 overview() takes no budget parameter. Both members of the class held the defect; both are fixed."
+    },
+    "global_id": "2026-09-03-pr-441#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc. Verified independently by reading fwk-service.ts resolve/overview: optional is empty, so required is true for every candidate."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:188 states the budget is all-or-nothing and names { code: \"context_overflow\", requiredId } with no manifest and no receipt. fwk-service.ts:560-605 leaves optional empty so every candidate is required; assembly.ts:11 returns the overflow object and resolve() returns it whole at :604. No truncation path exists. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "major",
+    "problem": "sac.read claimed a long item is truncated rather than refused.",
+    "impact": "read() resolves with required=[itemId] (fwk-service.ts:566), so an item over maxTokens hits the same required-overflow path and is refused with context_overflow. Nothing truncates item text anywhere. An agent told to \"check the returned content before treating it as complete\" would look for partial content that never exists.",
+    "suggested_fix": "State that content is never returned partially and that an oversized item is refused with context_overflow; tell the caller to raise maxTokens and retry.",
+    "evidence": "src/sac/fwk-service.ts:566,599; src/ctx/assembly.ts:11",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/mcp/tools.ts:198 sac.overview (held the defect)",
+        "src/mcp/tools.ts:211 sac.read (held the defect)"
+      ],
+      "enumeration_method": "grep for 'budget: { maxItems' across src/mcp/tools.ts returns exactly these two call sites into the FWK read service, which are therefore the only tools reaching the required-candidate overflow path at src/ctx/assembly.ts:11. sac.collaboration was checked and excluded: collaboration-service.ts:14 overview() takes no budget parameter. Both members of the class held the defect; both are fixed."
+    },
+    "global_id": "2026-09-03-pr-441#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc, same verification as F-003."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:202 states content is never returned partially and an oversized item is refused with context_overflow. fwk-service.ts:566 sets required:[itemId], optional:[], reaching the same overflow path. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "minor",
+    "problem": "sac.overview claimed it returns references and summaries, never full item bodies, and that sac.read is where content comes from.",
+    "impact": "overview and read share one resolve/success path and build the identical manifest, which carries each fact's full `statement` (fwk-service.ts:613). normalizeFwkResult is a deep clone and strips nothing. sac.read narrows to one id; it does not reveal content overview withheld. The description invents a projection that does not exist.",
+    "suggested_fix": "Say overview returns the same full statement content as sac.read for every item that fits the budget.",
+    "evidence": "src/sac/fwk-service.ts:597,613,766",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc. Verified independently by reading the manifest construction in fwk-service.ts success()."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:188 states returned items carry their full statement, the same content sac.read returns. fwk-service.ts:613 success() maps facts to the raw fact.statement, and success() is the single path shared by overview() and read(). Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "minor",
+    "problem": "gdgraph.cycles and gdgraph.orphans did not say what comes back when no graph was ever built.",
+    "impact": "loadGraphSafe degrades to an empty graph (src/mcp/tools.ts:49-55), so both return []. An empty result is indistinguishable from \"no cycles\" / \"no orphans\" — the same absent-vs-clean confusion the flow set out to fix in health.gate, left unnamed in the two tools where it also exists.",
+    "suggested_fix": "State on both that with no graph built the result is an empty list rather than an error, and that a build must be confirmed before reporting a clean result.",
+    "evidence": "src/mcp/tools.ts:49-55; src/gdgraph/query.ts:115-118",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc on both descriptions."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:497-500 (cycles) and :516-518 (orphans) both state that with no graph built the result is an empty list rather than an error and that a build must be confirmed. loadGraphSafe at tools.ts:49-55 degrades to an empty graph. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "minor",
+    "problem": "gdgraph.orphans claimed entry points, config and scripts legitimately appear in the list.",
+    "impact": "getOrphans requires absence from both inbound and outbound sets (src/gdgraph/query.ts:31-33), so a real entry point that imports anything never appears. An agent is told to expect entry points and will either discount a genuine orphan as \"probably an entry point\" or mis-triage their absence.",
+    "suggested_fix": "Say zero-degree only, and that a real entry point with outbound edges will not appear — so absence from the list is no evidence of reachability.",
+    "evidence": "src/gdgraph/query.ts:24-34",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:515-516 states zero-degree only and that a real entry point with outbound edges will not appear, so absence is no evidence of reachability. query.ts:24-35 filters to nodes in neither inbound nor outbound. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "minor",
+    "problem": "sac.read said item ids come from sac.overview, but the overview manifest contains no ids.",
+    "impact": "Facts are projected to { statement, evidence, observedAt, expiresAt, freshness } and knowHow is destructured to drop `id` (fwk-service.ts:613). Ids survive only in receipt.contextAssembly.selected, prefixed `./ids/`. An agent following the description searches the manifest, finds nothing, and cannot construct an itemId.",
+    "suggested_fix": "Name the receipt field and the `./ids/` prefix that must be stripped.",
+    "evidence": "src/sac/fwk-service.ts:613,636",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:202 states ids are absent from the overview manifest and live at receipt.contextAssembly.selected behind a ./ids/ prefix. fwk-service.ts:613 omits id from the manifest projection; :636 builds the prefixed receipt ids. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "minor",
+    "problem": "health.gate quoted the no-report reason without the backticks the code actually emits.",
+    "impact": "The emitted value is \"no report; run `keryx health run` first\" (health/service.ts:138). Anything matching on the documented literal misses.",
+    "suggested_fix": "Quote the literal verbatim, backticks included, and say so.",
+    "evidence": "src/health/service.ts:138",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:624-626 quotes the literal with its inner backticks and says to match it exactly. health/service.ts:138 emits the reason with backticks around the command. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "mcp-contract-accuracy",
+    "severity": "info",
+    "problem": "gdgraph.cycles measured staleness against commits (\"will not reflect uncommitted edits\") rather than against the last build.",
+    "impact": "A build run after editing does include uncommitted edits, and a graph built before a commit does not reflect that commit either. The phrasing points at the wrong boundary.",
+    "suggested_fix": "Say the result reflects no edit made since that build.",
+    "evidence": "src/mcp/tools.ts (cycles description); staleness is defined by `keryx gdgraph build`, not by git state",
+    "confidence": "high",
+    "global_id": "2026-09-03-pr-441#F-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-checked against commit 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc (the post-fix working tree; `git diff --quiet 0d341e3e2ab5f20ae2e8eba65dad1544ab0fedbc -- src/mcp/tools.ts` reports no difference, so the text read is that commit's). Current tools.ts:497-498 frames staleness as the last `keryx gdgraph build` and no edit made since it, with no commit claim. query.ts reads stored jsonl with no commit-distance logic; gdgraph/staleness.ts independently confirms a build-vs-current-state signal. Does not reproduce.",
+      "verifier": "post-fix-recheck"
+    }
+  }
+]
