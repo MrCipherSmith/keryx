@@ -300,7 +300,20 @@ export async function verifyPages(input: {
   cwd: string;
   page?: string | undefined;
   head?: string | undefined;
+  /**
+   * Stamp every page rather than one. Required for corpus-wide stamping and
+   * named `baseline` rather than `all` on purpose: stamping 44 pages at once
+   * does NOT mean 44 pages were read. It establishes a starting line so the
+   * freshness report can measure drift from somewhere, and the caller has to
+   * say that is what they meant.
+   */
+  baseline?: boolean | undefined;
 }): Promise<Array<{ path: string; verifiedAt: string | null; verifiedScope: string }>> {
+  if (input.page === undefined && input.baseline !== true) {
+    throw new Error(
+      "wiki verify: pass --page <path> to record that a page was reviewed, or --baseline to stamp the whole corpus as a measurement starting line. Stamping every page silently would assert a review that did not happen.",
+    );
+  }
   const graph = await loadGraph(input.cwd);
   const keyFilesIndex = computeModuleKeyFiles(graph);
   const knownPaths = new Set(

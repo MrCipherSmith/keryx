@@ -12,3 +12,24 @@
 - 2026-09-04T09:06:45.695Z - frozen: 12 criteria; checksum recorded
 - 2026-09-04T09:06:45.795Z - started
 - 2026-09-04T09:08:14.535Z - task-done: T5: Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)
+- 2026-09-04T09:18:48.432Z - task-done: T6: wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)
+- 2026-09-04T09:18:48.574Z - task-done: T7: Reference rendering reused from the existing collect renderer, not rewritten (AC1)
+- 2026-09-04T09:18:48.695Z - task-done: T8: wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)
+- 2026-09-04T09:18:48.809Z - task-done: T9: wiki verify: stamps provenance only, changes nothing else (AC6)
+- 2026-09-04T09:18:49.023Z - task-done: T10: wiki validate extension: markers, describes targets, monotonic changelog (AC10)
+- 2026-09-04T09:18:49.144Z - task-done: T11: End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)
+- 2026-09-04T09:26:03.943Z - task-done: T2: Implement per plan
+- 2026-09-04T09:26:05.246Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T09:26:05.638Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-04T09:26:06.610Z - ac-confirmed: AC1: refresh.test.ts 'rewrites the block on an accepted page, changing nothing outside it' — prose and the following section compared byte-for-byte
+- 2026-09-04T09:26:07.129Z - ac-confirmed: AC2: refreshPages imports no provider and takes none; refresh.test.ts completes a full refresh with no model configuration present
+- 2026-09-04T09:26:07.420Z - ac-confirmed: AC3: refresh.test.ts 'a hand-edited block is refused, and --force overwrites it' — file byte-identical after the refusal
+- 2026-09-04T09:26:07.648Z - ac-confirmed: AC4: managed-block.test.ts 'running it twice is a no-op' + refresh.test.ts idempotence; duplicated Reference heading refused; no section is never created
+- 2026-09-04T09:26:08.328Z - ac-confirmed: AC5: Real corpus: 40 migrated, 10 skipped, 0 malformed. Diff = 80 added lines across 40 files, ALL markers, zero removed lines, zero non-marker additions
+- 2026-09-04T09:26:08.657Z - ac-confirmed: AC6: refresh.test.ts 'stamps provenance and changes nothing else' — every non-provenance line identical
+- 2026-09-04T09:26:09.478Z - ac-confirmed: AC7: Real corpus end-to-end: before stamping 0 fresh / 44 affected; after wiki verify 44 fresh / 0 affected; after committing real src/wiki changes exactly 4 pages went stale with correct reasons and '1 commits behind'
+- 2026-09-04T09:26:09.722Z - ac-confirmed: AC8: refresh.test.ts 'bumps only the patch and appends exactly one changelog line' — Version 1.0.0 -> 1.0.1, two changelog lines total
+- 2026-09-04T09:26:10.295Z - ac-confirmed: AC9: refresh.test.ts 'an already-current page is not rewritten at all' — second refresh leaves the file byte-identical
+- 2026-09-04T09:26:10.673Z - ac-confirmed: AC10: validate-structure.test.ts: truncated block, unknown marker version, hand-edited block, missing Describes target, non-monotonic changelog. wiki validate passes clean on the migrated corpus
+- 2026-09-04T09:26:11.050Z - ac-confirmed: AC11: managed-block.test.ts 'an unknown marker version is refused, not guessed at'
+- 2026-09-04T09:26:11.443Z - ac-confirmed: AC12: Full suite 6758 pass / 48 fail — the same 48 that fail at the branch base

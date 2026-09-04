@@ -534,13 +534,30 @@ async function runVerifyCommand(args: string[]): Promise<void> {
   const cwd = process.cwd();
   const page = optionValue(args, "--page");
   const head = await currentHead(cwd);
-  const stamped = await verifyPages({ cwd, ...(page ? { page } : {}), ...(head ? { head } : {}) });
+  let stamped;
+  try {
+    stamped = await verifyPages({
+      cwd,
+      ...(page ? { page } : {}),
+      ...(head ? { head } : {}),
+      baseline: args.includes("--baseline"),
+    });
+  } catch (error) {
+    process.stdout.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return;
+  }
 
   if (args.includes("--json")) {
     process.stdout.write(`${JSON.stringify(stamped, null, 2)}\n`);
     return;
   }
-  process.stdout.write(`verified ${stamped.length} page(s)${head ? ` at ${head.slice(0, 8)}` : " (no git; scope hash only)"}\n`);
+  const what = args.includes("--baseline") ? "baselined" : "verified";
+  process.stdout.write(`${what} ${stamped.length} page(s)${head ? ` at ${head.slice(0, 8)}` : " (no git; scope hash only)"}\n`);
+  if (args.includes("--baseline")) {
+    process.stdout.write(
+      "  (a baseline is a measurement starting line, not a claim that these pages were read)\n",
+    );
+  }
   for (const entry of stamped) {
     process.stdout.write(`  ${entry.path}\n`);
   }

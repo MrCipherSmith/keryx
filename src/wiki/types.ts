@@ -134,7 +134,9 @@ export type WikiCheckLinksResult = {
 export type WikiValidateInput = { cwd: string };
 export type WikiValidateIssue = {
   page: string;
-  kind: "metadata" | "version" | "link" | "index";
+  // `managed-block`, `describes` and `changelog` added by LWG-14 (flow 227):
+  // structural rules the managed block makes checkable at all.
+  kind: "metadata" | "version" | "link" | "index" | "managed-block" | "describes" | "changelog";
   message: string;
 };
 export type WikiValidateResult = {

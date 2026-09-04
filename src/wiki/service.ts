@@ -235,6 +235,12 @@ export async function wikiValidate(cwd: string): Promise<WikiValidateResult> {
     }
   }
 
+  // LWG-14 (flow 227): structural rules the managed block makes checkable.
+  // Deterministic only — no model is consulted here, and `--deep` prose
+  // checking is deliberately not part of `validate`, so this stays safe to
+  // run in CI.
+  await validateStructure(cwd, pages, issues);
+
   const linkCheck = await wikiCheckLinks(cwd);
   for (const broken of linkCheck.broken) {
     issues.push({
@@ -1264,4 +1270,81 @@ function excerptMarkdown(content: string, maxLines: number): string[] {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Managed-block, describe-target and changelog rules (LWG-14, flow 227).
+ *
+ * A damaged page is reported, never repaired: `validate` says what is wrong,
+ * and `refresh`/`migrate-markers` are the things allowed to change a file.
+ */
+async function validateStructure(
+  cwd: string,
+  pages: readonly WikiPage[],
+  issues: WikiValidateIssue[],
+): Promise<void> {
+  const { findManagedBlock } = await import("./managed-block");
+  const { parseDescribesField } = await import("./describes");
+
+  for (const page of pages) {
+    let content: string;
+    try {
+      content = await readFile(page.absolutePath, "utf8");
+    } catch {
+      continue;
+    }
+
+    const block = findManagedBlock(content);
+    if (block.kind === "malformed") {
+      issues.push({
+        page: page.relativePath,
+        kind: "managed-block",
+        message: `managed Reference block is malformed: ${block.reason}`,
+      });
+    } else if (block.kind === "present" && block.block.handEdited) {
+      // Not an error — a legitimate state a person may choose — but it means
+      // `refresh` will refuse this page until someone decides, so it belongs
+      // in the report rather than as a surprise later.
+      issues.push({
+        page: page.relativePath,
+        kind: "managed-block",
+        message: "managed Reference block was edited by hand; `wiki refresh` will refuse it without --force",
+      });
+    }
+
+    for (const pattern of parseDescribesField(content)) {
+      if (pattern.includes("*")) {
+        continue;
+      }
+      if (!(await pathExists(path.join(cwd, pattern)))) {
+        issues.push({
+          page: page.relativePath,
+          kind: "describes",
+          message: `Describes names a path that does not exist: ${pattern}`,
+        });
+      }
+    }
+
+    const versions = [...content.matchAll(/^-\s+(\d+\.\d+\.\d+)\s+-/gm)].map((match) => match[1] as string);
+    for (let index = 1; index < versions.length; index += 1) {
+      if (compareSemver(versions[index - 1] as string, versions[index] as string) < 0) {
+        issues.push({
+          page: page.relativePath,
+          kind: "changelog",
+          message: `changelog versions are not newest-first: ${versions[index - 1]} appears above ${versions[index]}`,
+        });
+        break;
+      }
+    }
+  }
+}
+
+function compareSemver(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const diff = (pa[index] ?? 0) - (pb[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
