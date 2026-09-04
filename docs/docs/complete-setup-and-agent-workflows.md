@@ -492,7 +492,8 @@ the supported runtimes listed in section 6.
 | `keryx gdgraph affected <target> --depth N --ranked` | Compute a ranked transitive blast radius. |
 | `keryx gdgraph repomap --budget N` | Write a token-budgeted repository map. |
 | `keryx gdgraph repomap --changed` | Bias the map toward changed files. |
-| `keryx gdgraph context` | Emit the graph orientation fragment. |
+| `keryx gdgraph context` | Emit the graph orientation fragment, ending in the freshness line. |
+| `keryx gdgraph build` (after moving files) | Refresh the graph before trusting an answer; the post-commit hook does the committed half. |
 | `keryx gdgraph assets list` | Show declared graph assets and availability. |
 | `keryx gdgraph assets verify [<id>]` | Verify asset checksums. |
 | `keryx gdgraph assets pull <id>` | Explicitly download and verify one asset. |

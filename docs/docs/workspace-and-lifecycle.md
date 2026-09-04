@@ -341,7 +341,7 @@ pre-push gate (blocks in `enforced`/`ci` mode).
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|
 | gdgraph post-commit | post-commit | rebuilds the graph (`keryx gdgraph build`) after a graph-relevant commit; warns instead of failing, `KERYX_GDGRAPH_HOOK_REBUILD=0` reverts it to a reminder | on |
-| gdwiki post-commit | post-commit | reminder that wiki drafts may be stale (installed with the gdgraph post-commit hook) | on (derived) |
+| gdwiki post-commit | post-commit | appends one entry to `data/wiki/freshness-queue.jsonl` for `keryx wiki freshness` to drain (installed with the gdgraph post-commit hook) | on (derived) |
 | gdskills post-commit | post-commit | skill verify / staleness reminder | on |
 | health post-commit | post-commit | reminder to re-run health | on |
 | dashboard post-commit | post-commit | rebuild the dashboard (installed if any post-commit hook is enabled) | on (derived) |
