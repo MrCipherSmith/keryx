@@ -9,7 +9,7 @@
   "title": "Living Wiki + Graph phase 0: describes edge, content hashes, page provenance",
   "status": "in-progress",
   "createdAt": "2026-09-03T20:55:59.785Z",
-  "updatedAt": "2026-09-04T05:34:58.874Z",
+  "updatedAt": "2026-09-04T05:44:53.798Z",
   "source": {
     "type": "description",
     "ref": null
@@ -95,7 +95,7 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -103,14 +103,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T10, which decompose the same implementation against named ACs"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -118,14 +120,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T11: 4 new test files, 125 new passing tests, all 13 ACs confirmed with evidence"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -133,7 +137,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done against the generated layer on the real repo: 50 pages (42 component/7 architecture/1 decision), 373 describes edges, 6 undecidable (5 architecture + 1 SAC decision), origins 168 related-code / 205 key-files, 1120 manifest fingerprints. Draft PR not opened: push requires the MrCipherSmith account and was not authorised"
     },
     {
       "id": "T5",
@@ -437,6 +443,21 @@
       "at": "2026-09-04T05:34:58.874Z",
       "event": "ac-confirmed",
       "detail": "AC13: wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts"
+    },
+    {
+      "at": "2026-09-04T05:44:53.627Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T05:44:53.712Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T05:44:53.798Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

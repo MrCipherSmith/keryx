@@ -89,3 +89,6 @@ re-deriving it in memory would be the second implementation that
 - 2026-09-04T05:34:50.707Z - ac-confirmed: AC12: Measured on the real repo: 1120 files, 2335ms full build, 37ms layer+manifest = 2% ; recorded in journal.md. Full suite 48 fail before and 48 after (worktree at 94998d9a) — zero regressions, +125 passing tests
 - 2026-09-04T05:34:50.799Z - ac-confirmed: AC13: wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts
 - 2026-09-04T05:34:58.874Z - ac-confirmed: AC13: wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts
+- 2026-09-04T05:44:53.627Z - task-done: T2: Implement per plan
+- 2026-09-04T05:44:53.712Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T05:44:53.798Z - task-done: T4: Self-review and prepare draft PR
