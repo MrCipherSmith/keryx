@@ -84,6 +84,7 @@ nav:
       - Shared Agent Context (experimental): guides/shared-agent-context.md
       - "/goal: deterministic starts, autonomous continuation": guides/goal.md
       - Slate for external agents: guides/slate.md
+      - Keep the wiki current: guides/keep-the-wiki-current.md
       - Run keryx in CI: guides/run-in-ci.md
   - Architecture: architecture.md
   - The agent harness: harness.md

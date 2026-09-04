@@ -149,10 +149,19 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
 
   const propagation = propagate({ graph: input.graph, changes: input.changes });
   if (propagation.unresolvedEdgesPresent) {
+    // Carry the MAGNITUDE, not just the fact. "Coverage is partial" with no
+    // scale invites two wrong reactions — ignoring it forever, or treating a
+    // rounding error as a blocker. On this repository it is 50 edges of 3406
+    // (1.5%), nearly all test fixtures and Python stdlib imports inside them.
+    const unresolved = input.graph.edges.filter((edge) => edge.kind === "unresolved").length;
+    const total = input.graph.edges.length;
+    const share = total > 0 ? ((unresolved / total) * 100).toFixed(1) : "0.0";
     limitations.push({
       code: "unresolved-edges-present",
       detail:
-        "The graph contains unresolved imports, so propagation could not follow every dependency. Coverage is partial.",
+        `${unresolved} of ${total} graph edges (${share}%) are unresolved imports, so propagation could not follow every dependency. ` +
+        "Judge whether that share matters before acting on it.",
+      affectedCount: unresolved,
     });
   }
   const affectedByPage = new Map(propagation.pages.map((page) => [page.pageId, page]));
