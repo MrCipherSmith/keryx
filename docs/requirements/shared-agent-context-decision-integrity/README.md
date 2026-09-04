@@ -1,10 +1,32 @@
 # Shared Agent Context — Decision Deduplication and Lifecycle Cleanup (RP-13)
-Version: 0.1.0
+Version: 1.0.0
 
 ## Status
 
-Future / planned requirements package. No behaviour in this package is a claim
-about the current runtime.
+**Implemented (FR1–FR4), and wired into production paths.** This entry
+previously read "Future / planned requirements package. No behaviour in this
+package is a claim about the current runtime", which was stale rather than
+cautious: the code had landed and the document was never updated with it.
+Verified against `main` by reading the call sites, not by trusting a name:
+
+- **FR1 + FR2 — dedup/conflict hint at review time.** `computeDedupHint`
+  (`src/sac/decision-dedup.ts:164`) is called from
+  `src/sac/proposal-lifecycle.ts:237`, the real review path, and calls
+  `findDuplicates`/`findConflicts` (`src/memory/dedup.ts`) unmodified. FR2's
+  model annotation is folded into the same payload rather than built as a
+  separate service — exactly what this package's own PRD recommended
+  (`prd.md:147-152`) — and is optional: `annotate: false` and an injected
+  `providerFactory` are both covered in `decision-dedup.test.ts`.
+- **FR3 + FR4 — report-only lifecycle flag.** `computeLifecycleFlags`
+  (`src/sac/lifecycle-flag.ts:57`) is called from `src/sac/catch-up.ts:169`.
+  It extends the same graph-diff signal that already drives
+  `wikiPruneOrphans`, through the shared `validModuleNames`
+  (`src/wiki/service.ts:358`) rather than a second derivation, and performs
+  zero writes — pinned by `lifecycle-flag.test.ts`'s AC5.
+
+Understating a shipped capability is the mirror image of overstating one, and
+the same rule catches both: a status line must be checked against the code,
+not inherited from the last revision.
 
 ## Purpose
 
