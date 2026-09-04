@@ -185,7 +185,7 @@ export function buildToolRegistry(): ToolEntry[] {
     ...toMcpTools(),
     { name: "sac.collaboration", module: "sac", description: "Read the collaboration references and activity for one Shared Agent Context workspace — who is participating and what has moved recently, redacted to what this actor may see. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything, because HTTP has no verified principal and must not inherit the local OS actor. Returns references and activity, not the items themselves — use sac.overview to enumerate items and sac.read to fetch one. Discover the workspaceId with sac.workspaceList.", inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]), mutating: false, async invoke(cwd, params, context) { if (context?.transport === "http") return { code: "sac_transport_denied" as const }; return normalizeCollaborationResult(await createLocalCollaborationService(cwd).overview({ workspaceId: stringParam(params, "workspaceId") ?? "", request: undefined, requestCorrelationId: randomUUID() })); } },
     {
-      name: "sac.overview", module: "sac", description: "Enumerate the items in one Shared Agent Context workspace, bounded by a budget: `maxItems` defaults to 32 and `maxTokens` to 4096, so a large workspace comes back truncated rather than whole — treat the result as a page, not an inventory. Returns item references and summaries, never full item bodies; call sac.read for one item's content. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything. This is the entry point for a workspace — call it before sac.read.",
+      name: "sac.overview", module: "sac", description: "Enumerate the items in one Shared Agent Context workspace, bounded by a budget: `maxItems` defaults to 32, `maxTokens` to 4096. The budget is all-or-nothing, not a page: this tool passes no optional ids, so every candidate is required, and a workspace that does not fit returns `{ code: \"context_overflow\", requiredId }` with no manifest and no receipt at all. Branch on a `code` field before reading the manifest, and raise the budget or narrow the workspace rather than expecting a partial result. Returned items carry their full `statement` — the same content `sac.read` returns, not a summary of it. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId"]),
       mutating: false,
       async invoke(cwd, params, context) {
@@ -199,7 +199,7 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
-      name: "sac.read", module: "sac", description: "Fetch one item from a Shared Agent Context workspace by `itemId`, as discovered through sac.overview — item ids are not guessable, so call overview first. The result is budget-bounded (`maxTokens` defaults to 4096), so a long item is truncated rather than refused; check the returned content before treating it as complete. Reads one item and does not search — there is no query parameter. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything.",
+      name: "sac.read", module: "sac", description: "Fetch one item from a Shared Agent Context workspace by `itemId`, narrowing an overview to a single id with the whole budget behind it. Ids do not appear in the overview manifest: they are in the receipt, at `receipt.contextAssembly.selected`, each prefixed `./ids/` — strip that prefix to get the `itemId`. Content is never returned partially: an item larger than `maxTokens` (default 4096) is refused with `{ code: \"context_overflow\", requiredId }`, so raise the budget and retry rather than treating a short result as truncated. Reads one item and does not search — there is no query parameter. Local stdio only: over HTTP it returns `sac_transport_denied` without reading anything.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, itemId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId", "itemId"]),
       mutating: false,
       async invoke(cwd, params, context) {
@@ -495,8 +495,10 @@ export function buildToolRegistry(): ToolEntry[] {
         "Cycles closed only through a dynamic `await import()` are deliberately excluded: they " +
         "resolve at call time, not module-load time, so they are not the load-order cycle this " +
         "query answers. Reads the built graph, so results are as old as the last `keryx gdgraph " +
-        "build` and will not reflect uncommitted edits. Returns the cycles only — it does not " +
-        "rank them by severity and does not suggest where to break one.",
+        "build` and reflect no edit made since it. When no graph has been built at all the " +
+        "result is an empty list rather than an error, so an empty result means either no " +
+        "cycles or no graph — confirm a build exists before reporting `no cycles`. Returns the " +
+        "cycles only: it does not rank them by severity and does not suggest where to break one.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
@@ -510,8 +512,10 @@ export function buildToolRegistry(): ToolEntry[] {
         "Return the sorted paths of files the graph connects to nothing — no resolved import in " +
         "either direction. Unresolved edges do not count as connections, so a file whose only " +
         "imports failed to resolve is reported as an orphan; check before treating a hit as dead " +
-        "code. Entry points, config and scripts legitimately have no inbound edge and appear here " +
-        "too. Reads the built graph, so results are as old as the last `keryx gdgraph build`.",
+        "code. Zero-degree only: a real entry point that imports anything has outbound edges and " +
+        "will NOT appear here, so absence from this list is no evidence a file is reachable. " +
+        "Reads the built graph, so results are as old as the last `keryx gdgraph build`, and " +
+        "with no graph built at all the result is an empty list rather than an error.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
@@ -618,10 +622,12 @@ export function buildToolRegistry(): ToolEntry[] {
         "Health report. This reads the last report and never runs the gate itself, so the verdict " +
         "is only as fresh as the last `keryx health run` — read `lastRunAt` from health.status " +
         "before reporting it as the current state. When no report exists at all it returns " +
-        "`status: \"fail\"` with the reason `no report; run keryx health run first`: that is an " +
-        "absent gate, not a failing one, and must not be reported as a quality failure. " +
-        "`strictWarn` makes a `warn` status exit non-zero. Returns the verdict and its reasons, " +
-        "not per-file findings — use health.explain for those.",
+        "`status: \"fail\"` with the reason ``no report; run `keryx health run` first`` " +
+        "(backticks included, so match the literal exactly): that is an absent gate, not a " +
+        "failing one, and must not be reported as a quality failure. `strictWarn` makes a " +
+        "`warn` status exit non-zero. Returns the verdict and its reasons, not per-file " +
+        "findings — those come from the `keryx health explain <file-or-module>` CLI command; " +
+        "there is no MCP tool for them.",
       inputSchema: OBJECT_SCHEMA({
         strictWarn: { type: "boolean" },
       }),
@@ -639,8 +645,11 @@ export function buildToolRegistry(): ToolEntry[] {
         "it last ran (`lastRunAt`), the gate status, per-source statuses, the project score and " +
         "the counts of declining and regressed scopes. It reads the last report and never runs " +
         "the checks, so `lastRunAt` is the staleness signal — check it before quoting any figure " +
-        "here as current. With no report the numeric fields come back `null` rather than zero; " +
-        "`null` means unknown, not healthy. Returns aggregates only, never per-file findings.",
+        "here as current. With no report at all, `lastRunAt`, `gate` and `projectScore` are " +
+        "`null`, but `regressions`, `decliningScopes` and `regressedScopes` come back `0`: a " +
+        "zero here means no report was found, NOT that there are no regressions, so gate on " +
+        "`lastRunAt !== null` before reading any count. Returns aggregates only, never per-file " +
+        "findings.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
