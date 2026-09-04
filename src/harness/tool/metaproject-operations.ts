@@ -32,7 +32,7 @@ import type {
   WikiAskResult,
   WikiBacklinksResult,
   WikiPageResult,
-} from "./metaproject-port";
+  WikiFreshnessResult,} from "./metaproject-port";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -568,6 +568,48 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     },
   },
   {
+    name: "wiki_freshness",
+    risk: "read",
+    module: "wiki",
+    description:
+      "Ask whether wiki pages are current before trusting one as context. Returns the LAST freshness report: " +
+      "per-page category (stale-reference | stale-prose | undocumented | orphan | unknown), confidence, how many " +
+      "commits behind, and why. ALWAYS read `limitations` — an empty finding list with a non-empty `limitations` " +
+      "means the check could not run, not that the wiki is fresh. A page reported `stale-*` may describe code that " +
+      "no longer exists; say so rather than generating against it. Input: { page?: string } to ask about one page.",
+    inputSchema: {
+      type: "object",
+      properties: { page: { type: "string" } },
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string" },
+        reason: { type: "string" },
+        generatedAt: { type: "string" },
+        totals: { type: "object" },
+        pages: { type: "array" },
+        limitations: { type: "array" },
+      },
+      additionalProperties: true,
+    },
+    invoke: async (port, input) => {
+      if (!port.wikiFreshness) {
+        // Said plainly rather than answered with an empty report. A caller
+        // that cannot tell "no data" from "nothing is stale" will assume the
+        // second, which is the failure this tool exists to prevent.
+        return {
+          output:
+            "wiki freshness is unavailable from this port; run `keryx wiki freshness` directly. This is NOT evidence that the wiki is fresh.",
+          isError: false,
+        };
+      }
+      const page = typeof input?.page === "string" ? input.page : undefined;
+      return formatFreshness(await port.wikiFreshness(page === undefined ? {} : { page }));
+    },
+  },
+  {
     name: "graph_path",
     risk: "read",
     module: "gdgraph",
@@ -859,4 +901,51 @@ export function toToolDefinitions(ops: MetaprojectOperation[]): ToolDefinition[]
       credential: false,
     },
   }));
+}
+
+
+/**
+ * Render a freshness result for a model.
+ *
+ * `limitations` are printed FIRST and unconditionally. An agent that skims
+ * will read the top of the block, and the one thing it must not miss is that
+ * a short finding list may mean the check could not run rather than that
+ * nothing is stale.
+ */
+function formatFreshness(result: WikiFreshnessResult): InteractiveToolResult {
+  const lines: string[] = [];
+
+  if (result.status !== "measured") {
+    lines.push(`STATUS: ${result.status.toUpperCase()} — ${result.reason ?? "no reason recorded"}`);
+    lines.push("");
+  }
+  if (result.limitations.length > 0) {
+    lines.push("THIS REPORT IS INCOMPLETE — an empty finding list below does not mean the wiki is fresh:");
+    for (const limitation of result.limitations) {
+      lines.push(`  - ${limitation.code}: ${limitation.detail}`);
+    }
+    lines.push("");
+  }
+  if (result.totals) {
+    const t = result.totals;
+    lines.push(
+      `pages: ${t.pagesTotal ?? "?"} total, ${t.pagesFresh ?? "?"} fresh, ` +
+        `${t.pagesUndecidable ?? 0} undecidable (excluded from scoring)`,
+    );
+    lines.push("");
+  }
+  if (result.pages.length === 0) {
+    lines.push("No page is reported as needing attention in the last report's range.");
+  } else {
+    lines.push("Pages in doubt (do not treat these as current without checking):");
+    for (const page of result.pages.slice(0, 40)) {
+      lines.push(
+        `  - ${page.path}: ${page.category}, ${page.confidence}, ${page.commitsBehind} commit(s) behind`,
+      );
+    }
+  }
+  if (result.generatedAt) {
+    lines.push("", `report generated: ${result.generatedAt}`);
+  }
+  return { output: lines.join("\n"), isError: false };
 }

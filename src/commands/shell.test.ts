@@ -849,6 +849,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "web_search",
     "wiki_ask",
     "wiki_backlinks",
+    "wiki_freshness",
     "workspace_create",
     "workspace_list",
     "workspace_overview",

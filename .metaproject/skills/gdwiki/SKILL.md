@@ -5,6 +5,39 @@ description: Use FIRST for conceptual questions - how something works, why, arch
 
 # gdwiki Skill
 
+## Before you trust a page: check whether it is current
+
+A wiki page is a claim about code that may have moved since anyone checked.
+Reading a stale page and generating against it is the failure this whole
+mechanism exists to prevent, so consult freshness BEFORE treating a page as
+context, not after being wrong.
+
+- MCP: `wiki_freshness` (read-only; pass `page` to ask about one).
+- CLI: `keryx wiki freshness` — or read
+  `.metaproject/data/wiki/freshness/latest.json` directly, which is one file
+  and costs nothing.
+
+How to read the answer:
+
+- A page listed `stale-reference` has a Reference block that no longer matches
+  the graph. Its **prose may still be sound**; its API list is not. Say so
+  rather than quoting the list as current.
+- A page listed `stale-prose` may describe behaviour that changed. Quote it
+  with the caveat, and prefer reading the code it names.
+- A page listed `unknown` has never been verified. That is NOT the same as
+  stale, and NOT the same as fresh — nobody has checked.
+- **An empty finding list with a non-empty `limitations` does not mean the
+  wiki is fresh.** It means the check could not run: the graph was not built,
+  the symbol layer was unavailable, or there is no git history. Read
+  `limitations` first, every time.
+
+Repairing is a separate act from reading, and it belongs to a person:
+`keryx wiki refresh` regenerates Reference blocks deterministically without a
+model, and `keryx wiki verify --page <p>` records that someone reviewed a
+page. Do not stamp provenance on a human's behalf — the field means a person
+looked.
+
+
 Use this skill for project knowledge that is not a literal code detail:
 architecture, domain models, business rules, user scenarios, service/component
 responsibilities, integrations, and known decisions. The user does not need to

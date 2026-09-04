@@ -326,8 +326,42 @@ export interface ContextSummaryResult {
  * method returns a structured result and NEVER throws — a backing failure becomes
  * a structured empty/error result (see each result type's `error`/`isError`).
  */
+/**
+ * Structured result of `wikiFreshness` — the LAST freshness report, projected
+ * for a caller deciding whether to trust a page.
+ *
+ * `limitations` is not decoration. An empty `pages` list with a non-empty
+ * `limitations` means the check could not run; treating that as a fresh wiki
+ * is the failure this whole surface exists to prevent.
+ */
+export interface WikiFreshnessResult {
+  /** `measured` | `no-report` | `unreadable-report` | `stale-evidence`. */
+  status: string;
+  /** Why there is no number. Absent when `status` is `measured`. */
+  reason?: string;
+  generatedAt?: string;
+  totals?: Record<string, number>;
+  pages: Array<{
+    path: string;
+    category: string;
+    confidence: string;
+    commitsBehind: number;
+    verifiedAt: string | null;
+  }>;
+  limitations: Array<{ code: string; detail: string }>;
+}
+
 export interface MetaprojectPort {
   searchCode(input: { pattern: string; path?: string }): Promise<SearchCodeResult>;
+  /**
+   * Freshness of the wiki, from the LAST report. Never recomputes — that
+   * would start a graph traversal behind a call the caller thinks is a read.
+   *
+   * OPTIONAL, like `loadSkill`: a port that cannot answer says so by not
+   * implementing it, and the caller reports "not available" rather than
+   * inventing a clean result.
+   */
+  wikiFreshness?(input: { page?: string }): Promise<WikiFreshnessResult>;
   graphAffected(input: { target: string; depth?: number; ranked?: boolean }): Promise<GraphAffectedResult>;
   graphQuery(input: { query: "cycles" | "orphans" }): Promise<GraphQueryResult>;
   memorySearch(input: {
