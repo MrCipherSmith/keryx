@@ -3,6 +3,98 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.77] — 2026-09-04
+
+The wiki stops going quietly out of date. Measured on this repository before
+anything was built: 28 of 42 component pages had drifted, 530 commits in
+total, and all 42 had last been touched in a single month — generated once,
+never maintained, and nothing anywhere reported it. The cause was structural:
+the wiki and the code graph were not connected, so *which pages does this
+change affect* had no answer, and every mechanism that would need one had
+nothing to stand on.
+
+Four of the five designed phases shipped. The fifth is deliberately absent,
+and that is the release's other half: over a 189-file range the drift was
+100% machine-repairable and 0% prose, so the only phase that would spend
+model tokens had nothing to work on. It stays specified and unbuilt until a
+report says otherwise.
+
+### Added
+
+- **`keryx wiki freshness`** — a read-only, categorised backlog of the pages a
+  change puts in doubt, with a reason chain on every entry and sorted by how
+  far behind each page is. Exits 0 whatever it finds: a blocking freshness
+  check invites updating a page so CI passes, which manufactures filler faster
+  than drift manufactures staleness.
+- **`keryx wiki refresh`** — regenerates the machine-owned
+  `## Reference (from code graph)` block, including on `Status: accepted`
+  pages, without touching a byte of human prose and without calling a model.
+  A page already current is not rewritten at all; a hand-edited block is
+  refused rather than overwritten.
+- **`keryx wiki verify`** — records provenance. `--page` states that a page was
+  reviewed; `--baseline` sets a measurement starting line and says in its own
+  output that it is not a claim the pages were read. With neither it refuses,
+  because stamping a corpus in one keystroke would assert reviews that did not
+  happen.
+- **`keryx wiki migrate-markers`** — one-off, idempotent, authors no content.
+- **A `describes` layer in the code graph**, joining wiki pages to the files
+  they document, traversable in both directions. It lives in its own storage
+  files: five call sites treat every non-`asset` node as a source file, so a
+  page node in `nodes.jsonl` would have corrupted the module set that orphan
+  detection depends on.
+- **Page provenance** — `VerifiedAt` (a git revision) and `VerifiedScope` (a
+  content hash) live inside the page, so versioning does not depend on whether
+  a project tracks `.metaproject/` or has git at all.
+- **`wiki_freshness` over MCP**, read-only, and a `gdwiki` skill route telling
+  a reader to check freshness *before* treating a page as context. The output
+  leads with `limitations` unconditionally: an empty finding list with a
+  non-empty limitations list means the check could not run, not that the wiki
+  is fresh.
+- **A freshness figure in `keryx health run`**, beside lint, types and tests.
+  Health reads the last report and never recomputes. With no report the metric
+  is absent *with a reason* — never a number, and never a flattering default.
+  It cannot move the health gate, and that is enforced by the compiler rather
+  than by a runtime check that could pass vacuously.
+- **A CI workflow**: `wiki validate` gates on structural defects, `wiki
+  freshness` reports and never fails the build.
+- **`Describes: none  # why`** — a page can declare that it is not scoped to
+  code (a map rendered from the graph, an ADR). The report counts that
+  separately from a gap: "nobody has done this yet" and "this page is not
+  about code" are different facts, and one of them is not work.
+
+### Fixed
+
+- **Forty-eight test failures that only happened on macOS.** `mkdtemp` returns
+  `/var/folders/...` while `process.cwd()` after `chdir` returns the resolved
+  `/private/var/folders/...`, so anything keyed on the absolute project path
+  wrote to one directory and read from another. Linux CI never saw it. The
+  suite had been red locally and green in CI — the worst shape a suite can
+  have, because a real regression hides in a red run everyone has learned to
+  scroll past.
+- **Two more of those** bound to `0177.0.0.1`, octal notation macOS refuses
+  outright. Replaced with a form that preserves the test's intent exactly —
+  still classified non-loopback, still resolved to loopback by the kernel.
+- **A freshness report that asserted work already done.** Propagation knew
+  nothing about when a page was verified, so pages stamped at the range's own
+  end came back `must-refresh` with zero commits behind. Provenance now
+  outranks propagation over a page's own scope.
+- **Five tool descriptions** that stated the opposite of what their code does.
+
+### Changed
+
+- The `unresolved-edges-present` limitation now carries its magnitude. "Coverage
+  is partial" with no scale invites ignoring it forever or treating a rounding
+  error as a blocker.
+
+### Documentation
+
+- **[Keep the wiki current](https://mrciphersmith.github.io/keryx/guides/keep-the-wiki-current/)**
+  — how the machinery works, how to read the report, and what it deliberately
+  does not do.
+- Three status lines corrected against the code: `RP-13` was documented as
+  planned while both halves were shipped and wired, and understating a
+  delivered capability is the mirror image of overstating one.
+
 ## [0.2.76] — 2026-09-03
 
 Six commits since 0.2.75, and four of them are about one object: the ctx routing
