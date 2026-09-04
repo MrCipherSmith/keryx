@@ -8,6 +8,8 @@ import {
 } from "../wiki/service";
 import { wikiAsk } from "../wiki/ask";
 import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
+import { migrateMarkers, refreshPages, verifyPages } from "../wiki/refresh";
+import { gitCmd } from "../sync/provenance";
 import { optionValue } from "../lib/args";
 
 export async function wikiCommand(args: string[]): Promise<void> {
@@ -50,6 +52,21 @@ export async function wikiCommand(args: string[]): Promise<void> {
 
   if (command === "freshness") {
     await runFreshnessCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "refresh") {
+    await runRefreshCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "verify") {
+    await runVerifyCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "migrate-markers") {
+    await runMigrateMarkersCommand(args.slice(1));
     return;
   }
 
@@ -460,4 +477,110 @@ async function runFreshnessCommand(args: string[]): Promise<void> {
     return;
   }
   process.stdout.write(renderMarkdown(report, { all: args.includes("--all") }));
+}
+
+/** HEAD, or undefined outside a git repository — never a fabricated sha. */
+async function currentHead(cwd: string): Promise<string | undefined> {
+  const head = await gitCmd(cwd, ["rev-parse", "HEAD"]);
+  return head && /^[0-9a-f]{40}$/.test(head) ? head : undefined;
+}
+
+/**
+ * `keryx wiki refresh` (LWG-11) — deterministic, model-free regeneration of
+ * managed Reference blocks. Prose is never touched.
+ */
+async function runRefreshCommand(args: string[]): Promise<void> {
+  const cwd = process.cwd();
+  const page = optionValue(args, "--page");
+  const head = await currentHead(cwd);
+  const result = await refreshPages({
+    cwd,
+    ...(page ? { page } : {}),
+    force: args.includes("--force"),
+    dryRun: args.includes("--dry-run"),
+    ...(head ? { head } : {}),
+  });
+
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  const dry = args.includes("--dry-run") ? " (dry run)" : "";
+  process.stdout.write(
+    `refreshed ${result.refreshed}, unchanged ${result.unchanged}, conflicts ${result.conflicts}${dry}\n`,
+  );
+  for (const entry of result.pages) {
+    if (entry.action === "refreshed") {
+      process.stdout.write(`  refreshed  ${entry.path} -> ${entry.version}\n`);
+    } else if (entry.action === "conflict") {
+      process.stdout.write(`  CONFLICT   ${entry.path}: ${entry.reason}\n`);
+    }
+  }
+  if (result.conflicts > 0) {
+    process.stdout.write(
+      "\nA conflict means the block was edited by hand. Review it, then pass --force to overwrite.\n",
+    );
+  }
+}
+
+/**
+ * `keryx wiki verify` — stamp provenance without touching content. This is
+ * what turns the freshness report from all-`unknown` into a real backlog, and
+ * it deliberately regenerates nothing: verification and repair are different
+ * claims about a page.
+ */
+async function runVerifyCommand(args: string[]): Promise<void> {
+  const cwd = process.cwd();
+  const page = optionValue(args, "--page");
+  const head = await currentHead(cwd);
+  let stamped;
+  try {
+    stamped = await verifyPages({
+      cwd,
+      ...(page ? { page } : {}),
+      ...(head ? { head } : {}),
+      baseline: args.includes("--baseline"),
+    });
+  } catch (error) {
+    process.stdout.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return;
+  }
+
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify(stamped, null, 2)}\n`);
+    return;
+  }
+  const what = args.includes("--baseline") ? "baselined" : "verified";
+  process.stdout.write(`${what} ${stamped.length} page(s)${head ? ` at ${head.slice(0, 8)}` : " (no git; scope hash only)"}\n`);
+  if (args.includes("--baseline")) {
+    process.stdout.write(
+      "  (a baseline is a measurement starting line, not a claim that these pages were read)\n",
+    );
+  }
+  for (const entry of stamped) {
+    process.stdout.write(`  ${entry.path}\n`);
+  }
+}
+
+/** `keryx wiki migrate-markers` — one-off, idempotent, authors no content. */
+async function runMigrateMarkersCommand(args: string[]): Promise<void> {
+  const cwd = process.cwd();
+  const result = await migrateMarkers(cwd, { dryRun: args.includes("--dry-run") });
+
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+  const dry = args.includes("--dry-run") ? " (dry run)" : "";
+  process.stdout.write(
+    `migrated ${result.migrated.length}, already ${result.alreadyMigrated.length}, ` +
+      `no Reference section ${result.skippedNoSection.length}, malformed ${result.malformed.length}${dry}\n`,
+  );
+  for (const entry of result.malformed) {
+    process.stdout.write(`  MALFORMED  ${entry.path}: ${entry.reason}\n`);
+  }
+  for (const entry of result.skippedNoSection) {
+    process.stdout.write(`  no section ${entry}\n`);
+  }
 }

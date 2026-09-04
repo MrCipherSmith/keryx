@@ -3,6 +3,8 @@
 Version: 1.1.0
 Type: architecture
 Status: accepted
+VerifiedAt: 7d38dba02fad6f8f81d8f244f76b08d0b2f59682
+VerifiedScope: sha256:64757f1576d6f43b5e5dc3b0c435d7f45b54d9b4af846a1d7658c19f54b7aff5
 
 ## Summary
 
