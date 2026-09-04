@@ -232,15 +232,53 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
       continue;
     }
 
+    // PROVENANCE OUTRANKS PROPAGATION when it is the stronger measurement.
+    //
+    // Propagation is computed from the range's changed files and knows nothing
+    // about when a page was confirmed. So a page verified AFTER those changes
+    // was still being reported `must-refresh` — the report asserting work that
+    // had already been done. Found by running `refresh` and watching the same
+    // ten pages come back stale with `commitsBehind: 0`.
+    //
+    // `commitsBehind === 0` on the git basis means: nothing in this page's
+    // describe-set moved since it was verified. The Reference block is derived
+    // from exactly that set, so `stale-reference` is then not merely
+    // unhelpful, it is false.
+    const scopeConfirmed = freshness.basis === "git-log" && !freshness.changed;
+    const reasons = affected?.reasons ?? [];
+    const fromOwnScope = reasons.filter((reason) => reason.edgePath.length === 1);
+    const fromDependencies = reasons.filter((reason) => reason.edgePath.length > 1);
+
+    if (scopeConfirmed && fromDependencies.length === 0) {
+      // Everything that reached it came through its own describes edge, and
+      // its own scope is confirmed. Nothing to say.
+      fresh += 1;
+      continue;
+    }
     if (!affected && !freshness.changed) {
       fresh += 1;
       continue;
     }
 
-    const reasons = affected?.reasons ?? [];
+    if (scopeConfirmed) {
+      // A dependency moved, but this page's own code did not. That is worth
+      // knowing and is never a refresh instruction: capped at `fyi`, and it
+      // cannot be `stale-reference`, because the block it would refresh is
+      // already current.
+      entries.push({
+        path: page.relativePath,
+        category: "stale-prose",
+        confidence: "fyi",
+        verifiedAt: page.verifiedAt ?? null,
+        commitsBehind: freshness.commitsBehind,
+        reasons: fromDependencies,
+      });
+      continue;
+    }
+
     entries.push({
       path: page.relativePath,
-      category: categorise(reasons, content),
+      category: categorise(reasons.length > 0 ? reasons : fromOwnScope, content),
       confidence: cap(affected?.confidence ?? "review-suggested", freshness.confidenceCap),
       verifiedAt: page.verifiedAt ?? null,
       commitsBehind: freshness.commitsBehind,
