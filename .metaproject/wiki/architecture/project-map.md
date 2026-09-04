@@ -3,6 +3,7 @@ Title: Project Map
 Version: 0.1.0
 Type: architecture
 Status: accepted
+Describes: none  # not code-scoped: this page is rendered FROM the code graph, so its scope would be the whole repository and it would read as stale on every commit
 Summary: "Deterministic map of 681 code files, 4 assets, and 1502 import edges across 66 top-level modules. Enrich each module page with the gdwiki skill."
 ---
 # Project Map

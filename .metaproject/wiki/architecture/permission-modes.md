@@ -3,6 +3,13 @@
 Version: 1.0.0
 Type: architecture
 Status: accepted
+Describes:
+  - src/commands/permission-mode.ts
+  - src/lib/permission-mode-config.ts
+  - src/lib/command-risk.ts
+  - src/harness/child/quarantine.ts
+  - src/harness/policy/**
+  - src/harness/mutation/**
 
 ## Summary
 

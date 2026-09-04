@@ -3,6 +3,7 @@
 Version: 0.1.0
 Type: decision
 Status: draft
+Describes: none  # not code-scoped: a decision record of what was agreed, which does not go out of date when the code moves
 
 ## Summary
 

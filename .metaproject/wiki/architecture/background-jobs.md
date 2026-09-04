@@ -3,6 +3,12 @@
 Version: 1.0.0
 Type: architecture
 Status: accepted
+Describes:
+  - src/harness/tool/builtin/background-job-registry.ts
+  - src/harness/tool/builtin/shell-exec-tool.ts
+  - src/tui/background-job-inspector.ts
+  - src/tui/background-job-session.ts
+  - src/tui/job-bridge.ts
 
 ## Summary
 

@@ -183,3 +183,40 @@ describe("resolveDescribeSet outcomes that must stay distinct", () => {
     ]);
   });
 });
+
+describe("`Describes: none` — a decision, not a gap", () => {
+  test("declares the page out of scope without claiming it is fresh", () => {
+    const result = resolve("Describes: none\n");
+    expect(result.notCodeScoped).toBe(true);
+    // Still undecidable: out of scope is not the same as verified.
+    expect(result.undecidable).toBe(true);
+    expect(result.paths).toEqual([]);
+  });
+
+  test("a reason after # is a comment, commas and all", () => {
+    // The reason belongs on the same line or the next reader cannot tell a
+    // decision from an omission — and reasons contain commas, so the comment
+    // has to be stripped before the list is split.
+    const result = resolve("Describes: none  # generated from the graph, so its scope would be everything\n");
+    expect(result.notCodeScoped).toBe(true);
+  });
+
+  test("the sentinel does not fall through to key-files", () => {
+    const keyFiles = new Map([["components/src-ctx.md", ["src/wiki/collect.ts"]]]);
+    const result = resolve("Describes: none\n", keyFiles);
+    // Falling through would silently give a page a scope it declined.
+    expect(result.paths).toEqual([]);
+    expect(result.notCodeScoped).toBe(true);
+  });
+
+  test("a real path list is not mistaken for the sentinel", () => {
+    const result = resolve("Describes:\n  - src/ctx/run.ts\n");
+    expect(result.notCodeScoped).toBe(false);
+    expect(result.paths).toEqual(["src/ctx/run.ts"]);
+  });
+
+  test("a trailing comment on a real path is stripped, not treated as part of it", () => {
+    const result = resolve("Describes:\n  - src/ctx/run.ts  # the entry point\n");
+    expect(result.paths).toEqual(["src/ctx/run.ts"]);
+  });
+});

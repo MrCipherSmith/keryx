@@ -1284,7 +1284,7 @@ async function validateStructure(
   issues: WikiValidateIssue[],
 ): Promise<void> {
   const { findManagedBlock } = await import("./managed-block");
-  const { parseDescribesField } = await import("./describes");
+  const { NOT_CODE_SCOPED, parseDescribesField } = await import("./describes");
 
   for (const page of pages) {
     let content: string;
@@ -1313,6 +1313,13 @@ async function validateStructure(
     }
 
     for (const pattern of parseDescribesField(content)) {
+      if (pattern === NOT_CODE_SCOPED) {
+        // `Describes: none` is a declaration that the page is not scoped to
+        // code, not a path. Checking it as one reported four false defects
+        // and failed the gate on the very change that introduced the
+        // sentinel — the resolver learned about it and the validator did not.
+        continue;
+      }
       if (pattern.includes("*")) {
         continue;
       }
