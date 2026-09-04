@@ -8,6 +8,7 @@ import { computeMetrics } from "./scopes";
 import { loadBaseline, writeBaseline } from "./baseline";
 import { getChurn } from "./metrics/churn";
 import { rankHotspots } from "./metrics/hotspot";
+import { readWikiFreshnessMetric } from "./metrics/wiki-freshness";
 import { getComplexityFindings } from "./metrics/complexity-findings";
 import { getCoverage } from "./metrics/coverage";
 import { renderReportMarkdown } from "./report";
@@ -145,6 +146,11 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
   // nullable; deterministic (reuses the already-loaded churn + source analysis).
   const hotspots = rankHotspots(sourceFiles, churn, sourceAnalysis);
+  // LWG-15: read the LAST freshness report; never recompute here. Running a
+  // graph traversal inside `health run` would make a fast command slow and
+  // couple two subsystems that today share only a file. An absent or damaged
+  // report yields a not-measured status, never a number.
+  const wikiFreshness = await readWikiFreshnessMetric(cwd);
 
   const report: HealthReport = {
     schemaVersion: config.schemaVersion,
@@ -157,6 +163,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     metrics,
     findings,
     hotspots,
+    wikiFreshness,
     ...(input.runId
       ? {
           runId: input.runId,

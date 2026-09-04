@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "228",
+  "slug": "living-wiki-graph-phase-5-freshness-as-a",
+  "title": "Living Wiki + Graph phase 5: freshness as a health metric and a CI signal",
+  "status": "in-progress",
+  "createdAt": "2026-09-04T10:30:11.656Z",
+  "updatedAt": "2026-09-04T11:10:35.174Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:20e216658dc73f2a5021c8fadd2096133cf9300804f5da6b883d77fb01c56c37",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-04T11:10:34.220Z",
+      "note": "wiki-freshness-gate.test.ts 'a report written before this field existed renders unchanged apart from the new section'; field is optional on HealthReport, added exactly as hotspots was"
+    },
+    "AC2": {
+      "at": "2026-09-04T11:10:34.311Z",
+      "note": "wiki-freshness.test.ts 'reports the counts and a ratio over SCORABLE pages'; live artifact shows 'wiki freshness: 77% (34/44 scorable pages, 6 undecidable (excluded)), 2 needing attention'"
+    },
+    "AC3": {
+      "at": "2026-09-04T11:10:34.428Z",
+      "note": "wiki-freshness.test.ts 'no report yields no number and says why' — ratio and pagesFresh both undefined, reason contains 'not evidence that the wiki is fresh'; artifact renders 'Not measured'"
+    },
+    "AC4": {
+      "at": "2026-09-04T11:10:34.526Z",
+      "note": "Denominator is pagesTotal minus pagesUndecidable (34/44 not 34/50) and the excluded count is in the rendered line; asserted in two tests"
+    },
+    "AC5": {
+      "at": "2026-09-04T11:10:34.663Z",
+      "note": "wiki-freshness.test.ts 'an old report keeps its numbers but is marked as not current' — status stale-evidence, reportAgeDays 34, line contains STALE EVIDENCE"
+    },
+    "AC6": {
+      "at": "2026-09-04T11:10:34.750Z",
+      "note": "wiki-freshness.test.ts unparseable JSON and missing-totals cases both yield unreadable-report with no partial number"
+    },
+    "AC7": {
+      "at": "2026-09-04T11:10:34.855Z",
+      "note": "Compile-time guard: Parameters<typeof computeGate>[0] has no wikiFreshness key, so the metric structurally cannot reach the gate; the type fails to compile if anyone adds it. Plus a rendered gate-line comparison with a catastrophic 2/44 figure"
+    },
+    "AC8": {
+      "at": "2026-09-04T11:10:34.947Z",
+      "note": "wiki-freshness.test.ts 'works with no graph and no wiki present at all' (asserts .metaproject contains only data/) and 'a wiki full of pages does not change the numbers'"
+    },
+    "AC9": {
+      "at": "2026-09-04T11:10:35.051Z",
+      "note": ".github/workflows/wiki-freshness.yml: validate is a gate, freshness reports and never fails, summary calls empty findings clean only when limitations is empty. YAML parsed, summary logic exercised on clean / empty+limits / findings"
+    },
+    "AC10": {
+      "at": "2026-09-04T11:10:35.174Z",
+      "note": "Full suite 6776 pass / 48 fail — the same 48 that fail at the branch base"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context is the committed package plus flows 225-227 and the measurement that deferred phase 3"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review replaced a vacuous AC8 test that asserted an always-empty array with one that proves the point: the metric resolves in a project with no graph and no wiki, and a wiki full of pages does not change its numbers"
+    },
+    {
+      "id": "T5",
+      "title": "HealthReport.wikiFreshness optional field, additive like hotspots (AC1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "HealthReport.wikiFreshness optional, additive exactly as hotspots was; a report without it renders unchanged (AC1)"
+    },
+    {
+      "id": "T6",
+      "title": "Reader for latest.json: absent, damaged and stale-evidence cases all reported not rounded (AC3,AC5,AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "readWikiFreshnessMetric: no-report, unreadable-report and stale-evidence all reported with a reason and never a number (AC3,AC5,AC6)"
+    },
+    {
+      "id": "T7",
+      "title": "Ratio excluding undecidable pages, with the count alongside (AC2,AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Ratio over scorable pages only, with the undecidable count rendered alongside so the figure cannot hide what it excludes (AC2,AC4)"
+    },
+    {
+      "id": "T8",
+      "title": "Render in the health artifact and dashboard line (AC2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Rendered in the health artifact as its own section; absence gets a sentence rather than silence. Live run shows 77% (34/44), 6 excluded, 2 needing attention (AC2)"
+    },
+    {
+      "id": "T9",
+      "title": "CI workflow per ci-protocol.md section 6 (AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": ".github/workflows/wiki-freshness.yml per ci-protocol section 6: validate blocking, freshness reporting, summary calls empty findings clean only when limitations is empty too. YAML parse-checked; summary logic exercised on all three cases (AC9)"
+    },
+    {
+      "id": "T10",
+      "title": "Tests incl. gate-unchanged and no-traversal proofs (AC7,AC8,AC10)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "21 tests across two files incl. the compile-time guard that computeGate's input cannot carry the metric (AC7,AC8,AC10)"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T10:30:11.656Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T10:45:54.008Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T10:45:54.170Z",
+      "event": "task-added",
+      "detail": "T5: HealthReport.wikiFreshness optional field, additive like hotspots (AC1)"
+    },
+    {
+      "at": "2026-09-04T10:45:54.284Z",
+      "event": "task-added",
+      "detail": "T6: Reader for latest.json: absent, damaged and stale-evidence cases all reported not rounded (AC3,AC5,AC6)"
+    },
+    {
+      "at": "2026-09-04T10:45:54.420Z",
+      "event": "task-added",
+      "detail": "T7: Ratio excluding undecidable pages, with the count alongside (AC2,AC4)"
+    },
+    {
+      "at": "2026-09-04T10:45:54.543Z",
+      "event": "task-added",
+      "detail": "T8: Render in the health artifact and dashboard line (AC2)"
+    },
+    {
+      "at": "2026-09-04T10:45:54.647Z",
+      "event": "task-added",
+      "detail": "T9: CI workflow per ci-protocol.md section 6 (AC9)"
+    },
+    {
+      "at": "2026-09-04T10:45:54.757Z",
+      "event": "task-added",
+      "detail": "T10: Tests incl. gate-unchanged and no-traversal proofs (AC7,AC8,AC10)"
+    },
+    {
+      "at": "2026-09-04T10:45:55.127Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T10:45:55.292Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-04T11:03:46.812Z",
+      "event": "task-done",
+      "detail": "T5: HealthReport.wikiFreshness optional field, additive like hotspots (AC1)"
+    },
+    {
+      "at": "2026-09-04T11:03:46.936Z",
+      "event": "task-done",
+      "detail": "T6: Reader for latest.json: absent, damaged and stale-evidence cases all reported not rounded (AC3,AC5,AC6)"
+    },
+    {
+      "at": "2026-09-04T11:03:47.022Z",
+      "event": "task-done",
+      "detail": "T7: Ratio excluding undecidable pages, with the count alongside (AC2,AC4)"
+    },
+    {
+      "at": "2026-09-04T11:03:47.107Z",
+      "event": "task-done",
+      "detail": "T8: Render in the health artifact and dashboard line (AC2)"
+    },
+    {
+      "at": "2026-09-04T11:03:47.191Z",
+      "event": "task-done",
+      "detail": "T9: CI workflow per ci-protocol.md section 6 (AC9)"
+    },
+    {
+      "at": "2026-09-04T11:03:47.299Z",
+      "event": "task-done",
+      "detail": "T10: Tests incl. gate-unchanged and no-traversal proofs (AC7,AC8,AC10)"
+    },
+    {
+      "at": "2026-09-04T11:03:47.390Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T11:03:47.486Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T11:03:47.571Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-04T11:10:34.220Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: wiki-freshness-gate.test.ts 'a report written before this field existed renders unchanged apart from the new section'; field is optional on HealthReport, added exactly as hotspots was"
+    },
+    {
+      "at": "2026-09-04T11:10:34.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: wiki-freshness.test.ts 'reports the counts and a ratio over SCORABLE pages'; live artifact shows 'wiki freshness: 77% (34/44 scorable pages, 6 undecidable (excluded)), 2 needing attention'"
+    },
+    {
+      "at": "2026-09-04T11:10:34.429Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: wiki-freshness.test.ts 'no report yields no number and says why' — ratio and pagesFresh both undefined, reason contains 'not evidence that the wiki is fresh'; artifact renders 'Not measured'"
+    },
+    {
+      "at": "2026-09-04T11:10:34.526Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Denominator is pagesTotal minus pagesUndecidable (34/44 not 34/50) and the excluded count is in the rendered line; asserted in two tests"
+    },
+    {
+      "at": "2026-09-04T11:10:34.663Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: wiki-freshness.test.ts 'an old report keeps its numbers but is marked as not current' — status stale-evidence, reportAgeDays 34, line contains STALE EVIDENCE"
+    },
+    {
+      "at": "2026-09-04T11:10:34.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: wiki-freshness.test.ts unparseable JSON and missing-totals cases both yield unreadable-report with no partial number"
+    },
+    {
+      "at": "2026-09-04T11:10:34.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Compile-time guard: Parameters<typeof computeGate>[0] has no wikiFreshness key, so the metric structurally cannot reach the gate; the type fails to compile if anyone adds it. Plus a rendered gate-line comparison with a catastrophic 2/44 figure"
+    },
+    {
+      "at": "2026-09-04T11:10:34.947Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: wiki-freshness.test.ts 'works with no graph and no wiki present at all' (asserts .metaproject contains only data/) and 'a wiki full of pages does not change the numbers'"
+    },
+    {
+      "at": "2026-09-04T11:10:35.051Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: .github/workflows/wiki-freshness.yml: validate is a gate, freshness reports and never fails, summary calls empty findings clean only when limitations is empty. YAML parsed, summary logic exercised on clean / empty+limits / findings"
+    },
+    {
+      "at": "2026-09-04T11:10:35.174Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Full suite 6776 pass / 48 fail — the same 48 that fail at the branch base"
+    }
+  ]
+}
