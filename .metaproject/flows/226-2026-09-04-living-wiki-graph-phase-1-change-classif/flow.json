@@ -9,7 +9,7 @@
   "title": "Living Wiki + Graph phase 1: change classification, impact propagation, freshness queue and backlog",
   "status": "in-progress",
   "createdAt": "2026-09-04T06:33:35.496Z",
-  "updatedAt": "2026-09-04T07:05:33.983Z",
+  "updatedAt": "2026-09-04T07:18:21.226Z",
   "source": {
     "type": "description",
     "ref": null
@@ -132,7 +132,7 @@
       "id": "T8",
       "title": "Both freshness paths: git range and VerifiedScope fallback (AC11,AC12)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +140,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "page-freshness.ts: git-log path when VerifiedAt resolves, VerifiedScope fallback otherwise, findings from the hash path capped at review-suggested; unreachable revision falls through rather than erroring (AC11,AC12). 11 tests"
     },
     {
       "id": "T9",
       "title": "keryx wiki freshness: categories, limitations, --json, exit 0 always (AC5,AC7,AC8,AC9)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,13 +156,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "report.ts + run.ts + wiki freshness subcommand: categories, limitations, sorting by commits-behind, --json/--all, exits 0 always, writes only under data/wiki/freshness (AC5,AC7,AC8,AC9,AC13). 11 tests; verified end-to-end on this repo"
     },
     {
       "id": "T10",
       "title": "Orphan category projected from wikiPruneOrphans, not reimplemented (AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -168,7 +172,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "orphan is projected from validModuleNames/moduleNameFromProjectPath inside report.ts rather than re-detected; covered by a test that shrinks nodes.jsonl and watches the category change (AC10)"
     },
     {
       "id": "T11",
@@ -248,6 +254,21 @@
       "at": "2026-09-04T07:05:33.983Z",
       "event": "task-done",
       "detail": "T7: Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)"
+    },
+    {
+      "at": "2026-09-04T07:18:21.057Z",
+      "event": "task-done",
+      "detail": "T8: Both freshness paths: git range and VerifiedScope fallback (AC11,AC12)"
+    },
+    {
+      "at": "2026-09-04T07:18:21.143Z",
+      "event": "task-done",
+      "detail": "T9: keryx wiki freshness: categories, limitations, --json, exit 0 always (AC5,AC7,AC8,AC9)"
+    },
+    {
+      "at": "2026-09-04T07:18:21.226Z",
+      "event": "task-done",
+      "detail": "T10: Orphan category projected from wikiPruneOrphans, not reimplemented (AC10)"
     }
   ]
 }

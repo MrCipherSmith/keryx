@@ -7,6 +7,7 @@ import {
   wikiValidate,
 } from "../wiki/service";
 import { wikiAsk } from "../wiki/ask";
+import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
 import { optionValue } from "../lib/args";
 
 export async function wikiCommand(args: string[]): Promise<void> {
@@ -44,6 +45,11 @@ export async function wikiCommand(args: string[]): Promise<void> {
 
   if (command === "validate") {
     await runValidate();
+    return;
+  }
+
+  if (command === "freshness") {
+    await runFreshnessCommand(args.slice(1));
     return;
   }
 
@@ -433,4 +439,25 @@ Page types:
   architecture, domain-model, business-rule, user-scenario,
   component, service, integration, decision
 `);
+}
+
+
+/**
+ * `keryx wiki freshness` — read-only backlog (LWG-10, flow 226).
+ *
+ * Always exits 0. This is a report, not a gate: a blocking freshness check
+ * invites updating a page so CI passes, which manufactures filler faster than
+ * drift manufactures staleness. The gate decision belongs to a project, in
+ * `ci-protocol.md`, not to this command.
+ */
+async function runFreshnessCommand(args: string[]): Promise<void> {
+  const cwd = process.cwd();
+  const since = optionValue(args, "--since");
+  const report = await runFreshness({ cwd, ...(since ? { since } : {}) });
+
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+  process.stdout.write(renderMarkdown(report, { all: args.includes("--all") }));
 }

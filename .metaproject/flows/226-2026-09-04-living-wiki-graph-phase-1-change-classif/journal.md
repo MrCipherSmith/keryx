@@ -68,3 +68,54 @@ cannot parse confidently. That failure direction costs a wasted backlog entry;
 the opposite would silently drop a real change and nobody would learn of it.
 - 2026-09-04T07:05:33.883Z - task-done: T6: Change classification over SymbolNode.signature with honest degradation (AC1,AC2,AC4)
 - 2026-09-04T07:05:33.983Z - task-done: T7: Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)
+
+## 2026-09-04 — T8, T9, T10, and a false positive only the real corpus showed
+
+### The bug fixtures could not have caught
+
+The first end-to-end run of `wiki freshness --since HEAD~5` on this repository
+reported twelve changed signatures in `src/gdgraph/build.ts`:
+`matchesAlias@455`, `matchesAlias@467`, `candidateBases@484`, and so on.
+Nothing about those functions had changed. The only edit to that file was a
+`try`/`catch` block added above them.
+
+Cause: `changedSignatures` keyed on `SymbolNode.id`, and that id appends
+`@<startLine>` when two symbols in a file share a name. Adding eight lines
+shifted every same-named sibling, so each looked like one symbol disappearing
+and another appearing. Every unit test passed throughout — the fixtures used
+unique names, which is exactly the case the bug does not touch.
+
+Fixed by keying on a position-free identity (`path#container.name`). The
+trade is stated at the site: same-named siblings now collapse into one key,
+which under-reports a same-name overload changing. That is the safe
+direction, since the alternative fires on every reflow — and a signature
+verdict routes a page to the expensive prose path.
+
+Second defect from the same run: a page reachable by four routes from one
+change collected four near-identical reason rows, burying the distinct causes
+it also had. Reasons are now one row per (source, change class), keeping the
+shortest path that reached it.
+
+### What the run looks like now
+
+50 pages, 44 affected, 6 undecidable, 110 files changed, 0 cosmetic over that
+range. The signals are real: `getFilesDescribedBy, getPagesDescribing`
+reported as a signature change (they are new exports), `wiki-layer.ts` as
+`added`, `build.ts` as `body`.
+
+Every page reports `unknown`, because no page carries `VerifiedAt` or
+`VerifiedScope` yet — nothing has stamped them. That is the honest category
+and not a defect: `wiki verify` is phase 2. Worth stating because it means
+AC13's ordering has nothing to sort on until stamping exists, and the
+acceptance test must therefore drive `commitsBehind` through a stubbed git
+rather than the live corpus.
+
+### Presentation follows the earlier measurement
+
+`fyi` rows are hidden from the human view unless `--all` is passed — the
+decision recorded in the previous entry after a hub change reached 37 of 50
+pages. The default run above hid 31 advisory rows and showed 13. `latest.json`
+keeps everything.
+- 2026-09-04T07:18:21.057Z - task-done: T8: Both freshness paths: git range and VerifiedScope fallback (AC11,AC12)
+- 2026-09-04T07:18:21.143Z - task-done: T9: keryx wiki freshness: categories, limitations, --json, exit 0 always (AC5,AC7,AC8,AC9)
+- 2026-09-04T07:18:21.226Z - task-done: T10: Orphan category projected from wikiPruneOrphans, not reimplemented (AC10)

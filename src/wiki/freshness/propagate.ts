@@ -204,7 +204,14 @@ export function propagate(input: {
   }
 
   const pages: AffectedPage[] = [...affected.entries()]
-    .map(([pageId, value]) => ({ pageId, confidence: value.confidence, reasons: value.reasons }))
+    .map(([pageId, value]) => ({
+      pageId,
+      confidence: value.confidence,
+      // One row per (source, class), keeping the SHORTEST path that reached
+      // it. A page reachable by four routes from one change produced four
+      // near-identical rows, which buried the distinct causes it also had.
+      reasons: dedupeReasons(value.reasons),
+    }))
     .sort((a, b) => {
       const byConfidence = ORDER.indexOf(a.confidence) - ORDER.indexOf(b.confidence);
       return byConfidence !== 0 ? byConfidence : a.pageId.localeCompare(b.pageId);
@@ -249,4 +256,21 @@ function fileOfSymbolId(symbolId: string): string | null {
   const hash = symbolId.indexOf("#");
   const path = hash >= 0 ? symbolId.slice(0, hash) : symbolId;
   return path.length > 0 ? path : null;
+}
+
+
+function dedupeReasons(reasons: readonly Reason[]): Reason[] {
+  const best = new Map<string, Reason>();
+  for (const reason of reasons) {
+    const key = `${reason.sourcePath}\u0000${reason.changeClass}`;
+    const existing = best.get(key);
+    if (!existing || reason.edgePath.length < existing.edgePath.length) {
+      best.set(key, reason);
+    }
+  }
+  return [...best.values()].sort((a, b) =>
+    a.edgePath.length !== b.edgePath.length
+      ? a.edgePath.length - b.edgePath.length
+      : a.sourcePath.localeCompare(b.sourcePath),
+  );
 }

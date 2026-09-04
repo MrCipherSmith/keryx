@@ -153,13 +153,25 @@ async function classifyContent(
  * symbol's identity so an added or removed symbol still counts.
  */
 export function changedSignatures(before: SymbolLayer, after: SymbolLayer): string[] {
+  // Key on a POSITION-FREE identity, not `SymbolNode.id`.
+  //
+  // `id` appends `@<startLine>` when two symbols in a file share a name, so
+  // keying on it makes every line shift look like one symbol disappearing and
+  // another appearing. Observed on the real corpus before this fix: editing
+  // `src/gdgraph/build.ts` reported twelve "changed signatures"
+  // (`matchesAlias@455`, `matchesAlias@467`, …) when nothing about those
+  // functions had changed except where they sat in the file. Same-named
+  // siblings collapse into one key, which under-reports a same-name overload
+  // changing — the safe direction, since the alternative fires on every
+  // reflow.
   const index = (layer: SymbolLayer): Map<string, string> => {
     const map = new Map<string, string>();
     for (const symbol of layer.symbols) {
+      const key = `${symbol.path}#${symbol.container ?? ""}.${symbol.name}`;
       // A symbol with no rendered signature contributes its identity, so its
       // appearance or removal is still visible; what it cannot do is make an
       // unchanged symbol look changed.
-      map.set(symbol.id, symbol.signature ?? `${symbol.kind}:${symbol.name}`);
+      map.set(key, symbol.signature ?? `${symbol.kind}:${symbol.name}`);
     }
     return map;
   };
@@ -168,22 +180,23 @@ export function changedSignatures(before: SymbolLayer, after: SymbolLayer): stri
   const to = index(after);
   const changed = new Set<string>();
 
-  for (const [id, signature] of to) {
-    if (from.get(id) !== signature) {
-      changed.add(nameOf(id));
+  for (const [key, signature] of to) {
+    if (from.get(key) !== signature) {
+      changed.add(nameOf(key));
     }
   }
-  for (const id of from.keys()) {
-    if (!to.has(id)) {
-      changed.add(nameOf(id));
+  for (const key of from.keys()) {
+    if (!to.has(key)) {
+      changed.add(nameOf(key));
     }
   }
   return [...changed].sort();
 }
 
-function nameOf(symbolId: string): string {
-  const hash = symbolId.indexOf("#");
-  return hash >= 0 ? symbolId.slice(hash + 1) : symbolId;
+function nameOf(key: string): string {
+  const hash = key.indexOf("#");
+  const tail = hash >= 0 ? key.slice(hash + 1) : key;
+  return tail.startsWith(".") ? tail.slice(1) : tail;
 }
 
 /**
