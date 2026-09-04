@@ -150,5 +150,13 @@
     "toDir": "225-2026-09-03-living-wiki-graph-phase-0-describes-edge",
     "at": "2026-09-04T06:01:47.731Z",
     "reason": "id 223 collided after merging main, which carried 223-docs-remediation-2-4; this flow was created locally on a branch and loses the tie"
+  },
+  {
+    "from": "227",
+    "to": "230",
+    "fromDir": "227-2026-09-04-graph-freshness-is-not-routed-index-md-t",
+    "toDir": "230-2026-09-04-graph-freshness-is-not-routed-index-md-t",
+    "at": "2026-09-04T17:30:31.302Z",
+    "reason": "id 227 was allocated against a stale local main; upstream already has flow 227 (Living Wiki + Graph phase 2)"
   }
 ]

@@ -162,6 +162,9 @@ export function renderIndexMarkdown({
     enableGdgraph
       ? "| Find related files, dependencies, blast radius, cycles, or orphans | `gdgraph` | `skills/gdgraph/SKILL.md`; MCP `gdgraph.*` if available | Start with graph/affected context before broad search. |"
       : "",
+    enableGdgraph
+      ? "| Files were added, renamed, deleted or moved; graph answers look stale | `gdgraph` | `modules/gdgraph.md` (Freshness & Refresh) | Run `keryx gdgraph build`, then answer from the rebuilt graph. |"
+      : "",
     enableGdwiki
       ? "| Understand architecture, domain behavior, business rules, scenarios, integrations, or decisions | `gdwiki` | `skills/gdwiki/SKILL.md`; `wiki/index.md`; MCP `wiki.*` if available | Use knowledge pages first, then jump from wiki concepts to code. |"
       : "",
@@ -200,6 +203,11 @@ export function renderIndexMarkdown({
     enableGdgraph
       ? "For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before any raw file search. The user does not need to request graph usage explicitly."
       : "Use relevant skills from `skills/` before raw file search.",
+    ...(enableGdgraph
+      ? [
+          "The graph answers from the last `keryx gdgraph build`, not from the working tree. Rebuild before relying on a graph answer when you added, renamed, deleted or moved files in this session, or when `keryx gdgraph context` reports uncommitted code files — not once per question. If you cannot rebuild, say the graph predates those changes instead of quoting it as current. Contract: `modules/gdgraph.md` (Freshness & Refresh).",
+        ]
+      : []),
     ...(enableGdwiki
       ? [
           "For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.",
@@ -1817,13 +1825,23 @@ project-owned hook lines are preserved.
 
 ## git post-commit gdgraph hook
 
-When enabled during \`keryx init\`, the Git \`post-commit\` hook detects commits that touched files relevant to the graph and prints the explicit refresh command.
+When enabled during \`keryx init\`, the Git \`post-commit\` hook detects commits that touched files relevant to the graph and rebuilds the graph by running \`keryx gdgraph build\`.
 
 Purpose:
 
-- prevent stale graph usage by surfacing the refresh command close to the commit;
-- avoid broad raw file search when graph context is stale;
-- avoid mutating versioned \`.metaproject\` artifacts after the commit is already written.
+- keep the graph in step with the committed file set, so the next agent question is not answered from the previous one;
+- avoid broad raw file search caused by a graph that silently predates the commit.
+
+Behaviour:
+
+- runs only inside a work tree, and only when the commit touched a graph-relevant path;
+- resolves \`keryx\` from PATH, then \`$HOME/.local/bin/keryx\`; if neither exists it prints the manual command and returns;
+- never blocks the commit: a failed or unsupported build prints a warning and still exits 0;
+- \`KERYX_GDGRAPH_HOOK_REBUILD=0\` turns the hook back into a printed reminder.
+
+This hook mutates \`.metaproject\` after the commit is written. In a project that versions
+\`data/gdgraph/artifacts/\`, expect \`summary.md\` and \`module-map.json\` to be modified in the
+working tree after a graph-relevant commit — commit them separately, or opt out.
 
 ## git post-commit gdskills hook
 
@@ -1891,7 +1909,12 @@ Rules:
 
 export function renderGdgraphPostCommitHook(): string {
   return `keryx_gdgraph_post_commit() {
-  # Non-mutating: report graph staleness after graph-relevant commits.
+  # Rebuild the code graph after a graph-relevant commit, so the next agent
+  # question is answered from the committed file set instead of the previous one.
+  # Mutating by design: it rewrites graph storage and artifacts, which in a
+  # project that versions data/gdgraph/artifacts leaves them modified after the
+  # commit. Set KERYX_GDGRAPH_HOOK_REBUILD=0 for the old reminder-only behaviour.
+  # Never blocks: every path returns 0, including a failed build.
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -1906,7 +1929,28 @@ export function renderGdgraphPostCommitHook(): string {
     return 0
   fi
 
-  echo "keryx post-commit: gdgraph may be stale; run 'keryx gdgraph build' when you want to refresh graph artifacts"
+  if [ "\${KERYX_GDGRAPH_HOOK_REBUILD:-1}" = "0" ]; then
+    echo "keryx post-commit: gdgraph rebuild disabled (KERYX_GDGRAPH_HOOK_REBUILD=0); graph may be stale, run 'keryx gdgraph build'"
+    return 0
+  fi
+
+  gdm=""
+  if command -v keryx >/dev/null 2>&1; then
+    gdm="keryx"
+  elif [ -x "$HOME/.local/bin/keryx" ]; then
+    gdm="$HOME/.local/bin/keryx"
+  else
+    echo "keryx post-commit: keryx command not found; graph may be stale, run 'keryx gdgraph build'" >&2
+    return 0
+  fi
+
+  echo "keryx post-commit: rebuilding gdgraph after a graph-relevant commit"
+  if "$gdm" gdgraph build >/dev/null 2>&1; then
+    echo "keryx post-commit: gdgraph rebuilt; versioned graph artifacts may now differ from the commit"
+  else
+    echo "keryx post-commit: gdgraph build failed; graph may be stale, run 'keryx gdgraph build'" >&2
+  fi
+
   return 0
 }
 
@@ -2366,6 +2410,45 @@ frontend/static outputs are skipped by default.
 - \`keryx gdgraph query cycles | orphans\`
 - \`keryx gdgraph symbols <enable|disable|status>\` — opt-in tree-sitter symbol layer
 
+## Freshness & Refresh
+
+The graph is a snapshot of the last \`keryx gdgraph build\`, not a live view of the working tree. A
+graph answer computed after the file set moved is wrong, and nothing in the answer says so.
+
+What invalidates it:
+
+- a source file added, deleted, renamed or moved — the node set is stale, and \`find\`/\`orphans\`/
+  \`affected\` silently answer from the old one;
+- an import added or removed — the edge set is stale, so blast radius under-reports;
+- an edit inside a file with unchanged imports — file-level graph unaffected; the opt-in symbol
+  layer (\`symbol\`, \`path\` def/call data) IS stale, because signatures and call sites moved.
+
+How staleness is observed:
+
+\`\`\`bash
+keryx gdgraph context   # last line: "freshness: working tree clean"
+                        # or "freshness: N uncommitted code file(s) may not be reflected"
+\`\`\`
+
+That line counts uncommitted code files against \`HEAD\`; it is a heuristic, not a build ledger. It
+cannot see committed-but-not-rebuilt changes, so the post-commit hook covers that half.
+
+How it is repaired:
+
+\`\`\`bash
+keryx gdgraph build
+\`\`\`
+
+Agent rule: do not rebuild per question — the graph is meant to be read many times per build. Do
+rebuild before relying on a graph answer when you added, renamed, deleted or moved files in this
+session, when the freshness line reports uncommitted code files, or when graph storage is missing.
+When you cannot rebuild, say the graph predates your changes instead of quoting it as current.
+
+Automatic refresh: the optional Git \`post-commit\` hook rebuilds the graph after a commit that
+touched graph-relevant paths (see \`hooks/README.md\`). It never blocks the commit, and
+\`KERYX_GDGRAPH_HOOK_REBUILD=0\` turns it back into a printed reminder. In a project that versions
+\`data/gdgraph/artifacts/\`, a rebuild leaves those files modified after the commit.
+
 ## Data
 
 - \`data/gdgraph/artifacts/summary.md\`
@@ -2446,7 +2529,7 @@ Skip gdgraph only when the request is clearly unrelated to project files, asks f
 1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
 2. If the task requires finding relevant project files or understanding relationships, use graph context before any \`rg\` or reading many files. When you do need a text/symbol search, run it as \`keryx ctx rg\`, not raw \`rg\`.
 3. Do not rebuild the graph on every user question. Prefer existing graph storage and curated artifacts.
-4. Run build only when graph storage is missing, obviously stale, or the user explicitly asks to refresh it:
+4. Run build when graph storage is missing, when the file set changed since the last build (you added, renamed, deleted or moved files; \`keryx gdgraph context\` reports uncommitted code files), or when the user asks to refresh it. The freshness contract is \`modules/gdgraph.md\` (Freshness & Refresh):
 
 \`\`\`bash
 keryx gdgraph build
@@ -2498,11 +2581,24 @@ degrades to file-level otherwise).
 
 ## Refresh Policy
 
-Graph refresh should happen through one of these paths:
+The graph answers from the last \`keryx gdgraph build\`, never from the working
+tree, and a stale answer looks exactly like a fresh one. Refresh happens through
+one of these paths:
 
-- user or agent explicitly runs \`keryx gdgraph build\`;
-- Git \`post-commit\` hook refreshes graph after relevant file changes;
+- you or the user run \`keryx gdgraph build\` — required before you rely on a graph
+  answer after adding, renaming, deleting or moving files in this session, or when
+  \`keryx gdgraph context\` ends with \`freshness: N uncommitted code file(s) may not
+  be reflected\`;
+- the optional Git \`post-commit\` hook rebuilds the graph after a commit that
+  touched graph-relevant paths. It resolves \`keryx\` from PATH then
+  \`$HOME/.local/bin/keryx\`, never blocks the commit (a failed build only warns),
+  and is turned back into a printed reminder by \`KERYX_GDGRAPH_HOOK_REBUILD=0\`.
+  In a project that versions \`data/gdgraph/artifacts/\`, the rebuild leaves those
+  files modified after the commit;
 - graph storage is missing and the task needs graph context.
+
+If you cannot rebuild, say the graph predates your changes rather than quoting it
+as current. The full contract is \`modules/gdgraph.md\` (Freshness & Refresh).
 
 ## Always-on orientation (optional)
 
