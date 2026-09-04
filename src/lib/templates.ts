@@ -2049,24 +2049,91 @@ keryx_security_pre_push || exit $?
 
 export function renderGdwikiPostCommitHook(): string {
   return `keryx_gdwiki_post_commit() {
-  # Non-mutating: remind to refresh only the touched wiki drafts after a
-  # source-relevant commit. The refresh is deterministic; enrichment needs a
-  # model, so both stay user-triggered.
+  # LWG-9 (flow 226): append ONE line to the freshness queue, then stop.
+  #
+  # Everything expensive belongs to \`keryx wiki freshness\`. This hook may not
+  # build the graph, call a model, or read the queue back.
+  #
+  # SUBPROCESS COUNT IS THE COST. Measured on Apple-silicon macOS: the hook
+  # mechanism costs ~16 ms before the script runs, and each subprocess adds
+  # roughly 24 ms. So one \`git log\` carries revision, parent, timestamp and
+  # changed paths together, and parsing plus filtering are done with shell
+  # built-ins rather than sed/cut/grep. An earlier four-git-call version
+  # measured ~121 ms of added commit time.
+  #
+  # Always returns 0. A failure here must cost one queue entry, never a commit:
+  # a missed revision is recoverable with \`--since\`, a refused commit is not.
 
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    return 0
+  entry="$(git log -1 --format='%H%n%P%n%cI' --name-only --root HEAD 2>/dev/null || true)"
+  [ -n "$entry" ] || return 0
+
+  rev=""; prev=""; now=""; changed_files=""; quoted=false; n=0
+  while IFS= read -r line; do
+    n=$((n + 1))
+    case "$n" in
+      1) rev="$line" ;;
+      2) prev="\${line%% *}" ;;
+      3) now="$line" ;;
+      4) ;;
+      *)
+        [ -n "$line" ] || continue
+        # git renders a path containing a quote, a backslash or a control byte
+        # in C-style quoting, and core.quotePath=false does NOT turn that off.
+        # Such a line cannot be prefix-matched or embedded verbatim, so the
+        # entry is marked truncated and the drain re-reads the revision from
+        # git. Found by probe: without this, a commit touching one such path
+        # was dropped in silence.
+        case "$line" in
+          '"'*) quoted=true ;;
+        esac
+        changed_files="$changed_files$line
+"
+        ;;
+    esac
+  done <<KERYX_ENTRY
+$entry
+KERYX_ENTRY
+
+  [ -n "$rev" ] || return 0
+  [ -n "$changed_files" ] || return 0
+
+  # Prefix filter with built-ins only; no grep process.
+  relevant=false
+  count=0
+  for _p in $changed_files; do
+    count=$((count + 1))
+    case "$_p" in
+      src/*|lib/*|app/*|packages/*|services/*|.metaproject/wiki/*) relevant=true ;;
+    esac
+  done
+  if [ "$quoted" = true ]; then
+    relevant=true
+  fi
+  [ "$relevant" = true ] || return 0
+
+  queue_dir=".metaproject/data/wiki"
+  queue_file="$queue_dir/freshness-queue.jsonl"
+  [ -d "$queue_dir" ] || mkdir -p "$queue_dir" 2>/dev/null || return 0
+
+  # Cap the path list rather than write an unbounded line. A capped or
+  # unparseable entry is marked truncated so the drain re-reads that revision
+  # from git instead of trusting a partial list.
+  truncated=false
+  paths_json=""
+  if [ "$quoted" = true ] || [ "$count" -gt 200 ]; then
+    truncated=true
+  else
+    # \`printf '%s'\` without a trailing newline: \$changed_files already ends
+    # with one, and the extra produced a phantom empty path in every entry.
+    paths_json="$(printf '%s' "$changed_files" | sed -e '/^$/d' -e 's/\\\\/\\\\\\\\/g' -e 's/"/\\\\"/g' -e 's/^/"/' -e 's/$/"/' | paste -sd, - 2>/dev/null || echo '')"
   fi
 
-  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
-  if [ -z "$changed_files" ]; then
-    return 0
-  fi
+  {
+    printf '{"schemaVersion":1,"event":"post-commit","rev":"%s","recordedAt":"%s"' "$rev" "$now"
+    [ -n "$prev" ] && printf ',"previousRev":"%s"' "$prev"
+    printf ',"truncated":%s,"paths":[%s]}\\n' "$truncated" "$paths_json"
+  } >> "$queue_file" 2>/dev/null || true
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/)' >/dev/null 2>&1; then
-    return 0
-  fi
-
-  echo "keryx post-commit: wiki drafts may be stale; run 'keryx wiki collect --changed --since HEAD~1', then enrich new drafts with the gdwiki skill on a non-flagship model"
   return 0
 }
 
