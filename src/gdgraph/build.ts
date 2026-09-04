@@ -159,6 +159,18 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
     // Enrichment module or seam unavailable ⇒ file-level graph only.
   }
 
+  // LWG wiki layer (flow 223): the same additive shape as the symbol layer
+  // above — after the unchanged file-level build, into its OWN storage files,
+  // dynamically imported and defensively wrapped so a failure degrades to
+  // "no wiki layer" rather than a failed graph build. `nodes.jsonl` and
+  // `edges.jsonl` written above are never revisited (AC13).
+  try {
+    const { enrichBuildWithWikiLayer } = await import("./wiki-layer");
+    await enrichBuildWithWikiLayer({ projectRoot, graph, fileRecords });
+  } catch {
+    // Wiki absent, unreadable, or the layer module unavailable ⇒ no layer.
+  }
+
   return {
     nodes: nodes.length,
     edges: edges.length,

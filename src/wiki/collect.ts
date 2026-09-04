@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import type { GraphData } from "../gdgraph/types";
+import { parseProvenance } from "./provenance";
 import type { WikiPage, WikiPageType } from "./types";
 import { WIKI_PAGE_TYPES } from "./types";
 
@@ -42,6 +43,7 @@ function parsePage(
 ): WikiPage {
   const lines = content.split("\n");
   const titleLine = lines.find((line) => line.startsWith("# "));
+  const provenance = parseProvenance(content);
 
   return {
     absolutePath,
@@ -52,6 +54,9 @@ function parsePage(
     type: field(lines, "Type"),
     status: field(lines, "Status"),
     summary: extractSummary(lines),
+    verifiedAt: provenance.verifiedAt,
+    verifiedScope: provenance.verifiedScope,
+    describes: provenance.describes,
   };
 }
 
