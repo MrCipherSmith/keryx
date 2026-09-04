@@ -7,9 +7,9 @@
   "id": "228",
   "slug": "living-wiki-graph-phase-5-freshness-as-a",
   "title": "Living Wiki + Graph phase 5: freshness as a health metric and a CI signal",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-04T10:30:11.656Z",
-  "updatedAt": "2026-09-04T11:10:35.174Z",
+  "updatedAt": "2026-09-04T11:19:33.050Z",
   "source": {
     "type": "description",
     "ref": null
@@ -58,7 +58,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/458"
   },
   "tasks": [
     {
@@ -369,6 +369,25 @@
       "at": "2026-09-04T11:10:35.174Z",
       "event": "ac-confirmed",
       "detail": "AC10: Full suite 6776 pass / 48 fail — the same 48 that fail at the branch base"
+    },
+    {
+      "at": "2026-09-04T11:19:30.113Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/458 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-04T11:19:30.563Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-04T11:19:33.050Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "6babe28f",
+    "ref": "origin/main",
+    "at": "2026-09-04T11:19:33.049Z"
+  }
 }
