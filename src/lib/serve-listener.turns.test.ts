@@ -23,7 +23,7 @@
 // exercising the assembly the operator gets.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
@@ -52,7 +52,7 @@ let listener: ServeListener | undefined;
 let origin = "";
 
 beforeEach(() => {
-  const base = mkdtempSync(path.join(tmpdir(), "keryx-r4c-socket-"));
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-r4c-socket-")));
   configDir = path.join(base, "config");
   project = path.join(base, "project");
   mkdirSync(configDir, { recursive: true });
@@ -284,7 +284,7 @@ describe("a listener the CLI can start executes a turn", () => {
     //
     // A record that contradicts itself in two adjacent fields, on the field a
     // client branches on.
-    const base = mkdtempSync(path.join(tmpdir(), "keryx-r4c-stock-"));
+    const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-r4c-stock-")));
     const stockDir = path.join(base, "config");
     const stockProject = path.join(base, "project");
     mkdirSync(stockDir, { recursive: true });
@@ -364,7 +364,7 @@ describe("a listener the CLI can start executes a turn", () => {
     if (process.platform !== "linux") {
       return;
     }
-    const bin = mkdtempSync(path.join(tmpdir(), "keryx-fake-bwrap-"));
+    const bin = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-fake-bwrap-")));
     writeFileSync(path.join(bin, "bwrap"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const realPath = process.env.PATH;
     process.env.PATH = `${bin}${path.delimiter}${realPath ?? ""}`;
@@ -407,7 +407,7 @@ describe("a listener the CLI can start executes a turn", () => {
     // `requiredControls.isolation` is `required-fail-closed`, so the gate is
     // actually reached.
     for (const available of [true, false]) {
-      const base = mkdtempSync(path.join(tmpdir(), "keryx-r4c-probe-"));
+      const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-r4c-probe-")));
       const probeDir = path.join(base, "config");
       const probeProject = path.join(base, "project");
       mkdirSync(probeDir, { recursive: true });
