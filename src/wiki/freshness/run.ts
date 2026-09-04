@@ -108,7 +108,11 @@ async function collectChanges(
   git: GitRunner,
   fromRev: string,
 ): Promise<FileChange[]> {
-  const status = await git(cwd, ["diff", "--name-status", "-M", fromRev]);
+  // `fromRev HEAD`, not a bare `fromRev`. A bare base diffs against the
+  // WORKING TREE, so uncommitted edits would land in a report whose header
+  // says "fromRev → <sha>" — a range label that quietly does not describe
+  // what was measured. The queue is commit-driven; the report matches it.
+  const status = await git(cwd, ["diff", "--name-status", "-M", fromRev, "HEAD"]);
   if (status === null) {
     return [];
   }
@@ -124,7 +128,7 @@ async function collectChanges(
         path: parts[2],
         previousPath: parts[1],
         before: await showFile(cwd, git, fromRev, parts[1]),
-        after: await readCurrent(cwd, parts[2]),
+        after: await readCurrent(cwd, git, parts[2]),
       });
       continue;
     }
@@ -132,14 +136,14 @@ async function collectChanges(
     if (!file) continue;
 
     if (code.startsWith("A")) {
-      changes.push({ path: file, after: await readCurrent(cwd, file) });
+      changes.push({ path: file, after: await readCurrent(cwd, git, file) });
     } else if (code.startsWith("D")) {
       changes.push({ path: file, before: await showFile(cwd, git, fromRev, file) });
     } else {
       changes.push({
         path: file,
         before: await showFile(cwd, git, fromRev, file),
-        after: await readCurrent(cwd, file),
+        after: await readCurrent(cwd, git, file),
       });
     }
   }
@@ -156,7 +160,20 @@ async function showFile(
   return content ?? undefined;
 }
 
-async function readCurrent(cwd: string, file: string): Promise<string | undefined> {
+/**
+ * Content at HEAD, falling back to the working tree only when git cannot
+ * answer (no repository). Reading the worktree while the range says HEAD
+ * would classify uncommitted edits into a range that excludes them.
+ */
+async function readCurrent(
+  cwd: string,
+  git: GitRunner,
+  file: string,
+): Promise<string | undefined> {
+  const fromGit = await git(cwd, ["show", `HEAD:${file}`]);
+  if (fromGit !== null) {
+    return fromGit;
+  }
   try {
     return await readFile(path.join(cwd, file), "utf8");
   } catch {

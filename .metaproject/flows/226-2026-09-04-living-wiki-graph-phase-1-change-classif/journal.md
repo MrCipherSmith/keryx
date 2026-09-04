@@ -203,3 +203,6 @@ regressions.
 - 2026-09-04T08:02:04.307Z - ac-confirmed: AC13: report.test.ts 'entries are sorted by commits behind, descending'; renderMarkdown hides fyi by default per the measured 37-of-50 hub fan-out
 - 2026-09-04T08:02:04.387Z - ac-confirmed: AC14: queue.test.ts 'a corrupt line is skipped and counted, and the rest still drain' plus the valid-JSON-but-not-an-entry case; run.ts declares queue-truncated
 - 2026-09-04T08:02:04.468Z - ac-confirmed: AC15: Full suite 6721 pass / 48 fail; the same 48 fail at the branch base, verified earlier in a worktree at 94998d9a. Branch adds ~200 passing tests
+- 2026-09-04T08:25:41.855Z - task-done: T2: Implement per plan
+- 2026-09-04T08:25:41.950Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T08:25:42.038Z - task-done: T4: Self-review and prepare draft PR

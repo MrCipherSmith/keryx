@@ -9,7 +9,7 @@
   "title": "Living Wiki + Graph phase 1: change classification, impact propagation, freshness queue and backlog",
   "status": "in-progress",
   "createdAt": "2026-09-04T06:33:35.496Z",
-  "updatedAt": "2026-09-04T08:02:04.468Z",
+  "updatedAt": "2026-09-04T08:25:42.038Z",
   "source": {
     "type": "description",
     "ref": null
@@ -103,7 +103,7 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -111,14 +111,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T10, which decompose the same implementation against named ACs"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,14 +128,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T11: 62 freshness tests plus the hook probe; all 15 ACs confirmed with evidence"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -141,7 +145,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review found and fixed a range/measurement mismatch: collectChanges diffed the base against the WORKING TREE while the report header said 'base -> <sha>', so uncommitted edits entered a range that excluded them. Now diffs fromRev..HEAD and reads the AFTER side from HEAD. Draft PR opened separately"
     },
     {
       "id": "T5",
@@ -424,6 +430,21 @@
       "at": "2026-09-04T08:02:04.468Z",
       "event": "ac-confirmed",
       "detail": "AC15: Full suite 6721 pass / 48 fail; the same 48 fail at the branch base, verified earlier in a worktree at 94998d9a. Branch adds ~200 passing tests"
+    },
+    {
+      "at": "2026-09-04T08:25:41.855Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T08:25:41.950Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T08:25:42.038Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
