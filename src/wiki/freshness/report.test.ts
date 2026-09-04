@@ -347,3 +347,85 @@ describe("read-only guarantee (AC5)", () => {
     expect(await Bun.file(path.join(dir, "src-core.md")).text()).toBe(beforeBytes);
   });
 });
+
+describe("provenance outranks propagation", () => {
+  const stampedAtHead: GitRunner = async (_cwd, args) => {
+    if (args[0] === "cat-file") return "";
+    if (args[0] === "log") return ""; // nothing since VerifiedAt
+    return null;
+  };
+
+  test("a page verified after the change is fresh, not must-refresh", async () => {
+    const { cwd, graph } = await project({ pages: { "components/src-core.md": CORE_PAGE } });
+    const withEdge: GraphData = {
+      ...graph,
+      describes: [
+        { id: "d1", from: "wiki:components/src-core.md", to: "src/core.ts", pattern: "src/core.ts", origin: "frontmatter" },
+      ],
+    };
+
+    const report = await buildFreshnessReport({
+      cwd,
+      graph: withEdge,
+      // The range contains a signature change to the very file this page
+      // describes -- but the page has been verified since.
+      changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["x"] })],
+      symbolLayerAvailable: true,
+      git: stampedAtHead,
+      toRev: "HEAD",
+    });
+
+    // Reporting must-refresh here would assert work that was already done.
+    expect(report.pages).toEqual([]);
+    expect(report.totals.pagesFresh).toBe(1);
+  });
+
+  test("a dependency change on a verified page is fyi, never stale-reference", async () => {
+    const { cwd, graph } = await project({
+      pages: { "components/src-core.md": CORE_PAGE },
+      files: { "src/core.ts": "export const core = 1;\n", "src/dep.ts": "export const dep = 1;\n" },
+    });
+    const withEdges: GraphData = {
+      ...graph,
+      edges: [{ id: "e1", from: "src/core.ts", to: "src/dep.ts", kind: "imports", specifier: "./dep" }],
+      describes: [
+        { id: "d1", from: "wiki:components/src-core.md", to: "src/core.ts", pattern: "src/core.ts", origin: "frontmatter" },
+      ],
+    };
+
+    const report = await buildFreshnessReport({
+      cwd,
+      graph: withEdges,
+      changes: [change({ path: "src/dep.ts", changeClass: "signature", symbols: ["dep"] })],
+      symbolLayerAvailable: true,
+      git: stampedAtHead,
+      toRev: "HEAD",
+    });
+
+    // Its own block is current, so a refresh instruction would be false; the
+    // dependency news is still worth carrying, at advisory strength.
+    expect(report.pages[0]?.category).toBe("stale-prose");
+    expect(report.pages[0]?.confidence).toBe("fyi");
+    expect(report.pages[0]?.reasons.every((r) => r.edgePath.length > 1)).toBe(true);
+  });
+
+  test("a page NOT verified since the change is still must-refresh", async () => {
+    const { cwd, graph } = await project({ pages: { "components/src-core.md": CORE_PAGE } });
+    const withEdge: GraphData = {
+      ...graph,
+      describes: [
+        { id: "d1", from: "wiki:components/src-core.md", to: "src/core.ts", pattern: "src/core.ts", origin: "frontmatter" },
+      ],
+    };
+    const report = await buildFreshnessReport({
+      cwd,
+      graph: withEdge,
+      changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["x"] })],
+      symbolLayerAvailable: true,
+      git: busyGit,
+      toRev: "HEAD",
+    });
+    expect(report.pages[0]?.category).toBe("stale-reference");
+    expect(report.pages[0]?.confidence).toBe("must-refresh");
+  });
+});
