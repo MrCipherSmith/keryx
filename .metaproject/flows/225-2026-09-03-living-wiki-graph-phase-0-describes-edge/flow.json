@@ -7,9 +7,9 @@
   "id": "225",
   "slug": "living-wiki-graph-phase-0-describes-edge",
   "title": "Living Wiki + Graph phase 0: describes edge, content hashes, page provenance",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-03T20:55:59.785Z",
-  "updatedAt": "2026-09-04T06:02:00.678Z",
+  "updatedAt": "2026-09-04T06:33:26.411Z",
   "source": {
     "type": "description",
     "ref": null
@@ -70,7 +70,7 @@
     }
   },
   "pr": {
-    "url": "https://github.com/MrCipherSmith/keryx/pull/448"
+    "url": "https://github.com/MrCipherSmith/keryx/pull/449"
   },
   "tasks": [
     {
@@ -477,6 +477,65 @@
       "at": "2026-09-04T06:02:00.678Z",
       "event": "completion-failed",
       "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/225-2026-09-03-living-wiki-graph-phase-0-describes-edge/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#448 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__448.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 448 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-04T06:17:44.150Z",
+      "event": "completing",
+      "detail": "merged commit: ff390934"
+    },
+    {
+      "at": "2026-09-04T06:17:46.977Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-04-ingest-main-r02#F-NEW-001 (major, round 2026-09-04-ingest-main-r02): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-04-ingest-main-r02#F-NEW-002 (minor, round 2026-09-04-ingest-main-r02): marked fixed (`acted-on`) but its evidence names no commit SHA | verifier-stats (violated): round `2026-09-04-ingest-main-r02` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-04-ingest-main-r02#F-NEW-001, 2026-09-04-ingest-main-r02#F-NEW-002). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-04T06:19:55.131Z",
+      "event": "completing",
+      "detail": "merged commit: ff390934"
+    },
+    {
+      "at": "2026-09-04T06:19:58.116Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-04-ingest-main-r03#F-NEW-001 (major, round 2026-09-04-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-04-ingest-main-r03#F-NEW-002 (minor, round 2026-09-04-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-04T06:25:07.260Z",
+      "event": "completing",
+      "detail": "merged commit: ff390934"
+    },
+    {
+      "at": "2026-09-04T06:25:10.075Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against ff390934, but the PR head is 23962dfd75aa6c4a6c692ff7e9d0072b0ee29fff. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-04T06:26:02.952Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/449 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-04T06:32:37.052Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-04T06:32:39.756Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-04-ingest-main-r05#F-NEW-002 (minor, round 2026-09-04-ingest-main-r05): marked fixed at ff390934 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-04T06:33:23.514Z",
+      "event": "completing",
+      "detail": "merged commit: ff390934"
+    },
+    {
+      "at": "2026-09-04T06:33:26.411Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "ff390934",
+    "ref": "origin/main",
+    "at": "2026-09-04T06:33:26.410Z"
+  }
 }
