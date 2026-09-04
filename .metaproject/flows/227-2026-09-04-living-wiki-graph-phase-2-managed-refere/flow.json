@@ -1,0 +1,418 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "227",
+  "slug": "living-wiki-graph-phase-2-managed-refere",
+  "title": "Living Wiki + Graph phase 2: managed Reference block, deterministic refresh, and verify",
+  "status": "in-progress",
+  "createdAt": "2026-09-04T09:05:10.191Z",
+  "updatedAt": "2026-09-04T09:26:11.443Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8a23391b6789d6ac323163d5b8220329d21d224b2c63691a47b5d66017ce8013",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-04T09:26:06.610Z",
+      "note": "refresh.test.ts 'rewrites the block on an accepted page, changing nothing outside it' — prose and the following section compared byte-for-byte"
+    },
+    "AC2": {
+      "at": "2026-09-04T09:26:07.129Z",
+      "note": "refreshPages imports no provider and takes none; refresh.test.ts completes a full refresh with no model configuration present"
+    },
+    "AC3": {
+      "at": "2026-09-04T09:26:07.419Z",
+      "note": "refresh.test.ts 'a hand-edited block is refused, and --force overwrites it' — file byte-identical after the refusal"
+    },
+    "AC4": {
+      "at": "2026-09-04T09:26:07.648Z",
+      "note": "managed-block.test.ts 'running it twice is a no-op' + refresh.test.ts idempotence; duplicated Reference heading refused; no section is never created"
+    },
+    "AC5": {
+      "at": "2026-09-04T09:26:08.328Z",
+      "note": "Real corpus: 40 migrated, 10 skipped, 0 malformed. Diff = 80 added lines across 40 files, ALL markers, zero removed lines, zero non-marker additions"
+    },
+    "AC6": {
+      "at": "2026-09-04T09:26:08.657Z",
+      "note": "refresh.test.ts 'stamps provenance and changes nothing else' — every non-provenance line identical"
+    },
+    "AC7": {
+      "at": "2026-09-04T09:26:09.478Z",
+      "note": "Real corpus end-to-end: before stamping 0 fresh / 44 affected; after wiki verify 44 fresh / 0 affected; after committing real src/wiki changes exactly 4 pages went stale with correct reasons and '1 commits behind'"
+    },
+    "AC8": {
+      "at": "2026-09-04T09:26:09.722Z",
+      "note": "refresh.test.ts 'bumps only the patch and appends exactly one changelog line' — Version 1.0.0 -> 1.0.1, two changelog lines total"
+    },
+    "AC9": {
+      "at": "2026-09-04T09:26:10.295Z",
+      "note": "refresh.test.ts 'an already-current page is not rewritten at all' — second refresh leaves the file byte-identical"
+    },
+    "AC10": {
+      "at": "2026-09-04T09:26:10.673Z",
+      "note": "validate-structure.test.ts: truncated block, unknown marker version, hand-edited block, missing Describes target, non-monotonic changelog. wiki validate passes clean on the migrated corpus"
+    },
+    "AC11": {
+      "at": "2026-09-04T09:26:11.050Z",
+      "note": "managed-block.test.ts 'an unknown marker version is refused, not guessed at'"
+    },
+    "AC12": {
+      "at": "2026-09-04T09:26:11.443Z",
+      "note": "Full suite 6758 pass / 48 fail — the same 48 that fail at the branch base"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context is the committed package (specification 2.0.0) plus flows 225/226 journals and review rounds; re-deriving through workers would duplicate reviewed work"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T10 against named ACs"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T11: 37 phase-2 tests plus a real corpus run; all 12 ACs confirmed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review found an overclaim: wiki verify with no arguments stamped all 44 pages, silently asserting a human had reviewed each. Now requires --page (a real review) or --baseline (a measurement starting line, labelled as such in the output)"
+    },
+    {
+      "id": "T5",
+      "title": "Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "managed-block.ts: find/wrap/replace with marker version and content hash; malformed shapes reported not thrown; a block with no recorded hash is not treated as tampered. 14 tests (AC1,AC3,AC4,AC11)"
+    },
+    {
+      "id": "T6",
+      "title": "wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "migrateMarkers: idempotent, never authors a section, damage reported. Real corpus: 40 migrated, 10 skipped, 0 malformed; diff is 80 added lines all markers, zero removed (AC4,AC5)"
+    },
+    {
+      "id": "T7",
+      "title": "Reference rendering reused from the existing collect renderer, not rewritten (AC1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reference content comes from collectGraphWikiCandidates (exported from service.ts), the same renderer wiki collect uses — no extraction, no second implementation (AC1)"
+    },
+    {
+      "id": "T8",
+      "title": "wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "refreshPages: deterministic, patch-only bump, one changelog line, no-op when current, conflict on hand-edited block with --force override (AC1,AC2,AC3,AC8,AC9)"
+    },
+    {
+      "id": "T9",
+      "title": "wiki verify: stamps provenance only, changes nothing else (AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "verifyPages + wiki verify: stamps VerifiedAt/VerifiedScope only, skips empty describe-sets. Real corpus: 44 stamped, freshness went 0 fresh -> 44 fresh (AC6,AC7)"
+    },
+    {
+      "id": "T10",
+      "title": "wiki validate extension: markers, describes targets, monotonic changelog (AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "wikiValidate extended with managed-block, describes-target and changelog-ordering rules; passes on the migrated corpus. 9 tests (AC10)"
+    },
+    {
+      "id": "T11",
+      "title": "End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "End-to-end on the real corpus: migrate -> verify -> 44 fresh; then a real commit to src/wiki turned exactly 4 pages stale with correct reasons and commit counts (AC7,AC12)"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T09:05:10.191Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T09:06:44.928Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T09:06:45.019Z",
+      "event": "task-added",
+      "detail": "T5: Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.095Z",
+      "event": "task-added",
+      "detail": "T6: wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.172Z",
+      "event": "task-added",
+      "detail": "T7: Reference rendering reused from the existing collect renderer, not rewritten (AC1)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.263Z",
+      "event": "task-added",
+      "detail": "T8: wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.363Z",
+      "event": "task-added",
+      "detail": "T9: wiki verify: stamps provenance only, changes nothing else (AC6)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.472Z",
+      "event": "task-added",
+      "detail": "T10: wiki validate extension: markers, describes targets, monotonic changelog (AC10)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.577Z",
+      "event": "task-added",
+      "detail": "T11: End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.695Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T09:06:45.795Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-04T09:08:14.535Z",
+      "event": "task-done",
+      "detail": "T5: Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)"
+    },
+    {
+      "at": "2026-09-04T09:18:48.432Z",
+      "event": "task-done",
+      "detail": "T6: wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)"
+    },
+    {
+      "at": "2026-09-04T09:18:48.574Z",
+      "event": "task-done",
+      "detail": "T7: Reference rendering reused from the existing collect renderer, not rewritten (AC1)"
+    },
+    {
+      "at": "2026-09-04T09:18:48.695Z",
+      "event": "task-done",
+      "detail": "T8: wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)"
+    },
+    {
+      "at": "2026-09-04T09:18:48.809Z",
+      "event": "task-done",
+      "detail": "T9: wiki verify: stamps provenance only, changes nothing else (AC6)"
+    },
+    {
+      "at": "2026-09-04T09:18:49.023Z",
+      "event": "task-done",
+      "detail": "T10: wiki validate extension: markers, describes targets, monotonic changelog (AC10)"
+    },
+    {
+      "at": "2026-09-04T09:18:49.144Z",
+      "event": "task-done",
+      "detail": "T11: End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)"
+    },
+    {
+      "at": "2026-09-04T09:26:03.943Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T09:26:05.246Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T09:26:05.638Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-04T09:26:06.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: refresh.test.ts 'rewrites the block on an accepted page, changing nothing outside it' — prose and the following section compared byte-for-byte"
+    },
+    {
+      "at": "2026-09-04T09:26:07.129Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: refreshPages imports no provider and takes none; refresh.test.ts completes a full refresh with no model configuration present"
+    },
+    {
+      "at": "2026-09-04T09:26:07.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: refresh.test.ts 'a hand-edited block is refused, and --force overwrites it' — file byte-identical after the refusal"
+    },
+    {
+      "at": "2026-09-04T09:26:07.648Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: managed-block.test.ts 'running it twice is a no-op' + refresh.test.ts idempotence; duplicated Reference heading refused; no section is never created"
+    },
+    {
+      "at": "2026-09-04T09:26:08.328Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Real corpus: 40 migrated, 10 skipped, 0 malformed. Diff = 80 added lines across 40 files, ALL markers, zero removed lines, zero non-marker additions"
+    },
+    {
+      "at": "2026-09-04T09:26:08.657Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: refresh.test.ts 'stamps provenance and changes nothing else' — every non-provenance line identical"
+    },
+    {
+      "at": "2026-09-04T09:26:09.478Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Real corpus end-to-end: before stamping 0 fresh / 44 affected; after wiki verify 44 fresh / 0 affected; after committing real src/wiki changes exactly 4 pages went stale with correct reasons and '1 commits behind'"
+    },
+    {
+      "at": "2026-09-04T09:26:09.722Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: refresh.test.ts 'bumps only the patch and appends exactly one changelog line' — Version 1.0.0 -> 1.0.1, two changelog lines total"
+    },
+    {
+      "at": "2026-09-04T09:26:10.295Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: refresh.test.ts 'an already-current page is not rewritten at all' — second refresh leaves the file byte-identical"
+    },
+    {
+      "at": "2026-09-04T09:26:10.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: validate-structure.test.ts: truncated block, unknown marker version, hand-edited block, missing Describes target, non-monotonic changelog. wiki validate passes clean on the migrated corpus"
+    },
+    {
+      "at": "2026-09-04T09:26:11.050Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: managed-block.test.ts 'an unknown marker version is refused, not guessed at'"
+    },
+    {
+      "at": "2026-09-04T09:26:11.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Full suite 6758 pass / 48 fail — the same 48 that fail at the branch base"
+    }
+  ]
+}
