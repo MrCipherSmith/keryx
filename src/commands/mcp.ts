@@ -9,6 +9,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, heading, note, style, symbols } from "../lib/ui";
 import { serveMcp } from "../mcp/server";
+import { resolveServeRoot } from "./mcp-serve-root";
 import {
   installMcpClient,
   mcpRuntimeIds,
@@ -39,7 +40,7 @@ export async function mcpCommand(
   // `mcp` (no subcommand) is an alias for `mcp serve`.
   if (!subcommand || subcommand === "serve") {
     const http = args.includes("--http");
-    const projectRoot = path.resolve(optionValue(args, "--cwd") ?? cwd);
+    const projectRoot = path.resolve(resolveServeRoot(optionValue(args, "--cwd"), cwd, process.env));
     try {
       await serveMcp({ cwd: projectRoot, http });
     } catch (error) {
