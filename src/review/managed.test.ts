@@ -1,5 +1,5 @@
 import { afterEach, test, expect } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -99,7 +99,7 @@ async function fresh(): Promise<void> {
   if (ROOT) {
     await rm(ROOT, { recursive: true, force: true });
   }
-  ROOT = await mkdtemp(path.join(tmpdir(), "gd-review-"));
+  ROOT = await realpath(await mkdtemp(path.join(tmpdir(), "gd-review-")));
   await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
   await mkdir(path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
   await writeFile(

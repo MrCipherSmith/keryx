@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WorkspaceManifest } from "../sac/workspace-service";
@@ -16,7 +16,7 @@ async function invoke(cwd: string, args: string[], dataDir?: string) {
 }
 
 test("workspace overview --explain keeps JSON on stdout and FWK labels on stderr", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-explain-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-explain-")));
   await mkdir(path.join(cwd, "src"));
   await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "Explain workspace", "--component", "./src/a.ts"]);
@@ -31,7 +31,7 @@ test("workspace overview --explain keeps JSON on stdout and FWK labels on stderr
 });
 
 test("workspace CLI exposes only offline create/list/show/add-resource and guarded read operations", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-cli-")); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-cli-"))); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "CLI workspace", "--component", "./src/a.ts"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   expect((await invoke(cwd, ["list"])).stdout).toContain(manifest.id);
@@ -48,7 +48,7 @@ test("workspace CLI exposes only offline create/list/show/add-resource and guard
 // task-implementer wires the new CLI subcommands into src/commands/workspace.ts.
 
 test("workspace archive marks the workspace archived and hides it from list unless --include-archived is passed", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-archive-cli-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-archive-cli-")));
   const created = await invoke(cwd, ["create", "--title", "Archive Me"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   const archived = await invoke(cwd, ["archive", manifest.id]);
@@ -61,7 +61,7 @@ test("workspace archive marks the workspace archived and hides it from list unle
 });
 
 test("workspace list --include-archived=<value> parses the `=` spelling the same as every other option in this file, and refuses an unrecognized value instead of silently hiding archived workspaces", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-includearchived-cli-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-includearchived-cli-")));
   const created = await invoke(cwd, ["create", "--title", "Include Archived Me"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   expect((await invoke(cwd, ["archive", manifest.id])).exitCode).toBe(0);
@@ -84,7 +84,7 @@ test("workspace list --include-archived=<value> parses the `=` spelling the same
 });
 
 test("workspace remove-resource removes a resource by uri and rejects a uri that was never added", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-removeresource-cli-")); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-removeresource-cli-"))); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "Remove Resource Me", "--component", "./src/a.ts"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   const removed = await invoke(cwd, ["remove-resource", manifest.id, "--uri", "./src/a.ts"]);
@@ -96,7 +96,7 @@ test("workspace remove-resource removes a resource by uri and rejects a uri that
 });
 
 test("workspace rename updates the title and it is visible via a subsequent show", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-rename-cli-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-rename-cli-")));
   const created = await invoke(cwd, ["create", "--title", "Original CLI Title"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   const renamed = await invoke(cwd, ["rename", manifest.id, "--title", "New CLI Title"]);
@@ -108,7 +108,7 @@ test("workspace rename updates the title and it is visible via a subsequent show
 });
 
 test("workspace CLI ships no member-management or delete subcommand (AC-7, AC-8)", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-nongoal-cli-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-nongoal-cli-")));
   const created = await invoke(cwd, ["create", "--title", "Non-goal Check"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
   expect((await invoke(cwd, ["add-member", manifest.id, "--subject", "user:other", "--role", "editor"])).exitCode).toBe(1);
@@ -117,7 +117,7 @@ test("workspace CLI ships no member-management or delete subcommand (AC-7, AC-8)
 });
 
 test("F-001 fix: workspace list-proposals denies access for actor with no role in that workspace", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-listproposals-norole-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-listproposals-norole-")));
   const created = await invoke(cwd, ["create", "--title", "List Proposals Test"]);
   expect(created.exitCode).toBe(0);
   const manifest = JSON.parse(created.stdout) as WorkspaceManifest;
@@ -161,7 +161,7 @@ async function seedProposal(cwd: string, workspaceId: string, proposalId: string
 }
 
 test("confirm-review refuses a needs-approval proposal until the reviewer acknowledges the finding", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-gate-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-gate-")));
   await seedProposal(cwd, "workspace-a", "proposal-a", "needs-approval");
 
   const refused = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-a"]);
@@ -187,7 +187,7 @@ test("confirm-review refuses a needs-approval proposal until the reviewer acknow
 });
 
 test("confirm-review does not claim an acknowledgement a clean proposal never needed, and refuses one it cannot read", async () => {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-pass-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-pass-")));
   await seedProposal(cwd, "workspace-a", "proposal-clean", "pass");
 
   const clean = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-clean"]);
@@ -212,7 +212,7 @@ test("workspace propose refuses a note the security gate blocks, and creates no 
   // `workspace_propose` tool — and only the harness copy had a test. A guard
   // duplicated across write paths is only as good as its least-tested copy, and
   // this is the copy a human runs.
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-"));
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-")));
   await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
   await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
   await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode: "enforced" }), "utf8");
@@ -228,7 +228,7 @@ test("workspace propose refuses a note the security gate blocks, and creates no 
   // draft of this test passed while the mutation went unnoticed. The control
   // below proves the session is good, so the failure that follows can only come
   // from the note.
-  const dataDir = await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-data-"));
+  const dataDir = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-blocked-note-data-")));
   const handle = createSession({ cwd, title: "Blocked note session", dataDir, provider: "deepseek", model: "deepseek-v4-flash" });
   persistHistory(handle, [
     { role: "user", content: "What does the WorktreePort interface do?", provenance: "project" },

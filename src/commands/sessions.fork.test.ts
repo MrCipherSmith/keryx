@@ -8,7 +8,7 @@
 //
 // Isolation: every test points `KERYX_DATA_DIR` at a fresh temp directory, so
 // nothing here reads or writes the developer's real sessions.
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -46,8 +46,8 @@ function captureConsole(): () => void {
 }
 
 beforeEach(() => {
-  dataDir = mkdtempSync(path.join(tmpdir(), "keryx-fork-data-"));
-  projectDir = mkdtempSync(path.join(tmpdir(), "keryx-fork-proj-"));
+  dataDir = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-fork-data-")));
+  projectDir = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-fork-proj-")));
   previousDataDir = process.env.KERYX_DATA_DIR;
   process.env.KERYX_DATA_DIR = dataDir;
   logged = [];

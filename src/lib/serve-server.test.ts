@@ -17,7 +17,16 @@
 // address the configuration named.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Glob } from "bun";
@@ -120,7 +129,7 @@ function inventory(root: string): Record<string, string> {
 }
 
 beforeEach(() => {
-  const base = mkdtempSync(path.join(tmpdir(), "keryx-serve-server-"));
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-serve-server-")));
   configDir = path.join(base, "config");
   workspace = path.join(base, "work");
   mkdirSync(configDir, { recursive: true });
@@ -935,11 +944,27 @@ describe("the listener", () => {
 
   test("an acknowledged non-loopback bind binds, and reports itself as non-loopback", async () => {
     // security-policy.md forbids a fixture from opening a real listener on a
-    // non-loopback interface, so this uses `0177.0.0.1`: the classifier refuses
+    // Address form changed from `0177.0.0.1` (2026-09-04): macOS refuses to
+    // bind octal-notation IPv4, so this test failed on every developer machine
+    // while passing in Linux CI. `127.000.000.001` preserves the intent
+    // exactly — `isLoopbackAddress` still calls it NON-loopback because
+    // leading-zero octets are ambiguous, so the acknowledged-bind path is
+    // still what runs, and the kernel still resolves it to 127.0.0.1 so
+    // nothing becomes reachable. Verified on both classifications before
+    // swapping.
+    // non-loopback interface, so this uses `127.000.000.001`: the classifier refuses
     // it (leading-zero octets are ambiguous, so it fails closed and calls it
     // non-loopback) while the kernel resolves it to 127.0.0.1. The acknowledged
     // bind path is exercised end to end without anything becoming reachable.
-    const config = ephemeralConfig({ address: "0177.0.0.1", acknowledgeNonLoopback: true });
+    // Address form changed from `0177.0.0.1` (2026-09-04): macOS refuses to
+    // bind octal-notation IPv4, so this test failed on every developer machine
+    // while passing in Linux CI. `127.000.000.001` preserves the intent
+    // exactly — `isLoopbackAddress` still calls it NON-loopback because
+    // leading-zero octets are ambiguous, so the acknowledged-bind path is
+    // still what runs, and the kernel still resolves it to 127.0.0.1 so
+    // nothing becomes reachable. Verified on both classifications before
+    // swapping.
+    const config = ephemeralConfig({ address: "127.000.000.001", acknowledgeNonLoopback: true });
     const outcome = await start(config);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) {
@@ -1136,7 +1161,7 @@ function makeProject(name: string): string {
 
 describe("the credential reader reports absence and damage distinctly", () => {
   test("absent, ok and unreadable are three different answers", async () => {
-    const empty = mkdtempSync(path.join(tmpdir(), "keryx-serve-cred-read-"));
+    const empty = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-serve-cred-read-")));
     try {
       expect(readServeCredential(empty).status).toBe("absent");
       expect(readServeCredential(configDir).status).toBe("ok");

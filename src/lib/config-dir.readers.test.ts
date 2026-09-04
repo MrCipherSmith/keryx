@@ -41,6 +41,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -209,7 +210,7 @@ async function runReader(
 }
 
 beforeEach(() => {
-  base = mkdtempSync(path.join(tmpdir(), "keryx-readers-"));
+  base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-readers-")));
   configDir = path.join(base, "keryx");
 });
 

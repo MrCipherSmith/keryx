@@ -1,7 +1,16 @@
 // User-global project registry (flow 127 / roadmap R4a).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -28,7 +37,7 @@ function makeProject(name: string): string {
 }
 
 beforeEach(() => {
-  const base = mkdtempSync(path.join(tmpdir(), "keryx-registry-"));
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-registry-")));
   configDir = path.join(base, "config");
   workspace = path.join(base, "work");
   mkdirSync(configDir, { recursive: true });

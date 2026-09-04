@@ -11,7 +11,16 @@
 // store works and say nothing about whether the route consults it.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  ftruncateSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveLocalProfile } from "../harness/policy/profiles";
@@ -103,7 +112,7 @@ class StubProvider implements ProviderPort {
 }
 
 beforeEach(() => {
-  const base = mkdtempSync(path.join(tmpdir(), "keryx-r4c-"));
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-r4c-")));
   configDir = path.join(base, "config");
   project = path.join(base, "project");
   mkdirSync(configDir, { recursive: true });

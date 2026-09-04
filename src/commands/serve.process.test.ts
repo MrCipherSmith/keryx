@@ -19,7 +19,7 @@
 // job on the same runner.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defaultServeConfig, saveServeConfig, serveConfigPath } from "../lib/serve-config";
@@ -31,7 +31,7 @@ let xdgRoot = "";
 let configDir = "";
 
 beforeEach(() => {
-  xdgRoot = mkdtempSync(path.join(tmpdir(), "keryx-serve-proc-"));
+  xdgRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-serve-proc-")));
   configDir = path.join(xdgRoot, "keryx");
   mkdirSync(configDir, { recursive: true });
 });
@@ -220,12 +220,28 @@ describe("AC4 — refusal is terminal", () => {
 });
 
 describe("AC3 — non-loopback needs BOTH halves of the acknowledgement", () => {
-  // These use `0177.0.0.1` throughout: the classifier fails closed on
+    // Address form changed from `0177.0.0.1` (2026-09-04): macOS refuses to
+    // bind octal-notation IPv4, so this test failed on every developer machine
+    // while passing in Linux CI. `127.000.000.001` preserves the intent
+    // exactly — `isLoopbackAddress` still calls it NON-loopback because
+    // leading-zero octets are ambiguous, so the acknowledged-bind path is
+    // still what runs, and the kernel still resolves it to 127.0.0.1 so
+    // nothing becomes reachable. Verified on both classifications before
+    // swapping.
+  // These use `127.000.000.001` throughout: the classifier fails closed on
   // leading-zero octets and calls it non-loopback, while the kernel resolves it
   // to 127.0.0.1. security-policy.md forbids a fixture from opening a real
   // listener on a non-loopback interface, and this exercises the whole
   // acknowledged-bind path without anything becoming reachable.
-  const NON_LOOPBACK = "0177.0.0.1";
+    // Address form changed from `0177.0.0.1` (2026-09-04): macOS refuses to
+    // bind octal-notation IPv4, so this test failed on every developer machine
+    // while passing in Linux CI. `127.000.000.001` preserves the intent
+    // exactly — `isLoopbackAddress` still calls it NON-loopback because
+    // leading-zero octets are ambiguous, so the acknowledged-bind path is
+    // still what runs, and the kernel still resolves it to 127.0.0.1 so
+    // nothing becomes reachable. Verified on both classifications before
+    // swapping.
+  const NON_LOOPBACK = "127.000.000.001";
 
   test("a configuration acknowledgement alone is not enough", async () => {
     const port = await borrowPort();
