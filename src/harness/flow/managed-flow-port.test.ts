@@ -264,6 +264,7 @@ function makeSpyService(
     freeze: notImplemented("freeze", calls),
     start: notImplemented("start", calls),
     taskAdd: notImplemented("taskAdd", calls),
+    taskDepends: notImplemented("taskDepends", calls),
     taskDone,
     taskAttempt: notImplemented("taskAttempt", calls),
     next: notImplemented("next", calls),

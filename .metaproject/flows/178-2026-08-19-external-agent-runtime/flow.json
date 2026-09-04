@@ -5,7 +5,7 @@
   "title": "External Agent Runtime read-only release: registry + codex/claude codecs, worktree containment, folded supervision, TUI modal",
   "status": "done",
   "createdAt": "2026-08-19T17:59:35.989Z",
-  "updatedAt": "2026-08-20T08:59:32.780Z",
+  "updatedAt": "2026-09-04T04:50:04.413Z",
   "source": {
     "type": "description",
     "ref": null
@@ -239,8 +239,7 @@
       "status": "done",
       "dependsOn": [
         "T7",
-        "T8",
-        "T10"
+        "T8"
       ],
       "attempts": {
         "count": 0,
@@ -772,6 +771,11 @@
       "at": "2026-08-20T08:59:32.780Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-04T04:50:04.413Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T7, T8 (was T7, T8, T10) — T10 listed itself alongside T7 and T8, so flow next could never mark it ready — it only ever completed because it was dispositioned skipped by hand. The self edge is removed and the two real prerequisites are kept; recorded rather than hand-edited, which is what this command exists for."
     }
   ]
 }

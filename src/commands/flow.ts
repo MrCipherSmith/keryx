@@ -422,6 +422,31 @@ async function runTask(args: string[]): Promise<void> {
     console.log(`  ${style.green(symbols.ok)} Added ${style.bold(flow.tasks[flow.tasks.length - 1]?.id ?? "task")} to flow ${flow.id}`);
     return;
   }
+  if (sub === "depends") {
+    const id = positional(args, 1);
+    const taskId = positional(args, 2);
+    const on = optionValue(args, "--on");
+    const reason = optionValue(args, "--reason");
+    if (!id || !taskId || on === undefined || !reason) {
+      throw new Error(
+        'Usage: keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"',
+      );
+    }
+    // `--on none` and `--on ""` both mean "no dependencies". Spelling the empty
+    // case explicitly keeps clearing the field from looking like a forgotten flag.
+    const dependsOn =
+      on.trim().toLowerCase() === "none" || on.trim() === ""
+        ? []
+        : on.split(",").map((value) => value.trim()).filter(Boolean);
+    const flow = await getService().taskDepends({ cwd: process.cwd(), id, taskId, dependsOn, reason });
+    const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
+    const now = task?.dependsOn ?? [];
+    console.log(
+      `  ${style.green(symbols.ok)} ${style.bold(task?.id ?? taskId)} depends on ` +
+        `${now.length > 0 ? style.cyan(now.join(", ")) : style.dim("nothing")}`,
+    );
+    return;
+  }
   if (sub === "done") {
     const id = positional(args, 1);
     const taskId = positional(args, 2);
@@ -478,7 +503,7 @@ async function runTask(args: string[]): Promise<void> {
     );
     return;
   }
-  throw new Error("Usage: keryx flow task <add|done|attempt> ...");
+  throw new Error("Usage: keryx flow task <add|depends|done|attempt> ...");
 }
 
 async function runAc(args: string[]): Promise<void> {
@@ -658,6 +683,7 @@ function printHelp(): void {
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
     'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
+    'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
     'keryx flow ac update <id> --reason "<why>"   (criteria changed; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',

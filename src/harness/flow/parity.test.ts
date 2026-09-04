@@ -397,6 +397,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       freeze: notImplemented("freeze", calls),
       start: notImplemented("start", calls),
       taskAdd: notImplemented("taskAdd", calls),
+      taskDepends: notImplemented("taskDepends", calls),
       taskDone,
       taskAttempt: notImplemented("taskAttempt", calls),
       next: notImplemented("next", calls),
