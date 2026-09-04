@@ -304,7 +304,7 @@ Pass the matching `--no-*-hook` flag to force a hook off:
 
 | Flag | Skips hook |
 |---|---|
-| `--no-gdgraph-hook` | gdgraph post-commit hook. |
+| `--no-gdgraph-hook` | gdgraph post-commit hook (it rebuilds the graph; `KERYX_GDGRAPH_HOOK_REBUILD=0` downgrades it to a reminder instead). |
 | `--no-gdskills-hook` | gdskills post-commit hook. |
 | `--no-health-hook` | health post-commit hook. |
 | `--no-testing-post-commit-hook` | testing post-commit (refresh) hook. |
@@ -653,11 +653,20 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 | `path "<A>" "<B>"` | — | Resolve file or symbol endpoints and print the shortest path across import and call edges. |
 | `affected <file-or-symbol>` | `--depth <N>`, `--ranked`, `--json` | Resolve a file or symbol, print dependencies/dependents, and optionally walk/rank the transitive blast radius. |
 | `repomap` | `--budget <N>`, `--seed <path>...`, `--changed` | Write a token-budgeted repo map artifact. `--budget` caps the token estimate, `--seed` biases toward one or more paths (repeatable), and `--changed` seeds from locally changed files (`git diff --name-only HEAD`). |
-| `context` | — | Emit the bounded graph portion of the turn-start orientation block. |
+| `context` | — | Emit the bounded graph portion of the turn-start orientation block, ending in a freshness line: `working tree clean`, or `N uncommitted code file(s) may not be reflected`. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json`: `list` shows resolved/missing state, `verify` checks checksums (exit `1` on mismatch), `pull` fetches and verifies one asset (the only networked verb). |
 
 Only the exact queries `cycles` and `orphans` are accepted; anything else exits
 `1`. `affected` with no file argument prints usage and exits `1`.
+
+**Freshness.** Every query answers from the last `build`, never from the working
+tree, and a stale answer is shaped exactly like a fresh one. Adding, renaming,
+deleting or moving a file invalidates the node set; adding or removing an import
+invalidates the edge set, so `affected` under-reports. An edit inside a file with
+unchanged imports leaves the file graph correct and the symbol layer stale.
+Rebuild with `build` — before relying on an answer, not once per question — and
+let the gdgraph post-commit hook cover the committed half. The full contract is
+in `.metaproject/modules/gdgraph.md` (Freshness & Refresh).
 
 ---
 

@@ -3,6 +3,71 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.78] — 2026-09-05
+
+One theme, arrived at from two directions: a generated document that says
+something the code does not do is worse than no document, because an agent
+believes it.
+
+The code graph had a refresh command and a freshness signal, and neither
+reached an agent. `.metaproject/index.md` said only "run module CLI commands
+when generated data is stale"; the `AGENTS.md` / `CLAUDE.md` block routed
+navigation to gdgraph and never mentioned rebuilding; `modules/gdgraph.md`
+listed commands and data with no freshness contract at all. So an agent that
+renamed three files and then asked what breaks got an answer from the previous
+file set, with nothing in the answer to say so. Meanwhile the gdgraph skill
+claimed the post-commit hook refreshed the graph; the hook only printed a
+reminder.
+
+The second direction is the same failure one level up. The gdwiki skill's
+route to `keryx wiki freshness` — the thing that teaches an agent to check
+whether a page still matches the code — existed only in the generated file,
+not in the generator that overwrites it. Any `keryx update` deleted it, in
+this repository and in every project that had installed it.
+
+### Added
+
+- **A freshness contract for the code graph** in `modules/gdgraph.md`: what
+  invalidates it (files added, renamed, deleted or moved, and changed imports;
+  an in-file edit invalidates only the opt-in symbol layer), how staleness is
+  observed (`keryx gdgraph context`), how it is repaired, and the rule that a
+  rebuild belongs before relying on an answer — not once per question.
+- **Graph freshness routing** in the generated `index.md` (an Agent Workflow
+  item and an Intent Router row) and in the `<!-- keryx:index -->` block of
+  `AGENTS.md` / `CLAUDE.md`, so the rule reaches an agent without opening the
+  index. Both disappear when gdgraph is disabled.
+
+### Changed
+
+- **The gdgraph post-commit hook rebuilds the graph** instead of printing a
+  reminder, resolving `keryx` from `PATH` then `$HOME/.local/bin`. It never
+  blocks a commit — every path exits 0, including a failed build — and
+  `KERYX_GDGRAPH_HOOK_REBUILD=0` restores the old reminder. It is mutating by
+  design: a project that versions `data/gdgraph/artifacts/` will find
+  `summary.md` and `module-map.json` modified after a graph-relevant commit,
+  which the hooks README and the lifecycle docs now state outright.
+
+### Fixed
+
+- **The gdwiki freshness route survives `keryx update`.** It now lives in
+  `renderGdwikiSkillReadme()` rather than only in the generated
+  `skills/gdwiki/SKILL.md`, with one test pinning the route in the generator
+  and a second asserting the committed artifact equals the render — so a hand
+  edit that the next update would erase fails loudly instead of silently.
+- **`skills/gdgraph/SKILL.md` no longer claims a hook behaviour that does not
+  exist**; its refresh policy describes the hook that is actually rendered.
+- **`gdgraph.affected` states over MCP that it reads the built graph**, the
+  caveat `gdgraph.cycles` and `gdgraph.orphans` already carried. It was the one
+  blast-radius tool whose description read as if it saw the working tree.
+
+### Documentation
+
+- The CLI reference documents graph freshness under `gdgraph`, the freshness
+  line `gdgraph context` prints, and what `--no-gdgraph-hook` now skips.
+- The lifecycle page's hook table describes both post-commit hooks as they
+  behave today: gdgraph rebuilds, and gdwiki appends to the freshness queue
+  rather than printing the reminder it stopped printing in 0.2.77.
+
 ## [0.2.77] — 2026-09-04
 
 Two threads. The larger one in line count is the wiki, which stops going
