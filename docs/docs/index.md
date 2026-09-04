@@ -35,6 +35,7 @@ the one that describes shipped behaviour.
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
 - [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
 - [Slate for external agents](guides/slate.md)
+- [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
 
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
