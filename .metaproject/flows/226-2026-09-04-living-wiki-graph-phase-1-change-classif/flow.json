@@ -9,7 +9,7 @@
   "title": "Living Wiki + Graph phase 1: change classification, impact propagation, freshness queue and backlog",
   "status": "in-progress",
   "createdAt": "2026-09-04T06:33:35.496Z",
-  "updatedAt": "2026-09-04T06:34:58.037Z",
+  "updatedAt": "2026-09-04T07:05:33.983Z",
   "source": {
     "type": "description",
     "ref": null
@@ -100,7 +100,7 @@
       "id": "T6",
       "title": "Change classification over SymbolNode.signature with honest degradation (AC1,AC2,AC4)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -108,13 +108,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "classify-change.ts: six classes over the tree-sitter adapter run on both revisions; cosmetic normaliser is literal-aware and fails towards 'substantive'; degrades to body and never claims signature without the layer (AC1,AC2,AC4). 16 tests"
     },
     {
       "id": "T7",
       "title": "Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -122,7 +124,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "propagate.ts: edge-type policy with confidence decay as the bound, reason chains on every page, renames also reach the old path's page (AC3,AC13 input). Measured on the real graph: hub signature change reaches 37/50 pages in 5ms, recorded in journal. 16 tests"
     },
     {
       "id": "T8",
@@ -234,6 +238,16 @@
     {
       "at": "2026-09-04T06:34:58.037Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-04T07:05:33.883Z",
+      "event": "task-done",
+      "detail": "T6: Change classification over SymbolNode.signature with honest degradation (AC1,AC2,AC4)"
+    },
+    {
+      "at": "2026-09-04T07:05:33.983Z",
+      "event": "task-done",
+      "detail": "T7: Impact propagation: edge-type policy, confidence decay, reason chains (AC3,AC13)"
     }
   ]
 }
