@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "227",
+  "slug": "living-wiki-graph-phase-2-managed-refere",
+  "title": "Living Wiki + Graph phase 2: managed Reference block, deterministic refresh, and verify",
+  "status": "in-progress",
+  "createdAt": "2026-09-04T09:05:10.191Z",
+  "updatedAt": "2026-09-04T09:08:14.535Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8a23391b6789d6ac323163d5b8220329d21d224b2c63691a47b5d66017ce8013",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Context is the committed package (specification 2.0.0) plus flows 225/226 journals and review rounds; re-deriving through workers would duplicate reviewed work"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "managed-block.ts: find/wrap/replace with marker version and content hash; malformed shapes reported not thrown; a block with no recorded hash is not treated as tampered. 14 tests (AC1,AC3,AC4,AC11)"
+    },
+    {
+      "id": "T6",
+      "title": "wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Reference rendering reused from the existing collect renderer, not rewritten (AC1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "wiki verify: stamps provenance only, changes nothing else (AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "wiki validate extension: markers, describes targets, monotonic changelog (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T09:05:10.191Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T09:06:44.928Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T09:06:45.019Z",
+      "event": "task-added",
+      "detail": "T5: Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.095Z",
+      "event": "task-added",
+      "detail": "T6: wiki migrate-markers: idempotent, never invents a section, refuses duplicates (AC4,AC5)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.172Z",
+      "event": "task-added",
+      "detail": "T7: Reference rendering reused from the existing collect renderer, not rewritten (AC1)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.263Z",
+      "event": "task-added",
+      "detail": "T8: wiki refresh: deterministic, patch bump, one Changelog line, no-op when current (AC2,AC8,AC9)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.363Z",
+      "event": "task-added",
+      "detail": "T9: wiki verify: stamps provenance only, changes nothing else (AC6)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.472Z",
+      "event": "task-added",
+      "detail": "T10: wiki validate extension: markers, describes targets, monotonic changelog (AC10)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.577Z",
+      "event": "task-added",
+      "detail": "T11: End-to-end on this corpus: migrate, verify, freshness turns unknown into fresh (AC7,AC12)"
+    },
+    {
+      "at": "2026-09-04T09:06:45.695Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T09:06:45.795Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-04T09:08:14.535Z",
+      "event": "task-done",
+      "detail": "T5: Managed-block parse/serialise with version and content hash (AC1,AC3,AC11)"
+    }
+  ]
+}
