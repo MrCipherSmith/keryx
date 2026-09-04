@@ -13,6 +13,7 @@ import { resolveTreesitterCapability } from "../../gdgraph/treesitter/adapter";
 import type { SymbolLayer } from "../../gdgraph/types";
 import { gitCmd } from "../../sync/provenance";
 import { classifyChanges, type FileChange, type SymbolExtractor } from "./classify-change";
+import { clearQueue, drainQueue, earliestRev } from "./queue";
 import type { GitRunner } from "./page-freshness";
 import { buildFreshnessReport, type FreshnessReport } from "./report";
 
@@ -34,7 +35,14 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
 
   const head = (await git(cwd, ["rev-parse", "HEAD"])) ?? "";
   const gitAvailable = head.length > 0;
-  const fromRev = gitAvailable ? (input.since ?? "HEAD~1") : undefined;
+
+  // An explicit `--since` wins. Otherwise the queue supplies the base, which
+  // is the whole point of accumulating it: nobody should have to remember
+  // which revision they last looked at. With neither, fall back to the last
+  // commit rather than inventing a wider range.
+  const drained = input.since ? null : await drainQueue(cwd);
+  const queueBase = drained ? earliestRev(drained.entries) : undefined;
+  const fromRev = gitAvailable ? (input.since ?? queueBase ?? "HEAD~1") : undefined;
 
   const changes = gitAvailable ? await collectChanges(cwd, git, fromRev as string) : [];
   const extractor = await resolveSymbolExtractor(cwd);
@@ -49,8 +57,22 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
     git,
     fromRev,
     toRev: gitAvailable ? head : "working-tree",
+    ...(drained ? { queueEntriesConsumed: drained.entries.length } : {}),
+    ...(drained?.truncated ? { queueTruncated: true } : {}),
     ...(input.now ? { now: input.now } : {}),
   });
+
+  if (drained && drained.corruptLines > 0) {
+    // Skipped, counted, and declared. The queue is written by a shell hook
+    // that a killed commit or a full disk can interrupt mid-append; a
+    // half-written line must cost that one revision, not the report — and
+    // must not cost it silently.
+    report.limitations.push({
+      code: "queue-truncated",
+      detail: `${drained.corruptLines} unreadable queue line(s) were skipped. Those revisions are missing from this range; re-run with an explicit --since to cover them.`,
+      affectedCount: drained.corruptLines,
+    });
+  }
 
   if (!gitAvailable) {
     // Declared, not implied. A short report from a git-free project must not
@@ -64,6 +86,12 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
   }
 
   await persist(cwd, report);
+  // Only after the report is safely on disk. Clearing first would lose the
+  // range if persisting then failed, and the next run would silently report a
+  // narrower window than the user asked about.
+  if (drained && drained.entries.length > 0) {
+    await clearQueue(cwd);
+  }
   return report;
 }
 
