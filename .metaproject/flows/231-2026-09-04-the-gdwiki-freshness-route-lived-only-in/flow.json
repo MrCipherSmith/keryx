@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "231",
+  "slug": "the-gdwiki-freshness-route-lived-only-in",
+  "title": "The gdwiki freshness route lived only in the generated file, so keryx update deleted it",
+  "status": "implemented",
+  "createdAt": "2026-09-04T18:22:42.985Z",
+  "updatedAt": "2026-09-04T18:27:00.345Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:29b7aac4a515255283fa35841b6905badc2778043936ae4485ac78525220d42e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-04T18:23:47.953Z",
+      "note": "verified by tests and by the regeneration diff"
+    },
+    "AC2": {
+      "at": "2026-09-04T18:23:48.066Z",
+      "note": "verified by tests and by the regeneration diff"
+    },
+    "AC3": {
+      "at": "2026-09-04T18:23:48.162Z",
+      "note": "verified by tests and by the regeneration diff"
+    },
+    "AC4": {
+      "at": "2026-09-04T18:23:48.259Z",
+      "note": "verified by tests and by the regeneration diff"
+    },
+    "AC5": {
+      "at": "2026-09-04T18:23:48.361Z",
+      "note": "verified by tests and by the regeneration diff"
+    },
+    "AC6": {
+      "at": "2026-09-04T18:23:48.458Z",
+      "note": "verified by tests and by the regeneration diff"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/468"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Found while regenerating .metaproject on flow 230; #460 (576c653) touched only the generated file, src/wiki/templates.ts has zero freshness mentions"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Section moved into renderGdwikiSkillReadme; workspace regenerated"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "src/wiki/skill-template.test.ts: content guard + committed-equals-render guard; verified it failed before regeneration"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done; PR #468 opened on origin/main"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T18:22:42.985Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T18:23:47.373Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T18:23:47.515Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-04T18:23:47.635Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T18:23:47.732Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T18:23:47.833Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T18:23:47.953Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:23:48.066Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:23:48.162Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:23:48.259Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:23:48.361Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:23:48.458Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified by tests and by the regeneration diff"
+    },
+    {
+      "at": "2026-09-04T18:26:57.869Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-04T18:27:00.345Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/468 (warning: PR is not a draft)"
+    }
+  ]
+}
