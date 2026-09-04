@@ -1,0 +1,61 @@
+[
+  {
+    "id": "F-NEW-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`wiki verify` with no arguments stamped every page in the corpus.",
+    "impact": "VerifiedAt exists to record that a human looked at a page. Stamping 44 pages in one keystroke asserted 44 reviews that did not happen — the exact class of quiet overstatement this package was built to prevent, committed by the tool meant to prevent it. Downstream, the freshness report would then show a corpus that looked reviewed and was not.",
+    "suggested_fix": "Require explicit intent: --page for a real review, --baseline for a measurement starting line, and say in the output that a baseline is not a claim the pages were read.",
+    "evidence": "Running `wiki verify` on this repository stamped 44 pages with no flag and no warning; the freshness report then reported 44 fresh.",
+    "confidence": "high",
+    "file": "src/wiki/refresh.ts",
+    "line": 268,
+    "class_scope": {
+      "sites": [
+        "src/wiki/refresh.ts:268",
+        "src/commands/wiki.ts"
+      ],
+      "enumeration_method": "verifyPages is the only provenance-writing entry point."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at c9e86268 (merged as edd93155): verifyPages throws unless --page or --baseline is given, and the command prints that a baseline is not a claim the pages were read."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at c9e86268, merged as edd93155: `wiki verify` with no flag now prints the refusal and stamps nothing; `--page components/src-ctx.md` stamps exactly one page. No longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-NEW-002",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The Reference renderer lives inline inside collectGraphWikiCandidates, so `refresh` had to either duplicate it or call the whole candidate builder.",
+    "impact": "Duplicating would have created a second renderer that drifts from the first — the failure this package has already paid for three times (validModuleNames, wikiPruneOrphans, computePageNodeHash). Calling the builder does redundant work for modules that are not being refreshed.",
+    "suggested_fix": "Call the existing builder and lift the section out. Accept the redundant work; correctness of a single renderer outranks it.",
+    "evidence": "collectGraphWikiCandidates renders Reference inline at src/wiki/service.ts:518-536, with no seam to call.",
+    "confidence": "high",
+    "file": "src/wiki/refresh.ts",
+    "line": 178,
+    "class_scope": {
+      "sites": [
+        "src/wiki/refresh.ts:178"
+      ],
+      "enumeration_method": "Single call site for Reference content."
+    },
+    "global_id": "2026-09-04-ingest-main#F-NEW-002",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "Deliberate at c9e86268 (merged as edd93155) and written down at the site: one renderer means a Reference format change reaches refresh automatically. Extracting a seam is a worthwhile follow-up but not at the cost of a second implementation now."
+    },
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Still true at c9e86268, merged as edd93155: the renderer remains inline and refresh calls the builder. Dismissed as wont-fix rather than fixed, so it correctly still reproduces.",
+      "verifier": "review-verifier"
+    }
+  }
+]
