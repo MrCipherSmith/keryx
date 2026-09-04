@@ -1,6 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { CallEdge, GraphData, GraphEdge, GraphNode, SymbolNode } from "./types";
+import type {
+  CallEdge,
+  DescribesEdge,
+  GraphData,
+  GraphEdge,
+  GraphNode,
+  SymbolNode,
+  WikiPageNode,
+} from "./types";
 import { resolveGraphTarget } from "./target";
 
 export async function loadGraph(projectRoot: string): Promise<GraphData> {
@@ -11,6 +19,11 @@ export async function loadGraph(projectRoot: string): Promise<GraphData> {
   // (never an error — mirrors `readJsonl` tolerance). File-level graph unchanged.
   const symbols = await readJsonl<SymbolNode>(path.join(storageDir, "symbols.jsonl"));
   const calls = await readJsonl<CallEdge>(path.join(storageDir, "calls.jsonl"));
+  // LWG wiki layer (flow 223): same contract as the symbol layer above —
+  // loaded only if present, absent ⇒ omitted, never an error. A graph built
+  // before this layer existed therefore loads byte-for-byte as it always did.
+  const wikiPages = await readJsonl<WikiPageNode>(path.join(storageDir, "wiki-pages.jsonl"));
+  const describes = await readJsonl<DescribesEdge>(path.join(storageDir, "describes.jsonl"));
   const graph: GraphData = { nodes, edges };
   if (symbols.length > 0) {
     graph.symbols = symbols;
@@ -18,7 +31,44 @@ export async function loadGraph(projectRoot: string): Promise<GraphData> {
   if (calls.length > 0) {
     graph.calls = calls;
   }
+  if (wikiPages.length > 0) {
+    graph.wikiPages = wikiPages;
+  }
+  if (describes.length > 0) {
+    graph.describes = describes;
+  }
   return graph;
+}
+
+/**
+ * Reverse the `describes` layer: which wiki pages document this file?
+ * (LWG-1, flow 223 AC3.)
+ *
+ * The layer stores only page → file, so this is the index every caller would
+ * otherwise rebuild. An absent layer yields an empty array — the honest
+ * answer is "no information", and a caller must not read that as "this file
+ * is undocumented"; only a layer that IS present can support that claim.
+ */
+export function getPagesDescribing(graph: GraphData, filePath: string): string[] {
+  const target = filePath.replace(/^\.\//, "");
+  const pages = new Set<string>();
+  for (const edge of graph.describes ?? []) {
+    if (edge.to === target) {
+      pages.add(edge.from);
+    }
+  }
+  return [...pages].sort();
+}
+
+/** Every file the given page documents (LWG-1). Empty when undecidable. */
+export function getFilesDescribedBy(graph: GraphData, pageId: string): string[] {
+  const files = new Set<string>();
+  for (const edge of graph.describes ?? []) {
+    if (edge.from === pageId) {
+      files.add(edge.to);
+    }
+  }
+  return [...files].sort();
 }
 
 export function getOrphans(graph: GraphData): string[] {

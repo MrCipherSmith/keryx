@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.24.0
+Version: 0.25.0
 
 ## Status
 
@@ -7,6 +7,21 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.25.0** — added `keryx-living-wiki-graph` (spec ready, nothing
+>   implemented): connects gdwiki to gdgraph via a `describes` edge, adds
+>   `VerifiedAt` page provenance, machine markers around the
+>   `## Reference (from code graph)` section so it can be refreshed
+>   deterministically on `accepted` pages, change classification over the
+>   existing `SymbolNode.signature` symbol layer, an append-only freshness
+>   queue on a git hook, and a read-only categorized backlog. Adapted from
+>   RepoDoc (arXiv 2604.26523). Three problem statements in the package are
+>   verified against `main` (`be70279e`) with `file:line`, not asserted:
+>   `src/gdgraph/**` has zero wiki references; `writeCollectedPage`
+>   (`src/wiki/service.ts:791-804`) never rewrites a non-draft page;
+>   `completedNodeHashes` (`src/wiki/enrich.ts:917-931`) is only ever
+>   populated on the RLM path, and `rlm.enabled` defaults to `false`
+>   (`src/wiki/config.test.ts:8`), so the existing staleness gate cannot
+>   fire in the default configuration. No code changed in this revision.
 > - **0.24.0** — `slate` entry corrected and extended, in two passes within
 >   the same session. Prior entry read "v2 (SLATE-16..21) specification-ready,
 >   not implemented" — verified against real code on `main` (`c47e8f0`) this
@@ -474,4 +489,5 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Keryx OpenTUI Shell](keryx-opentui-shell/README.md) | implemented (default shell; flows 059–066) | Full-screen OpenTUI (`@opentui/core`) interactive shell replacing the line-based `node:readline` renderer: live `/` command composer, persistent composer region, component-based rendering, with the deterministic agent driver and pure render helpers unchanged. The TUI is **the default shell when `stdout.isTTY`**; `--tui`/`--no-tui` flags and a graceful readline fallback remain. ADR-0005 Accepted. Additive features shipped beyond the original Phase 0–5 spec: side-workers, multi-agent spawn wiring, dual-store session persistence. Shared interactive tools + approval across TUI and readline (`web_fetch` is not TUI-only). |
 | [Keryx OpenTUI Modal and Tabs](keryx-opentui-modal-tabs/README.md) | implemented (flow 154) | Reusable `openModal` host in `src/tui/modal-host.ts`: dimmed backdrop, titled panel, tab strip, Esc dismiss, `shell-chrome` overlay registration. No slash command of its own. |
 | [Keryx OpenTUI Session Info](keryx-opentui-session-info/README.md) | implemented (flows 155; 0.2.36–0.2.37) | `/status` inspector on the shared host (Status + Context; Workspaces / Flow only when the session referenced them). `/session-info` and `/info` are not aliases. Sibling `/flows` lists project flows on the same host. |
+| [Living Wiki + Graph](keryx-living-wiki-graph/README.md) | spec ready, nothing implemented | Makes gdwiki observably fresh by connecting it to gdgraph, which today it is not connected to at all: `src/gdgraph/**` contains zero references to the wiki, `GraphNode` is `{id, kind, path, language}`, and no "page describes code" edge exists — so "which pages does this change affect" is currently unanswerable by construction. Adds `wiki-page` nodes and a `describes` edge (LWG-1), content hashes on file nodes (LWG-2), a `VerifiedAt: <git sha>` page provenance field so staleness is `git log <VerifiedAt>..HEAD -- <paths>` rather than a hash comparison (LWG-4), and machine markers around the `## Reference (from code graph)` section so a deterministic writer can refresh it on `accepted` pages without touching human prose (LWG-5) — closing the gap where `writeCollectedPage` (`src/wiki/service.ts:791-804`) freezes the machine half along with the human half, by design and with a comment saying so. Change classification (`added`/`removed`/`signature`/`body`/`cosmetic`/`moved`, LWG-7) reuses the existing symbol layer's `SymbolNode.signature` rather than adding an AST diff, and the `cosmetic` class exists specifically to stop the current `computePageNodeHash` sha256 from manufacturing work on reformatting. A git hook appends to an append-only freshness queue within a 50 ms budget (LWG-9) and `keryx wiki freshness` drains it into a read-only categorized backlog modeled on `src/sac/catch-up.ts` (LWG-10). Prose enrichment stays delta-scoped and may route through the already-real SAC propose/review path (`src/sac/wiki-owner-writer.ts`, today limited to emitting `decisions/sac-<id>.md`), never auto-accepting (LWG-12). Adapted from RepoDoc (arXiv 2604.26523) — its four-stage pipeline, doc nodes in the code graph, and edge-type-driven propagation without a hop limit — with three deliberate departures: git-revision provenance instead of hashes alone, a human review contour RepoDoc has no equivalent of, and an explicit anti-entropy anchor against model-rewrites-model drift. Explicit non-goals: file-watcher realtime, auto-accepted prose, and the `semantic-impact` edge (needs embeddings; would make v1 non-deterministic). Depends on nothing; Phase 4 (incremental graph build) is pure optimization and blocks no other phase. |
 | [Structured File-Edit Tools](structured-file-edit-tools/README.md) | implemented (P0–P3, package complete) | `apply_patch`: a `risk: "write"` tool taking a standard multi-file unified diff, applied via a constrained `git apply` argv call (stdin, no shell string) and confined by the existing `confineToRoot`. Collapses N `shell_exec`-per-edit calls into 1 non-read budget slot. The approval gate (`GatedToolRisk`/`executeCall`/`resolveApprovalDecision`) was extended to a real `write` path — previously hard-denied unconditionally — backed by **ADR-0010**, with a new escalation classifier (`src/lib/patch-risk.ts`: delete / `.git` touch / many-files / credential-path). System prompt steers edits toward `apply_patch` over `shell_exec`. The approval prompt (readline and TUI) renders the full patch via `classifyDiffLine` instead of raw JSON. Documented non-goal: a "remember this pattern" auto-allow mechanic for edits. |
