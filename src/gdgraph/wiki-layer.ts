@@ -69,8 +69,12 @@ export function buildWikiLayer(input: BuildWikiLayerInput): WikiLayer {
     return { pages: [], describes: [] };
   }
 
+  // Explicitly `=== "file"`, not `!== "asset"`. The negative form is exactly
+  // the over-broad filter that made putting wiki nodes into `nodes.jsonl`
+  // dangerous in the first place (see `types.ts`); repeating it here would
+  // silently admit any future node kind as a describable target.
   const knownPaths = new Set(
-    input.graph.nodes.filter((node) => node.kind !== "asset").map((node) => node.path),
+    input.graph.nodes.filter((node) => node.kind === "file").map((node) => node.path),
   );
   const keyFilesIndex = computeModuleKeyFiles(input.graph);
 

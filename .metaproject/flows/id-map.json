@@ -142,5 +142,13 @@
     "toDir": "224-2026-08-26-keryx-full-review-remediation",
     "at": "2026-09-03T21:31:02.733Z",
     "reason": "Duplicate id 202, shared with 202-2026-08-29-review-precision-measure-the-baseline-fi. Both flows are done, so neither is at risk from the move and the tie-break decides: the review-precision flow landed first (40d134a7), this one arrived later (508f7b2d, #421), so this one yields. Old references to 202 stay valid through id-map.json."
+  },
+  {
+    "from": "223",
+    "to": "225",
+    "fromDir": "223-2026-09-03-living-wiki-graph-phase-0-describes-edge",
+    "toDir": "225-2026-09-03-living-wiki-graph-phase-0-describes-edge",
+    "at": "2026-09-04T06:01:47.731Z",
+    "reason": "id 223 collided after merging main, which carried 223-docs-remediation-2-4; this flow was created locally on a branch and loses the tie"
   }
 ]

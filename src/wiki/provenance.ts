@@ -20,6 +20,7 @@
 
 import { createHash } from "node:crypto";
 import type { GraphData } from "../gdgraph/types";
+import { parseDescribesField } from "./describes";
 import { computePageNodeHash } from "./staleness";
 
 export interface PageProvenance {
@@ -45,7 +46,10 @@ export function parseProvenance(content: string): PageProvenance {
   return {
     verifiedAt: verifiedAt && SHA_PATTERN.test(verifiedAt) ? verifiedAt : null,
     verifiedScope: verifiedScope && SCOPE_PATTERN.test(verifiedScope) ? verifiedScope : null,
-    describes: parseDescribesPatterns(content),
+    // Reuses `describes.ts`'s parser rather than keeping a second copy: two
+    // readers of one field drift, and the drift shows up as a page silently
+    // describing less than its author wrote.
+    describes: parseDescribesField(content),
   };
 }
 
@@ -127,25 +131,4 @@ function singleLineField(content: string, name: string): string | null {
   const pattern = new RegExp(`^${name}:\\s*(.+)$`, "im");
   const match = content.match(pattern);
   return match?.[1] ? match[1].trim() : null;
-}
-
-function parseDescribesPatterns(content: string): string[] {
-  const lines = content.split("\n");
-  const start = lines.findIndex((line) => /^Describes:/i.test(line));
-  if (start < 0) {
-    return [];
-  }
-  const inline = (lines[start] ?? "").replace(/^Describes:\s*/i, "").trim();
-  const found: string[] = [];
-  if (inline.length > 0) {
-    found.push(...inline.split(",").map((part) => part.trim()).filter(Boolean));
-  }
-  for (let index = start + 1; index < lines.length; index += 1) {
-    const item = (lines[index] ?? "").match(/^\s+-\s+(.+)$/);
-    if (!item) {
-      break;
-    }
-    found.push((item[1] ?? "").replace(/^`+|`+$/g, "").trim());
-  }
-  return found.filter((value) => value.length > 0);
 }
