@@ -3,6 +3,7 @@ Title: Quality Map
 Version: 0.1.0
 Type: architecture
 Status: accepted
+Describes: none  # not code-scoped: generated from a Code Health run, so its currency depends on when health last ran, not on which files moved
 Summary: Generated from Code Health: gate warn, score 90, 62 findings.
 ---
 

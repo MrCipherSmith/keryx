@@ -69,6 +69,8 @@ export interface FreshnessReport {
     pagesFresh: number;
     pagesAffected: number;
     pagesUndecidable: number;
+    /** Pages that declared `Describes: none` — a decision, not a gap. */
+    pagesNotCodeScoped?: number;
     filesChanged: number;
     filesCosmetic: number;
   };
@@ -157,6 +159,7 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
 
   const entries: ReportEntry[] = [];
   let undecidable = 0;
+  let notCodeScoped = 0;
   let fresh = 0;
 
   for (const page of pages) {
@@ -169,10 +172,19 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
     });
 
     if (describeSet.paths.length === 0) {
-      // §4.4.1: out of scoring entirely — not fresh, not orphaned. On this
-      // repository that is roughly one page in eight (architecture and
-      // decision pages, which own no module).
-      undecidable += 1;
+      // §4.4.1: out of scoring entirely — not fresh, not orphaned.
+      //
+      // Two different states share this branch and must not share a report
+      // line. A page that DECLARED `Describes: none` is a recorded decision:
+      // it describes generated state or an ADR, not a region of code, and no
+      // one should keep trying to give it a scope. A page that simply has no
+      // describe-set is work nobody has done. Counting them together makes the
+      // second invisible behind the first.
+      if (describeSet.notCodeScoped) {
+        notCodeScoped += 1;
+      } else {
+        undecidable += 1;
+      }
       continue;
     }
 
@@ -290,10 +302,13 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
     limitations.push({
       code: "page-without-describes",
       detail:
-        "Pages whose describe-set resolved empty were excluded from scoring. Give them an explicit `Describes:` frontmatter list to bring them in.",
+        "Pages whose describe-set resolved empty were excluded from scoring. Give them an explicit `Describes:` frontmatter list to bring them in, or `Describes: none` if the page is not about code.",
       affectedCount: undecidable,
     });
   }
+  // Deliberately NOT a limitation: these pages declared themselves out of
+  // scope, so nothing about the report is incomplete because of them.
+  // Reporting them as a gap would keep inviting work that should not happen.
 
   // AC13: order by how far behind, because the distribution is heavily
   // skewed — measured median 6, max 228 on this repository — and an
@@ -318,6 +333,7 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
       pagesFresh: fresh,
       pagesAffected: entries.length,
       pagesUndecidable: undecidable,
+      pagesNotCodeScoped: notCodeScoped,
       filesChanged,
       filesCosmetic,
     },

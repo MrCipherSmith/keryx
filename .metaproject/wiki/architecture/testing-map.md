@@ -3,6 +3,7 @@ Title: Testing Map
 Version: 0.1.0
 Type: architecture
 Status: accepted
+Describes: none  # not code-scoped: an inventory of the whole test suite; scoping it to every *.test.ts would make it stale on any test change and useless as a signal
 Summary: generatedAt: 2026-07-09T21:29:25.307Z
 ---
 

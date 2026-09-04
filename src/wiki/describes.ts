@@ -34,6 +34,22 @@ export interface DescribeEntry {
   resolvedPaths: string[];
 }
 
+/**
+ * `Describes: none` — an explicit declaration that a page is not scoped to
+ * code at all.
+ *
+ * Some pages describe generated state or a decision rather than a region of
+ * the repository: a project map rendered from the graph, a quality map from a
+ * health run, an ADR. Giving one a describe-set would either cover the whole
+ * repository — stale on every commit, useless as a signal — or invent a
+ * relationship that is not there.
+ *
+ * Without this, such a page sits in `undecidable` forever and reads as an
+ * oversight, so each new reader tries to "fix" it. Declaring it converts a
+ * permanent apparent gap into a recorded decision.
+ */
+export const NOT_CODE_SCOPED = "none";
+
 export interface PageDescribeSet {
   /** Wiki-relative page path, e.g. `components/src-ctx.md`. */
   page: string;
@@ -47,6 +63,12 @@ export interface PageDescribeSet {
    * for freshness — which is NOT the same as being fresh.
    */
   undecidable: boolean;
+  /**
+   * True when the page declared `Describes: none`. Also undecidable, but for a
+   * stated reason rather than for want of anyone writing one — the difference
+   * between "nobody has done this yet" and "this page is not about code".
+   */
+  notCodeScoped: boolean;
 }
 
 /**
@@ -69,7 +91,10 @@ export function parseDescribesField(content: string): string[] {
     if (!match) {
       continue;
     }
-    const inline = (match[1] ?? "").trim();
+    // Strip the comment BEFORE splitting on commas: a reason written after
+    // `#` will contain commas of its own, and splitting first turns one
+    // declaration into several nonsense patterns.
+    const inline = (match[1] ?? "").replace(/\s+#.*$/, "").trim();
     if (inline.length > 0) {
       // `Describes: a, b` — comma-separated inline form.
       for (const part of inline.split(",")) {
@@ -145,8 +170,20 @@ export function resolveDescribeSet(input: {
 }): PageDescribeSet {
   const { page, content, knownPaths, keyFilesIndex } = input;
 
+  const declared = parseDescribesField(content);
+  if (declared.length === 1 && declared[0] === NOT_CODE_SCOPED) {
+    return {
+      page: page.relativePath,
+      entries: [],
+      paths: [],
+      origin: "frontmatter",
+      undecidable: true,
+      notCodeScoped: true,
+    };
+  }
+
   const sources: Array<{ origin: DescribesOrigin; patterns: string[] }> = [
-    { origin: "frontmatter", patterns: parseDescribesField(content) },
+    { origin: "frontmatter", patterns: declared },
     { origin: "related-code", patterns: parseRelatedCodePaths(content) },
     { origin: "key-files", patterns: keyFilesForPage(keyFilesIndex, page) },
   ];
@@ -172,6 +209,7 @@ export function resolveDescribeSet(input: {
       paths,
       origin: source.origin,
       undecidable: paths.length === 0,
+      notCodeScoped: false,
     };
   }
 
@@ -181,6 +219,7 @@ export function resolveDescribeSet(input: {
     paths: [],
     origin: undefined,
     undecidable: true,
+    notCodeScoped: false,
   };
 }
 
@@ -238,7 +277,11 @@ function normalizePath(value: string): string {
 }
 
 function stripDecoration(value: string): string {
-  let out = value.trim();
+  // A trailing `# ...` is a comment. Paths and globs never contain a
+  // whitespace-preceded hash, and `Describes: none` is far more useful when
+  // the page can say WHY on the same line instead of leaving the next reader
+  // to guess whether it was a decision or an omission.
+  let out = value.replace(/\s+#.*$/, "").trim();
   // markdown link: [text](target) — the target is the path
   const link = out.match(/\[[^\]]*\]\(([^)]+)\)/);
   if (link?.[1]) {
