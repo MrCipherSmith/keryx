@@ -899,3 +899,4 @@ feature, not part of AC5.
 - 2026-08-20T08:59:30.818Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/354 (warning: PR is not a draft)
 - 2026-08-20T08:59:30.905Z - completing
 - 2026-08-20T08:59:32.780Z - done: all gates passed
+- 2026-09-04T04:50:04.413Z - task-depends-set: T10: dependsOn T7, T8 (was T7, T8, T10) — T10 listed itself alongside T7 and T8, so flow next could never mark it ready — it only ever completed because it was dispositioned skipped by hand. The self edge is removed and the two real prerequisites are kept; recorded rather than hand-edited, which is what this command exists for.

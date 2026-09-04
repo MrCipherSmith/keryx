@@ -305,6 +305,18 @@ export interface FlowService {
   freeze(input: { cwd: string; id: string }): Promise<FlowState>;
   start(input: { cwd: string; id: string }): Promise<FlowState>;
   taskAdd(input: FlowTaskAddInput): Promise<FlowState>;
+  /**
+   * Rewrite one task's `dependsOn`. The repair for the three unsatisfiable
+   * shapes `flow check` reports; refuses a change that would introduce a new
+   * dependency issue, and an empty list clears the field.
+   */
+  taskDepends(input: {
+    cwd: string;
+    id: string;
+    taskId: string;
+    dependsOn: string[];
+    reason: string;
+  }): Promise<FlowState>;
   taskDone(input: {
     cwd: string;
     id: string;

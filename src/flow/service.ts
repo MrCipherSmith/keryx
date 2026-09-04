@@ -302,6 +302,70 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    /**
+     * Set a task's `dependsOn` — the repair `flow check` had no counterpart for.
+     *
+     * `check` reports three unsatisfiable shapes (unknown dependency, self
+     * dependency, cycle) and nothing could fix any of them: `task add --depends`
+     * writes the field once at creation and no path rewrites it, so the only
+     * remedy was editing flow.json by hand, which this project forbids. Flow 178
+     * sat with `T10` depending on itself for two weeks for exactly that reason.
+     *
+     * The change is validated against `dependencyIssues` — the same function
+     * `check` uses — and refused when it would introduce an issue that was not
+     * already there. That is deliberately narrower than "the graph must be
+     * clean": a flow with two broken tasks must be repairable one task at a
+     * time, and requiring global cleanliness would make the first repair
+     * impossible. What it cannot do is add a new break.
+     */
+    async taskDepends({ cwd, id, taskId, dependsOn, reason }): Promise<FlowState> {
+      if (!reason?.trim()) {
+        throw new Error('flow task depends requires --reason "<why the dependencies changed>"');
+      }
+      return mutate(cwd, id, async ({ dir, flow }) => {
+        await assertAcIntact(cwd, dir, flow);
+        const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
+        if (!task) {
+          throw new Error(`Task not found: ${taskId}. Known: ${flow.tasks.map((t) => t.id).join(", ")}`);
+        }
+
+        // Normalise to the canonical ids so `t7` and `T7` cannot both appear,
+        // and so a duplicate does not survive as two edges.
+        const known = new Map(flow.tasks.map((item) => [item.id.toUpperCase(), item.id]));
+        const resolved: string[] = [];
+        for (const raw of dependsOn) {
+          const canonical = known.get(raw.trim().toUpperCase());
+          if (canonical === undefined) {
+            throw new Error(
+              `flow task depends: ${raw} is not a task in this flow. Known: ${flow.tasks.map((t) => t.id).join(", ")}`,
+            );
+          }
+          if (!resolved.includes(canonical)) resolved.push(canonical);
+        }
+
+        const before = dependencyIssues(flow.tasks);
+        const previous = task.dependsOn ?? [];
+        task.dependsOn = resolved;
+        const after = dependencyIssues(flow.tasks);
+        const introduced = after.filter(
+          (issue) => !before.some((old) => old.task === issue.task && old.kind === issue.kind),
+        );
+        if (introduced.length > 0) {
+          task.dependsOn = previous; // leave the record exactly as it was found
+          throw new Error(
+            `flow task depends: refusing — the change would introduce ${introduced.length} dependency issue(s): ` +
+              introduced.map((issue) => issue.message).join("; "),
+          );
+        }
+
+        const detail =
+          resolved.length === 0
+            ? `${task.id}: dependsOn cleared (was ${previous.length > 0 ? previous.join(", ") : "empty"})`
+            : `${task.id}: dependsOn ${resolved.join(", ")} (was ${previous.length > 0 ? previous.join(", ") : "empty"})`;
+        return save(cwd, dir, flow, "task-depends-set", `${detail} — ${reason.trim()}`);
+      });
+    },
+
     async taskDone({ cwd, id, taskId, disposition, reason, evidenceRefs, runLink }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
