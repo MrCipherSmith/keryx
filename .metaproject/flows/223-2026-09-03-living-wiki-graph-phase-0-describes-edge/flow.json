@@ -9,13 +9,66 @@
   "title": "Living Wiki + Graph phase 0: describes edge, content hashes, page provenance",
   "status": "in-progress",
   "createdAt": "2026-09-03T20:55:59.785Z",
-  "updatedAt": "2026-09-03T21:30:44.567Z",
+  "updatedAt": "2026-09-04T05:34:58.874Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:cd74deaaf46f9c9f46de8ebe63af3f299c40fba206f315b93ffbde5f2d1baab8",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-04T05:34:49.745Z",
+      "note": "wiki-layer.test.ts 'AC1: emits a page node per page and describes edges'; e2e build produces wiki-pages.jsonl + describes.jsonl; real repo: 50 pages, 373 describes edges"
+    },
+    "AC2": {
+      "at": "2026-09-04T05:34:49.827Z",
+      "note": "wiki-layer.test.ts 'a graph with no layer files loads with the fields simply absent'; loadGraph omits wikiPages/describes, 231 gdgraph+wiki tests green"
+    },
+    "AC3": {
+      "at": "2026-09-04T05:34:49.911Z",
+      "note": "wiki-layer.test.ts reverse queries: getPagesDescribing returns both pages for a shared file and nothing else; getFilesDescribedBy covers the forward direction"
+    },
+    "AC4": {
+      "at": "2026-09-04T05:34:50.007Z",
+      "note": "describes.test.ts 'resolveDescribeSet precedence' — frontmatter replaces, related-code beats key-files, key-files is the fallback"
+    },
+    "AC5": {
+      "at": "2026-09-04T05:34:50.089Z",
+      "note": "wiki-layer.test.ts 'the module set drives the layer — a stubbed set changes the output'; layer reads validModuleNames, never re-derives grouping"
+    },
+    "AC6": {
+      "at": "2026-09-04T05:34:50.177Z",
+      "note": "wiki-layer.test.ts 'an unbuilt graph yields an EMPTY layer, not a layer of orphans' — validModules undefined returns {pages:[],describes:[]}"
+    },
+    "AC7": {
+      "at": "2026-09-04T05:34:50.260Z",
+      "note": "wiki-layer.test.ts computeFingerprints: content-derived, stable across runs, sorted; e2e asserts build-manifest.json rows with sha256 + mtimeMs"
+    },
+    "AC8": {
+      "at": "2026-09-04T05:34:50.343Z",
+      "note": "provenance.test.ts upsertFrontmatterField: insert leaves every original line intact and lands inside frontmatter; replace changes no other byte; parse/write round-trip is a no-op"
+    },
+    "AC9": {
+      "at": "2026-09-04T05:34:50.434Z",
+      "note": "provenance.test.ts 'the SEVENTH file changes the scope' — computeVerifiedScope over the full describe-set, not top-6"
+    },
+    "AC10": {
+      "at": "2026-09-04T05:34:50.535Z",
+      "note": "wiki-layer.test.ts 'a page describing nothing is undecidable and emits no edges', run against an architecture-type page"
+    },
+    "AC11": {
+      "at": "2026-09-04T05:34:50.622Z",
+      "note": "wiki-layer-no-git.test.ts: full phase-0 path (build, layer, scope, provenance round-trip) on a tree with no .git; asserts none is created"
+    },
+    "AC12": {
+      "at": "2026-09-04T05:34:50.707Z",
+      "note": "Measured on the real repo: 1120 files, 2335ms full build, 37ms layer+manifest = 2% ; recorded in journal.md. Full suite 48 fail before and 48 after (worktree at 94998d9a) — zero regressions, +125 passing tests"
+    },
+    "AC13": {
+      "at": "2026-09-04T05:34:58.874Z",
+      "note": "wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -118,7 +171,7 @@
       "id": "T7",
       "title": "Emit wiki-page nodes and describes edges during build, incl. graph-unavailable guard (AC1,AC5,AC6)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,13 +179,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Wiki layer emitted to wiki-pages.jsonl/describes.jsonl via defensive dynamic import in buildGraph; graph-unavailable guard returns an empty layer (AC1,AC5,AC6,AC13)"
     },
     {
       "id": "T8",
       "title": "Page provenance: parse/write VerifiedAt+Describes, compute VerifiedScope over full describe-set (AC8,AC9)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +195,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "provenance.ts: parseProvenance/upsertFrontmatterField/writeProvenance byte-preserving, computeVerifiedScope reusing computePageNodeHash over the full describe-set; wired into WikiPage (AC8,AC9)"
     },
     {
       "id": "T9",
       "title": "Reverse query: pages describing file X, over existing incoming-edge index (AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,13 +211,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "getPagesDescribing/getFilesDescribedBy over the describes layer in query.ts (AC3)"
     },
     {
       "id": "T10",
       "title": "Undecidable pages: empty describe-set is neither fresh nor orphan (AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -168,13 +227,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Empty describe-set marked undecidable on the page node, emitting no edges; covered for a real architecture page (AC10)"
     },
     {
       "id": "T11",
       "title": "Tests per AC incl. back-compat fixture and no-.git worktree (AC2,AC11)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -182,13 +243,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "wiki-layer.test.ts, wiki-layer-no-git.test.ts, describes.test.ts, provenance.test.ts — 231 tests green incl. back-compat load and a tree with no .git (AC2,AC11)"
     },
     {
       "id": "T12",
       "title": "Measure graph build time delta from hashing and record in journal (AC12)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -196,7 +259,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Measured: layer + manifest is 37ms of a 2335ms build (2%); recorded in journal.md (AC12)"
     }
   ],
   "history": [
@@ -272,6 +337,106 @@
       "at": "2026-09-03T21:30:44.567Z",
       "event": "ac-updated",
       "detail": "Design corrected during T7: wiki layer must be its own storage files, not new kinds inside nodes.jsonl/edges.jsonl. Five production call sites (wiki/service.ts:365,412; wiki/collect.ts:97; commands/update.ts:869) treat every non-asset node as a source file, so a wiki-page node would be grouped by moduleNameFromProjectPath into a fabricated module and would corrupt validModuleNames — the exact module set wikiPruneOrphans and sac/lifecycle-flag.ts rely on. AC1/AC2/AC7 restated against the layer files and a build manifest; AC13 added to pin the no-regression guarantee"
+    },
+    {
+      "at": "2026-09-03T21:40:24.459Z",
+      "event": "task-done",
+      "detail": "T7: Emit wiki-page nodes and describes edges during build, incl. graph-unavailable guard (AC1,AC5,AC6)"
+    },
+    {
+      "at": "2026-09-03T21:40:24.629Z",
+      "event": "task-done",
+      "detail": "T8: Page provenance: parse/write VerifiedAt+Describes, compute VerifiedScope over full describe-set (AC8,AC9)"
+    },
+    {
+      "at": "2026-09-03T21:40:24.757Z",
+      "event": "task-done",
+      "detail": "T9: Reverse query: pages describing file X, over existing incoming-edge index (AC3)"
+    },
+    {
+      "at": "2026-09-03T21:40:24.919Z",
+      "event": "task-done",
+      "detail": "T10: Undecidable pages: empty describe-set is neither fresh nor orphan (AC10)"
+    },
+    {
+      "at": "2026-09-03T21:40:25.154Z",
+      "event": "task-done",
+      "detail": "T11: Tests per AC incl. back-compat fixture and no-.git worktree (AC2,AC11)"
+    },
+    {
+      "at": "2026-09-03T21:40:25.362Z",
+      "event": "task-done",
+      "detail": "T12: Measure graph build time delta from hashing and record in journal (AC12)"
+    },
+    {
+      "at": "2026-09-04T05:34:49.745Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: wiki-layer.test.ts 'AC1: emits a page node per page and describes edges'; e2e build produces wiki-pages.jsonl + describes.jsonl; real repo: 50 pages, 373 describes edges"
+    },
+    {
+      "at": "2026-09-04T05:34:49.827Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: wiki-layer.test.ts 'a graph with no layer files loads with the fields simply absent'; loadGraph omits wikiPages/describes, 231 gdgraph+wiki tests green"
+    },
+    {
+      "at": "2026-09-04T05:34:49.911Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: wiki-layer.test.ts reverse queries: getPagesDescribing returns both pages for a shared file and nothing else; getFilesDescribedBy covers the forward direction"
+    },
+    {
+      "at": "2026-09-04T05:34:50.007Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: describes.test.ts 'resolveDescribeSet precedence' — frontmatter replaces, related-code beats key-files, key-files is the fallback"
+    },
+    {
+      "at": "2026-09-04T05:34:50.089Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: wiki-layer.test.ts 'the module set drives the layer — a stubbed set changes the output'; layer reads validModuleNames, never re-derives grouping"
+    },
+    {
+      "at": "2026-09-04T05:34:50.177Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: wiki-layer.test.ts 'an unbuilt graph yields an EMPTY layer, not a layer of orphans' — validModules undefined returns {pages:[],describes:[]}"
+    },
+    {
+      "at": "2026-09-04T05:34:50.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: wiki-layer.test.ts computeFingerprints: content-derived, stable across runs, sorted; e2e asserts build-manifest.json rows with sha256 + mtimeMs"
+    },
+    {
+      "at": "2026-09-04T05:34:50.343Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: provenance.test.ts upsertFrontmatterField: insert leaves every original line intact and lands inside frontmatter; replace changes no other byte; parse/write round-trip is a no-op"
+    },
+    {
+      "at": "2026-09-04T05:34:50.435Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: provenance.test.ts 'the SEVENTH file changes the scope' — computeVerifiedScope over the full describe-set, not top-6"
+    },
+    {
+      "at": "2026-09-04T05:34:50.535Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: wiki-layer.test.ts 'a page describing nothing is undecidable and emits no edges', run against an architecture-type page"
+    },
+    {
+      "at": "2026-09-04T05:34:50.622Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: wiki-layer-no-git.test.ts: full phase-0 path (build, layer, scope, provenance round-trip) on a tree with no .git; asserts none is created"
+    },
+    {
+      "at": "2026-09-04T05:34:50.707Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Measured on the real repo: 1120 files, 2335ms full build, 37ms layer+manifest = 2% ; recorded in journal.md. Full suite 48 fail before and 48 after (worktree at 94998d9a) — zero regressions, +125 passing tests"
+    },
+    {
+      "at": "2026-09-04T05:34:50.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts"
+    },
+    {
+      "at": "2026-09-04T05:34:58.874Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: wiki-layer.test.ts 'nodes.jsonl/edges.jsonl stay byte-identical': build without a wiki, then with one, byte-compare both legacy artifacts"
     }
   ]
 }

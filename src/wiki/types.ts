@@ -71,6 +71,13 @@ export type WikiPage = {
   type: string | null;
   status: string | null;
   summary: string;
+  // LWG-4 provenance (flow 223). Both live in the page's own frontmatter so
+  // versioning never depends on whether the project versions `.metaproject/`
+  // — or has git at all. Null means "never verified", which is NOT "fresh".
+  verifiedAt?: string | null;
+  verifiedScope?: string | null;
+  /** Raw `Describes:` patterns as written; resolution lives in `describes.ts`. */
+  describes?: string[];
 };
 
 export type WikiStatusInput = { cwd: string };
