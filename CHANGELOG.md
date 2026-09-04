@@ -5,6 +5,13 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [0.2.77] — 2026-09-04
 
+Two threads. The larger one in line count is the wiki, which stops going
+quietly out of date. The one more likely to matter to someone installing today
+is smaller and came from other work in the same window: the curl-to-bash
+installer verified nothing about what it downloaded, `.mcp.json` was tracked
+carrying one machine's absolute path, and the built site never showed the
+install command the release pipeline actually publishes.
+
 The wiki stops going quietly out of date. Measured on this repository before
 anything was built: 28 of 42 component pages had drifted, 530 commits in
 total, and all 42 had last been touched in a single month — generated once,
@@ -61,6 +68,16 @@ report says otherwise.
   code (a map rendered from the graph, an ADR). The report counts that
   separately from a gap: "nobody has done this yet" and "this page is not
   about code" are different facts, and one of them is not work.
+- **`keryx flow task depends`** — `flow check` reported three unsatisfiable
+  `dependsOn` shapes (a dependency on a task that does not exist, a task
+  depending on itself, a cycle) and none of them could be repaired: the field
+  was written once at creation and nothing rewrote it, so the only remedy was
+  editing `flow.json` by hand, which this project's own rules forbid. Flow 178
+  sat with a self-dependent task for two weeks. The check was right every time
+  and the operator had nowhere to go.
+- **`keryx flow ac reseal`** — separates the checksum observation from its
+  cause, so a mismatched acceptance-criteria seal reports *why* rather than
+  only *that*.
 
 ### Fixed
 
@@ -79,6 +96,26 @@ report says otherwise.
   end came back `must-refresh` with zero commits behind. Provenance now
   outranks propagation over a page's own scope.
 - **Five tool descriptions** that stated the opposite of what their code does.
+- **The installer verified nothing.** `scripts/install-binary.sh` — the
+  curl-to-bash path documented for machines with no toolchain — downloaded a
+  binary, checked only that the file was non-empty, then chmod'd and installed
+  it. It now verifies what it downloaded.
+- **Commands hidden from the usage banner** are listed again.
+- **`.mcp.json` is no longer tracked.** `keryx mcp install` writes it with the
+  ABSOLUTE path of the project on the machine that ran it. Committed, that is
+  correct on exactly one machine and silently dead everywhere else — the MCP
+  server never starts and nothing reports it. The tracked copy carried one
+  developer's macOS path.
+- **Fifteen bundled skills served `|` as their entire description**, and the
+  sweep that exists to catch exactly that reported `frontmatter:description:
+  pass` throughout. Fixes the parser, the four skills left with no routing
+  signal at all, and the two blind spots that let it survive: a validator with
+  its own shallow parse, and per-document checks that never compared a harness
+  build against its `SKILL.md`.
+- **Skills argued with their own previous versions in front of the model.**
+  Five sites carried a diff against a prompt revision the model never saw; the
+  worst stated a rule and then quoted its negation. Also makes the health tools
+  admit staleness rather than presenting an old artifact as current.
 
 ### Changed
 
@@ -94,6 +131,15 @@ report says otherwise.
 - Three status lines corrected against the code: `RP-13` was documented as
   planned while both halves were shipped and wired, and understating a
   delivered capability is the mirror image of overstating one.
+- **One honest install story.** `npm install -g @mrciphersmith/keryx` — the
+  path the release pipeline actually publishes, and the one `keryx version
+  check` tells users to run — appeared on the built site **zero** times as an
+  install instruction. Slate and SAC are now visible there too, with four
+  guards that keep all of it true.
+- **The Homebrew install is no longer advertised.** The tap exists and is
+  public, but its formula pins `0.2.49`, carries literal
+  `PLACEHOLDER_SHA256_*` strings where the digests belong, and has no
+  `on_linux` block. It has never installed keryx for anyone, on any platform.
 
 ## [0.2.76] — 2026-09-03
 
