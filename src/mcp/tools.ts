@@ -472,7 +472,11 @@ export function buildToolRegistry(): ToolEntry[] {
       name: "gdgraph.affected",
       module: "gdgraph",
       description:
-        "List the dependencies and dependents of a file from the code graph (blast radius).",
+        "List the dependencies and dependents of a file from the code graph (blast radius). " +
+        "Reads the built graph, so results are as old as the last `keryx gdgraph build` and " +
+        "reflect no file added, renamed, deleted or re-imported since it — a blast radius " +
+        "computed after such a change under-reports. With no graph built at all the result is " +
+        "empty rather than an error, so an empty result means either no dependents or no graph.",
       inputSchema: OBJECT_SCHEMA(
         {
           file: { type: "string", description: "Project-relative file path." },

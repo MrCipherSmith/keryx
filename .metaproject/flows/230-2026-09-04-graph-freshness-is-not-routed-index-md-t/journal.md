@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-09-04T14:50:20.604Z - flow created
+- 2026-09-04T14:52:27.141Z - frozen: 13 criteria; checksum recorded
+- 2026-09-04T14:52:27.272Z - started
+- 2026-09-04T14:52:34.538Z - task-done: T1: Collect remaining context
+- 2026-09-04T15:01:45.280Z - task-done: T2: Implement per plan
+- 2026-09-04T15:01:45.655Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T15:03:02.678Z - ac-confirmed: AC1: verified by tests/regeneration
+- 2026-09-04T15:03:02.813Z - ac-confirmed: AC2: verified by tests/regeneration
+- 2026-09-04T15:03:02.925Z - ac-confirmed: AC3: verified by tests/regeneration
+- 2026-09-04T15:03:03.053Z - ac-confirmed: AC4: verified by tests/regeneration
+- 2026-09-04T15:03:03.197Z - ac-confirmed: AC5: verified by tests/regeneration
+- 2026-09-04T15:03:03.332Z - ac-confirmed: AC6: verified by tests/regeneration
+- 2026-09-04T15:03:03.463Z - ac-confirmed: AC7: verified by tests/regeneration
+- 2026-09-04T15:03:03.572Z - ac-confirmed: AC8: verified by tests/regeneration
+- 2026-09-04T15:03:03.678Z - ac-confirmed: AC9: verified by tests/regeneration
+- 2026-09-04T15:03:03.784Z - ac-confirmed: AC10: verified by tests/regeneration
+- 2026-09-04T15:03:03.909Z - ac-confirmed: AC11: verified by tests/regeneration
+- 2026-09-04T15:03:04.048Z - ac-confirmed: AC13: verified by tests/regeneration
+- 2026-09-04T15:03:15.018Z - ac-confirmed: AC12: bun ./src/cli.ts update --hooks regenerated index.md, modules/gdgraph.md, skills/gdgraph/SKILL.md, hooks/README.md, AGENTS.md, CLAUDE.md and .git/hooks/post-commit
+- 2026-09-04T17:30:31.302Z - renumbered: 227 -> 230: id 227 was allocated against a stale local main; upstream already has flow 227 (Living Wiki + Graph phase 2)
+- 2026-09-04T17:51:43.999Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-04T17:51:46.837Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/467 (warning: PR is not a draft)

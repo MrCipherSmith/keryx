@@ -17,6 +17,8 @@ If MCP tools/resources are available for this project, prefer them for Metaproje
 
 For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before raw file search.
 
+The graph answers from the last `keryx gdgraph build`, not from the working tree. Rebuild before relying on a graph answer when you added, renamed, deleted or moved files in this session, or when `keryx gdgraph context` reports uncommitted code files — not once per question. If you cannot rebuild, say the graph predates those changes instead of quoting it as current. Contract: .metaproject/modules/gdgraph.md (Freshness & Refresh).
+
 Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason recorded in the routing audit.
 
 `keryx ctx rg` and the agent's `search_code` tool require ripgrep (`rg`) on PATH — install it with `brew install ripgrep` (macOS) or `apt install ripgrep` (Debian/Ubuntu). Without it, code search is unavailable; fall back to reading files directly.

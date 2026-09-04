@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "230",
+  "slug": "graph-freshness-is-not-routed-index-md-t",
+  "title": "Graph freshness is not routed: index.md, the entrypoint block and the post-commit hook never tell an agent to rebuild",
+  "status": "implemented",
+  "createdAt": "2026-09-04T14:50:20.604Z",
+  "updatedAt": "2026-09-04T17:51:46.837Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:30c4c87b10edf68723987ef36241f0eaf54b5cefa9422c683299697675b302f3",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-04T15:03:02.678Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC2": {
+      "at": "2026-09-04T15:03:02.813Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC3": {
+      "at": "2026-09-04T15:03:02.925Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC4": {
+      "at": "2026-09-04T15:03:03.053Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC5": {
+      "at": "2026-09-04T15:03:03.197Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC6": {
+      "at": "2026-09-04T15:03:03.332Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC7": {
+      "at": "2026-09-04T15:03:03.463Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC8": {
+      "at": "2026-09-04T15:03:03.572Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC9": {
+      "at": "2026-09-04T15:03:03.678Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC10": {
+      "at": "2026-09-04T15:03:03.783Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC11": {
+      "at": "2026-09-04T15:03:03.909Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC13": {
+      "at": "2026-09-04T15:03:04.048Z",
+      "note": "verified by tests/regeneration"
+    },
+    "AC12": {
+      "at": "2026-09-04T15:03:15.018Z",
+      "note": "bun ./src/cli.ts update --hooks regenerated index.md, modules/gdgraph.md, skills/gdgraph/SKILL.md, hooks/README.md, AGENTS.md, CLAUDE.md and .git/hooks/post-commit"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/467"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected: templates.ts render sites (index ~276, manifest 2282, skill 2345, hook 1892, hooks README 1818), agent-entrypoint-blocks.ts, orient.ts freshness signal, tracked graph artifacts"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Templates updated: gdgraph manifest Freshness & Refresh, index workflow item + intent row, entrypoint block policy, rebuilding post-commit hook, hooks README, gdgraph SKILL refresh policy, workspace-and-lifecycle doc; regenerated via bun ./src/cli.ts update --hooks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "New src/lib/gdgraph-post-commit.test.ts (7 behavioural sh tests) + 6 routing tests in src/lib/templates.test.ts; typecheck clean; 3 pre-existing guard failures unrelated (verified by stashing the change)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Rebased onto origin/main (19 commits ahead); checked #452/#460/#464 for overlap — none; flow renumbered 227→230 after upstream id collision; PR #467"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-04T14:50:20.604Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-04T14:52:27.141Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-04T14:52:27.272Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-04T14:52:34.538Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-04T15:01:45.280Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-04T15:01:45.655Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-04T15:03:02.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:02.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:02.925Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.053Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.197Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.332Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.463Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.572Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.784Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:03.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:04.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: verified by tests/regeneration"
+    },
+    {
+      "at": "2026-09-04T15:03:15.018Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun ./src/cli.ts update --hooks regenerated index.md, modules/gdgraph.md, skills/gdgraph/SKILL.md, hooks/README.md, AGENTS.md, CLAUDE.md and .git/hooks/post-commit"
+    },
+    {
+      "at": "2026-09-04T17:30:31.302Z",
+      "event": "renumbered",
+      "detail": "227 -> 230: id 227 was allocated against a stale local main; upstream already has flow 227 (Living Wiki + Graph phase 2)"
+    },
+    {
+      "at": "2026-09-04T17:51:43.999Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-04T17:51:46.837Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/467 (warning: PR is not a draft)"
+    }
+  ]
+}

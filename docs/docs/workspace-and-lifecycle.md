@@ -332,14 +332,15 @@ self-contained HTML — again without touching `data/`.
 `init` installs git hooks through `installManagedHook`, which no-ops when `.git`
 is absent and otherwise idempotently injects a `# keryx:<blockId>:begin … :end`
 block into `.git/hooks/<post-commit|pre-push>` (creating a `#!/usr/bin/env sh`
-shebang if the file is new, `chmod 0o755`). The rendered hooks are deliberately
-non-mutating staleness reminders that `return 0` on every branch — the
-exceptions being the opt-in testing pre-push gate (blocks on test failure) and the
-opt-in security pre-push gate (blocks in `enforced`/`ci` mode).
+shebang if the file is new, `chmod 0o755`). Every post-commit hook `return 0`s on
+every branch and so never fails a commit; most are staleness reminders, while the
+gdgraph and dashboard hooks regenerate their artifacts. The blocking exceptions are
+the opt-in testing pre-push gate (blocks on test failure) and the opt-in security
+pre-push gate (blocks in `enforced`/`ci` mode).
 
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|
-| gdgraph post-commit | post-commit | reminder that the import graph may be stale | on |
+| gdgraph post-commit | post-commit | rebuilds the graph (`keryx gdgraph build`) after a graph-relevant commit; warns instead of failing, `KERYX_GDGRAPH_HOOK_REBUILD=0` reverts it to a reminder | on |
 | gdwiki post-commit | post-commit | reminder that wiki drafts may be stale (installed with the gdgraph post-commit hook) | on (derived) |
 | gdskills post-commit | post-commit | skill verify / staleness reminder | on |
 | health post-commit | post-commit | reminder to re-run health | on |
