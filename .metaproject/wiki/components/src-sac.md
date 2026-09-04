@@ -3,6 +3,8 @@ Title: "Module src/sac (Shared Agent Context)"
 Version: 0.1.0
 Type: component
 Status: accepted
+VerifiedAt: 7d38dba02fad6f8f81d8f244f76b08d0b2f59682
+VerifiedScope: sha256:7356aea2961db809fd842dbb2fd12ac2c689f35d3fd88cf0aa3af5bdfdc79cdb
 Summary: Shared Agent Context (SAC) — the reviewed collaboration layer of the wiki/graph/SAC stack. Owns the offline workspace registry, the Facts/Work/Know-how read view, and the immutable proposal → review → accept lifecycle that delegates knowledge writes to owning subsystems (wiki, memory, skill) only after a human reviewer gates them.
 ---
 

@@ -389,7 +389,15 @@ type WikiCollectCandidate = {
   content: string;
 };
 
-async function collectGraphWikiCandidates(
+/**
+ * Exported for `wiki refresh` (LWG-11, flow 227), which regenerates a page's
+ * managed Reference block. It calls THIS function and lifts the Reference
+ * section out of the candidate it returns, rather than extracting or copying
+ * the renderer above: one renderer means a change to the Reference format
+ * reaches `refresh` automatically instead of drifting away from it. Same rule
+ * that made `validModuleNames` a shared read.
+ */
+export async function collectGraphWikiCandidates(
   cwd: string,
   generatedAt: string,
   limit: number,
