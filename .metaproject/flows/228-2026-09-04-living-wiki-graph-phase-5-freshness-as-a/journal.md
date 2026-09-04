@@ -1,0 +1,31 @@
+# Flow Journal
+
+- 2026-09-04T10:30:11.656Z - flow created
+- 2026-09-04T10:45:54.008Z - task-done: T1: Collect remaining context
+- 2026-09-04T10:45:54.170Z - task-added: T5: HealthReport.wikiFreshness optional field, additive like hotspots (AC1)
+- 2026-09-04T10:45:54.284Z - task-added: T6: Reader for latest.json: absent, damaged and stale-evidence cases all reported not rounded (AC3,AC5,AC6)
+- 2026-09-04T10:45:54.420Z - task-added: T7: Ratio excluding undecidable pages, with the count alongside (AC2,AC4)
+- 2026-09-04T10:45:54.543Z - task-added: T8: Render in the health artifact and dashboard line (AC2)
+- 2026-09-04T10:45:54.647Z - task-added: T9: CI workflow per ci-protocol.md section 6 (AC9)
+- 2026-09-04T10:45:54.757Z - task-added: T10: Tests incl. gate-unchanged and no-traversal proofs (AC7,AC8,AC10)
+- 2026-09-04T10:45:55.127Z - frozen: 10 criteria; checksum recorded
+- 2026-09-04T10:45:55.292Z - started
+- 2026-09-04T11:03:46.812Z - task-done: T5: HealthReport.wikiFreshness optional field, additive like hotspots (AC1)
+- 2026-09-04T11:03:46.936Z - task-done: T6: Reader for latest.json: absent, damaged and stale-evidence cases all reported not rounded (AC3,AC5,AC6)
+- 2026-09-04T11:03:47.022Z - task-done: T7: Ratio excluding undecidable pages, with the count alongside (AC2,AC4)
+- 2026-09-04T11:03:47.107Z - task-done: T8: Render in the health artifact and dashboard line (AC2)
+- 2026-09-04T11:03:47.191Z - task-done: T9: CI workflow per ci-protocol.md section 6 (AC9)
+- 2026-09-04T11:03:47.299Z - task-done: T10: Tests incl. gate-unchanged and no-traversal proofs (AC7,AC8,AC10)
+- 2026-09-04T11:03:47.390Z - task-done: T2: Implement per plan
+- 2026-09-04T11:03:47.486Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-04T11:03:47.571Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-04T11:10:34.220Z - ac-confirmed: AC1: wiki-freshness-gate.test.ts 'a report written before this field existed renders unchanged apart from the new section'; field is optional on HealthReport, added exactly as hotspots was
+- 2026-09-04T11:10:34.311Z - ac-confirmed: AC2: wiki-freshness.test.ts 'reports the counts and a ratio over SCORABLE pages'; live artifact shows 'wiki freshness: 77% (34/44 scorable pages, 6 undecidable (excluded)), 2 needing attention'
+- 2026-09-04T11:10:34.429Z - ac-confirmed: AC3: wiki-freshness.test.ts 'no report yields no number and says why' — ratio and pagesFresh both undefined, reason contains 'not evidence that the wiki is fresh'; artifact renders 'Not measured'
+- 2026-09-04T11:10:34.526Z - ac-confirmed: AC4: Denominator is pagesTotal minus pagesUndecidable (34/44 not 34/50) and the excluded count is in the rendered line; asserted in two tests
+- 2026-09-04T11:10:34.663Z - ac-confirmed: AC5: wiki-freshness.test.ts 'an old report keeps its numbers but is marked as not current' — status stale-evidence, reportAgeDays 34, line contains STALE EVIDENCE
+- 2026-09-04T11:10:34.750Z - ac-confirmed: AC6: wiki-freshness.test.ts unparseable JSON and missing-totals cases both yield unreadable-report with no partial number
+- 2026-09-04T11:10:34.856Z - ac-confirmed: AC7: Compile-time guard: Parameters<typeof computeGate>[0] has no wikiFreshness key, so the metric structurally cannot reach the gate; the type fails to compile if anyone adds it. Plus a rendered gate-line comparison with a catastrophic 2/44 figure
+- 2026-09-04T11:10:34.947Z - ac-confirmed: AC8: wiki-freshness.test.ts 'works with no graph and no wiki present at all' (asserts .metaproject contains only data/) and 'a wiki full of pages does not change the numbers'
+- 2026-09-04T11:10:35.051Z - ac-confirmed: AC9: .github/workflows/wiki-freshness.yml: validate is a gate, freshness reports and never fails, summary calls empty findings clean only when limitations is empty. YAML parsed, summary logic exercised on clean / empty+limits / findings
+- 2026-09-04T11:10:35.174Z - ac-confirmed: AC10: Full suite 6776 pass / 48 fail — the same 48 that fail at the branch base

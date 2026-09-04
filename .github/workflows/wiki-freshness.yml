@@ -1,0 +1,92 @@
+name: Wiki freshness
+
+# LWG phase 5 (flow 228), implementing `ci-protocol.md` §6.
+#
+# Two steps with deliberately different force:
+#
+#   * `wiki validate` is a GATE. A truncated managed block, a `Describes` path
+#     that does not exist, a changelog whose versions run backwards — these are
+#     defects of structure, not matters of opinion, and they are cheap to fix.
+#
+#   * `wiki freshness` REPORTS and never fails the build. A blocking freshness
+#     check invites updating a page so CI passes, and that manufactures filler
+#     faster than drift manufactures staleness. Whether stale documentation
+#     should stop a merge is a project's decision, not this workflow's.
+#
+# The summary treats an empty finding list as clean ONLY when `limitations` is
+# also empty. Zero findings because nothing is stale and zero findings because
+# the graph was never built are different facts, and only one of them is good
+# news.
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - ".metaproject/wiki/**"
+      - ".github/workflows/wiki-freshness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: wiki validate (gate) + freshness (report)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The freshness range is computed against the merge base, so the
+          # history has to be there. A shallow clone would silently produce an
+          # empty range and a clean-looking report.
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build the code graph
+        # Freshness needs the describes layer. Without it the report is not
+        # wrong, it is empty — and it says so in `limitations` rather than
+        # reporting a clean wiki.
+        run: bun ./src/cli.ts gdgraph build
+
+      - name: Validate wiki structure
+        # The gate. Fails the build on structural defects.
+        run: bun ./src/cli.ts wiki validate
+
+      - name: Report freshness against the merge base
+        run: |
+          BASE="$(git merge-base origin/${{ github.base_ref }} HEAD)"
+          echo "merge base: $BASE"
+          bun ./src/cli.ts wiki freshness --since "$BASE" --json > freshness.json
+          bun ./src/cli.ts wiki freshness --since "$BASE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say plainly whether the clean result is trustworthy
+        # Exit 0 regardless: this step explains, it does not gate.
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("freshness.json"))
+          actionable = [p for p in r["pages"] if p["confidence"] != "fyi"]
+          limits = r.get("limitations", [])
+          print()
+          if not actionable and not limits:
+              print("**Clean.** No page needs attention, and the report saw everything it needed to.")
+          elif not actionable and limits:
+              print("**No findings, but the report was incomplete.** Zero findings here does not")
+              print("mean the wiki is fresh — it means these checks could not run:")
+              for l in limits:
+                  print(f"- `{l['code']}` — {l['detail']}")
+          else:
+              print(f"**{len(actionable)} page(s) need attention.**")
+              for p in actionable[:10]:
+                  print(f"- `{p['path']}` — {p['category']}, {p['confidence']}, {p['commitsBehind']} commit(s) behind")
+              if limits:
+                  print()
+                  print("Also incomplete:")
+                  for l in limits:
+                      print(f"- `{l['code']}` — {l['detail']}")
+              print()
+              print("Most of these are repaired by `keryx wiki refresh`, which calls no model.")
+          PY

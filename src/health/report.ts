@@ -1,3 +1,4 @@
+import { renderWikiFreshnessLine } from "./metrics/wiki-freshness";
 import type {
   FileHotspot,
   Finding,
@@ -53,6 +54,10 @@ ${report.sources
 ## Top Findings
 
 ${renderFindings(top)}
+
+## Wiki Freshness
+
+${renderWikiFreshness(report.wikiFreshness)}
 
 ## Hotspots
 
@@ -156,4 +161,18 @@ function renderNextAction(report: HealthReport): string {
     return "Review warnings; address regressions and low-coverage scopes.";
   }
   return "No blocking issues. Keep the baseline updated with `keryx health baseline update`.";
+}
+
+/**
+ * One line, and an explicit not-measured line when there is no report.
+ *
+ * Rendering nothing when the metric is absent would let a reader assume the
+ * wiki is fine; rendering a zero would state it. Both are the failure this
+ * metric exists to avoid, so absence gets a sentence of its own.
+ */
+function renderWikiFreshness(metric: HealthReport["wikiFreshness"]): string {
+  if (!metric) {
+    return "Not measured — no wiki freshness report was read. This is not evidence that the wiki is fresh.";
+  }
+  return renderWikiFreshnessLine(metric);
 }

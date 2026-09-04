@@ -144,6 +144,8 @@ export type SourceRunInfo = {
   error?: string;
 };
 
+import type { WikiFreshnessMetric } from "./metrics/wiki-freshness";
+
 export type HealthReport = {
   schemaVersion: number;
   generatedAt: string;
@@ -157,6 +159,11 @@ export type HealthReport = {
   // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
   // nullable — omitted from older (schemaVersion 1) reports.
   hotspots?: FileHotspot[];
+  // LWG-15 (flow 228): documentation freshness beside lint, types and tests.
+  // Optional and additive, exactly as `hotspots` was: a report written before
+  // this field existed loads and renders unchanged. Absent means NOT MEASURED
+  // — never "nothing is stale".
+  wikiFreshness?: WikiFreshnessMetric;
   runId?: string;
   provenance?: {
     commit: string | null;
