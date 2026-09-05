@@ -1,4 +1,7 @@
 {
+  "docs": [
+    "docs/requirements/keryx-living-wiki-graph/probe-wiki-drift.py"
+  ],
   "fixtures": [
     "fixtures/change-impacted-test/src/alpha.extra.test.ts",
     "fixtures/change-impacted-test/src/alpha.test.ts",
@@ -79,6 +82,9 @@
     "src/capability/wiring.test.ts",
     "src/capability/wiring.ts"
   ],
+  "cli-reference-coverage.test.ts": [
+    "src/cli-reference-coverage.test.ts"
+  ],
   "cli.test.ts": [
     "src/cli.test.ts"
   ],
@@ -129,6 +135,8 @@
     "src/commands/interactive-agent-tools.ts",
     "src/commands/job.ts",
     "src/commands/mcp-install.test.ts",
+    "src/commands/mcp-serve-root.test.ts",
+    "src/commands/mcp-serve-root.ts",
     "src/commands/mcp.ts",
     "src/commands/memory-p0.test.ts",
     "src/commands/memory-report.test.ts",
@@ -154,6 +162,9 @@
     "src/commands/review-learn-cli.test.ts",
     "src/commands/review.test.ts",
     "src/commands/review.ts",
+    "src/commands/route-synonyms.test.ts",
+    "src/commands/routing-baseline.test.ts",
+    "src/commands/routing-baseline.ts",
     "src/commands/rules.test.ts",
     "src/commands/rules.ts",
     "src/commands/sandbox.test.ts",
@@ -186,6 +197,7 @@
     "src/commands/standard.ts",
     "src/commands/status.help.test.ts",
     "src/commands/status.ts",
+    "src/commands/sync-unresolvable-baseline.test.ts",
     "src/commands/sync.ts",
     "src/commands/test.ts",
     "src/commands/update.test.ts",
@@ -207,6 +219,9 @@
     "src/ctx/hook-classify.ts",
     "src/ctx/hook-install.test.ts",
     "src/ctx/hook-install.ts",
+    "src/ctx/hook-native-search.test.ts",
+    "src/ctx/hook-pipeline.test.ts",
+    "src/ctx/hook-siblings.test.ts",
     "src/ctx/hook.test.ts",
     "src/ctx/hook.ts",
     "src/ctx/orient-runtimes.test.ts",
@@ -223,6 +238,8 @@
     "src/eval/gate.ts"
   ],
   "flow": [
+    "src/flow/ac-reseal.test.ts",
+    "src/flow/ac-reseal.ts",
     "src/flow/allocation.test.ts",
     "src/flow/allocation.ts",
     "src/flow/attempts.test.ts",
@@ -248,6 +265,7 @@
     "src/flow/service.ts",
     "src/flow/store.test.ts",
     "src/flow/store.ts",
+    "src/flow/task-depends.test.ts",
     "src/flow/task-gate.test.ts",
     "src/flow/templates.ts",
     "src/flow/tracker/github.test.ts",
@@ -291,7 +309,10 @@
     "src/gdgraph/treesitter/grammars.ts",
     "src/gdgraph/treesitter/no-treesitter-import.test.ts",
     "src/gdgraph/treesitter/resolve-calls.test.ts",
-    "src/gdgraph/types.ts"
+    "src/gdgraph/types.ts",
+    "src/gdgraph/wiki-layer-no-git.test.ts",
+    "src/gdgraph/wiki-layer.test.ts",
+    "src/gdgraph/wiki-layer.ts"
   ],
   "gdskills": [
     "src/gdskills/agent-catalogue-xref.test.ts",
@@ -318,12 +339,14 @@
     "src/gdskills/project-skills.test.ts",
     "src/gdskills/project-skills.ts",
     "src/gdskills/resolve.ts",
+    "src/gdskills/review-context-pr-cross-repo.test.ts",
     "src/gdskills/review-finding-class-scope.test.ts",
     "src/gdskills/review-input-fix-round.test.ts",
     "src/gdskills/review-pr-feedback-wiring.test.ts",
     "src/gdskills/review-skills-class-scope.test.ts",
     "src/gdskills/review-skills-iron-laws.test.ts",
     "src/gdskills/round-bound.test.ts",
+    "src/gdskills/skill-frontmatter.ts",
     "src/gdskills/skill-name-matches-directory.test.ts",
     "src/gdskills/status-contract.test.ts",
     "src/gdskills/sync-global.test.ts",
@@ -578,6 +601,7 @@
     "src/harness/tool/tool-port.test.ts",
     "src/harness/tool/tool-port.ts",
     "src/harness/tool/types.ts",
+    "src/harness/tool/wiki-freshness-op.test.ts",
     "src/harness/types.ts",
     "src/harness/web/sandboxed-web-transport.test.ts",
     "src/harness/web/sandboxed-web-transport.ts",
@@ -603,6 +627,8 @@
     "src/health/metrics/coverage.ts",
     "src/health/metrics/hotspot.test.ts",
     "src/health/metrics/hotspot.ts",
+    "src/health/metrics/wiki-freshness.test.ts",
+    "src/health/metrics/wiki-freshness.ts",
     "src/health/parsers.test.ts",
     "src/health/provenance.test.ts",
     "src/health/report.ts",
@@ -628,7 +654,8 @@
     "src/health/sources/typescript.ts",
     "src/health/templates.ts",
     "src/health/types.ts",
-    "src/health/util.ts"
+    "src/health/util.ts",
+    "src/health/wiki-freshness-gate.test.ts"
   ],
   "job": [
     "src/job/job.e2e.test.ts",
@@ -643,6 +670,7 @@
     "src/lib/agent-entrypoint-blocks.ts",
     "src/lib/args.test.ts",
     "src/lib/args.ts",
+    "src/lib/bounded-stdin.ts",
     "src/lib/command-risk.test.ts",
     "src/lib/command-risk.ts",
     "src/lib/config-dir.ast.test.ts",
@@ -658,6 +686,7 @@
     "src/lib/file-lock.ts",
     "src/lib/fs.test.ts",
     "src/lib/fs.ts",
+    "src/lib/gdgraph-post-commit.test.ts",
     "src/lib/git-hooks.test.ts",
     "src/lib/git-hooks.ts",
     "src/lib/json.ts",
@@ -1133,17 +1162,38 @@
     "src/wiki/config.ts",
     "src/wiki/deep-enrich.test.ts",
     "src/wiki/deep-enrich.ts",
+    "src/wiki/describes.test.ts",
+    "src/wiki/describes.ts",
     "src/wiki/enrich-rlm.test.ts",
     "src/wiki/enrich.test.ts",
     "src/wiki/enrich.ts",
+    "src/wiki/freshness/classify-change.test.ts",
+    "src/wiki/freshness/classify-change.ts",
+    "src/wiki/freshness/page-freshness.test.ts",
+    "src/wiki/freshness/page-freshness.ts",
+    "src/wiki/freshness/propagate.test.ts",
+    "src/wiki/freshness/propagate.ts",
+    "src/wiki/freshness/queue.test.ts",
+    "src/wiki/freshness/queue.ts",
+    "src/wiki/freshness/report.test.ts",
+    "src/wiki/freshness/report.ts",
+    "src/wiki/freshness/run.ts",
+    "src/wiki/managed-block.test.ts",
+    "src/wiki/managed-block.ts",
+    "src/wiki/provenance.test.ts",
+    "src/wiki/provenance.ts",
+    "src/wiki/refresh.test.ts",
+    "src/wiki/refresh.ts",
     "src/wiki/resume-state.ts",
     "src/wiki/security-seam.test.ts",
     "src/wiki/service.test.ts",
     "src/wiki/service.ts",
+    "src/wiki/skill-template.test.ts",
     "src/wiki/staleness.test.ts",
     "src/wiki/staleness.ts",
     "src/wiki/templates.ts",
-    "src/wiki/types.ts"
+    "src/wiki/types.ts",
+    "src/wiki/validate-structure.test.ts"
   ],
   "vscode-extension": [
     "vscode-extension/src/audit-log.test.ts",
