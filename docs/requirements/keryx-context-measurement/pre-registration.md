@@ -54,14 +54,38 @@ written:
 | drop `chore:` / `docs:` subjects | no source-location task in them |
 | gold set between 1 and 8 source files | one file makes every tool look equal; thirty makes every tool look bad |
 | drop if the query text names any gold file's basename or a path segment | otherwise this measures reading, not retrieval |
+| drop tests, in each language's own convention | the change under test is in the production code; see below |
 
-**Measured yield.** vantage-frontend: 713 PR-shaped commits → 117 tasks (65
-dropped chore/docs, 359 size, **172 answer-leak**). keryx before 2026-08-20: 96
-→ **12**.
+**Measured yield**, after the source-language fix of 2026-09-05:
 
-That answer-leak number is nearly a quarter of candidates and is the filter most
-likely to be quietly dropped by someone who wants a bigger sample. It is not
-optional.
+| repository | tasks | mean gold |
+|---|---|---|
+| vantage-frontend | 173 | 3.1 |
+| vantage-backend | 68 | 2.8 |
+| keryx (before 2026-08-20) | 13 | 3.2 |
+
+vantage-backend previously yielded **zero**, and the reported reason was wrong.
+It has 4,204 Java files; the extractor's source test covered TypeScript and
+JavaScript only, so every commit came out with an empty gold set and was dropped
+as *"gold set size"* — a reason nobody would read as *"this repository is
+written in a language I do not parse"*. gdgraph indexes `.ts`, `.tsx`, `.js`,
+`.jsx`, `.java` and `.py`; the benchmark now covers the same six, because
+measuring retrieval on a language the graph cannot see asks the context arm for
+an advantage it structurally does not have and scores the resulting nothing
+against keryx.
+
+**Test exclusion was TypeScript-only, and Java exposed it.** The first Java task
+drawn had a gold set of seven files, three of them `*IT.java`. The `.test.` /
+`.spec.` check that had always excluded TypeScript tests matches nothing in any
+other language, so the same measurement was scoring TypeScript against
+production code and Java against production code *plus its integration suite*.
+Now each language's own convention is excluded: Java's `src/test/` layout and
+`Test`/`Tests`/`IT`/`ITCase` suffixes, Python's `test_*.py`, `*_test.py` and
+`tests/`.
+
+**The answer-leak filter drops 180 of vantage-frontend's candidates** — more
+than half again the number that survive. It is the filter most likely to be
+quietly dropped by someone who wants a bigger sample. It is not optional.
 
 ## Repositories
 
@@ -69,9 +93,20 @@ optional.
 and barely touched by the author of this measurement. Results cannot be
 published.
 
-**Smoke test: keryx**, 12 tasks. Enough to prove the harness runs end to end.
-**Not a control** — at twelve tasks any result is equally consistent with a real
-effect and with none, and it will not be reported as confirmation.
+**Smoke test: keryx**, 13 tasks. Enough to prove the harness runs end to end.
+**Not a control** — at thirteen tasks any result is equally consistent with a
+real effect and with none, and it will not be reported as confirmation.
+
+**Secondary, agreed with the operator on 2026-09-05: keryx**, all 13 tasks, run
+because it is the only repository of the three whose **wiki is committed** and
+therefore present at the parent commit. The primary run measures the graph and
+routing index without a wiki; this one is the only place the wiki is in the arm
+at all. Underpowered, and reported as such.
+
+**Available and not yet chosen: vantage-backend**, 68 tasks. Java, private, and
+independent of the frontend. Its import graph and layering are stricter than a
+frontend's, which is where a code graph would be expected to help most if it
+helps anywhere.
 
 Recorded consequence: **this measurement will have no publishable independent
 confirmation.** The repository whose results could be shared cannot supply
@@ -208,6 +243,32 @@ touch the decision rule, which is recall and context tokens only, and both of
 those are unchanged. The smoke run is on keryx, which is not the measured
 sample.
 
+### Amendment, 2026-09-05: the environment both arms actually run in
+
+Written after checking, rather than assuming, what the headless agent starts
+with. It was not the roster this harness documents.
+
+**Removed: user-global MCP servers.** Without `--strict-mcp-config` the init
+event reports **88 tools, 59 of them MCP**, from ten user-global servers — among
+them a code-search server holding its own index of the repository. With the
+flag: 29 tools, none MCP. Measured both ways.
+
+They reach both arms equally, so the comparison was not biased. But handing the
+control arm a second retrieval system makes `context-off` mean "without keryx
+and with something else instead" rather than "without keryx". The smoke run ran
+that way and nothing in its output disclosed it.
+
+**Kept, and disclosed rather than removed: the machine's user-global agent
+configuration.** A `~/.claude/CLAUDE.md` of general engineering rules, and
+user-global hooks including a command-rewriting one on `Bash`. These reach both
+arms identically and none of them mentions keryx or this repository, so they are
+noise rather than a confound. Removing them would mean running against a copied
+credential store, which is a worse trade than disclosing them.
+
+**Consequence.** Every number produced before this date, the smoke run included,
+was produced under a different tool roster than the sweep will use, and none of
+it carries forward.
+
 ## The threshold, fixed in advance
 
 **keryx wins** if `context-on` file recall exceeds `context-off` by **≥10
@@ -222,6 +283,16 @@ tokens to find more files is available to anyone without a code graph.
 ## Model selection
 
 Runs are split across Opus 5 and Sonnet 5, adaptively by task difficulty.
+
+**The rule, fixed 2026-09-05, before any scored run: gold-set size, threshold
+four.** Four or more files goes to Opus 5, fewer to Sonnet 5. `selectModel` in
+`scripts/benchmark/retrieval-sweep.ts`, and the split is printed before the
+sweep starts.
+
+Written down because "adaptively" left as prose is a degree of freedom wide
+enough to drive a result through. Gold-set size is the only difficulty signal
+available before a run that does not require running one; a task whose answer
+spans four or more files needs the change understood, not one symptom matched.
 
 **The invariant:** both arms of a single task always use the same model.
 Assignment is decided from the task alone, before either arm runs, and never
