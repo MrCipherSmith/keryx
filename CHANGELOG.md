@@ -3,6 +3,78 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.80] — 2026-09-05
+
+Five commits, and three of them are one shape: a mechanism that could not
+establish something, reporting that it had. This release began by documenting
+the Living Wiki commands 0.2.77–0.2.78 shipped, and every subsequent finding
+came from running the thing being documented rather than reading it.
+
+### Fixed
+
+- **`keryx wiki refresh --help` performed the refresh instead of printing
+  usage.** It regenerated the managed Reference block of 37 pages. `wikiCommand`
+  only inspected the flag in first position and the subcommand never looked at
+  it, so asking what a command does performed it. `--help` anywhere in the argv
+  now prints usage and returns: a help flag that writes to the working tree is
+  the one flag that must never reach the body.
+
+- **The four Living Wiki commands were undocumented.** `wiki freshness`,
+  `refresh`, `verify` and `migrate-markers` appeared in neither `keryx wiki
+  --help` (the router dispatches fourteen subcommands; the banner listed ten) nor
+  `cli-reference.md`, a file titled "Every command, subcommand, flag, and exit
+  code". `agents monitor` had the same gap under a section whose opening sentence
+  counted the verb's surfaces and said "two" while the router dispatched three.
+
+- **`keryx sync` reported "up to date" when it could not compare at all.**
+  `diffSince` returns null when git cannot answer — its own comment says "not a
+  repo, unknown base" — and the caller treated that identically to a diff with
+  zero changes. This repository's graph provenance named a commit on a branch
+  that had been squash-merged and deleted, so the sha was not an object at all;
+  sync diffed against a revision that does not exist and called the result
+  clean. An unresolvable baseline is now named as such and counted as stale, on
+  the principle that not knowing whether a derived layer matches the code is a
+  reason to rebuild and never a reason to claim it does.
+
+- **One filler word defeated intent matching.** `matchIntent` was a contiguous
+  substring test in both directions, so "rebuild the graph" matched nothing while
+  `rebuild graph` sat in the registry as a declared intent. Measured over 22 real
+  phrasings recorded *before* the change — five returned nothing. A phrase now
+  also matches when every one of its meaningful words appears in the query, with
+  the substring rule kept alongside so that "nothing that matched before stops
+  matching" is structurally true rather than believed. Result: 2 gained, 0 lost,
+  20 unchanged, and two more fixed as data.
+
+  `keryx commands --intent` now lists the closest commands by shared words when
+  nothing matches outright. "обнови вики" names four commands at once and still
+  matches none of them — picking one would choose a winner the query does not
+  name — but the caller is no longer sent away empty-handed.
+
+### Changed
+
+- **The CLI-reference coverage guard is no longer verb-level.** Its own comment
+  had said "a new `wiki <subcommand>` is not detected", and that limit then cost
+  exactly what it predicted, twice. It now derives every router's dispatch and
+  requires each routed subcommand to be named in its verb's reference section —
+  five gaps across the whole CLI on the first run.
+
+- **The code graph was rebuilt.** Its module map was missing about thirty source
+  files, including the entire `src/wiki/freshness/` tree — the Living Wiki
+  implementation shipped in the two previous releases. Anything asking the graph
+  what a change affects had been answering from a file set two days and two
+  releases behind.
+
+### Added
+
+- **A research note on where the wiki and graph work goes next**
+  (`docs/requirements/keryx-wiki-graph-next/`). Its conclusion is that keryx sits
+  inside three current external themes — repository-as-graph, freshness as a
+  first-class signal, self-repairing documentation behind a human gate — and is
+  absent from the fourth: measurement. This project measures review precision,
+  detector false-negative rates, wiki drift and routing baselines, and has never
+  tested the claim the rest rests on, that project-local context makes an agent
+  better at a task.
+
 ## [0.2.79] — 2026-09-04
 
 One commit. It removes the last reason `.mcp.json` could not be committed: the
