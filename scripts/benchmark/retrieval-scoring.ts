@@ -11,6 +11,7 @@
 // given an answer and a gold set it returns the same numbers forever, which is
 // what makes a disputed result re-checkable by anyone.
 
+import type { ContextInventory } from "./retrieval-ablation";
 import { sourcePathPattern } from "./retrieval-languages";
 
 export interface RetrievalScore {
@@ -121,6 +122,11 @@ export interface ArmResult {
    * amendment in the pre-registration for why inputs alone were not enough.
    */
   readonly stepsToFirstGold: number | null;
+  /**
+   * What the arm actually held. `keryx init` creates an empty wiki skeleton, so
+   * "the directory exists" is not evidence a wiki does; the page count is.
+   */
+  readonly inventory: ContextInventory;
 }
 
 export interface Verdict {

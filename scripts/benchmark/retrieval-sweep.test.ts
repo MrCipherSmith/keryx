@@ -30,6 +30,7 @@ function armResult(taskId: string, arm: ArmResult["arm"], recall = 1): ArmResult
     contextTokens: 100,
     costUsd: 0.01,
     stepsToFirstGold: 1,
+    inventory: { wikiPages: 0, hasGraphDb: false, hasRoutingIndex: false },
   };
 }
 

@@ -23,7 +23,7 @@
 // before the agent starts, and a run that cannot show the ablation happened
 // fails instead of scoring.
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -113,6 +113,43 @@ export async function keryxHooksIn(worktreePath: string): Promise<string[]> {
     }
   }
   return found;
+}
+
+export interface ContextInventory {
+  /** Wiki pages with actual content. Directory skeletons and templates excluded. */
+  readonly wikiPages: number;
+  readonly hasGraphDb: boolean;
+  readonly hasRoutingIndex: boolean;
+}
+
+/**
+ * What the arm actually held, counted rather than assumed.
+ *
+ * `keryx init` creates a wiki SKELETON — eleven empty directories and an
+ * index — so "does .metaproject/wiki exist" answers yes on a repository that
+ * has no wiki at all. The primary sweep's central caveat is that it measures
+ * the graph without a wiki; recording the page count per arm turns that from
+ * something the author says into something the results show.
+ */
+export function inventoryContext(worktreePath: string): ContextInventory {
+  const wikiRoot = path.join(worktreePath, SUBSTANTIVE_CONTEXT, "wiki");
+  let wikiPages = 0;
+  if (existsSync(wikiRoot)) {
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "templates") continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".md") && entry.name !== "index.md") wikiPages += 1;
+      }
+    };
+    walk(wikiRoot);
+  }
+  return {
+    wikiPages,
+    hasGraphDb: existsSync(path.join(worktreePath, SUBSTANTIVE_CONTEXT, "data", "gdgraph")),
+    hasRoutingIndex: existsSync(path.join(worktreePath, SUBSTANTIVE_CONTEXT, "index.md")),
+  };
 }
 
 /**

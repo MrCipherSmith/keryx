@@ -14,7 +14,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { assertAnswerUnreachable, createIsolatedCheckout } from "./retrieval-checkout";
-import { assertArmContext, stripKeryxHooks } from "./retrieval-ablation";
+import { assertArmContext, inventoryContext, stripKeryxHooks } from "./retrieval-ablation";
 import { extractPaths, scoreRetrieval, type ArmResult } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
 
@@ -134,6 +134,9 @@ export async function runArm(
     // and `scripts/` was outside the typecheck.
     assertAnswerUnreachable(created.path, task.sha);
 
+    // Recorded before the agent runs, from the tree it is about to be given.
+    const inventory = inventoryContext(created.path);
+
     const answer = await options.agent.run({
       cwd: created.path,
       prompt: buildPrompt(task),
@@ -151,6 +154,7 @@ export async function runArm(
       contextTokens: answer.contextTokens,
       costUsd: answer.costUsd,
       stepsToFirstGold: answer.stepsToFirstGold,
+      inventory,
     };
   } finally {
     if (arm === "context-on" && options.provisioner !== undefined) {
