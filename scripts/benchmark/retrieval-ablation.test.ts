@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   assertArmContext,
+  inventoryContext,
   keryxHooksIn,
   stripKeryxHooks,
   CLAUDE_SETTINGS,
@@ -126,6 +127,66 @@ describe("stripKeryxHooks", () => {
       await writeFile(path.join(root, CLAUDE_SETTINGS), "{ not json", "utf8");
       await stripKeryxHooks(root);
       expect(await readFile(path.join(root, CLAUDE_SETTINGS), "utf8")).toBe("{ not json");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("inventoryContext", () => {
+  test("an init skeleton counts as zero wiki pages", async () => {
+    // `keryx init` creates eleven empty wiki directories and an index, so
+    // "does .metaproject/wiki exist" answers yes on a repository with no wiki
+    // at all — which is exactly the intended primary repository. The primary
+    // sweep's central caveat is that it measures the graph WITHOUT a wiki, and
+    // this is what makes that a recorded number rather than the author's word.
+    const root = await tree({ metaproject: true });
+    try {
+      await mkdir(path.join(root, ".metaproject", "wiki", "architecture"), { recursive: true });
+      await mkdir(path.join(root, ".metaproject", "wiki", "templates"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "wiki", "index.md"), "# wiki\n", "utf8");
+      await writeFile(path.join(root, ".metaproject", "wiki", "templates", "page.md"), "x", "utf8");
+
+      expect(inventoryContext(root).wikiPages).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("counts real pages, at any depth", async () => {
+    const root = await tree({ metaproject: true });
+    try {
+      await mkdir(path.join(root, ".metaproject", "wiki", "domain-models"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "wiki", "index.md"), "# wiki\n", "utf8");
+      await writeFile(path.join(root, ".metaproject", "wiki", "overview.md"), "real\n", "utf8");
+      await writeFile(path.join(root, ".metaproject", "wiki", "domain-models", "flow.md"), "real\n", "utf8");
+
+      expect(inventoryContext(root).wikiPages).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports the graph database and routing index separately", async () => {
+    const root = await tree({ metaproject: true });
+    try {
+      expect(inventoryContext(root).hasGraphDb).toBe(false);
+      expect(inventoryContext(root).hasRoutingIndex).toBe(true);
+      await mkdir(path.join(root, ".metaproject", "data", "gdgraph"), { recursive: true });
+      expect(inventoryContext(root).hasGraphDb).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a stripped tree inventories as nothing rather than throwing", async () => {
+    const root = await tree({});
+    try {
+      expect(inventoryContext(root)).toEqual({
+        wikiPages: 0,
+        hasGraphDb: false,
+        hasRoutingIndex: false,
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

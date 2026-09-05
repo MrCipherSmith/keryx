@@ -98,7 +98,20 @@ async function main(): Promise<void> {
   // Real, live embedding inference — no fabrication. A missing/unresolvable optional
   // dependency fails the whole producer loudly (see module comment + the `main().catch`
   // handler below), the same discipline every other producer script in this directory follows.
-  const { pipeline } = await import("@xenova/transformers");
+  // Deliberately not a dependency of this project — it is an optional baseline
+  // only this producer needs, and it is fetched at run time. Typecheck cannot
+  // resolve what is not installed, so the import is untyped here rather than
+  // dropping this whole file out of the typecheck to spare one line.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { pipeline } = (await import("@xenova/transformers" as string)) as {
+    pipeline: (task: string, model: string) => Promise<
+      (texts: string[], options: { pooling: string; normalize: boolean }) => Promise<{
+        dims: number[];
+        // A typed array in practice — `.slice` below relies on it.
+        data: Float32Array;
+      }>
+    >;
+  };
   const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL);
   const embed = async (texts: string[]): Promise<Float32Array[]> => {
     const out = await extractor(texts, { pooling: "mean", normalize: true });

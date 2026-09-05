@@ -93,7 +93,11 @@ async function runSeed(
     tools: buildTools(root, variant),
     systemInstruction: buildSystemInstruction(variant),
     idSeq,
-    maxToolCalls: 12,
+    // `maxToolCalls` was passed here and silently ignored: AgentDeps has no such
+    // field, and scripts/ was outside the typecheck, so this cap never took effect.
+    // Removed rather than renamed to `maxRounds` — enabling a cap that was never
+    // applied would change what this script does and make new runs incomparable to
+    // the recorded ones without anyone noticing.
   };
   let tokens = 0;
   let sawUsage = false;

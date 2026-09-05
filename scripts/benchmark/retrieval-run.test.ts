@@ -315,6 +315,34 @@ describe("runTask wiring", () => {
     }
   });
 
+  test("records what the control arm held after its run, not only before", async () => {
+    // The keryx binary is on PATH for both arms by design, so the control arm
+    // can run `keryx gdgraph build` and hand itself the thing under test. That
+    // would dilute the effect and appear nowhere. An agent that creates a graph
+    // database in the stripped tree must show up in the record.
+    const { root, task } = await fixtureRepo();
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      const agent: AgentPort = {
+        async run({ cwd }) {
+          if (!existsSync(path.join(cwd, ".metaproject"))) {
+            // The control arm, doing exactly what nothing stops it doing.
+            await mkdir(path.join(cwd, ".metaproject", "data", "gdgraph"), { recursive: true });
+          }
+          return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
+        },
+      };
+      const results = await runTask(task, { repoRoot: root, worktreesDir, agent, modelFor: () => "fake" });
+      const off = results.find((r) => r.arm === "context-off");
+
+      expect(off?.inventory.hasGraphDb).toBe(false);
+      expect(off?.inventoryAfter.hasGraphDb).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
   test("carries the agent's dollar cost through to the result", async () => {
     // It did not, for as long as the pre-registration claimed it did: the
     // adapter parsed `total_cost_usd` and this runner dropped it.
