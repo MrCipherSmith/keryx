@@ -82,8 +82,38 @@ enough clean tasks without including work the author did this week.
 - **File recall** — share of gold files the agent identified. The headline.
 - **File precision** and **F1** — reported, not used for the decision.
 - **Tool calls** — how much work it took.
-- **Context tokens** — what it cost.
+- **Context tokens** — what it cost. Defined below, because the obvious
+  definition is the wrong one.
 - **Steps to first gold file** — how quickly it oriented.
+
+### What "context tokens" means, and why the obvious answer is wrong
+
+**Definition: `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`.**
+Everything the model read, whether or not a cache made it cheap.
+
+Established by measurement rather than assumption. A four-word prompt through
+the headless CLI reports 2 input tokens and 4 output — beside **20,325
+cache-creation and 22,616 cache-read**. The overwhelming majority of what a
+model reads never appears in `input_tokens` at all.
+
+So counting only `input_tokens` would make both arms report near-zero, the "no
+greater context cost" condition would pass unconditionally, and a two-part
+threshold would silently become a one-part threshold. That is not a rounding
+choice; it deletes half the rule.
+
+It also removes the specific way this measurement could flatter keryx: an arm
+that pulls half the repository into context and thereby finds more files has not
+demonstrated that a code graph helps. Under this definition that shows up as
+cost, which is the point.
+
+Dollar cost is recorded too, and deliberately **excluded from the rule**. Prices
+change; tokens do not, and a threshold that moves with a price list is not a
+threshold.
+
+**Decided by me on 2026-09-05, not by the operator.** It was put to him twice
+and he did not object; I am recording that it was my call so that nobody later
+reads a shared decision where there was a unilateral one. It is reversible until
+the first scored run, and after that only by re-running everything.
 
 ## The threshold, fixed in advance
 
