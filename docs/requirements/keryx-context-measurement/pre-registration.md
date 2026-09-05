@@ -83,6 +83,14 @@ Now each language's own convention is excluded: Java's `src/test/` layout and
 `Test`/`Tests`/`IT`/`ITCase` suffixes, Python's `test_*.py`, `*_test.py` and
 `tests/`.
 
+**How the N are chosen, and what that costs.** Candidates come out in reverse
+chronological order and the sweep takes the first N, so the sample is the **N
+most recent qualifying pull requests before the cutoff** — not a random draw
+from the 448 available. Deterministic and reproducible, which matters more here
+than randomness; but it is a systematic sample, and if recent work clusters in
+areas the graph happens to cover well or badly, that lands in the result. Stated
+because it is invisible in the output otherwise.
+
 **The answer-leak filter drops 180 of vantage-frontend's candidates** — more
 than half again the number that survive. It is the filter most likely to be
 quietly dropped by someone who wants a bigger sample. It is not optional.
