@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, mkdir, rm, writeFile, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildPrompt, runTask, stripContext, CONTEXT_PATHS, type AgentPort } from "./retrieval-run";
@@ -144,6 +145,97 @@ describe("runTask wiring", () => {
       });
       expect(results[0]?.score.recall).toBe(1);
       expect(results[1]?.score.recall).toBe(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a repository whose .metaproject is gitignored, before calling the agent", async () => {
+    // The intended primary repository is exactly this: `.metaproject/` present
+    // on disk, listed in .gitignore, therefore absent from every worktree. The
+    // sweep would have compared two near-identical trees, returned the expected
+    // zero, and been written up as an honest negative result about a context
+    // that was never in either arm.
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-ignored-meta-"));
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      git(root, ["init", "-q"]);
+      git(root, ["config", "user.email", "fixture@example.invalid"]);
+      git(root, ["config", "user.name", "fixture"]);
+      await mkdir(path.join(root, "src"), { recursive: true });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "index.md"), "# routing\n", "utf8");
+      await writeFile(path.join(root, ".gitignore"), ".metaproject/\n", "utf8");
+      await writeFile(path.join(root, "src", "charge.ts"), "export const rate = 1;\n", "utf8");
+      git(root, ["add", "-A"]);
+      git(root, ["commit", "-q", "-m", "before"]);
+      const parent = git(root, ["rev-parse", "HEAD"]);
+      await writeFile(path.join(root, "src", "charge.ts"), "export const rate = 2;\n", "utf8");
+      git(root, ["add", "-A"]);
+      git(root, ["commit", "-q", "-m", "fix(core): refunds double (#1)"]);
+      const sha = git(root, ["rev-parse", "HEAD"]);
+
+      let called = 0;
+      const agent: AgentPort = {
+        async run() {
+          called += 1;
+          return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
+        },
+      };
+
+      await expect(
+        runTask(
+          { id: sha.slice(0, 8), sha, parent, query: "refunds double", gold: ["src/charge.ts"] },
+          { repoRoot: root, worktreesDir, agent, modelFor: () => "fake" },
+        ),
+      ).rejects.toThrow(/nothing under test/);
+      // And it cost nothing: the guard fires before the agent is ever spawned.
+      expect(called).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
+  test("strips keryx's own hooks from the control arm, keeping the project's", async () => {
+    // Files gone but the hook alive meant the control arm was forbidden raw
+    // grep and redirected into a workspace that had just been deleted —
+    // handicapped by the system under test rather than merely left alone.
+    const { root, task } = await fixtureRepo();
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      const settings = {
+        hooks: {
+          PreToolUse: [
+            { matcher: "Bash", hooks: [{ type: "command", command: "node scripts/guard.mjs" }] },
+            { matcher: "Bash|Grep", hooks: [{ type: "command", command: "keryx ctx hook claude" }], _keryxManaged: "ctx-agent-hooks" },
+          ],
+        },
+      };
+      await mkdir(path.join(root, ".claude"), { recursive: true });
+      await writeFile(path.join(root, ".claude", "settings.json"), JSON.stringify(settings), "utf8");
+      git(root, ["add", "-A"]);
+      git(root, ["commit", "-q", "--amend", "--no-edit"]);
+      const parent = git(root, ["rev-parse", "HEAD"]);
+
+      const seen: Record<string, string> = {};
+      const agent: AgentPort = {
+        async run({ cwd }) {
+          const file = path.join(cwd, ".claude", "settings.json");
+          seen[existsSync(path.join(cwd, ".metaproject")) ? "on" : "off"] = existsSync(file)
+            ? await readFile(file, "utf8")
+            : "";
+          return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
+        },
+      };
+      await runTask({ ...task, parent }, { repoRoot: root, worktreesDir, agent, modelFor: () => "fake" });
+
+      expect(seen.on).toContain("keryx ctx hook");
+      expect(seen.off).not.toContain("keryx ctx hook");
+      // The project's own guard survives on both sides — it confounds nothing.
+      expect(seen.on).toContain("guard.mjs");
+      expect(seen.off).toContain("guard.mjs");
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(worktreesDir, { recursive: true, force: true });

@@ -15,6 +15,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
+import { assertArmContext, stripKeryxHooks } from "./retrieval-ablation";
 import { extractPaths, scoreRetrieval, type ArmResult } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
 
@@ -68,6 +69,10 @@ export async function stripContext(worktreePath: string): Promise<void> {
   for (const entry of CONTEXT_PATHS) {
     await rm(path.join(worktreePath, entry), { recursive: true, force: true });
   }
+  // Deleting the files while leaving keryx's hooks registered produced a control
+  // arm that was forbidden to grep and redirected to a workspace that no longer
+  // existed. See retrieval-ablation.ts.
+  await stripKeryxHooks(worktreePath);
 }
 
 /**
@@ -98,6 +103,10 @@ export async function runArm(
     if (arm === "context-off") {
       await stripContext(created.path);
     }
+
+    // Before the agent, and before leakage: an arm that is not the arm it claims
+    // to be produces numbers that look exactly like results.
+    await assertArmContext(created.path, arm, CONTEXT_PATHS);
 
     const leakage = checkGoldLeakage(created.path, task.gold);
     if (leakage.leaked) {
