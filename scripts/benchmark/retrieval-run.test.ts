@@ -150,6 +150,25 @@ describe("runTask wiring", () => {
     }
   });
 
+  test("carries the agent's dollar cost through to the result", async () => {
+    // It did not, for as long as the pre-registration claimed it did: the
+    // adapter parsed `total_cost_usd` and this runner dropped it.
+    const { root, task } = await fixtureRepo();
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      const results = await runTask(task, {
+        repoRoot: root,
+        worktreesDir,
+        agent: fakeAgent([], "src/charge.ts"),
+        modelFor: () => "fake",
+      });
+      expect(results.map((r) => r.costUsd)).toEqual([0.01, 0.01]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
   test("a wrong answer scores zero rather than erroring", async () => {
     const { root, task } = await fixtureRepo();
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));

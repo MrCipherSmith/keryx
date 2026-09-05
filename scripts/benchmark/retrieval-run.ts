@@ -121,6 +121,7 @@ export async function runArm(
       score: scoreRetrieval(predicted, task.gold),
       toolCalls: answer.toolCalls,
       contextTokens: answer.contextTokens,
+      costUsd: answer.costUsd,
       stepsToFirstGold: answer.stepsToFirstGold,
     };
   } finally {
