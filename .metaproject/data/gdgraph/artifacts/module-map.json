@@ -29,6 +29,8 @@
     "scripts/benchmark/retrieval-ablation.ts",
     "scripts/benchmark/retrieval-agent-claude.test.ts",
     "scripts/benchmark/retrieval-agent-claude.ts",
+    "scripts/benchmark/retrieval-languages.test.ts",
+    "scripts/benchmark/retrieval-languages.ts",
     "scripts/benchmark/retrieval-provision.test.ts",
     "scripts/benchmark/retrieval-provision.ts",
     "scripts/benchmark/retrieval-run.test.ts",

@@ -17,6 +17,7 @@
 // retrieval and measuring reading.
 
 import { execFileSync } from "node:child_process";
+import { isTestFile, SOURCE_FILE } from "./retrieval-languages";
 
 export interface RetrievalTask {
   /** Stable id: the short sha of the merge commit. */
@@ -53,8 +54,7 @@ export interface ExtractResult {
   };
 }
 
-const SOURCE = /\.(ts|tsx|js|jsx|mjs)$/;
-const NOT_SOURCE = /\.(test|spec)\./;
+
 // `%s` and `%b` cannot be joined by a NUL through execFile's argv, so a literal
 // sentinel separates them. It has to be something no commit message contains.
 const SEPARATOR = "@@KERYX-TASK-SEP@@";
@@ -150,7 +150,7 @@ export function extractRetrievalTasks(options: ExtractOptions): ExtractResult {
       .trim()
       .split("\n")
       .filter(Boolean);
-    const gold = changed.filter((file) => SOURCE.test(file) && !NOT_SOURCE.test(file));
+    const gold = changed.filter((file) => SOURCE_FILE.test(file) && !isTestFile(file));
 
     if (gold.length < minGold || gold.length > maxGold) {
       dropped.goldSetSize += 1;

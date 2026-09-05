@@ -11,6 +11,8 @@
 // given an answer and a gold set it returns the same numbers forever, which is
 // what makes a disputed result re-checkable by anyone.
 
+import { sourcePathPattern } from "./retrieval-languages";
+
 export interface RetrievalScore {
   readonly recall: number;
   readonly precision: number;
@@ -42,11 +44,11 @@ export function normalizePath(raw: string, worktreeRoot?: string): string {
   return value;
 }
 
-// The leading `/?` is load-bearing. Without it an absolute answer like
-// `/tmp/wt-1/src/a.ts` is captured as `tmp/wt-1/src/a.ts`, which no longer
-// starts with the worktree root, so the prefix strip silently fails and a
-// correct answer scores as a miss. Caught by its own test.
-const PATH_PATTERN = /\/?(?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|js|jsx|mjs|cjs)\b/g;
+// Built from the shared language list rather than written out here. The two
+// copies had already drifted — this one accepted `.cjs`, the task extractor's
+// did not — so a gold file one side rejected could still be matched by the
+// other. See retrieval-languages.ts for why the list contains what it does.
+const PATH_PATTERN = sourcePathPattern();
 
 /**
  * Every repository-relative source path an answer mentions, de-duplicated and in
