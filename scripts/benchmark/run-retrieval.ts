@@ -10,7 +10,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createClaudeAgent } from "./retrieval-agent-claude";
 import { createKeryxProvisioner } from "./retrieval-provision";
-import { runSweep, selectModel } from "./retrieval-sweep";
+import { runSweep, selectModel, MODEL_EASY, MODEL_HARD } from "./retrieval-sweep";
 import { extractRetrievalTasks } from "./retrieval-tasks";
 
 function flag(name: string, fallback?: string): string {
@@ -39,8 +39,8 @@ console.log(`repo:    ${repoRoot}`);
 console.log(`tasks:   ${chosen.length} of ${tasks.length} available`);
 console.log(`dropped: ${JSON.stringify(dropped)}`);
 // Stated before the sweep runs, so the split cannot be described after the fact.
-const hard = chosen.filter((t) => selectModel(t) !== selectModel({ ...t, gold: ["x"] })).length;
-console.log(`models:  ${hard} on the larger model, ${chosen.length - hard} on the smaller`);
+const hard = chosen.filter((task) => selectModel(task) === MODEL_HARD).length;
+console.log(`models:  ${hard} ${MODEL_HARD}, ${chosen.length - hard} ${MODEL_EASY}`);
 console.log(`out:     ${outDir}\n`);
 
 const provisioner = createKeryxProvisioner();
