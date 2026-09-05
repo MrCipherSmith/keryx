@@ -242,6 +242,79 @@ describe("runTask wiring", () => {
     }
   });
 
+  test("provisions the context arm only, and releases what it registered", async () => {
+    // The graph is generated and never committed, so without this the context-on
+    // arm holds a routing index pointing at a graph that does not exist — the
+    // state the smoke run actually ran in. The control arm must not be touched:
+    // provisioning it would be handing it the thing under test.
+    const { root, task } = await fixtureRepo();
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      const provisioned: string[] = [];
+      const released: string[] = [];
+      const seen: string[] = [];
+      const agent: AgentPort = {
+        async run({ cwd }) {
+          seen.push(cwd);
+          return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
+        },
+      };
+
+      await runTask(task, {
+        repoRoot: root,
+        worktreesDir,
+        agent,
+        modelFor: () => "fake",
+        provisioner: {
+          async provision(p) {
+            provisioned.push(p);
+          },
+          async release(p) {
+            released.push(p);
+          },
+        },
+      });
+
+      expect(provisioned).toHaveLength(1);
+      expect(provisioned[0]).toBe(seen[0]!); // the context-on tree, and only it
+      expect(released).toEqual(provisioned);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
+  test("releases the registration even when the arm throws", async () => {
+    const { root, task } = await fixtureRepo();
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
+    try {
+      const released: string[] = [];
+      const agent: AgentPort = {
+        async run() {
+          throw new Error("agent died mid-task");
+        },
+      };
+      await expect(
+        runTask(task, {
+          repoRoot: root,
+          worktreesDir,
+          agent,
+          modelFor: () => "fake",
+          provisioner: {
+            async provision() {},
+            async release(p) {
+              released.push(p);
+            },
+          },
+        }),
+      ).rejects.toThrow(/agent died/);
+      expect(released).toHaveLength(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(worktreesDir, { recursive: true, force: true });
+    }
+  });
+
   test("carries the agent's dollar cost through to the result", async () => {
     // It did not, for as long as the pre-registration claimed it did: the
     // adapter parsed `total_cost_usd` and this runner dropped it.

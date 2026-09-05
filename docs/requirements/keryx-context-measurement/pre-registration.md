@@ -154,6 +154,26 @@ context paths and no keryx-managed hooks. A run that cannot demonstrate the
 ablation happened **fails instead of scoring**. It fires before the agent is
 spawned, so a misconfigured sweep costs nothing.
 
+**And the graph was never in either arm.** The graph *database* is generated,
+not committed — this repository tracks three gdgraph files, a provenance stamp,
+a module map and a summary, and none of them answers `gdgraph affected`. So even
+on keryx, where `.metaproject/` is committed, `context-on` held a routing index
+pointing at a graph that did not exist. The smoke run ran in exactly that state,
+which is one more reason to read nothing into its numbers.
+
+The `context-on` arm is now provisioned before the agent starts: `keryx gdgraph
+build` always, and `keryx init` first when the checkout has no `.metaproject/`
+at all. Both derive **only from the worktree, at the parent commit**. Copying the
+maintainer's current `.metaproject/` in would import artifacts built from code
+the target pull request added — the answer, delivered inside the context arm's
+own workspace. The leakage check runs after provisioning, not before, so this is
+verified rather than asserted.
+
+`keryx init` registers the project user-globally, so the sweep releases each
+entry when its worktree goes; `keryx projects list` already carries twenty dead
+entries from earlier throwaway trees, and fifty tasks would have added fifty
+more.
+
 **Consequence for the repository choice, recorded rather than resolved.** The
 primary repository cannot supply a `context-on` arm out of git as it stands. The
 graph can be rebuilt inside each worktree at the parent commit — copying the
