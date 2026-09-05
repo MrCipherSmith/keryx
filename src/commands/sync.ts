@@ -59,8 +59,38 @@ export async function syncCommand(args: string[]): Promise<void> {
     }
 
     const diff = await diffSince(cwd, provenance.commit);
-    const code = diff ? codeOnly(diff) : null;
-    if (!code || totalChanges(code) === 0) {
+
+    // `diffSince` returns null when git CANNOT ANSWER — most often because the
+    // recorded commit no longer exists, which is the ordinary outcome of
+    // building on a branch that was later squash-merged and deleted. That is a
+    // different fact from "compared, nothing changed", and collapsing the two
+    // is how this repository's own graph sat two days and ~30 files stale while
+    // sync reported `up to date (built at b99290b6)` — a revision `git
+    // cat-file` cannot resolve at all.
+    //
+    // An unresolvable baseline is treated as stale, not as clean: not knowing
+    // whether the derived layer matches the code is a reason to rebuild, never
+    // a reason to claim it does.
+    if (diff === null) {
+      anyStale = true;
+      if (apply) {
+        await applyModule(cwd, module, null, at);
+        console.log(
+          `  → rebuilt from scratch; provenance named ${provenance.commit.slice(0, 8)}, which this repository does not have`,
+        );
+      } else {
+        console.log(
+          `  cannot compare — provenance names ${provenance.commit.slice(0, 8)}, a revision this repository does not have`,
+        );
+        console.log("  (a branch that was squash-merged and deleted leaves exactly this)");
+        console.log("  → run `keryx sync --apply` to rebuild and re-record");
+      }
+      console.log("");
+      continue;
+    }
+
+    const code = codeOnly(diff);
+    if (totalChanges(code) === 0) {
       console.log(`  up to date (built at ${provenance.commit.slice(0, 8)})`);
       console.log("");
       continue;
