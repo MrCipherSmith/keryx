@@ -54,9 +54,17 @@ interface ParsedStream {
 /**
  * Fold a stream-json transcript into the numbers the measurement needs.
  *
- * `stepsToFirstGold` counts tool calls until one whose input NAMES a gold file.
- * Naming it in a tool input is the observable moment the agent reached for the
- * right file; the answer text alone cannot say when that happened.
+ * `stepsToFirstGold` counts tool calls until the agent first HAS a gold path in
+ * hand — whether it named the path itself in a tool input, or a tool handed the
+ * path back in its result.
+ *
+ * Inputs alone are not enough, and assuming they were is a mistake this metric
+ * already made once. In the smoke run, the context-on arm scored 100% recall on
+ * a task and still reported "never": it had asked the graph about a symptom and
+ * received the paths in the answer, so no tool INPUT ever contained one. The
+ * arm that navigates by query rather than by path was scored as never having
+ * arrived. Counting only inputs systematically penalises exactly the behaviour
+ * the measurement exists to detect.
  *
  * A malformed line is skipped rather than fatal. These transcripts interleave
  * several event kinds and gain new ones between releases, and a sweep that dies
@@ -71,6 +79,10 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
   let isError = false;
 
   const goldNames = gold.map((file) => file.toLowerCase());
+  const namesGold = (value: unknown): boolean => {
+    const serialized = JSON.stringify(value ?? {}).toLowerCase();
+    return goldNames.some((name) => serialized.includes(name));
+  };
 
   for (const line of lines) {
     let event: Record<string, unknown>;
@@ -86,11 +98,23 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
         const entry = block as { type?: string; input?: unknown };
         if (entry.type !== "tool_use") continue;
         toolCalls += 1;
-        if (stepsToFirstGold === null) {
-          const serialized = JSON.stringify(entry.input ?? {}).toLowerCase();
-          if (goldNames.some((name) => serialized.includes(name))) {
-            stepsToFirstGold = toolCalls;
-          }
+        if (stepsToFirstGold === null && namesGold(entry.input)) {
+          stepsToFirstGold = toolCalls;
+        }
+      }
+    }
+
+    // Tool results arrive as `user` events. A result carrying a gold path means
+    // the agent has it as of the call that produced it, which is the call count
+    // standing now — the assistant event that issued it has already been seen.
+    if (event.type === "user" && stepsToFirstGold === null && toolCalls > 0) {
+      const message = event.message as { content?: unknown[] } | undefined;
+      for (const block of message?.content ?? []) {
+        const entry = block as { type?: string; content?: unknown };
+        if (entry.type !== "tool_result") continue;
+        if (namesGold(entry.content)) {
+          stepsToFirstGold = toolCalls;
+          break;
         }
       }
     }

@@ -10,6 +10,10 @@ function assistantToolUse(name: string, input: unknown): string {
   return JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name, input }] } });
 }
 
+function toolResult(content: unknown): string {
+  return JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content }] } });
+}
+
 function resultEvent(over: Record<string, unknown> = {}): string {
   return JSON.stringify({
     type: "result",
@@ -77,6 +81,46 @@ describe("parseStream", () => {
       ["src/billing/charge.ts"],
     );
     expect(parsed.stepsToFirstGold).toBe(3);
+  });
+
+  test("a gold path HANDED BACK by a tool counts, even if the agent never typed it", () => {
+    // The defect the smoke run exposed. The context-on arm asks the graph about
+    // a symptom and gets paths in the answer; no tool input ever contains one.
+    // Scoring only inputs reported "never arrived" for an arm that answered the
+    // task perfectly, and would have penalised query-based navigation — the very
+    // behaviour under measurement — on all fifty tasks.
+    const parsed = parseStream(
+      [
+        assistantToolUse("keryx", { query: "refunds double on retry" }),
+        toolResult("related files:\n  src/billing/charge.ts\n  src/billing/retry.ts"),
+        resultEvent(),
+      ],
+      ["src/billing/charge.ts"],
+    );
+    expect(parsed.stepsToFirstGold).toBe(1);
+  });
+
+  test("a returned gold path is credited to the call that produced it, not the next one", () => {
+    const parsed = parseStream(
+      [
+        assistantToolUse("Bash", { command: "ls" }),
+        toolResult("src\npackage.json"),
+        assistantToolUse("keryx", { query: "refunds" }),
+        toolResult("src/billing/charge.ts"),
+        assistantToolUse("Read", { file_path: "src/billing/charge.ts" }),
+        resultEvent(),
+      ],
+      ["src/billing/charge.ts"],
+    );
+    expect(parsed.stepsToFirstGold).toBe(2);
+  });
+
+  test("tool results are not counted as tool calls", () => {
+    const parsed = parseStream(
+      [assistantToolUse("Bash", { command: "ls" }), toolResult("src/a.ts"), resultEvent()],
+      ["src/a.ts"],
+    );
+    expect(parsed.toolCalls).toBe(1);
   });
 
   test("stepsToFirstGold is null when the agent never reached the file", () => {

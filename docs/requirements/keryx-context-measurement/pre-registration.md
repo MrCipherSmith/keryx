@@ -115,6 +115,31 @@ and he did not object; I am recording that it was my call so that nobody later
 reads a shared decision where there was a unilateral one. It is reversible until
 the first scored run, and after that only by re-running everything.
 
+### Amendment, 2026-09-05: what "steps to first gold file" counts
+
+**Changed after the smoke run, before any scored run.** Recorded here rather than
+quietly patched, because a metric redefined after seeing numbers is exactly what
+this file exists to prevent.
+
+The harness originally counted tool calls until one whose **input** named a gold
+file. The two-task smoke run showed that this is broken in a way that biases the
+result: the `context-on` arm scored **100% recall and still reported "never
+arrived"**. It had asked the graph about a symptom and received paths in the
+tool's answer — so no tool input ever contained one.
+
+That definition penalises query-based navigation, which is precisely the
+behaviour under measurement. Left alone it would have produced a real-looking
+finding — "the context arm orients more slowly" — that was an artefact of the
+counter.
+
+**New definition: the first tool call after which the agent holds a gold path,
+whether it named the path in the input or a tool returned it in the result.**
+
+This change is confined to a **secondary, descriptive** metric. It does not
+touch the decision rule, which is recall and context tokens only, and both of
+those are unchanged. The smoke run is on keryx, which is not the measured
+sample.
+
 ## The threshold, fixed in advance
 
 **keryx wins** if `context-on` file recall exceeds `context-off` by **≥10
