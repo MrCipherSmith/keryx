@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildClaudeArgs, contextTokensOf, interpretRun, parseStream } from "./retrieval-agent-claude";
+import { buildClaudeArgs, buildClaudeEnv, contextTokensOf, interpretRun, parseStream } from "./retrieval-agent-claude";
 
 describe("buildClaudeArgs", () => {
   test("excludes user-global MCP servers", () => {
@@ -57,6 +57,33 @@ function resultEvent(over: Record<string, unknown> = {}): string {
     ...over,
   });
 }
+
+describe("buildClaudeEnv", () => {
+  test("points the session-facts hook's port at a closed one", () => {
+    // That hook posts every finished session to a local bot, which extracts
+    // durable project facts into the operator's memory. A sweep is two sessions
+    // per task — 126 across the two planned runs — every one of them about a
+    // throwaway checkout in /tmp.
+    //
+    // Overriding the port in the CHILD's environment makes the hook's
+    // `curl -sf … || true` fail and do nothing, without editing a settings file
+    // that is not this benchmark's to edit. Nothing to restore afterwards.
+    expect(buildClaudeEnv({ PATH: "/usr/bin" }).PORT).toBe("1");
+  });
+
+  test("passes the rest of the environment through untouched", () => {
+    // The agent needs PATH to find the keryx binary, and credentials to run at
+    // all. This is a targeted override, not an isolated environment.
+    const env = buildClaudeEnv({ PATH: "/usr/bin", HOME: "/home/x", EMPTY: undefined });
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/x");
+    expect("EMPTY" in env).toBe(false);
+  });
+
+  test("an existing PORT is overridden, not preserved", () => {
+    expect(buildClaudeEnv({ PORT: "3847" }).PORT).toBe("1");
+  });
+});
 
 describe("interpretRun", () => {
   const ctx = { timedOut: false, timeoutMs: 720_000, model: "m", cwd: "/tmp/t" };
