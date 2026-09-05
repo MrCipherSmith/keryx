@@ -718,6 +718,10 @@ keryx wiki enrich [<page>|--all] [--force] [--list] [--resume] [--limit <n>] [--
                   [--provider <p>] [--model <m>] [--dry-run] [--json]
 keryx wiki context
 keryx wiki backlinks <wiki-page-or-code-file>
+keryx wiki freshness
+keryx wiki refresh
+keryx wiki verify --page <path> | --baseline
+keryx wiki migrate-markers
 ```
 
 | Subcommand | Flags / args | Description |
@@ -732,6 +736,15 @@ keryx wiki backlinks <wiki-page-or-code-file>
 | `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
 | `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
+| `freshness` | — | Read-only backlog: which pages the code has moved under since each was last verified, classified and ordered by how far behind. Writes only its own report, never a page. Always exits `0` — a report, not a gate. |
+| `refresh` | — | **Writes pages.** Deterministic, model-free regeneration of the managed `## Reference` blocks from the graph. Prose is never touched. |
+| `verify` | `--page <path>` \| `--baseline` | Stamp provenance (`VerifiedAt`, `VerifiedScope`) without touching content. Refuses to run bare: stamping every page silently would assert a review that did not happen, so the whole-corpus form must be asked for by name. |
+| `migrate-markers` | — | One-off, idempotent: wrap pre-existing `## Reference` sections in the managed markers `refresh` needs. Authors no content. |
+
+`VerifiedAt` records **that the code in a page's scope has not moved since that
+revision** — not that the page was ever correct. A page can be wrong from the day
+it was written and nothing here notices. The
+[freshness guide](./guides/keep-the-wiki-current.md) is the operator-level tour.
 
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
 `component`, `service`, `integration`, `decision`.
@@ -1263,9 +1276,13 @@ and exits `1`.
 
 ## agents
 
-Two unrelated surfaces share this noun: `bootstrap` manages global instruction
-files for coding agents, and `external` inspects the vendor CLIs keryx can host
-as child agents.
+Three unrelated surfaces share this noun: `bootstrap` manages global instruction
+files for coding agents, `external` inspects the vendor CLIs keryx can host as
+child agents, and `monitor` reads a recorded subagent-fleet event log.
+
+(It said "two" until 2026-09-05, while the router dispatched three. `monitor`
+was undocumented here from the day it shipped — the sentence counting the
+surfaces was itself the thing that had drifted.)
 
 `bootstrap` is not project initialization: it only writes a small managed block
 into the selected global `AGENTS.md` / `CLAUDE.md` file. The block tells agents to
@@ -1286,6 +1303,7 @@ keryx agents bootstrap print
 | `bootstrap install` | `--runtime <id\|all>`, `--dry-run` | Merge-safe install/update. Inserts the managed block near the top of the global instruction file, after frontmatter and the H1 when present, preserving user content. |
 | `bootstrap uninstall` | `--runtime <id\|all>`, `--dry-run` | Remove only the managed Metaproject bootstrap block, preserving all user-authored content. |
 | `bootstrap print` | — | Print the managed block for manual installation. |
+| `monitor <events-file>` | `--json` | Offline fleet report over a recorded subagent event log: what each child was dispatched to do, what it spent, and how it ended. Reads the file and starts nothing. |
 
 Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 (`~/.config/opencode/AGENTS.md`), `zcode` (`~/.zcode/AGENTS.md`), `codex`

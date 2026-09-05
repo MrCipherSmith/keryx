@@ -20,6 +20,16 @@ export async function wikiCommand(args: string[]): Promise<void> {
     return;
   }
 
+  // `--help` anywhere in the argv prints usage instead of running. Without
+  // this, `keryx wiki refresh --help` REGENERATED 37 pages: the subcommand
+  // never inspected the flag, so asking what a command does performed it. A
+  // help flag that mutates the working tree is the one flag that must never
+  // reach the body.
+  if (args.includes("--help") || args.includes("-h")) {
+    printHelp();
+    return;
+  }
+
   if (command === "status") {
     await runStatus();
     return;
@@ -451,6 +461,11 @@ Usage:
                          # before the run; enrich can never itself accept a page (issue #391)
   keryx wiki context
   keryx wiki backlinks <wiki-page-or-code-file>
+  keryx wiki freshness            # read-only backlog: which pages the code moved under
+  keryx wiki refresh              # regenerate managed ## Reference blocks (WRITES pages)
+  keryx wiki verify --page <path> | --baseline
+                                  # stamp provenance; refuses to stamp the corpus silently
+  keryx wiki migrate-markers      # one-off: wrap existing Reference sections in markers
 
 Page types:
   architecture, domain-model, business-rule, user-scenario,

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { expect, test } from "bun:test";
 import { CLI_ROUTES } from "./cli";
 
@@ -75,6 +75,71 @@ test("the top-level usage banner names every verb the CLI reference documents", 
   expect(documented.length).toBeGreaterThan(20);
 
   expect(documented.filter((verb) => !banner.includes(`keryx ${verb}`)).sort()).toEqual([]);
+});
+
+// Verb-level coverage was never enough, and the file that added it said so:
+// "this is verb-level; a new `wiki <subcommand>` is not detected". That limit
+// then cost exactly what it predicted. `wiki freshness`, `refresh`, `verify` and
+// `migrate-markers` — the whole Living Wiki surface of two releases — appeared in
+// neither the reference nor `keryx wiki --help`, and `agents monitor` had been
+// missing since the day it shipped, under a sentence that counted the verb's
+// surfaces and said "two".
+//
+// The check is intentionally weak in one direction: a subcommand named `status`
+// or `list` matches almost any prose, so this cannot prove those are described.
+// It bites on the distinctive names, which is where the drift actually happens,
+// and a weak check that fires is worth more than a strong one nobody writes.
+const SUBCOMMAND_PATTERNS = [
+  /\bcommand === "([a-z][a-z0-9-]*)"/g,
+  /\bsubcommand === "([a-z][a-z0-9-]*)"/g,
+  /\bsub === "([a-z][a-z0-9-]*)"/g,
+];
+
+function routedSubcommands(source: string): Set<string> {
+  const found = new Set<string>();
+  for (const pattern of SUBCOMMAND_PATTERNS) {
+    for (const match of source.matchAll(pattern)) {
+      const name = match[1];
+      if (name !== undefined && name !== "help") found.add(name);
+    }
+  }
+  return found;
+}
+
+function referenceSection(reference: string, verb: string): string | undefined {
+  const start = reference.indexOf(`\n## ${verb}\n`);
+  if (start < 0) return undefined;
+  const end = reference.indexOf("\n## ", start + 1);
+  return reference.slice(start, end < 0 ? reference.length : end);
+}
+
+test("every routed subcommand is named in its verb's reference section", async () => {
+  const [reference, entries] = await Promise.all([
+    readFile(CLI_REFERENCE, "utf8"),
+    readdir(new URL("./commands/", import.meta.url)),
+  ]);
+
+  const sources = entries.filter((name) => name.endsWith(".ts") && !name.includes(".test."));
+  expect(sources.length).toBeGreaterThan(10);
+
+  const missing: string[] = [];
+  let verbsChecked = 0;
+  for (const file of sources) {
+    const verb = file.replace(/\.ts$/, "");
+    const section = referenceSection(reference, verb);
+    if (section === undefined) continue; // no section of its own; the verb-level test owns that
+    verbsChecked += 1;
+    const source = await readFile(new URL(`./commands/${file}`, import.meta.url), "utf8");
+    for (const name of routedSubcommands(source)) {
+      if (!section.includes(name)) missing.push(`${verb} ${name}`);
+    }
+  }
+
+  // Same scrape guard as the others: a dispatch-style refactor that matches
+  // nothing would leave this comparing empty sets and passing.
+  expect(verbsChecked).toBeGreaterThan(8);
+
+  expect(missing.sort()).toEqual([]);
 });
 
 test("the documented-elsewhere allowance never hides a verb that has no section", async () => {
