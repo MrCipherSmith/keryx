@@ -10,6 +10,7 @@ import {
   matchIntent,
   renderCommandsMarkdown,
   renderIntentTable,
+  suggestIntent,
 } from "../standard/command-registry";
 import { optionValue } from "../lib/args";
 
@@ -31,6 +32,18 @@ export async function commandsCommand(args: string[] = []): Promise<void> {
     }
     if (matches.length === 0) {
       console.log(`No command matched intent: ${intent}`);
+      // A bare "no match" is a dead end for a query that was perfectly
+      // reasonable — "обнови вики" names four commands at once, so nothing can
+      // be selected, but the registry still knows which four. Say so rather
+      // than sending the caller away empty-handed.
+      const suggestions = suggestIntent(intent);
+      if (suggestions.length > 0) {
+        console.log("");
+        console.log("Closest commands by shared words (none matched outright):");
+        for (const suggestion of suggestions) {
+          console.log(`  keryx ${suggestion.command} — ${suggestion.summary}`);
+        }
+      }
       process.exitCode = 1;
       return;
     }
