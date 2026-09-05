@@ -175,6 +175,42 @@ export function buildClaudeArgs(
   return args;
 }
 
+/**
+ * The port the operator's session-facts Stop hook posts transcripts to.
+ *
+ * That hook sends every finished session to a local bot, which extracts durable
+ * project facts into the operator's memory. A sweep is two sessions per task —
+ * 126 across the two planned runs — all of them about throwaway checkouts in
+ * /tmp. His memory would fill with facts about temporary directories.
+ *
+ * Pointing the port at a closed one in the CHILD's environment makes the hook's
+ * `curl -sf … || true` fail and do nothing. His settings are not touched, so
+ * nothing has to be restored afterwards and nothing can be forgotten.
+ *
+ * The honest weakness: this depends on how that script happens to be written
+ * today. If it stops reading PORT, this silently stops working, and the only
+ * symptom is memory filling up again. It is not a substitute for removing the
+ * hook — it is what can be done without editing a file that is not mine.
+ */
+const SESSION_HOOK_PORT_SINK = "1";
+
+/**
+ * The environment each arm is spawned with.
+ *
+ * Exported so the override is asserted rather than assumed — the same reason
+ * `buildClaudeArgs` is. Both arms get exactly this, so it cannot favour either.
+ */
+export function buildClaudeEnv(
+  parent: Record<string, string | undefined>,
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parent)) {
+    if (value !== undefined) env[key] = value;
+  }
+  env.PORT = SESSION_HOOK_PORT_SINK;
+  return env;
+}
+
 export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
 
@@ -182,7 +218,12 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
 
-      const proc = Bun.spawn(["claude", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+      const proc = Bun.spawn(["claude", ...args], {
+        cwd,
+        env: buildClaudeEnv(process.env),
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
