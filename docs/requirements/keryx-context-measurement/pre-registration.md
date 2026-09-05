@@ -110,15 +110,17 @@ quietly dropped by someone who wants a bigger sample. It is not optional.
 and barely touched by the author of this measurement. Results cannot be
 published.
 
-**Smoke test: keryx**, 13 tasks. Enough to prove the harness runs end to end.
-**Not a control** — at thirteen tasks any result is equally consistent with a
-real effect and with none, and it will not be reported as confirmation.
+**Secondary: keryx**, all 13 tasks. Agreed with the operator on 2026-09-05, and
+run first — it is small enough to expose a broken harness cheaply, and it is not
+a throwaway smoke test because it is one of the two results we want anyway.
 
-**Secondary, agreed with the operator on 2026-09-05: keryx**, all 13 tasks, run
-because it is the only repository of the three whose **wiki is committed** and
-therefore present at the parent commit. The primary run measures the graph and
-routing index without a wiki; this one is the only place the wiki is in the arm
-at all. Underpowered, and reported as such.
+It earns its place for one reason: keryx is the only repository of the three
+whose **wiki is committed**, and therefore present at the parent commit. The
+primary run measures the graph and routing index without a wiki; this is the
+only place a wiki is in the arm at all.
+
+**Not a control.** At thirteen tasks any result is equally consistent with a
+real effect and with none, and it will not be reported as confirmation.
 
 **Available and not yet chosen: vantage-backend**, 68 tasks. Java, private, and
 independent of the frontend. Its import graph and layering are stricter than a
@@ -136,7 +138,14 @@ enough clean tasks without including work the author did this week.
 - **Tool calls** — how much work it took.
 - **Context tokens** — what it cost. Defined below, because the obvious
   definition is the wrong one.
-- **Steps to first gold file** — how quickly it oriented.
+- **Steps to first gold file** — how quickly it oriented. Redefined 2026-09-05;
+  see the amendment.
+- **Dollar cost** — recorded, deliberately excluded from the rule.
+- **Context inventory, before and after each arm** — wiki pages, graph database,
+  routing index. Before, because "the arm had a wiki" should be a number rather
+  than an assumption. After, because the `keryx` binary is on PATH for both arms
+  and a control arm that built itself a graph would otherwise dilute the effect
+  invisibly.
 
 ### What "context tokens" means, and why the obvious answer is wrong
 
