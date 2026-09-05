@@ -31,6 +31,7 @@ function armResult(taskId: string, arm: ArmResult["arm"], recall = 1): ArmResult
     costUsd: 0.01,
     stepsToFirstGold: 1,
     inventory: { wikiPages: 0, hasGraphDb: false, hasRoutingIndex: false },
+    inventoryAfter: { wikiPages: 0, hasGraphDb: false, hasRoutingIndex: false },
   };
 }
 

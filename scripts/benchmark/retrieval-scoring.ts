@@ -127,6 +127,17 @@ export interface ArmResult {
    * "the directory exists" is not evidence a wiki does; the page count is.
    */
   readonly inventory: ContextInventory;
+  /**
+   * The same, taken AFTER the agent finished.
+   *
+   * The `keryx` binary is on PATH for both arms by design — the advantage under
+   * test is supposed to come from the context being present, not from one side
+   * holding a tool the other lacks. But that leaves the control arm able to run
+   * `keryx gdgraph build` and hand itself a graph, which would dilute the effect
+   * without appearing anywhere. If `context-off` ends a task holding a graph
+   * database it did not start with, it built one, and this is where that shows.
+   */
+  readonly inventoryAfter: ContextInventory;
 }
 
 export interface Verdict {

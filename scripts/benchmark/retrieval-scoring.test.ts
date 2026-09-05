@@ -90,6 +90,7 @@ function arm(over: Partial<ArmResult> & Pick<ArmResult, "taskId" | "arm">): ArmR
     costUsd: 0,
     stepsToFirstGold: null,
     inventory: { wikiPages: 0, hasGraphDb: false, hasRoutingIndex: false },
+    inventoryAfter: { wikiPages: 0, hasGraphDb: false, hasRoutingIndex: false },
     ...over,
   };
 }

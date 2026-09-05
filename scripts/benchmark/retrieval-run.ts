@@ -145,6 +145,7 @@ export async function runArm(
     });
 
     const predicted = extractPaths(answer.text, created.path);
+    const inventoryAfter = inventoryContext(created.path);
     return {
       taskId: task.id,
       arm,
@@ -155,6 +156,7 @@ export async function runArm(
       costUsd: answer.costUsd,
       stepsToFirstGold: answer.stepsToFirstGold,
       inventory,
+      inventoryAfter,
     };
   } finally {
     if (arm === "context-on" && options.provisioner !== undefined) {
