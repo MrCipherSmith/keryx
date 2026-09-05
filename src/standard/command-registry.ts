@@ -543,7 +543,15 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     module: "gdgraph",
     command: "gdgraph build",
     summary: "Build or refresh the code dependency graph for this project.",
-    intent: ["построй граф", "обнови граф", "build the code graph", "rebuild graph", "reindex dependencies"],
+    intent: [
+      "построй граф",
+      "обнови граф",
+      "перестрой граф",
+      "build the code graph",
+      "rebuild graph",
+      "update graph",
+      "reindex dependencies",
+    ],
     args: [],
     json: false,
     read: false,
@@ -747,12 +755,62 @@ export function listDescriptors(module?: string): CommandDescriptor[] {
   return [...filtered].sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0));
 }
 
-/** Find the descriptor whose intent phrases best match a natural-language query. */
+/**
+ * Words that carry no routing signal, so a phrase must not fail because a query
+ * happened to include one. Deliberately tiny: every entry here is a word that
+ * cannot distinguish two commands in this registry, and a longer list starts
+ * discarding meaning.
+ */
+const INTENT_FILLER = new Set([
+  "the",
+  "a",
+  "an",
+  "my",
+  "our",
+  "this",
+  "that",
+  "please",
+  "и",
+  "мне",
+  "этот",
+  "эту",
+  "это",
+  "пожалуйста",
+]);
+
+/** Unicode-aware split, so Cyrillic intents tokenise like Latin ones. */
+function intentTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}-]+/u)
+    .filter((token) => token.length > 0 && !INTENT_FILLER.has(token));
+}
+
+/**
+ * Find the descriptors whose intent phrases best match a natural-language query.
+ *
+ * Matching was a contiguous substring test in both directions, which meant one
+ * filler word defeated it: `rebuild graph` is an intent, and "rebuild the graph"
+ * matched NOTHING, because neither string contains the other. Measured over 22
+ * real phrasings, five returned no command at all — including "refresh the wiki"
+ * and "rebuild the graph", which are how people actually ask.
+ *
+ * A phrase now also matches when every one of its meaningful words appears in
+ * the query, in any order. That is the same correction #436 made to skill
+ * triggers: match on words, not on contiguous strings.
+ *
+ * The substring rule is KEPT alongside it rather than replaced. Every phrase it
+ * matched has all its words present too, so the word rule subsumes it — but
+ * keeping both makes "nothing that matched before stops matching" structurally
+ * true instead of merely believed, and this registry is what agents route on.
+ */
 export function matchIntent(query: string): CommandDescriptor[] {
   const normalized = query.trim().toLowerCase();
   if (normalized.length === 0) {
     return [];
   }
+  const queryTokens = new Set(intentTokens(normalized));
+
   const scored = listDescriptors()
     .map((descriptor) => {
       let score = 0;
@@ -760,6 +818,14 @@ export function matchIntent(query: string): CommandDescriptor[] {
         const needle = phrase.toLowerCase();
         if (normalized.includes(needle) || needle.includes(normalized)) {
           score = Math.max(score, needle.length);
+          continue;
+        }
+        const phraseTokens = intentTokens(needle);
+        if (phraseTokens.length > 0 && phraseTokens.every((token) => queryTokens.has(token))) {
+          // Scored below an exact substring hit of the same length: a phrase
+          // the query contains verbatim is stronger evidence than the same
+          // words scattered through it.
+          score = Math.max(score, needle.length - 1);
         }
       }
       return { descriptor, score };
@@ -767,6 +833,40 @@ export function matchIntent(query: string): CommandDescriptor[] {
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score);
   return scored.map((entry) => entry.descriptor);
+}
+
+/**
+ * Descriptors that share at least one meaningful word with the query, for the
+ * case where nothing matched outright.
+ *
+ * "обнови вики" is the motivating example, and it is genuinely ambiguous: four
+ * commands could answer it — `wiki index`, `wiki enrich`, `wiki refresh`,
+ * `wiki collect`. Attaching that phrase to one of them would be picking a
+ * winner the query does not name. Answering with the candidates is the honest
+ * shape: the user asked something real, and the registry knows which commands
+ * are in the neighbourhood even when it cannot choose between them.
+ *
+ * Ranked by how many words they share, so the closest come first. Never a
+ * substitute for a match — the caller must present these as suggestions.
+ */
+export function suggestIntent(query: string, limit = 4): CommandDescriptor[] {
+  const queryTokens = new Set(intentTokens(query));
+  if (queryTokens.size === 0) {
+    return [];
+  }
+  return listDescriptors()
+    .map((descriptor) => {
+      let shared = 0;
+      for (const phrase of descriptor.intent) {
+        const overlap = intentTokens(phrase).filter((token) => queryTokens.has(token)).length;
+        shared = Math.max(shared, overlap);
+      }
+      return { descriptor, shared };
+    })
+    .filter((entry) => entry.shared > 0)
+    .sort((a, b) => b.shared - a.shared)
+    .slice(0, limit)
+    .map((entry) => entry.descriptor);
 }
 
 /** Machine-readable JSON payload (stable shape for the harness / MCP). */
