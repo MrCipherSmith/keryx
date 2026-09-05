@@ -115,6 +115,74 @@ and he did not object; I am recording that it was my call so that nobody later
 reads a shared decision where there was a unilateral one. It is reversible until
 the first scored run, and after that only by re-running everything.
 
+### Amendment, 2026-09-05: what the ablation actually removes
+
+**Prompted by one question from the operator — "so you included the keryx shell
+in the trial?" — which found two ways the arms were not what this document says
+they are.** Both were in the harness before any scored run.
+
+**The control arm was being obstructed by the system under test.** keryx
+registers its hooks in `.claude/settings.json`, which is *tracked in the
+repository* and was not on the strip list. So `context-off` lost `.metaproject/`
+and kept a `PreToolUse` hook that refuses raw `grep` and redirects it to
+`keryx ctx rg` — at a workspace that had just been deleted. That is not a
+control. It is the same agent with its hands tied and nothing given back, and
+any gap it produced would have been read as evidence for keryx.
+
+Now `stripContext` removes keryx's hook registrations too, by their
+`_keryxManaged` marker. Marker-based, not `rm -rf .claude/`: a repository's own
+hooks belong to **both** arms. vantage-frontend registers its own
+`scripts/claude-guard.mjs` the same way — that one fires on both sides and
+confounds nothing, and deleting it from the control arm only would be this same
+asymmetry pointed the other way.
+
+**On the intended primary repository, there was nothing to ablate.**
+`.metaproject/` is in vantage-frontend's `.gitignore` (line 41). Worktrees come
+out of git. So the `context-on` arm would have checked out with no graph, no
+wiki and no routing index — and the sweep would have compared two nearly
+identical trees, found the expected nothing, and produced
+
+> project-local context did not measurably improve file retrieval
+
+as a clean negative result about a context that was never in either arm. Fifty
+tasks, roughly $45, and a conclusion pointed the wrong way that nothing in the
+output would have contradicted.
+
+**`assertArmContext` now runs after setup and before the agent**, in both arms:
+`context-on` must have `.metaproject/`, `context-off` must have none of the
+context paths and no keryx-managed hooks. A run that cannot demonstrate the
+ablation happened **fails instead of scoring**. It fires before the agent is
+spawned, so a misconfigured sweep costs nothing.
+
+**And the graph was never in either arm.** The graph *database* is generated,
+not committed — this repository tracks three gdgraph files, a provenance stamp,
+a module map and a summary, and none of them answers `gdgraph affected`. So even
+on keryx, where `.metaproject/` is committed, `context-on` held a routing index
+pointing at a graph that did not exist. The smoke run ran in exactly that state,
+which is one more reason to read nothing into its numbers.
+
+The `context-on` arm is now provisioned before the agent starts: `keryx gdgraph
+build` always, and `keryx init` first when the checkout has no `.metaproject/`
+at all. Both derive **only from the worktree, at the parent commit**. Copying the
+maintainer's current `.metaproject/` in would import artifacts built from code
+the target pull request added — the answer, delivered inside the context arm's
+own workspace. The leakage check runs after provisioning, not before, so this is
+verified rather than asserted.
+
+`keryx init` registers the project user-globally, so the sweep releases each
+entry when its worktree goes; `keryx projects list` already carries twenty dead
+entries from earlier throwaway trees, and fifty tasks would have added fifty
+more.
+
+**Consequence for the repository choice, recorded rather than resolved.** The
+primary repository cannot supply a `context-on` arm out of git as it stands. The
+graph can be rebuilt inside each worktree at the parent commit — copying the
+current one in would import files the target PR created, which is answer
+leakage. **The wiki cannot be reconstructed at all**: it was never committed
+there, and no version of it exists for those revisions. Whatever runs on
+vantage-frontend therefore measures the graph and routing index without the
+wiki, and must be reported that way.
+
 ### Amendment, 2026-09-05: what "steps to first gold file" counts
 
 **Changed after the smoke run, before any scored run.** Recorded here rather than

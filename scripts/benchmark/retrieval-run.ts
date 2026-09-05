@@ -15,6 +15,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
+import { assertArmContext, stripKeryxHooks } from "./retrieval-ablation";
 import { extractPaths, scoreRetrieval, type ArmResult } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
 
@@ -37,12 +38,27 @@ export interface AgentPort {
   run(input: { cwd: string; prompt: string; model: string; gold: readonly string[] }): Promise<AgentAnswer>;
 }
 
+/**
+ * Brings the `context-on` worktree up to what a developer at that commit would
+ * have had — chiefly the graph, which is generated and never committed.
+ *
+ * Optional so the wiring tests can run without a keryx binary. Absent, the arm
+ * gets whatever git carried, and `assertArmContext` still refuses a tree with no
+ * `.metaproject/` at all.
+ */
+export interface ContextProvisioner {
+  provision(worktreePath: string): Promise<void>;
+  /** Undo any user-global side effect provisioning had. Best-effort. */
+  release(worktreePath: string): Promise<void>;
+}
+
 export interface RunOptions {
   readonly repoRoot: string;
   readonly worktreesDir: string;
   readonly agent: AgentPort;
   /** Chosen per task, before either arm runs. Both arms always share it. */
   readonly modelFor: (task: RetrievalTask) => string;
+  readonly provisioner?: ContextProvisioner;
 }
 
 export function buildPrompt(task: RetrievalTask): string {
@@ -68,6 +84,10 @@ export async function stripContext(worktreePath: string): Promise<void> {
   for (const entry of CONTEXT_PATHS) {
     await rm(path.join(worktreePath, entry), { recursive: true, force: true });
   }
+  // Deleting the files while leaving keryx's hooks registered produced a control
+  // arm that was forbidden to grep and redirected to a workspace that no longer
+  // existed. See retrieval-ablation.ts.
+  await stripKeryxHooks(worktreePath);
 }
 
 /**
@@ -97,8 +117,17 @@ export async function runArm(
   try {
     if (arm === "context-off") {
       await stripContext(created.path);
+    } else if (options.provisioner !== undefined) {
+      await options.provisioner.provision(created.path);
     }
 
+    // Before the agent, and before leakage: an arm that is not the arm it claims
+    // to be produces numbers that look exactly like results.
+    await assertArmContext(created.path, arm, CONTEXT_PATHS);
+
+    // After provisioning, deliberately. The graph is built inside the worktree
+    // at the parent commit, so it cannot contain files the target PR added —
+    // but that is a claim, and this is the check that holds it to account.
     const leakage = checkGoldLeakage(created.path, task.gold);
     if (leakage.leaked) {
       throw new Error(
@@ -125,6 +154,12 @@ export async function runArm(
       stepsToFirstGold: answer.stepsToFirstGold,
     };
   } finally {
+    if (arm === "context-on" && options.provisioner !== undefined) {
+      // Before the tree goes: `keryx init` registers the project user-globally,
+      // and fifty throwaway trees would leave fifty dead registry entries
+      // pointing at directories that no longer exist.
+      await options.provisioner.release(created.path);
+    }
     await port.remove(worktreeId);
   }
 }
