@@ -1,0 +1,25 @@
+{
+  "repoRoot": "/home/altsay/keryx",
+  "before": "2026-08-20",
+  "dropped": {
+    "notPullRequest": 336,
+    "choreOrDocs": 40,
+    "goldSetSize": 16,
+    "answerLeak": 28,
+    "noParent": 0
+  },
+  "verdict": {
+    "tasks": 13,
+    "recallOn": 0.803113553113553,
+    "recallOff": 0.8287545787545787,
+    "recallGainPoints": -2.564102564102566,
+    "tokensOn": 1272684.923076923,
+    "tokensOff": 960592,
+    "costOn": 1.0018886692307691,
+    "costOff": 0.9490083461538461,
+    "meetsThreshold": false,
+    "reason": "recall gain -2.6 points is below the pre-registered 10"
+  },
+  "resumed": [],
+  "failed": []
+}
