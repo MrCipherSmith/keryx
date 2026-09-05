@@ -214,9 +214,28 @@ primary repository cannot supply a `context-on` arm out of git as it stands. The
 graph can be rebuilt inside each worktree at the parent commit — copying the
 current one in would import files the target PR created, which is answer
 leakage. **The wiki cannot be reconstructed at all**: it was never committed
-there, and no version of it exists for those revisions. Whatever runs on
-vantage-frontend therefore measures the graph and routing index without the
-wiki, and must be reported that way.
+there, and no version of it exists for those revisions.
+
+Measured on one real task from each repository, both arms, before any scored
+run:
+
+| repository | arm | wiki pages | graph db | routing index |
+|---|---|---|---|---|
+| keryx | `context-on` | **51** | yes | yes |
+| keryx | `context-off` | 0 | no | no |
+| vantage-frontend | `context-on` | **2** | yes | yes |
+| vantage-frontend | `context-off` | 0 | no | no |
+
+The two on vantage-frontend are `testing/README.md` and
+`testing/conventions.md`, which `keryx init` generates for any repository. They
+are boilerplate, not a wiki of that codebase. Against keryx's 51 curated pages
+that is the difference between having a wiki and not having one — but it is two
+rather than zero, and the earlier claim of "no wiki" was loose.
+
+So the primary sweep measures **the graph and routing index without a wiki**,
+and the secondary sweep on keryx is the only place a wiki is in the arm at all.
+Every ArmResult carries these counts, so this is checkable in the results rather
+than taken on the author's word.
 
 ### Amendment, 2026-09-05: what "steps to first gold file" counts
 
