@@ -106,7 +106,18 @@ export interface ArmResult {
   readonly score: RetrievalScore;
   readonly toolCalls: number;
   readonly contextTokens: number;
-  /** Tool calls before the first gold file was named; null if never named. */
+  /**
+   * What the arm actually cost. Recorded because the pre-registration says it is
+   * — and it was not, until this was added: the adapter read `total_cost_usd`
+   * and `runArm` dropped it on the floor, so the document promised a number
+   * nothing kept. Reported, never part of the rule; prices change, tokens do not.
+   */
+  readonly costUsd: number;
+  /**
+   * Tool calls made before the agent first HELD a gold path — named in a tool
+   * input or returned in a tool result. Null if it never did. See the 2026-09-05
+   * amendment in the pre-registration for why inputs alone were not enough.
+   */
   readonly stepsToFirstGold: number | null;
 }
 
@@ -117,6 +128,9 @@ export interface Verdict {
   readonly recallGainPoints: number;
   readonly tokensOn: number;
   readonly tokensOff: number;
+  /** Mean dollar cost per arm. Reported for the write-up; not part of the rule. */
+  readonly costOn: number;
+  readonly costOff: number;
   readonly meetsThreshold: boolean;
   readonly reason: string;
 }
@@ -145,6 +159,8 @@ export function decide(results: readonly ArmResult[]): Verdict {
       recallGainPoints: 0,
       tokensOn: 0,
       tokensOff: 0,
+      costOn: 0,
+      costOff: 0,
       meetsThreshold: false,
       reason: "no task has both arms — nothing to compare",
     };
@@ -162,6 +178,10 @@ export function decide(results: readonly ArmResult[]): Verdict {
   const recallOff = mean(offPaired.map((r) => r.score.recall));
   const tokensOn = mean(onPaired.map((r) => r.contextTokens));
   const tokensOff = mean(offPaired.map((r) => r.contextTokens));
+  // Computed alongside tokens and deliberately absent from every line below
+  // that decides anything.
+  const costOn = mean(onPaired.map((r) => r.costUsd));
+  const costOff = mean(offPaired.map((r) => r.costUsd));
 
   const recallGainPoints = (recallOn - recallOff) * 100;
   const cheaper = tokensOn <= tokensOff;
@@ -173,5 +193,16 @@ export function decide(results: readonly ArmResult[]): Verdict {
       ? `recall gain ${recallGainPoints.toFixed(1)} points is below the pre-registered ${RECALL_GAIN_THRESHOLD_POINTS}`
       : `recall gain ${recallGainPoints.toFixed(1)} points was bought with more context (${tokensOn.toFixed(0)} vs ${tokensOff.toFixed(0)} tokens)`;
 
-  return { tasks: paired.length, recallOn, recallOff, recallGainPoints, tokensOn, tokensOff, meetsThreshold, reason };
+  return {
+    tasks: paired.length,
+    recallOn,
+    recallOff,
+    recallGainPoints,
+    tokensOn,
+    tokensOff,
+    costOn,
+    costOff,
+    meetsThreshold,
+    reason,
+  };
 }

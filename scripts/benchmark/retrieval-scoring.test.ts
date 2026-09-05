@@ -87,6 +87,7 @@ function arm(over: Partial<ArmResult> & Pick<ArmResult, "taskId" | "arm">): ArmR
     score: { recall: 0, precision: 0, f1: 0, matched: [], missed: [], extra: [] },
     toolCalls: 0,
     contextTokens: 1000,
+    costUsd: 0,
     stepsToFirstGold: null,
     ...over,
   };
@@ -132,6 +133,34 @@ describe("decide — the pre-registered rule", () => {
     expect(verdict.recallGainPoints).toBeCloseTo(20, 5);
     expect(verdict.meetsThreshold).toBe(false);
     expect(verdict.reason).toContain("bought with more context");
+  });
+
+  test("dollar cost is reported", () => {
+    // The pre-registration says cost is recorded. It said so while the runner
+    // was throwing the adapter's `total_cost_usd` away, which made the sentence
+    // false. This is the test that keeps it true.
+    const verdict = decide([
+      arm({ taskId: "t1", arm: "context-on", costUsd: 0.5 }),
+      arm({ taskId: "t1", arm: "context-off", costUsd: 1.25 }),
+    ]);
+    expect(verdict.costOn).toBeCloseTo(0.5, 5);
+    expect(verdict.costOff).toBeCloseTo(1.25, 5);
+  });
+
+  test("dollar cost does NOT move the verdict", () => {
+    // Prices change and tokens do not, so a threshold that moved with a price
+    // list would not be a threshold. Same recall and tokens, wildly different
+    // bills, identical decision.
+    const cheap = decide([
+      withRecall("t1", "context-on", 0.9),
+      withRecall("t1", "context-off", 0.7),
+    ]);
+    const dear = decide([
+      arm({ ...withRecall("t1", "context-on", 0.9), costUsd: 999 }),
+      arm({ ...withRecall("t1", "context-off", 0.7), costUsd: 0.01 }),
+    ]);
+    expect(dear.meetsThreshold).toBe(cheap.meetsThreshold);
+    expect(dear.reason).toBe(cheap.reason);
   });
 
   test("only tasks with both arms count", () => {
