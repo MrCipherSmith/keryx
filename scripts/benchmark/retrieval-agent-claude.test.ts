@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildClaudeArgs, contextTokensOf, parseStream } from "./retrieval-agent-claude";
+import { buildClaudeArgs, contextTokensOf, interpretRun, parseStream } from "./retrieval-agent-claude";
 
 describe("buildClaudeArgs", () => {
   test("excludes user-global MCP servers", () => {
@@ -57,6 +57,48 @@ function resultEvent(over: Record<string, unknown> = {}): string {
     ...over,
   });
 }
+
+describe("interpretRun", () => {
+  const ctx = { timedOut: false, timeoutMs: 720_000, model: "m", cwd: "/tmp/t" };
+  const ok = {
+    text: "src/a.ts",
+    toolCalls: 3,
+    contextTokens: 100,
+    costUsd: 0.1,
+    stepsToFirstGold: 2,
+    isError: false,
+  };
+
+  test("a timeout throws rather than scoring as zero recall", () => {
+    // A killed process emits no `result` event, so the transcript parses to
+    // empty text — which scores zero recall and looks exactly like an arm that
+    // searched honestly and found nothing. Those mean opposite things about the
+    // context under test. In a five-hour sweep this would have recorded a
+    // twelve-minute hang as a confident zero, and credited whichever arm hung
+    // less often.
+    expect(() => interpretRun({ ...ok, text: "" }, { ...ctx, timedOut: true })).toThrow(/exceeded 720s/);
+  });
+
+  test("an error result throws", () => {
+    expect(() => interpretRun({ ...ok, isError: true }, ctx)).toThrow(/reported an error/);
+  });
+
+  test("a transcript with no final answer throws", () => {
+    // Same reasoning one step out: a run that ended without answering did not
+    // answer wrongly, it did not answer.
+    expect(() => interpretRun({ ...ok, text: "   " }, ctx)).toThrow(/no final answer/);
+  });
+
+  test("a good run comes through unchanged", () => {
+    expect(interpretRun(ok, ctx)).toEqual({
+      text: "src/a.ts",
+      toolCalls: 3,
+      contextTokens: 100,
+      costUsd: 0.1,
+      stepsToFirstGold: 2,
+    });
+  });
+});
 
 describe("contextTokensOf", () => {
   test("sums everything the model read, cache included", () => {

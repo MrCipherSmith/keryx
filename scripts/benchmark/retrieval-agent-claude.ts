@@ -42,7 +42,7 @@ export function contextTokensOf(usage: StreamUsage | undefined): number {
   );
 }
 
-interface ParsedStream {
+export interface ParsedStream {
   readonly text: string;
   readonly toolCalls: number;
   readonly contextTokens: number;
@@ -183,7 +183,11 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
 
       const proc = Bun.spawn(["claude", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-      const timer = setTimeout(() => proc.kill(), timeoutMs);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        proc.kill();
+      }, timeoutMs);
       let stdout: string;
       try {
         stdout = await new Response(proc.stdout).text();
@@ -193,20 +197,50 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
       }
 
       const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
-      if (parsed.isError) {
-        // Surfaced rather than scored. A failed arm scored as zero recall would
-        // be indistinguishable from an arm that searched and found nothing,
-        // and the two mean opposite things about the context under test.
-        throw new Error(`claude reported an error for model ${model} in ${cwd}`);
-      }
-
-      return {
-        text: parsed.text,
-        toolCalls: parsed.toolCalls,
-        contextTokens: parsed.contextTokens,
-        costUsd: parsed.costUsd,
-        stepsToFirstGold: parsed.stepsToFirstGold,
-      };
+      return interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
     },
+  };
+}
+
+/**
+ * Turn a parsed transcript into an answer, or refuse to.
+ *
+ * Every refusal here exists for one reason: **a run that failed and a run that
+ * searched honestly and found nothing both produce zero recall, and they mean
+ * opposite things about the context under test.** Scoring the failures would
+ * quietly credit whichever arm crashed less often.
+ *
+ * The `is_error` case was guarded from the start. Two others were not:
+ *
+ *  - A killed process emits no `result` event, so the transcript parses to
+ *    empty text. A twelve-minute timeout in a five-hour sweep would have been
+ *    recorded as a confident zero.
+ *  - A transcript that simply ends without a final answer, for any other
+ *    reason, is the same shape.
+ *
+ * Separated from the spawn so it can be tested without paying for a model or
+ * waiting out a real timeout.
+ */
+export function interpretRun(
+  parsed: ParsedStream,
+  context: { timedOut: boolean; timeoutMs: number; model: string; cwd: string },
+): AgentAnswer {
+  if (context.timedOut) {
+    throw new Error(
+      `claude exceeded ${Math.round(context.timeoutMs / 1000)}s for model ${context.model} in ${context.cwd}`,
+    );
+  }
+  if (parsed.isError) {
+    throw new Error(`claude reported an error for model ${context.model} in ${context.cwd}`);
+  }
+  if (parsed.text.trim().length === 0) {
+    throw new Error(`claude produced no final answer for model ${context.model} in ${context.cwd}`);
+  }
+  return {
+    text: parsed.text,
+    toolCalls: parsed.toolCalls,
+    contextTokens: parsed.contextTokens,
+    costUsd: parsed.costUsd,
+    stepsToFirstGold: parsed.stepsToFirstGold,
   };
 }
