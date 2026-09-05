@@ -243,6 +243,32 @@ touch the decision rule, which is recall and context tokens only, and both of
 those are unchanged. The smoke run is on keryx, which is not the measured
 sample.
 
+### Amendment, 2026-09-05: the environment both arms actually run in
+
+Written after checking, rather than assuming, what the headless agent starts
+with. It was not the roster this harness documents.
+
+**Removed: user-global MCP servers.** Without `--strict-mcp-config` the init
+event reports **88 tools, 59 of them MCP**, from ten user-global servers — among
+them a code-search server holding its own index of the repository. With the
+flag: 29 tools, none MCP. Measured both ways.
+
+They reach both arms equally, so the comparison was not biased. But handing the
+control arm a second retrieval system makes `context-off` mean "without keryx
+and with something else instead" rather than "without keryx". The smoke run ran
+that way and nothing in its output disclosed it.
+
+**Kept, and disclosed rather than removed: the machine's user-global agent
+configuration.** A `~/.claude/CLAUDE.md` of general engineering rules, and
+user-global hooks including a command-rewriting one on `Bash`. These reach both
+arms identically and none of them mentions keryx or this repository, so they are
+noise rather than a confound. Removing them would mean running against a copied
+credential store, which is a worse trade than disclosing them.
+
+**Consequence.** Every number produced before this date, the smoke run included,
+was produced under a different tool roster than the sweep will use, and none of
+it carries forward.
+
 ## The threshold, fixed in advance
 
 **keryx wins** if `context-on` file recall exceeds `context-off` by **≥10
