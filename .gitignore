@@ -14,6 +14,13 @@ coverage/
 # `.claude/` ignore.
 .claude/worktrees/
 
+# Retrieval-measurement output. Holds one full checkout per arm while a task
+# runs — a fifty-task sweep creates a hundred of them — plus the raw per-arm
+# results. The results that matter are copied into
+# docs/requirements/keryx-context-measurement/data/ deliberately; everything
+# here is working space and must never be committed or source-indexed.
+.benchmark-runs/
+
 
 
 # Slate v3 (SLATE-22..26): external-hand slate storage — private, task-local
