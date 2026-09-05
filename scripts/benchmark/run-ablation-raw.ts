@@ -45,7 +45,11 @@ async function runSeed(task: AblationTask, seed: number, idSeq: () => string): P
     tools: [],
     systemInstruction: SYSTEM_INSTRUCTION,
     idSeq,
-    maxToolCalls: 0,
+    // `maxToolCalls` was passed here and silently ignored: AgentDeps has no such
+    // field, and scripts/ was outside the typecheck, so this cap never took effect.
+    // Removed rather than renamed to `maxRounds` — enabling a cap that was never
+    // applied would change what this script does and make new runs incomparable to
+    // the recorded ones without anyone noticing.
   };
   let tokens = 0;
   let sawUsage = false;

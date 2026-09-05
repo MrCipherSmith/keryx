@@ -13,8 +13,7 @@
 
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { checkGoldLeakage } from "../../src/metrics/leakage";
-import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
+import { assertAnswerUnreachable, createIsolatedCheckout } from "./retrieval-checkout";
 import { assertArmContext, stripKeryxHooks } from "./retrieval-ablation";
 import { extractPaths, scoreRetrieval, type ArmResult } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
@@ -93,11 +92,11 @@ export async function stripContext(worktreePath: string): Promise<void> {
 /**
  * Run one arm and score it.
  *
- * The gold set is verified unreachable before the agent starts. It is not
- * written into the worktree by this harness — but the task's own commit is in
- * the repository's history, and a worktree shares that history, so an agent with
- * a shell could in principle `git log` its way to the answer. The check is
- * therefore over paths, and the prompt never names the commit.
+ * The tree is a standalone shallow checkout at the parent, not a git worktree.
+ * A worktree shares the object database and every ref of the repository it came
+ * from, which left `git show <the commit being asked about>` returning the
+ * answer, and `git log --all --grep` finding that commit from the prompt's own
+ * words — the prompt IS the subject line. See retrieval-checkout.ts.
  */
 export async function runArm(
   task: RetrievalTask,
@@ -105,15 +104,14 @@ export async function runArm(
   options: RunOptions,
 ): Promise<ArmResult> {
   const model = options.modelFor(task);
-  const port = createGitWorktreePort({
+  const treePath = path.join(options.worktreesDir, `${task.id}-${arm}`);
+  await createIsolatedCheckout({
     repoRoot: options.repoRoot,
-    worktreesDir: options.worktreesDir,
+    path: treePath,
     // The parent, never the commit itself. At the commit, the answer is the diff.
     ref: task.parent,
   });
-
-  const worktreeId = `${task.id}-${arm}`;
-  const created = await port.create(worktreeId);
+  const created = { path: treePath };
   try {
     if (arm === "context-off") {
       await stripContext(created.path);
@@ -125,15 +123,16 @@ export async function runArm(
     // to be produces numbers that look exactly like results.
     await assertArmContext(created.path, arm, CONTEXT_PATHS);
 
-    // After provisioning, deliberately. The graph is built inside the worktree
-    // at the parent commit, so it cannot contain files the target PR added —
-    // but that is a claim, and this is the check that holds it to account.
-    const leakage = checkGoldLeakage(created.path, task.gold);
-    if (leakage.leaked) {
-      throw new Error(
-        `gold reachable in ${arm} worktree for ${task.id}: ${leakage.reachablePaths.join(", ")}`,
-      );
-    }
+    // After provisioning, deliberately. The graph is built inside the tree at
+    // the parent commit, so it cannot contain files the target PR added — but
+    // that is a claim, and this is the check that holds it to account.
+    //
+    // The check this replaces asserted the gold FILES were absent, which is
+    // backwards: they are the search space, not the answer key, and 51 of 60
+    // vantage-frontend tasks have all of theirs present at the parent. It also
+    // never ran — it read a `leaked` property the result type does not have,
+    // and `scripts/` was outside the typecheck.
+    assertAnswerUnreachable(created.path, task.sha);
 
     const answer = await options.agent.run({
       cwd: created.path,
@@ -160,7 +159,7 @@ export async function runArm(
       // pointing at directories that no longer exist.
       await options.provisioner.release(created.path);
     }
-    await port.remove(worktreeId);
+    await rm(treePath, { recursive: true, force: true });
   }
 }
 
