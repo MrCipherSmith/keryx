@@ -103,6 +103,32 @@ describe("provisionContextOn", () => {
   });
 });
 
+describe("KERYX_INIT", () => {
+  test("suppresses every git hook, because worktrees share the real repo's hooks", () => {
+    // `git rev-parse --git-path hooks` inside a worktree resolves to the MAIN
+    // repository's .git/hooks — checked in a real worktree, not assumed. The
+    // intended primary repository is the operator's work checkout, and fifty
+    // throwaway trees rewriting its hooks is not an acceptable cost of a
+    // measurement. This test exists so nobody tidies the flags away.
+    for (const flag of [
+      "--no-gdgraph-hook",
+      "--no-gdskills-hook",
+      "--no-health-hook",
+      "--no-testing-post-commit-hook",
+      "--no-testing-pre-push-hook",
+      "--no-security-hook",
+    ]) {
+      expect(KERYX_INIT).toContain(flag);
+    }
+  });
+
+  test("keeps the .claude agent hooks, which live in the worktree and ARE the arm", () => {
+    // That file is per-worktree, so it is isolated; and those hooks are part of
+    // what "keryx is set up here" means.
+    expect(KERYX_INIT).not.toContain("--no-security-agent-hook");
+  });
+});
+
 describe("forgetRegisteredProject", () => {
   test("releases the registry entry the throwaway tree created", async () => {
     // `keryx projects list` already shows twenty dead entries left by earlier

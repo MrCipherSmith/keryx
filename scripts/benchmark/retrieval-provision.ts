@@ -32,7 +32,30 @@ export interface ProvisionResult {
   readonly initialized: boolean;
 }
 
-export const KERYX_INIT: readonly string[] = ["keryx", "init", "--yes"];
+/**
+ * Git hooks are the one thing a worktree does NOT get its own copy of.
+ *
+ * `git rev-parse --git-path hooks` from inside a worktree resolves to the MAIN
+ * repository's `.git/hooks` — verified, not assumed. So a plain `keryx init`
+ * here would install and overwrite git hooks in the operator's real checkout,
+ * and the intended primary repository is his work repo. Fifty throwaway trees
+ * rewriting the hooks of a repository someone is working in is not an
+ * acceptable cost of measuring anything.
+ *
+ * The `.claude/settings.json` agent hooks are deliberately NOT suppressed: that
+ * file lives in the worktree, so it is isolated, and those hooks are part of
+ * what "keryx is set up here" means — which is the arm under test.
+ */
+const NO_GIT_HOOKS: readonly string[] = [
+  "--no-gdgraph-hook",
+  "--no-gdskills-hook",
+  "--no-health-hook",
+  "--no-testing-post-commit-hook",
+  "--no-testing-pre-push-hook",
+  "--no-security-hook",
+];
+
+export const KERYX_INIT: readonly string[] = ["keryx", "init", "--yes", ...NO_GIT_HOOKS];
 export const KERYX_GRAPH_BUILD: readonly string[] = ["keryx", "gdgraph", "build"];
 
 /**
