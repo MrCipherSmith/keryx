@@ -104,6 +104,24 @@ because it is invisible in the output otherwise.
 than half again the number that survive. It is the filter most likely to be
 quietly dropped by someone who wants a bigger sample. It is not optional.
 
+**What it does not drop, stated deliberately.** It rejects a query containing a
+gold file's basename or a path segment as a whole word. It does not reject
+shared vocabulary. A surviving task reads *"fix button theme issue"* with
+`ButtonConfirm.tsx` in its gold set: "button" is a word in the query and a
+prefix of the filename, and that is a hint.
+
+Tightening it to catch prefixes would reject most real frontend work — a change
+about buttons touches files with "button" in the name, which is the domain
+rather than a leak — and would bias the sample toward pull requests whose prose
+happens to share no vocabulary with their filenames. That bias is worse than the
+hint, and it is the same failure this filter already had once: matching on
+substrings rejected *"refunds are charged twice"* because "charge" sits inside
+"charged".
+
+So the line is: **naming the file is a leak, sharing its vocabulary is the
+task.** Anyone who thinks that line is in the wrong place can move it and re-run
+— the extraction is deterministic and the filter counts are reported.
+
 ## Repositories
 
 **Primary: vantage-frontend**, 50 tasks. Private, so absent from pretraining,
