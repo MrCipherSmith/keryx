@@ -1,5 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { SOURCE_EXTENSIONS, SOURCE_FILE, sourcePathPattern } from "./retrieval-languages";
+import { isTestFile, SOURCE_EXTENSIONS, SOURCE_FILE, sourcePathPattern } from "./retrieval-languages";
+
+describe("isTestFile", () => {
+  test("excludes tests in every language's own convention", () => {
+    // Gold sets exclude tests. That was true for TypeScript and silently false
+    // for the rest: the first Java task drawn had three *IT.java files in a gold
+    // set of seven, so the same measurement scored TypeScript against production
+    // code and Java against production code plus its integration suite.
+    for (const path of [
+      "src/a.test.ts",
+      "src/a.spec.tsx",
+      "src/test/java/io/dev/FooIT.java",
+      "backend/src/test/java/io/dev/BarTest.java",
+      "app/BazTests.java",
+      "app/QuxITCase.java",
+      "pkg/test_thing.py",
+      "pkg/thing_test.py",
+      "tests/helpers.py",
+    ]) {
+      expect(isTestFile(path)).toBe(true);
+    }
+  });
+
+  test("keeps production code, including files whose names merely contain the words", () => {
+    for (const path of [
+      "src/main/java/io/dev/DataSourceService.java",
+      "src/tui/tui-shell.ts",
+      "src/latest/contest.ts",
+      "src/protests/index.ts",
+    ]) {
+      expect(isTestFile(path)).toBe(false);
+    }
+  });
+});
 
 describe("the source-language list", () => {
   test("covers every language gdgraph indexes", () => {

@@ -31,6 +31,32 @@ export const SOURCE_EXTENSIONS: readonly string[] = [
 export const SOURCE_FILE = new RegExp(`\\.(${SOURCE_EXTENSIONS.join("|")})$`);
 
 /**
+ * Tests, in each language's own convention.
+ *
+ * Gold sets exclude tests. That was already true for TypeScript through a
+ * `.test.`/`.spec.` check, and silently false for everything else: the first
+ * Java task drawn had three `*IT.java` files in its gold set out of seven, so
+ * the same measurement was scoring TypeScript against production files and Java
+ * against production files plus its integration suite. Whatever that difference
+ * is worth, it is not a property of the context under test.
+ *
+ * Java puts tests in `src/test/` and suffixes them `Test`/`Tests`/`IT`/`ITCase`.
+ * Python uses `test_*.py`, `*_test.py`, and `tests/` directories.
+ */
+const TEST_PATTERNS: readonly RegExp[] = [
+  /\.(test|spec)\./,
+  /(^|\/)src\/test\//,
+  /(Test|Tests|IT|ITCase)\.java$/,
+  /(^|\/)test_[^/]*\.py$/,
+  /_test\.py$/,
+  /(^|\/)tests?\//,
+];
+
+export function isTestFile(filePath: string): boolean {
+  return TEST_PATTERNS.some((pattern) => pattern.test(filePath));
+}
+
+/**
  * Finds source paths inside prose.
  *
  * The leading `/?` is load-bearing: without it an absolute answer like
