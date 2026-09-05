@@ -25,23 +25,32 @@ paragraph of its body. The **gold set** is the source files it changed.
 **Arms.** Two runs of the same task, differing only in what the worktree
 contains:
 
-| Arm | Worktree |
+| Arm | Tree |
 |---|---|
-| `context-on` | unmodified checkout: `.metaproject/`, `AGENTS.md`, `CLAUDE.md` present |
-| `context-off` | the same checkout with those removed before the agent starts |
+| `context-on` | `.metaproject/`, `AGENTS.md`, `CLAUDE.md` present, graph built at the parent commit |
+| `context-off` | the same checkout with those removed, and keryx's agent hooks removed with them |
 
 Both arms get the same model, the same prompt, the same budget, and the same
 tools. The only difference is whether the project's own context exists.
 
-**Isolation.** Each arm runs in its own git worktree checked out at the task's
-**parent commit** — the state before the PR landed. Running at `HEAD` would let
-the agent read the change it is being asked to locate, and both arms would score
-100%.
+**Isolation.** Each arm runs in its own **standalone shallow checkout** at the
+task's **parent commit** — the state before the PR landed. Running at `HEAD`
+would let the agent read the change it is being asked to locate, and both arms
+would score 100%.
 
-**Leakage.** The gold set is never written into a worktree. `checkGoldLeakage`
-(`src/metrics/leakage.ts`) runs before the agent starts and throws if any gold
-artifact is still reachable. This is the existing ablation harness's mechanism,
-reused rather than reinvented.
+Not a `git worktree`, which is what this said until 2026-09-05 and what the
+harness did. A worktree shares the object database and every ref of the
+repository it came from, so the commit under test was one git command away. See
+the amendment below.
+
+**Leakage.** `assertAnswerUnreachable` (`scripts/benchmark/retrieval-checkout.ts`)
+runs before the agent starts and refuses any tree in which the commit under test
+resolves, or which still has a remote to fetch it from.
+
+It is deliberately **not** a check that the gold files are absent. They are the
+search space, not the answer key — the task is to say which of them the change
+touched, and most of them exist at the parent. The earlier check asserted the
+opposite and would have thrown away 51 of 60 candidate tasks had it run at all.
 
 ## Filters, and what they cost
 
