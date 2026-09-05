@@ -130,28 +130,57 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
   return { text, toolCalls, contextTokens, costUsd, stepsToFirstGold, isError };
 }
 
+/**
+ * The exact argv every arm is run with.
+ *
+ * Exported so the flags can be asserted rather than trusted. One of them was
+ * missing for the whole of the smoke run, and nothing in the output said so —
+ * see `--strict-mcp-config` below.
+ */
+export function buildClaudeArgs(
+  prompt: string,
+  model: string,
+  allowedTools?: readonly string[],
+): string[] {
+  const args = [
+    "-p",
+    prompt,
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    model,
+    // The worktree is a throwaway checkout of a commit that already exists;
+    // there is nothing here to protect from the agent, and an approval prompt
+    // in a headless sweep is a hang, not a safeguard.
+    "--permission-mode",
+    "bypassPermissions",
+    // No user-global MCP servers. With no --mcp-config alongside it, none at
+    // all — measured, not assumed: without this flag the init event reports 88
+    // tools of which 59 are MCP, with it 29 and none.
+    //
+    // Among those 59 is a code-search server with its own index of the
+    // repository. It reaches both arms equally, so it does not bias the
+    // comparison — but handing the control arm a second retrieval system makes
+    // "without keryx" mean something other than what it says, and the smoke run
+    // was conducted that way without anyone noticing.
+    //
+    // The effect runs against keryx rather than for it, which is the safer
+    // direction. A measurement should not need that excuse.
+    "--strict-mcp-config",
+  ];
+  if (allowedTools !== undefined) {
+    args.push("--allowed-tools", ...allowedTools);
+  }
+  return args;
+}
+
 export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
 
   return {
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
-      const args = [
-        "-p",
-        prompt,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--model",
-        model,
-        // The worktree is a throwaway checkout of a commit that already exists;
-        // there is nothing here to protect from the agent, and an approval
-        // prompt in a headless sweep is a hang, not a safeguard.
-        "--permission-mode",
-        "bypassPermissions",
-      ];
-      if (options.allowedTools !== undefined) {
-        args.push("--allowed-tools", ...options.allowedTools);
-      }
+      const args = buildClaudeArgs(prompt, model, options.allowedTools);
 
       const proc = Bun.spawn(["claude", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
       const timer = setTimeout(() => proc.kill(), timeoutMs);

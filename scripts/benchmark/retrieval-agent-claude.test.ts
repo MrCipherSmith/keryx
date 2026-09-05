@@ -1,5 +1,32 @@
 import { describe, expect, test } from "bun:test";
-import { contextTokensOf, parseStream } from "./retrieval-agent-claude";
+import { buildClaudeArgs, contextTokensOf, parseStream } from "./retrieval-agent-claude";
+
+describe("buildClaudeArgs", () => {
+  test("excludes user-global MCP servers", () => {
+    // Measured, not assumed: without this flag the init event reports 88 tools
+    // of which 59 are MCP — including a code-search server with its own index of
+    // the repository. With it, 29 and none.
+    //
+    // That server reaches both arms equally, so it does not bias the
+    // comparison, but it makes "without keryx" mean "without keryx and with a
+    // different retrieval system". The smoke run was conducted that way and
+    // nothing in its output said so, which is why this is a test and not a
+    // comment.
+    expect(buildClaudeArgs("q", "m")).toContain("--strict-mcp-config");
+  });
+
+  test("both arms are run with identical flags apart from nothing at all", () => {
+    // The arms differ in the tree they run in. If they ever differ in argv, the
+    // measurement is comparing two things and reporting one.
+    expect(buildClaudeArgs("q", "claude-sonnet-5")).toEqual(buildClaudeArgs("q", "claude-sonnet-5"));
+  });
+
+  test("carries the prompt and model through", () => {
+    const args = buildClaudeArgs("find the bug", "claude-opus-5");
+    expect(args[args.indexOf("-p") + 1]).toBe("find the bug");
+    expect(args[args.indexOf("--model") + 1]).toBe("claude-opus-5");
+  });
+});
 
 // Parsed against transcripts shaped like the real one — captured from a live
 // `claude -p --output-format stream-json` run, not invented. The event kinds,
