@@ -87,7 +87,9 @@ import {
   renderGdskillsPostCommitHook,
   renderHealthPostCommitHook,
   renderHooksReadme,
+  renderIndexGateMarkdown,
   renderIndexMarkdown,
+  ROUTING_FILENAME,
   renderMetaprojectCoreReadme,
   renderMetaprojectDashboardHtml,
   renderMetaprojectDashboardPostCommitHook,
@@ -292,8 +294,26 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
     renderProjectRulesSkillReadme({ sources: ruleSources }),
   );
+  // index.md is the compact gate; the full router lives beside it in routing.md.
+  // The gate is read once per agent and then re-sent on every turn, so its size
+  // is multiplied by task length — see
+  // docs/requirements/keryx-context-measurement/context-loading.md.
   await writeTextIfChanged(
     path.join(metaprojectRoot, "index.md"),
+    renderIndexGateMarkdown({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
+      enableSecurity,
+    }),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, ROUTING_FILENAME),
     renderIndexMarkdown({
       enableGdgraph,
       enableGdctx,
