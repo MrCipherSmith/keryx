@@ -338,6 +338,92 @@ ${enableMemory ? "keryx memory index" : ""}
 `;
 }
 
+/** The file the full router moved to when `index.md` became a gate. */
+export const ROUTING_FILENAME = "routing.md";
+
+/**
+ * The compact gate that `index.md` became.
+ *
+ * Measured 2026-09-05: the full router is ~3,226 tokens, and an agent re-sends
+ * its entire transcript on every turn — so reading it once costs ~3,226 ×
+ * turns, roughly 80,000 tokens on a 25-turn task and about half the context
+ * gap the retrieval benchmark measured against keryx. Its size is multiplied by
+ * the length of every task, which is why it is worth cutting even though it is
+ * read only once.
+ *
+ * So this carries pointers and the two rules that actually bind behaviour, and
+ * nothing else. Everything removed still exists, one line away, in
+ * `routing.md` — an agent that needs the full router fetches it.
+ *
+ * Deliberately NOT here: the intent-router table, module descriptions, the data
+ * inventory, and the numbered workflow. Those are prose an agent re-reads on
+ * every turn of every task, including the many where none of it applies.
+ *
+ * See docs/requirements/keryx-context-measurement/context-loading.md.
+ */
+export function renderIndexGateMarkdown({
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+  enableSecurity = false,
+}: {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+}): string {
+  const rows = [
+    enableGdgraph
+      ? "| where is X, what depends on it, what breaks | `keryx gdgraph affected <file>` |"
+      : "",
+    enableGdctx ? "| search code | `keryx ctx rg \"<pattern>\" [path]` |" : "",
+    enableGdctx ? "| run a command with long output | `keryx ctx run -- <cmd>` |" : "",
+    enableGdwiki ? "| architecture, domain, decisions, why | `wiki/index.md`, `keryx wiki ask` |" : "",
+    enableMemory ? "| past decisions, lessons, constraints | `keryx memory search \"<query>\"` |" : "",
+    enableTesting ? "| what tests to run, test context | `keryx test related <file>` |" : "",
+    enableHealth ? "| lint/type/test/quality status | `keryx health run` |" : "",
+    enableTasks ? "| current work state | `keryx flow status` |" : "",
+    enableSecurity ? "| secrets, PII, prompt injection | `keryx security check-output` |" : "",
+    enableGdskills ? "| implement, review, refactor, plan | `skills/catalog.md` |" : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const binding = [
+    enableGdctx
+      ? "- Code search goes through `keryx ctx rg`, never bare `rg`/`grep`."
+      : "",
+    enableGdgraph
+      ? "- The graph answers from the last `keryx gdgraph build`, not the working tree. Rebuild after adding, renaming or moving files, or say the answer predates them."
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `# Metaproject Index
+
+Routing pointers. Everything else is in [\`${ROUTING_FILENAME}\`](${ROUTING_FILENAME}) — read it only if what you need is not below.
+
+| need | use |
+|---|---|
+${rows || "| any repository task | `rules/` |"}
+
+${binding}
+
+Treat requests as intents; the user does not need to know these command names.
+`;
+}
+
 export type MetaprojectDashboardData = {
   generatedAt?: string;
   health?: {

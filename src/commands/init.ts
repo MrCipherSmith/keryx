@@ -109,7 +109,9 @@ import {
   renderMetaprojectCoreReadme,
   renderMetaprojectGitignoreBlock,
   renderMetaprojectDashboardHtml,
+  renderIndexGateMarkdown,
   renderIndexMarkdown,
+  ROUTING_FILENAME,
   renderMetaprojectReadme,
   renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
@@ -725,8 +727,25 @@ export async function initCommand(args: string[]): Promise<void> {
     renderProjectRulesSkillReadme({ sources: agentRuleSources }),
   );
 
+  // index.md is the compact gate; the full router is routing.md beside it. The
+  // gate is re-sent on every turn, so its size is multiplied by task length —
+  // docs/requirements/keryx-context-measurement/context-loading.md.
   await writeTextIfChanged(
     path.join(metaprojectRoot, "index.md"),
+    renderIndexGateMarkdown({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
+      enableSecurity,
+    }),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, ROUTING_FILENAME),
     renderIndexMarkdown({
       enableGdgraph,
       enableGdctx,

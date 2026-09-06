@@ -157,6 +157,7 @@ test("recovers manifest and dashboard for existing metaprojects without metaproj
     };
     const dashboard = await readFile(path.join(root, ".metaproject", "keryx-dashboard.html"), "utf8");
     const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
+    const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
 
     expect(manifest.modules.gdgraph?.enabled).toBe(true);
     expect(manifest.modules.gdctx?.enabled).toBe(true);
@@ -179,8 +180,12 @@ test("recovers manifest and dashboard for existing metaprojects without metaproj
     expect(postCommitHook).not.toContain("keryx test analyze");
     expect(postCommitHook).not.toContain("keryx update --skip-runtime >/dev/null");
     expect(postCommitHook).not.toContain("keryx update --skip-runtime --no-tasks");
-    expect(index).toContain("| gdgraph |");
-    expect(index).not.toContain("| _none_ | No modules enabled yet | - |");
+    // index.md is the compact gate; the module table lives in routing.md beside
+    // it. Both are asserted so a split that wrote only one would fail here.
+    expect(routing).toContain("| gdgraph |");
+    expect(routing).not.toContain("| _none_ | No modules enabled yet | - |");
+    expect(index).toContain("routing.md");
+    expect(index).toContain("keryx gdgraph affected");
     expect(await readFile(graphStoragePath, "utf8")).toBe(graphStorage);
     expect(await readFile(healthReportPath, "utf8")).toBe(healthReport);
     });
