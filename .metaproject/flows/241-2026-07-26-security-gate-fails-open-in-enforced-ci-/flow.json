@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 2,
+  "id": "241",
+  "slug": "security-gate-fails-open-in-enforced-ci-",
+  "title": "Security gate fails open in enforced/ci: guardOutput/redactRaw/securityFlowGate swallow engine errors and a corrupt manifest silently disables enforcement",
+  "status": "blocked",
+  "createdAt": "2026-07-26T00:45:13.255Z",
+  "updatedAt": "2026-09-06T12:59:43.399Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:88bc2a188c7ba08cab3cc8874c286587ebf0ca948f6b8b80bdcbd67b530b7a6a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "guardOutput + explicit engine-error decision: resolve mode before fallible work, fail closed in enforced/ci",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "redactRaw + redactToolOutput: no unredacted content on error in blocking modes; failure marker on the result",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "securityFlowGate + flow complete: never omit the gate; skipped must not pass in a blocking workspace",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "isSecurityEnabled: distinguish corrupt manifest from absent manifest",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-26T00:45:13.255Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-26T00:47:11.852Z",
+      "event": "task-added",
+      "detail": "T5: guardOutput + explicit engine-error decision: resolve mode before fallible work, fail closed in enforced/ci"
+    },
+    {
+      "at": "2026-07-26T00:47:11.966Z",
+      "event": "task-added",
+      "detail": "T6: redactRaw + redactToolOutput: no unredacted content on error in blocking modes; failure marker on the result"
+    },
+    {
+      "at": "2026-07-26T00:47:12.093Z",
+      "event": "task-added",
+      "detail": "T7: securityFlowGate + flow complete: never omit the gate; skipped must not pass in a blocking workspace"
+    },
+    {
+      "at": "2026-07-26T00:47:12.211Z",
+      "event": "task-added",
+      "detail": "T8: isSecurityEnabled: distinguish corrupt manifest from absent manifest"
+    },
+    {
+      "at": "2026-07-26T00:47:16.818Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-26T00:47:16.917Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-06T12:59:04.082Z",
+      "event": "renumbered",
+      "detail": "125 -> 241: id 125 was minted in an isolated worktree on 2026-07-26 and never pushed; main independently allocated 125 to the harness-shell-security-hardening flow. Renumbered to the first id free in the clone allocation ledger so the B-04 planning package can land without a collision."
+    },
+    {
+      "at": "2026-09-06T12:59:43.399Z",
+      "event": "blocked",
+      "detail": "Parked 2026-09-06: planning only, no implementation started. Package was written 2026-07-26 in a worktree that is being cleaned up; re-verified against main 0bc6418 (all five fail-open holes still present). Unblock when B-04 is picked up."
+    }
+  ],
+  "previousStatus": "in-progress"
+}

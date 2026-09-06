@@ -158,5 +158,13 @@
     "toDir": "230-2026-09-04-graph-freshness-is-not-routed-index-md-t",
     "at": "2026-09-04T17:30:31.302Z",
     "reason": "id 227 was allocated against a stale local main; upstream already has flow 227 (Living Wiki + Graph phase 2)"
+  },
+  {
+    "from": "125",
+    "to": "241",
+    "fromDir": "125-2026-07-26-security-gate-fails-open-in-enforced-ci-",
+    "toDir": "241-2026-07-26-security-gate-fails-open-in-enforced-ci-",
+    "at": "2026-09-06T12:59:04.081Z",
+    "reason": "id 125 was minted in an isolated worktree on 2026-07-26 and never pushed; main independently allocated 125 to the harness-shell-security-hardening flow. Renumbered to the first id free in the clone allocation ledger so the B-04 planning package can land without a collision."
   }
 ]
