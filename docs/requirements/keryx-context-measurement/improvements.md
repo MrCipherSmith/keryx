@@ -32,10 +32,12 @@ with only a small core preloaded — in Claude Code, `CLAUDE.md` up front and
 `glob`/`grep` on demand
 ([Anthropic, effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
 
-keryx currently does close to the opposite for this task: a routing index, a
-skills catalogue and wiki pages are eagerly present, and the agent *still*
-explores. That is exactly our measurement — **identical tool calls (24.6 vs
-24.6) at 16% more tokens.** Preload cost paid, exploration not reduced.
+keryx mostly follows this already — the graph and wiki are queried, not loaded.
+Its deviation is narrower and, it turns out, more expensive than it looks: a
+mandatory ~4,300-token entry block that is re-read every turn, plus routed tool
+output that is larger per call than raw grep. The measurement shows the effect —
+**identical tool calls (24.6 vs 24.6) at 16% more tokens.** Entry cost paid on
+every turn, exploration not reduced. See change 3 for the arithmetic.
 
 The second finding is that grep-style search wrapped in a good harness matches
 or beats embedding retrieval on coding tasks — Claude Code moved off vector RAG
@@ -75,12 +77,47 @@ Either build that path — description → candidate symbols → files, one call
 stop claiming the graph helps with it. The pre-registration's negative result is
 really a result about this missing edge.
 
-### 3. Stop preloading; make context addressable
+### 3. Shrink the eager block — it is charged once per turn, not once per task
 
-Follow the just-in-time pattern: a few hundred tokens of index naming what
-exists, and everything else pulled on demand. The routing rules currently
-consume budget on every task including the ones where nothing in the workspace
-is relevant.
+**Correction to an earlier draft of this document.** I wrote that keryx
+"preloads" the graph and wiki. It does not, and the operator was right to push
+back. The graph is 1.1 MB on disk under `.metaproject/data/gdgraph/` and is
+reached only through CLI queries; the wiki is files, read on demand. Almost
+everything in keryx is already just-in-time.
+
+What *is* eager is small, and that is exactly why it was easy to get wrong:
+
+| loaded before any work | tokens |
+|---|---|
+| `CLAUDE.md` (auto-loaded by the runtime) | ~1,069 |
+| `.metaproject/index.md` (forced by the HARD GATE) | ~3,226 |
+| **total** | **~4,295** |
+
+4,295 tokens against a 210,775-token gap looks negligible. It is not, because
+**an agent re-reads its entire prefix on every turn.** Measured on a live
+transcript: four turns at 41,556 / 41,681 / 41,823 / 42,133 tokens, summing to
+exactly the total the run reports. The prefix is charged again each turn.
+
+So the eager block costs `4,295 × turns`:
+
+| turns | cost of the eager block |
+|---|---|
+| 10 | 42,950 |
+| 25 | 107,375 |
+| 40 | 171,800 |
+
+At the observed ~25 tool calls, **that alone accounts for roughly half the
+measured 210,775-token gap.** The rest is larger tool outputs — routed search
+and graph queries returning more per call than raw grep.
+
+This changes the fix. It is not "stop preloading", it is **make the mandatory
+entry block as small as possible**, because every token in it is multiplied by
+the length of the task. The HARD GATE currently forces a 3,226-token routing
+index before any work, on every task, including the many where nothing in the
+workspace turns out to be relevant.
+
+A gate that costs ~300 tokens and names where to look would carry the same
+routing information at a tenth of the compounded price.
 
 ### 4. Make routed search cheaper than raw grep, not merely mandatory
 
