@@ -37,6 +37,46 @@ This is the whole reason the operator's instinct is right: the index must be
 small not because disk is precious, but because **its size is multiplied by the
 length of every task.**
 
+## 2a. "Isn't reading it once at the start enough?"
+
+Yes — and the rule already says once. The gate reads *"Before the **first**
+shell command, search, grep, file read…"*. Nothing instructs a re-read on every
+model call.
+
+**Reading once is not the same as costing once.** The read lands in the
+transcript, and the transcript is re-sent on every subsequent turn. So a single
+3,226-token read is billed once per turn for the rest of the task:
+
+| main agent turns | cost of that one read |
+|---|---|
+| 10 | 32,260 |
+| 25 | 80,650 |
+| 40 | 129,040 |
+
+There is no way to read it once and pay once. The only lever is **making it
+smaller**.
+
+### And two rules multiply the reads themselves
+
+- *"If you create or switch to a git worktree, repeat the hard gate in that
+  worktree root"* — once per worktree.
+- *"Every subagent prompt must include the exact project/worktree root and
+  require reading `<project-root>/.metaproject/index.md`"* — **once per
+  subagent**, each then re-read across that subagent's own turns.
+
+| shape | routing index alone |
+|---|---|
+| main, 25 turns | 80,650 |
+| main + 3 subagents × 10 turns | **177,430** |
+| main + 5 subagents × 10 turns | **241,950** |
+| same, with a 300-token gate (main + 3 subagents) | **16,500** |
+
+That last row is the point: **~11× cheaper for the same routing.**
+
+It also cuts against the reason subagents exist. The intent is to give each one
+a narrow slice of context; the rule as written makes every one of them load the
+full 3,226-token index first.
+
 ## 3. `keryx orient` exists, is not installed, and currently makes this worse
 
 `keryx orient` advertises exactly the right thing — *"inject a compact graph map
