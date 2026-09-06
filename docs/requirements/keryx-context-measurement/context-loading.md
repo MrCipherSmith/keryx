@@ -77,6 +77,51 @@ It also cuts against the reason subagents exist. The intent is to give each one
 a narrow slice of context; the rule as written makes every one of them load the
 full 3,226-token index first.
 
+## 2b. Should every subagent be made to read the index? No — but "let the parent decide" is only half the fix
+
+The operator's proposal: the parent judges. A subagent that must navigate the
+codebase is told to read the index; one doing narrow work is not.
+
+The direction is right, and the change is cheap — **the requirement is prose in
+`CLAUDE.md` only.** It is not in `subagent-dispatch.schema.json` or any contract,
+so nothing needs migrating.
+
+Two things to get right, though.
+
+**A pure judgement call defaults to wrong.** "Parent decides" makes skipping the
+cheapest path, and a subagent stranded without routing fails quietly — it greps,
+gets redirected by the hook, and improvises. Nobody sees it. A rule you cannot
+check is worse than a rule that is merely expensive.
+
+**And it treats the symptom.** The reason this decision feels weighty is that
+the index costs 3,226 tokens. At 300 it costs a subagent ~3,000 tokens across
+ten turns and nobody needs to decide anything.
+
+### The shape that gets both
+
+**Default: inline the pointers, do not instruct a read.**
+
+The parent already knows the routing. Passing ~300 tokens of *capability →
+command* pointers directly in the dispatch prompt is strictly cheaper than
+telling the subagent to read a file, because a read also costs a tool call, a
+tool result, and both stay in that subagent's transcript for every later turn.
+Inlining removes the round-trip entirely.
+
+**Escalate only when the work is navigation-heavy:** the parent adds *"read
+`.metaproject/index.md`"* for a subagent that will genuinely explore the
+codebase.
+
+| dispatch | routing cost per subagent, 10 turns |
+|---|---|
+| today: read the full index | ~32,260 + read round-trip |
+| inlined 300-token pointers | ~3,000, no round-trip |
+| escalated, navigation-heavy | as today, but only where it pays |
+
+**Caveat on all of the above: this is arithmetic from the rules, not a
+measurement.** The benchmark ran single agents with no subagents. The per-turn
+re-send is measured; the subagent multiplier is derived from the token counts
+and the rule text. It should be measured before it is claimed.
+
 ## 3. `keryx orient` exists, is not installed, and currently makes this worse
 
 `keryx orient` advertises exactly the right thing — *"inject a compact graph map
