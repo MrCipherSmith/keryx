@@ -29,7 +29,10 @@ test("install writes an optional bootstrap block near the top and preserves user
     expect(content).toContain("Hard gate");
     expect(content).toContain("before the first plan, search, grep, file read");
     expect(content).toContain("If you create or switch to a git worktree");
-    expect(content).toContain("Every subagent prompt must include the project/worktree root");
+    expect(content).toContain("Give every subagent prompt the project/worktree root");
+    // Narrow subagents must not be made to load the whole routing index; see
+    // docs/requirements/keryx-context-measurement/context-loading.md for the cost.
+    expect(content).toContain("only when it will navigate the codebase itself");
     expect(content).toContain("Use local user rules.");
     expect(content).toContain(AGENT_BOOTSTRAP_END);
   } finally {

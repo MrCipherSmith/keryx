@@ -114,6 +114,21 @@ test("root entrypoint block carries the same rebuild rule as the index", () => {
   expect(block).toContain(".metaproject/modules/gdgraph.md");
 });
 
+test("subagents are not all made to read the full routing index", () => {
+  // Measured 2026-09-05: `.metaproject/index.md` is ~3,226 tokens, and an agent
+  // re-sends its whole transcript on every turn — so one read costs ~3,226 x
+  // turns. The old rule required EVERY subagent to read it, which at three
+  // subagents of ten turns each is ~177,000 tokens of routing index alone, and
+  // defeats the reason subagents exist: a narrow slice of context.
+  //
+  // The rule is prose, so nothing but this test stops it drifting back.
+  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: true });
+
+  expect(block).not.toMatch(/Every subagent prompt must .*require reading/);
+  expect(block).toMatch(/inline the few routing pointers/i);
+  expect(block).toMatch(/only when it will navigate the codebase itself/i);
+});
+
 test("gdgraph skill refresh policy describes the hook the template actually renders", () => {
   const skill = renderGdgraphSkillReadme();
 
