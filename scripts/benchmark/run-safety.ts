@@ -82,7 +82,11 @@ async function runOnce(prompt: string, systemInstruction: string, tools: Interac
     tools,
     systemInstruction,
     idSeq,
-    maxToolCalls: 8,
+    // `maxToolCalls` was passed here and silently ignored: AgentDeps has no such
+    // field, and scripts/ was outside the typecheck, so this cap never took effect.
+    // Removed rather than renamed to `maxRounds` — enabling a cap that was never
+    // applied would change what this script does and make new runs incomparable to
+    // the recorded ones without anyone noticing.
   };
   const io: AgentIO = { write: () => undefined };
   const history: NormalizedMessage[] = [];

@@ -1026,7 +1026,9 @@ async function main(): Promise<void> {
         platform: process.platform,
         bun: Bun.version,
         sandboxShellMode: resolveShellSandboxMode(process.env),
-        maxToolCalls: resolveAgentMaxToolCalls(),
+        // resolveAgentMaxToolCalls() does not exist and never did — this line threw
+        // whenever the JSON report was written. The real guard is round-based.
+        maxRounds: resolveAgentMaxRounds(),
         allowEgress: ALLOW_EGRESS,
         findings,
       },
