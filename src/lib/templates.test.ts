@@ -3,7 +3,9 @@ import {
   renderGdgraphManifest,
   renderGdgraphSkillReadme,
   renderHooksReadme,
+  renderIndexGateMarkdown,
   renderIndexMarkdown,
+  ROUTING_FILENAME,
   renderMetaprojectGitignoreBlock,
 } from "./templates";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
@@ -112,6 +114,65 @@ test("root entrypoint block carries the same rebuild rule as the index", () => {
   expect(block).toContain("<!-- keryx:index -->");
   expect(block).toMatch(/last `keryx gdgraph build`, not from the working tree/);
   expect(block).toContain(".metaproject/modules/gdgraph.md");
+});
+
+test("the index gate stays small, because its size is multiplied by task length", () => {
+  // Measured 2026-09-05: the full router is ~3,226 tokens and an agent re-sends
+  // its whole transcript every turn, so reading it once costs ~3,226 x turns —
+  // ~80,000 on a 25-turn task, about half the context gap the retrieval
+  // benchmark measured against keryx.
+  //
+  // This bound is the point of the split. If the gate creeps back toward the
+  // router's size, the split has quietly undone itself and nothing else would
+  // say so.
+  const gate = renderIndexGateMarkdown({ ...ALL_MODULES });
+
+  expect(gate.length).toBeLessThan(2000); // ~500 tokens, against ~3,226 before
+  expect(gate).toContain(ROUTING_FILENAME);
+});
+
+test("the gate carries pointers and the rules that bind, not prose", () => {
+  const gate = renderIndexGateMarkdown({ ...ALL_MODULES });
+
+  // Pointers an agent needs to act at all.
+  expect(gate).toContain("keryx gdgraph affected");
+  expect(gate).toContain("keryx ctx rg");
+  // The two rules that change behaviour rather than describing it.
+  expect(gate).toMatch(/never bare `rg`\/`grep`/);
+  expect(gate).toMatch(/last `keryx gdgraph build`/);
+
+  // Deliberately left to routing.md: these are re-read every turn of every
+  // task, including the many where none of it applies.
+  expect(gate).not.toContain("## Intent Router");
+  expect(gate).not.toContain("## Agent Workflow");
+  expect(gate).not.toContain("## Enabled Modules");
+});
+
+test("the gate names only the modules that are enabled", () => {
+  const gate = renderIndexGateMarkdown({
+    ...ALL_MODULES,
+    enableGdwiki: false,
+    enableMemory: false,
+  });
+
+  expect(gate).toContain("keryx ctx rg");
+  expect(gate).not.toContain("wiki/index.md");
+  expect(gate).not.toContain("keryx memory search");
+});
+
+test("subagents are not all made to read the full routing index", () => {
+  // Measured 2026-09-05: `.metaproject/index.md` is ~3,226 tokens, and an agent
+  // re-sends its whole transcript on every turn — so one read costs ~3,226 x
+  // turns. The old rule required EVERY subagent to read it, which at three
+  // subagents of ten turns each is ~177,000 tokens of routing index alone, and
+  // defeats the reason subagents exist: a narrow slice of context.
+  //
+  // The rule is prose, so nothing but this test stops it drifting back.
+  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: true });
+
+  expect(block).not.toMatch(/Every subagent prompt must .*require reading/);
+  expect(block).toMatch(/inline the few routing pointers/i);
+  expect(block).toMatch(/only when it will navigate the codebase itself/i);
 });
 
 test("gdgraph skill refresh policy describes the hook the template actually renders", () => {

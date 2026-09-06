@@ -25,7 +25,7 @@ When a nearest \`.metaproject/index.md\` exists:
 5. For code navigation and impact analysis, use gdgraph guidance before broad raw grep/glob.
 6. For architecture, domain behavior, business rules, decisions, and scenarios, use gdwiki guidance before deep code reads.
 7. For commands, search output, diffs, logs, test/lint/build output, and large file reads, use gdctx guidance to keep context compact.
-8. Do not dispatch subagents until this bootstrap is complete. Every subagent prompt must include the project/worktree root and instruct the subagent to read \`<project-root>/.metaproject/index.md\` before searching or reading code.
+8. Do not dispatch subagents until this bootstrap is complete. Give every subagent prompt the project/worktree root, and inline the few routing pointers that subagent actually needs. Instruct it to read \`<project-root>/.metaproject/index.md\` only when it will navigate the codebase itself: a subagent doing narrow, bounded work would otherwise load the whole routing index and re-read it on every one of its own turns.
 9. If a referenced Keryx file or capability is missing, skip only that capability and continue with the main contents of this ${fileName} file.
 
 ${endMarker}
@@ -45,7 +45,7 @@ export function renderProjectMetaprojectReferenceBlock({
     "This Metaproject block is optional project-local routing. If `.metaproject/index.md` or referenced Metaproject files are absent, state `metaproject: unavailable` and continue with the main contents of this AGENTS.md/CLAUDE.md file.",
     "If you create or switch to a git worktree, repeat the hard gate in that worktree root before any repository action there.",
     "The user does not need to know Metaproject command names. Treat natural-language requests as intents, route through `.metaproject/index.md`, then choose the right skill, rule, MCP tool/resource, or `keryx` CLI command yourself.",
-    "Do not dispatch subagents until the Metaproject hard gate is complete. Every subagent prompt must include the exact project/worktree root and require reading `<project-root>/.metaproject/index.md` before searching or reading code.",
+    "Do not dispatch subagents until the Metaproject hard gate is complete. Give every subagent prompt the exact project/worktree root, and inline the few routing pointers that subagent actually needs. Require it to read `<project-root>/.metaproject/index.md` only when it will navigate the codebase itself — a subagent doing narrow, bounded work would otherwise load the whole routing index and then re-read it on every one of its own turns, which is the cost the subagent was dispatched to avoid.",
     "If MCP tools/resources are available for this project, prefer them for Metaproject capabilities because they provide structured tool calls. If MCP is unavailable or lacks a needed capability, fall back to the corresponding project-local skill and CLI command.",
     "For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before raw file search.",
     "The graph answers from the last `keryx gdgraph build`, not from the working tree. Rebuild before relying on a graph answer when you added, renamed, deleted or moved files in this session, or when `keryx gdgraph context` reports uncommitted code files — not once per question. If you cannot rebuild, say the graph predates those changes instead of quoting it as current. Contract: .metaproject/modules/gdgraph.md (Freshness & Refresh).",

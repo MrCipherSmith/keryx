@@ -51,7 +51,8 @@ test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => 
     expect(rootAgents).toContain("**HARD GATE:**");
     expect(rootAgents).toContain("explicitly read `.metaproject/index.md`");
     expect(rootAgents).toContain("If you create or switch to a git worktree");
-    expect(rootAgents).toContain("Every subagent prompt must include the exact project/worktree root");
+    expect(rootAgents).toContain("Give every subagent prompt the exact project/worktree root");
+    expect(rootAgents).toContain("only when it will navigate the codebase itself");
     expect(rootAgents).toContain("This Metaproject block is optional project-local routing.");
     expect(rootAgents.indexOf("<!-- keryx:index -->")).toBeLessThan(rootAgents.indexOf("Use local conventions."));
     expect(manifest.agentEntrypoints.root).toEqual(["AGENTS.md", "CLAUDE.md"]);
