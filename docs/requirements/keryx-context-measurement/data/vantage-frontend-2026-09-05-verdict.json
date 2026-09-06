@@ -1,0 +1,52 @@
+{
+  "repoRoot": "/home/altsay/work/vantage-frontend",
+  "before": "2026-08-20",
+  "dropped": {
+    "notPullRequest": 383,
+    "choreOrDocs": 66,
+    "goldSetSize": 788,
+    "answerLeak": 315,
+    "noParent": 0
+  },
+  "verdict": {
+    "tasks": 50,
+    "recallOn": 0.45609523809523805,
+    "recallOff": 0.4192380952380952,
+    "recallGainPoints": 3.685714285714287,
+    "tokensOn": 1548979.5,
+    "tokensOff": 1338204.94,
+    "costOn": 1.2856555,
+    "costOff": 1.1306702619999998,
+    "meetsThreshold": false,
+    "reason": "recall gain 3.7 points is below the pre-registered 10"
+  },
+  "resumed": [
+    "ca67675f",
+    "6a024874",
+    "57f92d67",
+    "9278151d",
+    "d46aa115",
+    "7e55e53a",
+    "418fa505",
+    "dd44e972",
+    "e6c39d4b",
+    "823b488a",
+    "53254e0e",
+    "ce618564",
+    "feca1074",
+    "ec19172e",
+    "07f8e80f",
+    "07762aac",
+    "97d52d1b",
+    "07d3d835",
+    "8ae7b01e",
+    "6d0fdd23",
+    "6df38dc4",
+    "f37a9897",
+    "8cb326c6",
+    "c081b57f",
+    "8078d774",
+    "3eb333f9"
+  ],
+  "failed": []
+}
