@@ -1,9 +1,11 @@
 import {
   analyzeTestingProject,
+  computeTestingContext,
   findRelatedTests,
   loadTestingConfig,
   loadTestingContext,
   loadTestingReport,
+  relatedTestsInContext,
   runTesting,
   testingDataRoot,
 } from "../testing/service";
@@ -69,10 +71,13 @@ async function runSuggest(args: string[]): Promise<void> {
   }
 
   const cwd = process.cwd();
-  const [context, related] = await Promise.all([
-    analyzeTestingProject(cwd),
-    findRelatedTests(cwd, target),
-  ]);
+  // Flow 234 T21 (finding 2, second-order issue): this used to run
+  // `analyzeTestingProject` and `findRelatedTests` concurrently - each doing its
+  // own full tree walk and (pre-fix) its own write to the same three snapshot
+  // files. `suggest` only asks a question ("what tests exist / relate to this
+  // file"), so compute the context once, read-only, and share it.
+  const context = await computeTestingContext(cwd);
+  const related = await relatedTestsInContext(cwd, context, target);
   const { readFile } = await import("node:fs/promises");
   const { resolveContainedPath, resolveProjectRoot } = await import("../lib/contained-path");
   // Contain before opening. This file's contents are sent to a model provider,
@@ -119,6 +124,12 @@ async function runAnalyze(): Promise<void> {
   const context = await analyzeTestingProject(process.cwd());
   console.log("# testing analyze");
   console.log("");
+  console.log(`status: ${context.status}`);
+  if (context.status === "incomplete") {
+    for (const reason of context.incompleteReasons) {
+      console.log(`  - ${reason}`);
+    }
+  }
   console.log(`frameworks: ${context.frameworks.join(", ") || "none"}`);
   console.log(`scripts: ${context.scripts.length}`);
   console.log(`configs: ${context.configs.length}`);
@@ -148,6 +159,16 @@ async function runRun(args: string[]): Promise<void> {
   console.log(`passed: ${result.report.counts.passed}`);
   console.log(`failed: ${result.report.counts.failed}`);
   console.log(`selected tests: ${result.report.selection.selectedTests.length}`);
+  // Flow 234 T21 (finding 1, AC2 blocker): the testing-context refresh can be
+  // `incomplete` (part of the tree could not be walked) even when the executed
+  // tests passed - that must be visible here, not just in the JSON/markdown
+  // artifacts a caller may never open.
+  console.log(`context: ${result.report.context.status}`);
+  if (result.report.context.status === "incomplete") {
+    for (const reason of result.report.context.incompleteReasons) {
+      console.log(`  - ${reason}`);
+    }
+  }
   console.log("");
   console.log(`report: ${result.markdownPath}`);
   console.log(`json: ${result.jsonPath}`);
@@ -214,6 +235,16 @@ async function runReport(args: string[]): Promise<void> {
   console.log(`runner: ${report.runner ?? "n/a"}`);
   console.log(`command: ${report.command ?? "n/a"}`);
   console.log(`failures: ${report.failures.length}`);
+  // `report.context` may be absent on a report persisted before flow 234 T21 -
+  // guard defensively rather than assume every report on disk already has it.
+  if (report.context) {
+    console.log(`context: ${report.context.status}`);
+    if (report.context.status === "incomplete") {
+      for (const reason of report.context.incompleteReasons) {
+        console.log(`  - ${reason}`);
+      }
+    }
+  }
 }
 
 async function runRelated(args: string[]): Promise<void> {
@@ -272,7 +303,10 @@ async function runCoverageMap(args: string[]): Promise<void> {
   const config = await loadTestingConfig(cwd);
 
   if (sub === "build") {
-    const context = (await loadTestingContext(cwd)) ?? (await analyzeTestingProject(cwd));
+    // AFC-09 (flow 234, AC2): same staleness class as ensureContext/findRelatedTests
+    // in src/testing/service.ts - a cached context.json can predate a test
+    // add/rename/delete or a checkout change, so re-analyze rather than trust it.
+    const context = await analyzeTestingProject(cwd);
     const gitRef = await gitRefOf(cwd);
     const result = await buildCoverageMap(cwd, config, { testFiles: context.testFiles, gitRef });
     console.log("# testing coverage-map build");

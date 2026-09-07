@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { computeModuleKeyFiles, keyFilesForPage } from "./collect";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { collectPages, computeModuleKeyFiles, keyFilesForPage } from "./collect";
 import type { GraphData } from "../gdgraph/types";
 import type { WikiPage } from "./types";
 
@@ -51,4 +54,59 @@ test("T5/keyFilesForPage — resolves a WikiPage's relativePath through the inde
 test("T5/keyFilesForPage — unknown page path resolves to an empty list, not an error", () => {
   const index = computeModuleKeyFiles(fixtureGraph());
   expect(keyFilesForPage(index, { relativePath: "architecture/project-map.md" })).toEqual([]);
+});
+
+// AFC-06 (flow 234, T14, defect 3): `Status` was parsed from frontmatter but
+// `ValidFrom`/`ValidTo`/`SupersededBy` — the fields `WikiPage` (types.ts) now
+// declares — never were, so `computeLifecycle` would read undefined for
+// every page consuming them.
+test("T14/collectPages — parses ValidFrom, ValidTo, and SupersededBy frontmatter (AFC-06 defect 3)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-collect-"));
+  try {
+    await mkdir(path.join(root, ".metaproject", "wiki", "architecture"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "wiki", "architecture", "billing.md"),
+      [
+        "# Billing pipeline",
+        "Version: 1.0.0",
+        "Type: architecture",
+        "Status: accepted",
+        "ValidFrom: 2026-01-01",
+        "ValidTo: 2026-12-31",
+        "SupersededBy: architecture/billing-v2.md",
+        "",
+        "## Summary",
+        "",
+        "Invoices are generated nightly.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const pages = await collectPages(root);
+    const page = pages.find((p) => p.relativePath === "architecture/billing.md");
+    expect(page?.validFrom).toBe("2026-01-01");
+    expect(page?.validTo).toBe("2026-12-31");
+    expect(page?.supersededBy).toBe("architecture/billing-v2.md");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T14/collectPages — a page without lifecycle frontmatter parses those fields as null, not undefined-by-omission", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-collect-"));
+  try {
+    await mkdir(path.join(root, ".metaproject", "wiki", "architecture"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "wiki", "architecture", "bare.md"),
+      "# Bare page\nType: architecture\nStatus: accepted\n\n## Summary\n\nNo lifecycle fields here.\n",
+      "utf8",
+    );
+    const pages = await collectPages(root);
+    const page = pages.find((p) => p.relativePath === "architecture/bare.md");
+    expect(page?.validFrom).toBeNull();
+    expect(page?.validTo).toBeNull();
+    expect(page?.supersededBy).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

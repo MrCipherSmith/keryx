@@ -20,6 +20,11 @@
 
 import { createHash } from "node:crypto";
 import type { GraphData } from "../gdgraph/types";
+import {
+  computeLifecycle,
+  type LifecycleResult,
+  type SupersessionLookup,
+} from "../memory/lifecycle";
 import { parseDescribesField } from "./describes";
 import { computePageNodeHash } from "./staleness";
 
@@ -51,6 +56,56 @@ export function parseProvenance(content: string): PageProvenance {
     // describing less than its author wrote.
     describes: parseDescribesField(content),
   };
+}
+
+// --- AFC-06 (flow 234): wiki-side lifecycle/freshness -------------------
+//
+// Wiki pages had no representation at all of accepted/deprecated/conflict/
+// superseded/validFrom/validTo before this: `WikiPage.status` (types.ts) is
+// free text, and nothing here read `ValidFrom`/`ValidTo`/`SupersededBy`
+// frontmatter. `parsePageLifecycle` reads those same four fields memory
+// entries carry (`Status`/`ValidFrom`/`ValidTo`/`SupersededBy`, already
+// visible in wiki page frontmatter alongside `Status:` — see
+// `provenance.test.ts`'s fixture) and classifies them through the exact
+// same `computeLifecycle` memory uses, so a malformed/future/deprecated/
+// conflict/superseded page is admitted or rejected identically on both
+// surfaces (AC1). This module only *reads* the fields; nothing in this
+// package writes `ValidFrom`/`ValidTo`/`SupersededBy` onto a wiki page yet
+// (see the task report's "files wanted but not owned").
+
+export type { LifecycleResult, LifecycleState, LifecycleInput, SupersessionLookup } from "../memory/lifecycle";
+
+/**
+ * Classify a wiki page's lifecycle from its raw frontmatter, through the
+ * same formula and shape memory entries use (`computeLifecycle`). A page
+ * with no `Status:` line at all is `unknown`/non-current, matching the
+ * policy's "missing/unknown status не превращается в accepted".
+ */
+export function parsePageLifecycle(
+  content: string,
+  observedAt: Date,
+  lookup?: SupersessionLookup,
+): LifecycleResult {
+  const status = singleLineField(content, "Status");
+  const validFrom = aliasedField(content, "ValidFrom", "Valid-From");
+  const validTo = aliasedField(content, "ValidTo", "Valid-To");
+  const supersededBy = aliasedField(content, "SupersededBy", "Superseded-By");
+  return computeLifecycle({ status, validFrom, validTo, supersededBy }, observedAt, lookup);
+}
+
+// Memory frontmatter spells these fields hyphenated (`Valid-From`,
+// `Valid-To`, `Superseded-By`, `src/memory/store.ts`); wiki frontmatter
+// documents the unhyphenated form (`ValidFrom`, `ValidTo`, `SupersededBy`,
+// `src/wiki/collect.ts`). Verified directly against both parsers, not
+// assumed: they are two different spellings of the same field, not two
+// different fields. Without this, an author who copies a working entry from
+// one surface to the other silently gets a field that parses to nothing —
+// admitting a page that should have been rejected (AC1). The wiki spelling
+// is preferred when a page happens to carry both, since it is the one this
+// module documents as canonical; the hyphenated form is accepted as a
+// fallback only when the wiki spelling is absent.
+function aliasedField(content: string, wikiName: string, memoryName: string): string | null {
+  return singleLineField(content, wikiName) ?? singleLineField(content, memoryName);
 }
 
 /**

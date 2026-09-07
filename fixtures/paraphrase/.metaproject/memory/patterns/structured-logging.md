@@ -2,7 +2,7 @@
 
 Version: 1.0.0
 Type: pattern
-Status: draft
+Status: accepted
 Confidence: low
 
 ## Summary

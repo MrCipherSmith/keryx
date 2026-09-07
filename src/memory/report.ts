@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { access, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { MemoryReportInput, MemoryReportResult, MemorySearchReport, SearchFilters } from "./types";
+import type { MemoryEntry, MemoryReportInput, MemoryReportResult, MemorySearchReport, SearchFilters } from "./types";
 import { isValidCalendarDate } from "./temporal";
 import { MAX_QUERY_BYTES } from "./validation";
 
@@ -13,10 +13,18 @@ const MAX_TITLE_LENGTH = 512;
 const MAX_TYPE_LENGTH = 128;
 const MAX_REASON_LENGTH = 512;
 const MAX_SUMMARY_LENGTH = 2000;
+const MAX_VERSION_LENGTH = 256;
+const MAX_PROVENANCE_LENGTH = 512;
+const MAX_SCOPE_LENGTH = 512;
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 const STALE_STAGING_MS = 60_000;
 const STATUSES = new Set(["draft", "accepted", "deprecated", "conflict", "superseded"]);
 const CLASSES = new Set(["semantic", "episodic", "procedural"]);
+const CONFIDENCES = new Set(["low", "medium", "high"]);
+// AFC-25: explicit sentinel for an upstream field that was never captured.
+// Never an omitted key, never an empty string -- a reader must be able to
+// tell "unknown" apart from "confirmed absent" (e.g. `caveat: null`).
+const UNKNOWN = "unknown";
 
 export type MemoryReportStoreDependencies = {
   clock?: () => Date;
@@ -49,6 +57,19 @@ function cleanFilters(filters: SearchFilters): SearchFilters {
   };
 }
 
+// AC6 (flow 234) / policies.md "Lifecycle и freshness": a compact, single-
+// string rendering of an entry's scope. `null` ⇒ no scope was captured
+// (module/entity/files/skills all empty) -- the caller applies the same
+// explicit "unknown" sentinel used for an absent source, never a blank line.
+function formatScope(scopes: MemoryEntry["scopes"]): string | null {
+  const parts: string[] = [];
+  if (scopes.module) parts.push(`module:${scopes.module}`);
+  if (scopes.entity) parts.push(`entity:${scopes.entity}`);
+  if (scopes.files.length > 0) parts.push(`files:${scopes.files.length}`);
+  if (scopes.skills.length > 0) parts.push(`skills:${scopes.skills.length}`);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 function relativeMemoryPath(value: string): string {
   const normalized = value.split(path.sep).join("/");
   if (!normalized || path.isAbsolute(value) || normalized.startsWith("../") || normalized.includes("/../")) {
@@ -74,10 +95,34 @@ export function renderMemorySearchReport(input: {
       path: relativeMemoryPath(scored.entry.relativePath),
       title: bounded(scored.entry.title, MAX_TITLE_LENGTH),
       type: bounded(scored.entry.type, MAX_TYPE_LENGTH),
+      // AFC-25: carried verbatim from entry.type -- never derived from
+      // `score`/`confidence`. Confidence ranks results; it does not
+      // reclassify a hypothesis/observation into a decision or instruction.
+      claimType: bounded(scored.entry.type, MAX_TYPE_LENGTH),
       status: scored.entry.status,
       score: scored.score,
       reason: bounded(scored.reason, MAX_REASON_LENGTH),
       summary: bounded(scored.entry.summary, MAX_SUMMARY_LENGTH),
+      // AC6 (flow 234) / policies.md: the entry's scope, preserved through
+      // compression. Absent upstream ⇒ the explicit "unknown" sentinel.
+      scope: bounded(formatScope(scored.entry.scopes) ?? UNKNOWN, MAX_SCOPE_LENGTH),
+      // AFC-25: exact source fragment/version, preserved through
+      // compression. Absent upstream ⇒ the explicit "unknown" sentinel,
+      // never a dropped/empty field.
+      version: bounded(scored.entry.version ?? UNKNOWN, MAX_VERSION_LENGTH),
+      confidence: scored.entry.confidence,
+      provenance: {
+        source: bounded(scored.entry.provenance.source ?? UNKNOWN, MAX_PROVENANCE_LENGTH),
+        link: bounded(scored.entry.provenance.link ?? UNKNOWN, MAX_PROVENANCE_LENGTH),
+      },
+      // AC6 (flow 234) / AFC-25: who wrote/proposed the claim, and the
+      // confirming participant / acceptance basis -- two distinct carriers.
+      // Absent upstream ⇒ the explicit "unknown" sentinel.
+      author: bounded(scored.entry.author ?? UNKNOWN, MAX_PROVENANCE_LENGTH),
+      confirmedBy: bounded(scored.entry.confirmedBy ?? UNKNOWN, MAX_PROVENANCE_LENGTH),
+      // A deferral/qualification caveat. `null` ⇒ not captured upstream --
+      // distinct from a present-but-empty string, and never coerced away.
+      caveat: scored.entry.caveat ? bounded(scored.entry.caveat, MAX_SUMMARY_LENGTH) : null,
     })),
   };
   const errors = validateMemorySearchReport(report);
@@ -119,32 +164,92 @@ export function validateMemorySearchReport(value: unknown): string[] {
         continue;
       }
       const item = result as Record<string, unknown>;
-      const allowedResult = new Set(["path", "title", "type", "status", "score", "reason", "summary"]);
+      const allowedResult = new Set([
+        "path",
+        "title",
+        "type",
+        "claimType",
+        "status",
+        "score",
+        "reason",
+        "summary",
+        "scope",
+        "version",
+        "confidence",
+        "provenance",
+        "author",
+        "confirmedBy",
+        "caveat",
+      ]);
       for (const key of Object.keys(item)) if (!allowedResult.has(key)) errors.push(`unexpected result property: ${key}`);
       if (typeof item.path !== "string" || !item.path || item.path.length > MAX_PATH_LENGTH || path.isAbsolute(item.path) || item.path.includes("..")) errors.push("result path is invalid");
       if (typeof item.title !== "string" || item.title.length > MAX_TITLE_LENGTH) errors.push("result title is invalid");
       if (typeof item.type !== "string" || item.type.length > MAX_TYPE_LENGTH) errors.push("result type is invalid");
+      if (typeof item.claimType !== "string" || item.claimType.length > MAX_TYPE_LENGTH) errors.push("result claimType is invalid");
       if (typeof item.status !== "string" || !STATUSES.has(item.status)) errors.push("result status is invalid");
       if (typeof item.score !== "number" || !Number.isFinite(item.score)) errors.push("result score is invalid");
       if (typeof item.reason !== "string" || item.reason.length > MAX_REASON_LENGTH) errors.push("result reason is invalid");
       if (typeof item.summary !== "string" || item.summary.length > MAX_SUMMARY_LENGTH) errors.push("result summary is invalid");
+      if (typeof item.scope !== "string" || !item.scope || item.scope.length > MAX_SCOPE_LENGTH) errors.push("result scope is invalid");
+      if (typeof item.version !== "string" || !item.version || item.version.length > MAX_VERSION_LENGTH) errors.push("result version is invalid");
+      if (typeof item.confidence !== "string" || !CONFIDENCES.has(item.confidence)) errors.push("result confidence is invalid");
+      if (!item.provenance || typeof item.provenance !== "object" || Array.isArray(item.provenance)) {
+        errors.push("result provenance is invalid");
+      } else {
+        const provenance = item.provenance as Record<string, unknown>;
+        const allowedProvenance = new Set(["source", "link"]);
+        for (const key of Object.keys(provenance)) if (!allowedProvenance.has(key)) errors.push(`unexpected provenance property: ${key}`);
+        if (typeof provenance.source !== "string" || !provenance.source || provenance.source.length > MAX_PROVENANCE_LENGTH) errors.push("result provenance.source is invalid");
+        if (typeof provenance.link !== "string" || !provenance.link || provenance.link.length > MAX_PROVENANCE_LENGTH) errors.push("result provenance.link is invalid");
+      }
+      if (typeof item.author !== "string" || !item.author || item.author.length > MAX_PROVENANCE_LENGTH) errors.push("result author is invalid");
+      if (typeof item.confirmedBy !== "string" || !item.confirmedBy || item.confirmedBy.length > MAX_PROVENANCE_LENGTH) errors.push("result confirmedBy is invalid");
+      if (item.caveat !== null && (typeof item.caveat !== "string" || item.caveat.length === 0 || item.caveat.length > MAX_SUMMARY_LENGTH)) errors.push("result caveat is invalid");
     }
   }
   return errors;
 }
 
-export function renderMemorySearchReportMarkdown(report: MemorySearchReport): string {
-  const lines = [
-    `# memory search report: ${report.query}`,
-    "",
-    `runId: ${report.runId}`,
-    `generatedAt: ${report.generatedAt}`,
-    `results: ${report.results.length}`,
-    "",
-  ];
+// T20 finding 4 (flow 234 review, MAJOR): `includeHeader` (default true) lets
+// a caller that is splicing this into an already-headed document (e.g. the
+// `## Related Memory` section of `flow/context.ts`) render ONLY the result
+// lines -- the report's own `# memory search report: ...` H1, `runId`
+// (never written to disk on the pure/no-report-persisted path), duplicate
+// `generatedAt`, and restated `query` are a nested-heading, fabricated-
+// identifier preamble that has no place inside a caller's own section. The
+// per-result payload (claimType, scope, version, provenance, author,
+// confirmedBy, caveat) is unaffected either way.
+export function renderMemorySearchReportMarkdown(
+  report: MemorySearchReport,
+  options: { includeHeader?: boolean } = {},
+): string {
+  const includeHeader = options.includeHeader ?? true;
+  const lines: string[] = [];
+  if (includeHeader) {
+    lines.push(
+      `# memory search report: ${report.query}`,
+      "",
+      `runId: ${report.runId}`,
+      `generatedAt: ${report.generatedAt}`,
+      `results: ${report.results.length}`,
+      "",
+    );
+  }
   for (const [index, result] of report.results.entries()) {
     lines.push(`${index + 1}. [${result.score}] ${result.title} (${result.type}/${result.status}) - ${result.path}`);
     if (result.summary) lines.push(`   ${result.summary}`);
+    // AFC-25 / AC6: provenance always renders -- scope/version/source/link/
+    // author/confirmedBy carry the "unknown" sentinel rather than vanishing
+    // when unset, so a reader can never mistake "not captured" for "nothing
+    // to report".
+    lines.push(
+      `   claimType: ${result.claimType} | confidence: ${result.confidence} | version: ${result.version}`,
+    );
+    lines.push(`   scope: ${result.scope}`);
+    lines.push(
+      `   provenance: source=${result.provenance.source} link=${result.provenance.link} author=${result.author} confirmedBy=${result.confirmedBy}`,
+    );
+    if (result.caveat) lines.push(`   caveat: ${result.caveat}`);
   }
   return `${lines.join("\n")}\n`;
 }

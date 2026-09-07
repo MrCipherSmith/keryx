@@ -22,6 +22,15 @@ async function runScriptsTypecheck(project: string): Promise<{ exitCode: number;
   return { exitCode, output: `${stdout}${stderr}` };
 }
 
+// Both tests below spawn the TypeScript compiler over the whole scripts
+// project. That takes ~2.7s on a warm developer machine and comfortably more
+// than bun's 5s default on a shared CI runner, so they carry an explicit
+// budget rather than sitting one slow runner away from a red build. The
+// budget is a ceiling on a correctness check, not a performance assertion:
+// if a compile genuinely starts taking a minute, that is a real regression
+// and this test should be the one that says so.
+const COMPILE_BUDGET_MS = 120_000;
+
 test("the scripts TypeScript target covers benchmark and stress entrypoints and is currently clean", async () => {
   const text = await readFile(SCRIPTS_CONFIG, "utf8");
   const parsedJson = ts.parseConfigFileTextToJson(SCRIPTS_CONFIG, text);
@@ -35,7 +44,7 @@ test("the scripts TypeScript target covers benchmark and stress entrypoints and 
 
   const result = await runScriptsTypecheck(SCRIPTS_CONFIG);
   expect(result.exitCode, result.output).toBe(0);
-});
+}, COMPILE_BUDGET_MS);
 
 test("the scripts TypeScript target fails on an injected strict type error", async () => {
   // The probe is meaningful only when it extends the real scripts target.
@@ -63,4 +72,4 @@ test("the scripts TypeScript target fails on an injected strict type error", asy
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }
-});
+}, COMPILE_BUDGET_MS);

@@ -48,6 +48,7 @@ beforeEach(async () => {
     `# Authentication architecture
 
 Type: architecture
+Status: accepted
 
 ## Summary
 
