@@ -1,0 +1,11 @@
+# Code Health: PASS
+
+scope: project
+project score: 93 (trend: stable)
+findings: 248
+
+- OPTIONAL: sonarqube source skipped
+- PASS: no gate conditions triggered
+
+report: .metaproject/data/health/artifacts/latest.md
+json: .metaproject/data/health/artifacts/latest.json
