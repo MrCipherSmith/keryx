@@ -2,14 +2,14 @@
 
 ## Stats
 
-- Source files indexed: 1182
+- Source files indexed: 1194
 - Imported asset files indexed: 4
-- Total nodes: 1186
-- Edges: 3573
-- Import edges: 3514
+- Total nodes: 1198
+- Edges: 3617
+- Import edges: 3555
 - Asset edges: 9
-- Unresolved imports: 50
-- Import resolution: 98.6%
+- Unresolved imports: 53
+- Import resolution: 98.5%
 - Skipped generated/static directories: 10
 
 ## Top Modules
@@ -17,18 +17,18 @@
 | Module | Source Files |
 |---|---:|
 | harness | 256 |
-| commands | 123 |
+| commands | 127 |
 | tui | 100 |
 | lib | 89 |
 | sac | 51 |
 | security | 50 |
-| health | 47 |
-| wiki | 44 |
-| gdgraph | 40 |
+| health | 48 |
+| wiki | 45 |
+| memory | 43 |
+| gdgraph | 42 |
 | gdskills | 40 |
-| memory | 40 |
 | scripts | 37 |
-| flow | 33 |
+| flow | 34 |
 | review | 30 |
 | metrics | 27 |
 | mcp | 25 |
@@ -41,7 +41,7 @@
 
 | Type | Count |
 |---|---:|
-| relative-code | 36 |
+| relative-code | 39 |
 | package | 7 |
 | . | 2 |
 | .js | 2 |
