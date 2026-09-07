@@ -4,6 +4,10 @@
 // below) -- carried verbatim from `computeLifecycle` (`../memory/lifecycle.ts`),
 // never a second wiki-local set of state names.
 import type { LifecycleState } from "../memory/lifecycle";
+// AFC-W02 (flow 235) AC8: the closed set of explanation-template findings,
+// carried verbatim into `WikiValidateIssue["kind"]` below. Type-only, so this
+// does not make `./template-structure.ts` a runtime dependency of this module.
+import type { TemplateStructureIssueKind } from "./template-structure";
 
 export type WikiPageType =
   | "architecture"
@@ -152,7 +156,22 @@ export type WikiValidateIssue = {
   page: string;
   // `managed-block`, `describes` and `changelog` added by LWG-14 (flow 227):
   // structural rules the managed block makes checkable at all.
-  kind: "metadata" | "version" | "link" | "index" | "managed-block" | "describes" | "changelog";
+  //
+  // AFC-W02 (flow 235) AC8: the explanation-template kinds are carried in from
+  // `./template-structure.ts` rather than re-spelled here. `validate` is where
+  // that validator became reachable at all — until it was wired into
+  // `validateStructure` its only consumer was a test — and a second, hand-typed
+  // copy of its seven kinds would fork the moment one is renamed. The import is
+  // type-only, so nothing is added to this module's runtime graph.
+  kind:
+    | "metadata"
+    | "version"
+    | "link"
+    | "index"
+    | "managed-block"
+    | "describes"
+    | "changelog"
+    | TemplateStructureIssueKind;
   message: string;
 };
 export type WikiValidateResult = {

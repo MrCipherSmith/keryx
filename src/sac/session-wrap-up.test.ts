@@ -1,7 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { createSession, persistHistory } from "../session/store";
 import { resolveSessionWrapUp, sessionEvidenceRef, SessionWrapUpError } from "./session-wrap-up";
@@ -100,5 +101,62 @@ describe("resolveSessionWrapUp", () => {
     const wrapUpContent = await readFile(path.join(cwd, resolution.evidence[0]!.uri.slice(2)), "utf8");
     expect(wrapUpContent).toContain("flow: unbound");
     expect(wrapUpContent).toContain("(no Seeds captured this session)");
+  });
+
+  // --- The redaction floor's own announcement (flow 236 T6) ----------------
+  //
+  // This producer always ran the floor. What it did not do was say so: it wrote
+  // the rewritten bytes, recorded `revision` as the sha256 OF the rewritten
+  // bytes, and returned a resolution in which nothing distinguished a scrubbed
+  // record from an untouched one — so every downstream verifier
+  // (`readVerifiedProposalEvidence`, `validateEvidence`,
+  // `scanEvidenceSecurityGate`) re-verified the scrubbed form and reported a
+  // clean, intact record.
+  //
+  // The trigger is real: an actual uncommitted change in an actual git repo,
+  // collected by the real `gitDiff` and masked by the real guard seam.
+  const PLANTED_SECRET = "AKIAIOSFODNN7EXAMPLE";
+
+  test("a wrap-up whose diff evidence the floor rewrote says so, in a hash-verified redaction notice", async () => {
+    execFileSync("git", ["init", "-q"], { cwd });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd });
+    await writeFile(path.join(cwd, "README.md"), "seed content\n", "utf8");
+    execFileSync("git", ["add", "."], { cwd });
+    execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd });
+    await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode: "advisory" }), "utf8");
+    await writeFile(path.join(cwd, "README.md"), `seed content\naws_key = ${PLANTED_SECRET}\n`, "utf8");
+
+    const handle = realSession("Deploy notes");
+    const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
+
+    // The diff evidence really was rewritten — still a diff of the real change,
+    // with the credential masked.
+    const diffItem = resolution.evidence.find((item) => item.kind === "diff")!;
+    const diffBody = await readFile(path.join(cwd, diffItem.uri.slice(2)), "utf8");
+    expect(diffBody).toContain("aws_key = ");
+    expect(diffBody).not.toContain(PLANTED_SECRET);
+
+    // And the resolution says so, rather than leaving the reader to notice.
+    const notice = resolution.evidence.find((item) => item.kind === "redaction-notice");
+    expect(notice).toBeDefined();
+    // Appended last: evidence[0] is still the wrap-up doc every owner writer reads.
+    expect(resolution.evidence[0]!.kind).toBe("wrap-up");
+    expect(resolution.evidence.at(-1)).toBe(notice!);
+
+    const noticeBody = await readFile(path.join(cwd, notice!.uri.slice(2)), "utf8");
+    expect(noticeBody).toContain("## Rewritten");
+    expect(noticeBody).toContain(`- ${path.posix.basename(diffItem.uri)}`);
+    expect(noticeBody).toMatch(/secret:\d/);
+    expect(noticeBody).not.toContain(PLANTED_SECRET);
+    expect(notice!.revision).toBe(createHash("sha256").update(noticeBody).digest("hex"));
+  });
+
+  test("a wrap-up the floor did not touch carries no redaction notice", async () => {
+    const handle = realSession("Nothing sensitive here");
+    const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
+    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff", "session"]);
   });
 });

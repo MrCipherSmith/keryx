@@ -17,9 +17,17 @@
 // docs/requirements/keryx-metaproject-native/schemas/metaproject-operation.schema.json.
 
 import { STALE_NOTE, UNKNOWN_NOTE } from "../../gdgraph/staleness";
+import {
+  RANKING_SCORE_LABEL,
+  formatRankingScore,
+  normalizeRetrievalCode,
+  retrievalStatus,
+} from "../../lib/retrieval-codes";
+import type { EvidenceItem, EvidencePackage } from "../../wiki/evidence";
 import type {
   FlowStatusResult,
   GraphAffectedResult,
+  GraphFindResult,
   GraphPathResult,
   GraphQueryResult,
   GraphStaleness,
@@ -33,6 +41,7 @@ import type {
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
+  WikiEvidenceResult,
   WikiPageResult,
   WikiFreshnessResult,} from "./metaproject-port";
 import type { ToolDefinition } from "./types";
@@ -550,6 +559,284 @@ export function formatBacklinks(result: WikiBacklinksResult): InteractiveToolRes
   };
 }
 
+/**
+ * Render a `graphFind` result — `keryx gdgraph find`, for an agent.
+ *
+ * The CODE comes first and on its own line, exactly as `formatRetrievalOutcome`
+ * (`../../lib/retrieval-codes.ts`) renders it for the command line, so the two
+ * surfaces cannot drift into different spellings of the same answer.
+ *
+ * `normalizeRetrievalCode` is applied HERE as well as in the adapter, and that
+ * is not belt-and-braces: this is the second transport hop (port result → the
+ * text a model reads), and `MetaprojectPort` is an interface — a stub, a
+ * recorded replay result, or a future non-reference implementation can put any
+ * string in `code`. A code outside the shared vocabulary collapses to
+ * `capability-unavailable` rather than being printed as if a caller could
+ * branch on it.
+ */
+export function formatFind(result: GraphFindResult): InteractiveToolResult {
+  const code = normalizeRetrievalCode(result.code);
+  const lines = [`code: ${code}`, `reason: ${result.reason}`];
+  if (result.error !== undefined) {
+    lines.push(`error: ${result.error}`);
+  }
+  if (result.queryTerms.length > 0) {
+    lines.push(`terms: ${result.queryTerms.join(", ")}`);
+  }
+  if (result.ubiquitousTerms.length > 0) {
+    // Named explicitly: these are the terms that made the ranking weak, and a
+    // reader who cannot see them will re-run the same useless query.
+    lines.push(
+      `corpus-wide terms (these narrow nothing): ${result.ubiquitousTerms.join(", ")}`,
+    );
+  }
+  if (result.nextActions.length > 0) {
+    lines.push("next:", ...result.nextActions.map((action) => `  - ${action}`));
+  }
+  if (result.files.length > 0) {
+    lines.push("", `Files (${result.files.length}):`);
+    for (const file of result.files) {
+      lines.push(
+        `  - ${file.path} (${RANKING_SCORE_LABEL} ${formatRankingScore(file.score)})`,
+        `      ${file.reason}`,
+      );
+    }
+  }
+  if (result.symbols.length > 0) {
+    lines.push("", `Symbols (${result.symbols.length}):`);
+    for (const symbol of result.symbols) {
+      lines.push(
+        `  - ${symbol.name} (${symbol.kind}) at ${symbol.path}:${symbol.startLine} ` +
+          `(${RANKING_SCORE_LABEL} ${formatRankingScore(symbol.score)})`,
+        `      ${symbol.reason}`,
+      );
+    }
+  }
+  if (result.files.length === 0 && result.symbols.length === 0) {
+    lines.push("", "No candidates. The code above says whether that is an answer or a failure.");
+  }
+  return withStaleness(
+    { output: lines.join("\n"), isError: retrievalStatus(code) === "error" },
+    result.staleness,
+  );
+}
+
+// --- the evidence field registry: the anti-drop guard --------------------------
+//
+// The measured defect this exists to stop: a previous lane measured this
+// boundary and found six unreported gaps, the largest dropping THIRTEEN fields
+// from a wiki answer, because the projection was a hand-written list of the
+// fields somebody remembered. So the projection here is not a hand-written
+// list. It is a registry that the compiler checks against the envelope type,
+// walked by a value-driven renderer.
+//
+// Two independent checks, both at compile time:
+//
+//   1. `satisfies readonly (keyof EvidenceItem)[]` — nothing in the registry
+//      may be a field the envelope does not have (catches a rename/removal).
+//   2. `EveryEvidenceItemFieldIsProjected` below — nothing in the envelope may
+//      be missing from the registry (catches an ADDITION, which is the
+//      direction that actually bit). A new field on `EvidenceItem` fails to
+//      compile here until it is listed.
+//
+// And nested values are never hand-listed at all: `renderValue` walks
+// `Object.entries` of whatever it is given, so a field added inside `scope`,
+// `provenance`, `lifecycle`, `freshness`, a caveat or a conflict ref is
+// rendered without any edit to this file.
+
+export const EVIDENCE_ITEM_FIELDS = [
+  "contractVersion",
+  "scope",
+  "pageRef",
+  "pageVersion",
+  "sectionId",
+  "sectionVersion",
+  "title",
+  "contentClass",
+  "excerpt",
+  "lifecycle",
+  "freshness",
+  "provenance",
+  "caveats",
+  "bindings",
+  "conflictRefs",
+] as const satisfies readonly (keyof EvidenceItem)[];
+
+export type EvidenceItemField = (typeof EVIDENCE_ITEM_FIELDS)[number];
+
+/** Fails to compile when `T` is anything but `never`. */
+type AssertNever<T extends never> = T;
+
+/**
+ * Exhaustiveness in the direction that matters: a field ADDED to `EvidenceItem`
+ * and not added to `EVIDENCE_ITEM_FIELDS` makes `Exclude<…>` a real key, which
+ * violates `T extends never` and fails the build. Exported so it is not pruned
+ * as an unused local.
+ */
+export type EveryEvidenceItemFieldIsProjected = AssertNever<
+  Exclude<keyof EvidenceItem, EvidenceItemField>
+>;
+
+/**
+ * Every key ANY `EvidencePackage` variant can carry.
+ *
+ * `keyof EvidencePackage` on the union directly yields only the keys COMMON to
+ * every variant, which silently loses `requiredRef` — it lives on the
+ * `budget-exceeded` branch alone, and that branch is the one a caller must not
+ * mistake for a short success. The naked type parameter is what makes the
+ * conditional distribute over the union; without it this guard would have been
+ * blind to exactly the field that matters most.
+ */
+type KeysOfUnion<T> = T extends unknown ? keyof T : never;
+export type EvidencePackageField = KeysOfUnion<EvidencePackage>;
+
+const EVIDENCE_PACKAGE_FIELDS = [
+  "status",
+  "reason",
+  "suggestion",
+  "partial",
+  "omittedOptional",
+  "refused",
+  "overflow",
+  "requiredRef",
+  "items",
+] as const satisfies readonly EvidencePackageField[];
+
+/** Same guard, for the envelope's own top level. */
+export type EveryEvidencePackageFieldIsProjected = AssertNever<
+  Exclude<EvidencePackageField, (typeof EVIDENCE_PACKAGE_FIELDS)[number]>
+>;
+
+/**
+ * Fields deliberately NOT projected, each with the reason.
+ *
+ * Empty on purpose: every field of the envelope reaches the model today. The
+ * record exists so that a future omission has to be a NAMED DECISION with a
+ * stated reason — the renderer prints the reason in place of the value, so an
+ * omission is visible to the reader rather than being an absence nobody can
+ * see. `wiki-evidence-projection.test.ts` asserts every field is either
+ * rendered or named here.
+ */
+export const EVIDENCE_FIELDS_NOT_PROJECTED: Readonly<
+  Partial<Record<EvidenceItemField | (typeof EVIDENCE_PACKAGE_FIELDS)[number], string>>
+> = {};
+
+/**
+ * Render any value as readable, indented text WITHOUT a per-field hand list.
+ *
+ * Objects are walked with `Object.entries`, so a nested field cannot be
+ * silently dropped: whatever the value carries at runtime is what is rendered.
+ * `undefined` renders as `(absent)` and `null` as `null` — the envelope uses
+ * `null` to mean "this was not claimed" (`confirmedBy`, `acceptanceBasisRef`,
+ * `snapshotVersion`), and collapsing that into a blank line would erase the
+ * distinction the envelope is built on.
+ */
+function renderValue(value: unknown, indent: string): string[] {
+  if (value === undefined) {
+    return [`${indent}(absent)`];
+  }
+  if (value === null) {
+    return [`${indent}null`];
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return [`${indent}(none)`];
+    }
+    return value.flatMap((entry) => {
+      const [first = "", ...rest] = renderValue(entry, `${indent}  `);
+      return [`${indent}- ${first.trimStart()}`, ...rest];
+    });
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      return [`${indent}(empty)`];
+    }
+    return entries.flatMap(([key, entryValue]) => {
+      const rendered = renderValue(entryValue, `${indent}  `);
+      const only = rendered.length === 1 ? rendered[0] : undefined;
+      return only !== undefined
+        ? [`${indent}${key}: ${only.trimStart()}`]
+        : [`${indent}${key}:`, ...rendered];
+    });
+  }
+  const text = String(value);
+  return text.includes("\n")
+    ? text.split("\n").map((line) => `${indent}${line}`)
+    : [`${indent}${text}`];
+}
+
+function renderField(name: string, value: unknown, indent: string): string[] {
+  const omissionReason = (
+    EVIDENCE_FIELDS_NOT_PROJECTED as Readonly<Record<string, string | undefined>>
+  )[name];
+  if (omissionReason !== undefined) {
+    // A named omission is PRINTED, not skipped. An absence a reader cannot see
+    // is the defect; an absence with a reason attached is a decision.
+    return [`${indent}${name}: (not projected — ${omissionReason})`];
+  }
+  const rendered = renderValue(value, `${indent}  `);
+  const only = rendered.length === 1 ? rendered[0] : undefined;
+  return only !== undefined
+    ? [`${indent}${name}: ${only.trimStart()}`]
+    : [`${indent}${name}:`, ...rendered];
+}
+
+/** Render one evidence item, every registry field, in registry order. */
+export function renderEvidenceItem(item: EvidenceItem, indent: string): string[] {
+  return EVIDENCE_ITEM_FIELDS.flatMap((field) => renderField(field, item[field], indent));
+}
+
+/**
+ * Render a `wikiEvidence` result.
+ *
+ * `budget-exceeded` is an ERROR result, not a shorter success: the whole point
+ * of the envelope's overflow branch is that a required item is delivered whole
+ * or not at all, and rendering it as an ordinary empty answer would reintroduce
+ * the "shortened rule" the contract forbids. `no-match` and
+ * `insufficient-evidence` are NOT errors — they are completed operations whose
+ * result is empty, which `retrievalStatus` already encodes.
+ */
+export function formatWikiEvidence(result: WikiEvidenceResult): InteractiveToolResult {
+  if (result.envelope === undefined) {
+    return {
+      output: `wiki_evidence failed: ${result.error ?? "no envelope was produced"}`,
+      isError: true,
+    };
+  }
+  const envelope = result.envelope;
+  const code = normalizeRetrievalCode(envelope.status);
+  const lines = [`Evidence for ${JSON.stringify(result.question)}`, `code: ${code}`];
+  const record = envelope as unknown as Record<string, unknown>;
+
+  for (const field of EVIDENCE_PACKAGE_FIELDS) {
+    if (field === "status") {
+      continue; // already printed above, as the code line
+    }
+    if (field === "items") {
+      const items = envelope.items;
+      lines.push(`items (${items.length}):`);
+      items.forEach((item, index) => {
+        lines.push(`  [${index + 1}] ${item.title}`);
+        lines.push(...renderEvidenceItem(item, "    "));
+      });
+      if (items.length === 0) {
+        lines.push("  (none)");
+      }
+      continue;
+    }
+    if (!(field in record)) {
+      // `requiredRef` exists only on the overflow variant. Absent by shape, not
+      // dropped by this renderer — and the test that walks a real overflow
+      // envelope proves it is rendered when it IS present.
+      continue;
+    }
+    lines.push(...renderField(field, record[field], ""));
+  }
+
+  return { output: lines.join("\n"), isError: retrievalStatus(code) === "error" };
+}
+
 const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -689,6 +976,78 @@ const WIKI_ASK_OUTPUT_SCHEMA: Record<string, unknown> = {
     error: { type: "string" },
   },
   required: ["question", "citations", "answer"],
+};
+
+const GRAPH_FIND_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    query: { type: "string" },
+    // The closed AC5 vocabulary, not an open string: a caller branches on this.
+    code: { type: "string" },
+    reason: { type: "string" },
+    nextActions: { type: "array", items: { type: "string" }, maxItems: 3 },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          score: { type: "number" },
+          matched: { type: "array", items: { type: "string" } },
+          discriminating: { type: "array", items: { type: "string" } },
+          dependents: { type: "integer" },
+          reason: { type: "string" },
+        },
+        required: ["path", "score", "matched", "discriminating", "reason"],
+      },
+    },
+    symbols: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          kind: { type: "string" },
+          path: { type: "string" },
+          startLine: { type: "integer" },
+          score: { type: "number" },
+          matched: { type: "array", items: { type: "string" } },
+          discriminating: { type: "array", items: { type: "string" } },
+          reason: { type: "string" },
+        },
+        required: ["id", "name", "path", "score"],
+      },
+    },
+    queryTerms: { type: "array", items: { type: "string" } },
+    ubiquitousTerms: { type: "array", items: { type: "string" } },
+    staleness: STALENESS_OUTPUT_SCHEMA,
+    error: { type: "string" },
+  },
+  required: ["query", "code", "reason", "nextActions", "files", "symbols"],
+};
+
+// Deliberately NOT an exhaustive re-listing of the evidence envelope.
+//
+// `wiki-evidence.schema.json` is the contract for the envelope's shape, and a
+// second hand-maintained copy of it here is precisely the drift that dropped
+// thirteen fields at this boundary before. `additionalProperties: true` says
+// "the envelope is carried whole"; the anti-drop guarantee is enforced by
+// `EVIDENCE_ITEM_FIELDS` at compile time and by `wiki-evidence-projection.test.ts`
+// at runtime, not by re-typing field names into a JSON Schema literal.
+const WIKI_EVIDENCE_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    question: { type: "string" },
+    envelope: {
+      type: "object",
+      properties: { status: { type: "string" } },
+      required: ["status"],
+      additionalProperties: true,
+    },
+    error: { type: "string" },
+  },
+  required: ["question"],
 };
 
 const WIKI_BACKLINKS_OUTPUT_SCHEMA: Record<string, unknown> = {
@@ -1088,6 +1447,109 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       const k = typeof input.k === "number" && input.k > 0 ? input.k : undefined;
       return formatWikiAsk(
         await port.wikiAsk({ question: question.value, ...(k !== undefined ? { k } : {}) }),
+      );
+    },
+  },
+  {
+    name: "graph_find",
+    risk: "read",
+    module: "gdgraph",
+    description:
+      "Find the files and symbols a plain-language question is about, over the code graph " +
+      "(`keryx gdgraph find`). Input: { query: string, fileLimit?: integer, symbolLimit?: integer }. " +
+      "This is the tool to reach for when you do NOT yet know a path — graph_affected and " +
+      "read_file both need one. READ `code` BEFORE the candidates: `ok` means the ranking is " +
+      "evidence; `no-match` means the search ran over the index and nothing contains your terms; " +
+      "`insufficient-evidence` means every candidate matched only on terms that appear across " +
+      "this whole corpus, so the list below is NOT evidence for your question; " +
+      "`index-incomplete` means the graph could not answer at all and says nothing about whether " +
+      "the code exists. Each candidate carries `matched` (which terms hit) and `discriminating` " +
+      "(which of those actually narrow the corpus) — a candidate with an empty `discriminating` " +
+      "matched only noise. Fan-in is a tie-break, never evidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        fileLimit: { type: "integer", minimum: 1 },
+        symbolLimit: { type: "integer", minimum: 1 },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    outputSchema: GRAPH_FIND_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.graphFind === undefined) {
+        return { output: "graph_find is not available in this session.", isError: true };
+      }
+      const query = requireString(input, "query", "graph_find");
+      if ("error" in query) {
+        return query.error;
+      }
+      const fileLimit =
+        typeof input.fileLimit === "number" && input.fileLimit > 0 ? input.fileLimit : undefined;
+      const symbolLimit =
+        typeof input.symbolLimit === "number" && input.symbolLimit > 0
+          ? input.symbolLimit
+          : undefined;
+      return formatFind(
+        await port.graphFind({
+          query: query.value,
+          ...(fileLimit !== undefined ? { fileLimit } : {}),
+          ...(symbolLimit !== undefined ? { symbolLimit } : {}),
+        }),
+      );
+    },
+  },
+  {
+    name: "wiki_evidence",
+    risk: "read",
+    module: "wiki",
+    description:
+      "Ask the wiki for an EVIDENCE ENVELOPE rather than prose (`createGdWikiService().evidence`). " +
+      "Input: { question: string, k?: integer, budgetTokens?: integer, maxItems?: integer }. " +
+      "Use this instead of wiki_ask when you are about to ACT on what the wiki says: each item " +
+      "carries its section identity and version, the excerpt whole (never shortened), its " +
+      "lifecycle, its freshness with the reason it is not `fresh`, its provenance, and — the " +
+      "load-bearing parts — its mandatory `caveats` and its `conflictRefs`. A rule and its caveat " +
+      "are one indivisible unit: if a declared caveat cannot be resolved the item is REFUSED " +
+      "(listed under `refused`) rather than returned unqualified. Two disagreeing sections come " +
+      "back as two items pointing at each other, so a contested claim can never read as settled. " +
+      "READ `code` first: `budget-exceeded` means a REQUIRED item did not fit and NOTHING was " +
+      "returned — raise `budgetTokens` or narrow the question; it is never a shorter answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string" },
+        k: { type: "integer", minimum: 1 },
+        budgetTokens: { type: "integer", minimum: 1 },
+        maxItems: { type: "integer", minimum: 1 },
+      },
+      required: ["question"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_EVIDENCE_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiEvidence === undefined) {
+        return { output: "wiki_evidence is not available in this session.", isError: true };
+      }
+      const question = requireString(input, "question", "wiki_evidence");
+      if ("error" in question) {
+        return question.error;
+      }
+      const k = typeof input.k === "number" && input.k > 0 ? input.k : undefined;
+      const budgetTokens =
+        typeof input.budgetTokens === "number" && input.budgetTokens > 0
+          ? input.budgetTokens
+          : undefined;
+      const maxItems =
+        typeof input.maxItems === "number" && input.maxItems > 0 ? input.maxItems : undefined;
+      return formatWikiEvidence(
+        await port.wikiEvidence({
+          question: question.value,
+          ...(k !== undefined ? { k } : {}),
+          ...(budgetTokens !== undefined ? { budgetTokens } : {}),
+          ...(maxItems !== undefined ? { maxItems } : {}),
+        }),
       );
     },
   },

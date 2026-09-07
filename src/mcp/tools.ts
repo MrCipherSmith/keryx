@@ -764,6 +764,92 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
+      name: "wiki.evidence",
+      module: "wiki",
+      description:
+        "Ask the wiki for a structured EVIDENCE ENVELOPE instead of prose. Each item carries its " +
+        "section identity and version, the excerpt whole (never shortened to fit), lifecycle, " +
+        "freshness WITH the reason it is not `fresh`, provenance, its mandatory `caveats`, and " +
+        "`conflictRefs` naming any section that disagrees with it — with the version and section " +
+        "fragment of that other side, so a contested claim can never be read as settled. A " +
+        "declared caveat that cannot be resolved REFUSES the item (see `refused`) rather than " +
+        "returning the rule without its qualification. Branch on `status` before reading `items`: " +
+        "`budget-exceeded` means a REQUIRED item did not fit the token budget and `items` is empty " +
+        "— raise `budgetTokens` or narrow the question, and never treat it as a shorter answer. " +
+        "`no-match` and `insufficient-evidence` are completed searches with no usable evidence, " +
+        "not failures. The envelope is returned verbatim, not summarised.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          question: { type: "string", description: "The natural-language question." },
+          k: { type: "number", description: "Max citations seeded into the envelope." },
+          budgetTokens: { type: "number", description: "Whole-package token budget." },
+          maxItems: { type: "number", description: "Max items; the required set is never trimmed to it." },
+        },
+        ["question"],
+      ),
+      mutating: false,
+      async invoke(cwd, params) {
+        const question = stringParam(params, "question") ?? "";
+        const k = typeof params.k === "number" ? params.k : undefined;
+        const budgetTokens = typeof params.budgetTokens === "number" ? params.budgetTokens : undefined;
+        const maxItems = typeof params.maxItems === "number" ? params.maxItems : undefined;
+        // The live service object this file already constructs for `wiki.ask`
+        // and `wiki.query`. The envelope is returned as-is: a re-map here would
+        // be a second place for fields to go missing, which is the exact defect
+        // this tool was added to close.
+        return createGdWikiService().evidence({
+          cwd,
+          question,
+          ...(k !== undefined ? { k } : {}),
+          ...(budgetTokens !== undefined ? { budgetTokens } : {}),
+          ...(maxItems !== undefined ? { maxItems } : {}),
+        });
+      },
+    },
+    {
+      name: "gdgraph.find",
+      module: "gdgraph",
+      description:
+        "Find the files and symbols a plain-language question is about, over the code graph. Use " +
+        "this when you do not yet know a path — `gdgraph.affected` needs one. READ `code` BEFORE " +
+        "the candidates: `ok` means the ranking is evidence; `no-match` means the search ran over " +
+        "the index and no path or symbol contains your terms; `insufficient-evidence` means every " +
+        "candidate matched only on terms that appear across this whole corpus, so the list is NOT " +
+        "evidence for the question asked; `index-incomplete` means the graph could not answer at " +
+        "all and says nothing about whether the code exists; `invalid-input` means the query was " +
+        "empty. Each candidate carries `matched` and `discriminating` — an empty `discriminating` " +
+        "means it matched only noise — plus a one-line `reason`. `score` is a ranking score, never " +
+        "a probability, and fan-in (`dependents`) is a tie-break, never evidence. Reads the built " +
+        "graph, so results are as old as the last `keryx gdgraph build`; check `staleness`.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          query: { type: "string", description: "Plain-language description of what you are looking for." },
+          fileLimit: { type: "number", description: "Max file candidates." },
+          symbolLimit: { type: "number", description: "Max symbol candidates." },
+        },
+        ["query"],
+      ),
+      mutating: false,
+      async invoke(cwd, params) {
+        const query = stringParam(params, "query") ?? "";
+        const fileLimit = typeof params.fileLimit === "number" ? params.fileLimit : undefined;
+        const symbolLimit = typeof params.symbolLimit === "number" ? params.symbolLimit : undefined;
+        const port = createMetaprojectAdapter(cwd);
+        if (port.graphFind === undefined) {
+          throw new Error("gdgraph.find is not backed by this MetaprojectPort");
+        }
+        // Through the port rather than importing `../gdgraph/find` directly:
+        // the import boundary (`boundary.test.ts`) allows the metaproject
+        // adapter and not gdgraph internals, and routing through it also means
+        // the outcome code crosses `normalizeRetrievalCode` on the way here.
+        return port.graphFind({
+          query,
+          ...(fileLimit !== undefined ? { fileLimit } : {}),
+          ...(symbolLimit !== undefined ? { symbolLimit } : {}),
+        });
+      },
+    },
+    {
       name: "standard.validate",
       module: "standard",
       description:

@@ -1450,6 +1450,9 @@ async function validateStructure(
 ): Promise<void> {
   const { findManagedBlock } = await import("./managed-block");
   const { NOT_CODE_SCOPED, parseDescribesField } = await import("./describes");
+  const { validateTemplateStructure } = await import("./template-structure");
+  const { WIKI_QUESTIONS_HEADING, templateKindForPageType, wikiTemplateContract } =
+    await import("./templates");
 
   for (const page of pages) {
     let content: string;
@@ -1494,6 +1497,57 @@ async function validateStructure(
           kind: "describes",
           message: `Describes names a path that does not exist: ${pattern}`,
         });
+      }
+    }
+
+    // AFC-W02 (flow 235) AC8 — the explanation-template contract, wired.
+    //
+    // `validateTemplateStructure` shipped with a test as its only consumer, so
+    // until this call a `business-rule`/`decision`/`user-scenario` page could
+    // fill every mandatory heading, record no per-question verdict at all, and
+    // `keryx wiki validate` still printed "All checks passed." at exit 0 —
+    // measured on a temp wiki before this change, with the validator called
+    // directly on the same bytes returning `coverage-record-missing`.
+    //
+    // NAMED SCOPING DECISION, not a silent exemption. The template is an
+    // AUTHORING contract: wiki-specification.md §4 fixes the questions a page
+    // must close BEFORE the page is written ("До написания страницы
+    // фиксируются вопросы, которые она должна закрыть"). So it is applied to
+    // pages actually written to it, detected by the page carrying at least ONE
+    // of that template's own headings (or the coverage heading). The
+    // machine-written SAC provenance record —
+    // `.metaproject/wiki/decisions/sac-proposal-*.md`, a Summary / Details /
+    // Provenance shape produced by the SAC owner-writer — claims none of them,
+    // and reporting six missing Decision headings against it would be the
+    // validator accusing a page of failing a shape it never claimed.
+    //
+    // The clause this criterion is about is untouched by the scoping: a page
+    // whose headings are all filled carries every mandatory heading by
+    // construction, so it is always in scope. One heading is enough — a
+    // half-written page is in scope for the other six findings too. The hole
+    // this leaves (a templated page carrying NONE of its template's headings
+    // says nothing at all) is stated as a residual rather than papered over.
+    const templateKind = templateKindForPageType(page.pageType);
+    if (templateKind !== null) {
+      const contract = wikiTemplateContract(templateKind);
+      const headings = new Set(
+        [...content.matchAll(/^##[ \t]+(.+?)[ \t]*$/gm)].map((match) => match[1] as string),
+      );
+      const writtenToTemplate =
+        headings.has(WIKI_QUESTIONS_HEADING) ||
+        contract.fields.some((field) => headings.has(field.heading));
+      if (writtenToTemplate) {
+        for (const issue of validateTemplateStructure(page.pageType, content)) {
+          issues.push({
+            page: page.relativePath,
+            // The validator's own kind, carried through rather than collapsed
+            // to one generic "structure" label: `coverage-basis-missing` and
+            // `field-empty` are different defects and a caller must be able to
+            // branch on which one fired.
+            kind: issue.kind,
+            message: issue.message,
+          });
+        }
       }
     }
 

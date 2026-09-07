@@ -11,6 +11,18 @@
 // memory-search-result in particular). A reference implementation lives in
 // metaproject-adapter.ts (`createMetaprojectAdapter`); consumers depend only on
 // the interface here.
+//
+// The two imports below are TYPE-ONLY and therefore erased: this module still
+// emits nothing at runtime. They exist because the alternative — re-spelling a
+// vocabulary and an envelope by hand at the boundary — is the exact defect this
+// programme keeps measuring. `WikiAskCitation` below was hand-copied from
+// `src/wiki/types.ts` and a five-field re-map silently dropped thirteen of its
+// fields at this boundary; a hand-copied `EvidenceItem` would do it again, and a
+// hand-copied retrieval-code union would let a transport fork the vocabulary
+// that `src/lib/retrieval-codes.ts` exists to keep single.
+
+import type { RetrievalCode } from "../../lib/retrieval-codes";
+import type { EvidencePackage } from "../../wiki/evidence";
 
 /**
  * Tri-state graph freshness, carried to the agent-facing boundary.
@@ -330,6 +342,74 @@ export interface RepomapResult {
   error?: string;
 }
 
+/** One ranked file candidate from `graphFind` — mirrors `FindResult` (`src/gdgraph/find.ts`). */
+export interface GraphFindFile {
+  path: string;
+  /** A RANKING score. Never a probability, never a percentage (specification.md §3). */
+  score: number;
+  /** Which query terms hit this path. */
+  matched: string[];
+  /** The subset of `matched` that actually narrows the corpus — the evidence. */
+  discriminating: string[];
+  /** Fan-in (dependents). A TIE-BREAK, never evidence that this answers the question. */
+  dependents: number;
+  /** Why this candidate is here, in one line. */
+  reason: string;
+}
+
+/** One ranked symbol candidate from `graphFind` — mirrors `SymbolFindResult`. */
+export interface GraphFindSymbol {
+  id: string;
+  name: string;
+  kind: string;
+  path: string;
+  startLine: number;
+  score: number;
+  matched: string[];
+  discriminating: string[];
+  reason: string;
+}
+
+/**
+ * Structured result of `graphFind` — the explainable seed-file search.
+ *
+ * `code` is the load-bearing field and the reason this result type exists at
+ * all. `findCandidates` (`src/gdgraph/find.ts`) already distinguishes a genuine
+ * no-match from an unbuilt index from a query whose every term is corpus-wide,
+ * and `keryx gdgraph find` already prints the distinction — but the whole
+ * classification was CLI-only: no agent or MCP tool could ask this question,
+ * so an agent's only route to the same answer was `search_code`, which cannot
+ * tell those four situations apart.
+ *
+ * The `RetrievalCode` type is imported rather than re-spelled as a string
+ * union: `src/lib/retrieval-codes.ts` exists precisely so a transport cannot
+ * fork the vocabulary, and `normalizeRetrievalCode` is what enforces it at the
+ * hop (see `formatFind`, `./metaproject-operations.ts`). Type-only, so this
+ * module stays runtime-free.
+ */
+export interface GraphFindResult {
+  /** The query, echoed back. */
+  query: string;
+  /** The AC5 outcome code, from the one shared closed vocabulary. */
+  code: RetrievalCode;
+  /** Safe prose saying what happened. Never a stack, never a secret. */
+  reason: string;
+  /** At most `MAX_NEXT_ACTIONS` bounded continuations — never a full layer tour. */
+  nextActions: string[];
+  /** Ranked file candidates (may be empty even when `code` is `ok`-adjacent). */
+  files: GraphFindFile[];
+  /** Ranked symbol candidates. */
+  symbols: GraphFindSymbol[];
+  /** The content terms the query reduced to, after stop-word removal. */
+  queryTerms: string[];
+  /** The query terms that appear across this corpus and therefore discriminate nothing. */
+  ubiquitousTerms: string[];
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
+  /** Set when the backing service failed — structured, not thrown. */
+  error?: string;
+}
+
 /** One wiki/memory citation backing a wiki answer — wikiAsk result. */
 export interface WikiAskCitation {
   /** Citation path (wiki/<page> or memory/<entry>). */
@@ -397,6 +477,30 @@ export interface WikiAskResult {
   /** Assembled Markdown answer built deterministically from the citations. */
   answer: string;
   /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/**
+ * Structured result of `wikiEvidence` — the AFC-W04 evidence envelope.
+ *
+ * `envelope` is `EvidencePackage` VERBATIM, not a re-mapped subset. That is the
+ * whole design of this result type: the measured defect at this boundary was a
+ * hand-written re-map that dropped thirteen fields from a wiki answer, and the
+ * only structural fix is to make dropping a field impossible rather than to
+ * write a longer re-map and hope. A field added to the envelope arrives here
+ * with no edit to this file; a field renamed there fails to compile in the
+ * renderer that projects it.
+ *
+ * `envelope` is optional ONLY for the `error` branch — a backing failure is a
+ * structured result, never a throw, and never an empty envelope that would read
+ * as a genuine `no-match`.
+ */
+export interface WikiEvidenceResult {
+  /** The question asked, echoed back. */
+  question: string;
+  /** The evidence envelope, whole. Absent only when `error` is set. */
+  envelope?: EvidencePackage;
+  /** Set when the backing service failed — structured, not thrown. */
   error?: string;
 }
 
@@ -549,6 +653,35 @@ export interface MetaprojectPort {
    * `k` caps the citation count, exactly as `keryx wiki ask --k` does.
    */
   wikiAsk?(input: { question: string; k?: number }): Promise<WikiAskResult>;
+
+  // --- AFC (flow 240): the two capabilities that existed with no boundary ----
+  // Same OPTIONAL contract as every batch above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw.
+
+  /**
+   * Explainable seed-file/symbol search over the code graph (gdgraph), with the
+   * AC5 outcome code attached. `keryx gdgraph find` has returned this since
+   * flow 235; nothing on the agent or MCP boundary could ask for it.
+   */
+  graphFind?(input: {
+    query: string;
+    fileLimit?: number;
+    symbolLimit?: number;
+  }): Promise<GraphFindResult>;
+
+  /**
+   * The wiki evidence envelope (gdwiki) — required items that cannot be
+   * silently dropped, conflicting sources paired symmetrically, and a mandatory
+   * overflow reported as `budget-exceeded` rather than a shortened rule.
+   * `createGdWikiService().evidence` has backed it since flow 235; nothing
+   * outside its own test called it.
+   */
+  wikiEvidence?(input: {
+    question: string;
+    k?: number;
+    budgetTokens?: number;
+    maxItems?: number;
+  }): Promise<WikiEvidenceResult>;
 
   // --- flow 122: additive OPTIONAL read operation (MP-5a) ---------------------
   // Same OPTIONAL contract as flows 043/044: an absent method is an

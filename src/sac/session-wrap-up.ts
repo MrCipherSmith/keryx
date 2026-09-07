@@ -28,10 +28,9 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { findSession, exportSessionMarkdown, readSessionSlate, TranscriptUnreadableError } from "../session/store";
-import { courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff } from "./wrap-up-evidence";
+import { applyEvidenceRedactionFloor, courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff, REDACTION_NOTICE_KIND } from "./wrap-up-evidence";
 import { readCourse } from "../session/slate-course";
 import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
-import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 /** How long a resolved wrap-up may sit unconsumed before `verify()` expires it. */
 const WRAP_UP_TTL_MS = 60 * 60 * 1000;
@@ -132,29 +131,30 @@ export async function resolveSessionWrapUp(input: {
   ].join("\n");
   const wrapUpRelPath = path.join(evidenceDir, `${summary.id}.wrap-up.md`);
   const diffRelPath = path.join(evidenceDir, `${summary.id}.diff.txt`);
-  const [sessionGuard, wrapUpGuard, diffGuard] = await Promise.all([
-    guardOutput({ cwd: input.cwd, content: markdown, target: "report", source: "generated", path: relPath }),
-    guardOutput({ cwd: input.cwd, content: wrapUpMarkdown, target: "report", source: "generated", path: wrapUpRelPath }),
-    guardOutput({ cwd: input.cwd, content: diffText, target: "report", source: "tool-output", path: diffRelPath }),
+  const noticeRelPath = path.join(evidenceDir, `${summary.id}.redaction.md`);
+  // The same floor `machine-wrap-up.ts` now runs, through the same shared
+  // helper — this producer always ran `guardOutput`/`prepareOutputForPersistence`
+  // itself, but it discarded the floor's own `bytesPreserved` answer and wrote
+  // the altered bytes under a record whose header calls the transcript
+  // "verbatim". Refusal precedence (session, then wrap-up, then diff) is
+  // preserved by the argument order.
+  const floor = await applyEvidenceRedactionFloor(input.cwd, [
+    { name: path.basename(relPath), content: markdown, path: relPath, source: "generated" },
+    { name: path.basename(wrapUpRelPath), content: wrapUpMarkdown, path: wrapUpRelPath, source: "generated" },
+    { name: path.basename(diffRelPath), content: diffText, path: diffRelPath, source: "tool-output" },
   ]);
-  const safeSession = prepareOutputForPersistence(sessionGuard, markdown);
-  const safeWrapUp = prepareOutputForPersistence(wrapUpGuard, wrapUpMarkdown);
-  const safeDiff = prepareOutputForPersistence(diffGuard, diffText);
-  if (!safeSession.allowed || !safeWrapUp.allowed || !safeDiff.allowed) {
-    const reason = !safeSession.allowed
-      ? safeSession.reason
-      : !safeWrapUp.allowed
-        ? safeWrapUp.reason
-        : !safeDiff.allowed
-          ? safeDiff.reason
-          : "security gate blocked";
-    throw new SessionWrapUpError("security_denied", reason);
-  }
+  if (!floor.ok) throw new SessionWrapUpError("security_denied", floor.reason);
+  const [safeSession, safeWrapUp, safeDiff] = floor.bodies as [
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+  ];
 
   await mkdir(path.join(input.cwd, evidenceDir), { recursive: true });
   await writeFile(path.join(input.cwd, relPath), safeSession.content, "utf8");
   await writeFile(path.join(input.cwd, wrapUpRelPath), safeWrapUp.content, "utf8");
   await writeFile(path.join(input.cwd, diffRelPath), safeDiff.content, "utf8");
+  if (floor.notice !== undefined) await writeFile(path.join(input.cwd, noticeRelPath), floor.notice, "utf8");
 
   const observedAt = now().toISOString();
   const evidence: WrapUpEvidence[] = [
@@ -162,9 +162,14 @@ export async function resolveSessionWrapUp(input: {
     { kind: "diff", uri: `./${diffRelPath}`, revision: createHash("sha256").update(safeDiff.content).digest("hex"), observedAt },
     // Reference/attachment, deliberately last (never evidence[0], which
     // readVerifiedProposalEvidence hands to every owner writer as THE
-    // content) — the full verbatim transcript, still hash-verified.
+    // content) — the full transcript, still hash-verified. "Verbatim" only
+    // when no redaction notice follows it: the floor can rewrite this body,
+    // and when it does, the notice below is what says so.
     { kind: "session", uri: `./${relPath}`, revision: createHash("sha256").update(safeSession.content).digest("hex"), observedAt },
   ];
+  if (floor.notice !== undefined) {
+    evidence.push({ kind: REDACTION_NOTICE_KIND, uri: `./${noticeRelPath}`, revision: createHash("sha256").update(floor.notice).digest("hex"), observedAt });
+  }
   return {
     workspaceId: input.workspaceId,
     sourceRevision: summary.updatedAt,

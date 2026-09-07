@@ -20,6 +20,8 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { isPathInside } from "../../lib/fs";
 import { readContainedFile } from "../../lib/contained-read";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
+import { findCandidates, type FindOutcome, type FindOptions } from "../../gdgraph/find";
+import { normalizeRetrievalCode, RETRIEVAL_NEXT_ACTIONS } from "../../lib/retrieval-codes";
 import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
 import { loadGraph } from "../../gdgraph/query";
@@ -43,12 +45,14 @@ import { githubAdapter } from "../../flow/tracker/github";
 import { securityFlowGate } from "../../security/guard";
 import type { FlowService } from "../../flow/types";
 import { wikiAsk } from "../../wiki/ask";
-import { wikiPagesForFile } from "../../wiki/service";
+import { wikiEvidence, wikiPagesForFile, type WikiEvidenceInput } from "../../wiki/service";
+import type { EvidencePackage } from "../../wiki/evidence";
 import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
   FlowStatusResult,
   GraphAffectedResult,
+  GraphFindResult,
   GraphStaleness,
   GraphPathResult,
   GraphQueryResult,
@@ -64,6 +68,7 @@ import type {
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
+  WikiEvidenceResult,
   WikiPageResult,
 } from "./metaproject-port";
 
@@ -91,6 +96,19 @@ export interface MetaprojectAdapterDeps {
   createFlowService: () => FlowService;
   /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
   wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
+  /**
+   * The gdwiki evidence envelope (default: the real `wikiEvidence` facade — the
+   * same function `createGdWikiService().evidence` binds, so the agent boundary
+   * and MCP answer from ONE implementation, not two). Injectable for tests.
+   */
+  wikiEvidence: (input: WikiEvidenceInput) => Promise<EvidencePackage>;
+  /**
+   * Explainable graph seed search (default: load the graph, then the pure
+   * `findCandidates` — the same function `keryx gdgraph find` calls, so the
+   * outcome CODE an agent reads is the code the command line prints, not a
+   * second classification). Injectable for tests, which then build no graph.
+   */
+  graphFind: (cwd: string, query: string, options: FindOptions) => Promise<FindOutcome>;
   /**
    * Reverse "documented in" lookup: wiki pages referencing a repo file (default:
    * the real gdwiki `wikiPagesForFile` facade, which builds the backlink index
@@ -151,6 +169,8 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
       now: () => new Date(),
     }),
   wikiAsk,
+  wikiEvidence,
+  graphFind: async (cwd, query, options) => findCandidates(await loadGraph(cwd), query, options),
   wikiPagesForFile,
   now: () => new Date().toISOString(),
   checkGraphStaleness,
@@ -903,6 +923,103 @@ export function createMetaprojectAdapter(
         };
       } catch (cause) {
         return { question: input.question, citations: [], answer: "", error: errorMessage(cause) };
+      }
+    },
+
+    /**
+     * `keryx gdgraph find`, at the boundary an agent actually reads.
+     *
+     * The outcome is passed through WHOLE — code, reason, nextActions,
+     * per-candidate `matched`/`discriminating`, and the ubiquitous terms that
+     * explain an `insufficient-evidence`. `normalizeRetrievalCode` is applied
+     * here rather than trusted from the type: `findCandidates` is the current
+     * producer, but this is the transport hop the specification names
+     * ("Нормализатор транспорта сохраняет коды"), and a code that is not in the
+     * shared vocabulary must collapse to `capability-unavailable` instead of
+     * being forwarded as a private spelling the next hop cannot branch on.
+     *
+     * A failure to LOAD the graph is `index-incomplete`, not `no-match`: "the
+     * index could not answer" and "the corpus contains nothing" are the two
+     * situations this whole operation exists to keep apart, and an unreadable
+     * graph has no standing to make a claim about the corpus.
+     */
+    async graphFind(input): Promise<GraphFindResult> {
+      const options: FindOptions = {
+        ...(input.fileLimit !== undefined ? { fileLimit: input.fileLimit } : {}),
+        ...(input.symbolLimit !== undefined ? { symbolLimit: input.symbolLimit } : {}),
+      };
+      try {
+        const outcome = await deps.graphFind(cwd, input.query, options);
+        return {
+          query: input.query,
+          code: normalizeRetrievalCode(outcome.code),
+          reason: outcome.reason,
+          nextActions: [...outcome.nextActions],
+          files: outcome.files.map((file) => ({
+            path: file.path,
+            score: file.score,
+            matched: [...file.matched],
+            discriminating: [...file.discriminating],
+            dependents: file.dependents,
+            reason: file.reason,
+          })),
+          symbols: outcome.symbols.map((symbol) => ({
+            id: symbol.id,
+            name: symbol.name,
+            kind: symbol.kind,
+            path: symbol.path,
+            startLine: symbol.startLine,
+            score: symbol.score,
+            matched: [...symbol.matched],
+            discriminating: [...symbol.discriminating],
+            reason: symbol.reason,
+          })),
+          queryTerms: [...outcome.queryTerms],
+          ubiquitousTerms: [...outcome.ubiquitousTerms],
+          staleness: await staleness(),
+        };
+      } catch (cause) {
+        return {
+          query: input.query,
+          code: "index-incomplete",
+          reason:
+            `the code graph could not be read here (${errorMessage(cause)}). This says nothing ` +
+            "about whether the code exists — run `keryx gdgraph build` and retry.",
+          nextActions: [...RETRIEVAL_NEXT_ACTIONS["index-incomplete"]],
+          files: [],
+          symbols: [],
+          queryTerms: [],
+          ubiquitousTerms: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
+      }
+    },
+
+    /**
+     * The wiki evidence envelope, carried WHOLE.
+     *
+     * There is no field re-map here on purpose. The measured defect this closes
+     * is a boundary that re-listed an owner's fields by hand and dropped
+     * thirteen of them; the structural answer is that the envelope crosses as
+     * one value, so no field CAN be dropped in transit. Rendering is a separate
+     * concern and is guarded separately (see `formatWikiEvidence`,
+     * `./metaproject-operations.ts`).
+     */
+    async wikiEvidence(input): Promise<WikiEvidenceResult> {
+      try {
+        const envelope = await deps.wikiEvidence({
+          cwd,
+          question: input.question,
+          ...(input.k !== undefined ? { k: input.k } : {}),
+          ...(input.budgetTokens !== undefined ? { budgetTokens: input.budgetTokens } : {}),
+          ...(input.maxItems !== undefined ? { maxItems: input.maxItems } : {}),
+        });
+        return { question: input.question, envelope };
+      } catch (cause) {
+        // No empty envelope on failure: a zero-item `no-match` is a CLAIM about
+        // the wiki, and a call that never completed has no standing to make it.
+        return { question: input.question, error: errorMessage(cause) };
       }
     },
 

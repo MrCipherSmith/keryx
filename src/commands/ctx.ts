@@ -1,7 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
-import { pathExists } from "../lib/fs";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
@@ -18,6 +18,8 @@ import {
 } from "../ctx/lines";
 import type { OmittedRange } from "../ctx/lines";
 import { buildLossManifest, renderLossManifest } from "../ctx/manifest";
+import { latestRawTarget, reserveArtifact } from "../ctx/artifact-id";
+import type { ArtifactReservation } from "../ctx/artifact-id";
 import {
   jsonlExcerptNotice,
   repairJsonLines,
@@ -301,8 +303,8 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
     await redactRaw({ cwd: process.cwd(), content: rawContent, source: "trusted-project" })
   ).content;
   const lines = content.split("\n");
-  const id = newArtifactId("read");
-  const context: SummaryContext = { address: rawAddress(id) };
+  const reservation = await newArtifactReservation("read");
+  const context: SummaryContext = { address: rawAddress(reservation) };
   const summary =
     mode === "full"
       ? summarizeFullFile(file, lines)
@@ -311,7 +313,7 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
         : summarizeCompact(file, lines, config, context);
 
   const artifact = await writeArtifact({
-    id,
+    reservation,
     kind: "read",
     command: `read ${file} --mode ${mode}`,
     raw: content,
@@ -402,12 +404,12 @@ async function runAndSummarize(
   config: CtxConfig,
 ): Promise<void> {
   const result = await runCommand(command);
-  const id = newArtifactId(kind);
+  const reservation = await newArtifactReservation(kind);
   const summary = summarizeCommandOutput(command.join(" "), result, config, {
-    address: rawAddress(id),
+    address: rawAddress(reservation),
   });
   const artifact = await writeArtifact({
-    id,
+    reservation,
     kind,
     command: command.join(" "),
     raw: result.raw,
@@ -450,7 +452,18 @@ async function showArtifact(args: string[]): Promise<void> {
   const target = args[0] ?? "latest";
   const raw = args.includes("--raw");
   const root = gdctxRootDir();
-  const filePath = resolveArtifactPath(root, target, raw);
+  // `latest` is the one address concurrent runs share, so `latest.log` may
+  // belong to a different run than `latest.md`. Ask the summary which log is
+  // actually its own before falling back to the shared file.
+  const filePath =
+    target === "latest" && raw
+      ? ((await latestRawTarget({
+          latestSummaryPath: path.join(root, "artifacts", "latest.md"),
+          rawDir: path.join(root, "raw"),
+          projectRoot: resolveProjectRoot(process.cwd()),
+          exists: pathExists,
+        })) ?? resolveArtifactPath(root, target, raw))
+      : resolveArtifactPath(root, target, raw);
 
   if (!(await pathExists(filePath))) {
     console.error(`Artifact not found: ${filePath}`);
@@ -643,31 +656,38 @@ async function redactCommandResult(result: CommandResult): Promise<CommandResult
 }
 
 /**
- * Mint the artifact id up front, so the summary can quote its own address.
+ * Claim the artifact identity up front, so the summary can quote its own
+ * address — and so it quotes an address this run provably owns.
  *
  * A loss manifest has to name the command that recovers each omitted range, and
- * it is rendered before the artifact is written — so the id cannot be minted
- * inside `writeArtifact` any more.
+ * it is rendered before the artifact is written, so the id cannot be minted
+ * inside `writeArtifact` any more. `reserveArtifact` additionally creates both
+ * files exclusively: see `src/ctx/artifact-id.ts` for the measured collision
+ * this replaces.
  */
-function newArtifactId(kind: string): string {
-  return `${new Date().toISOString().replace(/[:.]/g, "-")}_${kind}`;
+function newArtifactReservation(kind: string): Promise<ArtifactReservation> {
+  const root = gdctxRootDir();
+  return reserveArtifact({
+    rawDir: path.join(root, "raw"),
+    artifactsDir: path.join(root, "artifacts"),
+    kind,
+  });
 }
 
-/** The `raw:` address of an artifact id — project-root-relative, as printed. */
-function rawAddress(id: string): string {
-  const projectRoot = resolveProjectRoot(process.cwd());
-  return path.relative(projectRoot, path.join(gdctxRootDir(), "raw", `${id}.log`));
+/** The `raw:` address of a reservation — project-root-relative, as printed. */
+function rawAddress(reservation: ArtifactReservation): string {
+  return path.relative(resolveProjectRoot(process.cwd()), reservation.rawPath);
 }
 
 async function writeArtifact({
-  id,
+  reservation,
   kind,
   command,
   raw,
   summary,
   exitCode,
 }: {
-  id?: string;
+  reservation?: ArtifactReservation;
   kind: string;
   command: string;
   raw: string;
@@ -678,12 +698,16 @@ async function writeArtifact({
   const root = gdctxRootDir();
   const rawRoot = path.join(root, "raw");
   const artifactsRoot = path.join(root, "artifacts");
-  await mkdir(rawRoot, { recursive: true });
-  await mkdir(artifactsRoot, { recursive: true });
 
-  const resolvedId = id ?? newArtifactId(kind);
-  const rawPath = path.join(rawRoot, `${resolvedId}.log`);
-  const summaryPath = path.join(artifactsRoot, `${resolvedId}.md`);
+  // Callers that do not need to quote their own address inside the summary
+  // (diff, rg) reserve here instead; either way the pair is claimed before a
+  // byte is written to it.
+  // Reserving already created both directories, so there is nothing left to
+  // mkdir here.
+  const claimed = reservation ?? (await newArtifactReservation(kind));
+  const resolvedId = claimed.id;
+  const rawPath = claimed.rawPath;
+  const summaryPath = claimed.summaryPath;
   const latestRawPath = path.join(rawRoot, "latest.log");
   const latestSummaryPath = path.join(artifactsRoot, "latest.md");
   const bytesIn = Buffer.byteLength(raw);
@@ -712,10 +736,26 @@ ${JSON.stringify(artifact, null, 2)}
 \`\`\`
 `;
 
+  // The durable pair: these two paths are reserved, so nothing else can be
+  // writing them and a plain write is enough.
   await writeFile(rawPath, raw, "utf8");
   await writeFile(summaryPath, summaryWithMeta, "utf8");
-  await writeFile(latestRawPath, raw, "utf8");
-  await writeFile(latestSummaryPath, summaryWithMeta, "utf8");
+
+  // `latest.*` is the one address that is deliberately shared, so concurrent
+  // runs DO contend for it. Two hazards, both handled here rather than left to
+  // the reader to notice:
+  //
+  //   · a reader catching a half-finished write would see a truncated log that
+  //     looks like a short command. `writeFileAtomic` renames into place, so
+  //     `latest.*` is only ever some run's complete output.
+  //   · `latest.log` and `latest.md` are two writes, so two runs can interleave
+  //     and leave one run's log beside another run's summary. Nothing can make
+  //     two files swap atomically — instead `latest.md` carries its OWN
+  //     `rawPath` in the metadata block above, and `ctx show latest --raw`
+  //     follows that pointer to the reserved log rather than trusting
+  //     `latest.log`. The pair a reader gets back is therefore always one run's.
+  await writeFileAtomic(latestRawPath, raw);
+  await writeFileAtomic(latestSummaryPath, summaryWithMeta);
 
   return artifact;
 }

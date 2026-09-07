@@ -54,7 +54,7 @@ import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
-import { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, type AttributedSeed } from "./wrap-up-evidence";
+import { applyEvidenceRedactionFloor, courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, REDACTION_NOTICE_KIND, type AttributedSeed } from "./wrap-up-evidence";
 // AFC-19 (flow 239, phase 7): the model turn used to arrive as a static
 // `runModelTurn` import from `../harness/provider/single-turn`, which put the
 // entire provider registry into the public SAC facade's shipped graph. It is
@@ -119,7 +119,20 @@ export type MachineWrapUpResolution =
    * distinction survives at this boundary and on stderr (warn-once); widening
    * the group union is left to the lane that owns those two files.
    */
-  | { ok: false; code: "no_credential" | "no_model_turn" };
+  | { ok: false; code: "no_credential" | "no_model_turn" }
+  /**
+   * The redaction floor refused one of the evidence bodies outright (an
+   * `enforced`/`ci` workspace whose gate came back `fail`/`needs-approval`/
+   * `incomplete`, or a body with no format-safe representation at all). Kept
+   * as its OWN code, and carried through `proposeOneGroup` as the existing
+   * `"error"` group outcome rather than folded into `"no_credential"`: a
+   * security refusal that reports itself as a missing credential is a failure
+   * disguised as a different, benign failure, and a reviewer would go looking
+   * for an API key that was never the problem. `detail` is
+   * `prepareOutputForPersistence`'s own reason, which is already leak-safe
+   * (categories and counts, never spans).
+   */
+  | { ok: false; code: "security_denied"; detail: string };
 
 /** A Seed together with which slate it actually came from — a child's Seed is
  * NEVER laundered as the parent's own (spec: "attributed, not merged"). Exported
@@ -186,8 +199,36 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     2,
   )}\n`;
 
-  // 2. A deterministic content hash. Baking it into the evidence file NAMES
-  //    below (step 4) is what lets AC4's two near-simultaneous racers safely
+  // 2. The redaction floor, BEFORE the content is hashed, prompted or written.
+  //    `session-wrap-up.ts` — the sibling producer of this same diff/flow/seeds
+  //    evidence taxonomy — has always run this seam; this resolver did not, so
+  //    `gitDiff`'s raw bytes reached both the workspace tree and the model
+  //    prompt below unscrubbed. See `applyEvidenceRedactionFloor` for the
+  //    measured asymmetry. Running it here rather than just before
+  //    `writeFileAtomic` is deliberate: the model prompt in step 3 is an
+  //    egress of the same bytes, and a floor the prompt goes around is not a
+  //    floor.
+  //
+  //    The `path` given to the guard is the hash-free evidence path: the real
+  //    file names below embed `shortHash`, which is derived FROM the floored
+  //    content, and a path hint is not worth an ordering cycle.
+  const evidenceRelBase = path.posix.join(".metaproject", "workspaces", input.workspaceId, "machine-evidence");
+  const floor = await applyEvidenceRedactionFloor(input.cwd, [
+    { name: `${input.kind}.diff.txt`, content: diffText, path: path.posix.join(evidenceRelBase, `${input.kind}.diff.txt`), source: "tool-output" },
+    { name: `${input.kind}.flow.json`, content: flowSnapshotJson, path: path.posix.join(evidenceRelBase, `${input.kind}.flow.json`), source: "generated" },
+    { name: `${input.kind}.seeds.json`, content: seedsJson, path: path.posix.join(evidenceRelBase, `${input.kind}.seeds.json`), source: "generated" },
+  ]);
+  if (!floor.ok) return { ok: false, code: "security_denied", detail: floor.reason };
+  const [safeDiff, safeFlow, safeSeeds] = floor.bodies as [
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+  ];
+
+  // 3. A deterministic content hash — over the FLOORED bodies, which are the
+  //    bytes that actually get recorded, so the dedup identity and the evidence
+  //    it stands for can never disagree. Baking it into the evidence file NAMES
+  //    below (step 5) is what lets AC4's two near-simultaneous racers safely
   //    "collide" onto the SAME bytes when their evidence is genuinely
   //    identical (the common case this AC targets), while two racers that
   //    legitimately observe DIFFERENT evidence (a real flow-snapshot change
@@ -197,10 +238,10 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   //    folds into the deterministic PROPOSAL id (AC4's actual dedup
   //    mechanism, via `ProposalLifecycleService.create()`'s existing
   //    same-path `"conflict"` rejection — no new lock invented here).
-  const sourceRevision = sha256([diffText, flowSnapshotJson, seedsJson].join(" "));
+  const sourceRevision = sha256([safeDiff.content, safeFlow.content, safeSeeds.content].join(" "));
   const shortHash = sourceRevision.slice(0, 16);
 
-  // 3. Model summary, raced against a bounded timeout — mirrors
+  // 4. Model summary, raced against a bounded timeout — mirrors
   //    spawn-subagent-tool.ts's own child-deadline `Promise.race` exactly,
   //    including safely ignoring the abandoned promise on timeout (`void
   //    turn.catch(...)`) rather than leaving an unhandled rejection.
@@ -211,10 +252,11 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const system =
     "Summarize ONLY the machine evidence provided below — a git diff, a Flow snapshot, and the Seeds captured " +
     "this session for one proposal kind. Never invent facts that are not present in the evidence.";
+  // The floored bodies, not the raw ones: this prompt leaves the machine.
   const user =
-    `--- git diff ---\n${diffText.length > 0 ? diffText : "(no working-tree changes)"}\n\n` +
-    `--- flow snapshot ---\n${flowSnapshotJson}\n` +
-    `--- seeds (${input.kind}) ---\n${seedsJson}`;
+    `--- git diff ---\n${safeDiff.content.length > 0 ? safeDiff.content : "(no working-tree changes)"}\n\n` +
+    `--- flow snapshot ---\n${safeFlow.content}\n` +
+    `--- seeds (${input.kind}) ---\n${safeSeeds.content}`;
 
   // No port, no summary: refuse before any evidence is written (step 4 below
   // is the only writer, and it is never reached from here), exactly as the
@@ -255,7 +297,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     // Abandoned model-turn promise — safely ignored, never an unhandled
     // rejection (mirrors spawn-subagent-tool.ts's `void turn.catch(...)`).
     void turn.catch(() => {});
-    summary = mechanicalSummary(diffText, course);
+    summary = mechanicalSummary(safeDiff.content, course);
   } else {
     const result = modelResult!;
     if (result.text.trim().length === 0 && !result.credentialAvailable) {
@@ -264,31 +306,43 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
       // proceed with an empty or fabricated summary.
       return { ok: false, code: "no_credential" };
     }
-    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(diffText, course);
+    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(safeDiff.content, course);
   }
 
-  // 4. Only now — with a real summary in hand — persist evidence under the
+  // 5. Only now — with a real summary in hand — persist evidence under the
   //    WORKSPACE's own tree (never the session dir; that's `runWrapUp`'s
   //    unbound-candidate path, below) and NEVER under `session-evidence/`
   //    (AC5 — that directory name is `session-wrap-up.ts`'s own full-archive
   //    dump, a structurally different evidence shape this module must never
-  //    produce or reference).
+  //    produce or reference). The bytes written and the `revision` recorded for
+  //    them are the FLOORED ones, so a hash check downstream verifies exactly
+  //    what is on disk.
   const evidenceDir = path.join(input.cwd, ".metaproject", "workspaces", input.workspaceId, "machine-evidence");
   await mkdir(evidenceDir, { recursive: true });
   const diffFile = `${input.kind}.${shortHash}.diff.txt`;
   const flowFile = `${input.kind}.${shortHash}.flow.json`;
   const seedsFile = `${input.kind}.${shortHash}.seeds.json`;
-  await writeFileAtomic(path.join(evidenceDir, diffFile), diffText);
-  await writeFileAtomic(path.join(evidenceDir, flowFile), flowSnapshotJson);
-  await writeFileAtomic(path.join(evidenceDir, seedsFile), seedsJson);
+  await writeFileAtomic(path.join(evidenceDir, diffFile), safeDiff.content);
+  await writeFileAtomic(path.join(evidenceDir, flowFile), safeFlow.content);
+  await writeFileAtomic(path.join(evidenceDir, seedsFile), safeSeeds.content);
 
   const observedAt = now().toISOString();
   const relBase = `./.metaproject/workspaces/${input.workspaceId}/machine-evidence`;
   const evidence: WrapUpEvidence[] = [
-    { kind: "diff", uri: `${relBase}/${diffFile}`, revision: sha256(diffText), observedAt },
-    { kind: "flow", uri: `${relBase}/${flowFile}`, revision: sha256(flowSnapshotJson), observedAt },
-    { kind: "seeds", uri: `${relBase}/${seedsFile}`, revision: sha256(seedsJson), observedAt },
+    { kind: "diff", uri: `${relBase}/${diffFile}`, revision: sha256(safeDiff.content), observedAt },
+    { kind: "flow", uri: `${relBase}/${flowFile}`, revision: sha256(safeFlow.content), observedAt },
+    { kind: "seeds", uri: `${relBase}/${seedsFile}`, revision: sha256(safeSeeds.content), observedAt },
   ];
+  // Appended LAST so `evidence[0]` — the item `readVerifiedProposalEvidence`
+  // hands every owner writer as THE content — is still the diff. Present only
+  // when the floor actually changed something, so its presence is itself the
+  // signal, and hash-verified like every other item so it travels with the
+  // proposal instead of sitting beside it as a strippable footnote.
+  if (floor.notice !== undefined) {
+    const noticeFile = `${input.kind}.${shortHash}.redaction.md`;
+    await writeFileAtomic(path.join(evidenceDir, noticeFile), floor.notice);
+    evidence.push({ kind: REDACTION_NOTICE_KIND, uri: `${relBase}/${noticeFile}`, revision: sha256(floor.notice), observedAt });
+  }
 
   return {
     ok: true,
@@ -495,11 +549,22 @@ async function proposeOneGroup(params: {
       ...(params.modelTurn !== undefined ? { modelTurn: params.modelTurn } : {}),
       ...(params.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: params.modelTurnTimeoutMs } : {}),
     });
-    // Both `no_credential` and `no_model_turn` land on the existing
-    // `"no_credential"` group outcome — see `MachineWrapUpResolution`'s own
-    // comment for why that union is not widened here. `resolveMachineWrapUp`
-    // has already said which it was, once, on stderr.
-    if (!resolved.ok) return { kind: params.kind, outcome: "no_credential" };
+    if (!resolved.ok) {
+      // A refusal by the redaction floor is NOT a credential problem, and must
+      // not arrive at the Review UI wearing that label — a reviewer would go
+      // looking for an API key that was never missing. `"error"` is the
+      // existing `WrapUpGroupOutcome` slot for "this group failed, here is
+      // why", already consumed exhaustively by `catch-up.ts` and
+      // `tui/review-inspector.ts`, so this needs no union widening either.
+      if (resolved.code === "security_denied") {
+        return { kind: params.kind, outcome: "error", message: `wrap-up evidence refused by the security floor: ${resolved.detail}` };
+      }
+      // Both `no_credential` and `no_model_turn` land on the existing
+      // `"no_credential"` group outcome — see `MachineWrapUpResolution`'s own
+      // comment for why that union is not widened here. `resolveMachineWrapUp`
+      // has already said which it was, once, on stderr.
+      return { kind: params.kind, outcome: "no_credential" };
+    }
 
     const flowEvidence = resolved.resolution.evidence.find((item) => item.kind === "flow");
     const sourceRef = (flowEvidence ?? resolved.resolution.evidence[0])!.uri;
