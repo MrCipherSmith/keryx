@@ -277,6 +277,68 @@ Recorded via a Shared Agent Context proposal, accepted by a reviewer.
   }
 });
 
+test("a templated page cannot escape the contract by carrying none of its headings", async () => {
+  // The first wiring scoped by heading presence, which made the contract
+  // escapable by writing less: this page drew NO template finding at all,
+  // while the same page with four headings drew five. Measured on a temp wiki
+  // before the scope was changed to what the page declares itself to be.
+  const evasive = `# Nothing In The Shape
+
+Version: 0.1.0
+Type: business-rule
+Status: accepted
+
+Some prose that answers nothing in particular and carries none of the headings
+this page type is supposed to have.
+`;
+  const root = await wikiWith({ "business-rules/no-headings.md": evasive });
+  try {
+    const kinds = (await templateIssues(root)).map((issue) => issue.kind);
+    expect(kinds).toContain("coverage-record-missing");
+    expect(kinds.filter((kind) => kind === "field-missing").length).toBeGreaterThan(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the machine exemption is claimed by the producer's own stamp, not by the filename", async () => {
+  // Same bytes as the accepted SAC record above, with the one line the SAC
+  // owner-writer stamps removed. If the exemption were keyed on the
+  // `sac-proposal-*` filename — which anyone can choose — this page would stay
+  // silent. It must not: the exemption belongs to the producer, and a
+  // hand-written page cannot acquire it by omission.
+  const impostor = `# SAC and the wiki
+
+Version: 0.1.0
+Type: decision
+Status: draft
+Describes: none
+
+## Summary
+
+SAC complements wiki and graph; it does not replace them.
+
+## Details
+
+Recorded via a Shared Agent Context proposal, accepted by a reviewer.
+
+## Provenance
+
+- Source: hand-written
+
+## Changelog
+
+- 0.1.0 - Written by a person.
+`;
+  const root = await wikiWith({ "decisions/sac-proposal-impostor.md": impostor });
+  try {
+    const kinds = (await templateIssues(root)).map((issue) => issue.kind);
+    expect(kinds).toContain("coverage-record-missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("page types with no explanation template are silent, as before", async () => {
   const component = `# Module billing
 
