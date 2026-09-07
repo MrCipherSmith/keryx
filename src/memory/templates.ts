@@ -19,6 +19,7 @@ Version: 0.2.0
 Type: ${type}
 Status: draft
 Confidence: ${confidence}
+Caveat:
 
 ## Summary
 
@@ -32,6 +33,8 @@ Main memory content.
 
 - Source: ${source}
 - Link:
+- Author:
+- Confirmed-By:
 - Created: ${date}
 - Updated: ${date}
 
@@ -57,6 +60,7 @@ Version: 0.1.0
 Type: <lesson|decision|constraint|known-mistake|...>
 Status: draft
 Confidence: medium
+Caveat: <optional deferral/qualification attached to this claim>
 
 ## Summary
 
@@ -70,6 +74,8 @@ Main memory content.
 
 - Source: review|health|orchestrator|manual|skill-verifier
 - Link: <path or URL>
+- Author: <optional author/proposer>
+- Confirmed-By: <optional confirming participant>
 - Created: YYYY-MM-DD
 - Updated: YYYY-MM-DD
 

@@ -55,6 +55,16 @@ export function parseEntry(
 
   const type = field(lines, "Type") ?? folderType;
   const created = bulletField(provenance, "Created");
+  // AFC-25 / AC6 (flow 234): who wrote/proposed the claim, the confirming
+  // participant / acceptance basis, and a deferral or qualification caveat
+  // attached to the claim. Follows the file's existing conventions: Author
+  // and Confirmed-By are provenance bullets alongside Source/Link, Caveat is
+  // a top-level "Name: value" header field like Version/Status. Absent ⇒
+  // null, resolved to the explicit "unknown" sentinel downstream (report.ts),
+  // never silently dropped.
+  const author = bulletField(provenance, "Author");
+  const confirmedBy = bulletField(provenance, "Confirmed-By");
+  const caveat = field(lines, "Caveat");
   // C2/C3 header fields (all optional; absence ⇒ null / class-by-type).
   const entryClass = normalizeClass(field(lines, "Class")) ?? classForType(type);
   const validFrom = field(lines, "Valid-From");
@@ -81,6 +91,9 @@ export function parseEntry(
       source: bulletField(provenance, "Source"),
       link: bulletField(provenance, "Link"),
     },
+    author,
+    confirmedBy,
+    caveat,
     class: entryClass,
     validFrom,
     validTo,

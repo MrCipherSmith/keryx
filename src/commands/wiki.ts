@@ -11,6 +11,7 @@ import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
 import { migrateMarkers, refreshPages, verifyPages } from "../wiki/refresh";
 import { gitCmd } from "../sync/provenance";
 import { optionValue } from "../lib/args";
+import { TemporalValidationError } from "../memory/temporal";
 
 export async function wikiCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -246,22 +247,54 @@ async function runValidate(): Promise<void> {
   process.exitCode = 1;
 }
 
+// AFC-06 (flow 234) T22: `--as-of` is spelled identically to memory's
+// (`keryx memory search ... --as-of <YYYY-MM-DD>`, `runSearch` below) rather
+// than a second historical-mode idiom, and its errors are reported through
+// the SAME `TemporalValidationError` memory's `--as-of` already throws
+// (`../memory/temporal.ts`) -- one validator, one error shape, two callers.
 async function runAsk(args: string[]): Promise<void> {
   const question = args.find((arg) => !arg.startsWith("--"));
   if (!question) {
-    console.error('Usage: keryx wiki ask "<question>" [--k <n>] [--rerank]');
+    console.error('Usage: keryx wiki ask "<question>" [--k <n>] [--rerank] [--as-of <YYYY-MM-DD>] [--json]');
     process.exitCode = 1;
     return;
   }
   const kValue = optionValue(args, "--k");
-  const result = await wikiAsk({
-    cwd: process.cwd(),
-    question,
-    ...(kValue ? { k: Number.parseInt(kValue, 10) } : {}),
-    ...(args.includes("--rerank") ? { rerank: true } : {}),
-  });
+  const asOf = optionValue(args, "--as-of");
+
+  let result;
+  try {
+    result = await wikiAsk({
+      cwd: process.cwd(),
+      question,
+      ...(kValue ? { k: Number.parseInt(kValue, 10) } : {}),
+      ...(args.includes("--rerank") ? { rerank: true } : {}),
+      ...(asOf ? { asOf } : {}),
+    });
+  } catch (error) {
+    if (error instanceof TemporalValidationError) {
+      printWikiValidationError(error, args.includes("--json"));
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   console.log(result.answerMarkdown);
+}
+
+function printWikiValidationError(error: TemporalValidationError, json: boolean): void {
+  const payload = { code: error.code, field: error.field, message: error.message, action: error.action };
+  if (json) {
+    console.log(JSON.stringify({ error: payload }, null, 2));
+  } else {
+    console.error(`[${payload.code}] ${payload.field}: ${payload.message} Action: ${payload.action}`);
+  }
 }
 
 async function runEnrich(args: string[]): Promise<void> {
@@ -451,7 +484,10 @@ Usage:
   keryx wiki index
   keryx wiki check-links
   keryx wiki validate
-  keryx wiki ask "<question>" [--k <n>] [--rerank]
+  keryx wiki ask "<question>" [--k <n>] [--rerank] [--as-of <YYYY-MM-DD>] [--json]
+                         # --as-of admits non-current wiki pages/memory entries
+                         # too, each marked HISTORICAL with its lifecycle state
+                         # and reason; without it, only current items are cited
   keryx wiki enrich [<page>|--all] [--force] [--list] [--resume] [--limit N] [--concurrency N]
                     [--refresh-graph] [--max-tokens N] [--no-validate]
                     [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]

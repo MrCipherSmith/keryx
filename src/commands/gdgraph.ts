@@ -13,6 +13,8 @@ import { graphMaybeStale, STALE_NOTE } from "../gdgraph/staleness";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
+import { requireSymbols, SymbolsUnavailableError } from "../gdgraph/symbols-capability";
+import { createTreesitterSpec, type GrammarDiagnosis } from "../gdgraph/treesitter/adapter";
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
   if (process.env.KERYX_GDGRAPH_LOCAL !== "1") {
@@ -225,21 +227,112 @@ async function runSymbolsCapability(rest: string[]): Promise<void> {
   }
 }
 
+// T19 finding 4 (flow 234 review): a per-language capability probe for
+// `requireSymbols()`'s optional `diagnoses` parameter. `capability/seam.ts`'s
+// `resolveCapability` and `treesitter/adapter.ts`'s own
+// `resolveTreesitterCapability` both discard the adapter (and therefore its
+// `GrammarDiagnosis[]`) the instant `isAvailable()` reports false — by
+// design, they only ever hand a caller "usable adapter, or null, degrade" —
+// so neither can supply the missing-vs-incompatible breakdown AC5 requires.
+// This probes the SAME two gates `resolveCapability` does (1: manifest-
+// enabled; 2: the lazy optional-dependency import) using only what
+// `capability/seam.ts` and `treesitter/adapter.ts` already export
+// (`isCapabilityEnabled`, `createTreesitterSpec`, `spec.load`) — neither file
+// is edited for this — but keeps the built adapter across gate 4
+// (`isAvailable()`) so its `getDiagnoses()` (present on every real
+// `TreesitterAdapter`; duck-typed here exactly the way `adapter.ts` itself
+// narrows it internally) can be forwarded instead of thrown away. Never
+// throws: any failure here degrades to `[]`, which `requireSymbols` already
+// treats as "no symbol layer, no diagnoses supplied" (`no-symbol-layer`).
+async function probeSymbolDiagnoses(cwd: string): Promise<GrammarDiagnosis[]> {
+  try {
+    const config = await loadGdgraphConfig(cwd);
+    const spec = createTreesitterSpec(cwd, {
+      languages: config.treesitter.languages,
+      grammarsPath: config.treesitter.grammarsPath,
+    });
+    if (!(await isCapabilityEnabled(cwd, spec.id))) {
+      return [];
+    }
+    let dep: unknown;
+    if (spec.optionalDependency) {
+      try {
+        dep = await import(spec.optionalDependency);
+      } catch {
+        dep = undefined;
+      }
+    }
+    const adapter = spec.load({ dep, asset: null }) as unknown as {
+      isAvailable(): Promise<boolean>;
+      getDiagnoses?: () => GrammarDiagnosis[];
+    };
+    await adapter.isAvailable().catch(() => false);
+    return typeof adapter.getDiagnoses === "function" ? adapter.getDiagnoses() : [];
+  } catch {
+    return [];
+  }
+}
+
 async function runSymbol(rest: string[]): Promise<void> {
   const name = rest.filter((a) => !a.startsWith("--")).join(" ").trim();
+  const asJson = rest.includes("--json");
   if (!name) {
-    console.error('Usage: keryx gdgraph symbol "<name>"');
+    console.error('Usage: keryx gdgraph symbol "<name>" [--json]');
     process.exitCode = 1;
     return;
   }
 
   const graph = await loadGraph(process.cwd());
   if (!graph.symbols || graph.symbols.length === 0) {
-    console.log("# gdgraph symbol");
-    console.log("");
-    console.log("Symbol layer not active (no symbols.jsonl).");
-    console.log("Enable it:  keryx gdgraph symbols enable   then   keryx gdgraph build");
-    console.log(`Meanwhile:  keryx gdgraph find "${name}"  ·  keryx ctx rg "${name}"`);
+    // T19 finding 4 (flow 234 review, AFC-13/AC5): an EXPLICIT demand for
+    // symbol-level capability — `keryx gdgraph symbol` names exactly one
+    // symbol, unlike `affected`'s best-effort symbol-aware fallback above —
+    // must get a typed, actionable error, not silent prose at exit 0.
+    // `requireSymbols`/`SymbolsUnavailableError` already existed
+    // (`../gdgraph/symbols-capability.ts`) and were tested, but had no
+    // production caller; this is that caller. `probeSymbolDiagnoses` below
+    // forwards the per-language `GrammarDiagnosis[]` so the thrown error
+    // distinguishes "grammar not installed" from "grammar installed but
+    // incompatible with this runtime" (requirement 3) instead of one
+    // indistinguishable "unavailable".
+    const diagnoses = await probeSymbolDiagnoses(process.cwd());
+    try {
+      requireSymbols(graph, diagnoses);
+      // `graph.symbols` was actually defined (just empty) — not a capability
+      // failure, just nothing to look up. Falls through below with an empty
+      // symbol set rather than reporting a phantom error.
+    } catch (error) {
+      if (!(error instanceof SymbolsUnavailableError)) {
+        throw error;
+      }
+      if (asJson) {
+        console.log(
+          JSON.stringify(
+            {
+              schemaVersion: 1,
+              error: error.code,
+              message: error.message,
+              remedy: error.remedy,
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        console.error(error.message);
+        console.error(error.remedy);
+      }
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  if (!graph.symbols) {
+    // Unreachable: `requireSymbols()` above only returns (instead of
+    // throwing) when `graph.symbols !== undefined`, so falling through past
+    // the guard above without it defined never actually happens — this
+    // exists only so TypeScript's narrowing agrees, and as a defensive
+    // backstop against that invariant ever changing silently.
     return;
   }
 
@@ -418,10 +511,73 @@ async function runAffected(rest: string[]): Promise<void> {
     }
   }
 
-  const affected = computeAffected(graph, target, {
-    depth: Number.isFinite(depth) ? depth : config.affected.defaultDepth,
-    ranked: ranked || asJson,
-  });
+  // `resolveGraphTarget` refuses an ambiguous suffix rather than guessing, and
+  // it refuses by throwing. Uncaught, that reached the user as a raw stack
+  // trace, which buries a message that is already precise about what to type
+  // instead. It is a caller error like the two below it, so it gets the same
+  // shape: the message on stderr, exit 1, no trace.
+  let affected: ReturnType<typeof computeAffected>;
+  try {
+    affected = computeAffected(graph, target, {
+      depth: Number.isFinite(depth) ? depth : config.affected.defaultDepth,
+      ranked: ranked || asJson,
+    });
+  } catch (error) {
+    console.error(`gdgraph: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // AFC-10 (flow 234, phase 2, frozen AC3): "an unknown target differs from
+  // indexed/no edges." `gdgraph/service.ts`'s `createGdgraphService().affected()`
+  // already makes this distinction (throws `UnknownGraphTargetError`), but this
+  // command calls `computeAffected()` directly and owns its own symbol-aware
+  // pre-resolution above (rewriting `target` to a resolved file when it names a
+  // symbol) — behavior the service facade does not perform — so routing through
+  // the facade here would mean reloading the graph/config a second time and
+  // either dropping that pre-resolution or duplicating it on the facade side.
+  // Replicating the membership check locally against the already-loaded graph
+  // is the minimal, faithful fix: `affected.target` is the RESOLVED target
+  // (exact/suffix match), or — per `target.ts`'s own contract — the normalized
+  // input unchanged when nothing matched, so membership in the loaded node set
+  // is exactly the signal that distinguishes "never indexed" from "indexed,
+  // zero edges".
+  const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
+  if (!isKnownNode) {
+    // A caller error (typo, wrong path, or a new file the graph has not been
+    // rebuilt for), not an empty-but-valid answer — exit 1, matching this
+    // file's own convention for a bad argument (missing-argument usage above,
+    // and the unknown-subcommand / unknown-query-verb paths further up).
+    const message =
+      `gdgraph: "${target}" is not a node in the built graph (never indexed, or the ` +
+      `path/symbol does not exist) — this is not the same as an indexed target with ` +
+      `zero edges. Run \`keryx gdgraph build\` if the file is new, or double-check the path.`;
+    // T19 finding 6 (flow 234 review): a caller that asked for `--json` got
+    // empty stdout and this prose on stderr — a JSON consumer parsing stdout
+    // saw nothing at all, not even a machine-readable failure. Matches
+    // `commands/modules.ts`'s own convention (its "not-initialized" branch):
+    // a structured error object on stdout under `--json`, prose on stderr
+    // otherwise — never both for the same failure.
+    if (asJson) {
+      console.log(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            error: "unknown-graph-target",
+            target,
+            dependencies: [],
+            dependents: [],
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.error(message);
+    }
+    process.exitCode = 1;
+    return;
+  }
 
   if (resolutionNote && !asJson) {
     console.log(`# ${resolutionNote}`);
@@ -605,7 +761,7 @@ Usage:
   keryx gdgraph query cycles
   keryx gdgraph query orphans
   keryx gdgraph find "<terms>"
-  keryx gdgraph symbol "<name>"
+  keryx gdgraph symbol "<name>" [--json]
   keryx gdgraph symbols <enable|disable|status>
   keryx gdgraph path "<A>" "<B>"
   keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]

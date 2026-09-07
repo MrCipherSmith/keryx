@@ -9,6 +9,7 @@ import type {
   SymbolNode,
   WikiPageNode,
 } from "./types";
+import { TYPE_ONLY_IMPORT_KIND } from "./types";
 import { resolveGraphTarget } from "./target";
 
 export async function loadGraph(projectRoot: string): Promise<GraphData> {
@@ -116,7 +117,19 @@ export function getCycles(graph: GraphData): string[][] {
     // load-order cycle this query answers (P1, flow 140). Excluding it here
     // — rather than reclassifying `edge.kind` — leaves orphans/affected
     // untouched (AC5): both still treat the edge as a normal import.
-    if (edge.kind !== "imports" || edge.importKind === "dynamic-import") {
+    //
+    // A `type-only` edge (AFC-11, flow 234) is excluded for the same reason:
+    // `import type`/`export type … from`/an all-`type`-specifier import is
+    // erased by the compiler, so it never runs at module-load time and a
+    // cycle closed only through such edges is not a real runtime deadlock.
+    // Same non-reclassification rule applies — `edge.kind` stays "imports"
+    // so getOrphans/getAffected/computeAffected still see it as a real
+    // dependency for impact analysis; only this load-order adjacency drops it.
+    if (
+      edge.kind !== "imports" ||
+      edge.importKind === "dynamic-import" ||
+      edge.importKind === TYPE_ONLY_IMPORT_KIND
+    ) {
       continue;
     }
     adjacency.get(edge.from)?.push(edge.to);

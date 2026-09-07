@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 1: Interface trust: containment redaction HTTP health scan and Shell parser",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:07.081Z",
-  "updatedAt": "2026-09-07T05:01:17.777Z",
+  "updatedAt": "2026-09-07T07:15:07.052Z",
   "source": {
     "type": "description",
     "ref": null
@@ -43,10 +43,14 @@
     "AC8": {
       "at": "2026-09-07T04:15:37.548Z",
       "note": "Evidence is explicit and immutable: full suite 7110 pass / 18 skip / 0 fail across 579 files (log PHASE-ACCEPTANCE-full-suite-2026-09-07T04-12-14Z.log, sha256 bf37a0dc...), both TypeScript targets and repository lint captured with their own logs and hashes. The health gate remains fail and is NOT relabelled: 27 blocking-priority rows across seven transitive packages, zero product-code findings, dependency refresh owned by phase 8. AC5 is deliberately left unconfirmed. Twenty-two independent reviews ran; every finding is fixed or recorded in artifacts/RESIDUALS.md"
+    },
+    "AC5": {
+      "at": "2026-09-07T07:15:07.052Z",
+      "note": "Три пункта самого критерия (field-name bypass, маскирование URL-секрета, публичная ссылка не считается отправкой) были выполнены ещё в поставке фазы. Подтверждение удерживалось не из-за них, а из-за обхода обязательного слоя автозагрузки: определение ссылки в блочном контейнере не распознавалось, и payload проходил все четыре публичные границы. T89 закрыл двенадцать однострочных написаний, T90 перечислил формы переноса destination и закрыл восемь подтверждённых рендерером обходов. Два оставленных неизмеренными зазора (CRLF и табуляция перед маркером) перемерены оркестратором против marked: обходов нет, остальное — безопасная пере-аппроксимация. 295 тестов security зелёные, стоимость линейна и измерена."
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/489"
   },
   "tasks": [
     {
@@ -2288,6 +2292,36 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T89",
+      "title": "AC5: закрыть обход в блочных контейнерах — пропускать маркеры цитаты и списка в сканере определений ссылок",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T90",
+      "title": "AC5 остаток: destination определения переносится на вторую строку с повторённым маркером контейнера — readDefinitionDestination читает маркер как destination и выпускает настоящий URL",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -4083,6 +4117,59 @@
       "at": "2026-09-07T05:01:17.777Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-07T06:35:54.198Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/489 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T06:36:04.635Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T06:36:08.782Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC5 | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#489 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__489.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 489 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: FAIL: 14 finding(s) at P0; WARN: health regression 5 vs baseline; OPTIONAL: sonarqube source skipped"
+    },
+    {
+      "at": "2026-09-07T06:36:42.198Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/489 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T06:36:42.311Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T06:36:46.375Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC5 | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#489 was last collected against 8e94a737de19674d5d884822dbab70949dadd66c (round 1), but the PR head is d7c4aa098cb4a00b523f640ee28b4acd3f1dbcab. Everything anyone said after 8e94a737de19674d5d884822dbab70949dadd66c is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 489 --sha <pr-head>`. | verifier-stats (unobserved): no ingested round to read verification stats from | health: FAIL: 14 finding(s) at P0; WARN: health regression 5 vs baseline; OPTIONAL: sonarqube source skipped"
+    },
+    {
+      "at": "2026-09-07T06:43:01.373Z",
+      "event": "task-added",
+      "detail": "T89: AC5: закрыть обход в блочных контейнерах — пропускать маркеры цитаты и списка в сканере определений ссылок"
+    },
+    {
+      "at": "2026-09-07T06:58:38.782Z",
+      "event": "task-done",
+      "detail": "T89: AC5: закрыть обход в блочных контейнерах — пропускать маркеры цитаты и списка в сканере определений ссылок"
+    },
+    {
+      "at": "2026-09-07T06:58:38.882Z",
+      "event": "task-added",
+      "detail": "T90: AC5 остаток: destination определения переносится на вторую строку с повторённым маркером контейнера — readDefinitionDestination читает маркер как destination и выпускает настоящий URL"
+    },
+    {
+      "at": "2026-09-07T07:14:56.967Z",
+      "event": "task-done",
+      "detail": "T90: AC5 остаток: destination определения переносится на вторую строку с повторённым маркером контейнера — readDefinitionDestination читает маркер как destination и выпускает настоящий URL"
+    },
+    {
+      "at": "2026-09-07T07:15:07.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Три пункта самого критерия (field-name bypass, маскирование URL-секрета, публичная ссылка не считается отправкой) были выполнены ещё в поставке фазы. Подтверждение удерживалось не из-за них, а из-за обхода обязательного слоя автозагрузки: определение ссылки в блочном контейнере не распознавалось, и payload проходил все четыре публичные границы. T89 закрыл двенадцать однострочных написаний, T90 перечислил формы переноса destination и закрыл восемь подтверждённых рендерером обходов. Два оставленных неизмеренными зазора (CRLF и табуляция перед маркером) перемерены оркестратором против marked: обходов нет, остальное — безопасная пере-аппроксимация. 295 тестов security зелёные, стоимость линейна и измерена."
     }
   ]
 }

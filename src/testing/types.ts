@@ -9,6 +9,12 @@ export type TestingScript = {
 export type TestingContext = {
   schemaVersion: 1;
   generatedAt: string;
+  // AFC-09 (flow 234, AC2): a project-file walk can fail to fully enumerate the tree
+  // (e.g. a permission-denied subdirectory). `incomplete` distinguishes "the refresh
+  // could not look everywhere" from a legitimate `complete` scan that found nothing -
+  // the two must never be indistinguishable to a consumer.
+  status: "complete" | "incomplete";
+  incompleteReasons: string[];
   frameworks: string[];
   scripts: TestingScript[];
   configs: string[];
@@ -41,6 +47,14 @@ export type TestingReport = {
     failed: number;
     skipped: number;
     total: number;
+  };
+  // AFC-09 / Flow 234 T21 (finding 1, AC2): the testing-context refresh this run
+  // used to select/execute tests. A refresh that could not fully walk the tree
+  // (e.g. a permission-denied subdirectory) must be visible to the report's
+  // consumer, not discarded after being computed - see `TestingContext.status`.
+  context: {
+    status: TestingContext["status"];
+    incompleteReasons: string[];
   };
   selection: {
     changed: boolean;

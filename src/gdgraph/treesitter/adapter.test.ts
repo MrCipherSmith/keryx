@@ -165,6 +165,110 @@ test("availability-false — missing dep ⇒ isAvailable false", async () => {
   }
 });
 
+// --- AFC-13 / AC5 requirement 3: "the grammar is not installed" and "the
+// grammar is installed but its ABI version does not match this runtime" must
+// be distinguishable outcomes, not one collapsed "unavailable". Neither
+// failure mode can be produced on a real machine without either uninstalling
+// `web-tree-sitter` (not available as a seam) or installing an ABI-mismatched
+// grammar build (forbidden by this task). Both are exercised instead through
+// the module's own seam: `spec.load({ dep, asset })` accepts an injected
+// `dep` exactly like the existing tests above, and a `Language.load` that
+// rejects is a faithful simulation of a real ABI/version-mismatch error from
+// `web-tree-sitter` (the real runtime rejects `Language.load` the same way
+// for a grammar built against an incompatible ABI).
+function brokenLanguageParserModule(rejection: Error): unknown {
+  function MockParser(this: unknown) {}
+  (MockParser as unknown as { init: () => Promise<void> }).init = async () => {};
+  (MockParser as unknown as { Language: { load: (p: string) => Promise<unknown> } }).Language = {
+    load: async () => {
+      throw rejection;
+    },
+  };
+  MockParser.prototype.setLanguage = function setLanguage(): void {};
+  MockParser.prototype.parse = function parse(): { rootNode: TsNode } {
+    return { rootNode: bootTree() };
+  };
+  return MockParser;
+}
+
+test("AC5.req3 — grammar asset never resolved ⇒ diagnosis status 'missing', not 'incompatible'", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ts-diag-missing-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    // No assets.lock.json entry at all ⇒ resolveGrammar can never find the asset.
+    const spec = createTreesitterSpec(root, { languages: ["typescript"], grammarsPath: null });
+    const adapter = spec.load({ dep: mockParserModule(), asset: null }) as unknown as {
+      isAvailable(): Promise<boolean>;
+      getDiagnoses(): { language: string; status: string; reason: string }[];
+    };
+
+    expect(await adapter.isAvailable()).toBe(false);
+    const diagnoses = adapter.getDiagnoses();
+    expect(diagnoses).toHaveLength(1);
+    expect(diagnoses[0]?.status).toBe("missing");
+    expect(diagnoses[0]?.reason).not.toContain("ABI");
+    expect(diagnoses[0]?.reason).toContain("not resolved");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC5.req3 — grammar asset resolves and verifies, but the runtime refuses to load it ⇒ diagnosis status 'incompatible', not 'missing'", async () => {
+  const { root, grammarsDir } = await makeWorkspaceWithGrammar();
+  try {
+    const spec = createTreesitterSpec(root, { languages: ["typescript"], grammarsPath: grammarsDir });
+    const abiError = new Error("Incompatible language version 13. Expected minimum 14, maximum 15");
+    const adapter = spec.load({ dep: brokenLanguageParserModule(abiError), asset: null }) as unknown as {
+      isAvailable(): Promise<boolean>;
+      getDiagnoses(): { language: string; status: string; reason: string }[];
+    };
+
+    // The grammar resolved (it is on disk with a verified checksum) — this is
+    // the crucial difference from the "missing" case above — but the runtime
+    // could not load it, so overall availability is still false.
+    expect(await adapter.isAvailable()).toBe(false);
+    const diagnoses = adapter.getDiagnoses();
+    expect(diagnoses).toHaveLength(1);
+    expect(diagnoses[0]?.status).toBe("incompatible");
+    expect(diagnoses[0]?.reason).toContain("Incompatible language version 13");
+    expect(diagnoses[0]?.reason).not.toContain("not resolved");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC5.req3 — missing and incompatible are genuinely different values end to end (adapter diagnosis -> warn reason -> requireSymbols code), never the same outcome", async () => {
+  const missingRoot = await mkdtemp(path.join(tmpdir(), "keryx-ts-diag-a-"));
+  const incompatibleWorkspace = await makeWorkspaceWithGrammar();
+  try {
+    await mkdir(path.join(missingRoot, ".metaproject"), { recursive: true });
+    const missingSpec = createTreesitterSpec(missingRoot, { languages: ["typescript"], grammarsPath: null });
+    const missingAdapter = missingSpec.load({ dep: mockParserModule(), asset: null }) as unknown as {
+      isAvailable(): Promise<boolean>;
+      getDiagnoses(): { language: string; status: string; reason: string }[];
+    };
+    await missingAdapter.isAvailable();
+
+    const incompatibleSpec = createTreesitterSpec(incompatibleWorkspace.root, {
+      languages: ["typescript"],
+      grammarsPath: incompatibleWorkspace.grammarsDir,
+    });
+    const incompatibleAdapter = incompatibleSpec.load({
+      dep: brokenLanguageParserModule(new Error("bad wasm magic number")),
+      asset: null,
+    }) as unknown as {
+      isAvailable(): Promise<boolean>;
+      getDiagnoses(): { language: string; status: string; reason: string }[];
+    };
+    await incompatibleAdapter.isAvailable();
+
+    expect(missingAdapter.getDiagnoses()[0]?.status).not.toBe(incompatibleAdapter.getDiagnoses()[0]?.status);
+  } finally {
+    await rm(missingRoot, { recursive: true, force: true });
+    await rm(incompatibleWorkspace.root, { recursive: true, force: true });
+  }
+});
+
 test("AC1.1 additive write path — enrich writes symbols.jsonl + calls.jsonl via a mock adapter", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-enrich-"));
   try {

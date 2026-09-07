@@ -736,11 +736,96 @@ const BRACKET_OPEN = /(!?)\[/g;
 // after the description so it can only match where a renderer would look for it.
 // Groups: 1 = angle-bracket destination, 2 = bare destination.
 const INLINE_DESTINATION = /\(\s*(?:<([^<>\n]*)>|([^)\s]+))[^)]*\)/y;
-// A reference definition's destination, `: URL`, anchored (sticky) just past the
-// `]:`. Groups: 1 = angle-bracket destination, 2 = bare destination. This is the
-// tail of the pattern `readReferenceDefinitions` replaced, unchanged, so the
-// destination and its offset are read exactly as they were.
-const REFERENCE_DESTINATION = /\s*(?:<([^<>\n]*)>|(\S+))/y;
+// A reference definition's destination, `: URL`. Groups: 1 = angle-bracket
+// destination, 2 = bare destination. Anchored (sticky) at the first byte of the
+// destination itself — NOT at `]:` — because leading whitespace, including any
+// newline it crosses, is now read by `skipDestinationLeadingWhitespace` below
+// rather than by a `\s*` prefix on this pattern. See that function for why the
+// split happened (T90).
+const REFERENCE_DESTINATION = /(?:<([^<>\n]*)>|(\S+))/y;
+
+// T90. The block-container bypass RESIDUALS.md recorded as a narrower residual
+// when T89 closed the twelve single-line cases: a definition whose DESTINATION
+// itself wraps to a second physical line, where the continuation line REPEATS
+// a block-container marker (`> [ref]:` \ `> URL`), was read wrong. The old
+// `\s*` prefix on `REFERENCE_DESTINATION` crosses the newline — `\s` matches
+// LF — and lands on the continuation line's first byte. When that byte starts
+// a container marker (`>`, a bullet, an ordered-list digit run) the bare
+// alternative `\S+` takes the marker itself as the destination, one byte, and
+// releases the real URL on the bytes after it. Reproduced against `marked`,
+// not inferred: the renderer resolves the multi-line destination through the
+// repeated marker and fetches the attacker host; the detector produced ZERO
+// findings, so the allowlist could not help because there was no finding to
+// allow.
+//
+// THE FIX REUSES `skipBlockContainerPrefix`, THE SAME FUNCTION, NOT A SECOND
+// MARKER GRAMMAR. That function already answers exactly the question this
+// site needs answered — "how far past this line's start can a renderer's
+// container markers be shown to reach" — for the label-opening `[` in
+// `readReferenceDefinitions`. Writing a second copy of that grammar here is
+// the mistake that let the two surfaces diverge in the first place: T89 only
+// taught the LABEL side to cross a container prefix, and the destination side
+// was left exactly as it was, which is this bypass. So the destination reader
+// crosses a newline the same way: consume the newline, then hand the position
+// just past it to `skipBlockContainerPrefix`, then keep skipping ordinary
+// whitespace and repeat if another newline follows.
+//
+// OFFSETS STAY ON THE ORIGINAL BYTES. `skipDestinationLeadingWhitespace`
+// returns an index into the SAME `content` string `readDefinitionDestination`
+// was already called with; nothing is rewritten or copied. `readDestination`'s
+// caller already relies on this (`applyRedaction` masks the bytes as written),
+// and this repair does not change that contract.
+//
+// MEMOISATION STAYS SOUND. `readDefinitionDestination` is memoised by
+// `afterColon` alone, and the reason it was sound before still holds: this
+// function, like the sticky regex it feeds, is a pure function of `content`
+// (fixed for the cache's lifetime) and the starting offset — nothing else. It
+// reads no external state and its own recursion bottoms out on `content` and
+// an index, so the same `(content, afterColon)` pair always produces the same
+// answer and the cache key does not need to grow a second dimension.
+//
+// COST STAYS LINEAR, by composing two already-linear arguments rather than by
+// a new one. `skipBlockContainerPrefix` costs at most the length of the line
+// it is called on (its own comment proves this: no backtracking, `at` never
+// moves backward). This function calls it at most once per newline crossed,
+// and it never revisits a byte once it has advanced past it — the whole
+// function is a single forward pointer, exactly like the `\s*` it replaces.
+// So one call's total cost is bounded by how far it travels, which is bounded
+// by `content.length`. And the DISJOINTNESS argument `readDefinitionDestination`
+// already carries — the whitespace/marker run starting at one `afterColon`
+// offset cannot cross a `:` character, because `:` matches none of this
+// function's advance conditions (not `\s`, not a recognised marker byte), and
+// every distinct `afterColon` is immediately preceded by a `:` — is UNCHANGED
+// by widening what a "run" may consume, because a `:` still stops it. Distinct
+// memoised calls therefore still cover pairwise-disjoint spans of `content`,
+// and total destination-side work is still bounded by `content.length`, not by
+// `content.length` times the number of `]:` offsets.
+//
+// DOES NOT MOVE THE ESCAPE-AWARE SCAN CURSOR. This function is reached from
+// both READING 1 and READING 2 in `readReferenceDefinitions`, through the
+// shared `destinations` cache, exactly as before T90; which reading may
+// advance `resumeAt` is decided entirely in `readReferenceDefinitions` and is
+// untouched here.
+function skipDestinationLeadingWhitespace(content: string, from: number): number {
+  let at = from;
+  for (;;) {
+    if (at >= content.length) return at;
+    const code = content.charCodeAt(at);
+    if (LINE_TERMINATORS.has(code)) {
+      at = skipBlockContainerPrefix(content, at + 1);
+      continue;
+    }
+    // The same class `\s` matched, minus the line terminators just handled
+    // above: ASCII tab/VT/FF/space by code, anything above ASCII by the
+    // engine's own `\s` — the identical fast path `isCollapsibleSpace` already
+    // uses for label-whitespace collapsing, reused rather than re-derived.
+    if (isCollapsibleSpace(code, content[at] as string)) {
+      at += 1;
+      continue;
+    }
+    return at;
+  }
+}
 
 // CommonMark matches a link label after Unicode case folding AND after
 // collapsing every run of internal whitespace — a newline included — to a
@@ -802,6 +887,136 @@ function normaliseLabel(label: string): string {
 // backtracking anywhere.
 const LINE_TERMINATORS = new Set([0x0a, 0x0d, 0x2028, 0x2029]);
 
+// T89. The block-container bypass RESIDUALS.md recorded as an accepted
+// limitation: a reference definition prefixed by a blockquote, bullet-list or
+// ordered-list marker (`> [ref]: URL`, `- [ref]: URL`, `1. [ref]: URL`) was
+// invisible to the line-start scan below, because it looked only for
+// whitespace before the opening `[`. `marked` still resolves the definition —
+// container prefixes are exactly what CommonMark strips before parsing block
+// content — so the renderer fetched the attacker host while this scanner
+// registered nothing at all: no key, no candidate span, ZERO findings, and the
+// allowlist could not help because there was no finding to allow. Twelve
+// spellings (four image forms times three container prefixes) were
+// enumerated and reproduced.
+//
+// Phase 1 judged this needed real block-structure parsing and that the only
+// terminating alternative was adding a markup-parser dependency; that option
+// was measured and rejected on separate grounds (not a declared dependency,
+// would throw on module load where an optional dependency is skipped). The
+// judgement that no narrow fix existed was wrong. The scan below is already
+// line-based: it walks to a line start and skips leading spaces/tabs before
+// testing for `[`. Extending that skip to also consume block-container
+// markers closes all twelve without a parser, because `at` stays an index
+// into the ORIGINAL `content` throughout — nothing downstream (`open`, the
+// label slice, the destination reader) has its offset touched. It answers a
+// narrower question than "is this line inside a container": "how far past
+// this line's start can a renderer's block-container markers be shown to
+// reach before something that is not one of them appears", which is exactly
+// what the existing whitespace skip already answered for indentation alone.
+//
+// One round, repeated until a round consumes nothing: skip spaces/tabs (the
+// existing rule, run first every round so multiple spaces between or after
+// markers are absorbed the same way indentation always was), then try to
+// consume ONE marker of any of the three kinds CommonMark defines for a
+// non-indented container:
+//   - blockquote: `>`, optionally followed by exactly one space (not a tab —
+//     CommonMark's blockquote marker consumes at most one following space);
+//   - bullet list: `-`, `*` or `+`, followed by a space or a tab;
+//   - ordered list: one or more digits, then `.` or `)`, followed by a space
+//     or a tab.
+// Nesting and order are both unconstrained — `> - 1. [ref]: URL` and
+// `- > [ref]: URL` both close — because a renderer's own container nesting is
+// unconstrained and a scan that stopped at one level would just move the
+// twelve spellings' bypass down one level of nesting rather than closing it.
+//
+// WHY THIS DOES NOT OVER-APPROXIMATE. Every round still ends by requiring the
+// LITERAL marker grammar above; ordinary prose that merely starts with `-` or
+// a digit (`-5 items`, `3.14 is pi`) fails the "followed by space/tab" or
+// "followed by `.`/`)`" test on its first character and the loop breaks
+// immediately, `at` unchanged — so a line that is not actually a container
+// prefix is returned exactly as the old whitespace-only skip would have left
+// it, and the caller's existing "is the next byte `[`, and is the byte after
+// its close `:`" test is what decides whether anything is a definition, same
+// as before. This function only widens how far a scan may look past
+// indentation for that `[`; it does not relax what counts as one.
+//
+// COST. Every branch below either breaks immediately (consuming nothing) or
+// advances `at` by at least one character, and `at` never moves backward, so
+// one line's skip costs at most that line's own length — there is no
+// backtracking and no re-reading of a character this skip has already
+// passed. Summed over every line start the scan visits, total work is
+// therefore bounded by `content.length`, the same linear shape the rest of
+// this function's cost proof already rests on; an attacker maximizes a
+// single line's cost by writing it as one arbitrarily long run of
+// alternating markers, and that line still costs only its own length, not
+// the whole document's.
+//
+// ESCAPE-AWARE READING. Both readings below call this once, before either
+// runs, and read the SAME `at` it returns — so widening the skip cannot by
+// itself let one reading move the cursor past a line the other would have
+// matched. That rule is enforced by `resumeAt`, which this function does not
+// touch: only a successful READING 1 advances it, exactly as before.
+//
+// LAZY CONTINUATION — the residual this repair does NOT close, stated rather
+// than left to be inferred. This is a per-line, forward-only skip: it
+// recognises a container marker only when it is written on the SAME line as
+// the `[` that opens the definition. CommonMark also lets some container
+// content continue on a FOLLOWING line without repeating the marker (list-item
+// content indented to the item's own content column with the marker omitted
+// on later lines, and a block quote's own lazy-continuation rule for a
+// paragraph already open inside it). A definition whose block-container
+// marker is carried by a PRIOR line and is not repeated on the definition's
+// own line is not recognised here and remains open — see the RESIDUALS.md
+// entry for T89 for the traced example, what was and was not measured against
+// a renderer for it, and why it is not one of the twelve closed by this
+// function.
+function skipBlockContainerPrefix(content: string, from: number): number {
+  let at = from;
+  for (;;) {
+    while (at < content.length) {
+      const code = content.charCodeAt(at);
+      if (code !== 0x20 && code !== 0x09) break;
+      at += 1;
+    }
+    const marker = content.charCodeAt(at);
+    if (marker === 0x3e /* > */) {
+      at += 1;
+      if (content.charCodeAt(at) === 0x20) at += 1; // at most one space, never a tab
+      continue;
+    }
+    if (marker === 0x2d || marker === 0x2a || marker === 0x2b /* - * + */) {
+      const after = content.charCodeAt(at + 1);
+      if (after === 0x20 || after === 0x09) {
+        at += 2;
+        continue;
+      }
+      break; // e.g. "-5": not a bullet marker, and not whitespace either
+    }
+    if (marker >= 0x30 && marker <= 0x39 /* 0-9 */) {
+      let digitsEnd = at + 1;
+      while (
+        digitsEnd < content.length &&
+        content.charCodeAt(digitsEnd) >= 0x30 &&
+        content.charCodeAt(digitsEnd) <= 0x39
+      ) {
+        digitsEnd += 1;
+      }
+      const punctuation = content.charCodeAt(digitsEnd);
+      const after = content.charCodeAt(digitsEnd + 1);
+      if (
+        (punctuation === 0x2e || punctuation === 0x29) /* . or ) */ &&
+        (after === 0x20 || after === 0x09)
+      ) {
+        at = digitsEnd + 2;
+        continue;
+      }
+      break; // e.g. "3.14": no space/tab after the "." — not an ordered marker
+    }
+    break;
+  }
+  return at;
+}
+
 interface ReferenceDefinitions {
   // label → every definition of it, in document order (T78#F-002: the floor does
   // not bet on a renderer's precedence rule, so none of them is discarded)
@@ -850,6 +1065,12 @@ type DefinitionDestination = { url: string; start: number; end: number } | null;
 // Total destination work is therefore at most `content.length`: linear, with no
 // budget and no bound on any length, which is the same shape of argument the
 // label side already carries.
+//
+// T90 widened what that leading run may consume — a crossed newline may now
+// also cross a repeated block-container marker — without widening the
+// disjointness argument's premise: `skipDestinationLeadingWhitespace` still
+// stops at a `:` (see that function's own comment for why), so the bound above
+// is unchanged in shape, only in what one call's own linear cost pays for.
 function readDefinitionDestination(
   content: string,
   afterColon: number,
@@ -857,14 +1078,15 @@ function readDefinitionDestination(
 ): DefinitionDestination {
   const cached = cache.get(afterColon);
   if (cached !== undefined) return cached;
-  REFERENCE_DESTINATION.lastIndex = afterColon;
+  const at = skipDestinationLeadingWhitespace(content, afterColon);
+  REFERENCE_DESTINATION.lastIndex = at;
   const match = REFERENCE_DESTINATION.exec(content);
   const url = match ? (match[1] ?? match[2] ?? "") : "";
   const destination: DefinitionDestination =
     match && url
       ? {
           url,
-          start: afterColon + match[0].lastIndexOf(url),
+          start: at + match[0].indexOf(url),
           end: REFERENCE_DESTINATION.lastIndex,
         }
       : null;
@@ -929,12 +1151,12 @@ function readReferenceDefinitions(content: string): ReferenceDefinitions {
   let lineStart = 0;
   for (;;) {
     if (lineStart >= resumeAt && closes.length > 0) {
-      let at = lineStart;
-      while (at < content.length) {
-        const code = content.charCodeAt(at);
-        if (code !== 0x20 && code !== 0x09) break;
-        at += 1;
-      }
+      // T89. Was a plain whitespace-only skip; now also consumes block-
+      // container markers (blockquote/bullet/ordered, any order, any
+      // nesting) ahead of the same `[` test, so `at` is still an index into
+      // this same `content` and every offset downstream is unaffected. See
+      // `skipBlockContainerPrefix` for the cost and coverage argument.
+      const at = skipBlockContainerPrefix(content, lineStart);
       if (content.charCodeAt(at) === 0x5b) {
         const open = at;
         const first = firstAtOrAfter(closes, open + 1);

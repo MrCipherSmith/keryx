@@ -49,7 +49,23 @@
     "result": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "title", "type", "status", "score", "reason", "summary"],
+      "required": [
+        "path",
+        "title",
+        "type",
+        "claimType",
+        "status",
+        "score",
+        "reason",
+        "summary",
+        "scope",
+        "version",
+        "confidence",
+        "provenance",
+        "author",
+        "confirmedBy",
+        "caveat"
+      ],
       "properties": {
         "path": {
           "type": "string",
@@ -59,12 +75,68 @@
         },
         "title": { "type": "string", "maxLength": 512 },
         "type": { "type": "string", "maxLength": 128 },
+        "claimType": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "AFC-25: carried verbatim from the entry's type. Never derived from score/confidence -- confidence ranks results, it does not reclassify a hypothesis/observation as a decision or an instruction."
+        },
         "status": {
           "enum": ["draft", "accepted", "deprecated", "conflict", "superseded"]
         },
         "score": { "type": "number" },
         "reason": { "type": "string", "maxLength": 512 },
-        "summary": { "type": "string", "maxLength": 2000 }
+        "summary": { "type": "string", "maxLength": 2000 },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "AC6 (flow 234) / policies.md: the entry's scope (module/entity), rendered compactly. Absent upstream renders the literal \"unknown\" sentinel."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "AFC-25: exact source version. Absent upstream renders the literal \"unknown\" sentinel, never an omitted/empty field."
+        },
+        "confidence": { "enum": ["low", "medium", "high"] },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "link"],
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "description": "AFC-25: absent upstream renders the literal \"unknown\" sentinel."
+            },
+            "link": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "description": "AFC-25: absent upstream renders the literal \"unknown\" sentinel."
+            }
+          }
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "AC6 (flow 234) / AFC-25: who wrote/proposed the claim. Distinct from confirmedBy. Absent upstream renders the literal \"unknown\" sentinel."
+        },
+        "confirmedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "AFC-25: confirming participant / acceptance basis. Absent upstream renders the literal \"unknown\" sentinel."
+        },
+        "caveat": {
+          "description": "AFC-25: deferral/qualification attached to the claim. null means not captured upstream, distinct from a present-but-empty string.",
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 2000 }
+          ]
+        }
       }
     }
   }

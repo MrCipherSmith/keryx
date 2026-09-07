@@ -26,8 +26,13 @@ export function renderProceduralBlock(entries: MemoryEntry[]): string {
   ];
   for (const entry of entries) {
     const summary = entry.summary ? ` — ${clipAutomaticRecallText(entry.summary)}` : "";
+    // AFC-25: a deferral/qualification caveat travels with the entry into the
+    // handoff. Omitting it here would flatten the evidence into a bare,
+    // unqualified "follow it" assertion the reader has no way to know is
+    // deferred or conditional. Entries without a caveat render unchanged.
+    const caveat = entry.caveat ? ` — caveat: ${clipAutomaticRecallText(entry.caveat)}` : "";
     lines.push(
-      `- [${entry.type}] ${clipAutomaticRecallText(entry.title, 200)}${summary} (\`${clipAutomaticRecallText(entry.relativePath, 200)}\`)`,
+      `- [${entry.type}] ${clipAutomaticRecallText(entry.title, 200)}${summary}${caveat} (\`${clipAutomaticRecallText(entry.relativePath, 200)}\`)`,
     );
   }
   return `${lines.join("\n")}\n`;

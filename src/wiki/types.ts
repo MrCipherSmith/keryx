@@ -1,3 +1,10 @@
+// AFC-06 (flow 234) T22: `LifecycleState` is the shared vocabulary a
+// non-current wiki page or memory entry is labelled with in `wikiAsk`'s
+// historical mode (see `WikiAskInput.asOf`/`WikiAskCitation.historical`
+// below) -- carried verbatim from `computeLifecycle` (`../memory/lifecycle.ts`),
+// never a second wiki-local set of state names.
+import type { LifecycleState } from "../memory/lifecycle";
+
 export type WikiPageType =
   | "architecture"
   | "domain-model"
@@ -78,6 +85,15 @@ export type WikiPage = {
   verifiedScope?: string | null;
   /** Raw `Describes:` patterns as written; resolution lives in `describes.ts`. */
   describes?: string[];
+  // AFC-06 (flow 234): the same event-time/supersession fields `MemoryEntry`
+  // carries (`src/memory/types.ts`), mirrored here for lifecycle parity.
+  // Populated by `collect.ts` (unhyphenated `ValidFrom`/`ValidTo`/
+  // `SupersededBy` frontmatter) and classified through the shared
+  // `computeLifecycle` (`../memory/lifecycle.ts`) so a page and a memory
+  // entry admit/reject the same six input classes identically.
+  validFrom?: string | null;
+  validTo?: string | null;
+  supersededBy?: string | null;
 };
 
 export type WikiStatusInput = { cwd: string };
@@ -177,6 +193,18 @@ export type WikiAskInput = {
   // Opt into a C1 embedding rerank of the deterministic citation set (when the
   // memory.embedding capability resolves). Default false ⇒ pure lexical.
   rerank?: boolean | undefined;
+  // AFC-06 (flow 234) T22: wiki's explicit historical mode, spelled and
+  // validated exactly like memory's `--as-of` (`SearchFilters.asOf`,
+  // `../memory/types.ts`; `validateAsOf`, `../memory/temporal.ts`) rather than
+  // a second idiom. Absent ⇒ default retrieval, byte-for-byte unchanged: only
+  // current wiki pages/memory entries are admitted, exactly as before this
+  // field existed. Present ⇒ policy's "История ... доступна только по явному
+  // режиму" — both candidate sources also admit non-current items, classified
+  // against this date instead of "today", and every non-current citation
+  // carries its `historical`/`lifecycleState`/`lifecycleReasons` (see
+  // `WikiAskCitation` below) so a reader can never mistake it for current
+  // guidance.
+  asOf?: string | undefined;
 };
 export type WikiAskCitation = {
   path: string;
@@ -184,6 +212,14 @@ export type WikiAskCitation = {
   excerpt: string;
   score: number;
   source: "wiki" | "memory";
+  // AFC-06 (flow 234) T22: set only when `WikiAskInput.asOf` was supplied AND
+  // this citation is not current (`LifecycleResult.historical`,
+  // `../memory/lifecycle.ts`). `lifecycleState`/`lifecycleReasons` are that
+  // same call's `state`/`reasons`, carried verbatim -- the policy's "с полным
+  // status" requirement -- never re-derived or re-worded here.
+  historical?: boolean;
+  lifecycleState?: LifecycleState;
+  lifecycleReasons?: string[];
 };
 export type WikiAskResult = {
   question: string;

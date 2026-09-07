@@ -6,8 +6,15 @@
 // `staleness.ts` did `import type { ResumeState } from "./enrich"` while
 // `enrich.ts` imports `checkPageStalenessGate`/`computePageNodeHash`/
 // `isPageUnchangedSinceLastEnrich` from `./staleness` at runtime — type-only
-// on one side, but this repo's `keryx gdgraph query cycles` treats type-only
-// edges the same as value edges, so it still flagged as a structural cycle.
+// on one side, but at the time this split was made, `keryx gdgraph query
+// cycles` treated type-only edges the same as value edges, so it still
+// flagged as a structural cycle. AFC-11 (flow 234) later gave a type-only
+// edge (`import type`/`export type … from`/an all-`type`-specifier import)
+// its own `importKind`, which the cycle query now excludes from load-order
+// adjacency — a cycle formed only through type-only edges like this one is no
+// longer reported. The split itself is left in place regardless: it is still
+// the correct shape (no runtime import cycle either way), just no longer the
+// only way to avoid a FALSE report from `keryx gdgraph query cycles`.
 // `enrich.ts` re-exports this type (`export type { ResumeState } from
 // "./resume-state"`) so existing importers of `ResumeState` from `./enrich`
 // (e.g. `enrich.test.ts`) do not need to change their import path.

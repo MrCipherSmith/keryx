@@ -98,3 +98,36 @@ test("AC2.4 — dependencies are the unchanged one-hop forward set", async () =>
     expect(result.dependencies).toEqual(deps);
   }
 });
+
+// ---------------------------------------------------------------------------
+// AFC-11 (flow 234) requirement 3 — a type consumer is visible in impact
+// analysis. `edge.importKind === "type-only"` is erased at runtime and is
+// excluded from `getCycles`' load-order adjacency, but the edge itself is
+// still `kind: "imports"` — a real dependency for "what do I have to
+// re-check" — so `computeAffected` (and `getAffected`) must keep surfacing
+// it. Constructed in-memory rather than through `buildGraph()`: this is a
+// pure-function contract on `GraphData`, unrelated to how the edge's
+// `importKind` was derived.
+// ---------------------------------------------------------------------------
+
+test("AFC-11 req3 — a file that only type-imports the target is still a visible dependent", () => {
+  const graph: GraphData = {
+    nodes: [
+      { id: "src/types.ts", kind: "file", path: "src/types.ts", language: "typescript" },
+      { id: "src/consumer.ts", kind: "file", path: "src/consumer.ts", language: "typescript" },
+    ],
+    edges: [
+      {
+        id: "edge:1",
+        from: "src/consumer.ts",
+        to: "src/types.ts",
+        kind: "imports",
+        specifier: "./types",
+        importKind: "type-only",
+      },
+    ],
+  };
+
+  expect(computeAffected(graph, "src/types.ts").dependents).toEqual(["src/consumer.ts"]);
+  expect(getAffected(graph, "src/types.ts").dependents).toEqual(["src/consumer.ts"]);
+});
