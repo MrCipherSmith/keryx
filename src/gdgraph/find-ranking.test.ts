@@ -59,6 +59,13 @@ const MEMORY_SEARCH = "src/memory/search.ts";
 // The irrelevant global celebrity: matches only the corpus-wide term, and is
 // the most-depended-on file in the whole graph.
 const POPULAR = "src/core/search-registry.ts";
+// A pair built solely to make the fan-in tie-break observable. They match the
+// query identically — same single corpus-wide term, same basename shape — and
+// differ only in dependents. Crucially their PATHS disagree with their fan-in
+// order: `zz-` sorts after `aa-`, so the alphabetical fallback would put the
+// low-fan-in file first. Only a real tie-break inverts that.
+const TIE_HIGH_FANIN = "src/tie/zz-search-adapter.ts";
+const TIE_LOW_FANIN = "src/tie/aa-search-adapter.ts";
 
 function buildCorpus(): GraphData {
   const nodes: GraphNode[] = [
@@ -67,6 +74,8 @@ function buildCorpus(): GraphData {
     fileNode(SECTION_RANKING),
     fileNode(MEMORY_SEARCH),
     fileNode(POPULAR),
+    fileNode(TIE_HIGH_FANIN),
+    fileNode(TIE_LOW_FANIN),
   ];
   // 55 filler files that all carry "search" in their path, making it a term
   // with no discriminating power in this corpus.
@@ -76,6 +85,8 @@ function buildCorpus(): GraphData {
   const edges: GraphEdge[] = [
     ...edgesInto(POPULAR, 400, "pop"),
     ...edgesInto(MEMORY_SEARCH, 12, "mem"),
+    ...edgesInto(TIE_HIGH_FANIN, 30, "tiehi"),
+    ...edgesInto(TIE_LOW_FANIN, 2, "tielo"),
   ];
   // The caller nodes themselves are not file nodes in this corpus on purpose:
   // fan-in must be readable from the edge list alone, exactly as `findNodes`
@@ -112,13 +123,54 @@ test("important related code does not lose to irrelevant global popularity", () 
   expect(askRank).toBeLessThan(memoryRank);
 });
 
-test("fan-in still breaks a tie between two equally discriminating matches", () => {
+test("fan-in still breaks a tie, and the tie-break is doing the work", () => {
   // The fix must not throw fan-in away — it must demote it to a tie-break.
-  // POPULAR and MEMORY_SEARCH match the identical single corpus-wide term with
-  // an identical basename hit, so nothing but fan-in separates them.
+  //
+  // THIS ASSERTION USED TO BE VACUOUS, and an independent review proved it:
+  // it compared POPULAR (`src/core/search-registry.ts`) with MEMORY_SEARCH
+  // (`src/memory/search.ts`), and `core` sorts before `memory`, so the
+  // alphabetical fallback ordered them the same way fan-in does. Deleting the
+  // fan-in tie-break entirely left all twelve assertions in this file green —
+  // including this one, which exists to prevent exactly that.
+  //
+  // The pair below is built so alphabetical order and fan-in order DISAGREE:
+  // the file with more dependents sorts last. Only a real tie-break can put it
+  // first, and `localeCompare` alone puts it last.
   const results = findNodes(CORPUS, QUERY);
   const paths = results.map((r) => r.path);
-  expect(paths.indexOf(POPULAR)).toBeLessThan(paths.indexOf(MEMORY_SEARCH));
+  expect(paths.indexOf(TIE_HIGH_FANIN)).toBeLessThan(paths.indexOf(TIE_LOW_FANIN));
+  expect(TIE_HIGH_FANIN > TIE_LOW_FANIN).toBe(true);
+});
+
+test("fan-in is a tie-break and is never added into the score", () => {
+  // The other half the review found unpinned: `score += dependents * 0.01`
+  // passed every assertion in this file. A tie-break that leaks into the score
+  // is not a tie-break — it is popularity with a smaller coefficient, which is
+  // the defect this fixture exists to catch.
+  //
+  // These two match identically and differ only in fan-in, so equal SCORES are
+  // what distinguishes "fan-in orders equals" from "fan-in changes the value".
+  const results = findNodes(CORPUS, QUERY);
+  const high = results.find((r) => r.path === TIE_HIGH_FANIN);
+  const low = results.find((r) => r.path === TIE_LOW_FANIN);
+  expect(high).toBeDefined();
+  expect(low).toBeDefined();
+  expect(high?.score).toBe(low?.score as number);
+  expect(high?.dependents).not.toBe(low?.dependents);
+
+  // And the ordering invariant that goes with it: scores run downhill. The
+  // moment fan-in enters the sort key rather than breaking ties, a
+  // higher-fan-in file with a lower score climbs over a lower-fan-in file with
+  // a higher one, and this sequence stops being monotonic.
+  //
+  // Measured honestly: the review's `score += dependents * 0.01` does NOT fail
+  // this, because in a corpus where a discriminating term scores ~30 and a
+  // corpus-wide one ~0.7, four points of fan-in bonus flip no pair — the
+  // mutation changes no observable output. Rather than reshape the fixture
+  // until an inert mutation fails, this pins the property that matters: any
+  // fan-in leakage large enough to reorder anything reorders this list.
+  const scores = results.map((r) => r.score);
+  expect(scores).toEqual([...scores].sort((a, b) => b - a));
 });
 
 test("a corpus-wide term contributes no ballast score of its own", () => {

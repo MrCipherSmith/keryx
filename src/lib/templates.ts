@@ -723,8 +723,22 @@ export function renderMetaprojectDashboardHtml({
   const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
   const healthClass = health ? healthTone(health) : "";
   const healthScoreTone = health ? healthTone(health) : "";
-  const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
-  const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
+  // A count is not coverage, and this slot in particular said it was.
+  //
+  // The alternative value here is "needs content", so any non-zero count read
+  // as "does not need content" — while five of the wiki's page types hold no
+  // pages at all. The number and the judgement were the same field, so the
+  // number was doing the judging. They are separated now: the count says what
+  // it counts, and the phrase that means "nothing more is needed" is not one
+  // this slot is able to imply.
+  const wikiStatus =
+    wikiPages.length > 0 ? `${wikiPages.length} pages on file` : enableGdwiki ? "no pages yet" : "disabled";
+  const memoryStatus =
+    memoryEntries.length > 0
+      ? `${memoryEntries.length} entries on file`
+      : enableMemory
+        ? "no entries yet"
+        : "disabled";
   const healthSources = health?.sources.map((source) => `
             <tr class="health-row" data-search="${escapeHtml(`${source.source} ${source.status} ${source.findings}`)}">
               <td>${escapeHtml(source.source)}</td>
