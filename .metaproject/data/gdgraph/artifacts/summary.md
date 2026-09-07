@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 1194
+- Source files indexed: 1197
 - Imported asset files indexed: 4
-- Total nodes: 1198
-- Edges: 3617
-- Import edges: 3555
+- Total nodes: 1201
+- Edges: 3631
+- Import edges: 3569
 - Asset edges: 9
 - Unresolved imports: 53
 - Import resolution: 98.5%
@@ -20,9 +20,9 @@
 | commands | 127 |
 | tui | 100 |
 | lib | 89 |
+| health | 51 |
 | sac | 51 |
 | security | 50 |
-| health | 48 |
 | wiki | 45 |
 | memory | 43 |
 | gdgraph | 42 |

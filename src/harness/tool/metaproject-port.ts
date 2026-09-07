@@ -65,6 +65,27 @@ export interface MemorySearchHit {
   score: number;
   /** Bounded snippet of the entry body. */
   excerpt?: string;
+  // --- F-002 (flow 234 review, BLOCKER) / AFC-25 / AC6: knowledge provenance
+  // carried into the hit, mirroring the compressed-report shape memory/report.ts
+  // already produces (renderMemorySearchReport) rather than a second one. A
+  // council-confirmed, sourced, versioned decision must not arrive
+  // byte-identical to a completely unsourced entry at THIS boundary — the one
+  // an agent actually reads (both the interactive tool and the MCP tool
+  // project through the same adapter). Optional at the TYPE level only so a
+  // hit literal built before this fix (e.g. an out-of-scope test fixture)
+  // still type-checks; `createMetaprojectAdapter().memorySearch` always
+  // populates every field below, falling back to the literal "unknown"
+  // sentinel exactly like memory/report.ts does — never an omitted key.
+  /** Exact source fragment/version. Absent upstream -> "unknown". */
+  version?: string;
+  /** Exact source fragment + link. Absent upstream -> "unknown" for each. */
+  provenance?: { source: string; link: string };
+  /** Who wrote/proposed the claim. Absent upstream -> "unknown". */
+  author?: string;
+  /** The confirming participant / acceptance basis. Absent upstream -> "unknown". */
+  confirmedBy?: string;
+  /** A deferral/qualification caveat. `null` -> not captured upstream — distinct from an omitted field. */
+  caveat?: string | null;
 }
 
 /** Applied memory-search filters (all optional) — memory-search-result.schema.json. */
@@ -135,6 +156,16 @@ export interface TestRelatedResult {
   file: string;
   /** Related test file paths (naming + directory heuristic), sorted. */
   tests: string[];
+  // F-003 (flow 234 review, MAJOR) / AC2: the testing-context refresh status
+  // behind this answer, mirroring TestingReport.context. An inability to fully
+  // walk the tree (e.g. a permission-denied subdirectory) must read as
+  // `incomplete`, never as an indistinguishable "there are no related tests"
+  // empty success. Optional only because a `MetaprojectPort` implementation
+  // predating this field would not set it; the reference adapter always does.
+  context?: {
+    status: "complete" | "incomplete";
+    incompleteReasons: string[];
+  };
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }

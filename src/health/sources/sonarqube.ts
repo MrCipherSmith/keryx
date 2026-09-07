@@ -112,6 +112,26 @@ export const sonarqubeAdapter: SourceAdapter = {
     }
     return findings;
   },
+
+  // F-018 (flow 234 T27, minor): unlike the eslint and dependency-audit
+  // adapters, this one declared no `validate` step - `parse()` above already
+  // tolerates malformed input by returning `[]` findings, so a corrupt
+  // sonar-issues.json was recorded by `run.ts` as `status: available`,
+  // `parse: parsed`, 0 findings: indistinguishable from a real clean scan.
+  // Follows the same convention as the two siblings that already declare
+  // `validate` rather than inventing a third one.
+  validate(raw: RawSourceResult) {
+    let data: unknown;
+    try {
+      data = JSON.parse(raw.content);
+    } catch {
+      return { valid: false, error: "Sonar issues JSON parse failed" };
+    }
+    const issues = (data as { issues?: unknown } | null)?.issues;
+    return Array.isArray(issues)
+      ? { valid: true, format: "sonar-issues-json" }
+      : { valid: false, error: "Sonar issues JSON format was not recognized" };
+  },
 };
 
 // Sonar `component` is "<projectKey>:<path>"; keep the path part.

@@ -123,11 +123,29 @@ export function formatMemory(result: MemorySearchResult): InteractiveToolResult 
     return { output: `No memory entries matched "${result.query}".`, isError: false };
   }
   const header = `Memory hits for "${result.query}" (${result.hits.length}):`;
-  const lines = result.hits.map((hit) => {
+  const lines = result.hits.flatMap((hit) => {
     const meta = [hit.type, hit.status].filter((v) => v !== undefined && v.length > 0).join("/");
     const suffix = meta.length > 0 ? ` [${meta}]` : "";
     const excerpt = hit.excerpt !== undefined && hit.excerpt.length > 0 ? ` — ${hit.excerpt}` : "";
-    return `  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`;
+    const rows = [`  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`];
+    // F-002 (flow 234 review, BLOCKER) / AFC-25 / AC6: provenance always
+    // renders on its own line when the adapter populated it — mirroring
+    // memory/report.ts's renderMemorySearchReportMarkdown shape rather than
+    // inventing a second one — so a council-confirmed, sourced, versioned
+    // entry reads as visibly distinct from an unsourced one instead of
+    // arriving byte-identical. A hit built by a port implementation that
+    // predates this field (no `version`/`provenance`/`author`/`confirmedBy`
+    // at all) still renders as before — this is additive, not a new
+    // required shape.
+    if (hit.version !== undefined || hit.provenance !== undefined || hit.author !== undefined || hit.confirmedBy !== undefined) {
+      rows.push(
+        `    version: ${hit.version ?? "unknown"} | provenance: source=${hit.provenance?.source ?? "unknown"} link=${hit.provenance?.link ?? "unknown"} author=${hit.author ?? "unknown"} confirmedBy=${hit.confirmedBy ?? "unknown"}`,
+      );
+      if (hit.caveat) {
+        rows.push(`    caveat: ${hit.caveat}`);
+      }
+    }
+    return rows;
   });
   return { output: [header, ...lines].join("\n"), isError: false };
 }
@@ -191,7 +209,32 @@ const MEMORY_OUTPUT_SCHEMA: Record<string, unknown> = {
   properties: {
     query: { type: "string" },
     filters: { type: "object" },
-    hits: { type: "array" },
+    hits: {
+      type: "array",
+      // F-002 (flow 234 review, BLOCKER): widened alongside MemorySearchHit —
+      // provenance fields are additive and optional (a hit predating this fix
+      // still validates), never a second, divergent output shape.
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          title: { type: "string" },
+          type: { type: "string" },
+          status: { type: "string" },
+          score: { type: "number" },
+          excerpt: { type: "string" },
+          version: { type: "string" },
+          provenance: {
+            type: "object",
+            properties: { source: { type: "string" }, link: { type: "string" } },
+          },
+          author: { type: "string" },
+          confirmedBy: { type: "string" },
+          caveat: { type: ["string", "null"] },
+        },
+        required: ["path", "title", "score"],
+      },
+    },
     error: { type: "string" },
   },
   required: ["query", "hits"],
@@ -246,11 +289,26 @@ export function formatTestRelated(result: TestRelatedResult): InteractiveToolRes
   if (result.error !== undefined) {
     return { output: `test_related failed: ${result.error}`, isError: true };
   }
-  if (result.tests.length === 0) {
-    return { output: `No related tests found for ${result.file}.`, isError: false };
+  const lines: string[] = [];
+  // F-003 (flow 234 review, MAJOR) / AC2: branch on an incomplete
+  // testing-context refresh BEFORE the "no related tests" empty branch below.
+  // An agent asking which tests cover a file, over a subtree the walk could
+  // not read, must be told the answer may be missing tests — never handed a
+  // legitimate-looking empty result with no error and nothing to distinguish
+  // it from "this file genuinely has none".
+  if (result.context?.status === "incomplete") {
+    lines.push(
+      "INCOMPLETE: the testing context could not be fully refreshed — this answer may be missing tests:",
+      ...result.context.incompleteReasons.map((reason) => `  - ${reason}`),
+      "",
+    );
   }
-  const lines = result.tests.map((test) => `  - ${test}`);
-  return { output: [`Related tests for ${result.file} (${result.tests.length}):`, ...lines].join("\n"), isError: false };
+  if (result.tests.length === 0) {
+    lines.push(`No related tests found for ${result.file}.`);
+    return { output: lines.join("\n"), isError: false };
+  }
+  lines.push(`Related tests for ${result.file} (${result.tests.length}):`, ...result.tests.map((test) => `  - ${test}`));
+  return { output: lines.join("\n"), isError: false };
 }
 
 /** Render a `healthStatus` result as readable text. */
@@ -359,6 +417,16 @@ const TEST_RELATED_OUTPUT_SCHEMA: Record<string, unknown> = {
   properties: {
     file: { type: "string" },
     tests: { type: "array", items: { type: "string" } },
+    // F-003 (flow 234 review, MAJOR): widened alongside TestRelatedResult —
+    // an incomplete testing-context refresh must be visible in the
+    // structured result, not just the rendered text.
+    context: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["complete", "incomplete"] },
+        incompleteReasons: { type: "array", items: { type: "string" } },
+      },
+    },
     error: { type: "string" },
   },
   required: ["file", "tests"],
