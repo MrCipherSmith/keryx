@@ -19,7 +19,18 @@ function boundedLimit(limit: number): number {
   return Math.min(MAX_AUTOMATIC_RESULTS, Math.max(1, Math.floor(limit)));
 }
 
-/** Shared accepted/current boundary for automatic agent-facing recall. */
+/**
+ * Shared accepted/current boundary for automatic agent-facing recall.
+ *
+ * T20 finding 1 (flow 234 review, BLOCKER): this always sets BOTH `status`
+ * (defaulting to `"accepted"`) and `asOf` (today). Before the fix, that
+ * combination bypassed `search.ts`'s supersession check entirely on the
+ * `asOf` path -- see the `temporalMatch` comment in `search.ts` for the
+ * fix: an unconditional guard rejects any entry whose status still literally
+ * reads `"accepted"` while it also carries a `supersededBy` pointer (a state
+ * the system never produces through normal use), independent of `asOf`/
+ * status-filter branching, so this function keeps setting `asOf` unchanged.
+ */
 export function acceptedCurrentSearchFilters(
   now: Date,
   filters: Pick<SearchFilters, "module" | "entity" | "class" | "status" | "limit"> = {},

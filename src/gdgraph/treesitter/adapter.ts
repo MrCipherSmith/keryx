@@ -37,6 +37,46 @@ export interface TreesitterAdapterConfig {
   grammarsPath: string | null;
 }
 
+// Per-language probe outcome (AFC-13 / AC5). "missing" and "incompatible" are
+// deliberately distinct: a grammar that never resolved (not installed, or
+// failed the Asset Resolver's checksum) has a different remedy — install it —
+// from one that resolved and verified on disk but the installed
+// `web-tree-sitter` runtime refuses to load it (an ABI/version mismatch
+// between the pinned grammar build and the runtime) — whose remedy is
+// reinstalling a matching build, not installing anything new. Collapsing
+// these into one "unavailable" outcome is the defect class AC5 targets.
+export type GrammarDiagnosisStatus = "ok" | "missing" | "incompatible";
+
+export interface GrammarDiagnosis {
+  language: GrammarLanguage;
+  status: GrammarDiagnosisStatus;
+  // Human-actionable detail; empty for "ok".
+  reason: string;
+}
+
+// Render diagnoses into one warn-once-friendly summary line, grouped by
+// status so a mixed missing+incompatible result stays legible.
+export function describeGrammarDiagnoses(diagnoses: GrammarDiagnosis[]): string {
+  if (diagnoses.length === 0) {
+    return "no grammar languages configured";
+  }
+  const byStatus = (status: GrammarDiagnosisStatus) =>
+    diagnoses.filter((d) => d.status === status).map((d) => d.language);
+  const missing = byStatus("missing");
+  const incompatible = byStatus("incompatible");
+  const parts: string[] = [];
+  if (missing.length > 0) {
+    parts.push(`missing grammar for [${missing.join(", ")}]`);
+  }
+  if (incompatible.length > 0) {
+    parts.push(`incompatible grammar for [${incompatible.join(", ")}]`);
+  }
+  if (parts.length === 0) {
+    return "no configured grammar resolved to a usable parser";
+  }
+  return parts.join("; ");
+}
+
 // Minimal shapes of the `web-tree-sitter` surface we touch (kept local so the
 // dep is never imported for types either — structural typing only).
 interface ParserLike {
@@ -138,7 +178,15 @@ export async function resolveTreesitterCapability(
       return null;
     }
     if (!available) {
-      warnCapabilityDegraded(spec.id, "adapter reported unavailable");
+      // Prefer the per-language diagnoses when the concrete adapter exposes
+      // them (only `TreesitterAdapter` does — this cast is local and narrow,
+      // never leaks into the shared `CapabilityAdapter` interface), so the
+      // one-line warn-once already names missing vs incompatible instead of
+      // a generic "unavailable".
+      const diagnoses = getGrammarDiagnoses(adapter as unknown as { getDiagnoses?: () => GrammarDiagnosis[] });
+      const reason =
+        diagnoses.length > 0 ? describeGrammarDiagnoses(diagnoses) : "adapter reported unavailable";
+      warnCapabilityDegraded(spec.id, reason);
       return null;
     }
 
@@ -149,9 +197,23 @@ export async function resolveTreesitterCapability(
   }
 }
 
+// Read `getDiagnoses()` off a `CapabilityAdapter` when the concrete instance
+// is a `TreesitterAdapter` (the only implementation today). A generic
+// `CapabilityAdapter` from another module simply has no such method, so this
+// is a safe narrow probe rather than an assumption about the seam's shared
+// interface.
+function getGrammarDiagnoses(adapter: { getDiagnoses?: () => GrammarDiagnosis[] }): GrammarDiagnosis[] {
+  return typeof adapter.getDiagnoses === "function" ? adapter.getDiagnoses() : [];
+}
+
 class TreesitterAdapter implements CapabilityAdapter<BuildInput, SymbolLayer> {
   readonly id = "gdgraph.treesitter";
   private grammars: ResolvedGrammar[] = [];
+  private diagnoses: GrammarDiagnosis[] = [];
+  // Populated by `isAvailable()`'s probe so `run()` never re-attempts a
+  // `loadLanguage()` call the probe already made (and, for a language that
+  // probed "incompatible", never attempts it at all).
+  private loadedLanguages = new Map<GrammarLanguage, unknown>();
 
   constructor(
     private readonly cwd: string,
@@ -159,13 +221,88 @@ class TreesitterAdapter implements CapabilityAdapter<BuildInput, SymbolLayer> {
     private readonly dep: unknown,
   ) {}
 
+  // Exposes the per-language missing-vs-incompatible breakdown from the most
+  // recent `isAvailable()` probe (AFC-13 / AC5, requirement 3). Empty before
+  // `isAvailable()` has run.
+  getDiagnoses(): GrammarDiagnosis[] {
+    return this.diagnoses;
+  }
+
   async isAvailable(): Promise<boolean> {
+    const languages = toGrammarLanguages(this.config.languages);
+    this.diagnoses = [];
+    this.loadedLanguages = new Map();
+    this.grammars = [];
+
     if (!this.dep) {
+      this.diagnoses = languages.map((language) => ({
+        language,
+        status: "missing",
+        reason: 'optional dependency "web-tree-sitter" is not installed',
+      }));
       return false;
     }
-    const languages = toGrammarLanguages(this.config.languages);
-    this.grammars = await resolveGrammars(this.cwd, languages, this.config.grammarsPath);
-    return this.grammars.length > 0;
+
+    const resolved = await resolveGrammars(this.cwd, languages, this.config.grammarsPath);
+    const resolvedByLanguage = new Map(resolved.map((grammar) => [grammar.language, grammar]));
+
+    const api = normalizeParserApi(this.dep);
+    if (typeof api?.init === "function") {
+      try {
+        await api.init();
+      } catch {
+        // Runtime init failure ⇒ every resolved grammar is unloadable; each
+        // still gets its own diagnosis below (loadLanguage will also throw).
+      }
+    }
+
+    for (const language of languages) {
+      const grammar = resolvedByLanguage.get(language);
+      if (!grammar) {
+        this.diagnoses.push({
+          language,
+          status: "missing",
+          reason: `grammar asset "tree-sitter-${language}" is not resolved (not installed, or failed checksum verification)`,
+        });
+        continue;
+      }
+      if (!api) {
+        this.diagnoses.push({
+          language,
+          status: "incompatible",
+          reason: 'the "web-tree-sitter" module shape was not recognized (no usable Parser export)',
+        });
+        continue;
+      }
+      try {
+        const loaded = await api.loadLanguage(grammar.path);
+        if (!loaded) {
+          this.diagnoses.push({
+            language,
+            status: "incompatible",
+            reason: `grammar at "${grammar.path}" loaded but produced no Language object`,
+          });
+          continue;
+        }
+        this.loadedLanguages.set(language, loaded);
+        this.grammars.push(grammar);
+        this.diagnoses.push({ language, status: "ok", reason: "" });
+      } catch (error) {
+        // The grammar resolved and verified on disk, but the installed
+        // `web-tree-sitter` runtime refused to load it — an ABI/version
+        // mismatch between the pinned grammar build and the runtime, NOT a
+        // missing asset. Distinct cause, distinct remedy (AFC-13).
+        this.diagnoses.push({
+          language,
+          status: "incompatible",
+          reason: `grammar at "${grammar.path}" failed to load in the installed web-tree-sitter runtime (likely an ABI/version mismatch): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        });
+      }
+    }
+
+    return this.diagnoses.some((d) => d.status === "ok");
   }
 
   async run(input: BuildInput): Promise<SymbolLayer> {
@@ -178,11 +315,14 @@ class TreesitterAdapter implements CapabilityAdapter<BuildInput, SymbolLayer> {
       await api.init();
     }
 
-    // Load + cache one parser per resolved grammar language.
+    // Load + cache one parser per resolved grammar language. Reuse the
+    // Language object the `isAvailable()` probe already loaded when present
+    // (the common path); fall back to loading directly for a caller that
+    // invokes `run()` without having called `isAvailable()` first.
     const parsers = new Map<GrammarLanguage, ParserLike>();
     for (const grammar of this.grammars) {
       try {
-        const language = await api.loadLanguage(grammar.path);
+        const language = this.loadedLanguages.get(grammar.language) ?? (await api.loadLanguage(grammar.path));
         if (!language) {
           continue;
         }

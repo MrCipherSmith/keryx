@@ -42,6 +42,7 @@
     "scripts/benchmark/run-rag-embedding-baseline.ts",
     "scripts/benchmark/run-safety.ts",
     "scripts/benchmark/run-testing-oracle.ts",
+    "scripts/check-doc-links.test.ts",
     "scripts/check-doc-links.ts",
     "scripts/generate-sac-policy-experiment-fixtures.ts",
     "scripts/install-global.test.ts",

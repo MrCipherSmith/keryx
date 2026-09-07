@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 0: routing lifecycle and benchmark correctness",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:39:45.467Z",
-  "updatedAt": "2026-09-07T04:33:54.619Z",
+  "updatedAt": "2026-09-07T06:36:04.528Z",
   "source": {
     "type": "description",
     "ref": null
@@ -42,7 +42,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/489"
   },
   "tasks": [
     {
@@ -983,6 +983,20 @@
       "at": "2026-09-07T04:33:54.619Z",
       "event": "task-done",
       "detail": "T10: Phase 0 independent review and fixes"
+    },
+    {
+      "at": "2026-09-07T06:35:56.127Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/489 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T06:36:00.592Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T06:36:04.528Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#489 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__489.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 489 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: FAIL: 14 finding(s) at P0; WARN: health regression 5 vs baseline; OPTIONAL: sonarqube source skipped"
     }
   ]
 }

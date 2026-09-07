@@ -216,6 +216,39 @@ test("gdgraph.affected returns dependencies + dependents", async () => {
   expect(parsed.dependents).toContain("src/a.ts");
 });
 
+// ---------------------------------------------------------------------------
+// T19 finding 1 (flow 234 review, BLOCKER) — AC3 requires an unknown graph
+// target to be distinguishable from an indexed target with no edges. The
+// service facade (`gdgraph/service.ts`) and the CLI (`commands/gdgraph.ts`)
+// already make this distinction, but `gdgraph.affected` here called
+// `getAffected(graph, file)` directly and never checked graph membership, so
+// a target the graph never indexed came back byte-identical to
+// `src/lonely.ts` (a real, indexed node with zero edges) — the exact defect
+// class AC3 exists to eliminate, on an agent-facing boundary.
+// ---------------------------------------------------------------------------
+
+test("T19 finding 1 — an indexed target with no edges reports an empty-but-valid result, isError false", async () => {
+  const ctx = await buildMcpContext(root);
+  const result = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/lonely.ts" });
+  expect(result.isError).toBe(false);
+  const parsed = JSON.parse(result.text) as { target: string; dependencies: string[]; dependents: string[] };
+  expect(parsed).toEqual({ target: "src/lonely.ts", dependencies: [], dependents: [] });
+});
+
+test("T19 finding 1 — an unknown target is NOT byte-identical to an indexed-with-no-edges result", async () => {
+  const ctx = await buildMcpContext(root);
+  const known = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/lonely.ts" });
+  const unknown = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/definitely-not-a-file.ts" });
+
+  // The reproduced defect: both calls returned the exact same shape with no
+  // error flag — `{"target":...,"dependencies":[],"dependents":[]}` — so an
+  // agent could not tell "never indexed" from "indexed, no edges".
+  expect(unknown.isError).toBe(true);
+  expect(known.isError).toBe(false);
+  expect(unknown.text).not.toBe(known.text.replace("src/lonely.ts", "src/definitely-not-a-file.ts"));
+  expect(unknown.text).toContain("src/definitely-not-a-file.ts");
+});
+
 // --- resources / AC2 ----------------------------------------------------------
 
 test("AC2: resources/list enumerates >= 3 classes and reads content", async () => {

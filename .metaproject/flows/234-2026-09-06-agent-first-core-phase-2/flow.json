@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,15 +7,44 @@
   "id": "234",
   "slug": "agent-first-core-phase-2",
   "title": "Agent-first core phase 2: Trustworthy sources: lifecycle provenance graph and testing snapshots",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-06T10:44:07.706Z",
-  "updatedAt": "2026-09-06T10:44:07.706Z",
+  "updatedAt": "2026-09-07T07:55:57.325Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:4ce3c0b6bedc64c7bc9fed438fbca2d090c12952313504ccd1b8298adb4b836d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-07T07:55:56.659Z",
+      "note": "Шесть классов входа (граница даты в обе стороны, future, deprecated, conflict, superseded, malformed) отвергаются одинаково обеими поверхностями через настоящую выдачу: тест паритета гоняет memory через searchEntries и wiki через wikiAsk, а не через парсер. Проверено независимым ревью T11 на живых CLI. Второй пункт закрыт T22: wiki получил --as-of по идиоме memory, по умолчанию ничего не меняется, в режиме каждая историческая позиция помечена состоянием и причиной в тексте. Блокер T20 (flow init подавал superseded и сломанную цепочку как текущие) закрыт охраной по состоянию accepted+supersededBy."
+    },
+    "AC2": {
+      "at": "2026-09-07T07:55:56.772Z",
+      "note": "add/rename/delete и смена checkout отражаются: ensureContext и findRelatedTests больше не отдают кэш. Обычный вложенный monorepo-пакет находится, что закреплено отдельным охранным тестом. Нечитаемый подкаталог даёт incomplete с причинами вместо пустого результата, и по блокеру T21 это теперь доходит до TestingReport и до строгого прогона: strict над нечитаемым деревом даёт FAIL и код 1."
+    },
+    "AC3": {
+      "at": "2026-09-07T07:55:56.879Z",
+      "note": "Пять триггеров инвалидации воспроизведены независимым ревью на настоящих git-фикстурах, включая переименование в трёх написаниях. Ошибка git даёт unknown и никогда fresh, оба вызывающих back-compat обёртки проверены. unknown target отделён от indexed-without-edges на всех трёх поверхностях: фасад, CLI и MCP — последняя была блокером ревью и закрыта в T19. Префикс .metaproject берётся из rev-parse --show-prefix, поэтому исключение работает и когда корень проекта ниже корня репозитория."
+    },
+    "AC4": {
+      "at": "2026-09-07T07:55:56.984Z",
+      "note": "Type-only цикл вне runtime-списка, смешанный импорт с рантайм-частью внутри, потребитель типа виден в impact, цикл сам по себе гейт не блокирует — все четыре проверены ревью на пересборке. Загрузчик теперь выбирается по расширению: валидный TypeScript с обобщённой стрелкой больше не считается неразбираемым, при этом действительно сломанный файл остаётся unknown, и его цикл не исчезает. На пересборке этого репозитория ложные циклы упали с девяти до одного настоящего."
+    },
+    "AC5": {
+      "at": "2026-09-07T07:55:57.089Z",
+      "note": "File-level работает без рантайма и грамматик. requireSymbols даёт типизированную ошибку и теперь вызывается настоящей командой keryx gdgraph symbol с кодом возврата 1 — до T19 он не имел ни одного вызывающего, и ревью назвало это блокером. Incompatible отличима от missing: ревью воспроизвело оба случая и показало разные сообщения. Фикстура даёт реальные символы, тест действительно прогоняется, а не пропускается."
+    },
+    "AC6": {
+      "at": "2026-09-07T07:55:57.197Z",
+      "note": "Источник, версия, подтверждающий участник и оговорка доходят от записи на диске до собранного текста передачи, отсутствующий источник виден как явный unknown, высокая уверенность не меняет claimType. Блокер ревью закрыт: автор и область добавлены в разбор, в форму отчёта, в схему и в шаблоны. Мёртвый renderSearchMarkdown подключён к настоящей команде, поэтому критерий больше не утверждается по коду без вызывающих. Шапка отчёта убрана из промпта."
+    },
+    "AC7": {
+      "at": "2026-09-07T07:55:57.325Z",
+      "note": "Полная сюита 7262 pass / 19 skip / 0 fail на 592 файлах, tsc, typecheck:scripts и eslint чисты — все в неизменяемых логах с хешами в artifacts. Health-гейт PASS, ноль блокирующих строк. Два независимых ревью выставили PARTIAL по всем нормативам и нашли пять блокеров на публичных границах; все пять закрыты и перепроверены. Ни одна упавшая или не запустившаяся проверка не переименована в проход."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -25,34 +54,627 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "AC-06: единый допуск lifecycle для wiki и memory (границы дат UTC, future/deprecated/conflict/superseded/malformed, явная метка historical)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "AC-09: снимок тестов отражает add/rename/delete и смену checkout; monorepo package не исключён; невозможность refresh даёт incomplete, не no-tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "AC-25: search→compression→handoff сохраняет source fragment/version, author, confirming participant и оговорку; source unknown виден; confidence не повышает hypothesis",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "AC-10: инвалидация снимка графа по commit/untracked/delete/rename/config; unknown target отличим от indexed-without-edges; ошибка git не становится fresh",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "AC-11: type-only цикл вне runtime-списка, mixed import с runtime-частью внутри, consumer типа виден в impact, цикл сам по себе не блокирует gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "AC-13: file-level без runtime/grammar; requireSymbols даёт типизированную ошибку; incompatible grammar отличима от missing; грамматики не ставятся автоматически",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Независимое ревью лейна memory/testing (AC-06/09/25): спецификация и качество в одном проходе",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T14",
+        "T15",
+        "T18"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Независимое ревью лейна graph (AC-10/11/13): спецификация и качество в одном проходе",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T9",
+        "T10",
+        "T16",
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Приёмка фазы 2: полная сюита, tsc, typecheck:scripts, eslint, health-гейт с хешами; DELIVERY.md и RESIDUALS.md",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T11",
+        "T12",
+        "T19"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "AC-06 wiring: заменить локальный isCurrent в wiki/ask.ts общим computeLifecycle, включить status в default-current поиск memory, прокинуть ValidFrom/ValidTo/SupersededBy в collect.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "AC-25 wiring: разбор Confirmed-By/Caveat в store.ts и шаблонах, проводка Related Memory в flow/context.ts через сохраняющий provenance форматтер, синхронизация checked-in схемы отчёта",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Починить фикстуру src/wiki/staleness.test.ts: тест закреплял старый дефект (поддельный .git/HEAD без репозитория читался как fresh)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "AC-10: перенести различение unknown target на путь CLI keryx gdgraph affected, который вызывает computeAffected в обход service.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "AC-06 добить паритет: фильтровать страницы wiki по жизненному циклу в wikiCandidates, починить упавшие проверки embedding, принять оба написания полей Valid-From и ValidFrom",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Ревью лейна graph T12: закрыть блокер MCP (unknown target неразличим), загрузчик tsx на валидном .ts, префикс .metaproject в monorepo, requireSymbols без вызывающего, шаблон core-runner и ошибки --json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Блокеры ревью memory: lifecycle на пути asOf, author/acceptance basis/scope в переносе знания, мёртвый renderSearchMarkdown, шапка отчёта в промпте",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Блокер ревью testing: неполнота контекста должна доходить до TestingReport и strict; findRelatedTests не должен писать файлы",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "AC1 последний пункт: historical режим должен быть явно размечен — вывести state/historical в выдачу и дать wiki режим показа исторических страниц со статусом",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-06T10:44:07.706Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-07T05:45:08.304Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T05:45:45.406Z",
+      "event": "task-added",
+      "detail": "T5: AC-06: единый допуск lifecycle для wiki и memory (границы дат UTC, future/deprecated/conflict/superseded/malformed, явная метка historical)"
+    },
+    {
+      "at": "2026-09-07T05:45:45.517Z",
+      "event": "task-added",
+      "detail": "T6: AC-09: снимок тестов отражает add/rename/delete и смену checkout; monorepo package не исключён; невозможность refresh даёт incomplete, не no-tests"
+    },
+    {
+      "at": "2026-09-07T05:45:45.670Z",
+      "event": "task-added",
+      "detail": "T7: AC-25: search→compression→handoff сохраняет source fragment/version, author, confirming participant и оговорку; source unknown виден; confidence не повышает hypothesis"
+    },
+    {
+      "at": "2026-09-07T05:45:45.766Z",
+      "event": "task-added",
+      "detail": "T8: AC-10: инвалидация снимка графа по commit/untracked/delete/rename/config; unknown target отличим от indexed-without-edges; ошибка git не становится fresh"
+    },
+    {
+      "at": "2026-09-07T05:45:45.862Z",
+      "event": "task-added",
+      "detail": "T9: AC-11: type-only цикл вне runtime-списка, mixed import с runtime-частью внутри, consumer типа виден в impact, цикл сам по себе не блокирует gate"
+    },
+    {
+      "at": "2026-09-07T05:45:45.963Z",
+      "event": "task-added",
+      "detail": "T10: AC-13: file-level без runtime/grammar; requireSymbols даёт типизированную ошибку; incompatible grammar отличима от missing; грамматики не ставятся автоматически"
+    },
+    {
+      "at": "2026-09-07T05:45:46.067Z",
+      "event": "task-added",
+      "detail": "T11: Независимое ревью лейна memory/testing (AC-06/09/25): спецификация и качество в одном проходе"
+    },
+    {
+      "at": "2026-09-07T05:45:46.176Z",
+      "event": "task-added",
+      "detail": "T12: Независимое ревью лейна graph (AC-10/11/13): спецификация и качество в одном проходе"
+    },
+    {
+      "at": "2026-09-07T05:45:46.276Z",
+      "event": "task-added",
+      "detail": "T13: Приёмка фазы 2: полная сюита, tsc, typecheck:scripts, eslint, health-гейт с хешами; DELIVERY.md и RESIDUALS.md"
+    },
+    {
+      "at": "2026-09-07T05:45:52.520Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T5, T6, T7 (was empty) — ревью лейна memory/testing идёт после его трёх реализаций"
+    },
+    {
+      "at": "2026-09-07T05:45:52.614Z",
+      "event": "task-depends-set",
+      "detail": "T12: dependsOn T8, T9, T10 (was empty) — ревью лейна graph идёт после его трёх реализаций"
+    },
+    {
+      "at": "2026-09-07T05:45:52.714Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T11, T12 (was empty) — приёмка фазы после обоих независимых ревью"
+    },
+    {
+      "at": "2026-09-07T05:45:52.805Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T05:58:00.773Z",
+      "event": "task-added",
+      "detail": "T14: AC-06 wiring: заменить локальный isCurrent в wiki/ask.ts общим computeLifecycle, включить status в default-current поиск memory, прокинуть ValidFrom/ValidTo/SupersededBy в collect.ts"
+    },
+    {
+      "at": "2026-09-07T05:58:09.713Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T5, T7 (was empty) — проводка использует общий computeLifecycle из T5 и трогает src/memory/search.ts, который до конца T7 принадлежит другому исполнителю"
+    },
+    {
+      "at": "2026-09-07T05:58:09.825Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T5, T6, T7, T14 (was T5, T6, T7) — ревью лейна memory/testing после проводки AC-06, иначе критерий проверяется на неподключённом хелпере"
+    },
+    {
+      "at": "2026-09-07T05:58:09.937Z",
+      "event": "task-done",
+      "detail": "T5: AC-06: единый допуск lifecycle для wiki и memory (границы дат UTC, future/deprecated/conflict/superseded/malformed, явная метка historical)"
+    },
+    {
+      "at": "2026-09-07T05:58:39.882Z",
+      "event": "task-done",
+      "detail": "T7: AC-25: search→compression→handoff сохраняет source fragment/version, author, confirming participant и оговорку; source unknown виден; confidence не повышает hypothesis"
+    },
+    {
+      "at": "2026-09-07T05:58:39.977Z",
+      "event": "task-added",
+      "detail": "T15: AC-25 wiring: разбор Confirmed-By/Caveat в store.ts и шаблонах, проводка Related Memory в flow/context.ts через сохраняющий provenance форматтер, синхронизация checked-in схемы отчёта"
+    },
+    {
+      "at": "2026-09-07T05:58:45.352Z",
+      "event": "task-depends-set",
+      "detail": "T15: dependsOn T7 (was empty) — проводка опирается на расширенную форму отчёта из T7"
+    },
+    {
+      "at": "2026-09-07T05:58:45.451Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T5, T6, T7, T14, T15 (was T5, T6, T7, T14) — ревью лейна memory/testing после обеих проводок, иначе критерии проверяются на неподключённых хелперах"
+    },
+    {
+      "at": "2026-09-07T06:00:00.283Z",
+      "event": "task-done",
+      "detail": "T9: AC-11: type-only цикл вне runtime-списка, mixed import с runtime-частью внутри, consumer типа виден в impact, цикл сам по себе не блокирует gate"
+    },
+    {
+      "at": "2026-09-07T06:00:14.093Z",
+      "event": "task-done",
+      "detail": "T6: AC-09: снимок тестов отражает add/rename/delete и смену checkout; monorepo package не исключён; невозможность refresh даёт incomplete, не no-tests"
+    },
+    {
+      "at": "2026-09-07T06:02:24.354Z",
+      "event": "task-done",
+      "detail": "T8: AC-10: инвалидация снимка графа по commit/untracked/delete/rename/config; unknown target отличим от indexed-without-edges; ошибка git не становится fresh"
+    },
+    {
+      "at": "2026-09-07T06:02:24.449Z",
+      "event": "task-added",
+      "detail": "T16: Починить фикстуру src/wiki/staleness.test.ts: тест закреплял старый дефект (поддельный .git/HEAD без репозитория читался как fresh)"
+    },
+    {
+      "at": "2026-09-07T06:02:24.551Z",
+      "event": "task-added",
+      "detail": "T17: AC-10: перенести различение unknown target на путь CLI keryx gdgraph affected, который вызывает computeAffected в обход service.ts"
+    },
+    {
+      "at": "2026-09-07T06:02:29.489Z",
+      "event": "task-depends-set",
+      "detail": "T12: dependsOn T8, T9, T10, T16, T17 (was T8, T9, T10) — ревью лейна graph после закрытия регрессии в wiki/staleness.test.ts и переноса различения unknown target на путь CLI"
+    },
+    {
+      "at": "2026-09-07T06:04:34.708Z",
+      "event": "task-done",
+      "detail": "T10: AC-13: file-level без runtime/grammar; requireSymbols даёт типизированную ошибку; incompatible grammar отличима от missing; грамматики не ставятся автоматически"
+    },
+    {
+      "at": "2026-09-07T06:09:37.286Z",
+      "event": "task-done",
+      "detail": "T16: Починить фикстуру src/wiki/staleness.test.ts: тест закреплял старый дефект (поддельный .git/HEAD без репозитория читался как fresh)"
+    },
+    {
+      "at": "2026-09-07T06:09:37.389Z",
+      "event": "task-done",
+      "detail": "T17: AC-10: перенести различение unknown target на путь CLI keryx gdgraph affected, который вызывает computeAffected в обход service.ts"
+    },
+    {
+      "at": "2026-09-07T06:10:25.676Z",
+      "event": "task-done",
+      "detail": "T15: AC-25 wiring: разбор Confirmed-By/Caveat в store.ts и шаблонах, проводка Related Memory в flow/context.ts через сохраняющий provenance форматтер, синхронизация checked-in схемы отчёта"
+    },
+    {
+      "at": "2026-09-07T06:13:22.254Z",
+      "event": "task-done",
+      "detail": "T14: AC-06 wiring: заменить локальный isCurrent в wiki/ask.ts общим computeLifecycle, включить status в default-current поиск memory, прокинуть ValidFrom/ValidTo/SupersededBy в collect.ts"
+    },
+    {
+      "at": "2026-09-07T06:13:22.351Z",
+      "event": "task-added",
+      "detail": "T18: AC-06 добить паритет: фильтровать страницы wiki по жизненному циклу в wikiCandidates, починить упавшие проверки embedding, принять оба написания полей Valid-From и ValidFrom"
+    },
+    {
+      "at": "2026-09-07T06:13:22.460Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T14 (was empty) — продолжение проводки AC-06 на стороне страниц wiki"
+    },
+    {
+      "at": "2026-09-07T06:13:22.562Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T5, T6, T7, T14, T15, T18 (was T5, T6, T7, T14, T15) — ревью лейна после закрытия паритета на стороне wiki и упавших проверок embedding"
+    },
+    {
+      "at": "2026-09-07T06:27:01.215Z",
+      "event": "task-added",
+      "detail": "T19: Ревью лейна graph T12: закрыть блокер MCP (unknown target неразличим), загрузчик tsx на валидном .ts, префикс .metaproject в monorepo, requireSymbols без вызывающего, шаблон core-runner и ошибки --json"
+    },
+    {
+      "at": "2026-09-07T06:27:01.322Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T11, T12, T19 (was T11, T12) — приёмка после закрытия находок ревью лейна graph"
+    },
+    {
+      "at": "2026-09-07T06:29:25.281Z",
+      "event": "task-done",
+      "detail": "T18: AC-06 добить паритет: фильтровать страницы wiki по жизненному циклу в wikiCandidates, починить упавшие проверки embedding, принять оба написания полей Valid-From и ValidFrom"
+    },
+    {
+      "at": "2026-09-07T06:50:21.276Z",
+      "event": "task-done",
+      "detail": "T19: Ревью лейна graph T12: закрыть блокер MCP (unknown target неразличим), загрузчик tsx на валидном .ts, префикс .metaproject в monorepo, requireSymbols без вызывающего, шаблон core-runner и ошибки --json"
+    },
+    {
+      "at": "2026-09-07T07:06:43.238Z",
+      "event": "task-done",
+      "detail": "T11: Независимое ревью лейна memory/testing (AC-06/09/25): спецификация и качество в одном проходе"
+    },
+    {
+      "at": "2026-09-07T07:06:43.353Z",
+      "event": "task-added",
+      "detail": "T20: Блокеры ревью memory: lifecycle на пути asOf, author/acceptance basis/scope в переносе знания, мёртвый renderSearchMarkdown, шапка отчёта в промпте"
+    },
+    {
+      "at": "2026-09-07T07:06:43.453Z",
+      "event": "task-added",
+      "detail": "T21: Блокер ревью testing: неполнота контекста должна доходить до TestingReport и strict; findRelatedTests не должен писать файлы"
+    },
+    {
+      "at": "2026-09-07T07:22:49.106Z",
+      "event": "task-done",
+      "detail": "T21: Блокер ревью testing: неполнота контекста должна доходить до TestingReport и strict; findRelatedTests не должен писать файлы"
+    },
+    {
+      "at": "2026-09-07T07:31:33.510Z",
+      "event": "task-done",
+      "detail": "T20: Блокеры ревью memory: lifecycle на пути asOf, author/acceptance basis/scope в переносе знания, мёртвый renderSearchMarkdown, шапка отчёта в промпте"
+    },
+    {
+      "at": "2026-09-07T07:35:30.217Z",
+      "event": "task-added",
+      "detail": "T22: AC1 последний пункт: historical режим должен быть явно размечен — вывести state/historical в выдачу и дать wiki режим показа исторических страниц со статусом"
+    },
+    {
+      "at": "2026-09-07T07:50:57.877Z",
+      "event": "task-done",
+      "detail": "T22: AC1 последний пункт: historical режим должен быть явно размечен — вывести state/historical в выдачу и дать wiki режим показа исторических страниц со статусом"
+    },
+    {
+      "at": "2026-09-07T07:55:56.659Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Шесть классов входа (граница даты в обе стороны, future, deprecated, conflict, superseded, malformed) отвергаются одинаково обеими поверхностями через настоящую выдачу: тест паритета гоняет memory через searchEntries и wiki через wikiAsk, а не через парсер. Проверено независимым ревью T11 на живых CLI. Второй пункт закрыт T22: wiki получил --as-of по идиоме memory, по умолчанию ничего не меняется, в режиме каждая историческая позиция помечена состоянием и причиной в тексте. Блокер T20 (flow init подавал superseded и сломанную цепочку как текущие) закрыт охраной по состоянию accepted+supersededBy."
+    },
+    {
+      "at": "2026-09-07T07:55:56.772Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: add/rename/delete и смена checkout отражаются: ensureContext и findRelatedTests больше не отдают кэш. Обычный вложенный monorepo-пакет находится, что закреплено отдельным охранным тестом. Нечитаемый подкаталог даёт incomplete с причинами вместо пустого результата, и по блокеру T21 это теперь доходит до TestingReport и до строгого прогона: strict над нечитаемым деревом даёт FAIL и код 1."
+    },
+    {
+      "at": "2026-09-07T07:55:56.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Пять триггеров инвалидации воспроизведены независимым ревью на настоящих git-фикстурах, включая переименование в трёх написаниях. Ошибка git даёт unknown и никогда fresh, оба вызывающих back-compat обёртки проверены. unknown target отделён от indexed-without-edges на всех трёх поверхностях: фасад, CLI и MCP — последняя была блокером ревью и закрыта в T19. Префикс .metaproject берётся из rev-parse --show-prefix, поэтому исключение работает и когда корень проекта ниже корня репозитория."
+    },
+    {
+      "at": "2026-09-07T07:55:56.984Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Type-only цикл вне runtime-списка, смешанный импорт с рантайм-частью внутри, потребитель типа виден в impact, цикл сам по себе гейт не блокирует — все четыре проверены ревью на пересборке. Загрузчик теперь выбирается по расширению: валидный TypeScript с обобщённой стрелкой больше не считается неразбираемым, при этом действительно сломанный файл остаётся unknown, и его цикл не исчезает. На пересборке этого репозитория ложные циклы упали с девяти до одного настоящего."
+    },
+    {
+      "at": "2026-09-07T07:55:57.089Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: File-level работает без рантайма и грамматик. requireSymbols даёт типизированную ошибку и теперь вызывается настоящей командой keryx gdgraph symbol с кодом возврата 1 — до T19 он не имел ни одного вызывающего, и ревью назвало это блокером. Incompatible отличима от missing: ревью воспроизвело оба случая и показало разные сообщения. Фикстура даёт реальные символы, тест действительно прогоняется, а не пропускается."
+    },
+    {
+      "at": "2026-09-07T07:55:57.197Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Источник, версия, подтверждающий участник и оговорка доходят от записи на диске до собранного текста передачи, отсутствующий источник виден как явный unknown, высокая уверенность не меняет claimType. Блокер ревью закрыт: автор и область добавлены в разбор, в форму отчёта, в схему и в шаблоны. Мёртвый renderSearchMarkdown подключён к настоящей команде, поэтому критерий больше не утверждается по коду без вызывающих. Шапка отчёта убрана из промпта."
+    },
+    {
+      "at": "2026-09-07T07:55:57.325Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Полная сюита 7262 pass / 19 skip / 0 fail на 592 файлах, tsc, typecheck:scripts и eslint чисты — все в неизменяемых логах с хешами в artifacts. Health-гейт PASS, ноль блокирующих строк. Два независимых ревью выставили PARTIAL по всем нормативам и нашли пять блокеров на публичных границах; все пять закрыты и перепроверены. Ни одна упавшая или не запустившаяся проверка не переименована в проход."
     }
   ]
 }

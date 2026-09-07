@@ -57,6 +57,18 @@ function parsePage(
     verifiedAt: provenance.verifiedAt,
     verifiedScope: provenance.verifiedScope,
     describes: provenance.describes,
+    // AFC-06 (flow 234) AC1: same fields `MemoryEntry` carries, read the same
+    // way `Status` already is here, so `computeLifecycle` (via
+    // `parsePageLifecycle`, `./provenance.ts`) sees a populated page instead
+    // of undefined for every field.
+    // Both spellings, because the two surfaces disagree and always have:
+    // memory frontmatter hyphenates these names, wiki frontmatter does not.
+    // An author who copies a working entry from one to the other otherwise
+    // gets a field that parses to nothing and a page admitted when the rule
+    // says reject it — a silent trap in the direction that releases.
+    validFrom: field(lines, "ValidFrom") ?? field(lines, "Valid-From"),
+    validTo: field(lines, "ValidTo") ?? field(lines, "Valid-To"),
+    supersededBy: field(lines, "SupersededBy") ?? field(lines, "Superseded-By"),
   };
 }
 

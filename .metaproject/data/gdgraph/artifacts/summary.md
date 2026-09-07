@@ -2,15 +2,15 @@
 
 ## Stats
 
-- Source files indexed: 1181
+- Source files indexed: 1182
 - Imported asset files indexed: 4
-- Total nodes: 1185
-- Edges: 3571
-- Import edges: 3512
+- Total nodes: 1186
+- Edges: 3573
+- Import edges: 3514
 - Asset edges: 9
 - Unresolved imports: 50
 - Import resolution: 98.6%
-- Skipped generated/static directories: 9
+- Skipped generated/static directories: 10
 
 ## Top Modules
 
@@ -27,7 +27,7 @@
 | gdgraph | 40 |
 | gdskills | 40 |
 | memory | 40 |
-| scripts | 36 |
+| scripts | 37 |
 | flow | 33 |
 | review | 30 |
 | metrics | 27 |
@@ -60,6 +60,7 @@
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
+- `vscode-extension/node_modules`
 
 ## Generated Files
 

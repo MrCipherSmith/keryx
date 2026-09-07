@@ -10,12 +10,13 @@ import { loadMemoryConfig } from "../memory/config";
 import { memoryEmbeddingSpec, type Embedder } from "../memory/embedding/adapter";
 import { cosine } from "../memory/embedding/index";
 import { readJsonFileOr } from "../lib/json";
+import { computeLifecycle, type LifecycleState } from "../memory/lifecycle";
 import { collectEntries } from "../memory/store";
 import { jaccard, tokenSet } from "../memory/text";
-import type { MemoryEntry } from "../memory/types";
+import { validateAsOf } from "../memory/temporal";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { collectPages } from "./collect";
-import type { WikiAskCitation, WikiAskInput, WikiAskResult, WikiPage } from "./types";
+import type { WikiAskCitation, WikiAskInput, WikiAskResult } from "./types";
 import path from "node:path";
 
 const DEFAULT_K = 8;
@@ -79,14 +80,30 @@ type Candidate = {
   text: string;
   excerpt: string;
   source: "wiki" | "memory";
+  // AFC-06 (flow 234) T22: set only in historical mode (`asOf` below), and
+  // only for a candidate `computeLifecycle` classified as non-current. Carried
+  // straight onto `WikiAskCitation` in the map at the bottom of this function.
+  historical?: boolean;
+  lifecycleState?: LifecycleState;
+  lifecycleReasons?: string[];
 };
 
 export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
   const k = input.k && input.k > 0 ? input.k : DEFAULT_K;
   const questionTokens = tokenSet(input.question);
+
+  // AFC-06 (flow 234) T22: same validator memory's `--as-of` already uses
+  // (`validateAsOf`, `../memory/temporal.ts`) -- a malformed date is rejected
+  // up front with the identical error shape, rather than silently degrading
+  // every candidate to `invalid` via `computeLifecycle`'s own malformed-date
+  // branch.
+  const asOf = input.asOf ? validateAsOf(input.asOf, new Date()) : undefined;
+  const historicalMode = Boolean(asOf);
+  const observedAt = asOf ? new Date(`${asOf}T00:00:00.000Z`) : todayObservedAt();
+
   const candidates = [
-    ...(await wikiCandidates(input.cwd)),
-    ...(await memoryCandidates(input.cwd)),
+    ...(await wikiCandidates(input.cwd, observedAt, historicalMode)),
+    ...(await memoryCandidates(input.cwd, observedAt, historicalMode)),
   ];
 
   let scored = scoreByQuestion(input.question, questionTokens, candidates);
@@ -122,12 +139,19 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
     excerpt: item.candidate.excerpt,
     score: item.score,
     source: item.candidate.source,
+    ...(item.candidate.historical
+      ? {
+          historical: true as const,
+          lifecycleState: item.candidate.lifecycleState,
+          lifecycleReasons: item.candidate.lifecycleReasons,
+        }
+      : {}),
   }));
 
   return {
     question: input.question,
     citations,
-    answerMarkdown: assembleAnswer(input.question, citations),
+    answerMarkdown: assembleAnswer(input.question, citations, historicalMode),
   };
 }
 
@@ -322,39 +346,121 @@ async function upsertDynamicTranslation(
   }
 }
 
-async function wikiCandidates(cwd: string): Promise<Candidate[]> {
-  const pages = await collectPages(cwd);
-  return pages.map((page: WikiPage) => ({
-    path: `wiki/${page.relativePath}`,
-    title: page.title,
-    text: `${page.title} ${page.summary}`.trim(),
-    excerpt: truncate(page.summary || page.title),
-    source: "wiki" as const,
-  }));
+function todayObservedAt(): Date {
+  const today = new Date().toISOString().slice(0, 10);
+  return new Date(`${today}T00:00:00.000Z`);
 }
 
-async function memoryCandidates(cwd: string): Promise<Candidate[]> {
+async function wikiCandidates(
+  cwd: string,
+  observedAt: Date,
+  historicalMode: boolean,
+): Promise<Candidate[]> {
+  const pages = await collectPages(cwd);
+  // AFC-06 (flow 234) AC1: this used to admit every wiki page unconditionally,
+  // so a future-dated, deprecated or superseded page was cited today as
+  // though it were current -- the larger half of the criterion, since the
+  // memory candidate path below already applies this rule.
+  //
+  // T20 finding 5 (flow 234 review): this used to re-read each page's raw
+  // content from disk and re-parse it through `parsePageLifecycle`
+  // (`./provenance.ts`), on the grounds that `collect.ts` was "out of this
+  // task's ownership" and had not populated `WikiPage.validFrom`/`validTo`/
+  // `supersededBy`. That was already false when written -- `collect.ts` was
+  // changed by the same task and populates all three (see `types.ts`'s
+  // corrected comment). Reads the already-parsed fields directly, exactly
+  // mirroring `memoryCandidates` below, so a wiki page and a memory entry go
+  // through the identical `computeLifecycle` call shape. The one real loss:
+  // `collect.ts` only recognizes the unhyphenated spelling (`ValidFrom`), so
+  // a page written with the memory-style hyphenated alias (`Valid-From`) is
+  // no longer honored on this path -- `parsePageLifecycle`'s alias fallback
+  // is not reachable from parsed `WikiPage` fields. That belongs in the
+  // collector itself (residual, not fixed here — out of this file's
+  // ownership).
+  //
+  // T22 (flow 234) AC1, second half: `observedAt`/`historicalMode` come from
+  // `wikiAsk`'s `asOf` (default: "today", default retrieval). Default mode
+  // keeps the exact `continue`-on-non-current behavior above; historical mode
+  // additionally admits a non-current page but tags it with the same
+  // `LifecycleResult` the classifier already computed, rather than dropping
+  // it or re-deriving a second verdict for the label.
+  const result: Candidate[] = [];
+  for (const page of pages) {
+    const lifecycle = computeLifecycle(
+      {
+        status: page.status,
+        validFrom: page.validFrom ?? null,
+        validTo: page.validTo ?? null,
+        supersededBy: page.supersededBy ?? null,
+      },
+      observedAt,
+    );
+    if (!lifecycle.current && !historicalMode) {
+      continue;
+    }
+    result.push({
+      path: `wiki/${page.relativePath}`,
+      title: page.title,
+      text: `${page.title} ${page.summary}`.trim(),
+      excerpt: truncate(page.summary || page.title),
+      source: "wiki" as const,
+      ...(lifecycle.historical
+        ? {
+            historical: true as const,
+            lifecycleState: lifecycle.state,
+            lifecycleReasons: lifecycle.reasons,
+          }
+        : {}),
+    });
+  }
+  return result;
+}
+
+async function memoryCandidates(
+  cwd: string,
+  observedAt: Date,
+  historicalMode: boolean,
+): Promise<Candidate[]> {
   const entries = await collectEntries(cwd);
-  const today = new Date().toISOString().slice(0, 10);
-  return entries
-    .filter((entry) => isCurrent(entry, today))
-    .map((entry) => ({
+  // AFC-06 (flow 234) AC1: the shared lifecycle formula (`computeLifecycle`,
+  // `../memory/lifecycle.ts`) replaces the local ad hoc check this used to
+  // run, which never looked at `validFrom`/`status` and compared `validTo`
+  // as an unvalidated raw string.
+  //
+  // T22 (flow 234) AC1, second half: same `observedAt`/`historicalMode`
+  // mirroring as `wikiCandidates` above, so the memory citations `wikiAsk`
+  // embeds in an answer go through the identical historical-mode admission
+  // and labelling as the wiki citations do.
+  const result: Candidate[] = [];
+  for (const entry of entries) {
+    const lifecycle = computeLifecycle(
+      {
+        status: entry.status,
+        validFrom: entry.validFrom ?? null,
+        validTo: entry.validTo ?? null,
+        supersededBy: entry.supersededBy ?? null,
+      },
+      observedAt,
+    );
+    if (!lifecycle.current && !historicalMode) {
+      continue;
+    }
+    result.push({
       path: `memory/${entry.relativePath}`,
       title: entry.title,
       text: `${entry.title} ${entry.summary} ${entry.tags.join(" ")}`.trim(),
       excerpt: truncate(entry.summary || entry.title),
       source: "memory" as const,
-    }));
-}
-
-function isCurrent(entry: MemoryEntry, today: string): boolean {
-  if (entry.supersededBy) {
-    return false;
+      ...(lifecycle.historical
+        ? {
+            historical: true as const,
+            lifecycleState: lifecycle.state,
+            lifecycleReasons: lifecycle.reasons,
+          }
+        : {}),
+    });
   }
-  if (entry.validTo && entry.validTo < today) {
-    return false;
-  }
-  return true;
+  return result;
 }
 
 async function rerankCitations(
@@ -391,16 +497,35 @@ async function rerankCitations(
   }
 }
 
-function assembleAnswer(question: string, citations: WikiAskCitation[]): string {
+// AFC-06 (flow 234) T22: `historicalMode` echoes `wikiAsk`'s `asOf` presence
+// so the answer carries a visible notice even if a reader only skims the
+// markdown and never inspects individual citation lines. Per-citation marking
+// (below) is what makes each historical item unmistakable on its own; this
+// notice is the "so a model reading it cannot mistake it for current
+// guidance" requirement applied to the answer as a whole, in the SAME text
+// output a model actually reads (not only the JSON citations).
+function assembleAnswer(
+  question: string,
+  citations: WikiAskCitation[],
+  historicalMode: boolean,
+): string {
   if (citations.length === 0) {
     return `# ${question}\n\n_No matching wiki pages or memory entries were found._\n`;
   }
   const points = citations
-    .map((citation, i) => `${i + 1}. **${citation.title}** — ${citation.excerpt} (\`${citation.path}\`)`)
+    .map((citation, i) => {
+      const marker = citation.historical
+        ? ` — **[HISTORICAL — not current: state=${citation.lifecycleState}; reason=${(citation.lifecycleReasons ?? []).join(", ")}]**`
+        : "";
+      return `${i + 1}. **${citation.title}** — ${citation.excerpt} (\`${citation.path}\`)${marker}`;
+    })
     .join("\n");
   const sources = citations.map((citation) => `- \`${citation.path}\``).join("\n");
+  const historicalNotice = historicalMode
+    ? "\n_Historical mode (`--as-of`): items marked **[HISTORICAL]** are not current and must not be applied as a confirmed current constraint._\n"
+    : "";
   return `# ${question}
-
+${historicalNotice}
 Based on the project's own wiki and memory:
 
 ${points}

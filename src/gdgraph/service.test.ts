@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { createGdgraphService } from "./service";
+import { createGdgraphService, UnknownGraphTargetError } from "./service";
 
 async function makeProject(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-svc-"));
@@ -39,6 +39,36 @@ test("AC5.3/T-1 — service.repomap writes artifacts/repomap.md deterministicall
     expect(first.tokens).toBeLessThanOrEqual(2000);
     const second = await service.repomap(root, { budget: 2000 });
     expect(second.content).toBe(first.content);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// AFC-10 (flow 234, phase 2): before this task, `service.affected` for a
+// target the graph never indexed and a target the graph indexed but found no
+// edges for returned byte-identical shapes — `{dependencies: [], dependents:
+// [], ranked: []}` — differing only in the echoed-back `target` string.
+// Measured directly against this exact fixture: an unknown path
+// ("src/does-not-exist.ts") and a real, indexed, edge-less leaf file
+// produced the same `{dependencies, dependents, ranked}`. That is the same
+// defect class phase 1 closed at eight other sites — a failure rendered as a
+// legitimate empty success — so an unknown target must now be reported
+// distinguishably instead of silently resolving to an empty result.
+test("AFC-10 — service.affected on a target the graph never indexed throws UnknownGraphTargetError, distinct from an indexed-but-edgeless target", async () => {
+  const root = await makeProject();
+  try {
+    await writeFile(path.join(root, "src", "isolated.ts"), "export const iso = 1;\n");
+    const service = createGdgraphService();
+    await service.build(root);
+
+    // Indexed, legitimately no edges at all: a real success, not an error.
+    const indexedNoEdges = await service.affected(root, "src/isolated.ts");
+    expect(indexedNoEdges.dependencies).toEqual([]);
+    expect(indexedNoEdges.dependents).toEqual([]);
+
+    // Never indexed: must be distinguishable from the above, not the same
+    // `{dependencies: [], dependents: []}` shape under a different `target`.
+    await expect(service.affected(root, "src/does-not-exist.ts")).rejects.toThrow(UnknownGraphTargetError);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -8,6 +8,32 @@ import {
   validateMemorySearchReport,
 } from "./report";
 import { createMemoryService } from "./service";
+import { searchEntries } from "./search";
+import { DEFAULT_MEMORY_CONFIG as C } from "./config";
+import type { MemoryEntry } from "./types";
+
+function afc25Entry(over: Partial<MemoryEntry>): MemoryEntry {
+  return {
+    absolutePath: "",
+    relativePath: "decisions/x.md",
+    type: "decision",
+    title: "adopt bun for scripts",
+    version: "1.2.0",
+    status: "accepted",
+    confidence: "medium",
+    summary: "adopt bun runtime for scripts",
+    details: "",
+    tags: [],
+    scopes: { module: null, entity: null, files: [], skills: [] },
+    created: null,
+    updated: null,
+    provenance: { source: "pr#412", link: "https://example.invalid/pr/412" },
+    author: "author:bob",
+    confirmedBy: "reviewer:alice",
+    caveat: "rollout deferred to Q3 pending security sign-off",
+    ...over,
+  };
+}
 
 const FIXTURE = path.join(import.meta.dir, "..", "..", "fixtures", "memory-reliability-p0");
 
@@ -69,4 +95,93 @@ test("P1-4/P1-9: report store publishes immutable unique runs and removes interr
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+// AFC-25 / AC6: compression (search -> renderMemorySearchReport) preserves the
+// exact source fragment/version, author, scope, and confirming participant
+// rather than dropping them because the compressed shape doesn't declare the
+// field.
+test("AFC-25: compression preserves version, scope, provenance, author, and confirming participant", () => {
+  const known = afc25Entry({
+    relativePath: "decisions/known.md",
+    scopes: { module: "release-pipeline", entity: "canary", files: [], skills: [] },
+  });
+  const scored = searchEntries([known], "adopt bun", {}, C, new Date("2026-08-10"));
+  const report = renderMemorySearchReport({
+    runId: "afc25-known",
+    generatedAt: new Date("2026-08-10T00:00:00.000Z"),
+    search: { schemaVersion: 1, query: "adopt bun", results: scored },
+    filters: {},
+  });
+  expect(validateMemorySearchReport(report)).toEqual([]);
+  const result = report.results[0];
+  expect(result).toBeDefined();
+  expect(result?.version).toBe("1.2.0");
+  expect(result?.scope).toBe("module:release-pipeline, entity:canary");
+  expect(result?.provenance).toEqual({ source: "pr#412", link: "https://example.invalid/pr/412" });
+  expect(result?.author).toBe("author:bob");
+  expect(result?.confirmedBy).toBe("reviewer:alice");
+  expect(result?.caveat).toBe("rollout deferred to Q3 pending security sign-off");
+});
+
+// AFC-25 / AC6: an absent source becomes the explicit "unknown" sentinel, not
+// a dropped/empty field that a reader could mistake for "nothing to report".
+test("AFC-25: absent source/author/confirming participant/scope surfaces as explicit unknown, not silently dropped", () => {
+  const unsourced = afc25Entry({
+    relativePath: "decisions/unsourced.md",
+    provenance: { source: null, link: null },
+    author: null,
+    confirmedBy: null,
+    version: null,
+    caveat: null,
+  });
+  const scored = searchEntries([unsourced], "adopt bun", {}, C, new Date("2026-08-10"));
+  const report = renderMemorySearchReport({
+    runId: "afc25-unsourced",
+    generatedAt: new Date("2026-08-10T00:00:00.000Z"),
+    search: { schemaVersion: 1, query: "adopt bun", results: scored },
+    filters: {},
+  });
+  expect(validateMemorySearchReport(report)).toEqual([]);
+  const result = report.results[0];
+  expect(result?.version).toBe("unknown");
+  expect(result?.scope).toBe("unknown");
+  expect(result?.provenance).toEqual({ source: "unknown", link: "unknown" });
+  expect(result?.author).toBe("unknown");
+  expect(result?.confirmedBy).toBe("unknown");
+  expect(result?.caveat).toBeNull();
+});
+
+// AFC-25 / AC6: claimType is carried verbatim from entry.type through the
+// compression stage; a high vs. low model confidence never changes it — the
+// score/confidence ranks results, it never promotes a hypothesis into a
+// decision or an instruction.
+test("AFC-25 confidence probe: claimType survives compression unchanged by confidence", () => {
+  const lowConfidence = afc25Entry({ relativePath: "decisions/low.md", confidence: "low", status: "draft" });
+  const highConfidence = afc25Entry({ relativePath: "decisions/high.md", confidence: "high", status: "draft" });
+  const scored = searchEntries(
+    [lowConfidence, highConfidence],
+    "adopt bun",
+    { status: "draft" },
+    C,
+    new Date("2026-08-10"),
+  );
+  const report = renderMemorySearchReport({
+    runId: "afc25-confidence",
+    generatedAt: new Date("2026-08-10T00:00:00.000Z"),
+    search: { schemaVersion: 1, query: "adopt bun", results: scored },
+    filters: {},
+  });
+  expect(report.results).toHaveLength(2);
+  for (const result of report.results) {
+    // Same entry.type ("decision") regardless of confidence, and status stays
+    // "draft" (a hypothesis) -- confidence never promotes it to "accepted".
+    expect(result.claimType).toBe("decision");
+    expect(result.status).toBe("draft");
+  }
+  const low = report.results.find((r) => r.path === "decisions/low.md");
+  const high = report.results.find((r) => r.path === "decisions/high.md");
+  expect(low?.confidence).toBe("low");
+  expect(high?.confidence).toBe("high");
+  expect(low?.claimType).toBe(high?.claimType);
 });

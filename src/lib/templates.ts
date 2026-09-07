@@ -2448,6 +2448,23 @@ if (command === "affected") {
   const graph = await loadGraph(process.cwd());
   const affected = getAffected(graph, target);
 
+  // T19 finding 5 (flow 234 review): a target the graph never indexed (never
+  // built, or the path/symbol does not exist) resolves to itself unchanged
+  // with an empty blast radius — the same shape as a real, indexed target
+  // that legitimately has zero edges. Replicating the membership check
+  // locally against the already-loaded graph (same fix as
+  // \`src/commands/gdgraph.ts\`'s \`runAffected\` and \`src/mcp/tools.ts\`'s
+  // \`gdgraph.affected\`) is the minimal, faithful fix here too.
+  const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
+  if (!isKnownNode) {
+    console.error(
+      \`gdgraph: "\${target}" is not a node in the built graph (never indexed, or the \` +
+        \`path/symbol does not exist) — this is not the same as an indexed target with \` +
+        \`zero edges. Run \\\`keryx gdgraph build\\\` if the file is new, or double-check the path.\`,
+    );
+    process.exit(1);
+  }
+
   if (asJson) {
     console.log(JSON.stringify(affected, null, 2));
     process.exit(0);

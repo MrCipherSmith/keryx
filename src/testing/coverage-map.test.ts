@@ -44,6 +44,8 @@ function ctx(testFiles: string[]): TestingContext {
   return {
     schemaVersion: 1,
     generatedAt: "t",
+    status: "complete",
+    incompleteReasons: [],
     frameworks: [],
     scripts: [],
     configs: [],

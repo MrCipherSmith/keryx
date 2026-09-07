@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
@@ -23,6 +24,11 @@ import type {
 const IGNORED_DIRS = new Set([
   ".git",
   ".metaproject",
+  // Transient per-agent scratch checkouts (`.claude/worktrees/<name>/...`) are full
+  // copies of the repo, not project code - their test files are not this project's
+  // tests. Excluded by exact directory name only (not a broad "skip nested dirs"
+  // rule), so an ordinary monorepo package (e.g. `packages/foo/`) is still walked.
+  ".claude",
   "node_modules",
   "dist",
   "build",
@@ -73,8 +79,14 @@ export function testingDataRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "testing");
 }
 
-export async function analyzeTestingProject(cwd: string): Promise<TestingContext> {
-  const files = await listProjectFiles(cwd);
+// Flow 234 T21 (finding 2, major): pure computation, no disk write. Asking what
+// the current testing context looks like is a question, not a command - a
+// read-only caller (`findRelatedTests`, `test suggest`) must be able to get an
+// up-to-date answer without persisting a snapshot and dirtying the working
+// tree. `analyzeTestingProject` below is this function plus the persistence,
+// reserved for callers whose actual job is to refresh the on-disk snapshot.
+export async function computeTestingContext(cwd: string): Promise<TestingContext> {
+  const { files, incompleteReasons } = await listProjectFiles(cwd);
   const pkg = await readPackageJson(cwd);
   const scripts = getTestingScripts(pkg);
   const dependencies = {
@@ -95,9 +107,11 @@ export async function analyzeTestingProject(cwd: string): Promise<TestingContext
     ciFiles,
   });
 
-  const context: TestingContext = {
+  return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
+    status: incompleteReasons.length > 0 ? "incomplete" : "complete",
+    incompleteReasons,
     frameworks,
     scripts,
     configs,
@@ -107,7 +121,18 @@ export async function analyzeTestingProject(cwd: string): Promise<TestingContext
     conventions,
     recommendations,
   };
+}
 
+// Read-write refresh: computes the context (pure, see above) and persists the
+// snapshot to `.metaproject/data/testing/{context.json,context.md,
+// recommendations.md}`. Reserved for commands whose job is to refresh that
+// on-disk snapshot (`test analyze`/`init`, `coverage-map build`, and
+// `runTesting`'s own pre-run refresh). A read-only question about the current
+// tree must call `computeTestingContext` directly instead - see Finding 2
+// (flow 234 T21): asking a question is not a command, and must not dirty the
+// working tree.
+export async function analyzeTestingProject(cwd: string): Promise<TestingContext> {
+  const context = await computeTestingContext(cwd);
   await writeContext(cwd, context);
   return context;
 }
@@ -193,7 +218,7 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
       message: safeRaw.trim() ? firstMeaningfulLine(safeRaw) : "Test command failed with a non-zero exit code.",
       priority: "P0",
     });
-    counts.failed = Math.max(counts.failed, 1);
+    counts.failed = Math.max(counts.failed, failures.length);
     counts.total = Math.max(counts.total, counts.passed + counts.failed);
   }
   // Only enforce "no related tests" when a changed file is actually source code.
@@ -211,7 +236,27 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
       message: `Changed-scope test selection found no related tests (fallback: ${selectedTests.fallback}).`,
       priority: "P0",
     });
-    counts.failed = Math.max(counts.failed, 1);
+    counts.failed = Math.max(counts.failed, failures.length);
+    counts.total = Math.max(counts.total, counts.passed + counts.failed);
+  }
+  // Flow 234 T21 (finding 1, AC2 blocker): the refresh above (`ensureContext`)
+  // can mark the context `incomplete` when part of the tree could not be walked
+  // (e.g. a permission-denied subdirectory) - that must never be indistinguishable
+  // from a legitimate pass. Same convention as the "no related tests" gate
+  // immediately above: under `--strict` this flips the reported status to `fail`
+  // and exits non-zero, unconditionally (not gated on `--changed` or whether a
+  // command ran) - a strict run is a gate, and a gate cannot certify a tree it
+  // could not fully read, whether or not the tests it did manage to run passed.
+  if (input.strict && context.status === "incomplete") {
+    status = "fail";
+    exitCode = 1;
+    failures.push({
+      file: null,
+      name: "testing-context-incomplete",
+      message: `Testing context could not be fully refreshed, so a strict gate cannot certify it: ${context.incompleteReasons.join("; ")}`,
+      priority: "P0",
+    });
+    counts.failed = Math.max(counts.failed, failures.length);
     counts.total = Math.max(counts.total, counts.passed + counts.failed);
   }
 
@@ -226,6 +271,10 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
     exitCode,
     durationMs: Date.now() - started,
     counts,
+    context: {
+      status: context.status,
+      incompleteReasons: context.incompleteReasons,
+    },
     selection: {
       changed: Boolean(input.changed),
       strategies: selectedTests.strategies,
@@ -316,16 +365,38 @@ export async function loadCompatibleTestingReport(
   return report.scope === expectedScope ? report : null;
 }
 
-export async function findRelatedTests(cwd: string, target: string): Promise<string[]> {
-  const context = (await loadTestingContext(cwd)) ?? (await analyzeTestingProject(cwd));
+// Flow 234 T21 (finding 2): relatedness for a context already in hand - shared
+// by `findRelatedTests` and by callers (e.g. `test suggest`) that already
+// computed the context once and must not walk the tree a second time to ask
+// this question.
+export async function relatedTestsInContext(
+  cwd: string,
+  context: TestingContext,
+  target: string,
+): Promise<string[]> {
   const normalized = normalizePath(target);
   const naming = relatedNaming(normalized, context.testFiles);
   const imported = await findTestsByImportedTargets(cwd, [normalized], context.testFiles);
   return Array.from(new Set([...naming, ...imported])).sort();
 }
 
+export async function findRelatedTests(cwd: string, target: string): Promise<string[]> {
+  // AFC-09 (flow 234, AC2): a cached context.json can go stale the moment a test is
+  // added, renamed, or deleted, or the checkout changes - re-analyze so relatedness
+  // is always computed against what is actually on disk right now.
+  // Flow 234 T21 (finding 2): this is a read-only question, not a command - compute
+  // the context WITHOUT persisting a snapshot, so answering "what tests relate to
+  // X" never dirties the working tree.
+  const context = await computeTestingContext(cwd);
+  return relatedTestsInContext(cwd, context, target);
+}
+
 async function ensureContext(cwd: string): Promise<TestingContext> {
-  return (await loadTestingContext(cwd)) ?? (await analyzeTestingProject(cwd));
+  // AFC-09 (flow 234, AC2): trusting a cached context.json here silently misses test
+  // adds/renames/deletes and checkout changes made since the last explicit
+  // `keryx test analyze`. Re-analyze so selection is always computed against the
+  // current tree, not a stale snapshot.
+  return analyzeTestingProject(cwd);
 }
 
 async function writeContext(cwd: string, context: TestingContext): Promise<void> {
@@ -385,21 +456,34 @@ async function writeRawLog(cwd: string, raw: string): Promise<string> {
   return path.relative(cwd, latest);
 }
 
-async function listProjectFiles(cwd: string): Promise<string[]> {
+async function listProjectFiles(cwd: string): Promise<{ files: string[]; incompleteReasons: string[] }> {
   const out: string[] = [];
-  await walk(cwd, cwd, out);
-  return out.sort();
+  const incompleteReasons: string[] = [];
+  await walk(cwd, cwd, out, incompleteReasons);
+  return { files: out.sort(), incompleteReasons };
 }
 
-async function walk(root: string, dir: string, out: string[]): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true });
+async function walk(root: string, dir: string, out: string[], incompleteReasons: string[]): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = (await readdir(dir, { withFileTypes: true })) as Dirent[];
+  } catch (error) {
+    // AFC-09 (flow 234, AC2): a directory the walk cannot read (e.g. permission
+    // denied) must not silently collapse into "this subtree has no tests". Record
+    // why and keep walking the rest of the tree - the caller marks the whole
+    // context `incomplete` so this is never mistaken for a legitimate empty result.
+    incompleteReasons.push(
+      `${normalizePath(path.relative(root, dir)) || "."}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
   for (const entry of entries) {
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith(".tmp-")) {
         continue;
       }
-      await walk(root, abs, out);
+      await walk(root, abs, out, incompleteReasons);
       continue;
     }
     if (entry.isFile()) {
@@ -877,6 +961,7 @@ function renderContextMarkdown(context: TestingContext): string {
   return `# Testing Context
 
 generatedAt: ${context.generatedAt}
+status: ${context.status}${context.status === "incomplete" ? ` (${context.incompleteReasons.join("; ")})` : ""}
 
 ## Frameworks
 
@@ -925,6 +1010,7 @@ scope: ${report.scope}
 runner: ${report.runner ?? "n/a"}
 command: ${report.command ?? "n/a"}
 durationMs: ${report.durationMs}
+context: ${report.context.status}${report.context.status === "incomplete" ? ` (${report.context.incompleteReasons.join("; ")})` : ""}
 
 ## Counts
 

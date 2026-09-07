@@ -475,8 +475,11 @@ export function buildToolRegistry(): ToolEntry[] {
         "List the dependencies and dependents of a file from the code graph (blast radius). " +
         "Reads the built graph, so results are as old as the last `keryx gdgraph build` and " +
         "reflect no file added, renamed, deleted or re-imported since it — a blast radius " +
-        "computed after such a change under-reports. With no graph built at all the result is " +
-        "empty rather than an error, so an empty result means either no dependents or no graph.",
+        "computed after such a change under-reports. A target the graph never indexed (never " +
+        "built, or the path/symbol does not exist) is NOT the same as an indexed target that " +
+        "legitimately has zero edges (AFC-10, flow 234, frozen AC3): the former throws, " +
+        "surfaced to the caller as an error result, rather than coming back as the same empty " +
+        "`{dependencies: [], dependents: []}` shape as the latter.",
       inputSchema: OBJECT_SCHEMA(
         {
           file: { type: "string", description: "Project-relative file path." },
@@ -488,7 +491,32 @@ export function buildToolRegistry(): ToolEntry[] {
       async invoke(cwd, params) {
         const file = stringParam(params, "file") ?? "";
         const graph = await loadGraphSafe(cwd);
-        return getAffected(graph, file);
+        const result = getAffected(graph, file);
+        // T19 finding 1 (flow 234 review, BLOCKER): `getAffected`/`resolveGraphTarget`
+        // (`../gdgraph/target.ts`, owned by a concurrent task and not editable here)
+        // resolve an unknown target to itself unchanged rather than signaling
+        // "not found" — by design, so `computeAffected`'s own contract stays
+        // intact (see `gdgraph/service.ts`'s `UnknownGraphTargetError` comment and
+        // `commands/gdgraph.ts`'s `runAffected`, which both replicate this exact
+        // membership check locally against the already-loaded graph rather than
+        // changing that shared resolver). `result.target` is the RESOLVED target
+        // (exact/suffix match), or the normalized input unchanged when nothing
+        // matched — so membership in the loaded node set is exactly the signal
+        // that distinguishes "never indexed" from "indexed, zero edges". Throwing
+        // here (rather than returning an ad hoc `{..., error}` shape) reuses this
+        // module's existing, general error contract: `dispatch.ts` catches any
+        // thrown tool error and maps it to `isError: true` on the wire — the
+        // same shape every other tool failure in this registry already produces,
+        // not a fourth bespoke error shape.
+        const isKnownNode = graph.nodes.some((node) => node.path === result.target);
+        if (!isKnownNode) {
+          throw new Error(
+            `gdgraph: "${file}" is not a node in the built graph (never indexed, or the ` +
+              `path/symbol does not exist) — this is not the same as an indexed target with ` +
+              `zero edges. Run \`keryx gdgraph build\` if the file is new, or double-check the path.`,
+          );
+        }
+        return result;
       },
     },
     {
@@ -498,11 +526,16 @@ export function buildToolRegistry(): ToolEntry[] {
         "Return the import cycles in the code graph, each as an ordered list of file paths. " +
         "Cycles closed only through a dynamic `await import()` are deliberately excluded: they " +
         "resolve at call time, not module-load time, so they are not the load-order cycle this " +
-        "query answers. Reads the built graph, so results are as old as the last `keryx gdgraph " +
-        "build` and reflect no edit made since it. When no graph has been built at all the " +
-        "result is an empty list rather than an error, so an empty result means either no " +
-        "cycles or no graph — confirm a build exists before reporting `no cycles`. Returns the " +
-        "cycles only: it does not rank them by severity and does not suggest where to break one.",
+        "query answers. A cycle closed only through `import type`/`export type … from`/an " +
+        "all-`type`-specifier import is excluded for the same reason (AFC-11, flow 234): it is " +
+        "erased by the compiler and never runs at module-load time, so it is not a real runtime " +
+        "deadlock either — a mixed cycle with at least one real (non-type-only) edge in the " +
+        "loop is still reported. Reads the built graph, so results are as old as the last " +
+        "`keryx gdgraph build` and reflect no edit made since it. When no graph has been built " +
+        "at all the result is an empty list rather than an error, so an empty result means " +
+        "either no cycles or no graph — confirm a build exists before reporting `no cycles`. " +
+        "Returns the cycles only: it does not rank them by severity and does not suggest where " +
+        "to break one.",
       inputSchema: OBJECT_SCHEMA(),
       mutating: false,
       async invoke(cwd) {
