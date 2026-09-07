@@ -56,6 +56,10 @@
     "scripts/benchmark/run-safety.test.ts",
     "scripts/benchmark/run-safety.ts",
     "scripts/benchmark/run-testing-oracle.ts",
+    "scripts/benchmark/run-wiki-freshness-scale.test.ts",
+    "scripts/benchmark/run-wiki-freshness-scale.ts",
+    "scripts/benchmark/wiki-freshness-scale-fixture.test.ts",
+    "scripts/benchmark/wiki-freshness-scale-fixture.ts",
     "scripts/check-doc-links.test.ts",
     "scripts/check-doc-links.ts",
     "scripts/generate-sac-policy-experiment-fixtures.ts",
@@ -181,6 +185,8 @@
     "src/commands/providers.custom.test.ts",
     "src/commands/providers.test.ts",
     "src/commands/providers.ts",
+    "src/commands/retention.test.ts",
+    "src/commands/retention.ts",
     "src/commands/review-comments-cli.test.ts",
     "src/commands/review-learn-cli.test.ts",
     "src/commands/review.test.ts",
@@ -245,6 +251,12 @@
     "src/contracts/resolver.ts",
     "src/contracts/validator.ts"
   ],
+  "core-package.test.ts": [
+    "src/core-package.test.ts"
+  ],
+  "core.ts": [
+    "src/core.ts"
+  ],
   "ctx": [
     "src/ctx/assembly.ts",
     "src/ctx/hook-classify.ts",
@@ -255,6 +267,8 @@
     "src/ctx/hook-siblings.test.ts",
     "src/ctx/hook.test.ts",
     "src/ctx/hook.ts",
+    "src/ctx/lines.test.ts",
+    "src/ctx/lines.ts",
     "src/ctx/orient-runtimes.test.ts",
     "src/ctx/orient-runtimes.ts",
     "src/ctx/orient.test.ts",
@@ -920,6 +934,13 @@
     "src/metrics/schema.ts",
     "src/metrics/service.test.ts",
     "src/metrics/types.ts"
+  ],
+  "retention": [
+    "src/retention/fs-deps.ts",
+    "src/retention/policy.test.ts",
+    "src/retention/policy.ts",
+    "src/retention/sweep.test.ts",
+    "src/retention/sweep.ts"
   ],
   "review": [
     "src/review/blast-radius.test.ts",
