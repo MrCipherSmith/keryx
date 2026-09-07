@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { Glob } from "bun";
 
 /**
  * Every source file must be readable by a text search.
@@ -32,12 +31,39 @@ import { Glob } from "bun";
  * every case the escape spells the identical runtime string, so the fix costs
  * nothing: `\u0000` in TypeScript, `\0` in prose.
  */
-const SRC = path.join(import.meta.dir, "..");
+const REPO = path.join(import.meta.dir, "..", "..");
 
 const NUL = "\u0000";
 
-/** Extensions that a person or a tool is expected to be able to grep. */
-const TEXT = [".ts", ".tsx", ".js", ".mjs", ".json", ".md", ".txt", ".yml", ".yaml"];
+/**
+ * Extensions a person or a tool is expected to be able to grep.
+ *
+ * This list is the guard's blind spot, so it is derived and then checked
+ * rather than typed once and trusted: `every extension actually present`
+ * below fails when a new text extension appears in the tree and is not
+ * listed here. The first version of this guard omitted `.mdc` (32 rule files
+ * shipped inside src/) and `.sse`, and a NUL planted in a `.mdc` file went
+ * unreported while the routed search silently skipped it.
+ */
+const TEXT = [
+  ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".jsonc", ".md", ".mdc", ".mdx",
+  ".txt", ".yml", ".yaml", ".sse", ".toml", ".css", ".html", ".sh", ".sql", ".csv",
+];
+
+/**
+ * Directories with nothing to guard: dependencies, build output, scratch
+ * worktrees, and version control internals.
+ */
+const SKIP = new Set(["node_modules", "dist", "coverage", "worktrees", ".git"]);
+
+/**
+ * gdctx's captured command logs, which legitimately hold whatever bytes the
+ * commands they wrapped produced. Matched by PATH, not by directory name —
+ * skipping every directory called `artifacts` would also have excluded
+ * the per-flow `artifacts` directories under `.metaproject/flows`, where
+ * three real violators live.
+ */
+const SKIP_PATHS = [".metaproject/data/gdctx/"];
 
 /**
  * PURE over a `{ path -> bytes }` map, so the self-check below drives THIS
@@ -52,33 +78,94 @@ function unsearchable(sources: ReadonlyMap<string, string>): string[] {
     .sort();
 }
 
-function textFiles(): Map<string, string> {
-  const found = new Map<string, string>();
-  for (const relative of new Glob("**/*").scanSync(SRC)) {
-    const posix = relative.split(path.sep).join("/");
-    if (!TEXT.some((extension) => posix.endsWith(extension))) {
+/**
+ * Walked with readdir rather than a glob, deliberately.
+ *
+ * `Glob("**\/*")` does not descend into dotted directories, so the first
+ * version of this guard could not see `.metaproject/` — where three of the
+ * five files that actually carried a NUL live, including two past review
+ * reports — nor a NUL planted in `src/.probe/`. A guard that cannot look
+ * where the defect is, is decorative.
+ */
+function walk(dir: string, prefix: string, found: Map<string, string>): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP.has(entry.name)) {
       continue;
     }
-    found.set(posix, readFileSync(path.join(SRC, relative), "latin1"));
+    const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    if (SKIP_PATHS.some((skipped) => `${relative}/`.startsWith(skipped))) {
+      continue;
+    }
+    if (entry.isDirectory()) {
+      walk(path.join(dir, entry.name), relative, found);
+    } else if (entry.isFile() && TEXT.some((extension) => relative.endsWith(extension))) {
+      found.set(relative, readFileSync(path.join(dir, entry.name), "latin1"));
+    }
   }
+}
+
+function textFiles(): Map<string, string> {
+  const found = new Map<string, string>();
+  walk(REPO, "", found);
   return found;
 }
 
+/** Every extension present in the tree, so the TEXT list cannot silently fall behind. */
+function extensionsPresent(): Set<string> {
+  const present = new Set<string>();
+  const seen = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (SKIP.has(entry.name)) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        seen(path.join(dir, entry.name));
+      } else if (entry.isFile()) {
+        const dot = entry.name.lastIndexOf(".");
+        if (dot > 0) {
+          present.add(entry.name.slice(dot));
+        }
+      }
+    }
+  };
+  seen(path.join(REPO, "src"));
+  return present;
+}
+
 describe("every source file can be found by a text search", () => {
-  test("no file under src/ contains a NUL byte", () => {
+  test("no text file in the repository contains a NUL byte", () => {
     expect(unsearchable(textFiles())).toEqual([]);
   });
 
-  test("the scan actually reached the tree", () => {
+  test("the scan actually reached the tree, including where the defect was", () => {
     // Without this the assertion above passes just as well when the root moves
     // and the map is empty — which is the exact failure mode being guarded
     // against, reproduced inside its own guard.
     const files = textFiles();
-    expect(files.size).toBeGreaterThan(400);
-    expect(files.has("sac/machine-wrap-up.ts")).toBe(true);
-    expect(files.has("lib/provider-config.ts")).toBe(true);
-    expect(files.has("gdskills/build-parity.test.ts")).toBe(true);
-    expect(files.has("review/fixtures/consolidated-review-2026-08-01.md")).toBe(true);
+    expect(files.size).toBeGreaterThan(1000);
+    expect(files.has("src/sac/machine-wrap-up.ts")).toBe(true);
+    expect(files.has("src/lib/provider-config.ts")).toBe(true);
+    expect(files.has("src/gdskills/build-parity.test.ts")).toBe(true);
+    expect(files.has("src/review/fixtures/consolidated-review-2026-08-01.md")).toBe(true);
+    // A dotted directory, which the previous glob-based scan could not enter,
+    // and where three of the five real violators lived.
+    expect([...files.keys()].some((file) => file.startsWith(".metaproject/"))).toBe(true);
+    // A `.mdc` rule file, an extension the first TEXT list omitted.
+    expect([...files.keys()].some((file) => file.endsWith(".mdc"))).toBe(true);
+  });
+
+  test("no text extension in src/ is missing from the scanned list", () => {
+    // The list of extensions is the guard's blind spot, so it is checked
+    // against the tree instead of being trusted. A new text format that
+    // nobody adds here would otherwise be unguarded and silently so.
+    const binary = new Set([
+      ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".pdf", ".zip", ".gz",
+      ".wasm", ".woff", ".woff2", ".ttf", ".otf", ".node", ".snap", ".lock",
+    ]);
+    const unscanned = [...extensionsPresent()].filter(
+      (extension) => !TEXT.includes(extension) && !binary.has(extension),
+    );
+    expect(unscanned).toEqual([]);
   });
 
   test("the four files that carried one still spell the separator as an escape", () => {
@@ -88,13 +175,13 @@ describe("every source file can be found by a text search", () => {
     // what makes the regression invisible without this assertion.
     const files = textFiles();
     for (const file of [
-      "sac/machine-wrap-up.ts",
-      "lib/provider-config.ts",
-      "gdskills/build-parity.test.ts",
+      "src/sac/machine-wrap-up.ts",
+      "src/lib/provider-config.ts",
+      "src/gdskills/build-parity.test.ts",
     ]) {
       expect(files.get(file)).toContain("\\u0000");
     }
-    expect(files.get("review/fixtures/consolidated-review-2026-08-01.md")).toContain("\\0");
+    expect(files.get("src/review/fixtures/consolidated-review-2026-08-01.md")).toContain("\\0");
   });
 
   test("the guard catches a planted byte, and does not fire on the escape", () => {

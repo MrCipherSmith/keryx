@@ -185,7 +185,7 @@ const wouldBeReleased = coverage
 const malformed: { id: string; outcome: string }[] = [];
 for (const [id, text] of Object.entries({
   loneSurrogate: "![a](" + String.fromCharCode(0xd800) + ")",
-  nulByte: `![a](https://${ATT}/ p)`,
+  nulByte: `![a](https://${ATT}/\u0000p)`,
   deepNest: "[".repeat(20000) + "a" + "]".repeat(20000),
   hugeTable: ("|" + "a|".repeat(200) + "\n").repeat(200),
 })) {

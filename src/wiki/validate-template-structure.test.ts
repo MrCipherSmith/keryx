@@ -264,12 +264,18 @@ Recorded via a Shared Agent Context proposal, accepted by a reviewer.
 ## Provenance
 
 - Source: sac-proposal
+- Link: ./.metaproject/workspaces/workspace-e1b7/session-evidence/77720896.md (sha256 aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e)
+- Created: 2026-08-14
+- Updated: 2026-08-14
 
 ## Changelog
 
 - 0.1.0 - Written by the SAC wiki owner-writer.
 `;
-  const root = await wikiWith({ "decisions/sac-proposal-demo.md": sacRecord });
+  // The fixture is the producer's real output shape — hex id in the filename
+  // and a hash-identified evidence link — because the exemption is now keyed
+  // on that whole shape rather than on one line anyone can type.
+  const root = await wikiWith({ "decisions/sac-proposal-a41fc4152ad147e2.md": sacRecord });
   try {
     expect(await templateIssues(root)).toEqual([]);
   } finally {
@@ -334,6 +340,65 @@ Recorded via a Shared Agent Context proposal, accepted by a reviewer.
   try {
     const kinds = (await templateIssues(root)).map((issue) => issue.kind);
     expect(kinds).toContain("coverage-record-missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("machine provenance without an evidence link does not earn the exemption", async () => {
+  // The producer always writes a hash-identified link beside the source name.
+  // A page claiming machine provenance while pointing at no evidence is
+  // claiming something it cannot support, and is held to the contract.
+  const unbacked = `# SAC and the wiki
+
+Version: 0.1.0
+Type: decision
+Status: draft
+Describes: none
+
+## Summary
+
+SAC complements wiki and graph.
+
+## Provenance
+
+- Source: sac-proposal
+
+## Changelog
+
+- 0.1.0 - Written by someone.
+`;
+  const root = await wikiWith({ "decisions/sac-proposal-a41fc4152ad147e2.md": unbacked });
+  try {
+    expect((await templateIssues(root)).map((issue) => issue.kind)).toContain("coverage-record-missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the stamp does not travel: the same bytes outside the producer's path are held to the contract", async () => {
+  // An independent review forged the exemption onto a hand-written
+  // `business-rule` page by appending a provenance block, and it drew zero
+  // template findings. The exemption belongs to the producer's whole output
+  // shape — its page type and the path it mints into — not to a line.
+  const forged = `# Nothing In The Shape
+
+Version: 0.1.0
+Type: business-rule
+Status: accepted
+
+Prose that answers nothing and carries none of the headings.
+
+## Provenance
+
+- Source: sac-proposal
+- Link: ./evidence.md (sha256 aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e)
+`;
+  const root = await wikiWith({ "business-rules/forged.md": forged });
+  try {
+    const kinds = (await templateIssues(root)).map((issue) => issue.kind);
+    expect(kinds).toContain("coverage-record-missing");
+    expect(kinds.filter((kind) => kind === "field-missing").length).toBeGreaterThan(0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
