@@ -128,7 +128,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "gdwiki",
     command: "wiki freshness",
-    summary: "Report which wiki pages a code change puts in doubt, and why. Read-only.",
+    summary:
+      "Report which wiki pages a code change puts in doubt, and why. NOT read-only: " +
+      "overwrites the report artifacts and consumes (deletes) the accumulated freshness queue.",
     intent: [
       "какие страницы вики устарели",
       "wiki freshness",
@@ -151,10 +153,25 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     // so `true` here would let an agent invoke it with no approval — and it
     // writes. Whether the write is small is beside the point.
     //
+    // CORRECTION (flow 236 T9): the `sideEffects` list below named the two
+    // artifact overwrites and stopped there, and the summary above still said
+    // "Read-only." — both wrong the same way `read: true` would have been
+    // wrong. `runFreshnessCommand` (`commands/wiki.ts`) calls `runFreshness`
+    // (`wiki/freshness/run.ts`), which — whenever it drained anything —
+    // deletes `data/wiki/freshness-queue.jsonl` outright. A consumer reading
+    // only the old two-item list would have no way to know the accumulated
+    // backlog is gone once the report lands, which is exactly the gap this
+    // registry exists to close: a machine-readable side-effect declaration an
+    // agent may act on without asking is the one place understating a delete
+    // is least survivable.
+    //
     // The MCP surface `wiki_freshness` is the genuinely read-only way to ask
     // this question: it reads the report and writes nothing at all.
     read: false,
-    sideEffects: ["writes data/wiki/freshness/latest.{json,md}"],
+    sideEffects: [
+      "writes data/wiki/freshness/latest.{json,md}",
+      "DELETES data/wiki/freshness-queue.jsonl once the report is on disk (whenever it drained anything)",
+    ],
   },
   {
     module: "gdwiki",
@@ -169,10 +186,19 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
+    // CORRECTION (flow 236 T9): "stamps VerifiedAt and VerifiedScope on
+    // refreshed pages" used to be unconditional. It is not: `resolveWikiSourceGate`
+    // (`wiki/staleness.ts`, AFC-08) makes the stamp conditional on the code
+    // graph demonstrably being current. A stale-but-not-errored graph still
+    // gets its Reference block repaired (the content is still what that graph
+    // says), but VerifiedAt/VerifiedScope are left untouched — an unstamped
+    // page, not a dishonestly-stamped one. A graph in ERROR preserves the
+    // existing block entirely (action `stale-source`) rather than rewriting
+    // it from a source that could not be interrogated.
     sideEffects: [
-      "rewrites the managed Reference block of affected pages",
-      "bumps page Version and appends one Changelog line",
-      "stamps VerifiedAt and VerifiedScope on refreshed pages",
+      "rewrites the managed Reference block of affected pages (preserved, not rewritten, when the source graph is in error)",
+      "bumps page Version and appends one Changelog line for each page actually rewritten",
+      "stamps VerifiedAt and VerifiedScope on refreshed pages ONLY when the code graph is demonstrably current (resolveWikiSourceGate); otherwise the stamp is left exactly as it was",
     ],
   },
   {
@@ -579,7 +605,16 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: false,
     read: false,
-    sideEffects: ["writes .metaproject/wiki/**"],
+    // CORRECTION (flow 236 T9): `wikiCollect` (`wiki/service.ts`) also
+    // conditionally records the gdwiki sync-provenance file — outside
+    // `.metaproject/wiki/**` — whenever `resolveWikiSourceGate` finds the code
+    // graph demonstrably current. The old list stopped at the page tree and
+    // silently understated this write, the same gap corrected on `wiki
+    // freshness` and `wiki refresh` above.
+    sideEffects: [
+      "writes .metaproject/wiki/**",
+      "writes .metaproject/data/gdwiki/.provenance.json, but only when the code graph is demonstrably current (resolveWikiSourceGate)",
+    ],
   },
   {
     module: "gdwiki",
@@ -682,7 +717,21 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     intent: ["check keryx version", "check for update", "проверь версию keryx"],
     args: [{ name: "json", type: "bool", required: false, desc: "typed structured result" }],
     json: true,
-    read: true,
+    // CORRECTION (flow 236 T9): found while auditing this file for the same
+    // defect class as `wiki freshness` below — `read: true` here made this
+    // auto-allowable, and it is not read-only. `checkVersion`
+    // (`lib/version-check.ts`) is served from a local cache/backoff window on
+    // some calls, but on every other call it makes a live outbound HTTPS
+    // request to `REGISTRY_URL` (a third-party npm registry) and then writes
+    // the result into `<keryx-config-dir>/version-check.json` — the per-user
+    // config directory, OUTSIDE this project — via `updateCache`. A descriptor
+    // cannot promise a caller which path a given invocation takes, so it
+    // cannot claim `read: true` for the paths that do neither.
+    read: false,
+    sideEffects: [
+      "makes an outbound HTTPS request to the npm registry, unless served from the local cache or failure-backoff window",
+      "writes <per-user keryx config dir>/version-check.json (outside this project)",
+    ],
   },
   // ---- providers --------------------------------------------------------
   // Both are read-only and network-free: they report over `llm-providers.json`

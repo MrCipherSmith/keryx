@@ -20,10 +20,9 @@
 // evidence collection, manifest/catalog update, and file locking — rather than
 // writing `.metaproject/project-skills/` files a second, parallel way.
 import { readFile } from "node:fs/promises";
-import { writeFileAtomic } from "../lib/fs";
 import { createProjectSkill, isRoutableSkillTarget } from "../gdskills/project-skills";
-import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
-import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
+import type { KnowledgeOwner, OwnerReceipt, OwnerWriteFailure, OwnerWriteIntent } from "./guarded-owner-writer";
+import { applyGuardedTargetWrite, ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence, recoverStagedOwnerWrite } from "./proposal-evidence";
 
 function titleFrom(evidenceContent: string, proposalId: string): string {
   const titleLine = evidenceContent.split("\n").find((line) => line.startsWith("# "));
@@ -62,9 +61,26 @@ function slug(value: string): string {
 export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; now?: () => Date }): {
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
   recover: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
-  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | { ok: false; code: string }>;
+  recoverReceipt: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
+  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | OwnerWriteFailure>;
 } {
   const now = opts?.now ?? (() => new Date());
+
+  /** Replays the staged package build — same module, same name, same path. */
+  const applyStaged = async (staged: Record<string, unknown>): Promise<{ ok: true } | OwnerWriteFailure> => {
+    try {
+      await createProjectSkill(cwd, {
+        target: staged.target as string,
+        ...(typeof staged.note === "string" ? { note: staged.note } : {}),
+        module: "sac",
+        name: staged.name as string,
+        format: "single",
+      });
+    } catch (cause) {
+      return { ok: false, code: `skill_write_failed_${slug(cause instanceof Error ? cause.message : String(cause))}` };
+    }
+    return { ok: true };
+  };
 
   return {
     async authorize(intent) {
@@ -81,6 +97,12 @@ export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; 
       } catch {
         return undefined;
       }
+    },
+
+    // AFC-27 / flow 237 AC1: the non-mutating restart question — see the same
+    // hook on wiki-owner-writer.ts for why `recover` alone cannot answer it.
+    async recoverReceipt(intent) {
+      return recoverStagedOwnerWrite({ cwd, owner: "skill", intent, apply: applyStaged });
     },
 
     async persist(intent) {
@@ -100,9 +122,15 @@ export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; 
         return { ok: false, code: "skill_write_refused_unroutable_target" };
       }
 
-      let result: Awaited<ReturnType<typeof createProjectSkill>>;
+      const staged = { target, ...(note !== undefined ? { note } : {}), name: proposal.id };
+
+      // The base-version comparison needs the target path BEFORE anything is
+      // written, and this owner does not own the slugging rule that produces it.
+      // `dryRun` is `createProjectSkill`'s own preview: it computes the same
+      // `skillPath` the real call would, and writes nothing.
+      let preview: Awaited<ReturnType<typeof createProjectSkill>>;
       try {
-        result = await createProjectSkill(cwd, { target, note, module: "sac", name: proposal.id, format: "single" });
+        preview = await createProjectSkill(cwd, { target, note, module: "sac", name: proposal.id, format: "single", dryRun: true });
       } catch (cause) {
         // createProjectSkill throws when its own security guard blocks the
         // write (or on other real failures, e.g. metaproject not initialized) —
@@ -111,19 +139,22 @@ export function createRealSkillOwnerWriter(cwd: string, opts?: { note?: string; 
         return { ok: false, code: `skill_write_failed_${slug(cause instanceof Error ? cause.message : String(cause))}` };
       }
 
-      // `result.skillPath` is relative to `cwd` and already includes the
+      // `preview.skillPath` is relative to `cwd` and already includes the
       // leading `.metaproject/` segment (createProjectSkill computes it via
       // `path.relative(projectRoot, packageRoot)`) — strip it, since
       // receiptRef/targetRef are relative to `.metaproject/` itself, the same
       // convention memory/wiki already use (`./memory/...`, `./wiki/...`).
-      const withoutMetaprojectPrefix = result.skillPath.replace(/^\.metaproject\//, "");
+      const withoutMetaprojectPrefix = preview.skillPath.replace(/^\.metaproject\//, "");
       const receipt: OwnerReceipt = {
         receiptRef: `./${withoutMetaprojectPrefix}/SKILL.md.receipt.json`,
         targetRef: `./${withoutMetaprojectPrefix}/SKILL.md`,
         completedAt: now().toISOString(),
       };
-      await writeFileAtomic(ownerReceiptPath(cwd, "skill", intent.workspaceId, intent.idempotencyKey), `${JSON.stringify(receipt, null, 2)}\n`);
-      return receipt;
+      // No `predictedContent`: the package writer, not this owner, decides the
+      // SKILL.md bytes (collected evidence, manifest timestamps), so this owner
+      // must not claim to know the applied digest. `SKILL.md` is the package's
+      // entry file and stands for the package in the base comparison.
+      return applyGuardedTargetWrite({ cwd, owner: "skill", intent, receipt, staged, apply: applyStaged });
     },
   };
 }

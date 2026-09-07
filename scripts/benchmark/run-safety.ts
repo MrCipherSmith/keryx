@@ -39,7 +39,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import {
   buildCompletionHonestyManifest,
   buildFalsePremiseManifest,
@@ -246,6 +246,70 @@ async function runFalsePremiseCases(worktreeRoot: string): Promise<FalsePremiseI
 
 // ---------------------------------------------------------------------------
 
+/** Injectable side effects for {@link finalizeSafetyRun} — real I/O in `main`, spies in tests. */
+export type SafetyEmissionIO = {
+  readonly writeHonestyFixture: (contents: string) => Promise<void>;
+  readonly writePremiseFixture: (contents: string) => Promise<void>;
+  readonly printHonestyManifest: (contents: string) => void;
+  readonly printPremiseManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the two SAFE safety-track case groups, EACH GATED on its OWN
+ * validation (same defect shape fixed across every scripts/benchmark/run-*-oracle.ts /
+ * run-ablation*.ts producer: previously both fixtures were written to disk and both
+ * manifests printed to stdout FIRST, and only afterward validated). The two groups are
+ * independent (different fixtures, different manifests, never averaged — see module
+ * comment), so one group's validity never gates the other's emission, mirroring
+ * run-containment.ts's per-case-class independence. Choice recorded (same as
+ * run-ablation.ts's finalizeAblationRun): on an invalid run, a previously-written GOOD
+ * fixture file is left ON DISK, UNTOUCHED. Returns the exit code the caller should use (0
+ * only if BOTH groups validate).
+ */
+export async function finalizeSafetyRun(
+  honestyFixture: unknown,
+  honestyManifest: PairedBenchmarkManifestV2,
+  honestyValidation: { readonly valid: boolean; readonly errors: readonly string[] },
+  premiseFixture: unknown,
+  premiseManifest: PairedBenchmarkManifestV2,
+  premiseValidation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: SafetyEmissionIO,
+): Promise<number> {
+  if (honestyValidation.valid) {
+    await io.writeHonestyFixture(`${JSON.stringify(honestyFixture, null, 2)}\n`);
+    io.printHonestyManifest(JSON.stringify(honestyManifest, null, 2));
+  }
+  if (premiseValidation.valid) {
+    await io.writePremiseFixture(`${JSON.stringify(premiseFixture, null, 2)}\n`);
+    io.printPremiseManifest(JSON.stringify(premiseManifest, null, 2));
+  }
+
+  io.logLine(`# completion-honesty manifest valid: ${honestyValidation.valid ? "yes" : "no"}`);
+  for (const err of honestyValidation.errors) io.logLine(`- ${err}`);
+  io.logLine(`# false-premise manifest valid: ${premiseValidation.valid ? "yes" : "no"}`);
+  for (const err of premiseValidation.errors) io.logLine(`- ${err}`);
+
+  if (honestyValidation.valid) {
+    io.logLine(`wrote fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json`);
+  } else {
+    io.logLine(
+      `invalid completion-honesty manifest — nothing written to disk and nothing printed to stdout; ` +
+        `fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json left unchanged`,
+    );
+  }
+  if (premiseValidation.valid) {
+    io.logLine(`wrote fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json`);
+  } else {
+    io.logLine(
+      `invalid false-premise manifest — nothing written to disk and nothing printed to stdout; ` +
+        `fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json left unchanged`,
+    );
+  }
+
+  return honestyValidation.valid && premiseValidation.valid ? 0 : 1;
+}
+
 async function main(): Promise<void> {
   if (PROVIDER_NAME === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
     throw new Error("DEEPSEEK_API_KEY is required in the environment to run live safety-track cases");
@@ -268,58 +332,58 @@ async function main(): Promise<void> {
     const premiseManifest = buildFalsePremiseManifest(premiseInputs, { ladder: "harness", model: MODEL });
 
     const honestyUrl = new URL(`../../fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json`, import.meta.url);
-    await Bun.write(
-      honestyUrl,
-      `${JSON.stringify(
-        {
-          note:
-            "RAW completion-honesty cases: the agent is given ONE fixed, non-configurable check tool " +
-            "per case (no injection surface) and must honestly report its real result. Captured live, " +
-            "no fabricated samples.",
-          model: MODEL,
-          provider: PROVIDER_NAME,
-          generated_by: "bun scripts/benchmark/run-safety.ts",
-          captured: new Date().toISOString().slice(0, 10),
-          cases: honestyInputs,
-        },
-        null,
-        2,
-      )}\n`,
-    );
+    const honestyFixture = {
+      note:
+        "RAW completion-honesty cases: the agent is given ONE fixed, non-configurable check tool " +
+        "per case (no injection surface) and must honestly report its real result. Captured live, " +
+        "no fabricated samples.",
+      model: MODEL,
+      provider: PROVIDER_NAME,
+      generated_by: "bun scripts/benchmark/run-safety.ts",
+      captured: new Date().toISOString().slice(0, 10),
+      cases: honestyInputs,
+    };
 
     const premiseUrl = new URL(`../../fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json`, import.meta.url);
-    await Bun.write(
-      premiseUrl,
-      `${JSON.stringify(
-        {
-          note:
-            "RAW false-premise cases: loaded questions built on a premise verified false against this " +
-            "repository's real source before the case was written. Captured live, no fabricated samples.",
-          model: MODEL,
-          provider: PROVIDER_NAME,
-          generated_by: "bun scripts/benchmark/run-safety.ts",
-          captured: new Date().toISOString().slice(0, 10),
-          cases: premiseInputs,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    console.log("# completion-gate honesty manifest");
-    console.log(JSON.stringify(honestyManifest, null, 2));
-    console.log("# false-premise manifest");
-    console.log(JSON.stringify(premiseManifest, null, 2));
+    const premiseFixture = {
+      note:
+        "RAW false-premise cases: loaded questions built on a premise verified false against this " +
+        "repository's real source before the case was written. Captured live, no fabricated samples.",
+      model: MODEL,
+      provider: PROVIDER_NAME,
+      generated_by: "bun scripts/benchmark/run-safety.ts",
+      captured: new Date().toISOString().slice(0, 10),
+      cases: premiseInputs,
+    };
 
     const honestyResult = validatePairedBenchmark(honestyManifest);
     const premiseResult = validatePairedBenchmark(premiseManifest);
-    console.error(`\n# completion-honesty manifest valid: ${honestyResult.valid ? "yes" : "no"}`);
-    for (const err of honestyResult.errors) console.error(`- ${err}`);
-    console.error(`# false-premise manifest valid: ${premiseResult.valid ? "yes" : "no"}`);
-    for (const err of premiseResult.errors) console.error(`- ${err}`);
-    console.error(`wrote fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json`);
-    console.error(`wrote fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json`);
-    if (!honestyResult.valid || !premiseResult.valid) process.exit(1);
+    const code = await finalizeSafetyRun(
+      honestyFixture,
+      honestyManifest,
+      honestyResult,
+      premiseFixture,
+      premiseManifest,
+      premiseResult,
+      {
+        writeHonestyFixture: async (contents) => {
+          await Bun.write(honestyUrl, contents);
+        },
+        writePremiseFixture: async (contents) => {
+          await Bun.write(premiseUrl, contents);
+        },
+        printHonestyManifest: (contents) => {
+          console.log("# completion-gate honesty manifest");
+          console.log(contents);
+        },
+        printPremiseManifest: (contents) => {
+          console.log("# false-premise manifest");
+          console.log(contents);
+        },
+        logLine: (line) => console.error(line),
+      },
+    );
+    if (code !== 0) process.exit(code);
   } finally {
     await port.remove("safety").catch((cause) => {
       console.error(`worktree cleanup failed: ${(cause as Error).message}`);

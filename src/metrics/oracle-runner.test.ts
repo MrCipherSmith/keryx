@@ -91,10 +91,16 @@ describe("scoreOracleTarget", () => {
     expect(score.falseNegatives).toBe(2);
   });
 
-  test("empty gold set => recall is vacuously 1 (ir.ts convention)", () => {
+  test("empty gold set => recall is unmeasured (null), never a fabricated score (ir.ts convention)", () => {
     const score = scoreOracleTarget({ target: "t", system: ["a"], gold: [] });
-    expect(score.recall).toBe(1);
+    expect(score.recall).toBeNull();
     expect(score.precision).toBe(0); // "a" is not in the (empty) gold set
+  });
+
+  test("empty system set => precision is unmeasured (null), never a fabricated score", () => {
+    const score = scoreOracleTarget({ target: "t", system: [], gold: ["g"] });
+    expect(score.precision).toBeNull();
+    expect(score.recall).toBe(0); // nothing retrieved, so nothing of the gold was recalled
   });
 
   test("deterministic: same input yields identical scores", () => {
@@ -159,6 +165,15 @@ describe("buildOracleManifest", () => {
     expect(empty?.rates?.precision).toBeUndefined();
     // recall still has an n (gold non-empty)
     expect(empty?.rates?.recall?.n).toBe(1);
+    // The unmeasured `oracle.precision` field is OMITTED entirely (never emitted with a
+    // null value) — flow 238/T8: `requireMeasured` in validatePairedBenchmarkV2 would
+    // reject a present field with `value: null`, so this is also what keeps the manifest
+    // valid, not just a style choice.
+    expect(empty?.oracle?.precision).toBeUndefined();
+    // recall has a real denominator here (gold is non-empty) — nothing retrieved means
+    // nothing recalled, a real measured 0, not an absence of measurement.
+    expect(empty?.oracle?.recall?.value).toBe(0);
+    expect(empty?.oracle?.f1).toBeDefined();
     expect(validatePairedBenchmark(manifest).valid).toBe(true);
   });
 
@@ -351,9 +366,10 @@ describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", (
       system: ["src/metrics/wrong.test.ts"],
       gold: goldTestImpact(COVERAGE, ["src/metrics/orphan.ts"]), // no coverage => empty gold
     });
-    // Empty gold => recall vacuously 1 (ir.ts convention), but the spurious system id is a
-    // false positive so precision is 0.
-    expect(run.oracle?.recall?.value).toBe(1);
+    // Empty gold => recall is unmeasured (null => omitted from the manifest, flow 238/T8),
+    // never a fabricated "vacuously perfect" score; the spurious system id is still a real
+    // false positive so precision is a real, measured 0.
+    expect(run.oracle?.recall).toBeUndefined();
     expect(run.oracle?.precision?.value).toBe(0);
   });
 

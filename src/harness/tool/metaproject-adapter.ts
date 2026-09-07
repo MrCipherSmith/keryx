@@ -24,6 +24,7 @@ import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
 import { loadGraph } from "../../gdgraph/query";
 import { loadGdgraphConfig } from "../../gdgraph/config";
+import { checkGraphStaleness, type StalenessCheck } from "../../gdgraph/staleness";
 import {
   computeRepomap,
   type RepomapOptions,
@@ -48,6 +49,7 @@ import type {
   ContextSummaryResult,
   FlowStatusResult,
   GraphAffectedResult,
+  GraphStaleness,
   GraphPathResult,
   GraphQueryResult,
   GraphSymbolResult,
@@ -102,6 +104,28 @@ export interface MetaprojectAdapterDeps {
    */
   repomapCompute: (cwd: string, options: RepomapOptions) => Promise<GdgraphRepomapResult>;
   /**
+   * Tri-state graph freshness (default: the real `checkGraphStaleness`). Every
+   * graph-backed result carries it so an agent learns what the command line
+   * already prints; a git failure reads as `unknown`, never as a confident
+   * "the repo moved" claim and never as "fresh". Computed AT MOST ONCE per
+   * adapter instance (see `staleness()` below) — it shells out to git, and a
+   * per-call check would spend three subprocesses on every graph read.
+   * Injectable so tests are deterministic and spawn nothing.
+   */
+  checkGraphStaleness: (cwd: string) => Promise<StalenessCheck>;
+  /**
+   * Run ripgrep with a FIXED argv and return its raw streams (default: a real
+   * `Bun.spawn`). This is `searchCode`'s backing: before flow 235 T8 the
+   * adapter's `searchCode` was a permanent stub, and only the interactive path
+   * wrapped it with a subprocess fallback — so code search over MCP was dead
+   * for every pattern, including ones with real matches. Injectable so tests
+   * neither need ripgrep installed nor spawn anything.
+   */
+  runRipgrep: (
+    cwd: string,
+    argv: string[],
+  ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  /**
    * Clock for `skillsCatalog`'s `generatedAt` (default: real wall-clock ISO
    * time). Injectable for tests — the only concession to this file's stated
    * "reads nothing from Date.now" determinism, kept isolated to this one
@@ -129,6 +153,16 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   wikiAsk,
   wikiPagesForFile,
   now: () => new Date().toISOString(),
+  checkGraphStaleness,
+  runRipgrep: async (cwd, argv) => {
+    const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { stdout, stderr, exitCode };
+  },
   repomapCompute: async (cwd, options) => {
     const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
     return computeRepomap(graph, config, options);
@@ -145,6 +179,50 @@ const MAX_QUERY_BYTES = 4096;
 // confirmedBy reads identically at both the compressed-report boundary and
 // this agent-facing one. Never an omitted key, never an empty string.
 const UNKNOWN_PROVENANCE = "unknown";
+
+/** Output cap for `searchCode` — the same bound the interactive fallback used. */
+const MAX_SEARCH_OUTPUT_BYTES = 20_000;
+
+/**
+ * The model-facing diagnosis when ripgrep is missing. Deliberately keeps the
+ * "ripgrep (rg) is not installed" prefix that `normalizeSearchResult`
+ * (`./builtin/metaproject-tools.ts`) keys its detection on, so the interactive
+ * path still recognises the condition after this adapter gained a real backing.
+ */
+export const SEARCH_CODE_RG_MISSING =
+  "ripgrep (rg) is not installed or not on PATH, and search_code needs it. Install it " +
+  "(`brew install ripgrep` / `apt install ripgrep`), or use read_file and list_dir to " +
+  "inspect files directly instead of retrying search_code.";
+
+/** True when an error is a "binary not found on PATH" spawn failure. */
+function isMissingExecutable(cause: unknown): boolean {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return /Executable not found|\bENOENT\b|not found in \$?PATH/i.test(message);
+}
+
+/**
+ * Confine a caller-supplied search path to the project root. `searchCode` is
+ * classified `read` and auto-approved, so an unconfined `path` would be an
+ * arbitrary read behind a read-only tool — the identical check the interactive
+ * tools already apply (`confineToRoot`, `./builtin/interactive-tools.ts`),
+ * re-derived here rather than imported so this pure adapter keeps no dependency
+ * on the interactive tool layer.
+ */
+function confineToProject(cwd: string, candidate: string): string | null {
+  const target = resolve(cwd, candidate);
+  const rel = relative(cwd, target);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return null;
+  }
+  return target;
+}
+
+function boundOutput(raw: string): { output: string; truncated: boolean } {
+  return raw.length > MAX_SEARCH_OUTPUT_BYTES
+    ? { output: `${raw.slice(0, MAX_SEARCH_OUTPUT_BYTES)}\n…(truncated)`, truncated: true }
+    : { output: raw, truncated: false };
+}
+
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -301,16 +379,100 @@ export function createMetaprojectAdapter(
   const memory = deps.createMemoryService();
   const flow = deps.createFlowService();
 
+  // One freshness check per adapter instance, shared by every graph-backed
+  // result below. `checkGraphStaleness` shells out to git; recomputing it per
+  // operation would put three subprocesses behind every graph read, and the
+  // answer cannot meaningfully change within a single adapter's lifetime.
+  let stalenessOnce: Promise<GraphStaleness> | undefined;
+  function staleness(): Promise<GraphStaleness> {
+    stalenessOnce ??= deps
+      .checkGraphStaleness(cwd)
+      .then((check) => ({ status: check.status, reasons: check.reasons }))
+      // A freshness check that itself failed is `unknown` — the one thing it
+      // must never become is `fresh`.
+      .catch((cause: unknown) => ({
+        status: "unknown" as const,
+        reasons: [`the staleness check failed: ${errorMessage(cause)}`],
+      }));
+    return stalenessOnce;
+  }
+
   return {
-    // searchCode has no in-process facade (gdctx is CLI-only); return a structured
-    // "unavailable" result so a caller without a subprocess fallback degrades
-    // gracefully rather than throwing. The agent tool keeps the subprocess path.
+    /**
+     * Real ripgrep, in-process-owned rather than delegated.
+     *
+     * The previous implementation returned a permanent "no in-process backing"
+     * error. Only the interactive path wrapped the port with a subprocess
+     * fallback, so MCP `search_code` — the tool this project's own routing
+     * tells agents to use — was dead for every pattern.
+     *
+     * The argv is FIXED and the pattern is passed after `--`, so a pattern
+     * that looks like an option (`--pre=/bin/sh`) can never be re-parsed as
+     * one. Exit 1 is ripgrep's "no matches": a legitimate empty answer, NOT an
+     * error — conflating the two is the same "failure indistinguishable from
+     * empty success" defect from the other direction.
+     */
     async searchCode(input): Promise<SearchCodeResult> {
-      return {
+      const echo = {
         pattern: input.pattern,
         ...(input.path !== undefined ? { path: input.path } : {}),
-        output: "search_code has no in-process backing (use the subprocess runner).",
-        isError: true,
+      };
+      if (input.pattern.length === 0) {
+        return { ...echo, output: "search_code requires a non-empty 'pattern'", isError: true };
+      }
+      const argv = [
+        "rg",
+        "--with-filename",
+        "--line-number",
+        "--column",
+        "--no-heading",
+        "--",
+        input.pattern,
+      ];
+      if (input.path !== undefined && input.path.length > 0) {
+        const confined = confineToProject(cwd, input.path);
+        if (confined === null) {
+          return {
+            ...echo,
+            output: `search_code: path escapes the project root: ${input.path}`,
+            isError: true,
+          };
+        }
+        argv.push(confined);
+      }
+      let run: { stdout: string; stderr: string; exitCode: number };
+      try {
+        run = await deps.runRipgrep(cwd, argv);
+      } catch (cause) {
+        return {
+          ...echo,
+          output: isMissingExecutable(cause) ? SEARCH_CODE_RG_MISSING : errorMessage(cause),
+          isError: true,
+        };
+      }
+      if (run.exitCode === 1 && run.stdout.trim().length === 0) {
+        return {
+          ...echo,
+          output: `No matches for ${JSON.stringify(input.pattern)}${input.path !== undefined ? ` under ${input.path}` : ""}. The search ran and completed — this is a no-match, not a failure.`,
+          isError: false,
+        };
+      }
+      if (run.exitCode > 1) {
+        const detail = run.stderr.trim().length > 0 ? run.stderr.trim() : run.stdout.trim();
+        return {
+          ...echo,
+          output: /rg|ripgrep/i.test(detail) && isMissingExecutable(detail)
+            ? SEARCH_CODE_RG_MISSING
+            : `search_code failed (rg exit ${run.exitCode}): ${detail || "(no diagnostic)"}`,
+          isError: true,
+        };
+      }
+      const bounded = boundOutput(run.stdout.trimEnd());
+      return {
+        ...echo,
+        output: bounded.output,
+        isError: false,
+        ...(bounded.truncated ? { truncated: true } : {}),
       };
     },
 
@@ -324,9 +486,22 @@ export function createMetaprojectAdapter(
         const affected = ranked
           ? result.ranked.map((node) => ({ id: node.path, path: node.path, hop: node.hop, fanIn: node.fanIn }))
           : result.dependents.map((path) => ({ id: path, path, hop: 1 }));
-        return { target: result.target, depth: result.depth, ranked, affected };
+        return {
+          target: result.target,
+          depth: result.depth,
+          ranked,
+          affected,
+          // The other half of the blast radius the CLI has always printed.
+          dependencies: [...result.dependencies].sort(),
+          staleness: await staleness(),
+        };
       } catch (cause) {
-        return { target: input.target, affected: [], error: errorMessage(cause) };
+        return {
+          target: input.target,
+          affected: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
@@ -334,10 +509,10 @@ export function createMetaprojectAdapter(
       try {
         const result = await gdgraph.query(cwd, input.query);
         return input.query === "orphans"
-          ? { query: "orphans", orphans: result as string[] }
-          : { query: "cycles", cycles: result as string[][] };
+          ? { query: "orphans", orphans: result as string[], staleness: await staleness() }
+          : { query: "cycles", cycles: result as string[][], staleness: await staleness() };
       } catch (cause) {
-        return { query: input.query, error: errorMessage(cause) };
+        return { query: input.query, staleness: await staleness(), error: errorMessage(cause) };
       }
     },
 
@@ -508,6 +683,7 @@ export function createMetaprojectAdapter(
         graphNodes,
         graphEdges,
         hasWikiIndex,
+        staleness: await staleness(),
         ...(graphError !== undefined ? { error: graphError } : {}),
       };
     },
@@ -524,9 +700,16 @@ export function createMetaprojectAdapter(
           to: input.to,
           nodes: result.nodes,
           ...(unresolved ? { unresolved: true } : {}),
+          staleness: await staleness(),
         };
       } catch (cause) {
-        return { from: input.from, to: input.to, nodes: [], error: errorMessage(cause) };
+        return {
+          from: input.from,
+          to: input.to,
+          nodes: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
@@ -562,6 +745,10 @@ export function createMetaprojectAdapter(
           sources: status.sources,
           projectScore: status.projectScore,
           regressions: status.regressions,
+          // The two real counters. `regressions` alone is the DEPRECATED alias
+          // and used to be all this boundary carried.
+          decliningScopes: status.decliningScopes,
+          regressedScopes: status.regressedScopes,
         };
       } catch (cause) {
         return {
@@ -584,6 +771,7 @@ export function createMetaprojectAdapter(
         return {
           flows: filtered.map((f) => ({
             id: f.id,
+            slug: f.slug,
             status: f.status,
             title: f.title,
             tasksDone: f.tasksDone,
@@ -614,28 +802,49 @@ export function createMetaprojectAdapter(
           })),
           callers: result.callers.map((ref) => ref.label),
           callees: result.callees.map((ref) => ref.label),
+          staleness: await staleness(),
         };
       } catch (cause) {
-        return { name: input.name, definitions: [], callers: [], callees: [], error: errorMessage(cause) };
+        return {
+          name: input.name,
+          definitions: [],
+          callers: [],
+          callees: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
     async repomap(input): Promise<RepomapResult> {
+      const seed = input.seed?.filter((entry) => typeof entry === "string" && entry.length > 0);
       try {
         // Read-only: compute the map in-process (never writeRepomap → no artifact).
-        const result = await deps.repomapCompute(
-          cwd,
-          input.budget !== undefined ? { budget: input.budget } : {},
-        );
+        const result = await deps.repomapCompute(cwd, {
+          ...(input.budget !== undefined ? { budget: input.budget } : {}),
+          // The seed is the whole point for a change intent; it used to be
+          // unreachable because the port's input had no such field at all.
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+        });
         return {
           budget: input.budget ?? result.tokens,
           files: result.entries.map((entry) => ({
             path: entry.path,
             score: entry.score,
             symbols: entry.symbols,
+            // Which entry the budget protected, not just which scored highest.
+            required: entry.required,
           })),
           tokens: result.tokens,
           omitted: result.omitted,
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+          // AFC-12's honest markers, all four of them. Without these a dropped
+          // required seed and a trimmed tail were the same `ok` result with a
+          // bigger `omitted` count.
+          omittedOptional: result.omittedOptional,
+          partial: result.partial,
+          ...(result.overflow !== undefined ? { overflow: result.overflow } : {}),
+          staleness: await staleness(),
         };
       } catch (cause) {
         return {
@@ -643,6 +852,7 @@ export function createMetaprojectAdapter(
           files: [],
           tokens: 0,
           omitted: 0,
+          staleness: await staleness(),
           error: errorMessage(cause),
         };
       }
@@ -650,15 +860,44 @@ export function createMetaprojectAdapter(
 
     async wikiAsk(input): Promise<WikiAskResult> {
       try {
-        const result = await deps.wikiAsk({ cwd, question: input.question });
+        const result = await deps.wikiAsk({
+          cwd,
+          question: input.question,
+          ...(input.k !== undefined ? { k: input.k } : {}),
+        });
         return {
           question: result.question,
+          ...(result.status !== undefined ? { status: result.status } : {}),
+          ...(result.reason !== undefined ? { reason: result.reason } : {}),
+          // Pass through what `wikiAsk` computed. The previous five-field
+          // re-map silently dropped the retrieval status, the section address,
+          // the match reason and — worst — the HISTORICAL lifecycle marks the
+          // CLI renders, so an agent could not tell current guidance from
+          // superseded guidance.
           citations: result.citations.map((citation) => ({
             path: citation.path,
             title: citation.title,
             excerpt: citation.excerpt,
             score: citation.score,
             source: citation.source,
+            ...(citation.matched !== undefined ? { matched: citation.matched } : {}),
+            ...(citation.sectionId !== undefined ? { sectionId: citation.sectionId } : {}),
+            ...(citation.sectionRef !== undefined ? { sectionRef: citation.sectionRef } : {}),
+            ...(citation.sectionTitle !== undefined ? { sectionTitle: citation.sectionTitle } : {}),
+            ...(citation.sectionStability !== undefined
+              ? { sectionStability: citation.sectionStability }
+              : {}),
+            ...(citation.contentClass !== undefined ? { contentClass: citation.contentClass } : {}),
+            ...(citation.domain !== undefined ? { domain: citation.domain } : {}),
+            ...(citation.startLine !== undefined ? { startLine: citation.startLine } : {}),
+            ...(citation.endLine !== undefined ? { endLine: citation.endLine } : {}),
+            ...(citation.historical !== undefined ? { historical: citation.historical } : {}),
+            ...(citation.lifecycleState !== undefined
+              ? { lifecycleState: citation.lifecycleState }
+              : {}),
+            ...(citation.lifecycleReasons !== undefined
+              ? { lifecycleReasons: citation.lifecycleReasons }
+              : {}),
           })),
           answer: result.answerMarkdown,
         };

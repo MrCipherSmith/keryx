@@ -7,14 +7,14 @@
   "id": "236",
   "slug": "agent-first-core-phase-4",
   "title": "Agent-first core phase 4: Freshness and delivery: bindings managed sync and bootstrap",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-06T10:44:09.088Z",
-  "updatedAt": "2026-09-06T13:58:23.204Z",
+  "updatedAt": "2026-09-07T16:21:19.284Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:f4de0e0b55aaf6cc92b31970b2f8f22670785704bfa72364c3ddf50f2ec728c6",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -107,6 +107,51 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "L1: полный отказ git невидим — gitCmd сводит ошибку запуска, ненулевой выход и пустой результат к одному значению, поэтому отчёт свежести не отличает сломанный репозиторий от здорового",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "L2: устаревший граф штампуется свежим — refreshPages и verifyPages не спрашивают checkGraphStaleness; плюс справка команды freshness называет её read-only, а она удаляет очередь",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Завершение L2: реестр команд несёт ту же ложную пометку read-only на поверхности, по которой агент решает об автодопуске, и sync --apply обходит охрану, проставляя провенанс безусловно",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -123,6 +168,45 @@
       "at": "2026-09-06T13:58:23.204Z",
       "event": "task-added",
       "detail": "T6: Give evidence reads a path that does not pass through the redaction floor"
+    },
+    {
+      "at": "2026-09-07T12:03:46.023Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T12:03:46.124Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T15:44:40.806Z",
+      "event": "task-added",
+      "detail": "T7: L1: полный отказ git невидим — gitCmd сводит ошибку запуска, ненулевой выход и пустой результат к одному значению, поэтому отчёт свежести не отличает сломанный репозиторий от здорового"
+    },
+    {
+      "at": "2026-09-07T15:44:40.907Z",
+      "event": "task-added",
+      "detail": "T8: L2: устаревший граф штампуется свежим — refreshPages и verifyPages не спрашивают checkGraphStaleness; плюс справка команды freshness называет её read-only, а она удаляет очередь"
+    },
+    {
+      "at": "2026-09-07T16:05:41.678Z",
+      "event": "task-done",
+      "detail": "T8: L2: устаревший граф штампуется свежим — refreshPages и verifyPages не спрашивают checkGraphStaleness; плюс справка команды freshness называет её read-only, а она удаляет очередь"
+    },
+    {
+      "at": "2026-09-07T16:05:41.816Z",
+      "event": "task-added",
+      "detail": "T9: Завершение L2: реестр команд несёт ту же ложную пометку read-only на поверхности, по которой агент решает об автодопуске, и sync --apply обходит охрану, проставляя провенанс безусловно"
+    },
+    {
+      "at": "2026-09-07T16:09:34.056Z",
+      "event": "task-done",
+      "detail": "T7: L1: полный отказ git невидим — gitCmd сводит ошибку запуска, ненулевой выход и пустой результат к одному значению, поэтому отчёт свежести не отличает сломанный репозиторий от здорового"
+    },
+    {
+      "at": "2026-09-07T16:21:19.284Z",
+      "event": "task-done",
+      "detail": "T9: Завершение L2: реестр команд несёт ту же ложную пометку read-only на поверхности, по которой агент решает об автодопуске, и sync --apply обходит охрану, проставляя провенанс безусловно"
     }
   ]
 }

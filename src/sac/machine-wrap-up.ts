@@ -36,9 +36,9 @@
 //      TrustedWrapUpResolution>` that throws — `runWrapUp` below must keep
 //      going across MULTIPLE Seed-kind groups even when one group's model
 //      turn fails closed, which a thrown exception does not compose with.
-//   3. `now`/`env`/`providerFactory`/`modelTurnTimeoutMs` are extra,
-//      all-optional testability seams (mirroring `runModelTurn`'s own
-//      injected-non-determinism pattern in single-turn.ts).
+//   3. `now`/`env`/`modelTurn`/`modelTurnTimeoutMs` are extra, all-optional
+//      injection seams (`modelTurn` was `providerFactory` until flow 239
+//      phase 7 — see the import block below).
 //   4. `runWrapUp` takes BOTH `cwd` (project root — git diff, the SAC
 //      workspace tree) AND `dir` (the session dir where `slate.json`/
 //      `slate-archive/` actually live) — two different filesystem
@@ -55,8 +55,18 @@ import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUp
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
 import { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, type AttributedSeed } from "./wrap-up-evidence";
-import type { ProviderFactory, ModelTurnResult } from "../harness/provider/single-turn";
-import { runModelTurn } from "../harness/provider/single-turn";
+// AFC-19 (flow 239, phase 7): the model turn used to arrive as a static
+// `runModelTurn` import from `../harness/provider/single-turn`, which put the
+// entire provider registry into the public SAC facade's shipped graph. It is
+// now an INJECTED port that core declares and a client supplies; absence is a
+// refusal with its own code, never a summary nobody asked a model for. See
+// `./model-turn-port.ts` and `./core-graph.test.ts`.
+import {
+  resolveModelTurnPort,
+  warnModelTurnUnavailable,
+  type ModelTurnOutcome,
+  type ModelTurnPort,
+} from "./model-turn-port";
 
 export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff } from "./wrap-up-evidence";
 export type { AttributedSeed } from "./wrap-up-evidence";
@@ -86,13 +96,30 @@ export type MachineWrapUpInput = {
   kind: SlateSeedKind;
   now?: () => Date;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /**
+   * The injected single-turn capability (`./model-turn-port.ts`). Core carries
+   * no provider registry of its own (AFC-19); without this — and without a
+   * process-wide default from `setModelTurnPort` — this resolver refuses with
+   * `no_model_turn` instead of writing an unauthored summary.
+   */
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
 };
 
 export type MachineWrapUpResolution =
   | { ok: true; resolution: TrustedWrapUpResolution }
-  | { ok: false; code: "no_credential" };
+  /**
+   * `no_credential`: a port was supplied and reported it has no key.
+   * `no_model_turn`: no port was supplied at all — a wiring gap, not a key gap.
+   * Kept distinct HERE, at the boundary that knows the difference. Note that
+   * `proposeOneGroup` still folds both into the existing
+   * `WrapUpGroupOutcome`'s `"no_credential"`, because that union is consumed by
+   * `./catch-up.ts` and `../tui/review-inspector.ts` — files this change does
+   * not own — and widening it would break their exhaustive reads. The
+   * distinction survives at this boundary and on stderr (warn-once); widening
+   * the group union is left to the lane that owns those two files.
+   */
+  | { ok: false; code: "no_credential" | "no_model_turn" };
 
 /** A Seed together with which slate it actually came from — a child's Seed is
  * NEVER laundered as the parent's own (spec: "attributed, not merged"). Exported
@@ -177,10 +204,10 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   //    spawn-subagent-tool.ts's own child-deadline `Promise.race` exactly,
   //    including safely ignoring the abandoned promise on timeout (`void
   //    turn.catch(...)`) rather than leaving an unhandled rejection.
-  //    `runModelTurn` itself resolves as fast as any other call
-  //    (immediately, with `credentialAvailable: false` and empty text) when
-  //    no credential/factory is available, so the fail-closed path below
-  //    never actually waits out the timeout.
+  //    A supplied port resolves as fast as any other call (immediately, with
+  //    `credentialAvailable: false` and empty text) when it has no credential,
+  //    so the fail-closed path below never actually waits out the timeout — and
+  //    an ABSENT port never starts a timer at all.
   const system =
     "Summarize ONLY the machine evidence provided below — a git diff, a Flow snapshot, and the Seeds captured " +
     "this session for one proposal kind. Never invent facts that are not present in the evidence.";
@@ -189,14 +216,24 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     `--- flow snapshot ---\n${flowSnapshotJson}\n` +
     `--- seeds (${input.kind}) ---\n${seedsJson}`;
 
-  let modelResult: ModelTurnResult | undefined;
+  // No port, no summary: refuse before any evidence is written (step 4 below
+  // is the only writer, and it is never reached from here), exactly as the
+  // no-credential path already did. A mechanical summary is NOT substituted —
+  // that is reserved for a real model turn that timed out, and using it here
+  // would present an unrequested summary as a wrap-up the model authored.
+  const modelTurn = resolveModelTurnPort(input.modelTurn);
+  if (modelTurn === undefined) {
+    warnModelTurnUnavailable("machine-wrap-up");
+    return { ok: false, code: "no_model_turn" };
+  }
+
+  let modelResult: ModelTurnOutcome | undefined;
   const modelTurnTimeoutMs = input.modelTurnTimeoutMs ?? DEFAULT_MODEL_TURN_TIMEOUT_MS;
-  const turn = runModelTurn({
+  const turn = modelTurn({
     system,
     user,
     requestId: `machine-wrap-up-${shortHash}`,
     ...(input.env !== undefined ? { env: input.env } : {}),
-    ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
   }).then((result) => {
     modelResult = result;
     return "done" as const;
@@ -317,7 +354,8 @@ export type RunWrapUpInput = {
   wrapUpSource?: WrapUpSource;
   now?: () => Date;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /** Injected model-turn capability, threaded to every group (see above). */
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
   /**
    * Flow 200 test seam: overrides the real `resolveOrCreateWorkspace`
@@ -330,7 +368,7 @@ export type RunWrapUpInput = {
     cwd: string;
     topicHint: string;
     env?: Record<string, string | undefined>;
-    providerFactory?: ProviderFactory;
+    modelTurn?: ModelTurnPort;
     modelTurnTimeoutMs?: number;
   }) => Promise<{ ok: true; workspaceId: string; action: "bound-existing" | "created" } | { ok: false; reason: string }>;
 };
@@ -424,7 +462,7 @@ async function proposeOneGroup(params: {
   now: () => Date;
   wrapUpSource?: WrapUpSource;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
 }): Promise<WrapUpGroupOutcome> {
   const wrapUpSource: WrapUpSource = params.wrapUpSource ?? "flow";
@@ -454,9 +492,13 @@ async function proposeOneGroup(params: {
       kind: params.kind,
       now: params.now,
       ...(params.env !== undefined ? { env: params.env } : {}),
-      ...(params.providerFactory !== undefined ? { providerFactory: params.providerFactory } : {}),
+      ...(params.modelTurn !== undefined ? { modelTurn: params.modelTurn } : {}),
       ...(params.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: params.modelTurnTimeoutMs } : {}),
     });
+    // Both `no_credential` and `no_model_turn` land on the existing
+    // `"no_credential"` group outcome — see `MachineWrapUpResolution`'s own
+    // comment for why that union is not widened here. `resolveMachineWrapUp`
+    // has already said which it was, once, on stderr.
     if (!resolved.ok) return { kind: params.kind, outcome: "no_credential" };
 
     const flowEvidence = resolved.resolution.evidence.find((item) => item.kind === "flow");
@@ -581,7 +623,7 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
       cwd: input.cwd,
       topicHint: topicHint.length > 0 ? topicHint : "Untitled session wrap-up",
       ...(input.env !== undefined ? { env: input.env } : {}),
-      ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
+      ...(input.modelTurn !== undefined ? { modelTurn: input.modelTurn } : {}),
       ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
     });
     if (!resolved.ok) {
@@ -616,7 +658,7 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
         now,
         ...(input.wrapUpSource !== undefined ? { wrapUpSource: input.wrapUpSource } : {}),
         ...(input.env !== undefined ? { env: input.env } : {}),
-        ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
+        ...(input.modelTurn !== undefined ? { modelTurn: input.modelTurn } : {}),
         ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
       }),
     ),

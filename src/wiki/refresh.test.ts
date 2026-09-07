@@ -8,6 +8,18 @@ import { appendChangelogLine, bumpPatch, migrateMarkers, refreshPages, verifyPag
 
 const SHA = "c".repeat(40);
 
+// Flow 236 T8: `refreshPages`/`verifyPages` now ask how old their source graph
+// is before stamping anything (AFC-08, "running the generator does not make a
+// stale input fresh"). These fixtures are bare temp directories, not git
+// repositories, so the real `checkGraphStaleness` can only answer `unknown`
+// there — while every call below hands in a fabricated 40-char `head`, a
+// combination that cannot occur in production (no git ⇒ no head). The
+// precondition these tests always relied on implicitly is now written down
+// instead: the source is current, so the behaviour under test is block
+// replacement and nothing else. The gate's own behaviour is demonstrated
+// against real git fixtures in `source-gate.test.ts`.
+const FRESH = async () => ({ status: "fresh" as const, reasons: [] });
+
 /** A project whose graph really produces a `src/mod` component page. */
 async function project(pageBody?: string): Promise<{ cwd: string; pagePath: string }> {
   const cwd = await mkdtemp(path.join(tmpdir(), "lwg-refresh-"));
@@ -104,7 +116,7 @@ describe("refreshPages", () => {
     await migrateMarkers(cwd);
     const before = await readFile(pagePath, "utf8");
 
-    const result = await refreshPages({ cwd, head: SHA });
+    const result = await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     expect(result.refreshed).toBe(1);
 
     const after = await readFile(pagePath, "utf8");
@@ -124,7 +136,7 @@ describe("refreshPages", () => {
     // configuration present at all.
     const { cwd } = await project();
     await migrateMarkers(cwd);
-    const result = await refreshPages({ cwd, head: SHA });
+    const result = await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     expect(result.refreshed).toBe(1);
     expect(result.conflicts).toBe(0);
   });
@@ -132,7 +144,7 @@ describe("refreshPages", () => {
   test("AC8: bumps only the patch and appends exactly one changelog line", async () => {
     const { cwd, pagePath } = await project();
     await migrateMarkers(cwd);
-    await refreshPages({ cwd, head: SHA });
+    await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
 
     const after = await readFile(pagePath, "utf8");
     expect(after).toContain("Version: 1.0.1");
@@ -147,10 +159,10 @@ describe("refreshPages", () => {
   test("AC9: an already-current page is not rewritten at all", async () => {
     const { cwd, pagePath } = await project();
     await migrateMarkers(cwd);
-    await refreshPages({ cwd, head: SHA });
+    await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     const afterFirst = await readFile(pagePath, "utf8");
 
-    const second = await refreshPages({ cwd, head: SHA });
+    const second = await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     expect(second.unchanged).toBe(1);
     expect(second.refreshed).toBe(0);
     // No version bump, no changelog line, no re-stamp: a second refresh must
@@ -161,24 +173,24 @@ describe("refreshPages", () => {
   test("AC3: a hand-edited block is refused, and --force overwrites it", async () => {
     const { cwd, pagePath } = await project();
     await migrateMarkers(cwd);
-    await refreshPages({ cwd, head: SHA });
+    await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
 
     const edited = (await readFile(pagePath, "utf8")).replace("### Key files", "### Key files (mine)");
     await writeFile(pagePath, edited);
 
-    const refused = await refreshPages({ cwd, head: SHA });
+    const refused = await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     expect(refused.conflicts).toBe(1);
     expect(refused.pages[0]?.reason).toContain("edited by hand");
     expect(await readFile(pagePath, "utf8")).toBe(edited);
 
-    const forced = await refreshPages({ cwd, head: SHA, force: true });
+    const forced = await refreshPages({ cwd, head: SHA, force: true, checkStaleness: FRESH });
     expect(forced.refreshed).toBe(1);
     expect(await readFile(pagePath, "utf8")).not.toBe(edited);
   });
 
   test("a page with no markers is reported, not silently skipped", async () => {
     const { cwd } = await project();
-    const result = await refreshPages({ cwd, head: SHA });
+    const result = await refreshPages({ cwd, head: SHA, checkStaleness: FRESH });
     expect(result.pages[0]?.action).toBe("no-block");
   });
 });
@@ -188,7 +200,7 @@ describe("verifyPages (AC6)", () => {
     const { cwd, pagePath } = await project();
     const before = await readFile(pagePath, "utf8");
 
-    const stamped = await verifyPages({ cwd, page: "components/src-mod.md", head: SHA });
+    const stamped = await verifyPages({ cwd, page: "components/src-mod.md", head: SHA, checkStaleness: FRESH });
     expect(stamped).toHaveLength(1);
 
     const after = await readFile(pagePath, "utf8");
@@ -203,7 +215,7 @@ describe("verifyPages (AC6)", () => {
       "# Overview\nVersion: 1.0.0\nType: component\nStatus: accepted\n\n## Overview\n\nProse.\n",
     );
     // No Describes, no Related Code, and the slug does not match a module.
-    const stamped = await verifyPages({ cwd, page: "components/src-mod.md", head: SHA });
+    const stamped = await verifyPages({ cwd, page: "components/src-mod.md", head: SHA, checkStaleness: FRESH });
     expect(stamped.map((s) => s.path)).not.toContain("components/does-not-exist.md");
   });
 });

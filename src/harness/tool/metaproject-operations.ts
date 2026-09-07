@@ -16,11 +16,13 @@
 // shapes). Descriptors validate against
 // docs/requirements/keryx-metaproject-native/schemas/metaproject-operation.schema.json.
 
+import { STALE_NOTE, UNKNOWN_NOTE } from "../../gdgraph/staleness";
 import type {
   FlowStatusResult,
   GraphAffectedResult,
   GraphPathResult,
   GraphQueryResult,
+  GraphStaleness,
   GraphSymbolResult,
   HealthStatusResult,
   MemorySearchResult,
@@ -77,41 +79,88 @@ function requireString(
   return { value };
 }
 
+/**
+ * Render the tri-state graph freshness exactly as the command line does
+ * (`printStaleNote`, `src/commands/gdgraph.ts`), reusing `STALE_NOTE` /
+ * `UNKNOWN_NOTE` verbatim rather than re-wording them here — an `unknown`
+ * check must never read as the confident "the repo moved" claim, and a fresh
+ * graph must add no noise at all.
+ */
+function stalenessLines(staleness: GraphStaleness | undefined): string[] {
+  if (staleness === undefined || staleness.status === "fresh") {
+    return [];
+  }
+  return [
+    "",
+    staleness.status === "unknown" ? UNKNOWN_NOTE : STALE_NOTE,
+    ...staleness.reasons.map((reason) => `  - ${reason}`),
+  ];
+}
+
+/** Append the freshness note (if any) to an already-rendered graph result. */
+function withStaleness(
+  result: InteractiveToolResult,
+  staleness: GraphStaleness | undefined,
+): InteractiveToolResult {
+  const extra = stalenessLines(staleness);
+  return extra.length === 0 ? result : { ...result, output: [result.output, ...extra].join("\n") };
+}
+
 /** Render a structured `graphAffected` result as readable text for the model. */
 export function formatAffected(result: GraphAffectedResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_affected failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_affected failed: ${result.error}`, isError: true }, result.staleness);
   }
+  const dependencies = result.dependencies ?? [];
+  // The dependencies half is printed by the CLI and by MCP `gdgraph.affected`;
+  // this boundary used to return dependents only, so "no dependents" read as
+  // "nothing to see" even when the target imported a dozen files.
+  const dependencyLines =
+    dependencies.length > 0
+      ? [`Dependencies of ${result.target} (${dependencies.length}):`, ...dependencies.map((path) => `  - ${path}`), ""]
+      : [];
   if (result.affected.length === 0) {
-    return { output: `No dependents found for ${result.target}.`, isError: false };
+    return withStaleness(
+      { output: [...dependencyLines, `No dependents found for ${result.target}.`].join("\n"), isError: false },
+      result.staleness,
+    );
   }
   const header = `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
   const lines = result.affected.map((node) => {
     const fanIn = node.fanIn !== undefined ? `, fanIn ${node.fanIn}` : "";
     return `  - ${node.path ?? node.id} (hop ${node.hop}${fanIn})`;
   });
-  return { output: [header, ...lines].join("\n"), isError: false };
+  return withStaleness(
+    { output: [...dependencyLines, header, ...lines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a structured `graphQuery` (cycles or orphans) result as readable text. */
 export function formatQuery(result: GraphQueryResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_query failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_query failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.query === "orphans") {
     const orphans = result.orphans ?? [];
     if (orphans.length === 0) {
-      return { output: "No orphan files found.", isError: false };
+      return withStaleness({ output: "No orphan files found.", isError: false }, result.staleness);
     }
     const lines = orphans.map((path) => `  - ${path}`);
-    return { output: [`Orphan files (${orphans.length}):`, ...lines].join("\n"), isError: false };
+    return withStaleness(
+      { output: [`Orphan files (${orphans.length}):`, ...lines].join("\n"), isError: false },
+      result.staleness,
+    );
   }
   const cycles = result.cycles ?? [];
   if (cycles.length === 0) {
-    return { output: "No dependency cycles found.", isError: false };
+    return withStaleness({ output: "No dependency cycles found.", isError: false }, result.staleness);
   }
   const lines = cycles.map((cycle) => `  - ${cycle.join(" -> ")}`);
-  return { output: [`Dependency cycles (${cycles.length}):`, ...lines].join("\n"), isError: false };
+  return withStaleness(
+    { output: [`Dependency cycles (${cycles.length}):`, ...lines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a structured `memorySearch` result as readable text for the model. */
@@ -180,6 +229,20 @@ export function formatSkillLoad(result: SkillLoadResult): InteractiveToolResult 
 
 // --- object result schemas (structured tool output) ---------------------------
 
+/**
+ * Tri-state graph freshness on every graph-backed result (flow 235 T8).
+ * Declared once and spread into each graph output schema, so a new graph
+ * operation cannot quietly ship without it.
+ */
+const STALENESS_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: ["fresh", "stale", "unknown"] },
+    reasons: { type: "array", items: { type: "string" } },
+  },
+  required: ["status", "reasons"],
+};
+
 const AFFECTED_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -187,7 +250,9 @@ const AFFECTED_OUTPUT_SCHEMA: Record<string, unknown> = {
     depth: { type: "number" },
     ranked: { type: "boolean" },
     affected: { type: "array" },
+    dependencies: { type: "array", items: { type: "string" } },
     truncated: { type: "boolean" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["target", "affected"],
@@ -199,6 +264,7 @@ const QUERY_OUTPUT_SCHEMA: Record<string, unknown> = {
     query: { type: "string", enum: ["cycles", "orphans"] },
     orphans: { type: "array", items: { type: "string" } },
     cycles: { type: "array" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["query"],
@@ -273,15 +339,24 @@ const SEARCH_OUTPUT_SCHEMA: Record<string, unknown> = {
 /** Render a `graphPath` result as readable text. */
 export function formatPath(result: GraphPathResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_path failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_path failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.unresolved === true) {
-    return { output: `graph_path: could not resolve ${result.from} or ${result.to}.`, isError: false };
+    return withStaleness(
+      { output: `graph_path: could not resolve ${result.from} or ${result.to}.`, isError: false },
+      result.staleness,
+    );
   }
   if (result.nodes.length === 0) {
-    return { output: `No path from ${result.from} to ${result.to}.`, isError: false };
+    return withStaleness(
+      { output: `No path from ${result.from} to ${result.to}.`, isError: false },
+      result.staleness,
+    );
   }
-  return { output: `Path (${result.nodes.length} node(s)): ${result.nodes.join(" -> ")}`, isError: false };
+  return withStaleness(
+    { output: `Path (${result.nodes.length} node(s)): ${result.nodes.join(" -> ")}`, isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a `testRelated` result as readable text. */
@@ -322,7 +397,10 @@ export function formatHealth(result: HealthStatusResult): InteractiveToolResult 
   const parts = [
     `gate: ${result.gate ?? "n/a"}`,
     `score: ${result.projectScore ?? "n/a"}`,
-    `regressions: ${result.regressions}`,
+    // `regressions` is the deprecated alias; print the two real counters
+    // alongside it rather than letting the alias stand in for both.
+    `declining scopes: ${result.decliningScopes ?? result.regressions}`,
+    `regressed scopes: ${result.regressedScopes ?? "n/a"}`,
     `last run: ${result.lastRunAt ?? "never"}`,
   ];
   return { output: `Code health — ${parts.join(", ")}.`, isError: false };
@@ -336,17 +414,24 @@ export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResul
   if (result.flows.length === 0) {
     return { output: "No matching flows.", isError: false };
   }
-  const lines = result.flows.map((f) => `  - ${f.id} [${f.status}] ${f.title} (${f.tasksDone}/${f.tasksTotal} tasks)`);
+  const lines = result.flows.map(
+    (f) =>
+      `  - ${f.id}${f.slug !== undefined ? ` (${f.slug})` : ""} [${f.status}] ${f.title} ` +
+      `(${f.tasksDone}/${f.tasksTotal} tasks)`,
+  );
   return { output: [`Flows (${result.flows.length}):`, ...lines].join("\n"), isError: false };
 }
 
 /** Render a `graphSymbol` result as readable text. */
 export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_symbol failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_symbol failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.definitions.length === 0) {
-    return { output: `No symbol definition found for ${result.name}.`, isError: false };
+    return withStaleness(
+      { output: `No symbol definition found for ${result.name}.`, isError: false },
+      result.staleness,
+    );
   }
   const defs = result.definitions.map(
     (def) => `  - ${def.name} (${def.kind}) at ${def.path}:${def.startLine}`,
@@ -358,23 +443,59 @@ export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.callees.length > 0) {
     lines.push(`Callees (${result.callees.length}):`, ...result.callees.map((c) => `  - ${c}`));
   }
-  return { output: lines.join("\n"), isError: false };
+  return withStaleness({ output: lines.join("\n"), isError: false }, result.staleness);
 }
 
 /** Render a `repomap` result as readable text. */
 export function formatRepomap(result: RepomapResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `repomap failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `repomap failed: ${result.error}`, isError: true }, result.staleness);
+  }
+  // AFC-12: a required entry that does not fit is `budget-exceeded`, NOT a
+  // success with a truncated required set. Before this branch existed the
+  // adapter dropped `overflow` entirely and an overflow rendered as the same
+  // "Repomap is empty (no ranked files)." text as a genuinely empty map.
+  if (result.overflow !== undefined) {
+    return withStaleness(
+      {
+        output: [
+          `repomap: ${result.overflow.code} — the required entry "${result.overflow.requiredId}" does not fit within the ${result.budget}-token budget.`,
+          "No entries were returned: a partial required set is never reported as a map.",
+          "Raise `budget`, or narrow `seed`, and retry.",
+        ].join("\n"),
+        isError: true,
+      },
+      result.staleness,
+    );
   }
   if (result.files.length === 0) {
-    return { output: "Repomap is empty (no ranked files).", isError: false };
+    return withStaleness({ output: "Repomap is empty (no ranked files).", isError: false }, result.staleness);
   }
-  const header = `Repomap (${result.files.length} file(s), ~${result.tokens} tokens, ${result.omitted} omitted):`;
+  const partial = result.partial === true;
+  const header =
+    `Repomap${partial ? " [PARTIAL]" : ""} (${result.files.length} file(s), ~${result.tokens} tokens, ` +
+    `${result.omitted} omitted):`;
   const lines = result.files.map((file) => {
     const symbols = file.symbols.length > 0 ? ` — ${file.symbols.join(", ")}` : "";
-    return `  - ${file.path} (score ${file.score.toFixed(4)})${symbols}`;
+    // `required` is why the entry survived; without it a protected seed and a
+    // high-scoring incidental file were indistinguishable.
+    const marker = file.required === true ? " [required]" : "";
+    return `  - ${file.path} (score ${file.score.toFixed(4)})${marker}${symbols}`;
   });
-  return { output: [header, ...lines].join("\n"), isError: false };
+  const omittedOptional = result.omittedOptional ?? [];
+  const lossLines =
+    omittedOptional.length > 0
+      ? [
+          "",
+          `PARTIAL — ${omittedOptional.length} optional entr${omittedOptional.length === 1 ? "y" : "ies"} omitted for budget:`,
+          ...omittedOptional.slice(0, 40).map((path) => `  - ${path}`),
+          ...(omittedOptional.length > 40 ? [`  - … +${omittedOptional.length - 40} more`] : []),
+        ]
+      : [];
+  return withStaleness(
+    { output: [header, ...lines, ...lossLines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a `wikiAsk` result as readable text. */
@@ -382,7 +503,36 @@ export function formatWikiAsk(result: WikiAskResult): InteractiveToolResult {
   if (result.error !== undefined) {
     return { output: `wiki_ask failed: ${result.error}`, isError: true };
   }
-  return { output: result.answer.length > 0 ? result.answer : "(no answer)", isError: false };
+  const lines: string[] = [];
+  // AFC-M03: the retrieval outcome is a CODE, and it must be legible as one
+  // rather than only inferable from the prose. A stop-word-only query and a
+  // real answer used to be the same shape at this boundary.
+  if (result.status !== undefined && result.status !== "ok") {
+    lines.push(
+      `RETRIEVAL: ${result.status}${result.reason !== undefined ? ` — ${result.reason}` : ""}`,
+      "",
+    );
+  }
+  lines.push(result.answer.length > 0 ? result.answer : "(no answer)");
+  // AFC-06: the CLI marks a non-current citation `[HISTORICAL — not current]`.
+  // These fields used to be dropped by the adapter's five-field re-map, so the
+  // agent surface presented superseded guidance as current.
+  const historical = result.citations.filter((citation) => citation.historical === true);
+  if (historical.length > 0) {
+    lines.push(
+      "",
+      `NOT CURRENT — ${historical.length} of ${result.citations.length} citation(s) are historical and are not confirmed guidance:`,
+      ...historical.map((citation) => {
+        const state = citation.lifecycleState !== undefined ? ` [${citation.lifecycleState}]` : "";
+        const why =
+          citation.lifecycleReasons !== undefined && citation.lifecycleReasons.length > 0
+            ? ` — ${citation.lifecycleReasons.join("; ")}`
+            : "";
+        return `  - ${citation.sectionRef ?? citation.path}${state}${why}`;
+      }),
+    );
+  }
+  return { output: lines.join("\n"), isError: false };
 }
 
 /** Render a `wikiBacklinks` result as readable text. */
@@ -407,6 +557,7 @@ const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
     to: { type: "string" },
     nodes: { type: "array", items: { type: "string" } },
     unresolved: { type: "boolean" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["from", "to", "nodes"],
@@ -441,6 +592,8 @@ const HEALTH_OUTPUT_SCHEMA: Record<string, unknown> = {
     sources: { type: "array" },
     projectScore: { type: ["number", "null"] },
     regressions: { type: "integer" },
+    decliningScopes: { type: "integer" },
+    regressedScopes: { type: "integer" },
     error: { type: "string" },
   },
   required: ["enabled", "lastRunAt", "gate", "sources", "projectScore", "regressions"],
@@ -453,6 +606,7 @@ const SYMBOL_OUTPUT_SCHEMA: Record<string, unknown> = {
     definitions: { type: "array" },
     callers: { type: "array", items: { type: "string" } },
     callees: { type: "array", items: { type: "string" } },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["name", "definitions", "callers", "callees"],
@@ -462,9 +616,36 @@ const REPOMAP_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     budget: { type: "number" },
-    files: { type: "array" },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          score: { type: "number" },
+          symbols: { type: "array", items: { type: "string" } },
+          // AFC-12: protected from budget/rank eviction, not merely top-ranked.
+          required: { type: "boolean" },
+        },
+        required: ["path", "score", "symbols"],
+      },
+    },
     tokens: { type: "integer" },
     omitted: { type: "integer" },
+    seed: { type: "array", items: { type: "string" } },
+    // AFC-12 loss markers — named loss, the partial flag, and the mandatory
+    // overflow that must never render as an ordinary success.
+    omittedOptional: { type: "array", items: { type: "string" } },
+    partial: { type: "boolean" },
+    overflow: {
+      type: "object",
+      properties: {
+        code: { type: "string", enum: ["context_overflow"] },
+        requiredId: { type: "string" },
+      },
+      required: ["code", "requiredId"],
+    },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["budget", "files", "tokens", "omitted"],
@@ -474,7 +655,36 @@ const WIKI_ASK_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     question: { type: "string" },
-    citations: { type: "array" },
+    // AFC-M03: the retrieval outcome as a code, not a shape to infer.
+    status: { type: "string", enum: ["ok", "no-match", "insufficient-evidence"] },
+    reason: { type: "string" },
+    citations: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          title: { type: "string" },
+          excerpt: { type: "string" },
+          score: { type: "number" },
+          source: { type: "string", enum: ["wiki", "memory"] },
+          matched: { type: "array", items: { type: "string" } },
+          sectionId: { type: "string" },
+          sectionRef: { type: "string" },
+          sectionTitle: { type: "string" },
+          sectionStability: { type: "string", enum: ["stable", "version-bound"] },
+          contentClass: { type: "string", enum: ["substantive", "scaffold", "reference"] },
+          domain: { type: "string" },
+          startLine: { type: "integer" },
+          endLine: { type: "integer" },
+          // AFC-06: the "not current" signal the CLI renders.
+          historical: { type: "boolean" },
+          lifecycleState: { type: "string" },
+          lifecycleReasons: { type: "array", items: { type: "string" } },
+        },
+        required: ["path", "title", "excerpt", "score", "source"],
+      },
+    },
     answer: { type: "string" },
     error: { type: "string" },
   },
@@ -528,7 +738,10 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdctx",
     description:
-      "Search the project's code/text (compact ripgrep via `keryx ctx rg`). Input: { pattern: string, path?: string } (path relative to the project root).",
+      "Search the project's code/text with ripgrep. Input: { pattern: string, path?: string } (path relative " +
+      "to the project root). A completed search with no hits comes back as a SUCCESS whose output says so — " +
+      "an `isError` result means the search could not run (bad regex, ripgrep missing, path outside the " +
+      "project), never that there was nothing to find.",
     inputSchema: {
       type: "object",
       properties: { pattern: { type: "string" }, path: { type: "string" } },
@@ -554,10 +767,18 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Show the blast radius (dependents) of a file via the code graph (`keryx gdgraph affected`). Input: { file: string } relative to the project root.",
+      "Show the blast radius of a file via the code graph (`keryx gdgraph affected`): its dependents AND " +
+      "its dependencies. Input: { file: string } relative to the project root, plus the same knobs the CLI " +
+      "takes — { depth?: integer } to widen the transitive closure and { ranked?: boolean } to turn off the " +
+      "hop/fanIn ranking. The result carries the graph's freshness: read `staleness` before quoting it, and " +
+      "treat `unknown` as \"could not be determined\", never as fresh.",
     inputSchema: {
       type: "object",
-      properties: { file: { type: "string" } },
+      properties: {
+        file: { type: "string" },
+        depth: { type: "integer", minimum: 1 },
+        ranked: { type: "boolean" },
+      },
       required: ["file"],
       additionalProperties: false,
     },
@@ -567,7 +788,17 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in file) {
         return file.error;
       }
-      return formatAffected(await port.graphAffected({ target: file.value }));
+      // `depth`/`ranked` have always been on the port and on the CLI; this
+      // dispatch used to drop them, so a caller could never widen the closure.
+      const depth = typeof input.depth === "number" && input.depth > 0 ? input.depth : undefined;
+      const ranked = typeof input.ranked === "boolean" ? input.ranked : undefined;
+      return formatAffected(
+        await port.graphAffected({
+          target: file.value,
+          ...(depth !== undefined ? { depth } : {}),
+          ...(ranked !== undefined ? { ranked } : {}),
+        }),
+      );
     },
   },
   {
@@ -596,10 +827,17 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "memory",
     description:
-      "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: { query: string }.",
+      "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: " +
+      "{ query: string, module?: string, class?: \"semantic\"|\"episodic\"|\"procedural\", limit?: integer } — " +
+      "the same narrowing the CLI offers. Automatic recall is always bounded to accepted, current entries.",
     inputSchema: {
       type: "object",
-      properties: { query: { type: "string" } },
+      properties: {
+        query: { type: "string" },
+        module: { type: "string" },
+        class: { type: "string", enum: ["semantic", "episodic", "procedural"] },
+        limit: { type: "integer", minimum: 1 },
+      },
       required: ["query"],
       additionalProperties: false,
     },
@@ -609,7 +847,21 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in query) {
         return query.error;
       }
-      return formatMemory(await port.memorySearch({ query: query.value }));
+      // The port has accepted module/class/limit since flow 037; only this
+      // dispatch's schema withheld them, so no agent could narrow a search.
+      // `status` is deliberately NOT exposed: the adapter admits `accepted`
+      // only, so a knob with one legal value would be a false affordance.
+      const module = typeof input.module === "string" && input.module.length > 0 ? input.module : undefined;
+      const cls = typeof input.class === "string" && input.class.length > 0 ? input.class : undefined;
+      const limit = typeof input.limit === "number" ? input.limit : undefined;
+      return formatMemory(
+        await port.memorySearch({
+          query: query.value,
+          ...(module !== undefined ? { module } : {}),
+          ...(cls !== undefined ? { class: cls } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        }),
+      );
     },
   },
   {
@@ -777,10 +1029,18 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). Input: { budget?: number } token budget.",
+      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). " +
+      "Input: { budget?: integer, seed?: string[] }. `seed` is what makes this useful for a change intent: " +
+      "a seeded file and its direct consumers/tests become REQUIRED and are protected from rank eviction, " +
+      "and each entry says whether it was `required`. If the required set does not fit, the result is a " +
+      "`context_overflow` refusal naming the entry that did not fit — not a shorter map. Optional entries " +
+      "dropped for budget are named in `omittedOptional` with `partial: true`.",
     inputSchema: {
       type: "object",
-      properties: { budget: { type: "integer", minimum: 1 } },
+      properties: {
+        budget: { type: "integer", minimum: 1 },
+        seed: { type: "array", items: { type: "string" } },
+      },
       additionalProperties: false,
     },
     outputSchema: REPOMAP_OUTPUT_SCHEMA,
@@ -789,7 +1049,15 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return { output: "repomap is not available in this session.", isError: true };
       }
       const budget = typeof input.budget === "number" && input.budget > 0 ? input.budget : undefined;
-      return formatRepomap(await port.repomap(budget !== undefined ? { budget } : {}));
+      const seed = Array.isArray(input.seed)
+        ? input.seed.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        : undefined;
+      return formatRepomap(
+        await port.repomap({
+          ...(budget !== undefined ? { budget } : {}),
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+        }),
+      );
     },
   },
   {
@@ -797,10 +1065,14 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "wiki",
     description:
-      "Ask a question answered deterministically from the project's own wiki + memory with citations (`keryx wiki ask`). Input: { question: string }.",
+      "Ask a question answered deterministically from the project's own wiki + memory with citations " +
+      "(`keryx wiki ask`). Input: { question: string, k?: integer } — `k` caps the citations, exactly as " +
+      "`--k` does. Read `status` before the prose: `no-match` and `insufficient-evidence` mean the answer " +
+      "is NOT evidence for the question. A citation marked `historical` is superseded/expired guidance and " +
+      "is not a current constraint.",
     inputSchema: {
       type: "object",
-      properties: { question: { type: "string" } },
+      properties: { question: { type: "string" }, k: { type: "integer", minimum: 1 } },
       required: ["question"],
       additionalProperties: false,
     },
@@ -813,7 +1085,10 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in question) {
         return question.error;
       }
-      return formatWikiAsk(await port.wikiAsk({ question: question.value }));
+      const k = typeof input.k === "number" && input.k > 0 ? input.k : undefined;
+      return formatWikiAsk(
+        await port.wikiAsk({ question: question.value, ...(k !== undefined ? { k } : {}) }),
+      );
     },
   },
   {

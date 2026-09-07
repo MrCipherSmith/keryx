@@ -9,7 +9,7 @@ import { computeAffected, type AffectedResult } from "../gdgraph/affected";
 import { findNodes, findSymbols } from "../gdgraph/find";
 import { querySymbol, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
 import { findPath, labelNode } from "../gdgraph/path";
-import { graphMaybeStale, STALE_NOTE } from "../gdgraph/staleness";
+import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
@@ -419,10 +419,21 @@ async function printDocumentedIn(files: string[]): Promise<void> {
   }
 }
 
+// Flow 237 T6 (AFC-28/AC-28): route through the tri-state result
+// (`checkGraphStaleness`) instead of the boolean wrapper (`graphMaybeStale`),
+// which collapsed "stale" and "unknown" into the same `STALE_NOTE` wording
+// and discarded the reasons entirely. "unknown" (a git failure — staleness
+// could not be determined) must never read as the confident "repo moved"
+// claim that `STALE_NOTE` makes.
 async function printStaleNote(): Promise<void> {
-  if (await graphMaybeStale(process.cwd())) {
-    console.log("");
-    console.log(STALE_NOTE);
+  const check = await checkGraphStaleness(process.cwd());
+  if (check.status === "fresh") {
+    return;
+  }
+  console.log("");
+  console.log(check.status === "unknown" ? UNKNOWN_NOTE : STALE_NOTE);
+  for (const reason of check.reasons) {
+    console.log(`  - ${reason}`);
   }
 }
 

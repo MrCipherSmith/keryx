@@ -21,7 +21,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import {
   buildOracleManifestsByGold,
   GOLD_KIND_LABELS,
@@ -85,6 +85,67 @@ async function loadGold(url: URL): Promise<Map<string, string[]>> {
   return new Map(raw.targets.map((t) => [t.target, t.affected]));
 }
 
+const GOLD_KINDS = ["co-change", "dependency"] as const;
+
+/** Injectable side effects for {@link finalizeExpressOracleRun} — real I/O in `main`, spies in tests. */
+export type ExpressOracleEmissionIO = {
+  readonly writeSystemFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (kind: GoldKind, contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the express-oracle run, GATED on validation (same defect shape
+ * fixed across every scripts/benchmark/run-*-oracle.ts producer: previously the captured
+ * gdgraph-affected system fixture was written to disk and each gold-kind's manifest
+ * printed to stdout FIRST, and only afterward validated — an invalid manifest reached both
+ * the file and the terminal before the process exited non-zero).
+ *
+ * The ONE system-output fixture (gdgraph-affected.json) is shared by BOTH gold-kind
+ * manifests it feeds, so it is written only when EVERY present gold kind validates —
+ * a fixture cannot be "half published" for one gold kind and not the other. Each
+ * gold-kind's manifest is then printed independently, gated on ITS OWN validity (mirrors
+ * run-containment.ts's per-case-class independence: the two golds are never conflated).
+ * Choice recorded (same as run-ablation.ts's finalizeAblationRun): on an invalid run, a
+ * previously-written GOOD fixture file is left ON DISK, UNTOUCHED.
+ */
+export async function finalizeExpressOracleRun(
+  systemFixture: unknown,
+  manifestsByKind: Partial<Record<GoldKind, PairedBenchmarkManifestV2>>,
+  validationByKind: Partial<Record<GoldKind, { readonly valid: boolean; readonly errors: readonly string[] }>>,
+  io: ExpressOracleEmissionIO,
+): Promise<number> {
+  let allValid = true;
+  for (const kind of GOLD_KINDS) {
+    const manifest = manifestsByKind[kind];
+    const validation = validationByKind[kind];
+    if (!manifest || !validation) {
+      io.logLine(`# gold: ${kind} — no scored targets`);
+      allValid = false;
+      continue;
+    }
+    io.logLine(`# gold=${kind} manifest valid: ${validation.valid ? "yes" : "no"}`);
+    for (const err of validation.errors) io.logLine(`- ${err}`);
+    if (validation.valid) {
+      io.printManifest(kind, JSON.stringify(manifest, null, 2));
+    } else {
+      allValid = false;
+    }
+  }
+
+  if (allValid) {
+    await io.writeSystemFixture(`${JSON.stringify(systemFixture, null, 2)}\n`);
+    io.logLine("wrote fixtures/benchmark/express/gdgraph-affected.json");
+    return 0;
+  }
+  io.logLine(
+    "invalid manifest(s) — nothing written to disk and nothing printed to stdout for an invalid gold kind; " +
+      "fixtures/benchmark/express/gdgraph-affected.json left unchanged " +
+      "(a previously-written valid fixture, if any, is preserved as-is)",
+  );
+  return 1;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const repoFlag = args.indexOf("--repo");
@@ -115,13 +176,14 @@ async function main(): Promise<void> {
       system.set(target, parseAffected(affected.stdout));
     }
 
-    // Write the real system-output fixture (same shape the CLI's `--system` loader reads).
+    // Build the real system-output fixture (same shape the CLI's `--system` loader reads) —
+    // held in memory, not yet written; {@link finalizeExpressOracleRun} decides whether it
+    // reaches disk, based on both gold kinds' own validation below.
     const systemFixture = {
       pinned_commit: PINNED_SHA,
       generated_by: "bun scripts/benchmark/run-express-oracle.ts",
       targets: TARGET_FILES.map((target) => ({ target, affected: system.get(target) ?? [] })),
     };
-    await Bun.write(systemFixtureUrl, `${JSON.stringify(systemFixture, null, 2)}\n`);
 
     // Two-gold scoring (decision (a)+(b)): score the ONE gdgraph affected-set against BOTH
     // the git co-change gold AND the independent transitive import-closure gold, reported
@@ -140,30 +202,31 @@ async function main(): Promise<void> {
     }));
 
     const manifests = buildOracleManifestsByGold(inputs, { ladder: "metastore" });
-    let allValid = true;
-    for (const kind of ["co-change", "dependency"] as const) {
+    const validations: Partial<Record<GoldKind, { valid: boolean; errors: string[] }>> = {};
+    for (const kind of GOLD_KINDS) {
       const manifest = manifests[kind];
-      if (!manifest) {
-        console.error(`# gold: ${kind} — no scored targets`);
-        allValid = false;
-        continue;
-      }
-      console.log(`# gold: ${kind} (${GOLD_KIND_LABELS[kind as GoldKind]})`);
-      console.log(JSON.stringify(manifest, null, 2));
-      console.error(`# oracle IR result — gold=${kind} (${GOLD_KIND_LABELS[kind as GoldKind]})`);
+      if (!manifest) continue;
+      console.error(`# oracle IR result — gold=${kind} (${GOLD_KIND_LABELS[kind]})`);
       for (const run of manifest.runs) {
         const o = run.oracle;
         console.error(
           `${run.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} f1=${o?.f1?.value}`,
         );
       }
-      const result = validatePairedBenchmark(manifest);
-      console.error(`# gold=${kind} manifest valid: ${result.valid ? "yes" : "no"}`);
-      for (const err of result.errors) console.error(`- ${err}`);
-      if (!result.valid) allValid = false;
+      validations[kind] = validatePairedBenchmark(manifest);
     }
-    if (!allValid) process.exit(1);
-    console.error(`wrote fixtures/benchmark/express/gdgraph-affected.json`);
+
+    const code = await finalizeExpressOracleRun(systemFixture, manifests, validations, {
+      writeSystemFixture: async (contents) => {
+        await Bun.write(systemFixtureUrl, contents);
+      },
+      printManifest: (kind, contents) => {
+        console.log(`# gold: ${kind} (${GOLD_KIND_LABELS[kind]})`);
+        console.log(contents);
+      },
+      logLine: (line) => console.error(line),
+    });
+    if (code !== 0) process.exit(code);
   } finally {
     cleanup?.();
   }

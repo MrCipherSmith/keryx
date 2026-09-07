@@ -483,7 +483,18 @@ export function buildToolRegistry(): ToolEntry[] {
       inputSchema: OBJECT_SCHEMA(
         {
           file: { type: "string", description: "Project-relative file path." },
-          depth: { type: "number", description: "Reserved; traversal depth." },
+          // Flow 235 T8: this parameter is DECLARED and never read — `invoke`
+          // below calls `getAffected(graph, file)`, which has no depth notion
+          // at all. Saying "reserved" read as "supported, maybe capped"; a
+          // caller passing depth: 3 silently got depth 1. Kept (removing a
+          // declared public parameter would break any client that sends it)
+          // but described honestly, with the operation that does implement it.
+          depth: {
+            type: "number",
+            description:
+              "ACCEPTED AND IGNORED: this tool returns direct dependents/dependencies only. " +
+              "Use the `graph_affected` tool for a transitive, ranked closure with a real depth.",
+          },
         },
         ["file"],
       ),
@@ -638,17 +649,36 @@ export function buildToolRegistry(): ToolEntry[] {
         "so an empty result means nothing accepted matched, not that the project has no memory on " +
         "the topic. The query must be non-empty and at most 4096 UTF-8 bytes, and the result count " +
         "is capped. Invalid input comes back as an `error` field on a normal result with empty " +
-        "`hits` — it does not throw, so check `error` before reading `hits`.",
+        "`hits` — it does not throw, so check `error` before reading `hits`. Narrow with `module`, " +
+        "`class` and `limit` rather than re-querying: the backing accepts all three.",
+      // Flow 235 T8: the backing (`createMetaprojectAdapter(cwd).memorySearch`)
+      // has accepted module/class/limit since flow 037 and validates each one;
+      // this schema exposed `query` alone, so the narrowing was unreachable
+      // through the tool even though `keryx memory search --module/--class/
+      // --limit` offers it. `status` is deliberately still absent: automatic
+      // recall admits `accepted` only, so a knob with one legal value would be
+      // a false affordance.
       inputSchema: OBJECT_SCHEMA(
         {
           query: { type: "string" },
+          module: { type: "string" },
+          class: { type: "string", description: "semantic | episodic | procedural" },
+          limit: { type: "number", description: "Max hits; capped by the recall bound." },
         },
         ["query"],
       ),
       mutating: false,
       async invoke(cwd, params) {
         const query = stringParam(params, "query") ?? "";
-        return createMetaprojectAdapter(cwd).memorySearch({ query });
+        const module = stringParam(params, "module");
+        const memoryClass = stringParam(params, "class");
+        const limit = typeof params.limit === "number" ? params.limit : undefined;
+        return createMetaprojectAdapter(cwd).memorySearch({
+          query,
+          ...(module !== undefined && module.length > 0 ? { module } : {}),
+          ...(memoryClass !== undefined && memoryClass.length > 0 ? { class: memoryClass } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        });
       },
     },
     {

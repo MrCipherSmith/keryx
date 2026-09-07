@@ -15,9 +15,9 @@ describe("precision", () => {
     expect(precision(["a", "b", "c"], ["a", "b"])).toBeCloseTo(2 / 3, 10);
   });
 
-  test("edge case: empty retrieved set is defined as 1 (vacuously perfect)", () => {
-    expect(precision([], ["a", "b"])).toBe(1);
-    expect(precision(new Set(), new Set())).toBe(1);
+  test("edge case: empty retrieved set is unmeasured (null), never a fabricated score", () => {
+    expect(precision([], ["a", "b"])).toBeNull();
+    expect(precision(new Set(), new Set())).toBeNull();
   });
 
   test("duplicate IDs in retrieved are deduped before dividing", () => {
@@ -43,9 +43,9 @@ describe("recall", () => {
     expect(recall(["a"], ["a", "b"])).toBeCloseTo(0.5, 10);
   });
 
-  test("edge case: empty relevant set is defined as 1 (vacuously perfect)", () => {
-    expect(recall(["a", "b"], [])).toBe(1);
-    expect(recall([], [])).toBe(1);
+  test("edge case: empty relevant set is unmeasured (null), never a fabricated score", () => {
+    expect(recall(["a", "b"], [])).toBeNull();
+    expect(recall([], [])).toBeNull();
   });
 
   test("duplicate IDs in relevant are deduped before dividing", () => {
@@ -71,6 +71,18 @@ describe("f1", () => {
 
   test("edge case: both retrieved and relevant empty -> both vacuous 1 -> f1 = 1", () => {
     expect(f1([], [])).toBe(1);
+  });
+
+  test("edge case: empty retrieved, non-empty relevant -> unmeasured precision treated as neutral -> f1 = 0", () => {
+    // precision([], ["a"]) is null (unmeasured); recall([], ["a"]) is 0 (real: nothing
+    // retrieved so nothing recalled). f1 must still be a plain number (unchanged contract).
+    expect(f1([], ["a"])).toBe(0);
+  });
+
+  test("edge case: non-empty retrieved, empty relevant -> unmeasured recall treated as neutral -> f1 = 0", () => {
+    // precision(["a"], []) is 0 (real: nothing in retrieved is relevant); recall(["a"], [])
+    // is null (unmeasured, nothing to miss).
+    expect(f1(["a"], [])).toBe(0);
   });
 });
 

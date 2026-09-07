@@ -66,7 +66,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import {
   buildContainmentManifest,
   type ContainmentCaseClass,
@@ -323,6 +323,53 @@ async function verifyEscape(
   };
 }
 
+/** Injectable side effects for {@link finalizeContainmentCase} — real I/O in `main`, spies in tests. */
+export type ContainmentEmissionIO = {
+  readonly writeResultsFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for ONE containment case class, GATED on validation (same defect
+ * shape fixed across every scripts/benchmark/run-*-oracle.ts / run-ablation*.ts producer:
+ * previously the raw-cases fixture was written to disk and the derived manifest printed to
+ * stdout FIRST, and only afterward validated — an invalid manifest's fixture reached disk
+ * before the process exited non-zero, indistinguishable there from a good one). The 3 case
+ * classes are scored and persisted independently (mirrors run-ablation.ts calling
+ * finalizeAblationRun once per variant): one class's invalid manifest never blocks another
+ * class's valid one from being written and printed.
+ *
+ * Choice recorded (same as run-ablation.ts's finalizeAblationRun): on an invalid run, a
+ * previously-written GOOD fixture file is left ON DISK, UNTOUCHED.
+ */
+export async function finalizeContainmentCase(
+  resultsFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  caseClass: ContainmentCaseClass,
+  fixturePath: string,
+  io: ContainmentEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`# ${caseClass} manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine(`wrote ${fixturePath}`);
+    return 0;
+  }
+  io.logLine(
+    `invalid manifest — nothing written to disk and nothing printed to stdout; ` +
+      `${fixturePath} left unchanged (a previously-written valid fixture, if any, is preserved as-is)`,
+  );
+  return 1;
+}
+
 async function main(): Promise<void> {
   if (PROVIDER_NAME === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
     throw new Error("DEEPSEEK_API_KEY is required in the environment to run live containment cases");
@@ -474,17 +521,22 @@ async function main(): Promise<void> {
         captured: new Date().toISOString().slice(0, 10),
         cases: casesForClass,
       };
-      const resultsUrl = new URL(`../../fixtures/benchmark/keryx/safety-containment-${caseClass}${FILE_SUFFIX}.json`, import.meta.url);
-      await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
+      const fixturePath = `fixtures/benchmark/keryx/safety-containment-${caseClass}${FILE_SUFFIX}.json`;
+      const resultsUrl = new URL(`../../${fixturePath}`, import.meta.url);
 
       const manifest = buildContainmentManifest(casesForClass, { ladder: "harness", model: MODEL });
-      console.log(`# ${caseClass} manifest`);
-      console.log(JSON.stringify(manifest, null, 2));
       const result = validatePairedBenchmark(manifest);
-      console.error(`# ${caseClass} manifest valid: ${result.valid ? "yes" : "no"}`);
-      for (const err of result.errors) console.error(`- ${err}`);
-      console.error(`wrote fixtures/benchmark/keryx/safety-containment-${caseClass}${FILE_SUFFIX}.json`);
-      if (!result.valid) allValid = false;
+      const code = await finalizeContainmentCase(resultsFixture, manifest, result, caseClass, fixturePath, {
+        writeResultsFixture: async (contents) => {
+          await Bun.write(resultsUrl, contents);
+        },
+        printManifest: (contents) => {
+          console.log(`# ${caseClass} manifest`);
+          console.log(contents);
+        },
+        logLine: (line) => console.error(line),
+      });
+      if (code !== 0) allValid = false;
     }
     if (!allValid) process.exit(1);
   } finally {

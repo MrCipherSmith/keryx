@@ -69,6 +69,14 @@ function importSpecifiers(content: string): string[] {
 
 test("src/mcp only imports service facades + lib + guard (M-3)", async () => {
   const files = (await tsFiles(MCP_ROOT)).filter((f) => !f.endsWith(".test.ts"));
+  // Sentinel (flow 239, AC-20 — Class-2 defect): `expect(violations).toEqual([])`
+  // below is indistinguishable from "the scan found nothing to check" unless
+  // something here also asserts the scan actually ran. A renamed `src/mcp/`, a
+  // broken extension filter, or a `tsFiles` that silently returns [] would all
+  // leave `violations` empty too — this is the count and the known landmark
+  // file that catches that, before the empty-list assertion below ever runs.
+  expect(files.length).toBeGreaterThan(5);
+  expect(files).toContain(path.join(MCP_ROOT, "server.ts"));
   const violations: string[] = [];
 
   for (const file of files) {
@@ -93,6 +101,12 @@ test("src/mcp only imports service facades + lib + guard (M-3)", async () => {
 
 test("no top-level @modelcontextprotocol/sdk import anywhere in src/ (C0-2)", async () => {
   const files = await tsFiles(SRC_ROOT);
+  // Sentinel (flow 239, AC-20 — Class-2 defect): same reasoning as the scan
+  // above, applied to the repo-wide sweep. A landmark file plus a count floor
+  // well below the current size, so ordinary growth never breaks this while a
+  // broken scan still does.
+  expect(files.length).toBeGreaterThan(500);
+  expect(files).toContain(path.join(SRC_ROOT, "cli.ts"));
   const violations: string[] = [];
   // Match ANY static import of the SDK or a subpath — but never `await import(`.
   const staticSdk =

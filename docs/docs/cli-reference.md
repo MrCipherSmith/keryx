@@ -722,11 +722,19 @@ keryx wiki freshness
 keryx wiki refresh
 keryx wiki verify --page <path> | --baseline
 keryx wiki migrate-markers
+keryx wiki sections list [--json]
+keryx wiki sections resolve <section-ref> [--json]
+keryx wiki sections sync
+keryx wiki sections migrate [--dry-run]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
+| `sections list` | `--json` | List every indexed section with its identity, its stability, and the page it belongs to. |
+| `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, stale-locator or unknown, and never redirects a deleted identity to a same-named section elsewhere. |
+| `sections sync` | — | Rebuild the section index from the pages on disk. |
+| `sections migrate` | `--dry-run` | Insert versioned identity markers into pages that have none. Content is preserved byte for byte apart from the markers, and the round trip is asserted before anything is written. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
 | `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. |
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |

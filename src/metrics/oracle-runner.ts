@@ -44,8 +44,18 @@ export type OracleScoreInput = {
 export type OracleTargetScore = {
   readonly target: string;
   readonly taskId: string;
-  readonly precision: number;
-  readonly recall: number;
+  /**
+   * `null` when `system` was empty (no denominator to compute a proportion from) — see
+   * ./ir.ts precision()'s doc comment (RESOLVED 2026-09-07, flow 238/T8). Every emitter
+   * below (oracleMetrics/oracleMetricsForGold/scoreTestImpactRun/scoreMemorySearchRun)
+   * OMITS the corresponding manifest field entirely when this is `null`, never reports it
+   * with a null value — OracleMetrics fields are "present only when measured", and
+   * validatePairedBenchmarkV2's `requireMeasured` guard on `run.oracle.*` actively rejects
+   * a present field with `value: null`.
+   */
+  readonly precision: number | null;
+  /** `null` when `gold` was empty (no denominator) — see ./ir.ts recall()'s doc comment. Same omit-not-null-value contract as `precision` above. */
+  readonly recall: number | null;
   readonly f1: number;
   readonly systemSize: number;
   readonly goldSize: number;
@@ -96,22 +106,33 @@ function measured(value: number): BenchmarkValue {
   return { value, reliability: ORACLE_RELIABILITY, source: METRIC_SOURCE };
 }
 
+// precision/recall are OMITTED entirely when unmeasured (score.precision/.recall is
+// `null` — see OracleTargetScore's doc comment) rather than emitted with a null value:
+// OracleMetrics documents "present only when measured", and validatePairedBenchmarkV2's
+// `requireMeasured` guard on `run.oracle.*` actively REJECTS a present field whose
+// `value` is null / `reliability` is "unknown" as "metric field present without a
+// corresponding measurement" — so a conditional field, not a null-valued one, is the only
+// encoding validatePairedBenchmark accepts. f1 is unaffected (see ./ir.ts f1()'s doc
+// comment: it always returns a plain number, never null).
 function oracleMetrics(score: OracleTargetScore): OracleMetrics {
   return {
-    precision: measured(score.precision),
-    recall: measured(score.recall),
+    ...(score.precision !== null ? { precision: measured(score.precision) } : {}),
+    ...(score.recall !== null ? { recall: measured(score.recall) } : {}),
     f1: measured(score.f1),
   };
 }
 
 // Precision and recall are genuine binomial proportions (successes/n), so where a real
 // denominator exists we also report them as rates carrying a 95% Wilson CI via deriveRate.
-// A denominator of 0 (empty retrieved => no precision n; empty gold => no recall n) is
-// skipped rather than fabricated — validateRate rejects a rate without an explicit n.
+// An unmeasured precision/recall (score.precision/.recall === null, i.e. an empty
+// retrieved/gold denominator) is skipped rather than fabricated — validateRate rejects a
+// rate without an explicit n. Checked directly against the same nullness ./ir.ts's
+// precision()/recall() already decided (rather than re-deriving it from systemSize/goldSize
+// here), so this guard and oracleMetrics' guard above can never drift apart.
 function oracleRates(score: OracleTargetScore): Record<string, RateWithCI> | undefined {
   const rates: Record<string, RateWithCI> = {};
-  if (score.systemSize > 0) rates.precision = deriveRate(score.truePositives, score.systemSize, ORACLE_RELIABILITY);
-  if (score.goldSize > 0) rates.recall = deriveRate(score.truePositives, score.goldSize, ORACLE_RELIABILITY);
+  if (score.precision !== null) rates.precision = deriveRate(score.truePositives, score.systemSize, ORACLE_RELIABILITY);
+  if (score.recall !== null) rates.recall = deriveRate(score.truePositives, score.goldSize, ORACLE_RELIABILITY);
   return Object.keys(rates).length > 0 ? rates : undefined;
 }
 
@@ -251,10 +272,11 @@ function measuredValue(value: number, source: string, notes?: string): Benchmark
   return { value, reliability: ORACLE_RELIABILITY, source, ...(notes ? { notes } : {}) };
 }
 
+// Same omit-not-null-value contract as oracleMetrics() above.
 function oracleMetricsForGold(score: OracleTargetScore, source: string, notes: string): OracleMetrics {
   return {
-    precision: measuredValue(score.precision, source, notes),
-    recall: measuredValue(score.recall, source, notes),
+    ...(score.precision !== null ? { precision: measuredValue(score.precision, source, notes) } : {}),
+    ...(score.recall !== null ? { recall: measuredValue(score.recall, source, notes) } : {}),
     f1: measuredValue(score.f1, source, notes),
   };
 }
@@ -391,8 +413,8 @@ export function scoreTestImpactRun(
     seeds: [1],
     quality: "measured",
     oracle: {
-      precision: measuredValue(score.precision, source),
-      recall: measuredValue(score.recall, source),
+      ...(score.precision !== null ? { precision: measuredValue(score.precision, source) } : {}),
+      ...(score.recall !== null ? { recall: measuredValue(score.recall, source) } : {}),
       f1: measuredValue(score.f1, source),
     },
     ...(rates ? { rates } : {}),
@@ -490,8 +512,8 @@ export function scoreMemorySearchRun(
     seeds: [1],
     quality: "measured",
     oracle: {
-      precision: measuredValue(score.precision, source),
-      recall: measuredValue(score.recall, source),
+      ...(score.precision !== null ? { precision: measuredValue(score.precision, source) } : {}),
+      ...(score.recall !== null ? { recall: measuredValue(score.recall, source) } : {}),
       recallAtK: measuredValue(atK, source),
     },
     ...(rates ? { rates } : {}),
@@ -867,7 +889,8 @@ export function buildEvidenceBundle(
   const timestamp = options.timestamp ?? DEFAULT_TIMESTAMP;
   const leakageAssertion = options.leakageAssertion ?? "not-applicable";
   const rationale =
-    `precision=${score.precision} recall=${score.recall} f1=${score.f1} ` +
+    `precision=${score.precision === null ? "unmeasured (empty system set)" : score.precision} ` +
+    `recall=${score.recall === null ? "unmeasured (empty gold set)" : score.recall} f1=${score.f1} ` +
     `(tp=${score.truePositives}, fp=${score.falsePositives}, fn=${score.falseNegatives}; ` +
     `system=${score.systemSize}, gold=${score.goldSize}). ` +
     `IR metrics computed by src/metrics/ir.ts against git-history gold (src/metrics/gold.ts).`;

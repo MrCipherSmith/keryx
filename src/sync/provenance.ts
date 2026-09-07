@@ -22,21 +22,70 @@ export function provenancePath(cwd: string, module: string): string {
   return path.join(cwd, ".metaproject", "data", module, ".provenance.json");
 }
 
-// Run a git command, returning trimmed stdout or null on any failure.
-export function gitCmd(cwd: string, args: string[]): Promise<string | null> {
+// AFC-22/AFC-W05 (flow 236, phase 4, T7): "a git failure yields unknown" only
+// holds if a git failure is itself distinguishable from a git *success*. The
+// previous `gitCmd` collapsed three different events into one `null` answer:
+//   1. the process could not be started at all (spawn error — git missing,
+//      permission denied, a `cwd` that does not exist);
+//   2. the process started and exited non-zero (git RAN and refused — a
+//      corrupt repo, a bad revision, "fatal: not a git repository"; note
+//      some commands, e.g. `cat-file -e`, use a non-zero exit as their own
+//      legitimate negative *answer*, not a failure — that distinction is the
+//      caller's to make, which is exactly why it needs the raw exit code);
+//   3. the process ran, exited zero, and produced no stdout — a legitimate
+//      result for several commands (`git log` over a range with zero
+//      matching commits, `git status --porcelain` on a clean tree).
+// Every caller that only ever saw `string | null` necessarily read (1) and
+// (2) as the same fact, and — wherever it used a truthy check like `if
+// (!result)` — case (3) as well. `gitCmdResult` is the separated primitive;
+// `gitCmd` below is now a thin, byte-identical-behavior wrapper over it, kept
+// so every existing caller (`gdgraph/staleness.ts`, `sync/diff.ts`,
+// `commands/wiki.ts`, …) is unaffected. New or updated callers that need to
+// tell "could not run" apart from "ran and refused" apart from "ran and said
+// nothing" should call `gitCmdResult` directly instead of adding another
+// ad hoc null check.
+export type GitCmdResult =
+  | { kind: "ok"; stdout: string }
+  | { kind: "spawn-error"; message: string }
+  | { kind: "exit-error"; code: number | null; stderr: string };
+
+export function gitCmdResult(cwd: string, args: string[]): Promise<GitCmdResult> {
   return new Promise((resolve) => {
     try {
-      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
+      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
       let out = "";
+      let err = "";
       child.stdout?.on("data", (chunk) => {
         out += String(chunk);
       });
-      child.on("error", () => resolve(null));
-      child.on("close", (code) => resolve(code === 0 ? out.trim() : null));
-    } catch {
-      resolve(null);
+      child.stderr?.on("data", (chunk) => {
+        err += String(chunk);
+      });
+      child.on("error", (error) => {
+        resolve({ kind: "spawn-error", message: error instanceof Error ? error.message : String(error) });
+      });
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve({ kind: "ok", stdout: out.trim() });
+        } else {
+          resolve({ kind: "exit-error", code, stderr: err.trim() });
+        }
+      });
+    } catch (error) {
+      resolve({ kind: "spawn-error", message: error instanceof Error ? error.message : String(error) });
     }
   });
+}
+
+// Run a git command, returning trimmed stdout or null on any failure.
+//
+// Back-compat surface, deliberately unchanged: `null` still means "spawn
+// error OR non-zero exit", and a genuinely empty successful result still
+// comes back as `""` (not `null`) exactly as before — verified against
+// `gitCmdResult` directly in `provenance.test.ts` so this stays true.
+export async function gitCmd(cwd: string, args: string[]): Promise<string | null> {
+  const result = await gitCmdResult(cwd, args);
+  return result.kind === "ok" ? result.stdout : null;
 }
 
 export async function gitHead(cwd: string): Promise<{ commit: string; branch: string } | null> {

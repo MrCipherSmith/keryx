@@ -50,7 +50,7 @@ describe("buildAblationRun", () => {
     expect(run.rates?.taskSuccess?.successes).toBe(3);
     expect(run.rates?.taskSuccess?.n).toBe(3);
     expect(run.rates?.taskSuccess?.rate).toBe(1);
-    expect(run.rates?.taskSuccess?.ci95.lower).toBeGreaterThan(0);
+    expect(run.rates?.taskSuccess?.ci95?.lower).toBeGreaterThan(0);
   });
 
   test("tool-call distribution carries one sample per seed with a real median/spread", () => {

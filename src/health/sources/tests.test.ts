@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -129,6 +130,17 @@ test("health run over a testing report with an incomplete context reports a bloc
     "import { expect, test } from 'bun:test';\ntest('ok', () => expect(1).toBe(1));\n",
   );
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  // Flow 237 T6 defect 4: `compatibleReportForHealth`'s "file"/"module"
+  // branch now goes through `loadCompatibleTestingReport`'s gitRef/scope
+  // guard like every other scope kind (it no longer bypasses it) — a real
+  // commit is needed so the report `runTesting` writes below and the
+  // `runHealth` read after it agree on the current gitRef. Committed BEFORE
+  // locking "src/locked" so `git add`/`commit` do not need to read into it.
+  execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "test"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["add", "-A"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd: root, stdio: "ignore" });
   await chmod(path.join(root, "src", "locked"), 0o000);
 
   try {
@@ -150,10 +162,12 @@ test("health run over a testing report with an incomplete context reports a bloc
 
     const { report } = await runHealth({
       cwd: root,
-      // "file" scope makes the health source load the report directly
-      // (`compatibleReportForHealth`'s fallback branch) instead of requiring
-      // a git-ref/scope match irrelevant to this finding.
-      scope: { kind: "file", path: "src/visible.test.ts" },
+      // "file" scope, path matching `report.scope` ("src/visible", the
+      // `runTesting` call's own `scope` above via `describeScope`) — this
+      // now has to match `loadCompatibleTestingReport`'s gitRef AND scope
+      // check to be imported at all; the git commit above is what makes
+      // that match possible.
+      scope: { kind: "file", path: "src/visible" },
       sources: ["tests"],
     });
 
@@ -201,6 +215,82 @@ test("a corrupted testing report on disk is recorded as missing, never as a sile
     expect(testsInfo?.status).toBe("missing");
     expect(testsInfo?.status).not.toBe("available");
     expect(testsInfo?.findings).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 237 T6 defect 4 (AFC-28/AC-28, "a package grants no rights of its own
+// and an old test pass is not reused as evidence for new code"):
+// `loadCompatibleTestingReport` (src/testing/service.ts) exists specifically
+// to guard against reusing a testing report from a DIFFERENT commit — it
+// checks `report.gitRef` against the current `git rev-parse` before treating
+// a report as usable evidence. Before this fix, `compatibleReportForHealth`'s
+// fallback branch (for `scopeSelector.kind` "module"/"file") called
+// `loadTestingReport` directly, going around that guard entirely: any report
+// on disk, from any commit, was treated as importable evidence for the
+// current tree.
+test("a testing report from a different commit is not imported as evidence for a file-scoped health run (compatible-report guard is not bypassed)", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-health-tests-stale-scope-bypass");
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject", "data", "testing", "artifacts"), { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: root, stdio: "ignore" });
+    execFileSync("git", ["config", "user.name", "test"], { cwd: root, stdio: "ignore" });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    execFileSync("git", ["add", "-A"], { cwd: root, stdio: "ignore" });
+    execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd: root, stdio: "ignore" });
+
+    // A testing report on disk scoped to exactly the file a "file"-scoped
+    // health run below asks about — but recorded against a commit that is
+    // NOT this fixture's real HEAD (a stale/foreign gitRef).
+    const staleReport: TestingReport = {
+      schemaVersion: 1,
+      generatedAt: new Date(Date.now() - 86_400_000).toISOString(),
+      gitRef: "0000000",
+      status: "pass",
+      scope: "src/a.ts",
+      runner: "bun test",
+      command: "bun test",
+      exitCode: 0,
+      durationMs: 1,
+      counts: { passed: 1, failed: 0, skipped: 0, total: 1 },
+      context: { status: "complete", incompleteReasons: [] },
+      selection: {
+        changed: false,
+        strategies: [],
+        selectedTests: [],
+        changedFiles: [],
+        fallback: "none",
+        smokeTests: [],
+      },
+      failures: [],
+      relatedFiles: [],
+      relatedSkills: [],
+      rawLogPath: null,
+    };
+    await writeFile(
+      path.join(root, ".metaproject", "data", "testing", "artifacts", "latest.json"),
+      JSON.stringify(staleReport, null, 2),
+      "utf8",
+    );
+
+    const fileCtx = {
+      cwd: root,
+      scopeSelector: { kind: "file", path: "src/a.ts" },
+      // No test files of its own in this scope-selection sense (the report
+      // above is the only would-be evidence) — if the stale report is
+      // (wrongly) accepted, `detect()` reports "available"; if it is
+      // correctly rejected, `detect()` falls through to "no test files" and
+      // reports "skipped".
+      sourceFiles: [],
+    } as unknown as HealthContext;
+
+    const status = await testsAdapter.detect(fileCtx);
+
+    expect(status).toBe("skipped");
+    expect(status).not.toBe("available");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

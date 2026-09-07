@@ -200,13 +200,38 @@ export type BenchmarkCost = {
 
 // A rate (detection / task-success / containment) reported with an explicit n and a
 // 95% Wilson confidence interval. A bare rate without n or CI is not publishable.
-export type RateWithCI = {
+export type MeasuredRate = {
   successes: number;
+  /** Strictly positive: a rate without trials is an `UnmeasuredRate`, not this. */
   n: number;
   rate: number;
   ci95: { lower: number; upper: number };
   reliability: Reliability;
+  incomplete?: undefined;
 };
+
+// The honest counterpart: there were no trials, so there is no rate and no interval.
+// `rate` and `ci95` are `null` rather than `0` / `{0, 0}` deliberately — a numeric zero
+// with a zero-width interval is indistinguishable from a measured, unanimous failure, and
+// a consumer that reads the number without reading `reliability` cannot tell them apart.
+// Making both fields non-numeric means arithmetic on them is a *type error*, not a quietly
+// wrong result (metrics-and-validation.md §M07: "Неполная подготовка → INCOMPLETE, не
+// нулевой recall").
+export type UnmeasuredRate = {
+  successes: 0;
+  n: 0;
+  rate: null;
+  ci95: null;
+  reliability: Reliability;
+  incomplete: "no-trials";
+};
+
+export type RateWithCI = MeasuredRate | UnmeasuredRate;
+
+/** Narrow a rate to the variant that actually carries a number and an interval. */
+export function isMeasuredRate(rate: RateWithCI): rate is MeasuredRate {
+  return rate.rate !== null && rate.ci95 !== null;
+}
 
 // Judge panel: exactly three independent judges score 0-2. `strict` = all three score 2;
 // `lenient` = at least two of three score 2. Both derived flags are recorded so a reader
@@ -220,15 +245,20 @@ export type JudgePanel = {
 };
 
 // 95% Wilson score interval for a binomial proportion. z defaults to the 95% two-sided
-// critical value. Returns the point rate plus the interval, clamped to [0, 1].
+// critical value. Returns the point rate plus the interval, clamped to [0, 1], or `null`
+// when there is no denominator to compute it from. `null` rather than a collapsed
+// {0, 0, 0}: with no trials there is no point estimate and no interval, and returning
+// zeros here is what let a fabricated "0% with zero uncertainty" propagate upward.
 export const WILSON_Z_95 = 1.959963984540054;
+
+export type WilsonInterval = { rate: number; lower: number; upper: number };
 
 export function wilsonInterval(
   successes: number,
   n: number,
   z: number = WILSON_Z_95,
-): { rate: number; lower: number; upper: number } {
-  if (!Number.isFinite(n) || n <= 0) return { rate: 0, lower: 0, upper: 0 };
+): WilsonInterval | null {
+  if (!Number.isFinite(n) || n <= 0) return null;
   const p = successes / n;
   const z2 = z * z;
   const denom = 1 + z2 / n;
@@ -238,10 +268,22 @@ export function wilsonInterval(
   return { rate: p, lower: clamp(center - margin), upper: clamp(center + margin) };
 }
 
-// Build a fully-formed RateWithCI from a count, deriving the 95% Wilson CI.
+// Build a fully-formed RateWithCI from a count, deriving the 95% Wilson CI. With no
+// trials (n <= 0, or a non-finite n) there is nothing to derive: the result is an
+// `UnmeasuredRate` carrying nulls and an explicit `incomplete: "no-trials"` marker, so a
+// stratum with no eligible tasks reports an absence rather than a confident 0%.
 export function deriveRate(successes: number, n: number, reliability: Reliability): RateWithCI {
-  const { rate, lower, upper } = wilsonInterval(successes, n);
-  return { successes, n, rate, ci95: { lower, upper }, reliability };
+  const interval = wilsonInterval(successes, n);
+  if (!interval) {
+    return { successes: 0, n: 0, rate: null, ci95: null, reliability, incomplete: "no-trials" };
+  }
+  return {
+    successes,
+    n,
+    rate: interval.rate,
+    ci95: { lower: interval.lower, upper: interval.upper },
+    reliability,
+  };
 }
 
 // Derive a judge panel's strict/lenient flags from three raw 0-2 scores.
@@ -478,6 +520,13 @@ function validateRate(label: string, rate: RateWithCI | undefined, errors: strin
   if (!RELIABILITIES.has(rate.reliability)) {
     errors.push(`${label}: numeric value without a reliability level`);
   }
+  // An honestly-marked no-trials rate is a real value elsewhere (a report may carry it as
+  // INCOMPLETE), but it is not a scored outcome: a manifest is a record of measurements,
+  // so a run whose rate has no denominator does not belong in one.
+  if (!isMeasuredRate(rate)) {
+    errors.push(`${label}: rate derived from no trials (n = 0) — report it as incomplete, not as a scored outcome`);
+    return;
+  }
   if (typeof rate.n !== "number" || !Number.isFinite(rate.n) || rate.n <= 0) {
     errors.push(`${label}: rate reported without an explicit n`);
     return;
@@ -494,6 +543,10 @@ function validateRate(label: string, rate: RateWithCI | undefined, errors: strin
     return;
   }
   const expected = wilsonInterval(rate.successes, rate.n);
+  if (!expected) {
+    errors.push(`${label}: rate reported without an explicit n`);
+    return;
+  }
   if (Math.abs(rate.ci95.lower - expected.lower) > 1e-6 || Math.abs(rate.ci95.upper - expected.upper) > 1e-6) {
     errors.push(`${label}: confidence interval does not match the 95% Wilson interval`);
   }

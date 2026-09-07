@@ -11,10 +11,12 @@
 // reset `process.exitCode`).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gdgraphCommand } from "./gdgraph";
+import { recordProvenance } from "../sync/provenance";
 
 describe("keryx gdgraph affected — unknown target vs. indexed-with-no-edges", () => {
   let root = "";
@@ -235,5 +237,102 @@ describe("keryx gdgraph symbol — explicit symbol requirement (AFC-13/AC5, T19 
     expect(payload.message.length).toBeGreaterThan(0);
     expect(payload.remedy.length).toBeGreaterThan(0);
     expect(loggedErr.join("\n")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 237 T6 defect 1 (AFC-28/AC-28, "a check that could not run is unknown
+// rather than passed"): `checkGraphStaleness` (src/gdgraph/staleness.ts)
+// returns a tri-state {fresh, stale, unknown} result with reasons — written
+// exactly so a git failure never collapses into the same answer as a
+// confirmed stale graph. Before this fix, `printStaleNote` (this file) only
+// ever called the boolean wrapper `graphMaybeStale`, which maps BOTH "stale"
+// and "unknown" to `true` and then always printed the same
+// "repo moved since the last graph build" `STALE_NOTE` — so a git failure
+// (graph freshness genuinely unknown) read to the CLI's own reader as a
+// confident, specific claim ("repo moved") that was not actually established,
+// and the structured reasons were discarded outright.
+// ---------------------------------------------------------------------------
+
+describe("keryx gdgraph find/path/symbol — staleness note carries the tri-state result, not a collapsed boolean", () => {
+  let root = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let originalLog: typeof console.log;
+
+  beforeEach(async () => {
+    cwd = process.cwd();
+    loggedOut = [];
+    originalLog = console.log;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    if (root) {
+      await rm(root, { recursive: true, force: true });
+      root = "";
+    }
+  });
+
+  test("a git failure (graph freshness genuinely unknown) is never reported as the confident 'repo moved' claim", async () => {
+    // Deliberately NOT a git repository (and not nested inside one via
+    // mkdtemp under the OS tmp dir) — `git rev-parse HEAD` fails here, which
+    // is exactly the trigger `checkGraphStaleness` maps to `status: "unknown"`
+    // (see gdgraph/staleness.ts's own doc comment: "a git failure never
+    // becomes fresh" — and, per this task, must never silently become the
+    // stale wording either).
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-stale-unknown-"));
+    process.chdir(root);
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
+
+    await gdgraphCommand(["find", "a.ts"]);
+
+    const output = loggedOut.join("\n");
+    // The defect: this exact string is what the pre-fix code printed for
+    // EVERY non-fresh result, including a plain git failure.
+    expect(output).not.toContain("note: repo moved since the last graph build");
+    // The tri-state's own reason must reach this surface instead of being
+    // discarded by the boolean collapse.
+    expect(output).toContain("git rev-parse HEAD failed");
+  });
+
+  test("a real stale trigger (untracked file) surfaces checkGraphStaleness's specific reason, not just a generic note", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-stale-reason-"));
+    process.chdir(root);
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "test"], { cwd: root });
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
+    execFileSync("git", ["add", "-A"], { cwd: root });
+    execFileSync("git", ["commit", "-q", "-m", "initial build fixture"], { cwd: root });
+    await recordProvenance(root, "gdgraph", new Date().toISOString());
+    // The trigger: an untracked file added to the working tree after the
+    // graph was built — `checkGraphStaleness`'s reason for this is specific
+    // ("an untracked or newly added file exists in the working tree"), not
+    // just the generic STALE_NOTE wording.
+    await writeFile(path.join(root, "src", "untracked.ts"), "export const u = 1;\n");
+
+    await gdgraphCommand(["find", "a.ts"]);
+
+    const output = loggedOut.join("\n");
+    expect(output).toContain("an untracked or newly added file exists in the working tree");
   });
 });

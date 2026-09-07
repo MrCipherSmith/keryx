@@ -6,9 +6,9 @@ import path from "node:path";
 import type { GraphData } from "../gdgraph/types";
 import { recordProvenance } from "../sync/provenance";
 import {
-  checkPageStalenessGate,
   computePageNodeHash,
   isPageUnchangedSinceLastEnrich,
+  resolveWikiSourceGate,
 } from "./staleness";
 
 async function tempRepo(): Promise<string> {
@@ -19,20 +19,22 @@ function git(cwd: string, args: string[]): void {
   execFileSync("git", args, { cwd, stdio: "ignore" });
 }
 
-// AFC-10 (flow 234, phase 2): `checkPageStalenessGate` delegates to
-// `graphMaybeStale` (`gdgraph/staleness.ts`), which now runs real `git`
-// commands (`git rev-parse HEAD`, `git status --porcelain`) and — per the
-// frozen AC3 criterion this task enforces — treats ANY git failure as
-// `"unknown"`, never as `"fresh"`. A bare temp directory with a hand-written
-// `.git/HEAD` file (the old fixture below `tempRepo()`) is not a real
-// repository: `git rev-parse HEAD` genuinely fails against it, so the gate
-// correctly reports `repoMaybeStale: true` there now — which is exactly the
-// defect AC3 requires eliminating, not a fixture that happens to demonstrate
-// "not stale". `makeBuiltFixture()` instead builds a REAL repo with a real
-// commit and matching build provenance, mirroring `gdgraph/staleness.test.ts`,
-// so the "build postdates HEAD" / "HEAD postdates build" conditions this pair
-// of tests names are genuinely true rather than faked via mtimes on files
-// `graphMaybeStale` no longer reads.
+// AFC-10 (flow 234, phase 2) / AFC-08 (flow 236 T8): the wiki-side gate runs
+// real `git` commands through `checkGraphStaleness` (`gdgraph/staleness.ts`)
+// and — per the frozen AC3 criterion — treats ANY git failure as `"unknown"`,
+// never as `"fresh"`. A bare temp directory with a hand-written `.git/HEAD`
+// file (the old fixture below `tempRepo()`) is not a real repository: `git
+// rev-parse HEAD` genuinely fails against it. `makeBuiltFixture()` instead
+// builds a REAL repo with a real commit and matching build provenance,
+// mirroring `gdgraph/staleness.test.ts`, so the "graph built at HEAD" /
+// "HEAD moved past the build" conditions these tests name are genuinely true.
+//
+// These two tests previously exercised `checkPageStalenessGate`, which flow
+// 236's inventory measured as having zero non-test callers — a capability whose
+// only remaining proof of life was this file. It has been replaced by
+// `resolveWikiSourceGate`, which `refreshPages`, `verifyPages` and `wikiCollect`
+// actually call; the fixtures are unchanged so the same two conditions are
+// still demonstrated, now against something the product uses.
 async function makeBuiltFixture(): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "gd-wiki-staleness-built-"));
   git(dir, ["init", "-q"]);
@@ -125,31 +127,57 @@ test("T5/isPageUnchangedSinceLastEnrich — true only when a hash is recorded an
   expect(isPageUnchangedSinceLastEnrich("components/alpha.md", "abc123", undefined)).toBe(false);
 });
 
-test("T5/checkPageStalenessGate — repoMaybeStale false when the graph build postdates .git/HEAD", async () => {
+test("T8/resolveWikiSourceGate — a graph built at HEAD may stamp that head", async () => {
   const cwd = await makeBuiltFixture();
   try {
     // Nothing has moved since `makeBuiltFixture()` committed and recorded
-    // provenance for that same commit ⇒ the repo has not moved since the
-    // build ⇒ not stale.
-    const gate = await checkPageStalenessGate(cwd);
-    expect(gate.repoMaybeStale).toBe(false);
+    // provenance for that same commit ⇒ the source saw this revision ⇒ a
+    // generator may stamp it.
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const gate = await resolveWikiSourceGate(cwd, head);
+    expect(gate.status).toBe("fresh");
+    expect(gate.stampableHead).toBe(head);
+    expect(gate.preserveGenerated).toBe(false);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });
 
-test("T5/checkPageStalenessGate — repoMaybeStale true when .git/HEAD postdates the graph build", async () => {
+test("T8/resolveWikiSourceGate — a head the graph never saw is not stampable", async () => {
   const cwd = await makeBuiltFixture();
   try {
     // A new commit lands after the graph was built ⇒ HEAD has moved past the
-    // commit recorded in build provenance ⇒ the repo moved since ⇒ maybe stale.
+    // commit recorded in build provenance ⇒ the source is stale, and the new
+    // head must not be stamped as if the source had read it.
     await writeFile(path.join(cwd, "src", "b.ts"), "export const b = 1;\n");
     git(cwd, ["add", "-A"]);
     git(cwd, ["commit", "-q", "-m", "a new commit after the graph was built"]);
 
-    const gate = await checkPageStalenessGate(cwd);
-    expect(gate.repoMaybeStale).toBe(true);
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const gate = await resolveWikiSourceGate(cwd, head);
+    expect(gate.status).toBe("stale");
+    expect(gate.stampableHead).toBeNull();
+    // Stale is not an error: the block may still be regenerated.
+    expect(gate.preserveGenerated).toBe(false);
+    expect(gate.reasons.join(" ")).toContain("HEAD moved");
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
+});
+
+test("T8/resolveWikiSourceGate — a git failure is unknown, and preserves only when a head exists", async () => {
+  const broken = async () => ({ status: "unknown" as const, reasons: ["git status failed"] });
+
+  // A project with no git at all: `unknown` is the expected steady state and
+  // there is no revision to over-claim, so generation proceeds as before.
+  const noGit = await resolveWikiSourceGate("/nonexistent", undefined, broken);
+  expect(noGit.status).toBe("unknown");
+  expect(noGit.stampableHead).toBeNull();
+  expect(noGit.preserveGenerated).toBe(false);
+
+  // A head that resolves while the staleness check's git calls fail is a
+  // genuinely broken repository — preserve the existing block.
+  const partial = await resolveWikiSourceGate("/nonexistent", "f".repeat(40), broken);
+  expect(partial.preserveGenerated).toBe(true);
+  expect(partial.stampableHead).toBeNull();
 });

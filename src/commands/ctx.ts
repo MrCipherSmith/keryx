@@ -219,7 +219,10 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
     exitCode: result.exitCode,
   });
 
-  printArtifactSummary(artifact, summary);
+  // rg/read are the two callers where nothing downstream depends on the
+  // pointer trailer (see printArtifactSummary) — suppress it once the body
+  // shown above already IS the full content.
+  printArtifactSummary(artifact, summary, { alwaysShowPointer: false });
   process.exitCode = result.exitCode;
 }
 
@@ -263,7 +266,7 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
     exitCode: 0,
   });
 
-  printArtifactSummary(artifact, summary);
+  printArtifactSummary(artifact, summary, { alwaysShowPointer: false });
 }
 
 async function runAndSummarize(
@@ -1210,8 +1213,29 @@ function groupBy<T>(items: T[], getKey: (item: T) => string): Map<string, T[]> {
   return grouped;
 }
 
-function printArtifactSummary(artifact: CtxArtifact, summary: string): void {
+// Defect (flow 238 / phase 6 / T5, #1): a four-byte `ctx read` printed 311
+// bytes and a single-hit `ctx rg` printed ~490-520 — the raw/summary pointer
+// trailer below was unconditional, so it cost tens of times the payload on
+// small input. The trailer earns its keep only when the body above is NOT
+// the whole story: `artifact.truncated` (compaction actually cut something)
+// means the printed body is partial, so a pointer to the full raw copy is
+// the tool's "expandable without re-reading" contract. When nothing was cut,
+// the body already IS everything — the same pointer would be pure overhead.
+//
+// `alwaysShowPointer` lets `run`/`diff` keep their unconditional trailer
+// (existing callers, e.g. the "writes to the project root" regression test,
+// key off its presence regardless of size) while `read`/`rg` — the two
+// commands the small-input defect was measured on — drop it once
+// `artifact.truncated` is false.
+function printArtifactSummary(
+  artifact: CtxArtifact,
+  summary: string,
+  { alwaysShowPointer = true }: { alwaysShowPointer?: boolean } = {},
+): void {
   console.log(summary.trimEnd());
+  if (!alwaysShowPointer && !artifact.truncated) {
+    return;
+  }
   console.log("");
   if (artifact.truncated && artifact.bytesIn > 0) {
     const savedPct = Math.round((1 - artifact.bytesOut / artifact.bytesIn) * 100);

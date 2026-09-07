@@ -6,6 +6,7 @@ import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
 import { collectPages } from "./collect";
+import { resolveWikiSourceGate } from "./staleness";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -284,8 +285,19 @@ export async function wikiCollect(input: WikiCollectInput): Promise<WikiCollectR
   }
 
   const index = await wikiGenerateIndex(input.cwd);
-  const { recordProvenance } = await import("../sync/provenance");
-  await recordProvenance(input.cwd, "gdwiki", generatedAt);
+  // AFC-08 (flow 236 T8): `recordProvenance` stamps the CURRENT commit as the
+  // revision gdwiki was synced at. Run over a graph built six commits ago that
+  // is the same forged freshness `wiki refresh` was stamping onto pages: `keryx
+  // sync` would then report gdwiki as current when its content came from an
+  // older source. When the source is not demonstrably fresh the record is
+  // skipped, so the previous (older, or absent) provenance stands and sync
+  // under-claims instead of over-claiming — the failure direction that leads
+  // someone to rebuild rather than to trust.
+  const sourceGate = await resolveWikiSourceGate(input.cwd, undefined);
+  if (sourceGate.status === "fresh") {
+    const { recordProvenance } = await import("../sync/provenance");
+    await recordProvenance(input.cwd, "gdwiki", generatedAt);
+  }
   return {
     generatedAt,
     created: pages.filter((page) => page.action === "created").length,

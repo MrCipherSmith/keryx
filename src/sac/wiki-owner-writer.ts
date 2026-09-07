@@ -22,8 +22,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
-import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
-import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
+import type { KnowledgeOwner, OwnerReceipt, OwnerWriteFailure, OwnerWriteIntent } from "./guarded-owner-writer";
+import { applyGuardedTargetWrite, ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence, recoverStagedOwnerWrite, targetAbsolutePath } from "./proposal-evidence";
 
 /** Build a wiki decision page (src/wiki/templates.ts renderWikiPage's section
  * shape) from real, hash-verified evidence — never from unverified prose. */
@@ -86,9 +86,18 @@ function wikiPageRelativePath(proposalId: string): string {
 export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; now?: () => Date }): {
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
   recover: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
-  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | { ok: false; code: string }>;
+  recoverReceipt: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
+  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | OwnerWriteFailure>;
 } {
   const now = opts?.now ?? (() => new Date());
+
+  /** Replays exactly what `persist` staged — the same bytes to the same path. */
+  const applyStaged = async (staged: Record<string, unknown>): Promise<{ ok: true } | OwnerWriteFailure> => {
+    const relativePath = staged.relativePath as string;
+    const content = staged.content as string;
+    await writeFileAtomic(path.join(cwd, ".metaproject", "wiki", relativePath), content);
+    return { ok: true };
+  };
 
   return {
     async authorize(intent) {
@@ -105,6 +114,14 @@ export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; n
       } catch {
         return undefined;
       }
+    },
+
+    // AFC-27 / flow 237 AC1: the non-mutating restart question. `recover` above
+    // only sees a COMMITTED receipt, which is exactly the state a crash in the
+    // write window does not leave; this also finishes an interrupted write from
+    // this owner's own staging and returns the receipt that attempt prepared.
+    async recoverReceipt(intent) {
+      return recoverStagedOwnerWrite({ cwd, owner: "wiki", intent, apply: applyStaged });
     },
 
     async persist(intent) {
@@ -129,8 +146,6 @@ export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; n
       const output = prepareOutputForPersistence(guard, content);
       if (!output.allowed) return { ok: false, code: `security_gate_${output.reason}` };
 
-      await writeFileAtomic(path.join(cwd, ".metaproject", "wiki", relativePath), output.content);
-
       // receiptRef/targetRef are schema-typed as workspace-relative `path`s (no `#`,
       // no query strings — see workspace-proposal.schema.json's `path` pattern), so
       // this is a distinct logical path, not a URL-style fragment on targetRef.
@@ -139,8 +154,28 @@ export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; n
         targetRef: `./wiki/${relativePath}`,
         completedAt: now().toISOString(),
       };
-      await writeFileAtomic(ownerReceiptPath(cwd, "wiki", intent.workspaceId, intent.idempotencyKey), `${JSON.stringify(receipt, null, 2)}\n`);
-      return receipt;
+      // Compare against the base, stage the receipt, then write the page. The
+      // page is no longer the first durable thing this function does, and it is
+      // no longer written at all when the target holds bytes this owner cannot
+      // account for.
+      return applyGuardedTargetWrite({
+        cwd,
+        owner: "wiki",
+        intent,
+        receipt,
+        staged: { relativePath, content: output.content },
+        // This owner writes the target's bytes itself, so it knows exactly what
+        // the page will hash to — which lets recovery tell "already applied"
+        // from "not yet applied" without re-writing anything.
+        predictedContent: output.content,
+        proposedContent: output.content,
+        apply: applyStaged,
+      });
     },
   };
+}
+
+/** Absolute path of the wiki page a proposal writes — the target of its base-version check. */
+export function wikiTargetPath(cwd: string, proposalId: string): string {
+  return targetAbsolutePath(cwd, `./wiki/${wikiPageRelativePath(proposalId)}`);
 }

@@ -1,5 +1,6 @@
 import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedModule } from "../sync/provenance";
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
+import { describeSourceGate, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
 
 // `keryx sync` — reconcile the derived artifacts (graph, wiki, memory) with the
 // current code. Each artifact records the commit it was built from (provenance);
@@ -49,8 +50,8 @@ export async function syncCommand(args: string[]): Promise<void> {
     if (!provenance) {
       anyStale = true;
       if (apply) {
-        await applyModule(cwd, module, null, at);
-        console.log("  → built + provenance recorded (baseline)");
+        const outcome = await applyModule(cwd, module, null, at);
+        printApplyOutcome(outcome, "  → built + provenance recorded (baseline)", "  → built; provenance NOT recorded (baseline)");
       } else {
         console.log("  no provenance — run `keryx sync --apply` to build + record a baseline");
       }
@@ -74,9 +75,11 @@ export async function syncCommand(args: string[]): Promise<void> {
     if (diff === null) {
       anyStale = true;
       if (apply) {
-        await applyModule(cwd, module, null, at);
-        console.log(
+        const outcome = await applyModule(cwd, module, null, at);
+        printApplyOutcome(
+          outcome,
           `  → rebuilt from scratch; provenance named ${provenance.commit.slice(0, 8)}, which this repository does not have`,
+          "  → rebuilt from scratch; provenance NOT re-recorded",
         );
       } else {
         console.log(
@@ -103,8 +106,8 @@ export async function syncCommand(args: string[]): Promise<void> {
     for (const f of code.added.slice(0, 5)) console.log(`    + ${f}`);
     for (const f of code.deleted.slice(0, 5)) console.log(`    - ${f}`);
     if (apply) {
-      await applyModule(cwd, module, provenance.commit, at);
-      console.log("  → updated + provenance advanced");
+      const outcome = await applyModule(cwd, module, provenance.commit, at);
+      printApplyOutcome(outcome, "  → updated + provenance advanced", "  → updated; provenance NOT advanced");
       if (module === "gdwiki" && code.deleted.length > 0) {
         const { wikiPruneOrphans } = await import("../wiki/service");
         const prune = await wikiPruneOrphans(cwd);
@@ -124,12 +127,54 @@ export async function syncCommand(args: string[]): Promise<void> {
   }
 }
 
+/** Print an `applyModule` outcome honestly: the gate's reasons when it declined to record. */
+function printApplyOutcome(
+  outcome: { recorded: boolean; gate?: WikiSourceGate },
+  recordedLine: string,
+  skippedLine: string,
+): void {
+  if (outcome.recorded) {
+    console.log(recordedLine);
+    return;
+  }
+  console.log(`${skippedLine} — ${describeSourceGate(outcome.gate!)}`);
+  for (const reason of outcome.gate?.reasons ?? []) {
+    console.log(`    - ${reason}`);
+  }
+}
+
+// AFC-08 (flow 236 T9): `wikiCollect` (`../wiki/service.ts`) already declines
+// to advance gdwiki's OWN internal provenance record when `resolveWikiSourceGate`
+// finds the code graph is not demonstrably fresh — the gate a sibling lane put
+// inside the collector so `keryx sync` can never claim gdwiki reflects a
+// source it did not actually read. This function used to call
+// `recordProvenance(cwd, module, at)` again, unconditionally, for every
+// module right after applying it — including gdwiki. That second, ungated
+// write re-stamped gdwiki's provenance at the current commit regardless of
+// what the gate had just decided, going around it entirely. Measured live: a
+// fixture where gdgraph/memory already read "up to date" to sync's own
+// commit-diff check (so their branches in the loop never ran) but the graph
+// was genuinely stale by `checkGraphStaleness`'s own git-status signal (an
+// untracked file) recorded gdwiki's provenance at HEAD anyway
+// (`sync.test.ts`).
+//
+// The fix re-checks the SAME gate here — `resolveWikiSourceGate`, not a
+// second freshness mechanism — before the shared `recordProvenance` call, and
+// only for the module that carries the gate at all. Chosen over "record
+// something else" or "refuse the apply": `wikiCollect` itself already applies
+// (writes the page tree) and simply skips advancing ITS OWN provenance when
+// not fresh, leaving the previous (older, or absent) record standing — an
+// under-claim, never an over-claim. This mirrors that choice exactly rather
+// than inventing a third answer (e.g. stamping an "unknown" sentinel), and
+// keeps gdgraph/memory's existing unconditional recording unchanged: neither
+// module has an equivalent staleness gate today, and gdgraph's own apply step
+// (`gdgraph build`) always makes itself the fresh ground truth by definition.
 async function applyModule(
   cwd: string,
   module: SyncedModule,
   base: string | null,
   at: string,
-): Promise<void> {
+): Promise<{ recorded: boolean; gate?: WikiSourceGate }> {
   if (module === "gdgraph") {
     const { gdgraphCommand } = await import("./gdgraph");
     await gdgraphCommand(["build"]);
@@ -137,11 +182,16 @@ async function applyModule(
     const { wikiCollect, wikiGenerateIndex } = await import("../wiki/service");
     await wikiCollect({ cwd, changed: base !== null, ...(base ? { since: base } : {}) });
     await wikiGenerateIndex(cwd);
+    const gate = await resolveWikiSourceGate(cwd, undefined);
+    if (gate.status !== "fresh") {
+      return { recorded: false, gate };
+    }
   } else if (module === "memory") {
     const { memoryCommand } = await import("./memory");
     await memoryCommand(["index"]);
   }
   await recordProvenance(cwd, module, at);
+  return { recorded: true };
 }
 
 function printHelp(): void {

@@ -1,10 +1,15 @@
 // Pure, deterministic, I/O-free IR (information-retrieval) metric primitives for the
 // metastore ladder's oracle metrics (see docs/requirements/keryx-benchmark-suite/
 // metrics-and-validation.md and OracleMetrics in ./benchmark.ts: precision, recall, f1,
-// ndcg, recallAtK, factPreservation). These functions return plain numbers in [0, 1];
-// the caller is responsible for wrapping a result in a `BenchmarkValue` with an explicit
-// `reliability` level — this module never fabricates a reliability tag and never touches
-// I/O.
+// ndcg, recallAtK, factPreservation). Most of these functions return plain numbers in
+// [0, 1]; `precision`/`recall` return `number | null` — `null` on their own empty-
+// denominator case, meaning "unmeasured", never a fabricated in-range number (see their
+// doc comments) — while f1/ndcg/recallAtK/factPreservation keep their own, separately
+// documented vacuous-value conventions and always return a plain number. The caller is
+// responsible for wrapping a non-null result in a `BenchmarkValue` with an explicit
+// `reliability` level, and for OMITTING (never null-valuing) a manifest field whose
+// measurement came back `null` — this module never fabricates a reliability tag and never
+// touches I/O.
 //
 // Duplicate-ID rule: everywhere an ID set is required (precision/recall/f1/
 // factPreservation), duplicate IDs are deduped via `Set` before comparison — an ID
@@ -33,17 +38,30 @@ function dedupeRanked(rankedRetrieved: readonly string[]): string[] {
 /**
  * Precision = |retrieved ∩ relevant| / |retrieved|, over deduped ID sets (order-independent).
  *
- * Edge case: an empty retrieved set has no denominator. Defined as 1 — retrieving
- * nothing relevant-or-not contains no false positive, so precision is vacuously perfect.
- * This mirrors the convention used for `recall` below (empty target set => 1) and avoids
- * silently returning 0 or NaN for a set with no elements to be wrong about.
+ * Edge case: an empty retrieved set has no denominator — there is nothing to compute a
+ * proportion of. Returns `null`, not a number: RESOLVED 2026-09-07, flow 238/T8 (this
+ * function previously returned `1`, "vacuously perfect" — see git history / flow 238/T7's
+ * decision record for the prior reasoning and why it was wrong). An absence of data is not
+ * a confident score, in either direction: `1` here was the same class of bug this
+ * benchmark programme keeps finding elsewhere (an absence of data rendered as a confident
+ * number), just inverted — a confident PERFECT score instead of a confident zero. Making
+ * the return type `number | null` mirrors `UnmeasuredRate` in ./benchmark.ts (`rate: null`,
+ * never a fabricated `0`/zero-width CI): arithmetic on an unmeasured precision is now a
+ * compile error under this repo's `strict`/`strictNullChecks` tsconfig, not a silently
+ * plausible wrong number. Every caller (src/metrics/oracle-runner.ts scoreOracleTarget and
+ * its downstream oracleMetrics/oracleMetricsForGold/scoreTestImpactRun/scoreMemorySearchRun)
+ * was updated in this same change to OMIT the `precision` field entirely when this returns
+ * `null` — never to report it with a null value (OracleMetrics documents "present only when
+ * measured"; validatePairedBenchmarkV2's `requireMeasured` guard on `run.oracle.*` actively
+ * REJECTS a present field with `value: null`/`reliability: "unknown"`, so omission is the
+ * only valid encoding, not a stylistic choice).
  */
 export function precision(
   retrieved: readonly string[] | ReadonlySet<string>,
   relevant: readonly string[] | ReadonlySet<string>,
-): number {
+): number | null {
   const retrievedSet = toIdSet(retrieved);
-  if (retrievedSet.size === 0) return 1;
+  if (retrievedSet.size === 0) return null;
   const relevantSet = toIdSet(relevant);
   let hits = 0;
   for (const id of retrievedSet) if (relevantSet.has(id)) hits += 1;
@@ -53,16 +71,19 @@ export function precision(
 /**
  * Recall = |retrieved ∩ relevant| / |relevant|, over deduped ID sets (order-independent).
  *
- * Edge case: an empty relevant set has no denominator. Defined as 1 — there was nothing
- * relevant to miss, so recall against an empty gold set is vacuously perfect. Never
- * returns 0/NaN for this case.
+ * Edge case: an empty relevant set has no denominator. Returns `null`, not a number — same
+ * fix and same reasoning as `precision` above (RESOLVED 2026-09-07, flow 238/T8): there was
+ * nothing relevant to measure recall against, which is an absence of a gold set, not a
+ * perfect result. See `precision`'s doc comment for the full rationale (UnmeasuredRate
+ * parallel, the `requireMeasured` validator rule that makes omission mandatory, and the
+ * updated callers).
  */
 export function recall(
   retrieved: readonly string[] | ReadonlySet<string>,
   relevant: readonly string[] | ReadonlySet<string>,
-): number {
+): number | null {
   const relevantSet = toIdSet(relevant);
-  if (relevantSet.size === 0) return 1;
+  if (relevantSet.size === 0) return null;
   const retrievedSet = toIdSet(retrieved);
   let hits = 0;
   for (const id of relevantSet) if (retrievedSet.has(id)) hits += 1;
@@ -75,13 +96,26 @@ export function recall(
  * Edge case: when precision + recall === 0 (both zero, e.g. non-empty retrieved and
  * relevant sets that share nothing), the harmonic mean's denominator is zero. Defined
  * as 0 in that case, matching the standard IR convention (no overlap => no F1).
+ *
+ * `f1` is NOT part of the 2026-09-07/flow 238/T8 precision/recall fix above and keeps its
+ * own long-standing edge-case behavior unchanged (this function's return type is still a
+ * plain `number`, always present, exactly as before this change — no caller of `f1` needed
+ * updating). `precision`/`recall` now return `null` on their own empty-denominator case
+ * (see their doc comments); internally here that unmeasured signal is treated as the same
+ * neutral value their OLD vacuous-1 convention supplied for combination purposes only —
+ * `p ?? 1` / `r ?? 1` — so every case this function documents/tests produces byte-for-byte
+ * the same result as before. This is a deliberate, narrow exception: F1 is a genuine
+ * composite metric that already had its own documented zero-overlap convention, and the
+ * empty-retrieved/empty-relevant edge case was not part of this fix's scope (see
+ * src/metrics/oracle-runner.ts for the actual fix, which is scoped to `precision`/`recall`
+ * as standalone measurements).
  */
 export function f1(
   retrieved: readonly string[] | ReadonlySet<string>,
   relevant: readonly string[] | ReadonlySet<string>,
 ): number {
-  const p = precision(retrieved, relevant);
-  const r = recall(retrieved, relevant);
+  const p = precision(retrieved, relevant) ?? 1;
+  const r = recall(retrieved, relevant) ?? 1;
   const denom = p + r;
   if (denom === 0) return 0;
   return (2 * p * r) / denom;

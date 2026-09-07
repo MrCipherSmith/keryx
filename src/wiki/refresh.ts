@@ -26,6 +26,13 @@ import {
 } from "./managed-block";
 import { computeVerifiedScope, writeProvenance } from "./provenance";
 import { collectGraphWikiCandidates } from "./service";
+import {
+  describeSourceGate,
+  resolveWikiSourceGate,
+  type StalenessProbe,
+  type StalenessStatus,
+  type WikiSourceGate,
+} from "./staleness";
 import type { WikiPage } from "./types";
 
 const DEFAULT_LIMIT = 400;
@@ -35,7 +42,14 @@ export type RefreshAction =
   | "unchanged"
   | "conflict"
   | "no-block"
-  | "no-source";
+  | "no-source"
+  /**
+   * The code graph this page would be regenerated from is in error (flow 236
+   * T8 / AFC-08). The existing block is preserved and the failure is reported,
+   * rather than a page being rewritten from a source that could not be
+   * interrogated.
+   */
+  | "stale-source";
 
 export interface RefreshPageResult {
   path: string;
@@ -51,6 +65,14 @@ export interface RefreshResult {
   refreshed: number;
   unchanged: number;
   conflicts: number;
+  /** Pages left alone because the source graph was in error. */
+  staleSource: number;
+  /**
+   * What the run knew about its own input. Carried in the result — and so in
+   * `--json` — so a caller cannot mistake a run over a stale graph for a run
+   * over a current one.
+   */
+  source: { status: StalenessStatus; reasons: readonly string[]; stampedAt: string | null };
 }
 
 export interface MigrateResult {
@@ -161,14 +183,22 @@ export interface RefreshInput {
   /** Overwrite a hand-edited block. */
   force?: boolean | undefined;
   dryRun?: boolean | undefined;
-  /** Revision to stamp as `VerifiedAt`; omitted when git is unavailable. */
+  /**
+   * Revision the caller would like stamped as `VerifiedAt`; omitted when git
+   * is unavailable. It is stamped only if the source graph demonstrably saw
+   * it — see `resolveWikiSourceGate`.
+   */
   head?: string | undefined;
   now?: () => Date;
+  /** Injection seam for tests; defaults to the real `checkGraphStaleness`. */
+  checkStaleness?: StalenessProbe | undefined;
 }
 
 export async function refreshPages(input: RefreshInput): Promise<RefreshResult> {
   const cwd = input.cwd;
   const generatedAt = (input.now ?? (() => new Date()))().toISOString();
+  // AFC-08: ask how old the source is BEFORE generating anything from it.
+  const gate = await resolveWikiSourceGate(cwd, input.head, input.checkStaleness);
   const graph = await loadGraph(cwd);
   const keyFilesIndex = computeModuleKeyFiles(graph);
   const knownPaths = new Set(
@@ -188,7 +218,14 @@ export async function refreshPages(input: RefreshInput): Promise<RefreshResult> 
     (page) => input.page === undefined || page.relativePath === input.page,
   );
 
-  const result: RefreshResult = { pages: [], refreshed: 0, unchanged: 0, conflicts: 0 };
+  const result: RefreshResult = {
+    pages: [],
+    refreshed: 0,
+    unchanged: 0,
+    conflicts: 0,
+    staleSource: 0,
+    source: { status: gate.status, reasons: gate.reasons, stampedAt: gate.stampableHead },
+  };
 
   for (const page of pages) {
     const outcome = await refreshOne({
@@ -200,13 +237,16 @@ export async function refreshPages(input: RefreshInput): Promise<RefreshResult> 
       referenceBySlug,
       force: input.force === true,
       dryRun: input.dryRun === true,
-      head: input.head,
+      // NOT `input.head`: only a revision the source actually saw.
+      head: gate.stampableHead ?? undefined,
+      gate,
       generatedAt,
     });
     result.pages.push(outcome);
     if (outcome.action === "refreshed") result.refreshed += 1;
     else if (outcome.action === "unchanged") result.unchanged += 1;
     else if (outcome.action === "conflict") result.conflicts += 1;
+    else if (outcome.action === "stale-source") result.staleSource += 1;
   }
 
   return result;
@@ -222,6 +262,7 @@ async function refreshOne(input: {
   force: boolean;
   dryRun: boolean;
   head: string | undefined;
+  gate: WikiSourceGate;
   generatedAt: string;
 }): Promise<RefreshPageResult> {
   const { page } = input;
@@ -260,6 +301,18 @@ async function refreshOne(input: {
     return { path: page.relativePath, action: "unchanged" };
   }
 
+  if (input.gate.preserveGenerated) {
+    // AFC-08 / wiki-specification.md §7: "Ошибка source сохраняет старый block
+    // и видимый stale/unknown result." The block WOULD have changed, and that
+    // is exactly why it must not: the replacement was derived from a graph
+    // whose freshness we could not establish. Preserve, and say so.
+    return {
+      path: page.relativePath,
+      action: "stale-source",
+      reason: describeSourceGate(input.gate),
+    };
+  }
+
   let next = replaceManagedBlock(content, replacement);
   if (next === null) {
     return { path: page.relativePath, action: "conflict", reason: "block replacement failed" };
@@ -281,7 +334,16 @@ async function refreshOne(input: {
   });
 
   const stamp = input.head ? ` (${input.head.slice(0, 8)})` : "";
-  next = appendChangelogLine(next, `- ${version} - Reference refreshed from the code graph${stamp}.`);
+  // When the source was stale the page says so in its own changelog. Without
+  // this the only difference between a refresh from a current graph and one
+  // from a graph six commits behind is an ABSENT `VerifiedAt` line, which is
+  // far too quiet a signal to carry the difference.
+  const note =
+    input.gate.status === "stale" ? " Source graph was stale; VerifiedAt was not advanced." : "";
+  next = appendChangelogLine(
+    next,
+    `- ${version} - Reference refreshed from the code graph${stamp}.${note}`,
+  );
 
   if (!input.dryRun) {
     await writeFile(page.absolutePath, next, "utf8");
@@ -295,11 +357,25 @@ async function refreshOne(input: {
  * This is what "a human looked and confirmed" means, and it is what turns the
  * phase-1 report from all-`unknown` into a real backlog. It deliberately does
  * NOT regenerate anything: verification and repair are different claims.
+ *
+ * AFC-08 (flow 236 T8): unlike `refreshPages`, this REFUSES on any source that
+ * is not fresh rather than doing reduced work. Refresh has honest work left
+ * when the graph is old — the block it writes is genuinely what that graph
+ * says — but verify's entire product IS the freshness claim. Both of the
+ * fields it writes depend on the graph: `VerifiedAt` asserts the page was
+ * checked at a revision, and `VerifiedScope` hashes a describe-set that
+ * `resolveDescribeSet` derives from the graph's key-file index and node set,
+ * so a graph that has not seen a newly added file silently produces a scope
+ * NARROWER than the page's real surface — a verification over less than it
+ * appears to cover. There is no reduced-but-honest version of that, so the
+ * command says what is wrong and stops. The remedy is one cheap command.
  */
 export async function verifyPages(input: {
   cwd: string;
   page?: string | undefined;
   head?: string | undefined;
+  /** Injection seam for tests; defaults to the real `checkGraphStaleness`. */
+  checkStaleness?: StalenessProbe | undefined;
   /**
    * Stamp every page rather than one. Required for corpus-wide stamping and
    * named `baseline` rather than `all` on purpose: stamping 44 pages at once
@@ -314,6 +390,23 @@ export async function verifyPages(input: {
       "wiki verify: pass --page <path> to record that a page was reviewed, or --baseline to stamp the whole corpus as a measurement starting line. Stamping every page silently would assert a review that did not happen.",
     );
   }
+
+  const gate = await resolveWikiSourceGate(input.cwd, input.head, input.checkStaleness);
+  if (gate.status !== "fresh" && input.head !== undefined) {
+    // `input.head !== undefined` because a project with no git at all is
+    // supported (`init.no-git.test.ts`): there the gate can only ever say
+    // `unknown`, no `VerifiedAt` was ever going to be written, and refusing
+    // would remove the scope-hash stamping such projects rely on. The refusal
+    // is for the case where a revision WOULD have been stamped on a source
+    // that cannot support it.
+    throw new Error(
+      `wiki verify: refusing to stamp — ${describeSourceGate(gate)}. ` +
+        "Stamping VerifiedAt now would record a verification against a revision the code graph never read, " +
+        "and VerifiedScope would be computed over a describe-set resolved from that same stale graph. " +
+        "Run `keryx gdgraph build` first, then verify.",
+    );
+  }
+
   const graph = await loadGraph(input.cwd);
   const keyFilesIndex = computeModuleKeyFiles(graph);
   const knownPaths = new Set(

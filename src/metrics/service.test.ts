@@ -323,13 +323,17 @@ test("v2 oracle deterministic case validates as a single unpaired run", () => {
 
 test("wilson 95% CI helper brackets the point rate and stays within [0,1]", () => {
   const ci = wilsonInterval(8, 10);
+  expect(ci).not.toBeNull();
+  if (!ci) throw new Error("unreachable");
   expect(ci.rate).toBeCloseTo(0.8, 10);
   expect(ci.lower).toBeGreaterThan(0);
   expect(ci.upper).toBeLessThanOrEqual(1);
   expect(ci.lower).toBeLessThan(ci.rate);
   expect(ci.upper).toBeGreaterThan(ci.rate);
-  // Degenerate n collapses to a zero interval rather than NaN.
-  expect(wilsonInterval(0, 0)).toEqual({ rate: 0, lower: 0, upper: 0 });
+  // A degenerate n has no point estimate and no interval, so it returns null rather than
+  // collapsing to {0, 0, 0} — a zero-width interval at 0% is indistinguishable from a
+  // measured, unanimous failure. See src/metrics/rate-honesty.test.ts (AC-M08).
+  expect(wilsonInterval(0, 0)).toBeNull();
 });
 
 test("judge panel helper derives strict and lenient consistently", () => {

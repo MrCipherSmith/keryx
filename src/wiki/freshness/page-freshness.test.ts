@@ -122,7 +122,19 @@ describe("scope-hash basis (AC11)", () => {
     expect(result.changed).toBe(false);
   });
 
-  test("git present but the log command itself fails still falls back", async () => {
+});
+
+// Flow 236, phase 4, T7 (AFC-22 clause 2 / AFC-W05 clause 3: "a git failure
+// yields unknown"). Before this task, a `git log`/`git diff` call that FAILED
+// outright — as opposed to succeeding with zero matching commits — was
+// indistinguishable from "this page has no git evidence at all" and silently
+// fell through to the scope-hash basis, dressing a measurement that never ran
+// as a legitimate (if weaker) result. And when git could not be asked at all
+// (the `revisionExists` cat-file check itself failing) the old code read that
+// as AC12's "revision not reachable in this history" and fell through the
+// same way — collapsing "git is broken" into "nobody verified this page yet".
+describe("a git failure yields unknown (AFC-22 clause 2 / AFC-W05 clause 3)", () => {
+  test("git present and the revision resolves, but `git log` itself fails: undecidable, not scope-hash", async () => {
     const { cwd, graph, paths } = await fixture();
     const scope = await computeVerifiedScope(cwd, paths, graph);
     const result = await evaluatePageFreshness({
@@ -130,9 +142,78 @@ describe("scope-hash basis (AC11)", () => {
       page: { path: "components/x.md", verifiedAt: SHA, verifiedScope: scope },
       describePaths: paths,
       graph,
+      // cat-file succeeds (revision exists), but log fails outright — this
+      // is NOT the same event as log succeeding with zero commits (""),
+      // which is a legitimate, confirmed "unchanged" answer tested above.
       git: scriptedGit({ "cat-file": "", log: null }),
     });
+    expect(result.basis).toBe("undecidable");
+    expect(result.changed).toBe(false);
+    expect(result.gitFailure).toBeDefined();
+  });
+
+  test("`git log` finds commits but the follow-up `git diff` fails: undecidable, not a half-reported git-log result", async () => {
+    const { cwd, graph, paths } = await fixture();
+    const result = await evaluatePageFreshness({
+      cwd,
+      page: { path: "components/x.md", verifiedAt: SHA, verifiedScope: null },
+      describePaths: paths,
+      graph,
+      git: scriptedGit({ "cat-file": "", log: "c1\nc2", diff: null }),
+    });
+    expect(result.basis).toBe("undecidable");
+    expect(result.gitFailure).toBeDefined();
+  });
+
+  test("git wholly unavailable this run (gitAvailable: false) never silently uses scope-hash for a verified page", async () => {
+    const { cwd, graph, paths } = await fixture();
+    const scope = await computeVerifiedScope(cwd, paths, graph);
+    const result = await evaluatePageFreshness({
+      cwd,
+      page: { path: "components/x.md", verifiedAt: SHA, verifiedScope: scope },
+      describePaths: paths,
+      graph,
+      // Even a git that WOULD answer everything correctly must not be
+      // consulted once the caller has established git could not be asked
+      // this run (the up-front `rev-parse HEAD` probe failed).
+      git: scriptedGit({ "cat-file": "", log: "", diff: "" }),
+      gitAvailable: false,
+    });
+    expect(result.basis).toBe("undecidable");
+    expect(result.changed).toBe(false);
+    expect(result.gitFailure).toBeDefined();
+  });
+
+  test("git wholly unavailable this run does NOT affect a page with no VerifiedAt at all (scope-hash is git-independent)", async () => {
+    const { cwd, graph, paths } = await fixture();
+    const scope = await computeVerifiedScope(cwd, paths, graph);
+    const result = await evaluatePageFreshness({
+      cwd,
+      page: { path: "components/x.md", verifiedAt: null, verifiedScope: scope },
+      describePaths: paths,
+      graph,
+      git: noGit,
+      gitAvailable: false,
+    });
     expect(result.basis).toBe("scope-hash");
+    expect(result.gitFailure).toBeUndefined();
+  });
+
+  test("a VerifiedAt this history has never heard of (AC12) is still preserved — not confused with a git failure", async () => {
+    const { cwd, graph, paths } = await fixture();
+    const scope = await computeVerifiedScope(cwd, paths, graph);
+    const result = await evaluatePageFreshness({
+      cwd,
+      page: { path: "components/x.md", verifiedAt: SHA, verifiedScope: scope },
+      describePaths: paths,
+      graph,
+      // git IS available and DID answer cat-file — it just said "no". That
+      // is AC12's legitimate fallthrough, not a failure.
+      git: scriptedGit({ "cat-file": null, log: "c1" }),
+      gitAvailable: true,
+    });
+    expect(result.basis).toBe("scope-hash");
+    expect(result.gitFailure).toBeUndefined();
   });
 });
 

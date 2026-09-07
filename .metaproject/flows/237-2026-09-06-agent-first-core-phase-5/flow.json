@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "237",
   "slug": "agent-first-core-phase-5",
   "title": "Agent-first core phase 5: Atomic changes and continuation: CAS recovery handoff and forgetting",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-06T10:44:09.765Z",
-  "updatedAt": "2026-09-06T10:44:09.765Z",
+  "updatedAt": "2026-09-07T15:05:15.827Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:121e289bc94cd0a4a6227fc079c8977df72362f8a924e0433f20ebe2ffe9e5fb",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -25,34 +25,150 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Лейн B: окно сбоя в жизненном цикле предложения — цель и квитанция пишутся несинхронно, повтор по тому же ключу выполняет persist повторно и оставляет предложение навсегда непринимаемым",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Лейн C: честность свежести — checkGraphStaleness без вызывающих, unknown теряется в graphMaybeStale, missing-источник health не даёт строки причины, test status печатает pass по вчерашнему отчёту",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Лейн A: сравнение с ожидаемой версией на стороне цели — предложение принимается поверх чужих байт и молча их заменяет",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-06T10:44:09.765Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-07T12:03:46.224Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T12:03:46.327Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T12:19:20.332Z",
+      "event": "task-added",
+      "detail": "T5: Лейн B: окно сбоя в жизненном цикле предложения — цель и квитанция пишутся несинхронно, повтор по тому же ключу выполняет persist повторно и оставляет предложение навсегда непринимаемым"
+    },
+    {
+      "at": "2026-09-07T12:19:20.426Z",
+      "event": "task-added",
+      "detail": "T6: Лейн C: честность свежести — checkGraphStaleness без вызывающих, unknown теряется в graphMaybeStale, missing-источник health не даёт строки причины, test status печатает pass по вчерашнему отчёту"
+    },
+    {
+      "at": "2026-09-07T12:19:20.528Z",
+      "event": "task-added",
+      "detail": "T7: Лейн A: сравнение с ожидаемой версией на стороне цели — предложение принимается поверх чужих байт и молча их заменяет"
+    },
+    {
+      "at": "2026-09-07T12:44:29.815Z",
+      "event": "task-done",
+      "detail": "T5: Лейн B: окно сбоя в жизненном цикле предложения — цель и квитанция пишутся несинхронно, повтор по тому же ключу выполняет persist повторно и оставляет предложение навсегда непринимаемым"
+    },
+    {
+      "at": "2026-09-07T12:44:29.911Z",
+      "event": "task-done",
+      "detail": "T6: Лейн C: честность свежести — checkGraphStaleness без вызывающих, unknown теряется в graphMaybeStale, missing-источник health не даёт строки причины, test status печатает pass по вчерашнему отчёту"
+    },
+    {
+      "at": "2026-09-07T15:05:15.827Z",
+      "event": "task-done",
+      "detail": "T7: Лейн A: сравнение с ожидаемой версией на стороне цели — предложение принимается поверх чужих байт и молча их заменяет"
     }
   ]
 }

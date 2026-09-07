@@ -18,7 +18,7 @@
 //   DEEPSEEK_API_KEY=... bun scripts/benchmark/run-ablation-raw.ts
 
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import { buildRawBaselineManifest, type RawBaselineSeedSample, type RawBaselineTaskInput } from "../../src/metrics/ablation-runner";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
@@ -29,6 +29,51 @@ const SEEDS = [1, 2, 3] as const;
 const PROVIDER_NAME = "deepseek";
 const MODEL = "deepseek-v4-flash";
 const RESULTS_FILENAME = "ablation-results-raw.json";
+
+/** Injectable side effects for {@link finalizeRawBaselineRun} — real I/O in `main`, spies in tests. */
+export type RawBaselineEmissionIO = {
+  readonly writeResultsFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the raw-baseline leg, GATED on validation (same defect shape as
+ * build-comparative-report.ts, fixed the same way here: previously the raw per-seed fixture
+ * was written to disk and the derived manifest printed to stdout FIRST, and only afterward
+ * validated — an invalid manifest's raw fixture reached disk (and build-comparative-report.ts
+ * reads that fixture back as "already-validated") before the process exited non-zero.
+ *
+ * Choice recorded: on an invalid run, a previously-written GOOD fixture file is left ON
+ * DISK, UNTOUCHED (same reasoning as build-comparative-report.ts's finalizeComparativeReport
+ * — overwriting a good artifact with an invalid one destroys it for no benefit; deleting it
+ * turns a transient failure into a silent data loss). Returns the exit code the caller
+ * should use.
+ */
+export async function finalizeRawBaselineRun(
+  resultsFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: RawBaselineEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`\n# ladder=comparative (raw leg) manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine(`wrote fixtures/benchmark/keryx/${RESULTS_FILENAME}`);
+    return 0;
+  }
+  io.logLine(
+    `invalid manifest — nothing written to disk and nothing printed to stdout; ` +
+      `fixtures/benchmark/keryx/${RESULTS_FILENAME} left unchanged (a previously-written valid fixture, if any, is preserved as-is)`,
+  );
+  return 1;
+}
 
 const SYSTEM_INSTRUCTION =
   "You are being asked a precise question about a specific software repository you have " +
@@ -99,16 +144,16 @@ async function main(): Promise<void> {
     tasks: taskResults,
   };
   const resultsUrl = new URL(`../../fixtures/benchmark/keryx/${RESULTS_FILENAME}`, import.meta.url);
-  await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
-
   const manifest = buildRawBaselineManifest(taskResults, { ladder: "comparative", model: MODEL });
-  console.log(JSON.stringify(manifest, null, 2));
-
   const result = validatePairedBenchmark(manifest);
-  console.error(`\n# ladder=comparative (raw leg) manifest valid: ${result.valid ? "yes" : "no"}`);
-  for (const err of result.errors) console.error(`- ${err}`);
-  console.error(`wrote fixtures/benchmark/keryx/${RESULTS_FILENAME}`);
-  if (!result.valid) process.exit(1);
+  const code = await finalizeRawBaselineRun(resultsFixture, manifest, result, {
+    writeResultsFixture: async (contents) => {
+      await Bun.write(resultsUrl, contents);
+    },
+    printManifest: (contents) => console.log(contents),
+    logLine: (line) => console.error(line),
+  });
+  if (code !== 0) process.exit(code);
 }
 
 if (import.meta.main) {

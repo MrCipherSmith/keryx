@@ -346,3 +346,101 @@ test("ctx diff reports staged and untracked changes from inside a git worktree",
     await rm(root, { recursive: true, force: true });
   }
 }, 60_000);
+
+// Defect (flow 238 / phase 6 / T5, #1): output size discipline fails on small
+// inputs. `keryx ctx read` on a four-byte file returned 311 bytes and a
+// single-hit `keryx ctx rg` returned ~490-520 — a wrapper costing tens of
+// times the payload, defeating the whole point of a context-compacting tool.
+// The fix drops the raw/summary artifact-pointer trailer for `read`/`rg` only
+// when nothing was actually truncated (the printed body already shows
+// everything, so a "here's where to go re-read it" pointer adds pure
+// overhead). A large/truncated result must keep the pointer unchanged — that
+// is asserted separately below.
+async function initTinyProject(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-tiny-"));
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    `${JSON.stringify({ modules: { gdctx: { enabled: true } } }, null, 2)}\n`,
+    "utf8",
+  );
+  return root;
+}
+
+test("ctx read on a tiny file is not wrapped in a trailer many times its size", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "tiny.txt");
+    await writeFile(file, "abc\n", "utf8");
+
+    const proc = Bun.spawn(["bun", CLI, "ctx", "read", file], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("abc");
+    // The bug's tell: a pointer trailer for content that is already shown in
+    // full, printed unconditionally regardless of size.
+    expect(stdout).not.toContain("raw: ");
+    expect(stdout).not.toContain("summary: ");
+    // Not a byte-exact pin (paths vary by environment) — a proportionality
+    // guard: the whole point of the tool is defeated once the wrapper costs
+    // tens of times the four-byte payload.
+    expect(Buffer.byteLength(stdout)).toBeLessThan(250);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("ctx rg on a single-hit search is not wrapped in a trailer many times its size", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "needle.txt");
+    await writeFile(file, "uniqueneedle12345\n", "utf8");
+
+    const proc = Bun.spawn(["bun", CLI, "ctx", "rg", "uniqueneedle12345", file], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("uniqueneedle12345");
+    expect(stdout).toContain("Matches: `1`");
+    expect(stdout).not.toContain("raw: ");
+    expect(stdout).not.toContain("summary: ");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("ctx read on a large file still compacts and keeps the raw/summary pointer expandable", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "big.txt");
+    const lines = Array.from({ length: 500 }, (_, i) => `line ${i}`);
+    await writeFile(file, lines.join("\n"), "utf8");
+
+    const proc = Bun.spawn(["bun", CLI, "ctx", "read", file], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+    expect(exitCode).toBe(0);
+    // Compaction (head/tail truncation) must still fire, and the pointer to
+    // the full raw copy must still be printed — the small-input fix must not
+    // regress the large-input path this tool exists for.
+    expect(stdout).toContain("omitted");
+    expect(stdout).toContain("compacted:");
+    expect(stdout).toContain("raw: ");
+    expect(stdout).toContain("summary: ");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);

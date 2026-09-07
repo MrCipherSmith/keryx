@@ -113,7 +113,15 @@ function fakeDeps(opts: {
 
   return {
     calls,
-    deps: { createGdgraphService: () => gdgraph, createMemoryService: () => memory },
+    deps: {
+      createGdgraphService: () => gdgraph,
+      createMemoryService: () => memory,
+      // Flow 235 T8: every graph-backed result now carries the tri-state
+      // freshness the CLI prints. Pinned here so these tests stay hermetic
+      // (the real check shells out to git) and assert delegation, not the
+      // state of whatever tree they happen to run in.
+      checkGraphStaleness: async () => ({ status: "fresh" as const, reasons: [] }),
+    },
   };
 }
 
@@ -158,12 +166,14 @@ test("graphQuery delegates to the fake for orphans and cycles", async () => {
   expect(await orphans.graphQuery({ query: "orphans" })).toEqual({
     query: "orphans",
     orphans: ["src/x.ts"],
+    staleness: { status: "fresh", reasons: [] },
   });
 
   const cycles = createMetaprojectAdapter(CWD, fakeDeps({ query: [["a", "b", "a"]] }).deps);
   expect(await cycles.graphQuery({ query: "cycles" })).toEqual({
     query: "cycles",
     cycles: [["a", "b", "a"]],
+    staleness: { status: "fresh", reasons: [] },
   });
 });
 

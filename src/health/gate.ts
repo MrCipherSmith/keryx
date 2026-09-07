@@ -84,6 +84,19 @@ export function computeGate(input: {
     reasons.push(`OPTIONAL: ${source.source} source skipped`);
   }
 
+  // Flow 237 T6 defect 2 (AFC-28/AC-28): a MISSING optional source (tool not
+  // installed / not importable) fell through both the `brokenRequired` branch
+  // above (it is not required) and this one (its status is "missing", not
+  // "skipped") and produced no reason line at all — its absence was
+  // invisible to a reader of the gate's own output. Whether missing should
+  // BLOCK is a separate policy question already answered by the
+  // required/optional split above; this only makes the absence visible, the
+  // same way a skipped optional source already is. Never escalates status.
+  const missingOptional = sources.filter((s) => !s.required && s.status === "missing");
+  for (const source of missingOptional) {
+    reasons.push(`OPTIONAL: ${source.source} source missing`);
+  }
+
   const brokenOptional = sources.filter(
     (s) => !s.required && s.status === "configured-but-failed",
   );

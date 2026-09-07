@@ -29,10 +29,15 @@
 //   already rendered `report.context`) said `context: incomplete`.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { testCommand } from "./test";
+
+function git(gitCwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd: gitCwd, stdio: "ignore" });
+}
 
 let cwd = "";
 let originalCwd = "";
@@ -213,4 +218,97 @@ test("keryx test coverage-map build says whether the file set behind the map was
   } finally {
     chmodSync(path.join(cwd, "src", "locked"), 0o755);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Flow 237 T6 defect 3 (AFC-28/AC-28, "a different checkout or consumer sees
+// changed grounds before it acts"): `keryx test status` (runStatus, ./test.ts)
+// printed `latest status: pass` with no qualifier at all saying whether that
+// pass still corresponds to the tree on disk. A report generated yesterday
+// against a since-modified working tree (or a tree that has moved to a new
+// commit since) read exactly the same as a report generated one second ago
+// against the current tree — a genuinely different set of grounds with no
+// visible difference to the reader acting on it.
+// ---------------------------------------------------------------------------
+
+test("keryx test status flags a report as possibly stale when the working tree has changed since the run (uncommitted changes)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  // The grounds change: a new, uncommitted file appears in the working tree
+  // after the report was generated (HEAD has not moved — a plain gitRef
+  // comparison alone would miss this).
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  // The defect: before the fix there was no line saying the working tree no
+  // longer matches what the report was generated against.
+  expect(output.toLowerCase()).toContain("stale");
+  expect(output.toLowerCase()).toContain("uncommitted");
+});
+
+test("keryx test status flags a report as possibly stale when HEAD has moved since the run (new commit)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "a new commit after the test run"]);
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  expect(output.toLowerCase()).toContain("stale");
+  expect(output).toContain("gitRef");
+});
+
+test("keryx test status reports the report as current when gitRef matches and the tree is clean", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  expect(output.toLowerCase()).not.toContain("stale");
 });

@@ -345,7 +345,15 @@ export async function loadTestingReport(cwd: string): Promise<TestingReport | nu
 
 export async function loadCompatibleTestingReport(
   cwd: string,
-  input: { scope: "project" | "changed"; since?: string | null },
+  // Flow 237 T6 defect 4 (AFC-28/AC-28, "an old test pass is not reused as
+  // evidence for new code"): "module"/"file" join "project"/"changed" as
+  // scopes this loader can vouch for, each requiring `name` (the module name
+  // or file path a report's own `scope` string must match, mirroring how
+  // `describeScope`/`runRun`'s `--scope` produces that string). Before this,
+  // `src/health/sources/tests.ts`'s `compatibleReportForHealth` went around
+  // this function entirely for those two scope kinds and imported whatever
+  // `loadTestingReport` returned with no gitRef or scope check at all.
+  input: { scope: "project" | "changed" | "module" | "file"; since?: string | null; name?: string },
 ): Promise<TestingReport | null> {
   const report = await loadTestingReport(cwd);
   if (!report) {
@@ -357,6 +365,11 @@ export async function loadCompatibleTestingReport(
   }
   if (input.scope === "project") {
     return !report.selection.changed && report.scope === "project" ? report : null;
+  }
+  if (input.scope === "module" || input.scope === "file") {
+    return !report.selection.changed && input.name !== undefined && report.scope === input.name
+      ? report
+      : null;
   }
   if (!report.selection.changed) {
     return null;

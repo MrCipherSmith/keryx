@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "235",
   "slug": "agent-first-core-phase-3",
   "title": "Agent-first core phase 3: Useful retrieval: wiki sections ranking repomap and bounded context",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-06T10:44:08.483Z",
-  "updatedAt": "2026-09-06T10:44:08.483Z",
+  "updatedAt": "2026-09-07T15:13:06.344Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:9a25343c3171430df18bb01eeda4f547e4714a1eec21371041b5c2887332d669",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -25,34 +25,169 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Лейн A: устойчивая идентичность секций wiki — маркеры, индекс по дайджесту, стабильный id при переименовании, tombstone для удалённого, поиск термина из Details",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Лейн B: repomap — пять из шести явных seed отбрасываются как обычный ok, нулевой балласт, видимая потеря при переполнении",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Найдено инвентаризацией: ctx read --mode compact теряет строку FAIL и ломает JSON, сообщая об экономии; wiki ask пишет запрос пользователя на диск из неизменяющей команды; запрос из стоп-слов даёт уверенный ответ",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Лейн D: граница инструментов для агента слепа — карта репозитория не принимает seed и теряет обязательность и потерю, инструмент графа не сообщает свежесть, поиск кода в протоколе мёртв",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-06T10:44:08.483Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-07T12:03:45.822Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T12:03:45.923Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T12:22:49.683Z",
+      "event": "task-added",
+      "detail": "T5: Лейн A: устойчивая идентичность секций wiki — маркеры, индекс по дайджесту, стабильный id при переименовании, tombstone для удалённого, поиск термина из Details"
+    },
+    {
+      "at": "2026-09-07T12:22:49.782Z",
+      "event": "task-added",
+      "detail": "T6: Лейн B: repomap — пять из шести явных seed отбрасываются как обычный ok, нулевой балласт, видимая потеря при переполнении"
+    },
+    {
+      "at": "2026-09-07T12:22:49.878Z",
+      "event": "task-added",
+      "detail": "T7: Найдено инвентаризацией: ctx read --mode compact теряет строку FAIL и ломает JSON, сообщая об экономии; wiki ask пишет запрос пользователя на диск из неизменяющей команды; запрос из стоп-слов даёт уверенный ответ"
+    },
+    {
+      "at": "2026-09-07T12:44:29.715Z",
+      "event": "task-done",
+      "detail": "T6: Лейн B: repomap — пять из шести явных seed отбрасываются как обычный ok, нулевой балласт, видимая потеря при переполнении"
+    },
+    {
+      "at": "2026-09-07T14:50:55.737Z",
+      "event": "task-added",
+      "detail": "T8: Лейн D: граница инструментов для агента слепа — карта репозитория не принимает seed и теряет обязательность и потерю, инструмент графа не сообщает свежесть, поиск кода в протоколе мёртв"
+    },
+    {
+      "at": "2026-09-07T14:56:03.231Z",
+      "event": "task-done",
+      "detail": "T5: Лейн A: устойчивая идентичность секций wiki — маркеры, индекс по дайджесту, стабильный id при переименовании, tombstone для удалённого, поиск термина из Details"
+    },
+    {
+      "at": "2026-09-07T15:13:06.344Z",
+      "event": "task-done",
+      "detail": "T8: Лейн D: граница инструментов для агента слепа — карта репозитория не принимает seed и теряет обязательность и потерю, инструмент графа не сообщает свежесть, поиск кода в протоколе мёртв"
     }
   ]
 }

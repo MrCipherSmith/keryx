@@ -215,6 +215,66 @@ async function runStatus(): Promise<void> {
       }
     }
   }
+  // Flow 237 T6 defect 3 (AFC-28/AC-28, "a different checkout or consumer
+  // sees changed grounds before it acts"): `latest status: pass` above said
+  // nothing about whether the tree that produced it is still the tree on
+  // disk. A report from yesterday and a report from a second ago printed
+  // identically. Name both ways the grounds can have moved since: the commit
+  // changed (gitRef mismatch) and/or the working tree picked up uncommitted
+  // changes since the run — neither is visible from `report.status` alone.
+  if (report) {
+    console.log(`report freshness: ${await describeReportFreshness(process.cwd(), report.gitRef)}`);
+  }
+}
+
+// Reused by `runStatus` above and mirrors the `stale`/`gitRef` computation
+// `runCoverageMap`'s "status" branch already does for the coverage map
+// artifact (same file, see below) — a report whose commit could not be
+// confirmed OR whose working tree has moved since is "unknown-not-passed",
+// never silently read as still current.
+async function describeReportFreshness(cwd: string, reportGitRef: string | null): Promise<string> {
+  const currentRef = await gitRefOf(cwd);
+  const dirty = await isWorkingTreeDirty(cwd);
+  const reasons: string[] = [];
+  if (!reportGitRef) {
+    reasons.push("report gitRef is unknown (recorded without git)");
+  } else if (!currentRef) {
+    reasons.push("current gitRef is unknown (not a git repository, or git is unavailable)");
+  } else if (reportGitRef !== currentRef) {
+    reasons.push(`gitRef changed since this report (report ${reportGitRef}, now ${currentRef})`);
+  }
+  if (dirty) {
+    reasons.push("working tree has uncommitted changes since this report was generated");
+  }
+  if (reasons.length === 0) {
+    return "current (gitRef matches, working tree clean)";
+  }
+  return `stale — ${reasons.join("; ")}`;
+}
+
+async function isWorkingTreeDirty(cwd: string): Promise<boolean | null> {
+  if (!Bun.which("git")) {
+    return null;
+  }
+  const proc = Bun.spawn(["git", "status", "--porcelain=v1"], { cwd, stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (code !== 0) {
+    return null;
+  }
+  // The testing report's own bookkeeping (`.metaproject/data/testing/**` —
+  // context.json/md, artifacts/, history/, logs/) is written by the very run
+  // this freshness check is about, so it always shows up freshly
+  // modified/untracked right after that run. That is normal report residue,
+  // not evidence the SOURCE tree moved — the same exclusion
+  // `gdgraph/staleness.ts` makes for its own `.metaproject/` bookkeeping, for
+  // the same reason. (Paths here are relative to the project root, which is
+  // assumed to be the git root, matching every other git call in this file —
+  // a project root below the git root, as `gdgraph/staleness.ts` handles via
+  // `--show-prefix`, is not handled here.)
+  const lines = out
+    .split("\n")
+    .filter((line) => line.length >= 3 && !line.slice(3).startsWith(".metaproject/"));
+  return lines.length > 0;
 }
 
 async function runContext(): Promise<void> {

@@ -57,6 +57,16 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
     git,
     fromRev,
     toRev: gitAvailable ? head : "working-tree",
+    // `runFreshness` already had to probe `rev-parse HEAD` above to decide
+    // the revision range — pass the result straight through so
+    // `buildFreshnessReport` does not spend a second `rev-parse` reaching
+    // the same answer. It still declares the `not-a-git-repository`
+    // limitation and drives every page's `unknown`/`gitFailure` result
+    // itself (flow 236 T7) — this is an optimization, not a hand-off of that
+    // responsibility, and `buildFreshnessReport` still probes on its own
+    // when a caller does not supply this (e.g. a future direct caller that
+    // has not already checked).
+    gitAvailable,
     ...(drained ? { queueEntriesConsumed: drained.entries.length } : {}),
     ...(drained?.truncated ? { queueTruncated: true } : {}),
     ...(input.now ? { now: input.now } : {}),
@@ -71,17 +81,6 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
       code: "queue-truncated",
       detail: `${drained.corruptLines} unreadable queue line(s) were skipped. Those revisions are missing from this range; re-run with an explicit --since to cover them.`,
       affectedCount: drained.corruptLines,
-    });
-  }
-
-  if (!gitAvailable) {
-    // Declared, not implied. A short report from a git-free project must not
-    // read as "little is stale" — the range simply could not be computed, and
-    // every page fell back to the coarser scope-hash path.
-    report.limitations.unshift({
-      code: "not-a-git-repository",
-      detail:
-        "No git history was available, so no revision range could be computed and freshness fell back to VerifiedScope comparison. Findings are capped at `review-suggested`.",
     });
   }
 

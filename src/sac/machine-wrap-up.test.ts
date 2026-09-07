@@ -38,9 +38,10 @@
 //    as cleanly.
 //
 // 3. `resolveMachineWrapUp`/`runWrapUp` accept extra, all-OPTIONAL testability
-//    seams beyond plan.md's minimal signature: `now`, `env`, `providerFactory`,
-//    `modelTurnTimeoutMs` — mirroring `runModelTurn`'s (single-turn.ts) own
-//    already-established injected-non-determinism pattern, needed here to
+//    seams beyond plan.md's minimal signature: `now`, `env`, `modelTurn`
+//    (`providerFactory` until flow 239 phase 7 replaced it with the AFC-19
+//    model-turn port), `modelTurnTimeoutMs` — an already-established
+//    injected-non-determinism pattern, needed here to
 //    deterministically exercise the fail-closed-no-credential and
 //    bounded-timeout-mechanical-fallback behaviors plan.md's Risks section
 //    itself calls out, without a real network credential or a real hang.
@@ -73,76 +74,40 @@ import type { MachineWrapUpResolution, WrapUpOutcome } from "./machine-wrap-up";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import type { Slate, SlateSeed } from "../session/slate";
 import { readSlate } from "../session/slate";
-import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
+import type { ModelTurnPort } from "./model-turn-port";
 
 const time = "2026-08-16T00:00:00.000Z";
 
-const DESCRIPTION: ProviderDescription = {
-  capabilities: {
-    streaming: true,
-    toolCalls: false,
-    parallelToolCalls: false,
-    structuredOutput: false,
-    reasoningMetadata: false,
-    promptCaching: false,
-    vision: false,
-    tokenCounting: false,
-    modelListing: false,
-  },
-  descriptor: { providerId: "stub" },
-};
-
-/** A model-turn provider that answers immediately with fixed text. */
-function stubModelProvider(text: string): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: (_req, opts) =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text };
-        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
-      })(),
-  };
+/**
+ * The injected model-turn capability, in its three test shapes. These were
+ * `ProviderPort` stubs behind an injected `providerFactory` until flow 239
+ * phase 7 moved the whole turn behind a port (`./model-turn-port.ts`, AFC-19):
+ * core no longer names a provider, so neither does its test double.
+ */
+function stubModelTurn(text: string): ModelTurnPort {
+  return async () => ({ credentialAvailable: true, text });
 }
 
-/** A model-turn provider that never answers (bounded-timeout fallback probe). */
-function hangingModelProvider(): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: () =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        await new Promise(() => {});
-      })(),
-  };
+/** A port that never answers (bounded-timeout fallback probe). */
+function hangingModelTurn(): ModelTurnPort {
+  return () => new Promise<never>(() => {});
 }
 
 /**
- * A model-turn provider whose `stream()` throws synchronously (inside the
- * async generator body, before any `yield`) for exactly ONE Seed kind —
- * detected via `resolveMachineWrapUp`'s own `--- seeds (<kind>) ---` marker
- * in the user message it builds — and answers normally for every other kind.
- * F-002 regression test seam: `runModelTurn`'s `for await (const event of
- * port.stream(...))` has no try/catch of its own, so a throwing generator
- * propagates all the way out of `resolveMachineWrapUp` uncaught — exactly
- * the "genuinely-thrown, non-conflict failure" class F-002 is about, reached
- * here through the cheapest possible seam (an injected `providerFactory`)
- * rather than a new production-code test hook.
+ * A port that throws synchronously for exactly ONE Seed kind — detected via
+ * `resolveMachineWrapUp`'s own `--- seeds (<kind>) ---` marker in the user
+ * message it builds — and answers normally for every other kind. F-002
+ * regression test seam: nothing between the port call and `resolveMachineWrapUp`
+ * catches, so the throw propagates out uncaught — exactly the
+ * "genuinely-thrown, non-conflict failure" class F-002 is about, reached
+ * through the cheapest possible seam rather than a new production-code hook.
  */
-function perKindThrowingProvider(failingKind: string, okText: string): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: (request, opts) => {
-      const marker = `seeds (${failingKind})`;
-      const isFailingKind = request.messages.some(
-        (message) => typeof message.content === "string" && message.content.includes(marker),
-      );
-      return (async function* (): AsyncGenerator<NormalizedEvent> {
-        if (isFailingKind) {
-          throw new Error(`F-002 test: injected non-conflict failure for kind "${failingKind}"`);
-        }
-        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: okText };
-        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
-      })();
-    },
+function perKindThrowingModelTurn(failingKind: string, okText: string): ModelTurnPort {
+  return (request) => {
+    if (request.user.includes(`seeds (${failingKind})`)) {
+      throw new Error(`F-002 test: injected non-conflict failure for kind "${failingKind}"`);
+    }
+    return Promise.resolve({ credentialAvailable: true, text: okText });
   };
 }
 
@@ -257,7 +222,7 @@ test("AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.
     slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
     kind: "decision",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("machine-authored summary of the evidence above"),
+    modelTurn: stubModelTurn("machine-authored summary of the evidence above"),
   });
 
   expect(result.ok).toBe(true);
@@ -268,10 +233,10 @@ test("AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.
   }
 });
 
-// --- Fail-closed: no credential, no injected factory -> typed no-credential
+// --- Fail-closed: a supplied port with no credential -> typed no-credential
 // outcome, no proposal attempted. -------------------------------------------
 
-test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' } when no credential and no providerFactory are available", async () => {
+test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' } when the supplied port reports no credential", async () => {
   const cwd = await tempGitCwd();
   await createWorkspace(cwd, "workspace-a");
 
@@ -282,9 +247,34 @@ test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' 
     kind: "decision",
     now: () => new Date(time),
     env: {}, // deliberately no ANTHROPIC_API_KEY / any provider key
+    // The capability is present and answers honestly that it has no key.
+    modelTurn: async () => ({ credentialAvailable: false, text: "" }),
   });
 
   expect(result).toEqual({ ok: false, code: "no_credential" });
+});
+
+// --- Fail-closed: no port at all -> a DIFFERENT typed outcome, and no
+// mechanical summary presented as if a model had authored one. ---------------
+
+test("resolveMachineWrapUp refuses with { ok: false, code: 'no_model_turn' } when no model-turn port is supplied at all (AFC-19)", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    env: {},
+  });
+
+  expect(result).toEqual({ ok: false, code: "no_model_turn" });
+  // And nothing was written: the refusal happens before the evidence step, so
+  // an unwired client leaves no half-finished wrap-up behind.
+  const evidenceDir = path.join(cwd, ".metaproject", "workspaces", "workspace-a", "machine-evidence");
+  await expect(readdir(evidenceDir)).rejects.toThrow();
 });
 
 // --- Bounded timeout -> mechanical fallback, never a hang. -----------------
@@ -300,7 +290,7 @@ test("resolveMachineWrapUp falls back to a mechanical summary on a bounded model
     slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
     kind: "decision",
     now: () => new Date(time),
-    providerFactory: () => hangingModelProvider(),
+    modelTurn: hangingModelTurn(),
     modelTurnTimeoutMs: 200,
   });
   const elapsed = performance.now() - started;
@@ -340,7 +330,7 @@ test("flow 200: with no workspaceId and a FAILED resolve, runWrapUp writes an un
     slate,
     trigger: "process-termination",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("mechanical or model summary"),
+    modelTurn: stubModelTurn("mechanical or model summary"),
     // Flow 200 lazy binding: resolve-or-create is attempted from Seeds; a
     // failed resolve degrades to the unbound-candidate artifact (AC6).
     resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
@@ -396,7 +386,7 @@ test("flow 200 (lazy binding): with no workspaceId and a SUCCESSFUL resolve, run
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("lazy summary"),
+    modelTurn: stubModelTurn("lazy summary"),
     resolveWorkspace: async (input) => {
       resolveCalls.push(input);
       return { ok: true, workspaceId: "workspace-seed-resolved", action: "bound-existing" };
@@ -440,11 +430,11 @@ test("AC4: two Promise.all-raced runWrapUp calls for the same flow transition pr
     seeds: [seed("s1", "the same finding both racers see", "decision")],
   });
 
-  const providerFactory = () => stubModelProvider("racer summary");
+  const modelTurn = stubModelTurn("racer summary");
 
   const [first, second] = await Promise.all([
-    runWrapUp({ cwd, dir: dirA, slate, trigger: "flow-complete", now: () => new Date(time), providerFactory }),
-    runWrapUp({ cwd, dir: dirB, slate, trigger: "flow-complete", now: () => new Date(time), providerFactory }),
+    runWrapUp({ cwd, dir: dirA, slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
+    runWrapUp({ cwd, dir: dirB, slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
   ]);
 
   // AC4's actual invariant, checked directly on disk: at most one accepted
@@ -493,7 +483,7 @@ test("two DIFFERENT non-empty kind groups in the same runWrapUp call produce two
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("two-kind summary"),
+    modelTurn: stubModelTurn("two-kind summary"),
   });
 
   const proposedKinds = outcome.groups.filter((group) => group.outcome === "proposed").map((group) => group.kind).sort();
@@ -530,7 +520,7 @@ test("F-002: a genuinely-thrown, non-conflict failure in ONE kind-group never di
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => perKindThrowingProvider("risk", "decision summary"),
+    modelTurn: perKindThrowingModelTurn("risk", "decision summary"),
   });
 
   const decisionGroup = outcome.groups.find((group) => group.kind === "decision");
@@ -589,7 +579,7 @@ test("AC1/AC2/AC3/AC9: runWrapUp writes a wrap-up-outcome artifact for the unbou
     slate,
     trigger: "process-termination",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("mechanical or model summary"),
+    modelTurn: stubModelTurn("mechanical or model summary"),
     resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
   });
 
@@ -623,7 +613,7 @@ test("AC1/AC2/AC9: runWrapUp writes a wrap-up-outcome artifact recording an 'err
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => perKindThrowingProvider("risk", "unused"),
+    modelTurn: perKindThrowingModelTurn("risk", "unused"),
   });
 
   expect(outcome.groups.length).toBe(1);
@@ -657,7 +647,7 @@ test("AC2: runWrapUp writes a wrap-up-outcome artifact for a fully successful ('
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("summary"),
+    modelTurn: stubModelTurn("summary"),
   });
 
   expect(outcome.groups.length).toBe(1);
@@ -714,7 +704,7 @@ test("AC2/NFR-1: a failing writeWrapUpOutcomeArtifact mkdir never poisons runWra
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("summary"),
+    modelTurn: stubModelTurn("summary"),
   });
 
   // runWrapUp itself must resolve normally with its correctly-computed

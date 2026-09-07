@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 
+import { runModelTurn } from "./harness/provider/single-turn";
+import { setModelTurnPort } from "./sac/model-turn-port";
+
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
@@ -93,6 +96,20 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
 };
 
 export async function main(): Promise<void> {
+  // The client supplies the model turn that core refuses to import.
+  //
+  // `src/sac/**` declares a port and holds no provider: the norm forbids a
+  // provider registry, model selection, credentials and live model calls inside
+  // core, and a build-graph test fails if any of them reappear there. Without
+  // this registration the SAC paths that need a model turn refuse by name
+  // rather than pretending to have run one, which is correct but is not what a
+  // user with a key configured expects. The CLI is the client, so it registers.
+  //
+  // Inside `main`, not at module scope: a registration at import time changes
+  // the behaviour of every process that merely imports this file, which turned
+  // three tests asserting the unwired refusal green for the wrong reason.
+  setModelTurnPort(async (request) => runModelTurn(request));
+
   const args = process.argv.slice(2);
   const command = args[0];
 

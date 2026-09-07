@@ -27,6 +27,12 @@ async function tsFiles(dir: string): Promise<string[]> {
 
 test("no static import of web-tree-sitter anywhere in src/", async () => {
   const files = await tsFiles(SRC_ROOT);
+  // Sentinel (flow 239, AC-20 — Class-2 defect): without this, a renamed
+  // `SRC_ROOT` or a broken extension filter yields `violations === []` for
+  // exactly the same reason full compliance does. A landmark file plus a
+  // count floor well below the current size closes that gap.
+  expect(files.length).toBeGreaterThan(500);
+  expect(files).toContain(ADAPTER);
   const staticImport = /\b(?:import|export)\b[^()]*?\bfrom\s*['"]web-tree-sitter['"]|\bimport\s*['"]web-tree-sitter['"]|\brequire\s*\(\s*['"]web-tree-sitter['"]\s*\)/;
   const violations: string[] = [];
   for (const file of files) {

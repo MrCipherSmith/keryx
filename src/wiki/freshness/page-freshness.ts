@@ -37,6 +37,16 @@ export interface PageFreshness {
   changedFiles: string[];
   /** The strongest confidence a finding from this basis may claim. */
   confidenceCap: "must-refresh" | "review-suggested";
+  /**
+   * Set only when `basis === "undecidable"` BECAUSE a git operation could not
+   * be completed — flow 236 T7, AFC-22 clause 2 / AFC-W05 clause 3: "a git
+   * failure yields unknown". This is deliberately a distinct fact from the
+   * ordinary "nobody has verified this page yet" undecidable (no reason set):
+   * a `VerifiedAt` naming a commit this history genuinely does not contain
+   * (AC12 — a rebase, a shallow clone) is git successfully ANSWERING "no",
+   * not a failure, and never sets this field.
+   */
+  gitFailure?: string;
 }
 
 /** Injected so tests need no repository, and so a missing git degrades. */
@@ -48,40 +58,82 @@ export async function evaluatePageFreshness(input: {
   describePaths: readonly string[];
   graph: GraphData;
   git: GitRunner;
+  /**
+   * Whether git could answer at all this run, established ONCE per report by
+   * a single up-front probe (mirrors `gdgraph/staleness.ts`'s
+   * `checkGraphStaleness`, which does the same thing for the same reason).
+   * Defaults to `true` so a direct caller that never exercises this failure
+   * mode (every pre-existing fixture in this file) is unaffected; the real
+   * report builder (`report.ts`) always supplies the measured value.
+   */
+  gitAvailable?: boolean;
 }): Promise<PageFreshness> {
-  const { cwd, page, describePaths, graph, git } = input;
+  const { cwd, page, describePaths, graph, git, gitAvailable = true } = input;
 
   const base: Omit<PageFreshness, "basis" | "changed" | "confidenceCap"> = {
     page: page.path,
     commitsBehind: 0,
     changedFiles: [],
   };
+  const undecidableGitFailure = (detail: string): PageFreshness => ({
+    ...base,
+    basis: "undecidable",
+    changed: false,
+    confidenceCap: "review-suggested",
+    gitFailure: detail,
+  });
 
   if (describePaths.length === 0) {
     // Nothing to measure against. §4.4.1: excluded from scoring entirely.
     return { ...base, basis: "undecidable", changed: false, confidenceCap: "review-suggested" };
   }
 
-  if (page.verifiedAt && (await revisionExists(git, cwd, page.verifiedAt))) {
-    const log = await git(cwd, [
-      "log",
-      "--format=%H",
-      `${page.verifiedAt}..HEAD`,
-      "--",
-      ...describePaths,
-    ]);
-    if (log !== null) {
+  if (page.verifiedAt) {
+    if (!gitAvailable) {
+      // Git could not be asked at all this run (the up-front `rev-parse
+      // HEAD` probe failed). Silently falling through to VerifiedScope here
+      // is exactly the defect this task closes: a git-log measurement that
+      // never ran would read as a legitimate, if weaker, result instead of
+      // "unknown". A page with no `VerifiedAt` at all never reaches this
+      // branch and is unaffected — VerifiedScope alone never depended on git.
+      return undecidableGitFailure(
+        "git was unavailable this run (rev-parse HEAD failed); the git-log measurement could not be attempted",
+      );
+    }
+
+    if (await revisionExists(git, cwd, page.verifiedAt)) {
+      const log = await git(cwd, [
+        "log",
+        "--format=%H",
+        `${page.verifiedAt}..HEAD`,
+        "--",
+        ...describePaths,
+      ]);
+      if (log === null) {
+        // Git answered `cat-file` fine but THIS call failed — a corrupt
+        // object, an index lock, a permission error. That is not the same
+        // event as "nothing changed" (an empty, SUCCESSFUL log is `""`,
+        // handled below) and must not be read as one.
+        return undecidableGitFailure("`git log` failed for a revision known to exist");
+      }
       const commits = log.split("\n").filter((line) => line.trim().length > 0);
-      const names =
-        commits.length > 0
-          ? ((await git(cwd, [
-              "diff",
-              "--name-only",
-              `${page.verifiedAt}..HEAD`,
-              "--",
-              ...describePaths,
-            ])) ?? "")
-          : "";
+      let names = "";
+      if (commits.length > 0) {
+        const diff = await git(cwd, [
+          "diff",
+          "--name-only",
+          `${page.verifiedAt}..HEAD`,
+          "--",
+          ...describePaths,
+        ]);
+        if (diff === null) {
+          // `log` reported real commits but the follow-up `diff` failed —
+          // reporting `git-log` here would assert a changed-file list that
+          // was never actually measured.
+          return undecidableGitFailure("`git diff` failed after `git log` reported commits");
+        }
+        names = diff;
+      }
       return {
         ...base,
         basis: "git-log",
@@ -91,6 +143,10 @@ export async function evaluatePageFreshness(input: {
         confidenceCap: "must-refresh",
       };
     }
+    // `revisionExists` returned false: AC12's legitimate fallthrough — git
+    // ran fine and answered "this commit is not in this history" (a clean
+    // `cat-file -e` negative, not a failure). Falls through to the
+    // scope-hash basis below, exactly as before.
   }
 
   if (page.verifiedScope) {

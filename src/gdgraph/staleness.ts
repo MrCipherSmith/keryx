@@ -200,3 +200,13 @@ export async function graphMaybeStale(cwd: string): Promise<boolean> {
 }
 
 export const STALE_NOTE = "note: repo moved since the last graph build — `keryx gdgraph build` to refresh.";
+
+// Flow 237 T6 (AFC-28/AC-28, "a check that could not run is unknown rather
+// than passed"): a git failure means staleness genuinely could not be
+// determined — it is not evidence the repo moved. Printing `STALE_NOTE`
+// ("repo moved...") for this case asserted something the check never
+// established. Every live caller must print THIS note (with the tri-state's
+// own reasons) for `status: "unknown"`, and reserve `STALE_NOTE` for a
+// confirmed `status: "stale"`.
+export const UNKNOWN_NOTE =
+  "note: could not determine whether the graph is stale (see reasons below) — run `keryx gdgraph build` if unsure.";
