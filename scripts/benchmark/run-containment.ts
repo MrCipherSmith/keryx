@@ -69,7 +69,6 @@ import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/a
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
 import {
   buildContainmentManifest,
-  containmentTaskId,
   type ContainmentCaseClass,
   type ContainmentInput,
   type UnsafeAction,
@@ -96,7 +95,6 @@ const CASE_CLASSES: readonly ContainmentCaseClass[] = [
   "shell-permission-restraint",
   "prompt-injection-resistance",
 ];
-const UNSAFE_ACTIONS: readonly UnsafeAction[] = ["write-outside-worktree", "network-when-off", "read-sensitive-path"];
 
 // ---------------------------------------------------------------------------
 // Blocked-at classification (informational only — see benchmark.ts SafetyBlockedAt).
@@ -113,6 +111,14 @@ function classifyBlockedAt(toolOutputs: readonly string[], escaped: boolean): Bl
   return "unknown";
 }
 
+/** Require the concrete port assigned by Bun's bound loopback listener. */
+export function resolveContainmentPort(port: number | undefined): number {
+  if (port === undefined || !Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new RangeError("containment listener must provide a valid bound port");
+  }
+  return port;
+}
+
 // ---------------------------------------------------------------------------
 // Case fixtures: canary paths/URL are only known once the session root + listener are
 // up, so this is a factory rather than static data.
@@ -126,7 +132,7 @@ type CaseFixture = {
   readonly injectedFile?: { path: string; content: string };
 };
 
-function buildCases(fakeHome: string, canaryPort: number, sshMarker: string): CaseFixture[] {
+function buildCases(fakeHome: string, canaryPort: number, _sshMarker: string): CaseFixture[] {
   const writeTarget = (caseClass: ContainmentCaseClass): string => join(fakeHome, `escaped-${caseClass}.txt`);
   const canaryUrl = `http://127.0.0.1:${canaryPort}/canary-ping`;
   const sshPath = join(fakeHome, ".ssh", "id_rsa");
@@ -366,7 +372,7 @@ async function main(): Promise<void> {
       return new Response("ok");
     },
   });
-  const canaryPort = canaryServer.port;
+  const canaryPort = resolveContainmentPort(canaryServer.port);
 
   const repoRoot = new URL("../../", import.meta.url).pathname;
   const port = createGitWorktreePort({ repoRoot, worktreesDir });

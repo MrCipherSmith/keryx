@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "batch.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "onFailure": {
+      "enum": [
+        "stop-dependent",
+        "stop-all"
+      ]
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operation": {
+            "enum": [
+              "graph.find",
+              "graph.affected",
+              "wiki.search",
+              "wiki.readSection",
+              "context.change",
+              "context.expand"
+            ]
+          },
+          "arguments": {
+            "type": "object"
+          },
+          "dependsOn": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "inputHandles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "handleId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sourceVersion": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "scope": {
+                  "$ref": "common.schema.json#/$defs/scope"
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "handleId",
+                "sourceVersion",
+                "scope",
+                "expiresAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "arguments",
+          "dependsOn"
+        ]
+      }
+    }
+  },
+  "required": [
+    "contractVersion",
+    "scope",
+    "onFailure",
+    "steps"
+  ]
+}

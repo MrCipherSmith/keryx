@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T9",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "code-verifier",
+  "task": {
+    "title": "Phase 0 integrated verification",
+    "description": "Run current root and scripts typechecks, full repository check and report all unavailable required quality sources. Verify installed contract synchronization and resolved-path MCP boundary regression. Reuse captured immutable evidence if exact inputs unchanged; no repeated full suite without a new concern. This is verification, not discretionary self-review of M01. Do not accept your own implementation; root handles acceptance. Report scoped source verdict and global INCOMPLETE if required lint absent.",
+    "intent": "verify"
+  },
+  "acceptance_criteria": [
+    "Root and scripts TypeScript targets pass.",
+    "Current full tests pass or every failure is explicitly reported with scope and reproduction.",
+    "Required checks unavailable are INCOMPLETE, never PASS; source/schema parity correct."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "kind": "report",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/package.json",
+    "/Users/Goodea/goodea/keryx/.metaproject/health.config.json",
+    "/Users/Goodea/goodea/keryx/src/mcp/boundary.test.ts",
+    "/Users/Goodea/goodea/keryx/src/gdskills/install.test.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md first. Read local code-verifier SKILL.md and testing context.",
+    "Read-only source; only T9 reports/results. No git/flow/AC/dependency changes. No model/network calls. Stats disabled.",
+    "Do not review own M01 code for acceptance; this task runs objective integrated checks. Root and independent review handle acceptance.",
+    "Root is finishing Shell parser tests/source; coordinate snapshot before full check. T8 writes finished.",
+    "Known required ESLint absent: exact tool PASS may be reported as observed but never accepted as complete."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T11:19:08.298318+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

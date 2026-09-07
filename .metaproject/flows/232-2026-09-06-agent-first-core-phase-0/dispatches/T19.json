@@ -1,0 +1,59 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T19",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Enforce actual model round budgets",
+    "description": "Fix independently reproduced max_rounds off-by-one and unbudgeted wrap-up. Existing probe T16-recheck-round-budget-probe.ts shows configured1 permits two tool-bearing rounds plus wrapup. Add RED regression, then make configured maxRounds a true provider/model-round cap: no tool or extra model wrap-up after exhausted cap. Preserve independent actual invocation maxToolCalls semantics, truthful reasons, legacy behavior only where no declared bound is violated. Update obsolete tests with approved strict-budget rationale, not by dropping assertions. Document inclusive round semantics and any user-visible corrected stop behavior. Root assigns independent reviewer after implementation.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "max_rounds1 permits at most one model round and no hidden wrap-up request.",
+    "Model round cap and actual tool call cap remain independent; correct finish/terminal/child status.",
+    "Focused agent/child/script tests and strict typecheck/lint pass; no model/network calls."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
+    "Branch codex/agent-first-core; no git/flow/frozen AC/dependencies/package/lock modifications, stats disabled, auto_commit false. No real models/network.",
+    "Explicit target_files ownership only plus same-area focused test files; root owns cross-module integration. No global tests while independent RED work runs.",
+    "Write implementation spec before production; preserve initial RED evidence and add targeted GREEN result. Validate typed report/result and security-check artifacts. Do not review own implementation."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:18:18.554127+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

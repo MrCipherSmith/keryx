@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T26",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix structural output review defects",
+    "description": "Reproduce and fix all three T24 findings with regression tests first: duplicate-key serialized JSON leakage, $ref sibling schema validation, encoded HTML src/srcset automatic fetching. Preserve public links and mandatory structural output floor. Read T24 review and local task-implementer skill; write spec before production, meaningful RED/GREEN and implementation/result artifacts. No independent review of own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "Tool/resource/error/SDK output contains no synthetic secret and carries safe metadata without altering operation JSON schema.",
+    "Safe numeric values/IDs retained; recognized secrets cannot bypass by fieldkey; unsafe numeric/schema returns format-unsafe.",
+    "Disabled advisory settings do not disable mandatory floor; persistence materializer applies it too; plain publiclinks allowed while autofetchexfil blocked."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T8-output-integration-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T22-implementation.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/redact.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/secrets.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/pii.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/dispatch.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/redact-seam.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/server.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/persistence-sinks.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first. Local task-implementer skill, testing context, wiki; keryx ctx rg for code searches.",
+    "Own only output-validation.ts/tests, detect/exfil.ts/tests, serialized validation helper in service.ts. Do not edit guard.ts (root integrating incomplete), scanner, schemas.ts (coordinate if needed), MCP or flow state. No git/network/global model tests. Stats disabled.",
+    "Use synthetic bounded fixtures, write spec before code and regression RED first. Preserve T20 scanner code in service.ts."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:06:15.356975+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

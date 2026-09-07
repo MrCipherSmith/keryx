@@ -1,0 +1,70 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T56",
+  "status": "DONE",
+  "summary": "Fixed T39-review.md F-001: the flow-completion health gate in src/flow/service.ts's complete() (Gate 5, formerly line ~641) was a one-value denylist -- `health.status === \"fail\" ? fail : pass` -- so `warn`, `incomplete`, and any unrecognized GateStatus all fell through to the permissive `pass` arm. `incomplete` is exactly what the health module produces for a required source unavailable/execution-failed/parse-failed (computeGate, src/health/gate.ts:58-63), verbatim AC4/AFC-05's 'skipped required check'/'incomplete area', and that false-pass row was written into flow.json history and posted by buildIssueComment when a tracker is configured. Replaced the ternary with a new pure helper, healthGateOutcome, an exhaustive switch over GateStatus (pass|warn|incomplete|fail) with the default arm blocking, matching the shape of the sibling folds named in the dispatch (gateExitCode, runExitCode, isPassGate, securityFlowGate's switch) and reusing this file's own existing unevaluableGate constant for its default arm. `incomplete` and any unrecognized value now fold to GateOutcome.status:\"fail\". `warn` was decided deliberately, not mechanically: both health CLI surfaces (keryx health run/gate) exit 0 for warn unless an explicit --strict/--strict-warn opt-in is passed, flow complete() has no equivalent strict flag to opt into, and policies.md's 'optional skip warns, not signed as passed' is about an optional-source-skip reason, not every warn -- so warn folds to pass, kept distinguishable from a genuine pass by its unchanged detail text ('health gate: warn' vs 'health gate: pass'). Four regression tests added and confirmed RED before / GREEN after; re-ran the reviewer's own T39-exit.ts probe against the real complete() pipeline both before and after, confirming incomplete and unrecognized now block while pass/warn/fail and the untouched security-gate rows are unchanged. Full src/flow/ suite: 191 pass / 0 fail.",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome; violations are not lost when another check is unavailable.",
+      "status": "met",
+      "evidence": "The `incomplete` GateStatus -- computeGate's own value for a required source unavailable/execution-failed/parse-failed, which is exactly 'skipped required check'/'incomplete area' -- now folds to GateOutcome.status:\"fail\" instead of \"pass\" (new regression test 'healthGate -> incomplete blocks completion, not relabeled pass'). `fail` (an established violation) already blocked and still does, so a genuine violation is never masked by an unrelated unavailable check; this task changed only the incomplete/unrecognized arms of the fold, not the fail arm or computeGate's own escalate() precedence (fail always outranks incomplete/warn there, unchanged)."
+    },
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS at any surface, including the recorded completion row; partial acceptance is not full phase completion.",
+      "status": "met",
+      "evidence": "T39-exit.ts F1, re-run against the real complete() pipeline post-fix (raw .metaproject/data/gdctx/raw/2026-09-06T15-53-28-458Z_run.log): healthGate->incomplete now records status:\"fail\", completionPassed:false (was status:\"pass\", completionPassed:true pre-fix); healthGate->banana (unrecognized) now records status:\"fail\" with the constant leak-safe detail \"health gate could not be evaluated; treated as failed, not skipped\" (was status:\"pass\" pre-fix). New regression tests assert both directly against result.gates and result.passed/result.flow.status. `warn` stays status:\"pass\" but its detail (\"health gate: warn\") remains distinguishable from a genuine pass's detail (\"health gate: pass\") -- pinned by a third new test -- satisfying the acceptance criterion's own qualifier that the row must be distinguishable from a genuine pass, not that every non-fail value must block."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/flow/ stays green and no flow that legitimately completes today stops completing.",
+      "status": "met",
+      "evidence": "RED (bun test src/flow/service.test.ts -t \"healthGate ->\", direct pre-fix run): 1 pass / 2 fail, both on `expect(health?.status).toBe(\"fail\")` receiving \"pass\" -- transcript in T56-implementation.md. GREEN (bun src/cli.ts ctx run -- bun test src/flow/service.test.ts -t \"healthGate ->\"): 3 pass / 0 fail / 16 expect(), raw .metaproject/data/gdctx/raw/2026-09-06T15-53-19-340Z_run.log. Full src/flow/ suite: bun src/cli.ts ctx run -- bun test src/flow/ -> 191 pass / 0 fail / 649 expect() across 20 files, raw .metaproject/data/gdctx/raw/2026-09-06T15-52-05-762Z_run.log. 'No flow that legitimately completes today stops completing' verified two ways: (1) the new `warn` regression test drives a full happy-path completion with healthGate returning warn and asserts passed:true, flow.status:\"done\"; (2) the pre-existing happy-path and merged-completion tests (healthGate pass) are unmodified and still pass, confirmed by the same 191/0 full-suite run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Vocabulary enumeration, sibling-shape survey, the warn determination and its justification, the conservatism argument, the fix design and the regression-test plan, written before any code change."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full enumeration, the defect reproduced pre-edit via the reviewer's own T39-exit.ts probe, the sibling-shape comparison, the warn decision and justification, the fix, RED/GREEN transcripts, the post-fix probe re-run table, and every verification command with raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/flow/service.ts",
+      "change": "Gate 5 (health)'s inline two-way ternary fold replaced with a call to a new healthGateOutcome(health) helper (placed directly below the existing unevaluableGate, which it calls for its own default arm): an exhaustive switch over GateStatus (\"pass\"|\"warn\"|\"incomplete\"|\"fail\") producing GateOutcome's 3-valued status, default arm on the blocking side. pass/warn -> status:\"pass\" (detail names the underlying status); fail/incomplete -> status:\"fail\" (detail from reasons, same construction the pre-fix fail arm already used); any unrecognized value -> unevaluableGate(\"health\")'s constant, leak-safe detail. No change to GateOutcome, FlowServiceDeps, the pass/fail fold, buildIssueComment, or gates 1-4/6."
+    },
+    {
+      "path": "src/flow/service.test.ts",
+      "change": "Four new tests added immediately after the existing \"healthGate that throws...\" test: (1) healthGate -> incomplete blocks completion and is not relabeled pass; (2) healthGate -> unrecognized status blocks completion and does not echo the unrecognized value into the detail; (3) healthGate -> warn still completes but the recorded detail stays distinguishable from a genuine pass. No existing test modified or deleted."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 4,
+    "tests_passing_full_flow_suite": 191,
+    "tests_failing_full_flow_suite": 0,
+    "typecheck_errors_src_flow": 0,
+    "typecheck_errors_other": 0,
+    "eslint_errors": 0
+  },
+  "timestamp_utc": "2026-09-06T15:55:00Z"
+}

@@ -1,0 +1,71 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T16",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent health completeness and Shell CLI review",
+    "description": "Review other authors health AFC05 and root Shell AFC18. Stage1 verify approved AC4/AC7 and health-spec.md/shell-parser-spec.md. Stage2 logic and security only after Stage1 passes. Inspect truthful coverage/parser results, missing/filtered/disabled/unparsed required sources, CLI strict exits; verify Shell help precedence, missing/typo/incompatible arguments fail before side effects, valid calls remain. No own containment review.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Health findings and coverage remain separate; required incomplete never PASS; supported Bun/npm formats recognized and unknown rejected.",
+    "Shell help/argument errors precede credentials/session/UI mutation; actionable examples and nonzero invalid exits.",
+    "Independent Stage1 then Stage2 with concrete findings and immutable evidence; no false integrated PASS."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/shell-parser-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/shell-parser-implementation.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/health/types.ts",
+    "/Users/Goodea/goodea/keryx/src/health/gate.ts",
+    "/Users/Goodea/goodea/keryx/src/health/run.ts",
+    "/Users/Goodea/goodea/keryx/src/health/service.ts",
+    "/Users/Goodea/goodea/keryx/src/health/sources/dependency-audit.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/health.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/shell.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/shell-cli-validation.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first; local review-logic/review-security-code skills, testing context. All searches keryx ctx rg.",
+    "Read-only code; write only T16 review/repro/result artifacts. No source/git/flow/AC/lock changes, no model/network calls. Stats disabled.",
+    "No own containment review. Other worker writes security RED tests; no global suite. Focused local fixtures allowed.",
+    "Report Stage1 before Stage2; validate result schema and security-check artifacts. Root owns fixes and acceptance."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:06:15.356975+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

@@ -89,7 +89,7 @@ export function ruleFileNameFor(source: string): string {
 
 async function findAgentEntrypoints(projectRoot: string, manifestSources: string[]): Promise<string[]> {
   const candidates = [...new Set([...manifestSources, "AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"])];
-  let files = new Set<string>();
+  let files: Set<string>;
   try {
     files = new Set(await readdir(projectRoot));
   } catch {

@@ -1,0 +1,51 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T33",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Make the security gate path classify missing malformed and non-pass evidence truthfully and stop failing open",
+    "description": "Two independent reviews reproduced five defects along one path, from loading the config to the flow completion gate. They are one repair over one file set and must be fixed together, regression first. (1) Blocker: runGate returns pass when the latest report is absent or unparseable, because readLatestReport collapses both to null; runReport shares it and synthesizes a pass report. A check that never ran must never read as clean. (2) Blocker: the fold is a two-value denylist with an unconditional pass fallthrough, so needs-approval, a missing gate field and an unrecognized gate string all become pass, and the stored report is cast to its type with no shape validation; the missing-field case emits a detail reading gate undefined and still passes. Replace it with an exhaustive mapping over the recognized values pass, fail, needs-approval and incomplete, and treat a missing report, an unreadable or unparseable one, a shape that does not validate, and an unrecognized value as incomplete with a constant reason. (3) Blocker: guardOutput's outer catch degrades to allowed true on any thrown error; a security.config.json containing literally null reproduces it. (4) Blocker twin, undisclosed until the second review: securityFlowGate's own mode-load catch returns null under the same trigger, which is indistinguishable from the intentional module-disabled case, so flow completion silently omits the security gate entirely, neither fail nor skipped. Harden loadSecurityConfig so a non-object JSON payload takes the existing malformed-JSON fallback instead of throwing, and stop both catch sites from resolving toward everything is fine. (5) Major: securityFlowGate's status mapping is a non-exhaustive ternary over a four-value union, and a stored needs-approval report already reads as pass today; give it its own exhaustive mapping so the gap does not reopen one call frame up. Everything that is not a pass must block flow completion, while the report keeps the distinction between a violation, an approval requirement and unavailable evidence. Preserve the pass-to-incomplete fold inside runScanPath that a concurrent task relies on for the truthful non-recursive directory outcome. No reason or detail may echo raw error text, a path or source bytes. Write T33-spec.md before coding, then T33-implementation.md and T33-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+    "AC8: no required failed or incomplete check is relabeled PASS; strict guards and the strict flow gate refuse incomplete evidence; advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+    "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; an optional skip warns and is never signed as passed. Reasons and details are constant and leak-safe."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-failopen.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/config.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/flow/service.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/security/guard.ts and its test, src/security/config.ts, and the runGate, runReport and readLatestReport region of src/security/service.ts, plus additive gate-status shapes in src/security/types.ts and src/security/schemas.ts if a type genuinely requires it. Do not touch output-validation.ts, detect/*, the validateSerializedOutput helper region of service.ts, path-scan.ts, src/mcp/*, src/commands/*, src/flow/service.ts, flow files, package.json or the lockfile.",
+    "src/flow/service.ts is read-only here but decides the outcome: confirm how each gate status is actually consumed before choosing your mapping, because a status the completion gate ignores is not a gate.",
+    "Preserve the pass-to-incomplete fold inside runScanPath: a concurrent task's truthful non-recursive directory outcome depends on it, and losing it would move the false pass one level up.",
+    "No git state changes, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic fixtures under mkdtemp only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:53:00+00:00", "created_by": "flow-orchestrator" }
+}

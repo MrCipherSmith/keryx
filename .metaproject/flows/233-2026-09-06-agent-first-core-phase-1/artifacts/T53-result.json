@@ -1,0 +1,215 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T53",
+  "dispatch_id": "233-T53-review-security-code-review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent fourth-round review of the auto-fetch floor repair (T52). Stage 1 PASS on all five rows, measured with an independent HTML tokenizer (Bun HTMLRewriter / lol-html) rather than by inspection: 88 tokenizer-state extraction cases with 0 bypasses; 41 destinations x 15 renderer document bases (615 resolutions) with 0 bypasses and 0 false positives; 19 hostile classes closed at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput with advisory redaction off; 15 hostile base-element vectors reach the attacker host before redaction and none after; the 42-case, 48-case and 240-case matrices and the canonicalization and persistence boundary rows all re-run unchanged; 116 pass / 0 fail on the focused suites, typecheck and eslint clean. The base-element behaviour change is UPHELD with evidence, with its undisclosed whole-document blast radius recorded (minor). Both disclosed over-approximations ACCEPTED, one with a correction to its stated justification (info). The reconstructed pre-repair detector is a real methodological weakness that weakens no load-bearing conclusion, because the only new class is identifiable by policy id and was re-attributed here over the current tree with no reconstruction. 0 blocker, 0 major, 1 minor, 3 info. Two files outside the declared concurrent set (src/security/guard.ts, src/security/config.ts) drifted mid-review under another worker; every conclusion touching them was re-measured afterwards and is unchanged.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T53-extract.ts 88 cases 0 bypasses; T53-resolve.ts 615 resolutions 0 bypasses 0 false positives; T42-exfil-attack.ts 42 cases 0 bypasses; T24-recheck2-exfil.ts 48 cases 0/0; T42-charrefs.ts 240 cases 0/0; p.password-key gives secrets.sensitive-field; ctlPublicLink stays state=none and byte-identical at all four boundaries."
+    },
+    {
+      "criterion": "Every bypass class the four rounds found is closed, verified at the MCP dispatch and the persistence materializer as well as at the detector, with no new bypass",
+      "status": "met",
+      "evidence": "T53-boundary.ts: 19 hostile classes of the reviewer's own derivation, hostileLeakingAtAnyBoundary=0 across dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput under mergeMcpConfig({redactToolOutput:false}); T42-boundary.ts ROW 1 six formerly-leaking shapes now state=redacted leaksHost=false at all three seams; T24-recheck2-boundary.ts 28 MCP cases, 0 leakHost, every reason token preserved."
+    },
+    {
+      "criterion": "No benign content newly flagged",
+      "status": "met",
+      "evidence": "T53-corpus.ts part A: 21769 files (wider scope than the implementer's 16684), all 55 egress.html-base-href-exfil findings in 8 vector-carrying files, 0 in benign repository content; the README's 8 findings are pre-existing HTML image badges the old regex matched identically. Part B: 30 synthetic benign shapes, 23 clean, 6 flagged by classes predating this change, 1 (codeFenceBaseExample) by the new class, recorded as T53#F-001."
+    },
+    {
+      "criterion": "The resolution sufficiency argument is upheld with evidence or refuted with a reproduction",
+      "status": "met",
+      "evidence": "Upheld. T53-resolve.ts varies every base property the two pairs hold constant (is-file, opaque path, port, userinfo, path depth, query, fragment) across 15 renderer bases: 0 bypasses, 0 false positives. The argument as written is incomplete - the file state and the opaque-path branch are base-dependent and unrealised by either pair - and is corrected in T53#F-002 (info); the conclusion stands because resolvedHost filters to http(s)."
+    },
+    {
+      "criterion": "The base-element behaviour change is upheld with evidence or refuted with a reproduction",
+      "status": "met",
+      "evidence": "Upheld. T53-base.ts: 15 hostile base vectors, all 15 reach attacker.invalid before redaction under a renderer model independent of the detector (document base located with lol-html under the real first-base-with-href-wins rule), 0 after. A relative destination in a document whose base was masked cannot reach a remote host. A benign document carrying a legitimate base element IS now flagged and masked - accepted, with the undisclosed whole-document blast radius recorded as T53#F-001."
+    },
+    {
+      "criterion": "Stage 2 (code quality), run because Stage 1 passed",
+      "status": "met",
+      "evidence": "readStartTag is a single linear pass, measured non-backtracking (960 KB benign prose 1.8 ms, 200 K consecutive solidi 1.8 ms, 20 K nested pseudo-tags inside one value 0.3 ms); exfilHost/agreedHost/resolvedHost decompose cleanly; no dead code, no duplicated branch logic beyond the shared considerUrl funnel. One cosmetic nit (comment indentation at :509-511, missing blank line at :487) recorded in the review body, not raised as a finding. eslint and tsc --noEmit both exit 0; 116 pass / 0 fail on the five focused suites."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Stage 1 table, four findings, three judgement-call rulings, confirmed clean areas, evidence hashes, routing audit."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-extract.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "88 extraction cases derived from the HTML tokenizer state machine, adjudicated by Bun HTMLRewriter (lol-html) as an independent parser. 0 bypasses.",
+      "hash": "7542a4f2fa7550e3e66a90f4d727751584d1ac070e14e5a440e26af8c083a4ae"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-resolve.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "41 destinations x 15 renderer document bases varying every base property the two synthetic pairs hold constant. 0 bypasses, 0 false positives.",
+      "hash": "f87386757ca8f94346a8eed3e64c5459be22e5c411f9ad349a38f049eace6858"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-base.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "23 base-element cases (15 hostile, 8 benign) with a renderer model independent of the detector. 0 hostile documents left un-neutralized; 4 benign flagged.",
+      "hash": "a82e7732352094f32f0b224835c857949fb6ebbf63fabbfa5159a1e5ee6092b7"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "26 shapes through dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput with advisory redaction off. 0 hostile leaking.",
+      "hash": "314d7047d97888d58227ca369eba137af148eeffea95c4ae0cac438c836e3249"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-corpus.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "21769-file false-positive sweep plus 30 synthetic benign shapes; new-class findings attributed by policy id, with no reconstructed detector.",
+      "hash": "a03a991bc5ca4a6c13e4d0ce8b0c17176c0508d196dabe9382ab51e27a47231e"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result document."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T53#F-001",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "line": 571,
+      "symbol": "detectExfil",
+      "problem": "The new <base href> class is correct but its cost is understated in two ways. (1) Masking an <img src> breaks one image; masking a <base href> re-points EVERY relative URL in the document to the reader's own origin, so one false positive silently changes the resolution of every link and image around it. That asymmetry appears nowhere in the code, the spec or the implementation report. (2) The class inherits the extractor's pre-existing non-element-context over-approximation, so a <base href> written inside a markdown code fence, an HTML comment, a <script> string or a <pre> block is flagged although no conformant renderer parses it as an element - which is exactly the shape documentation ABOUT <base> takes. The corpus sweep does not contradict this, it is silent on it: the repository contains no benign <base href> at all, so 'zero new findings in benign repository content' measures a corpus that cannot exercise the class.",
+      "impact": "No disclosure and no bypass; the direction is toward flagging and policies.md permits returning the safe part with redaction.state=redacted. The cost is a documentation or tool-output payload whose HTML is quietly rewritten - the base href becomes [REDACTED:url] and every relative destination around it now resolves against the reader's origin instead of the intended one - and a caller reading reasons:[\"egress.html-base-href-exfil\"] is not told that the document's relative resolution changed with it.",
+      "suggested_fix": "Keep the class, the empty-allowlist default and the deny direction. (a) State the whole-document effect in the <base> branch's comment and in the shared remediation string, so a caller that sees this policy id knows the document's relative resolution changed and not just one destination. (b) Record in the deferred-surface task that the non-element-context over-approximation (comment, RAWTEXT, RCDATA, fenced code) now covers a document-level element, that a benign <base href> is the shape most likely to surface it, and that the allowlist is the intended remedy.",
+      "evidence": "T53-base.ts: benignFlaggedIds = [g05.twoBasesRelativeFirst, g06.cdnBaseDoc, g07.cdnBaseInFence, g08.cdnBaseInComment]; g06's redacted output is '<base href=\"[REDACTED:url]\">\\n<img src=\"logo.png\">\\n<a href=\"guide.html\">Guide</a>', so the image and the anchor now resolve elsewhere. T53-corpus.ts part B: codeFenceBaseExample flagged among 30 synthetic benign shapes. T53-boundary.ts: benignNotByteIdenticalIds = [ctlCdnBaseDoc] at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput. T53-extract.ts x02-x07 establish the non-element-context half against lol-html. T53-corpus.ts part A: 21769 files, all 55 egress.html-base-href-exfil findings in 8 vector-carrying files, 0 in benign repository content.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:base-href-class-blast-radius-and-non-element-contexts",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:571",
+          "src/security/detect/exfil.ts:322",
+          "src/security/detect/exfil.ts:356",
+          "src/security/detect/exfil.ts:586",
+          "src/security/detect/exfil.ts:604"
+        ],
+        "enumeration_method": "Complete read of detectExfil's HTML loop, then every non-element context the HTML tokenizer has for '<' (comment, bogus comment, RAWTEXT via <style>, script-data via <script>, RCDATA via <textarea> and <title>, end tag with attributes, attribute value) driven through the detector AND through Bun's HTMLRewriter (lol-html) as an independent oracle - T53-extract.ts x01-x07, s14, b10. Then a 30-shape synthetic benign corpus written to contain the documentation forms this repository happens to lack (T53-corpus.ts part B), then the whole 21769-file checkout swept with the new policy id attributed per file (T53-corpus.ts part A)."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T53#F-002",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 224,
+      "symbol": "SYNTHETIC_BASE_PAIRS",
+      "problem": "The sufficiency argument states that the scheme state branches on one predicate ('the base's scheme equals the destination's scheme') and concludes that 'a third base scheme could only repeat one of those two branches'. The premise is incomplete: the WHATWG basic URL parser branches on the base in at least three places - the scheme-equality predicate, the FILE state (entered from the no-scheme state whenever the BASE's scheme is file, a different test), and the OPAQUE-PATH branch of the no-scheme state, where a relative destination against an opaque-path base is a parse failure. Neither pair is a file: base and neither has an opaque path, so neither branch is realised by either pair. What actually makes the conclusion sound is a fact the comment does not invoke: resolvedHost discards anything whose protocol is not http:/https:, so the file state can only yield a file: URL and the opaque-path branch can only yield a failure. The conclusion is right; the stated reason is not the reason it is right.",
+      "impact": "None today, measured rather than argued: 41 destinations x 15 renderer document bases - including file:///, a file:// UNC base, an app:opaque-document base, ported, userinfo-bearing, path-deep, query- and fragment-bearing bases and the other special schemes - give 0 bypasses and 0 false positives. The risk is that a future change widening resolvedHost past http(s) (ws:/wss: for a WebSocket egress channel is the obvious candidate; file: for a UNC/SMB fetch the less obvious one) removes the fact doing the work while leaving the sentence that appears to justify it, so a maintainer deriving base sufficiency from the comment derives it wrongly. Same failure mode as T42#F-005: a sound rule with an unsound stated reason.",
+      "suggested_fix": "Replace 'a third base scheme could only repeat one of those two branches' with the two-part reason that is true: the pairs realise both sides of the scheme-equality predicate, AND the parser's other base-dependent branches (the file state; an opaque base path) cannot produce an http(s) host, which is the only thing resolvedHost returns. Add the consequence a maintainer needs: widening resolvedHost beyond http:/https: invalidates this argument and requires a third base realising the file branch.",
+      "evidence": "T53-resolve.ts: {destinations: 41, rendererBases: 15, bypasses: 0, falsePositives: 0}. The rows that reach the unrealised branches - d.fileNoSlash, d.fileAuthority, d.wsNoSlash, d.wssNoSlash, d.ftpNoSlash - each return 'no remote host under any renderer base' precisely because of the http(s) filter in resolvedHost, not because of the base pairs.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:two-pair-sufficiency-argument-incomplete",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:210",
+          "src/security/detect/exfil.ts:250",
+          "src/security/detect/exfil.ts:263"
+        ],
+        "enumeration_method": "The WHATWG basic URL parser read state by state for every step that consults `base`, producing the list of base properties the classification could depend on (scheme, is-special, is-file, opaque path, host, port, userinfo, path, query, fragment). Each property was then given a renderer document base that varies it, and 41 destination forms were driven against all 15 bases through the platform URL and through the real detector (T53-resolve.ts)."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T53#F-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 394,
+      "symbol": "readStartTag",
+      "problem": "Row 12 (EOF inside the tag) is justified as an over-approximation that errs toward flagging, because 'our input is a FRAGMENT, so the renderer may hold the terminator we do not'. The same code path also runs in the opposite direction and that half is not stated: an unterminated QUOTED value consumes to end of input (close === -1 -> valueEnd = content.length), the scan index is set past the end, and any later <img src=...> in the fragment is never examined. So one rule both flags what a parser would drop and hides what a parser would drop, and the premise offered for the eager half applies word for word to the closing quote, where it would argue for the opposite treatment.",
+      "impact": "None measured, and the behaviour is correct rather than lax: a conformant tokenizer emits nothing there either, so the detector is faithful. The finding is about the completeness of a security argument that a later round will read as the specification of this behaviour.",
+      "suggested_fix": "State both halves in the readStartTag comment: an unterminated tag has its collected attributes classified (eager), and an unterminated quoted value swallows the remainder of the fragment so nothing after it is classified (conservative). Record the measurement that makes the second acceptable - a conformant tokenizer emits no element there either, so the fragment premise does not apply symmetrically.",
+      "evidence": "T53-extract.ts rows y01.unterminatedSwallows and y02.unterminatedThenTag: renderer=false detector=false, adjudicated by lol-html; against s12.eofInTagQuoted and s12b.eofInTagUnquoted: renderer=false detector=true, verdict OVER.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:eof-in-tag-justification-one-directional",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T53#F-004",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 561,
+      "symbol": "detectExfil",
+      "problem": "Resuming the scan past the tag's own '>' is what makes <img alt=\"<img src=https://attacker.invalid/p>\" src=\"/a.png\"> a non-finding, reported as a removed pre-existing false positive. It is that; it is also a narrowing of the net whose safety now rests on the READER implementing the attribute-value states. Measured at the boundary, that payload leaves dispatchCallTool with isError:false, redaction.state:\"none\", byte-identical through the materializer and the seam, with 'attacker.invalid' present in the released text. Against a conformant tokenizer it is inert and correct; against a client that renders tool output through a non-conformant HTML-ish pass it is not obviously inert.",
+      "impact": "None demonstrated - no renderer I could construct fetches it, and lol-html does not. Recorded because it is the one place where this round's design decides NOT to mask attacker-controlled bytes on the strength of a parser model, where every previous round of this floor decided the opposite and the standing framing is deny-by-default. The trade is defensible; it should be a recorded decision rather than an incidental consequence of the lastIndex line.",
+      "suggested_fix": "Record it in the HTML loop's comment as a decision with its premise named - markup inside a quoted attribute value is text for any conformant HTML parser, so it is released unmasked; this is the one point where the floor trusts the reader's parser - and add the case to the deferred-surface task's scope so a future policy round on non-conformant renderers has it in the list.",
+      "evidence": "T53-boundary.ts: ctlMarkupInValue = mcp isError=false state=none reasons=[] leaksHost=true | persist leaksHost=true identical=true | transport leaksHost=true | seam leaksHost=true. T53-extract.ts: s14.markupInsideValue and b10.baseInsideValue = renderer=false detector=false hostAfter=true.",
+      "confidence": "medium",
+      "dedupe_key": "afc15:exfil:markup-in-value-released-on-parser-conformance",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "extraction_cases": 88,
+    "extraction_bypasses": 0,
+    "resolution_destinations": 41,
+    "resolution_renderer_bases": 15,
+    "resolution_bypasses": 0,
+    "resolution_false_positives": 0,
+    "base_hostile_vectors": 15,
+    "base_hostile_not_neutralized": 0,
+    "boundary_hostile_classes": 19,
+    "boundary_hostile_leaking": 0,
+    "corpus_files_scanned": 21769,
+    "corpus_new_class_findings_in_benign_files": 0,
+    "synthetic_benign_shapes": 30,
+    "synthetic_benign_flagged_by_new_class": 1,
+    "rerun_42_case_bypasses": 0,
+    "rerun_48_case_bypasses": 0,
+    "rerun_charref_cases": 240,
+    "rerun_charref_bypasses": 0,
+    "focused_tests_pass": 116,
+    "focused_tests_fail": 0,
+    "findings_blocker": 0,
+    "findings_major": 0,
+    "findings_minor": 1,
+    "findings_info": 3
+  },
+  "timestamp_utc": "2026-09-06T16:31:23.300Z"
+}

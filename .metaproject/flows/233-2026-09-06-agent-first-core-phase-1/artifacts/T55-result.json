@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T55",
+  "dispatch_id": "233-2026-09-06-agent-first-core-phase-1-T55",
+  "status": "DONE",
+  "summary": "Closed three defects T39's recheck found beyond T38/T50's exhaustive-mapping rewrites: (1) security report's exit code now sources its strict-mode decision from the workspace's own config instead of the stored artifact's own mode field; (2) reportExitCode's enforced arm now accepts only pass, matching ci, closing the codebase's one remaining enforced-more-permissive-than-ci inversion per the reviewer's explicit ruling; (3) health service.ts's readLatest now treats a missing or malformed gate shape as unusable evidence (the existing no-report outcome) instead of letting a TypeError escape gate().",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AC-05) / AC8: no required failed or incomplete check is relabeled PASS at any surface including the process exit code; a strict mode accepts only a pass; an artifact under judgement cannot select the strictness applied to it.",
+      "status": "met",
+      "evidence": "Defect 1: handleReport now calls reportExitCode(report.gate, await modeOf(cwd)) instead of report.mode; verified at the real CLI entry point via T55-verify-real-cli.ts (exitCode 1 for workspace ci + stored mode advisory + gate fail, was 0). Defect 2: reportExitCode(gate, \"enforced\") now returns 1 for fail/needs-approval/incomplete/unrecognized, 0 only for pass. Defect 3: a health report with no gate key or a malformed gate shape now returns {status:\"fail\", exitCode:1}, never a thrown exception."
+    },
+    {
+      "criterion": "Policy (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS; optional skip warns and is never signed as passed; messages stay constant and leak-safe.",
+      "status": "met",
+      "evidence": "isPassGate and gateExitCode (unchanged, already exhaustive per T38/T50) still enforce FAIL/INCOMPLETE/PASS. Both strict security modes (ci, enforced) now accept only PASS via reportExitCode. The health unusable-evidence reason reuses the pre-existing constant leak-safe string \"no report; run `keryx health run` first\" — no new interpolation."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after, covering: a stored report whose recorded mode is more permissive than the workspace's, the enforced arm on a failing and on an incomplete gate, and a stored report with no gate key. Everything the previous rewrites closed stays closed; the recognized-value truth tables do not move except where this task deliberately changes them, and each change is stated.",
+      "status": "met",
+      "evidence": "Four new regression tests: mismatched-mode CLI test (both directions), corrected enforced-arm unit test, no-gate-key and gate-as-array health tests. Full owned/read focused-test run: 144 pass/0 fail/460 expect() before -> 148 pass/0 fail/472 expect() after, zero pre-existing test broken except the one corrected assertion (justified in T55-implementation.md). Truth-table deltas stated explicitly: only reportExitCode's four enforced+non-pass cells moved (0->1); every ci/advisory/gateway cell and every gateExitCode/isPassGate cell is unchanged."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-coding spec: per-defect decision (mode source from workspace vs validating report.mode), the enforced/ci symmetry fix, and the health shape-guard design, each with the truth-table deltas stated up front."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect before/after code, truth tables, reviewer's-probe before/after, supplementary real-CLI probe, regression test descriptions, verification counts and raw log paths, acceptance mapping, concerns, changed files, routing audit."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-verify-real-cli.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Supplementary read-only probe driving the real securityCommand([\"report\"]) entry point for defect 1, since the reviewer's own T39-exit.ts S3 row calls reportExitCode directly and cannot demonstrate the fix (the fix relocated which argument handleReport passes, not reportExitCode's own mapping)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T55-probe-before.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewer's probe (T39-exit.ts) output before this task's edits."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T55-probe-after.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewer's probe (T39-exit.ts) output after this task's edits."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/commands/security.ts", "change": "modified" },
+    { "path": "src/commands/security-gate-exit.test.ts", "change": "modified" },
+    { "path": "src/health/service.ts", "change": "modified" },
+    { "path": "src/health/service-gate-exit.test.ts", "change": "modified" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-spec.md", "change": "added" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-implementation.md", "change": "added" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-verify-real-cli.ts", "change": "added" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T55-result.json", "change": "added" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "focused_tests_before": "144 pass / 0 fail / 460 expect()",
+    "focused_tests_after": "148 pass / 0 fail / 472 expect()",
+    "typecheck": "clean",
+    "eslint": "clean"
+  },
+  "timestamp_utc": "2026-09-06T16:06:28Z"
+}

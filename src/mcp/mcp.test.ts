@@ -271,10 +271,10 @@ test("AC3: with mcp disabled, no tools/resources are exposed", async () => {
 
 // --- AC4: redaction seam ------------------------------------------------------
 
-test("AC4: with security disabled, tool output is byte-identical (never throws)", async () => {
+test("AC4: safe tool values are preserved with advisory security disabled", async () => {
   const ctx = await buildMcpContext(root);
   const result = await dispatchCallTool(ctx, "gdgraph.orphans", {});
-  // Security module is not initialized in the fixture ⇒ redactRaw is a no-op.
+  // The mandatory floor preserves this fixture's nonsensitive values.
   expect(result.isError).toBe(false);
   expect(JSON.parse(result.text)).toEqual(getOrphans(await import("../gdgraph/query").then((m) => m.loadGraph(root))));
 });
@@ -315,6 +315,7 @@ test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", 
       listTools(): Promise<{ tools: Array<{ name: string }> }>;
       callTool(args: { name: string; arguments: Record<string, unknown> }): Promise<{
         content: Array<{ type: string; text: string }>;
+        _meta?: Record<string, unknown>;
       }>;
       close(): Promise<void>;
     };
@@ -348,6 +349,7 @@ test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", 
   // AC1 parity: the transported result equals the in-process dispatch result.
   const inProcess = await dispatchCallTool(ctx, "gdgraph.orphans", {});
   expect(overWire).toBe(inProcess.text);
+  expect(called._meta?.["keryx/redaction"]).toEqual(inProcess.redaction);
 
   await client.close();
   await server.close();

@@ -14,7 +14,7 @@ import {
 import { optionValue } from "../lib/args";
 import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
 import { pathExists as fsPathExists } from "../lib/fs";
-import { readJsonFileOr } from "../lib/json";
+import { readJsonObjectFile } from "../lib/json";
 import {
   buildMcpBaseline,
   scanMcpManifest,
@@ -24,7 +24,7 @@ import {
   analyze,
   createSecurityService,
   runReport,
-  runScan,
+  runScanPath,
 } from "../security/service";
 import {
   loadSecurityConfig,
@@ -192,24 +192,44 @@ async function handleStatus(cwd: string): Promise<void> {
 }
 
 async function handleScan(cwd: string, args: string[]): Promise<void> {
-  const file = optionValue(args, "--file") ?? args.find((a) => !a.startsWith("--"));
+  const file = scanPathArgument(args);
   if (!file) {
-    console.error("Usage: keryx security scan <path> [--json]");
+    console.error("Usage: keryx security scan <path> [--json] [--recursive|--no-recursive] [--exclude <path>] [--max-files <n>] [--max-bytes <n>]");
     process.exitCode = 1;
     return;
   }
+  const maxFiles = positiveScanLimit(args, "--max-files");
+  const maxBytes = positiveScanLimit(args, "--max-bytes");
+  if (maxFiles === null || maxBytes === null) {
+    console.error("Usage: keryx security scan <path> [--max-files <positive integer>] [--max-bytes <positive integer>]");
+    process.exitCode = 1;
+    return;
+  }
+  const exclusions = scanOptionValues(args, "--exclude");
+  const recursive = recursiveScanFlag(args);
+  const projectRoot = resolveProjectRoot(cwd);
   // Contain before opening: the scanner reads whatever it is pointed at and
   // renders findings from the content, so an uncontained path turns a scanner
   // into a file reader for anything the process can reach.
-  const contained = await resolveContainedPath(resolveProjectRoot(cwd), file);
+  const contained = await resolveContainedPath(projectRoot, file);
   if (!contained.ok) {
     console.error(contained.message);
     process.exitCode = 1;
     return;
   }
-  const content = await readFile(contained.path, "utf8");
   const source = parseSource(args, "trusted-project");
-  const result = await runScan(cwd, { content, source, path: file });
+  const result = await runScanPath(cwd, {
+    ownerRoot: projectRoot,
+    targetPath: contained.path,
+    source,
+    path: path.relative(projectRoot, contained.path) || ".",
+    ...(exclusions.length > 0 ? { exclusions } : {}),
+    ...(recursive !== undefined ? { recursive } : {}),
+    ...(maxFiles !== undefined ? { limits: { maxFiles } } : {}),
+    ...(maxBytes !== undefined
+      ? { limits: { ...(maxFiles !== undefined ? { maxFiles } : {}), maxBytes } }
+      : {}),
+  });
   const asJson = args.includes("--json");
 
   if (asJson) {
@@ -219,6 +239,9 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
     note(file);
     surfaceWarnings(result.warnings);
     renderDecision(result.decision);
+    if (result.report.coverage !== undefined) {
+      console.log(`  coverage: ${result.report.coverage.status} (${result.report.files?.filter((entry) => entry.status === "scanned").length ?? 0} scanned)`);
+    }
     console.log("");
     console.log(`  report: ${result.markdownPath}`);
     console.log(`  json:   ${result.jsonPath}`);
@@ -227,10 +250,90 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
   process.exitCode = exitCodeFor(result.decision, cwd, await modeOf(cwd));
 }
 
+function scanOptionValues(args: string[], name: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const argument = args[i];
+    if (argument === undefined) continue;
+    if (argument === name) {
+      const value = args[i + 1];
+      if (value !== undefined && !value.startsWith("--")) {
+        values.push(value);
+        i += 1;
+      }
+    } else if (argument.startsWith(`${name}=`)) {
+      const value = argument.slice(name.length + 1);
+      if (value.length > 0) values.push(value);
+    }
+  }
+  return values;
+}
+
+// `--recursive` and `--no-recursive` mean what they say: forward an explicit
+// choice to `runScanPath`/`scanContainedPath`, and leave it undefined (so the
+// API's own default of `true` applies) when neither flag is present. Never
+// silently force recursion on when the caller asked for `--no-recursive`.
+function recursiveScanFlag(args: string[]): boolean | undefined {
+  if (args.includes("--no-recursive")) return false;
+  if (args.includes("--recursive")) return true;
+  return undefined;
+}
+
+function positiveScanLimit(args: string[], name: string): number | null | undefined {
+  const value = optionValue(args, name);
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function scanPathArgument(args: string[]): string | undefined {
+  const valueOptions = new Set(["--file", "--source", "--target", "--exclude", "--max-files", "--max-bytes"]);
+  for (let i = 0; i < args.length; i += 1) {
+    const argument = args[i];
+    if (argument === undefined) continue;
+    if (argument === "--json" || argument === "--recursive" || argument === "--no-recursive") continue;
+    if (valueOptions.has(argument)) {
+      i += 1;
+      continue;
+    }
+    if (argument.startsWith("--")) continue;
+    return argument;
+  }
+  return optionValue(args, "--file");
+}
+
 type McpBaselineFile = { schemaVersion: number; tools: Record<string, string> };
 
 function mcpBaselinePath(cwd: string): string {
   return path.join(securityDataRoot(cwd), "mcp-baseline.json");
+}
+
+/**
+ * Read the pinned rug-pull baseline on the three-way distinction the decision
+ * needs: never pinned, pinned and readable, or pinned and unusable.
+ *
+ * `absent` is the ordinary case (no `--pin` has ever run) and is not a fault:
+ * there is nothing to compare against and nothing to report. `unreadable` is a
+ * file that EXISTS and cannot be used — it did not parse, it is not an object,
+ * or its `tools` member is not the map every pinned baseline carries. That case
+ * used to collapse into the same empty `{}` as `absent`, so every rug-pull
+ * comparison was silently skipped while the scan still reported a clean result.
+ */
+async function readMcpBaseline(
+  file: string,
+): Promise<{ state: "absent" | "ok" | "unreadable"; tools: Record<string, string> }> {
+  if (!(await fsPathExists(file))) {
+    return { state: "absent", tools: {} };
+  }
+  const read = await readJsonObjectFile(file);
+  if (read.state !== "object") {
+    return { state: "unreadable", tools: {} };
+  }
+  const tools = read.value.tools;
+  if (typeof tools !== "object" || tools === null || Array.isArray(tools)) {
+    return { state: "unreadable", tools: {} };
+  }
+  return { state: "ok", tools: tools as Record<string, string> };
 }
 
 // Collect the manifest JSON files to scan: a single file, or every *.json under
@@ -292,8 +395,23 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
   }
 
   if (args.includes("--pin")) {
-    const parsed = await readJsonFileOr<unknown>(target, null);
-    const { manifest } = extractManifestAndBaseline(parsed, {});
+    // Pinning writes the rug-pull baseline every later scan is measured
+    // against, so it is a persisted security decision and an unreadable
+    // manifest must not produce one. Through `readJsonFileOr(target, null)`
+    // this used to hand `null` to `buildMcpBaseline`, write
+    // `{"schemaVersion":1,"tools":{}}` and report "pinned 0 tool
+    // definition(s)" — a baseline nothing can ever drift from, recorded as
+    // though the operator had chosen it (T39 "Judgement calls" #4).
+    const read = await readJsonObjectFile(target);
+    if (read.state !== "object") {
+      // Leak-safe: names the file, never its bytes.
+      console.error(
+        `Cannot pin: ${target} is not a readable MCP manifest object (unparsed or not a JSON object).`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const { manifest } = extractManifestAndBaseline(read.value, {});
     const baseline: McpBaselineFile = { schemaVersion: 1, tools: buildMcpBaseline(manifest) };
     const outPath = mcpBaselinePath(cwd);
     await mkdir(path.dirname(outPath), { recursive: true });
@@ -307,14 +425,15 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
     return;
   }
 
-  const globalBaselineFile = await readJsonFileOr<Partial<McpBaselineFile>>(
-    mcpBaselinePath(cwd),
-    {},
-  );
-  const globalBaseline =
-    globalBaselineFile.tools && typeof globalBaselineFile.tools === "object"
-      ? globalBaselineFile.tools
-      : {};
+  // The pinned baseline, on the same three-way distinction. ABSENT is the
+  // ordinary "never pinned" case and stays silent and non-blocking. A file that
+  // EXISTS but cannot be read as a baseline is different in kind: it used to
+  // degrade to `{}` — every rug-pull comparison silently skipped, the scan
+  // still reporting a clean result — which is the same "unestablished evidence
+  // read as a pass" this phase is closing everywhere else.
+  const baselinePath = mcpBaselinePath(cwd);
+  const baselineState = await readMcpBaseline(baselinePath);
+  const globalBaseline = baselineState.tools;
 
   const files = await collectManifestFiles(target);
   if (files.length === 0) {
@@ -323,16 +442,31 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
     return;
   }
 
-  const perFile: Array<{ file: string; matches: DetectorMatch[] }> = [];
+  const perFile: Array<{ file: string; readable: boolean; matches: DetectorMatch[] }> = [];
   for (const file of files) {
-    const parsed = await readJsonFileOr<unknown>(file, null);
-    const { manifest, baseline } = extractManifestAndBaseline(parsed, globalBaseline);
+    // A manifest that does not parse, or parses to something that is not an
+    // object, is a manifest that was NOT scanned. `readJsonFileOr(file, null)`
+    // used to hand `null` to `scanMcpManifest`, which finds no tools in it and
+    // returns no matches, so the file was counted as scanned and clean.
+    const read = await readJsonObjectFile(file);
+    if (read.state !== "object") {
+      perFile.push({ file, readable: false, matches: [] });
+      continue;
+    }
+    const { manifest, baseline } = extractManifestAndBaseline(read.value, globalBaseline);
     const matches = scanMcpManifest(manifest, { baseline, source: file });
-    perFile.push({ file, matches });
+    perFile.push({ file, readable: true, matches });
   }
 
   const flagged = perFile.filter((entry) => entry.matches.length > 0);
   const totalFindings = perFile.reduce((sum, entry) => sum + entry.matches.length, 0);
+  const unreadable = perFile.filter((entry) => !entry.readable).length;
+  // policies.md ("Health и security gate"): a required check that is missing,
+  // skipped, unparsed or unfinished is INCOMPLETE, never PASS. Findings and
+  // incompleteness are independent — both are reported, and a scan can be
+  // incomplete while still having found something.
+  const coverage =
+    unreadable > 0 || baselineState.state === "unreadable" ? "incomplete" : "complete";
 
   if (asJson) {
     // Leak-safe JSON: policy ids + categories only, never raw manifest content.
@@ -342,8 +476,12 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
           scanned: files.length,
           flaggedFiles: flagged.length,
           totalFindings,
+          unreadable,
+          coverage,
+          baseline: baselineState.state,
           files: perFile.map((entry) => ({
             file: path.relative(cwd, entry.file),
+            readable: entry.readable,
             findings: entry.matches.map((m) => ({
               category: m.category,
               policyId: m.policyId,
@@ -358,7 +496,22 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
     );
   } else {
     heading("keryx security scan-mcp");
-    note(`scanned ${files.length} manifest(s); ${flagged.length} flagged; ${totalFindings} finding(s)`);
+    note(
+      `scanned ${files.length} manifest(s); ${flagged.length} flagged; ${totalFindings} finding(s); coverage ${coverage}`,
+    );
+    if (unreadable > 0) {
+      console.log("");
+      console.log(`  ${style.bold(`${unreadable} manifest(s) could not be read and were NOT scanned:`)}`);
+      for (const entry of perFile.filter((e) => !e.readable)) {
+        console.log(`    ${symbols.cross} ${path.relative(cwd, entry.file)}`);
+      }
+    }
+    if (baselineState.state === "unreadable") {
+      console.log("");
+      console.log(
+        `  ${symbols.cross} pinned MCP baseline exists but could not be read; rug-pull comparisons were not performed`,
+      );
+    }
     for (const entry of flagged) {
       console.log("");
       console.log(`  ${style.bold(path.relative(cwd, entry.file))}`);
@@ -373,8 +526,11 @@ async function handleScanMcp(cwd: string, args: string[]): Promise<void> {
     }
   }
 
-  // Gate-usable: non-zero exit when threats found and --strict is requested.
-  if (args.includes("--strict") && totalFindings > 0) {
+  // Gate-usable: non-zero exit when threats were found, and equally when the
+  // scan could not establish its own coverage. Exiting 0 because an unreadable
+  // manifest produced no findings is a clean exit code for a check that never
+  // ran, which is the defect class this task closes at the reader.
+  if (args.includes("--strict") && (totalFindings > 0 || coverage === "incomplete")) {
     process.exitCode = 1;
   }
 }
@@ -480,8 +636,78 @@ async function handleReport(cwd: string, args: string[]): Promise<void> {
     }
   }
 
-  const mode = report.mode;
-  process.exitCode = mode === "ci" && report.gate === "fail" ? 1 : 0;
+  // T39 F-003: the mode this exit code is judged against must come from the
+  // workspace's own live configuration, not from `report.mode` (the stored
+  // artifact under judgement). `runReport` returns a stored `latest.json`
+  // verbatim once one exists, and `hasRecognizedGate` (`src/security/service.ts`)
+  // validates only `gate`, never `mode` — so a workspace switched to `ci`
+  // after an `advisory` scan ran would otherwise have its strictness chosen
+  // by the very artifact it is judging. `modeOf(cwd)` is what the sibling
+  // exit-code call sites in this file already use (`:250`, `:515`); this was
+  // the one site that asked the payload instead. `report.mode` is still
+  // printed above (`:551`) as the artifact's own provenance — a different
+  // question from which posture this process exits under.
+  process.exitCode = reportExitCode(report.gate, await modeOf(cwd));
+}
+
+/**
+ * `security report` aggregates the *last stored scan* rather than a live
+ * decision, but that is a fact about the surface, not a reason for its
+ * strict check to accept a narrower set of gates than `exitCodeFor`'s. Until
+ * T39 F-003 this function refused only in `ci`, so `enforced` returned 0 for
+ * every gate including `fail` — an established threshold violation exiting
+ * clean — making this the only fold in the codebase where `enforced` is more
+ * permissive than `ci` (T35 F-002 called that inversion "backwards" for the
+ * mode axis; T39 found it recurring here on the gate axis). `isBlockingMode`
+ * (`guard.ts`), `exitCodeFor` (below) and `securityFlowGate`
+ * (`src/security/guard.ts`) all already pair `enforced` with `ci`; this
+ * function now does too. Delegates to `isPassGate` so this file carries one
+ * gate vocabulary, not a second one next to `runGate`'s switch
+ * (`src/security/service.ts`) and `securityFlowGate`'s
+ * (`src/security/guard.ts`).
+ *
+ * `gateway` joins the strict arm as of T65, aligning with T61's correction
+ * to `isBlockingMode` (`src/security/guard.ts`): that function used to group
+ * `gateway` with `advisory` (report-only) while `MODE_RANK`
+ * (`src/security/self-protect.ts`) ranked it the strictest recognized mode —
+ * two disagreeing notions of the same mode. T61 resolved the disagreement in
+ * `MODE_RANK`'s favor (anchored by must-keep-passing regressions and this
+ * module's own fail-closed discipline elsewhere; see T61-spec.md) and moved
+ * `isBlockingMode`, so `guardOutput`/`securityFlowGate` now refuse under
+ * `gateway`. This fold had not followed: until T65 it still exited 0 for a
+ * `gateway` workspace on every gate, identical to `advisory`, which is the
+ * same "a value that blocks inside the module exits zero at its command"
+ * defect this phase has repaired at eight other sites.
+ */
+export function reportExitCode(gate: string, mode: string): number {
+  if (mode === "ci" || mode === "enforced" || mode === "gateway") {
+    return isPassGate(gate) ? 0 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Whether a `SecurityGate` value is the one a strict mode accepts.
+ * Exhaustive, with the default arm on the blocking side: a future
+ * `SecurityGate` member — or, defensively, a runtime value the type checker
+ * would never let a caller construct directly — is refused rather than
+ * falling through to a pass. Mirrors `runGate`'s switch
+ * (`src/security/service.ts:311-330`) and `securityFlowGate`'s
+ * (`src/security/guard.ts:362-371`), which already treat `enforced` and `ci`
+ * as the same blocking pair (`isBlockingMode`); this file's two folds
+ * (`exitCodeFor`, `reportExitCode`) had not, until T35 F-002.
+ */
+function isPassGate(gate: string): boolean {
+  switch (gate) {
+    case "pass":
+      return true;
+    case "fail":
+    case "needs-approval":
+    case "incomplete":
+      return false;
+    default:
+      return false;
+  }
 }
 
 async function handlePolicy(cwd: string, args: string[]): Promise<void> {
@@ -572,7 +798,7 @@ async function handleHooks(cwd: string, args: string[]): Promise<void> {
         // twice — and nothing on this screen said so.
         if ((await modeOf(cwd)) === "advisory") {
           note(
-            `advisory mode: ${runtime.id} will report findings and allow the call. Set \`mode\` to \`enforced\` or \`ci\` in ${path.join(".metaproject", "security.config.json")} to make it refuse.`,
+            `advisory mode: ${runtime.id} will report findings and allow the call. Set \`mode\` to \`enforced\`, \`ci\` or \`gateway\` in ${path.join(".metaproject", "security.config.json")} to make it refuse.`,
           );
         }
       } else {
@@ -670,6 +896,7 @@ function severityMarker(severity: string): string {
 function gateLabel(gate: string): string {
   if (gate === "fail") return style.red(style.bold("FAIL"));
   if (gate === "needs-approval") return style.yellow(style.bold("NEEDS-APPROVAL"));
+  if (gate === "incomplete") return style.yellow(style.bold("INCOMPLETE"));
   return style.green(style.bold("PASS"));
 }
 
@@ -680,9 +907,26 @@ async function modeOf(cwd: string): Promise<string> {
 /**
  * The exit code, and for an agent hook it is a PROCEED/REFUSE.
  *
- * `scan` and the two `check` commands share this. `ci` refuses on a gate fail,
- * `enforced` also on `needs-approval`, `advisory` reports and proceeds —
- * report-only in advisory is a stated §11 invariant.
+ * `scan` and the two `check` commands share this. `ci`, `enforced` and
+ * `gateway` all refuse anything but a verified `pass`; `advisory` reports
+ * and proceeds — report-only in advisory is a stated §11 invariant.
+ *
+ * Until T35 F-002, `ci` refused only on `fail`/`incomplete` — a two-value
+ * denylist that let `needs-approval` exit 0, making `ci` *more* permissive
+ * than `enforced` at the CLI, backwards from what "strict CI accepts only
+ * PASS" (policies.md) requires, and the opposite of `guard.ts`'s
+ * `isBlockingMode`, which already treats the two modes identically. Fixed by
+ * `isPassGate`: an allowlist over the one acceptable value, exhaustive over
+ * `SecurityGate`, shared with `reportExitCode` so the CLI carries one gate
+ * vocabulary rather than a second one next to `runGate`'s.
+ *
+ * `gateway` joined this arm as of T65, for the same reason `reportExitCode`
+ * (above) did: T61 corrected `isBlockingMode` to treat `gateway` as blocking
+ * (it used to be grouped with `advisory` there, disagreeing with
+ * `MODE_RANK`'s ranking of it as strictest), and this fold's own mode check
+ * had not followed — until T65 a `gateway` workspace exited 0 here on every
+ * gate, indistinguishable from `advisory`, while `guardOutput` already
+ * refused the equivalent write.
  *
  * What is NOT here any more is a hardcoded rule that refused on any
  * prompt-injection finding regardless of the gate. It was added to close "the
@@ -719,12 +963,14 @@ async function modeOf(cwd: string): Promise<string> {
  * or setting `action: "warn"` turns it back off. That is a policy the operator
  * writes down, not a rule compiled into a CLI.
  */
-function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): number {
-  if (mode === "ci") {
-    return decision.gate === "fail" ? 1 : 0;
-  }
-  if (mode === "enforced") {
-    return decision.gate === "fail" || decision.gate === "needs-approval" ? 1 : 0;
+// Exported so the T38 regression tests can drive every `SecurityGate` value
+// directly, including one TypeScript's own union would refuse (cast through
+// `as unknown as SecurityGate`) — the only way to exercise the exhaustive
+// switch's default arm, since a live `SecurityDecision` has no on-disk JSON
+// to attack the way `service.ts`'s `hasRecognizedGate` is attacked.
+export function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): number {
+  if (mode === "ci" || mode === "enforced" || mode === "gateway") {
+    return isPassGate(decision.gate) ? 0 : 1;
   }
   return 0;
 }
@@ -896,7 +1142,7 @@ export function printSecurityHelp(): void {
   );
   helpUsage([
     "keryx security status",
-    "keryx security scan <path> [--json] [--source <kind>]",
+    "keryx security scan <path> [--json] [--source <kind>] [--recursive|--no-recursive] [--exclude <path>] [--max-files <n>] [--max-bytes <n>]",
     "keryx security scan-mcp <manifest.json | dir> [--json] [--pin <manifest>] [--strict]",
     "keryx security check-input [--source <kind>] [--file <path>] [--runtime <id>]",
     "keryx security check-output [--target <kind>] [--file <path>] [--runtime <id>]",
@@ -915,6 +1161,14 @@ export function printSecurityHelp(): void {
       desc: "Refuse in the shape this agent runtime reads. `hooks install` writes claude|cursor|windsurf|generic-mcp; codex and antigravity are also understood here. A bare exit code with no --runtime.",
     },
     { flag: "--source <kind>", desc: "Trust level of the content source." },
+    { flag: "--recursive", desc: "Recursively scan directories (the default for directory targets)." },
+    {
+      flag: "--no-recursive",
+      desc: "Scan only the target directory's own entry, not its contents; coverage reports incomplete rather than a clean pass.",
+    },
+    { flag: "--exclude <path>", desc: "Exclude a contained path; may be repeated." },
+    { flag: "--max-files <n>", desc: "Required positive file-count limit for a scan." },
+    { flag: "--max-bytes <n>", desc: "Required positive aggregate byte limit for a scan." },
     { flag: "--target <kind>", desc: "Write/publish target for check-output." },
     { flag: "--file <path>", desc: "Read content from a file instead of stdin." },
     { flag: "--out <path>", desc: "Write redacted output to a file." },

@@ -49,6 +49,18 @@ export type HealthConfig = {
     warnOnRegressionDrop: number;
     failOnMissingRequiredSource: boolean;
   };
+  /**
+   * Set only by `loadHealthConfig` (`config.ts`) when `health.config.json`
+   * EXISTS but could not be read as a mergeable object (T59: `null`, a
+   * non-object payload, or unparseable JSON) -- never for an absent file.
+   * Mirrors `SecurityConfig.configUnreadable` (`src/security/types.ts`, T35/T54)
+   * in name, shape, and the condition that sets it. `gate`/`sources[*].required`
+   * are already forced to their strictest values in that branch (T59); this
+   * flag lets `computeGate` (`gate.ts`) surface a discrete, constant,
+   * leak-safe reason for why, rather than leaving that only readable from this
+   * loader's source (T64).
+   */
+  configUnreadable?: boolean;
 };
 
 // D1: a single file's git-churn × complexity hotspot record (specification.md
@@ -129,8 +141,14 @@ export type ScopeMetrics = {
   regression_score: number;
 };
 
-export type GateStatus = "pass" | "warn" | "fail";
-export type GateResult = { status: GateStatus; reasons: string[] };
+export type GateStatus = "pass" | "warn" | "incomplete" | "fail";
+export type CoverageStatus = "complete" | "incomplete";
+export type GateResult = {
+  status: GateStatus;
+  reasons: string[];
+  /** Optional only so reports written before truthful coverage remain readable. */
+  coverage?: CoverageStatus;
+};
 
 export type SourceRunInfo = {
   source: string;
@@ -141,6 +159,9 @@ export type SourceRunInfo = {
   command: string | null;
   toolVersion: string | null;
   findings: number;
+  execution?: "completed" | "failed" | "not-run";
+  parse?: "parsed" | "failed" | "not-run";
+  exitCode?: number | null;
   error?: string;
 };
 
@@ -200,6 +221,7 @@ export interface SourceAdapter {
   run(ctx: HealthContext): Promise<RawSourceResult>;
   import(ctx: HealthContext): Promise<RawSourceResult>;
   parse(raw: RawSourceResult, ctx: HealthContext): Finding[];
+  validate?(raw: RawSourceResult): { valid: boolean; format?: string; error?: string };
 }
 
 export type HealthRunInput = {

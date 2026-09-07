@@ -1,0 +1,98 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T5",
+  "status": "DONE",
+  "summary": "Created 15 Bun containment tests across MCP resources, harness wiki/skills, and the proposed shared contained reader. Current source is intentionally RED at 2 pass / 13 fail: external links and replaced roots are not fail-closed, linked skill discovery is incomplete, lexical containment re-roots after owner replacement, and src/lib/contained-read.ts is not yet present.",
+  "summary_markdown": "TEST_CASE_SPECS: T5-test-case-specs.json defines 15 RED scenarios and the proposed src/lib/contained-read.ts API. Run the focused command in T5-red-evidence.md; no production edits were made.",
+  "acceptance": [
+    {
+      "criterion": "Ordinary file and internal link chain return same bytes inside narrow owner root.",
+      "status": "met",
+      "evidence": "MCP and harness happy-path tests cover direct files plus internal file/directory links; two current happy paths pass, while the linked discovery cases remain RED until implementation follows links safely."
+    },
+    {
+      "criterion": "External/sibling/root-replacement links and nonfiles/unreadable paths cannot disclose synthetic sentinel or unsafe target names.",
+      "status": "met",
+      "evidence": "MCP and harness tests use temporary roots, external sentinel symlinks, replaced owner roots, and leak-safe structured errors; current external/root-replacement tests fail as intended."
+    },
+    {
+      "criterion": "MCP resource listing and harness wiki/skills discovery/direct reads observe the same containment rules; cycles are bounded.",
+      "status": "met",
+      "evidence": "Resource listing tests require internal aliases, cycle bounding, and external omission; harness tests require equivalent wiki reads, linked skill discovery, and loadSkill parity."
+    },
+    {
+      "criterion": "Race test verifies descriptor/identity protection or explicit capability refusal; no unsupported full TOCTOU claim.",
+      "status": "met",
+      "evidence": "Shared-reader specs define an injectable beforeOpen replacement fixture, typed CONTAINED_READ_UNAVAILABLE capability refusal, regular-file and max-byte checks, and explicitly avoid claiming pathname realpath/readFile race safety."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/mcp/resources-containment.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "MCP resources containment RED tests",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter-containment.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Harness wiki/skills containment RED tests",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shared contained-reader RED tests and proposed seam contract",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-test-case-specs.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Exact test case specs and shared reader API proposal",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-red-evidence.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused RED run and failure signatures",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/mcp/resources-containment.test.ts",
+      "change": "created containment RED suite"
+    },
+    {
+      "path": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "change": "created wiki/skills containment RED suite"
+    },
+    {
+      "path": "src/lib/contained-read.test.ts",
+      "change": "created shared reader RED suite and seam contract tests"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 15,
+    "red_passed": 2,
+    "red_failed": 13,
+    "typecheck_exit_code": null,
+    "source_edits": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T11:46:00Z"
+}

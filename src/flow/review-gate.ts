@@ -103,6 +103,32 @@ export const DEFAULT_REVIEW_GATE_CONFIG: ReviewGateConfig = {
 };
 
 /**
+ * A safe, enumerable label for a caught filesystem error — its Node `errno`
+ * name (`ENOENT`, `EACCES`, `EPERM`, `EISDIR`, ...) when the error carries
+ * one shaped like Node's own short, fixed constants.
+ *
+ * Never the error's own `message`: every Node `fs` error that has a path
+ * embeds the RESOLVED path in its message (`open '<path>'`), which is
+ * exactly what a note rendered into a durable gate detail must not carry
+ * (`policies.md`, "Redaction и security scan": "Секрет не сохраняется в
+ * exception, error, receipt, loss manifest или raw continuation"). The
+ * `code` is a different thing: a closed vocabulary of a few dozen fixed
+ * uppercase names Node itself defines, none of which can embed a path, a
+ * secret, or file content — the same class of "safe enumerable token" the
+ * severity-floor and require-clean-round notes below already use for a typo
+ * (`` `completion.severity_floor \`${rawFloor}\` is not a severity` ``,
+ * where `rawFloor` is bounded to a JSON string value from a config file the
+ * project itself owns, not an OS error message).
+ */
+function safeFsErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+  const code = (error as { code: unknown }).code;
+  return typeof code === "string" && /^[A-Z][A-Z0-9]{2,15}$/.test(code) ? code : undefined;
+}
+
+/**
  * Read `.metaproject/tasks.config.json`, if it is there.
  *
  * A malformed file yields the defaults PLUS a note, and the note is rendered
@@ -110,23 +136,48 @@ export const DEFAULT_REVIEW_GATE_CONFIG: ReviewGateConfig = {
  * in the floor indistinguishable from not having configured one, and a
  * misconfiguration that reads as a deliberate setting is the same class of
  * defect as an unrecorded dismissal.
+ *
+ * Two separate `try`s, not one, because "the file could not be READ" and "the
+ * file could not be PARSED" are different failures with different safe
+ * messages, and — before this split — one `catch` covered both and
+ * interpolated the caught error's own `message` into the note verbatim. That
+ * is a leak: `pathExists` just above is a TOCTOU check, not a guarantee (this
+ * module's own header, "Two consequences run through this whole file"), so
+ * the file can vanish, become unreadable, or turn out to be a directory
+ * between the check and the read, and a real Node `readFile` failure's
+ * message embeds the resolved path. Neither `catch` below interpolates
+ * `error.message`; the read failure keeps a safe `code` token when one is
+ * available (see {@link safeFsErrorCode}), and the parse failure carries no
+ * part of the caught value at all — a `SyntaxError`'s own message can, on
+ * some engines, echo a fragment of the offending text, and nothing here
+ * depends on that not being true.
  */
 export async function readReviewGateConfig(cwd: string): Promise<ReviewGateConfig> {
   const file = path.join(cwd, REVIEW_GATE_CONFIG_PATH);
   if (!(await pathExists(file))) {
     return { ...DEFAULT_REVIEW_GATE_CONFIG, notes: [] };
   }
-  let parsed: unknown;
+  let raw: string;
   try {
-    parsed = JSON.parse(await readFile(file, "utf8"));
+    raw = await readFile(file, "utf8");
   } catch (error) {
+    const code = safeFsErrorCode(error);
     return {
       ...DEFAULT_REVIEW_GATE_CONFIG,
       notes: [
-        `${REVIEW_GATE_CONFIG_PATH} could not be parsed (${
-          error instanceof Error ? error.message : String(error)
-        }); the built-in defaults were used`,
+        `${REVIEW_GATE_CONFIG_PATH} could not be read` +
+          (code === undefined ? "" : ` (${code})`) +
+          "; the built-in defaults were used",
       ],
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {
+      ...DEFAULT_REVIEW_GATE_CONFIG,
+      notes: [`${REVIEW_GATE_CONFIG_PATH} could not be parsed; the built-in defaults were used`],
     };
   }
   const completion = readRecord(readRecord(parsed)?.["completion"]);
@@ -386,7 +437,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
       : [];
 
     const scopePath = path.join(packageDir, "scope.md");
-    const scope = (await pathExists(scopePath)) ? await readFile(scopePath, "utf8") : null;
+    const scope = (await pathExists(scopePath)) ? await readScopeMarkdown(scopePath) : null;
 
     rounds.push({
       reviewId,
@@ -413,6 +464,38 @@ async function readJson(file: string): Promise<unknown> {
   }
   try {
     return JSON.parse(await readFile(file, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `scope.md`'s content, or `null` when it is missing OR could not be read.
+ *
+ * Same shape as {@link readJson} just above, and for the same reason:
+ * `pathExists` is a TOCTOU check, not a guarantee, so the file can vanish,
+ * lose read permission, or turn out to be a directory between the check and
+ * the read. Before this existed, the call site below read `scope.md`
+ * directly with no `try` of its own — unlike `manifest.json` and
+ * `findings.json`, which `readJson` already wraps — so a failure there threw
+ * out of `readReviewRounds` entirely, past `runReviewGate` (which has no
+ * `try`/`catch` either) to whichever caller happened to be running it. `reviewGate()` in
+ * `service.ts` is the only production caller today, and its own `catch`
+ * (T47) already turns an escaping exception into a blocking, constant
+ * `unevaluableGate("review")` outcome — but `readReviewRounds` and
+ * `runReviewGate` are exported functions with no safety of their own
+ * (`review-gate.e2e.test.ts` already calls `runReviewGate` directly), so
+ * that safety net was never this module's own. A `null` here reads exactly
+ * like an absent `scope.md` already does: `verification: null` two lines
+ * below, which condition 5 (`verifier-stats`) already reports as
+ * `unobserved` — a status this module's own header says is never a pass.
+ * That is what makes this the same "blocking, constant outcome instead of
+ * an escaping exception" shape `unevaluableGate` gives the whole gate, only
+ * applied where the read actually happens.
+ */
+async function readScopeMarkdown(file: string): Promise<string | null> {
+  try {
+    return await readFile(file, "utf8");
   } catch {
     return null;
   }

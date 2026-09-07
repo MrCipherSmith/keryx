@@ -35,6 +35,16 @@ function metaPath(cwd: string, parts: string[]): string {
 }
 
 function boundedIndexExcerpt(raw: string): string {
+  const compactIndex = raw.trim();
+  if (
+    compactIndex.includes("Routing pointers.") &&
+    compactIndex.includes("routing.md") &&
+    compactIndex.length <= MAX_INDEX_CHARS &&
+    compactIndex.split("\n").length <= MAX_INDEX_LINES
+  ) {
+    return compactIndex;
+  }
+
   const sections = new Map<string, string[]>();
   let projectTitle = "# Metaproject Index";
   let currentSection: string | undefined;

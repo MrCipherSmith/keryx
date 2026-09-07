@@ -77,6 +77,26 @@ const RULES: Rule[] = [
     confidence: 0.92,
     remediation: "Remove inline credentials from URLs; use a secrets store.",
   },
+  // Credentials embedded in a URL query or in an explicitly sensitive path
+  // segment. The span covers only the value, preserving the safe URL shape.
+  {
+    policyId: "secrets.url-sensitive-query",
+    regex:
+      /[?&](?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)=([^&#\s]+)/gi,
+    severity: "high",
+    confidence: 0.9,
+    remediation: "Remove credentials from URL query parameters.",
+    valueGroup: 1,
+  },
+  {
+    policyId: "secrets.url-sensitive-path",
+    regex:
+      /\/(?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)\/([^/?#\s]{6,})/gi,
+    severity: "high",
+    confidence: 0.88,
+    remediation: "Remove credentials from URL path segments.",
+    valueGroup: 1,
+  },
   // JWT-like tokens.
   {
     policyId: "secrets.jwt",

@@ -1,0 +1,136 @@
+{
+  "contractVersion": "1.0.0",
+  "operation": "wiki.search",
+  "status": "ok",
+  "scope": {
+    "projectId": "demo-project",
+    "checkoutId": "demo-checkout",
+    "workspaceId": "demo-workspace",
+    "taskId": "demo-task"
+  },
+  "sources": [
+    {
+      "ref": "wiki:demo-policy",
+      "version": "v7",
+      "fragment": "section:dependency-policy#lines=3-5"
+    }
+  ],
+  "freshness": {
+    "state": "unknown",
+    "reason": "Основания ещё не проверены в текущем checkout.",
+    "snapshotVersion": null
+  },
+  "completeness": {
+    "state": "complete",
+    "reasons": []
+  },
+  "redaction": {
+    "state": "unchanged",
+    "reasons": []
+  },
+  "continuations": [
+    {
+      "operation": "wiki.readSection",
+      "handleId": "handle-demo-1",
+      "sourceVersion": "v7",
+      "scope": {
+        "projectId": "demo-project",
+        "checkoutId": "demo-checkout",
+        "workspaceId": "demo-workspace",
+        "taskId": "demo-task"
+      },
+      "expiresAt": "2099-01-01T00:00:00Z"
+    }
+  ],
+  "result": {
+    "items": [
+      {
+        "contractVersion": "1.0.0",
+        "scope": {
+          "projectId": "demo-project",
+          "checkoutId": "demo-checkout",
+          "workspaceId": "demo-workspace",
+          "taskId": "demo-task"
+        },
+        "pageRef": "wiki:demo-policy",
+        "pageVersion": "v7",
+        "sectionId": "dependency-policy",
+        "sectionVersion": "digest-demo-7",
+        "title": "Обновление зависимостей",
+        "contentClass": "substantive",
+        "excerpt": {
+          "text": "Обновление зависимостей согласовано. Реализация отложена.",
+          "startLine": 3,
+          "endLine": 5
+        },
+        "lifecycle": {
+          "status": "accepted",
+          "current": true,
+          "validFrom": null,
+          "validTo": null,
+          "supersededBy": null
+        },
+        "freshness": {
+          "state": "unknown",
+          "reason": "Основания ещё не проверены в текущем checkout.",
+          "snapshotVersion": null
+        },
+        "provenance": {
+          "claimType": "decision",
+          "sourceStatus": "known",
+          "source": {
+            "ref": "wiki:demo-policy",
+            "version": "v7",
+            "fragment": "section:dependency-policy#lines=3-5"
+          },
+          "authorRef": "participant:requester",
+          "confirmedBy": "participant:requester",
+          "acceptanceBasisRef": "decision:demo-approval",
+          "constraints": [
+            {
+              "text": "Обновление согласовано, но реализация отложена.",
+              "source": {
+                "ref": "wiki:demo-policy",
+                "version": "v7",
+                "fragment": "section:dependency-policy#lines=3-5"
+              },
+              "sourceStatus": "known"
+            }
+          ]
+        },
+        "caveats": [
+          {
+            "text": "Обновление согласовано, но реализация отложена.",
+            "source": {
+              "ref": "wiki:demo-policy",
+              "version": "v7",
+              "fragment": "section:dependency-policy#lines=3-5"
+            },
+            "sourceStatus": "known"
+          }
+        ],
+        "bindings": [
+          {
+            "relation": "based-on",
+            "targetRef": "decision:demo-approval",
+            "targetVersion": "v1",
+            "qualification": "confirmed"
+          }
+        ],
+        "conflictRefs": [],
+        "continuation": {
+          "operation": "wiki.readSection",
+          "handleId": "handle-demo-1",
+          "sourceVersion": "v7",
+          "scope": {
+            "projectId": "demo-project",
+            "checkoutId": "demo-checkout",
+            "workspaceId": "demo-workspace",
+            "taskId": "demo-task"
+          },
+          "expiresAt": "2099-01-01T00:00:00Z"
+        }
+      }
+    ]
+  }
+}

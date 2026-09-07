@@ -125,3 +125,30 @@ test("enforced securityGate failure returns the flow to in-progress", async () =
   expect(result.flow.status).toBe("in-progress");
   await rm(ROOT, { recursive: true, force: true });
 });
+
+// T35 F-005 / T45 regression: a gate whose EVALUATION THROWS is a check that
+// could not run, not a check that was deliberately skipped. Before the fix,
+// the catch arm recorded `status: "skipped"`, which `gates.every((gate) =>
+// gate.status !== "fail")` treats as non-blocking -- so an unexpected error
+// in the security gate was indistinguishable from a pass, and let the flow
+// complete. The detail must also never echo the thrown text: it can carry a
+// filesystem path or file content (policies.md, "Redaction и security
+// scan").
+test("securityGate that throws blocks completion, not skips it, and never echoes the thrown text", async () => {
+  await fresh();
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+  const result = await driveToComplete(
+    makeDeps({
+      securityGate: async () => {
+        throw new Error(`ENOENT: no such file or directory, open '${secretPath}'`);
+      },
+    }),
+  );
+  const security = result.gates.find((g) => g.name === "security");
+  expect(security?.status).toBe("fail");
+  expect(security?.detail).not.toContain(secretPath);
+  expect(security?.detail).not.toContain("ENOENT");
+  expect(result.passed).toBe(false);
+  expect(result.flow.status).toBe("in-progress");
+  await rm(ROOT, { recursive: true, force: true });
+});

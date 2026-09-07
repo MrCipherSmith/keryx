@@ -340,7 +340,7 @@ test("[c] then [y] connects, flips the row's status locally, and fires onStatusC
 });
 
 test("[d] never arms for generic (no file to disconnect)", () => {
-  let active = "mcp";
+  const active = "mcp";
   const body = fakeBody();
   presentMcpTools(
     (_otui, _chrome, input) => {

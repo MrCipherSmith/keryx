@@ -1,0 +1,45 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T28",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent bounded recursive scan and coverage review (Stage1 spec, then Stage2 quality)",
+    "description": "Independently review the T20 recursive security scanner against AFC-17 and policies.md: authorized scope/excludes/limits fixed before traversal; nested directories recurse without EISDIR; internal symlinks and canonical duplicates are visited once; symlink cycles terminate; external symlink targets are refused without exposing their names or content to an unauthorized caller; unreadable/limit-exhausted entries yield incomplete coverage while findings collected so far are retained; per-file scanned/skipped/failed outcomes and reasons are reported; fail with incomplete coverage stays fail. Separately review runGate in src/security/service.ts: verify with a bounded temp fixture what happens when no latest report exists, when latest.json is malformed, and when it is a recognized report with gate incomplete; a missing or unparseable report must not become a clean pass; report your actual observation, do not assume. Reproduce with bounded synthetic temp fixtures and the CLI (bun src/cli.ts security scan ...). Stage 1 = spec compliance verdict per criterion with evidence; Stage 2 (code quality) only if Stage 1 passes. Write T28-review.md (STATUS first line, findings JSON block with severity/file/line/class_scope) and T28-result.json in the flow artifacts dir.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+    "Policy (policies.md, security scan): scope/excludes/max size+count/required coverage fixed before run; internal symlinks and visited canonical identities recognized, external symlink denied; per-file scanned/skipped/failed with reasons but no hidden names for an unauthorized caller; findings preserved independently of coverage.",
+    "runGate truthfulness: no report, malformed report and incomplete report are each classified without a false pass; the verdict is backed by an executed probe with a raw log reference."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
+    "/Users/Goodea/goodea/keryx/src/security/report.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md and .metaproject/skills/gdskills/review/review-security-code/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run. Use bun src/cli.ts (the global keryx binary is stale).",
+    "Read-only on production code. Write only T28-review.md, T28-result.json and probe scripts named T28-*.ts under the flow artifacts dir; temp fixtures under a mkdtemp dir. Two other workers concurrently edit src/security/output-validation.ts, exfil.ts, schemas.ts $ref handling, the validateSerializedOutput helper in service.ts and guard.ts; exclude those from your verdict and note any hash change you observe.",
+    "No git state changes, no flow state, no network, no model calls, no global test suite, no real sensitive data. Stats disabled. Stage1 before Stage2. Do not accept anything based on prior PASS artifacts; execute your own probes.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:08:00+00:00", "created_by": "flow-orchestrator" }
+}

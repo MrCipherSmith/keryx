@@ -1,0 +1,261 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T57-recheck-2026-09-06",
+  "dispatch_id": "T57",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of T54/T55/T56/T58. Rows 1 (mode validation), 2 (security report exit code at the real CLI entry point), 4 (persisted posture) and 5 (nothing reopens) are closed under fresh probes. Row 3 is half-closed: incomplete and every unrecognized health status now block completion, but a `warn` gate is signed as PASS in the stored flow.json and in the published issue comment, byte-identically to a genuine pass (F-001, blocker). Two minor residuals: a durable false mode-downgrade incident written during a broken-config window when the prior real mode is gateway (F-002, which refutes the fourth disclosed judgement call), and hasGateShape leaving status()'s metrics/sources reads unguarded (F-003). Stage 2 not started. Mid-review drift from the concurrent readJsonObjectFile migration is disclosed; all nine probe logs are byte-identical before and after it, so no conclusion is affected.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Row 1 — mode validation fails closed; absent mode stays permissive; the declared value is validated, not the merged one",
+      "status": "met",
+      "evidence": "T57-mode.ts, 36 payloads x 4 surfaces (loader, guardOutput with a planted key, securityFlowGate, real securityCommand check-input). 29 unrecognized shapes -> enforced + configUnreadable + blocked + CLI exit 1; case, whitespace (tab/newline/NBSP/NUL), non-strings incl. falsy 0/false, and a recognized value nested one level deeper (array or object) all covered. M22 ({\"mode\":null}) proves the declared value is read; M05/M06/M07 keep the permissive default. Raw .metaproject/data/gdctx/raw/T57-mode.log."
+    },
+    {
+      "criterion": "Row 2 — the report command no longer takes strictness from the artifact, and both strict modes accept only a pass, verified at the real command entry point",
+      "status": "met",
+      "evidence": "T57-report.ts drives securityCommand([\"report\",\"--json\"]) itself, never reportExitCode alone; the earlier probe's blind spot is controlled for by printing the pure-function answer beside the real one, and the two disagree on 6 of 8 R2 rows. ci and enforced are one rule across the full gate matrix; advisory/gateway/absent-config stay 0; unreadable and unrecognized-mode configs resolve to the forced enforced and refuse. Raw .metaproject/data/gdctx/raw/T57-report.log."
+    },
+    {
+      "criterion": "Row 3 — no incomplete or unrecognized health gate recorded as passing, and a warn row stays distinguishable from a genuine pass to a reader of the stored flow record",
+      "status": "partial",
+      "evidence": "First half met: T57-flow.ts C03/C05-C16/C18 — incomplete and eleven unrecognized/malformed statuses all block with the constant detail and no echo of the planted value. Second half NOT met: C99 shows the stored flow.json for a warn completion is byte-identical to a genuine pass, the issue comment reads `health: pass` in both, and `warn` appears nowhere in the stored record. F-001. Raw .metaproject/data/gdctx/raw/T57-flow.log."
+    },
+    {
+      "criterion": "Row 4 — a forced-closed posture never becomes the recorded configured mode; repair produces no incident that did not happen; a genuine downgrade across a broken window is still detected, including a first run whose config is already broken",
+      "status": "met",
+      "evidence": "T57-state.ts, both broken shapes x six scenarios through the real check() path. S1 no spurious downgrade; S2 four genuine downgrade shapes still fire; S3 upgrade silent; S4 first-run-broken leaves no state and no incidents across repeated runs and the first readable config establishes real state; S5 a policy disabled across the window is still caught; S7 no config rewrite and no synthesized state.json. One residual on the live comparison (F-002, minor). Raw .metaproject/data/gdctx/raw/T57-state.log."
+    },
+    {
+      "criterion": "Row 5 — nothing the earlier repairs closed reopens; reasons and details stay constant and leak-safe",
+      "status": "met",
+      "evidence": "T39-posture.ts, T39-exit.ts, T39-scan.ts and T55-verify-real-cli.ts re-run with every protected verdict unchanged; T57-health.ts extends the health shape guard to 19 payloads, all failing closed at gate() with the constant reason and clean prototypes. leaky:false on all 36 mode rows and 19 health rows; no planted reason text in any stored flow record or issue comment. Focused suites 133 pass / 0 fail; tsc --noEmit clean. One pre-existing residual narrowed but not eliminated (F-003, minor)."
+    },
+    {
+      "criterion": "Every verdict row cites the reviewer's own executed probe with a raw log path under .metaproject/data/gdctx/raw/",
+      "status": "met",
+      "evidence": "Sixteen-row Evidence table in T57-review.md with SHA-256 for every probe log, plus the pre/post-drift re-run whose identical digests are themselves the drift evidence."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "The review: scope with start/end hashes and disclosed drift, Stage 1 table, four findings, four judgement-call rulings, confirmed clean areas, evidence, routing audit.",
+      "hash": "a407a7f0a2c20f9383200e708b4dc57f9dd25c0bf65e736b1bf014346389058d"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-mode.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe A (row 1): 36 security.config.json mode payloads through the loader, the write seam with a planted synthetic key, the flow gate and the real check-input CLI.",
+      "hash": "6ab4768af30c9cf6c85c147c57dbc58379ad905cd6b12590f73f22a9aa1cc771"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-report.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe B (row 2): the workspace-mode x stored-gate matrix at the real securityCommand report entry point, with the pure-function answer printed beside it as the blind-spot control.",
+      "hash": "540b3fa68f7df799d97e52862715e5b838d5ede31b854b46c6dff5bb6bdd59db"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-flow.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe C (row 3): 18 health payloads through the real complete() pipeline, verdict read back from the stored flow.json, plus a byte comparison of a warn completion against a genuine pass.",
+      "hash": "ec439ac447df6dfd3e5f929dd7da29da8c6a093b83b77cbf9b560312793b1f36"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-state.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe D (row 4): broken-config windows through the real check() path, reading back state.json and the incidents.jsonl trail across repair, genuine downgrade, upgrade, first-run and policy-disable scenarios.",
+      "hash": "51020a7991e463b2aab842fbc4274e670992b5bf6544a154259d2abed60fb7dd"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-health.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe E (row 5): 19 stored health-report shapes at both readLatest callers.",
+      "hash": "35caecbaf06a567e53028f45c84ca8da4beff114d61d685915ad401428824c21"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-mode.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Raw probe A output, 36 rows + prototype hygiene.",
+      "hash": "07cd1864ffad48f3ff5853f7090bf736766ca912bdd9ef05a6d5959b61c95931"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-report.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Raw probe B output.",
+      "hash": "3d6e8a32867bee3a1584fd8cfcd895f30e19c8e85cb11ad4d89034879c038dac"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-flow.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Raw probe C output; row C99 is F-001's evidence.",
+      "hash": "350056681cd5b3c06657b433a3b74871a061ccbc7f7d75a412b87483dfea0f1b"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-state.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Raw probe D output; row S6 is F-002's evidence.",
+      "hash": "19c80bad05bbe3201d62bd652b1d3db30c26734b52c09745205a6ea8f9f99e31"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-health.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Raw probe E output; rows E18/E19 are F-003's evidence.",
+      "hash": "23b107f3a524605de973f0d645411101d8cd54ed5cf737df8cf9c8e4239e867d"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-hashes-start.txt",
+      "kind": "custom",
+      "exists": true,
+      "summary": "File digests at the start of the review.",
+      "hash": "252e7c07bc3480f1b4aeab35156fd3a4635a38a8b3321671a08540f955bb6934"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T57-hashes-end.txt",
+      "kind": "custom",
+      "exists": true,
+      "summary": "File digests at the end of the review; five files drifted, all re-verified.",
+      "hash": "3bc81e1c85a0a98ec90606ad7871f760bfcea5d620d0ccb037a69e9a67abfae4"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-result.json",
+      "change": "added (contract result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-mode.ts",
+      "change": "added (probe, read-only against production code)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-report.ts",
+      "change": "added (probe, read-only against production code)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-flow.ts",
+      "change": "added (probe, read-only against production code)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-state.ts",
+      "change": "added (probe, read-only against production code)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-health.ts",
+      "change": "added (probe, read-only against production code)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T57#F-001",
+      "reviewer": "review-security-code+review-logic (T57)",
+      "severity": "blocker",
+      "file": "src/flow/service.ts",
+      "line": 996,
+      "symbol": "healthGateOutcome",
+      "problem": "The completion fold records a `warn` health gate as GateOutcome.status \"pass\" and relies on `detail` to keep the row distinguishable, but `detail` never reaches the durable record. On the passing path `complete()` writes only `transition(..., \"all gates passed\")` (src/flow/service.ts:667) and `buildIssueComment` renders `${gate.name}: ${gate.status}` with `detail` dropped (:1091), so the stored flow.json for a warned completion is byte-identical to a genuine pass and the published issue comment reads `health: pass`. The code comment at :980-983 and T56-implementation.md's acceptance table both assert the opposite as a property of flow.json.",
+      "impact": "policies.md's «Optional skip показывает warning и не подписывается как passed» fails on the completion path. computeGate produces `warn` precisely for an optional source that was configured and then failed or was skipped, and for coverage below the soft floor; that state is now persisted in flow.json and posted to the issue tracker as an unqualified pass. A machine reading either surface to decide the phase was verified cannot tell a clean gate from a warned one. The distinction survives only on the ephemeral terminal line (src/commands/flow.ts:589), beside a green check mark.",
+      "suggested_fix": "Keep the warn -> non-blocking decision; fix the record. Either (a) give the pass-path `transition` the same `${gate.name}: ${gate.detail}` join the failing path already builds at :683, so flow.json history carries `health: health gate: warn`; or (b) add a `warn` member to GateOutcome.status (leaving the master fold at :659 unchanged so it still does not block) and let buildIssueComment render `health: warn`. (b) is the more faithful reading of \"not signed as passed\". Correct the code comment at :980-983 and T56's acceptance row either way: as written they assert a false property of flow.json.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-flow.ts, raw .metaproject/data/gdctx/raw/T57-flow.log (sha256 350056681cd5b3c06657b433a3b74871a061ccbc7f7d75a412b87483dfea0f1b), row C99: {\"storedRecordsIdentical\":true,\"issueCommentsIdentical\":true,\"issueCommentHealthLinePass\":\"- Gates: ... health: pass\",\"issueCommentHealthLineWarn\":\"- Gates: ... health: pass\",\"storedRecordContainsWarnWord\":false}. Rows C01/C02 show returnedDetail differing in memory (\"health gate: pass\" vs \"health gate: warn\") while storedRecordMentionsHealth is false for both. Two full real complete() pipelines, verdict read back off disk.",
+      "confidence": "high",
+      "dedupe_key": "flow-complete-warn-signed-as-pass-in-stored-record",
+      "blocking_merge": true,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/flow/service.ts:996",
+          "src/flow/service.ts:667",
+          "src/flow/service.ts:1091",
+          "src/flow/service.ts:683",
+          "src/commands/flow.ts:589"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg -n \"buildIssueComment|gate.status|gate.detail|gates\" src/flow/service.ts (raw 2026-09-06T16-13-51-868Z_rg.log) enumerated all 29 uses of the gates array in complete(); each was read. Exactly two leave the function's memory (:667/:683 through transition's history.push at :106, and :668 -> :1091). The resulting bytes on disk were then confirmed by probe rather than inferred."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T57#F-002",
+      "reviewer": "review-security-code+review-logic (T57)",
+      "severity": "minor",
+      "file": "src/security/service.ts",
+      "line": 92,
+      "symbol": "analyze / evaluateSelfProtection",
+      "problem": "T58 stops a forced posture becoming `previous`, but `appendIncidents` runs before the state-write guard, so a run against a broken config whose prior real mode is `gateway` appends a durable `mode-downgrade` entry to the append-only incidents.jsonl, and that entry survives the operator repairing the config back to the same `gateway`. The disclosed justification (\"a true statement about the current run\") does not hold: while configUnreadable is set, guardOutput and securityFlowGate refuse everything through their posture-unavailable branches, so effective enforcement during the window is stricter, not weakened; and isBlockingMode (guard.ts:229) puts `gateway` on the non-blocking side while MODE_RANK (self-protect.ts:32-37) ranks it strictest, so the two axes disagree about the sign of gateway -> enforced.",
+      "impact": "Fail-loud noise, not a bypass: no check is relabeled and nothing is let through. But the acceptance criterion is 'repairing the config afterwards must produce no incident that did not happen', and state.json now satisfies it while the incident trail does not. A false entry in the append-only audit trail erodes the signal a real mode-downgrade carries. Reachability is one prior mode (`gateway` is the only rank above the forced `enforced`, and is a Phase-4 mode).",
+      "suggested_fix": "Guard the comparison on the same condition the state write already uses: skip the mode-downgrade and policy-disabled arms of evaluateSelfProtection when config.configUnreadable, since a forced posture is not an operator choice on the way in either. If an operator-visible signal is wanted during a broken window, emit it as a `warning` only and never as an IncidentEntry, so the durable trail keeps meaning 'the operator changed something'. Separately (out of scope): MODE_RANK ranks `gateway` strictest while isBlockingMode treats it as report-only.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-state.ts, raw .metaproject/data/gdctx/raw/T57-state.log (sha256 19c80bad05bbe3201d62bd652b1d3db30c26734b52c09745205a6ea8f9f99e31), row S6 for both broken shapes: incidentsBeforeBreak [], incidentsDuringBrokenWindow [\"mode-downgrade\"], incidentsAfterRepairToSameMode [\"mode-downgrade\"], durableIncidentWrittenByTheBrokenRun true, stateAfterRepair \"gateway\". Controls in the same run: S1 (advisory prior) raises nothing; S2 shows four genuine downgrade shapes across a broken window still fire.",
+      "confidence": "high",
+      "dedupe_key": "self-protect-live-comparison-false-incident-during-broken-config",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "T57#F-003",
+      "reviewer": "review-security-code+review-logic (T57)",
+      "severity": "minor",
+      "file": "src/health/service.ts",
+      "line": 48,
+      "symbol": "hasGateShape",
+      "problem": "hasGateShape validates that the payload is an object and that `gate` carries a string `status` and an array `reasons`, and nothing else. A stored latest.json whose gate is well-formed but which has no `metrics` key, or `metrics` as a string, passes the guard and then throws a raw TypeError out of status() at `latest?.metrics.find` (:198) — the same value-vs-shape gap T55 was dispatched to close, one field further along. T55-implementation.md states that status() 'also benefits from this fix (a malformed report no longer throws there either)', which is true only for the payloads it tested.",
+      "impact": "Not a false pass, and gate() — the deciding surface — is unaffected. `keryx health status` and the health.status MCP tool raise an unhandled TypeError at an agent-visible seam instead of the module's own 'no report' answer. A truncated, hand-written or older artifact reaches it; no tampering is needed.",
+      "suggested_fix": "Extend hasGateShape to the fields its callers dereference — Array.isArray(value.metrics) && Array.isArray(value.sources) — which folds a truncated artifact into the same 'no report' outcome the guard already produces, for both callers, in one extra clause. Guarding at status()'s two reads instead would work but abandons the single-point shape the repair chose.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T57-health.ts, raw .metaproject/data/gdctx/raw/T57-health.log (sha256 23b107f3a524605de973f0d645411101d8cd54ed5cf737df8cf9c8e4239e867d), rows E18 (statusThrew \"undefined is not an object (evaluating 'latest?.metrics.find')\", gateResult still a clean {status:pass,exitCode:0}) and E19 (statusThrew \"latest?.metrics.find is not a function\"). Controls E01-E17: every malformed gate shape is the constant no-report refusal at gate() and null at status(), no throw.",
+      "confidence": "high",
+      "dedupe_key": "health-hasGateShape-metrics-sources-unvalidated",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T57#F-004",
+      "reviewer": "review-security-code+review-logic (T57)",
+      "severity": "info",
+      "file": "src/flow/service.ts",
+      "line": 652,
+      "symbol": "complete (Gate 6: security)",
+      "problem": "The security arm still pushes `status: security.status` verbatim, and the master fold at :659 (`gates.every((gate) => gate.status !== \"fail\")`) treats `skipped` as non-blocking. securityFlowGate's declared return type admits \"skipped\"; the function cannot produce it today. Unchanged from T39 F-001's class_scope and correctly outside T56's ownership.",
+      "impact": "None reachable today: securityFlowGate returns only pass/fail, or null for a disabled module. Recorded so the next round does not rediscover it, and because the type keeps the door open on the one arm where every sibling fold has now been closed.",
+      "suggested_fix": "Either narrow securityFlowGate's return type to the two values it can actually return, or fold the security arm through the same exhaustive-helper shape healthGateOutcome now uses.",
+      "evidence": "Read of src/flow/service.ts:645-659 and src/security/guard.ts:417-476 (securityFlowGate returns only pass/fail/null on every path). T39-exit.ts F2 re-run, raw .metaproject/data/gdctx/raw/T57-r1-T39exit.log: a hand-built securityGate dependency returning \"skipped\" completes the flow (recordedGateStatus \"skipped\", completionPassed true).",
+      "confidence": "high",
+      "dedupe_key": "flow-complete-security-arm-skipped-passthrough",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "probes_written": 5,
+    "probe_cases_executed": 129,
+    "files_drifted_mid_review": 5,
+    "probe_logs_identical_across_drift": 9,
+    "focused_tests": "133 pass / 0 fail / 692 expect()"
+  },
+  "timestamp_utc": "2026-09-06T16:30:00Z"
+}

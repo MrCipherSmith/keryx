@@ -1,0 +1,91 @@
+{
+  "framework": "bun:test",
+  "test_files": [
+    {
+      "path": "src/health/health-truthful-gate.test.ts",
+      "target_module": "src/health/gate.ts, src/health/run.ts, and health source outcome aggregation",
+      "test_count": 5,
+      "tests": [
+        {
+          "id": "AFC05-required-completeness-fold",
+          "description": "required missing, skipped, disabled, and failed checks produce incomplete while an optional skip remains visible without making coverage incomplete",
+          "criterion": "Required coverage and finding outcomes are independent; optional skips remain truthful",
+          "type": "edge_case",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC05-fail-dominates-incomplete",
+          "description": "a P0 finding produces fail while the gate still records incomplete required coverage",
+          "criterion": "Confirmed blocking findings dominate without hiding incomplete coverage",
+          "type": "edge_case",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC05-source-filter-coverage",
+          "description": "selecting only complexity records omitted required eslint/typescript checks and cannot report a clean gate",
+          "criterion": "Source-filter scope reports actual required coverage truthfully",
+          "type": "error_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC05-audit-rc0-unparsed",
+          "description": "a local fake Bun audit returning malformed text with exit zero yields no findings and an incomplete parse instead of PASS",
+          "criterion": "Unknown or malformed output cannot report clean even with rc0",
+          "type": "error_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC05-audit-rc1-findings",
+          "description": "a local fake Bun audit returning one recognized critical advisory with exit one retains that finding and produces FAIL with complete coverage",
+          "criterion": "Recognized nonzero audit results retain findings and remain distinct from execution/parse failure",
+          "type": "happy_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "src/health/dependency-audit-format.test.ts",
+      "target_module": "src/health/sources/dependency-audit.ts",
+      "test_count": 1,
+      "tests": [
+        {
+          "id": "AFC05-audit-public-formats",
+          "description": "synthetic Bun package-keyed arrays plus npm modern vulnerabilities and legacy advisories preserve deterministic unique advisory identity and mapped severity",
+          "criterion": "Supported Bun and npm audit formats parse deterministically from public synthetic fixtures",
+          "type": "happy_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "src/commands/health-incomplete.test.ts",
+      "target_module": "src/health/service.ts and src/commands/health.ts",
+      "test_count": 2,
+      "tests": [
+        {
+          "id": "AFC05-service-blocks-incomplete",
+          "description": "the stored-report service returns exit code one for an incomplete gate even when strict-warn is absent",
+          "criterion": "Strict service gate behavior accepts only PASS",
+          "type": "error_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC05-cli-blocks-incomplete",
+          "description": "health run --strict --source eslint prints an incomplete report and sets exit code one when required eslint is skipped",
+          "criterion": "Strict CLI rejects incomplete and exposes the selected source status",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    }
+  ],
+  "run_command": "bun test src/health/health-truthful-gate.test.ts src/health/dependency-audit-format.test.ts src/commands/health-incomplete.test.ts",
+  "expected_result_before_implementation": "8 failing, 0 passing (RED phase)",
+  "expected_result_after_implementation": "8 passing, 0 failing",
+  "additional_green_commands": [
+    "bun run typecheck",
+    "bun test src/health/gate.test.ts src/health/parsers.test.ts src/health/service-status.test.ts src/commands/health-status.test.ts"
+  ],
+  "red_evidence": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-red.md",
+  "notes": "All runtime audit cases use a temporary local node_modules/.bin/bun script with synthetic public JSON or malformed text; no package registry, network, provider, model, credential, or private audit data is accessed. The fixtures exercise the existing runHealth -> runAdapter -> dependencyAuditAdapter boundary, so no test-only production seam is required. Tests intentionally assert externally visible report/gate/source behavior rather than a private helper layout. Existing health assertions were left unchanged. commit_test_stubs=false; no git or flow state was mutated."
+}

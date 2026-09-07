@@ -1,0 +1,124 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T85",
+  "dispatch_id": "233-T85-agent-first-core-phase-1",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T84#F-001 (readDefinitionDestination had no memoisation, making a found-then-failing `]:` quadratic: 6971ms in the detector at 200001 bytes and 6784-6952ms at all four public boundaries at 196610 bytes, with no attacker host in the payload) and T84#F-003 (indexContent's bracket pairing was blind to backslash escaping, so seven description-side spellings reached all four boundaries with redaction.state 'none' while marked fetched). T84#F-002, reference definitions inside container blocks, was NOT revisited: it is the user's accepted, documented limitation and all 17 of its rows still read BYPASS by design. The destination read is now memoised by its sticky offset, which changes no answer and makes total destination work provably linear because the whitespace runs at distinct `]:` offsets are pairwise disjoint. descriptionEnds now APPENDS two escape-aware candidate ends after the two escape-blind ones rather than replacing them, because replacing would delete the only candidate `![a\\](URL)` has and exfil.ts:529-531 forbids moving in the release direction. Fuzzing found one real release the appending argument did not cover -- a new end grew a spurious link whose destination grammar swallowed the next line's genuine image -- so a construct that exists only through an escape-aware end is now flagged but never moves the scan cursor. With that guard the 28000-document differential fuzz reports zero span moves and zero host releases.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "No shape costs more than a second at any public boundary at any size up to a megabyte, including the reviewer's destination-failure shape and at least one constructed here; the worst shape and its cost are stated",
+      "status": "met",
+      "evidence": "T84-cost.ts boundary (the run T84 abandoned as impractically slow) completes with boundariesOverOneSecond: []. T85-cost.ts boundary, best-of-three over ten shapes at 524288 and 1048576 bytes: boundariesOverOneSecond: []. Worst shape under a megabyte: T82's own resolvingBangUses at 1048576 bytes, 691.2 ms at prepareOutputForPersistence -- pre-existing, consistent with T82's 676.8 ms and T83's 715.4 ms. Worst of my own: escapedCloseRunWithDef at 1048615 bytes, 607.4 ms at dispatchCallTool, whose backslash-free control of the same class (which takes exactly the pre-change code path) reads 678-967 ms at the same size, so the cost is pre-existing. The reviewer's destFailWhitespaceTail at 1048576 bytes: 198325.1 ms -> 20.4 ms. Raw: T85-after-T84-cost-boundary.log, T85-after-cost-boundary.log, T85-after-T84-cost-ladder.log, T85-after-cost-ladder.log."
+    },
+    {
+      "criterion": "All the escape-blind description-side spellings are findings at the detector and at all four public boundaries, plus spellings added here",
+      "status": "met",
+      "evidence": "T84-bypass.ts: b01,b02,b03,b05,b07,b08 all BYPASS -> closed, 0 -> 1 findings, mcpState none -> redacted, no boundary carries the host; b06NestedInLinkEscapedAlt additionally 0 -> 1. T84-escape.ts: x09EscapeInAltOnly BYPASS -> closed, exactly one row changed. Six spellings of my own added to the regression (m01,m02,m03,m04,m06,m07), covering the escape-aware balanced end, an escaped close in a link's text wrapping an image, a doubly-escaped close, an adjacent ref-id, and an escaped close abutting the real one. T85-marked.ts: 78 shapes (the twelve pinned plus a generated sweep of ten escaped-`]` positions x six use forms) through marked and all four boundaries -- bypasses: [], rendererFetchesButNoFinding: []."
+    },
+    {
+      "criterion": "Everything previously closed stays closed; the benign corpus does not grow, or the change is enumerated with the correct vector",
+      "status": "met",
+      "evidence": "18 of 19 prior matrices byte-identical before and after and equal to T83's recorded hashes; T83-escape, T82-escape, T82-dup, T83-parity byte-identical; T82-boundary budget 62595fb8... equal to T83's value. T53-corpus moved, and its ENTIRE diff is two lines: filesScanned 23466 -> 23513 and elapsedMs 7081 -> 7557. Every finding count is byte-identical, including benignFilesWithFindings 16, benignFindings 62 and Part B 7 flagged with the same ids -- the benign corpus does not grow. T85-parity.ts over 28000 documents: span moves 0, host releases 0, additions 653 with additionsWithoutBackslash 0."
+    },
+    {
+      "criterion": "Each fix is pinned by a regression that fails without it",
+      "status": "met",
+      "evidence": "On the pre-change tree the two pinning tests failed: 'T84#F-001: a definition destination that fails to parse cannot cost quadratic time' at [destFailWhitespaceTail=6966.1ms, destFailNewlineTail=7217.1ms, destFailMixedWhitespaceTail=5638.0ms] (and timed out at bun's 5 s default), and 'T84#F-003: a backslash-escaped `]` in a description cannot hide the construct' at b01FullRefEscapedAlt:false. Both pass after. Two further tests are declared non-regression guards rather than pins and pass on both trees. Raw: T85-red.log."
+    },
+    {
+      "criterion": "The cost argument is preserved, or re-derived and demonstrated empirically if the change touches it",
+      "status": "met",
+      "evidence": "Steps (i) and (ii) -- a key is the label's bytes up to its first `]`, and normaliseLabel -- are facts about the definition side and are untouched; no key moved. Step (iii) re-derived in exfil.ts and T85-implementation.md: the new ends add no shortcut/collapsed slicing (the span provably contains the first `]`, so readLabel's escape-blind rejection fires before any slice), full-reference spans stay pairwise disjoint (the span is a function of its close position alone), and per-open work at most doubles. LABEL_WORK_FACTOR is unchanged and is still a multiplier on the input, never a bound on a length. The destination side gains a new linearity argument (runs at distinct `]:` offsets are pairwise disjoint), pinned by two shapes built to defeat the cache: destFailManyDistinctOffsets exponent 0.80, destFailDistinctGrowingRuns 1.09. Both ladders report superLinear: []. T82's six constant-size dials: spreads 5.8/14.4/3.4/38.9/15.0/25.4 ms against T83's 2.3/14.9/4.1/36.8/25.5/31.5."
+    },
+    {
+      "criterion": "Container-block reference definitions (T84#F-002) are not covered and no external markdown parser is adopted",
+      "status": "not_applicable",
+      "evidence": "Out of scope by the user's final decision. No container handling and no dependency change. All 12 class-A rows in T84-bypass.ts and all 5 in T84-escape.ts still read BYPASS, unchanged."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Spec written before any code: the mechanism of both findings re-derived, the additive design for the description side, and the cost obligations declared as empirical rather than argued.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full report: baselines, both mechanisms, the release the fuzz found and the cursor guard that fixes it, matrices, corpus delta, cost tables, concerns, routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-parity.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Differential fuzz over 28000 documents built from the characters the DESCRIPTION side is sensitive to, including parentheses, which T83-parity.ts's atom set lacks. Reports span moves and host releases separately.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-marked.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Renderer differential over 78 shapes -- the pinned spellings plus a generated sweep -- through marked and all four public boundaries.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-cost.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Cost ladder and four-boundary sweep to a megabyte over shapes chosen against both repairs' mechanisms, best-of-three.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T85-matrices.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Runs the 19 prior matrix probes and diffs each against T83's recorded log. Read-only; edits no existing probe.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T85-after-focused-suites.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "119 pass / 0 fail / 1393 expect(), exit 0 across the four focused suites.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "readDefinitionDestination memoised by its sticky `]:` offset via a per-call Map shared by both readings (T84#F-001). indexContent gains escape-aware bracket pairing (unescapedCloses, escapeAwareBalanced), built only when the document contains a backslash and otherwise aliasing the escape-blind structures by reference. descriptionEnds APPENDS two escape-aware candidate ends after the two existing ones and reports how many are escape-blind. BracketConstruct carries `escapeAware`; all four scan-cursor writes in the inline and reference passes are guarded so an escape-aware-only construct is flagged but never skips. Header comments re-derive both cost arguments. Hash 63ea36a6... -> 4e6668b8..."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Four tests added: a cost regression for T84#F-001 over six shapes including two that defeat a cache by never repeating an offset; a bypass regression for T84#F-003 over twelve spellings at the detector and all four public boundaries, with no-release and allowlist controls; a construct-ordering guard; and a cost guard for the new candidate ends. Hash aec80e05..."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 4,
+    "tests_passing": 119,
+    "tests_failing": 0,
+    "expect_calls": 1393,
+    "matrices_identical": 18,
+    "matrices_total": 19,
+    "fuzz_documents": 28000,
+    "fuzz_span_moves": 0,
+    "fuzz_host_releases": 0,
+    "benign_corpus_files_with_findings": 16,
+    "benign_corpus_findings": 62,
+    "worst_boundary_ms_under_1mb": 691.2,
+    "new_false_positive_shapes": 3
+  },
+  "timestamp_utc": "2026-09-07T04:05:00Z"
+}

@@ -74,10 +74,14 @@ test("src/mcp only imports service facades + lib + guard (M-3)", async () => {
   for (const file of files) {
     const content = await readFile(file, "utf8");
     for (const spec of importSpecifiers(content)) {
-      const isRelativeInternal = spec.startsWith("./") || spec.startsWith("../transport/");
+      // Compare resolved targets: transports are one directory deeper than the
+      // facade. A textual ../lib prefix rejects valid ../../lib imports there.
+      const target = spec.startsWith(".") ? path.resolve(path.dirname(file), spec) : undefined;
+      const moduleSpecifier = target === undefined ? spec : `../${path.relative(SRC_ROOT, target).split(path.sep).join("/")}`;
+      const isRelativeInternal = target !== undefined && target.startsWith(`${MCP_ROOT}${path.sep}`);
       const isNodeBuiltin = spec.startsWith("node:");
-      const isLib = spec.startsWith("../lib/");
-      const isAllowedFacade = ALLOWED_EXTERNAL.has(spec);
+      const isLib = moduleSpecifier.startsWith("../lib/");
+      const isAllowedFacade = ALLOWED_EXTERNAL.has(moduleSpecifier);
       if (!isRelativeInternal && !isNodeBuiltin && !isLib && !isAllowedFacade) {
         violations.push(`${path.relative(PKG_ROOT, file)} imports "${spec}"`);
       }

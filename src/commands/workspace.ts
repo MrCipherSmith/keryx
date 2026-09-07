@@ -341,6 +341,7 @@ function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): str
   if (includeLifecycleFlags) {
     sections.push(renderSection("Lifecycle flags (component no longer in the graph)", report.lifecycleFlags, (item) =>
       `- ${item.kind} \`${item.ref}\` scopes to \`${item.missingComponent}\`, which is no longer in the code graph (flagged ${item.flaggedAt}). Still relevant, or safe to clean up? ` +
+      // eslint-disable-next-line no-useless-escape -- Escaped backticks are emitted by the surrounding Markdown template.
       `Recommendation: this is report-only — nothing was archived/edited/removed automatically; ${item.kind === "workspace" ? "\`keryx workspace archive " + item.ref + "\`" : item.kind === "memory-entry" ? "\`keryx memory supersede\` or edit the entry directly" : "edit or remove the wiki page directly"} if you decide it's actually stale.`));
   }
   return sections.join("\n\n");

@@ -1,0 +1,116 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T52",
+  "status": "DONE",
+  "summary": "Fixed the auto-fetch floor's extractor and its resolution assumption together, plus the base element. HTML attributes are now walked with the tokenizer's own states instead of a negated character class (a quoted > no longer hides an element and an attribute value is no longer a name position), a scheme-with-no-slashes destination is judged against two base pairs whose schemes differ so the verdict no longer depends on the renderer's document scheme, a bare CommonMark destination is no longer cut at >, and a <base href> that carries its own authority is a document-level egress finding whose masking restores the relative-implies-same-origin rule. The reviewer's 42-case matrix goes 14 bypasses to 0 with 0 false positives on its 15 benign controls, the earlier 48-case matrix stays 0/0, and all six shapes that reached the MCP client with isError:false and redaction.state:none now come back redacted with the host gone at the dispatch, the persistence materializer and the compatibility seam.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T52-implementation.md",
+  "acceptance": [
+    {
+      "criterion": "All fourteen bypasses in the reviewer's forty-two case matrix are closed, with zero false positives against its fifteen benign controls.",
+      "status": "met",
+      "evidence": "T42-exfil-attack.ts unmodified: before cases=42 bypasses=14 (8 unconditional b.gtInEarlierAttribute/.Single/.Image/.Srcset, b.decoySrcInAttribute, b.decoySrcsetInAttribute, b.decoySrcThenGt, b.newlineInTag; 6 conditional a.schemeNoSlashes/.OneSlash/.Upper/.Mixed/.Entity/.Markdown) falsePositives=0 (raw .metaproject/data/gdctx/raw/T52-before-T42-exfil-attack.log); after cases=42 bypasses=0 falsePositives=0 (raw .metaproject/data/gdctx/raw/T52-after-T42-exfil-attack.log)."
+    },
+    {
+      "criterion": "The earlier forty-eight case matrix stays at zero bypasses and zero false positives.",
+      "status": "met",
+      "evidence": "T24-recheck2-exfil.ts unmodified: cases=48 bypasses=0 falsePositives=0 before and after (raw .metaproject/data/gdctx/raw/T52-before-T24R2-48matrix.log, T52-after-T24R2-48matrix.log)."
+    },
+    {
+      "criterion": "The closures hold at the MCP dispatch and the persistence materializer, not only at the detector.",
+      "status": "met",
+      "evidence": "T42-boundary.ts unmodified with mergeMcpConfig({redactToolOutput:false}) (advisory redaction OFF, so the mandatory floor is what is measured): the six shapes gtInEarlierAttribute, decoySrcInAttribute, decoySrcThenGt, gtInEarlierAttributeSrcset, imageAliasGt and schemeNoSlashes go from 'mcp isError=false state=none reasons=[] leaksHost=true | persist leaksHost=true identical=true | seam leaksHost=true' to 'state=redacted reasons=[egress.html-image-exfil] leaksHost=false | persist leaksHost=false identical=false | seam leaksHost=false'; ctlPublicLink stays state=none byte-identical (raw T52-before-T42-boundary-row1.log, T52-after-T42-boundary-row1.log). Rows 2 and 3 of the same probe (T41 scanner, T44 persistence signal) compare byte-identical before and after. T24-recheck2-boundary.ts re-run: 28 MCP cases, 0 leakHost at transport, materializer and seam (raw T52-after-T24R2-boundary.log). Two committed regressions drive prepareOutputForPersistence and validateOutputForTransport over all seven new class vectors."
+    },
+    {
+      "criterion": "The base element's effect on resolution is either handled or shown not to matter, in writing, with a probe either way.",
+      "status": "met",
+      "evidence": "Handled: a <base href> whose destination carries its own authority is an egress finding (egress.html-base-href-exfil) masked url on its raw span, which puts the document base back inside the reader's own origin so the relative-implies-same-origin conclusion is true again for the rendered text. Shown, not argued: T52-base.ts adjudicates every destination in the REDACTED document against five renderer document bases with an independent quote-state document reader and the platform URL parser. Before 10 of 14 documents still reach attacker.invalid after redaction; after, 0 do, with 0 false positives on 4 controls (relative base, base without href, base written inside an attribute value, allowlisted base). Raw T52-before-base.log, T52-after-base.log. Written up in T52-implementation.md 'Defect 4', including why relative destinations are deliberately not re-resolved against the attacker's base, and why meta refresh stays with the deferred surface task."
+    },
+    {
+      "criterion": "Extraction and classification are both correct: no destination is truncated or mis-captured before classification, and the attribute forms handled are enumerated with their method.",
+      "status": "met",
+      "evidence": "Extraction: HTML_IMG/HTML_IMG_SRCSET replaced by a single left-to-right start-tag scan whose attribute walk reproduces the HTML Standard §13.2.5 states; src/srcset/href are read only from the attribute-name position and the scan resumes past the tag's own '>'. Truncation: INLINE group 3 [^)\\s>]+ -> [^)\\s]+ and REFERENCE_DEF group 3 [^\\s>]+ -> \\S+, so a bare CommonMark destination containing '>' masks whole (regression asserts the '>b' tail is inside the mask). Enumeration method: every tokenizer state reachable between the tag name and the terminating '>' was enumerated from §13.2.5 and each transition asked whether it can carry or hide a destination, producing the 14-row table in T52-implementation.md, each row a regression vector. Row 14 was a pre-existing FALSE POSITIVE (markup inside a quoted value) that the fix removes: measured markupInsideValue before=1 after=0."
+    },
+    {
+      "criterion": "No bypass is closed by widening the net until benign text trips it; false positives re-measured over the repository's own content.",
+      "status": "met",
+      "evidence": "T52-corpus.ts over 16684 text files, empty allowlist, both detectors: 192 findings / 40 files before, 248 / 41 after. Delta +66 / -10, and every one of the 66 is inside a file that carries attack vectors on purpose (the flow's own probes, the review artifacts quoting them, the extended exfil.test.ts, the detector's own doc comment). Zero new findings in benign repository content; all 18 egress.html-base-href-exfil hits are in probe/test files and the repository contains no benign <base href>. The 10 removed are the same destinations re-attributed after the '>' truncation fix. Raw T52-before-corpus.log, T52-after-corpus.log. Reviewer's 15 benign controls stay at 0 false positives, and a dedicated new regression adds 15 more controls."
+    },
+    {
+      "criterion": "One false sentence in the module's documentation about the named-character-reference table is corrected.",
+      "status": "met",
+      "evidence": "The claim 'over the ASCII punctuation that HTML5 names, that is exactly this set' is replaced by the true and stronger reason: a named reference is only ever an alternative spelling and the unbounded, range-checked numeric form already covers every character generically, so an absent name can matter only for a character that has an HTML5 name AND is URL syntax or URL-removed. The table is unchanged. T42-charrefs.ts is unchanged before and after: namesTested 48, casesTested 240, namedSpellingBypasses [], numericSpellingBypasses [], absentButUrlSyntax [] (raw T52-before-T42-charrefs.log, T52-after-T42-charrefs.log)."
+    },
+    {
+      "criterion": "Masking offsets stay on the original bytes; the platform URL parser is used and no URL parser is hand-rolled.",
+      "status": "met",
+      "evidence": "considerUrl is unchanged: it builds the renderable form for classification only and keeps start/end on the raw span. The new attribute walk records each value's exact offset (valueStart) rather than re-finding it with lastIndexOf, so spans are exact by construction. Every regression asserts the attacker host is absent from applyRedaction's output. Only ATTRIBUTE scanning is hand-rolled, justified row by row against §13.2.5; host resolution is the platform WHATWG URL in resolvedHost, now against two base pairs."
+    },
+    {
+      "criterion": "Quality gates: focused suites, typecheck, lint.",
+      "status": "met",
+      "evidence": "bun test src/security/detect/exfil.test.ts src/security/output-validation.test.ts src/mcp/structural-redaction.test.ts src/security/persistence-sinks.test.ts src/mcp -> 259 pass, 3 skip, 0 fail, 1244 expect(), 262 tests / 21 files (raw T52-after-focused-suites.log). Wider bun test src/security src/session -> 323 pass, 0 fail, 1557 expect() (raw T52-after-wider-suite.log). exfil.test.ts alone: RED 20 pass / 7 fail (raw T52-red-exfil-test.log) -> GREEN 27 pass / 0 fail / 313 expect() (raw T52-green-exfil-test.log). bun run typecheck exit 0, no output (raw T52-after-typecheck.log). bunx eslint on both changed files exit 0, no output (raw T52-after-eslint.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T52-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Spec written before any code change: baselines, the three defects plus the base element, the attribute-form enumeration method, the two-base-pair decision with its resolution table, and the verification plan."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T52-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect report with the attribute-form enumeration and its method, the base-element determination, and before/after counts with raw log paths."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T52-base.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The base-element probe: resolves every destination in the REDACTED document against five renderer document bases with an independent quote-state document reader; 14 cases, both detectors."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T52-corpus.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "False-positive sweep of the detector over every text file in the checkout, per policy id and per file, runnable against any detector revision."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "modified"
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "modified"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "reviewer_42_case_matrix_bypasses_before": 14,
+    "reviewer_42_case_matrix_bypasses_after": 0,
+    "reviewer_42_case_matrix_false_positives_after": 0,
+    "earlier_48_case_matrix_bypasses_after": 0,
+    "boundary_shapes_leaking_host_before": 6,
+    "boundary_shapes_leaking_host_after": 0,
+    "base_documents_reaching_attacker_after_redaction_before": 10,
+    "base_documents_reaching_attacker_after_redaction_after": 0,
+    "corpus_files_scanned": 16684,
+    "corpus_findings_before": 192,
+    "corpus_findings_after": 248,
+    "corpus_new_findings_in_benign_content": 0,
+    "new_regressions": 7,
+    "regressions_failing_before": 7,
+    "regressions_failing_after": 0,
+    "focused_suite_pass": 259,
+    "focused_suite_fail": 0,
+    "typecheck_exit": 0,
+    "eslint_exit": 0
+  },
+  "timestamp_utc": "2026-09-06T16:12:00Z"
+}

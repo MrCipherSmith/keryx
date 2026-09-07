@@ -1,0 +1,72 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T59",
+  "status": "DONE",
+  "summary": "Closed the strongest remaining instance of this phase's defect class, named by T43-implementation.md at src/health/config.ts:71: loadHealthConfig threw on a null-payload health config and silently reverted an operator's tightened gate thresholds to defaults for every other non-object or unparseable payload. Migrated the reader to the shared shape-aware readJsonObjectFile (T39 ruling), and decided deliberately what a present-but-unusable health config means: unlike security.config.json, HealthConfig has no single mode and no configUnreadable-shaped carrier field, and adding one would touch src/health/types.ts and src/health/gate.ts, outside this task's ownership. Instead of a flag, the two gate-relevant blocks T43 named for this site -- gate and every source's required flag -- are forced to the strictest values the type can express, provably at least as strict as any real config, and reach an equivalent outcome through the existing, unmodified computeGate(): a required-but-disabled sonarqube source guarantees the gate is never better than incomplete, and the widened priorities/zero drop thresholds guarantee any real finding or regression escalates to fail. Absent and well-formed configs are byte-identical to before. Also corrected the documentation drift the same worker recorded at docs/docs/cli-reference.md:2116 and :2139 (scan-mcp's --strict exit description was missing the unreadable-manifest/baseline case T43 added).",
+  "summary_markdown": "See T59-implementation.md for the full three-case description of what a reader of the resulting gate sees (absent / well-formed / unusable), the argument for why health does not literally mirror security's flag-based answer, the disclosed metrics.coverageSoftFloor residual, and per-regression evidence.",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome; violations are not lost when another check is unavailable.",
+      "status": "met",
+      "evidence": "src/health/config.test.ts covers null, 42, [], \"advisory\", and unparseable JSON as the corrupted-payload fixtures; each produces the strictest achievable HealthConfig rather than throwing or silently defaulting. Forcing every source's required to true guarantees at least one broken required source (sonarqube, mode:disabled by default), which the unmodified computeGate() already escalates to GateStatus:incomplete per policies.md's own required-check-missing -> INCOMPLETE fold -- so an incomplete area is never silently dropped, and a real finding at any priority still independently reaches fail via the widened failOnPriorities."
+    },
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS; a security-relevant setting is never silently relaxed by an unusable file.",
+      "status": "met",
+      "evidence": "config.test.ts's 'a non-object payload does not silently restore default gate thresholds' test asserts config.gate is NOT equal to DEFAULT_HEALTH_CONFIG.gate for a corrupted payload -- the exact silent-relaxation bug, now asserted against directly. The forced gate (all four priorities, zero drop thresholds, every source required) is provably a superset of any real operator's tightening, since every legal failOnPriorities is a subset of the four priorities and every legal drop threshold is non-negative; computeGate is untouched so PASS is reachable only when literally nothing is wrong, never as a relabeling of incomplete/fail."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/health/ src/commands stays green and no currently passing invocation stops passing.",
+      "status": "met",
+      "evidence": "RED (before): 1 pass / 6 fail, 11 expect(), src/health/config.test.ts against the original config.ts -- .metaproject/data/gdctx/raw/2026-09-06T16-37-38-810Z_run.log. GREEN (after): 7 pass / 0 fail, 74 expect() -- .metaproject/data/gdctx/raw/2026-09-06T16-39-29-758Z_run.log. Required broad command 'bun src/cli.ts ctx run -- bun test src/health/ src/commands': 1083 pass / 6 skip / 0 fail, 3981 expect(), 1089 tests across 97 files -- .metaproject/data/gdctx/raw/2026-09-06T16-40-10-858Z_run.log. bun run typecheck: exit 0, no errors. bunx eslint src/health/config.ts src/health/config.test.ts: exit 0, no output. The two pre-existing loadHealthConfig tests in src/health/parsers.test.ts (absent-file default, ignore-path merge) are unmodified and included, still passing, in the broad run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T59-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: the defect precisely, the three-case decision argument, the disclosed metrics.coverageSoftFloor residual, and the implementation/verification contract",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T59-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What changed, the full three-case description of what a reader of the resulting gate sees, the comparison against security/config.ts's flag-based answer and why health does not literally mirror it, per-regression evidence, verification counts and raw log paths, files changed, and routing audit",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/health/config.ts",
+      "change": "readJsonFileOr replaced with readJsonObjectFile; loadHealthConfig branches on read.state; well-formed-merge path untouched line-for-line; new present-but-unusable branch forces gate to the strictest values (all four priorities, zero drop thresholds, failOnMissingRequiredSource:true) and every sources[*].required to true, leaving ignore/metrics/scoring/schemaVersion at the built-in default"
+    },
+    {
+      "path": "src/health/config.test.ts",
+      "change": "new focused test file: 7 regressions covering the null-payload non-throw, three more non-object/unparseable-payload cases proving the gate is not silently defaulted, one case pinning which blocks stay at plain defaults, and one pinning the well-formed merge path is byte-unchanged"
+    },
+    {
+      "path": "docs/docs/cli-reference.md",
+      "change": "lines 2116 and 2139-2141: scan-mcp's --strict exit description now also names the unreadable-manifest/pinned-baseline case (coverage: incomplete), matching the behaviour T43-implementation.md already shipped in src/commands/security.ts"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 7,
+    "tests_passed": 1083,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T16:41:00Z"
+}

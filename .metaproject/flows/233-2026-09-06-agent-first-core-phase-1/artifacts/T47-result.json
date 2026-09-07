@@ -1,0 +1,71 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T47",
+  "status": "DONE",
+  "summary": "Closed the leak-safety half of T35 F-005 that T45 deliberately left open: the acceptance-criteria and review gates' catch arms in src/flow/service.ts's complete() already recorded status:\"fail\" on a throw (blocking was already correct), but their detail strings interpolated the caught error's message verbatim -- a filesystem or unexpected-runtime error can carry a path or file content, and that detail is written into flow.json history (both directly and via the failed-gates transition-reason join) and can reach buildIssueComment. Both catch arms now call the same unevaluableGate(name) helper T45 introduced for the health/security arms, widened from \"health\"|\"security\" to include \"acceptance-criteria\"|\"review\", so all four throw-catching gates share one constant, leak-safe detail shape instead of a second vocabulary. Re-enumerated every gate-detail-building site in complete() and its helpers (taskGate, verifyCommitOnMain, buildIssueComment, the failed-gates transition reason) fresh rather than trusting T45's table; confirmed exactly these two remaining leak sites and nothing else. Two new regression tests plant a fake secret + path in a thrown error and assert the gate blocks (status:\"fail\", already true pre-fix) and the detail excludes both the secret and the path (false pre-fix, true post-fix). Full src/flow/ suite: 185 pass / 0 fail (T45's 183 baseline + 2 new).",
+  "acceptance": [
+    {
+      "criterion": "No gate detail or reason recorded on the completion path contains raw error text, a filesystem path, or source bytes; each is a constant or is built only from safe, enumerable tokens.",
+      "status": "met",
+      "evidence": "Re-enumerated every gates.push(...) and gate-detail-producing site in complete() (table in T47-implementation.md), confirming the acceptance-criteria and review catch arms were the only two remaining sites that interpolated the caught error's message. Both now call unevaluableGate(name), a pure function returning a constant string built only from the gate's own name. New regression tests plant /Users/attacker/.ssh/id_rsa and \"ENOENT\" in a thrown Error for each gate; pre-fix (RED) both details contained the planted path (gate 1's catch had no prefix at all -- the whole detail was the caught value; gate 4's catch prefixed \"review gate could not be evaluated: \" before the same leak); post-fix (GREEN) neither detail contains the path or \"ENOENT\". Every other detail-building site was re-verified safe: pass-path AC count, AC-id-only unconfirmed list (closed AC\\d+ token space), tracker/mainMergeGate results with a pre-regex-validated commit id, taskGate's internal task ids, and buildIssueComment (name:status only, never detail)."
+    },
+    {
+      "criterion": "Every gate that blocks today still blocks, every gate omitted or skipped today still is, and no flow that legitimately completes today stops completing.",
+      "status": "met",
+      "evidence": "Both fixed catch arms already had status:\"fail\" before this change (T45 confirmed this for the review arm in its own enumeration; re-confirmed here for the acceptance-criteria arm) -- this task changed only the detail string's shape, never the status literal, so no blocking behavior changed. Full src/flow/ suite 185/185 (raw 2026-09-06T15-14-02-534Z_run.log) and the sibling security/review/review-e2e/task-gate suites 86/86 (raw 2026-09-06T15-14-17-114Z_run.log) both green, including the happy-path and gate-failure-path tests in service.test.ts that assert exact gate name/status arrays through the full completion pipeline, unmodified and still passing."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; the flow focused suites stay green.",
+      "status": "met",
+      "evidence": "RED: both new tests failed on the not-toContain(secretPath) assertion with the actual leaked detail shown (T47-implementation.md quotes both). First attempt at the gate-1 test used real fs deletion and instead crashed with an uncaught ENOENT from an earlier, unguarded assertAcIntact call inside complete()'s own preflight (service.ts:140/551) -- diagnosed and corrected to a scoped mock.module(\"./store\", ...) override of only readAcCriteria, applied after all setup steps run for real, restored in finally. GREEN: bun test src/flow/service.test.ts -t \"echoes the thrown text\" -> 3 pass / 0 fail / 15 expect(). Full src/flow/ suite green (185/185, raw 2026-09-06T15-14-02-534Z_run.log); sibling gate suites green (86/86, raw 2026-09-06T15-14-17-114Z_run.log); eslint clean on both changed files (raw 2026-09-06T15-14-21-423Z_run.log); typecheck exit 0 with zero errors, including zero from src/security/* this time (raw 2026-09-06T15-14-33-603Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Fresh gate-detail enumeration, the diagnostic-value tradeoff analysis for gate 1 (and why it's mitigated by the existing `flow check` command rather than fixed by touching store.ts), the widened-helper design, the regression-test plan, and the verification plan, written before any code change."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full gate-by-gate enumeration table, the fix, the diagnostic-value tradeoff writeup, two out-of-scope review-gate.ts leak observations flagged (not fixed), RED/GREEN transcripts including the corrected test-design story, and every verification command with raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/flow/service.ts",
+      "change": "Gate 1 (acceptance-criteria) and Gate 4 (review) catch arms now push unevaluableGate(\"acceptance-criteria\") / unevaluableGate(\"review\") instead of building detail from the caught error's message. unevaluableGate's name parameter widened from \"health\" | \"security\" to \"acceptance-criteria\" | \"review\" | \"health\" | \"security\"; its doc comment updated to note T47 folded these two arms in. Status literals (already \"fail\" for both) unchanged; no other gate, type, or dependency signature changed."
+    },
+    {
+      "path": "src/flow/service.test.ts",
+      "change": "Added `mock` to the bun:test import; added realReviewGateExports/realStoreExports module-scope snapshots; added two regression tests -- \"acceptance-criteria gate that throws blocks completion, not skips it, and never echoes the thrown text\" (scoped mock.module(\"./store\", ...) override of readAcCriteria only, restored in finally) and \"review gate that throws blocks completion, not skips it, and never echoes the thrown text\" (scoped mock.module(\"./review-gate\", ...) override of reviewGate, restored in finally)."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 2,
+    "tests_passing_full_flow_suite": 185,
+    "tests_failing_full_flow_suite": 0,
+    "tests_passing_sibling_gate_suites": 86,
+    "tests_failing_sibling_gate_suites": 0,
+    "typecheck_errors_src_flow": 0,
+    "typecheck_errors_other": 0
+  },
+  "timestamp_utc": "2026-09-06T15:20:00Z"
+}

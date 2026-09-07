@@ -1,0 +1,58 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T23-recheck",
+  "status": "DONE",
+  "summary": "Stage 1 and Stage 2 recheck passed. T25 resolves original F-001 by applying the shared 8 MiB ceiling and regular-file requirement at the SAC wrapper while retaining descriptor-chain nofollow and identity behavior; no remaining focused defects were found.",
+  "summary_markdown": "See T23-recheck.md for prior-finding disposition, sequential Stage 1/Stage 2 evidence, RED/GREEN records, and the bounded-review limitation.",
+  "acceptance": [
+    {
+      "criterion": "Internal symlink chains read the same bytes within a narrow owner root; external/replaced owner/target paths are refused without disclosure.",
+      "status": "met",
+      "evidence": "The shared identity checks remain green in the combined 19-test run, and the existing owner replacement probe returns CONTAINED_READ_RACE."
+    },
+    {
+      "criterion": "Descriptor/platform/file-type/size guarantees hold for the supported runtime and fail explicitly otherwise; SAC nofollow is not weakened.",
+      "status": "met",
+      "evidence": "src/sac/secure-resource-read.ts:16-19 passes the shared 8 MiB ceiling and requireRegularFile:true into the same descriptor-chain reader; direct boundary/type regressions pass 2/2."
+    },
+    {
+      "criterion": "Stage 1 then Stage 2 independent verdict with concrete evidence and no own-code review.",
+      "status": "met",
+      "evidence": "Stage 1 passed before Stage 2 began; Stage 2 found no remaining focused logic or security defect. Own output-validator and health work remained excluded."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-recheck.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent T23 Stage 1 and Stage 2 recheck after T25",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-review.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Preserved original T23 finding and pre-fix evidence",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_passed": 19,
+    "tests_failed": 0,
+    "sac_tests_passed": 2,
+    "stage1": "passed",
+    "stage2": "passed",
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:50:03.602Z"
+}

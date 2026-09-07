@@ -1,0 +1,115 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T6",
+  "status": "DONE",
+  "summary": "Added seven meaningful Bun RED tests for M10 across four new lane-owned files. The offline provider proves maxToolCalls is currently ignored inside a single three-call round; the offline stress subprocess reproduces the missing resolver; containment tests pin fail-closed optional-port handling; and scripts typecheck tests require real benchmark/stress coverage plus an injected-error rejection. Current focused result is 0 pass / 7 fail, while the existing root TypeScript check remains green. The full scripts baseline exposes 13 diagnostics with bounded corrections recorded in immutable evidence. No production code, package metadata, git state, flow state, frozen acceptance criteria, external provider, or private dataset was changed or used.",
+  "summary_markdown": "TEST_CASE_SPECS: four test files contain 7 RED tests. Run `bun test src/commands/agent-tool-call-budget.test.ts scripts/stress/keryx-shell-stress.test.ts scripts/benchmark/run-containment.test.ts scripts/typecheck.test.ts`; expected pre-implementation result is 0 pass / 7 fail. The required containment IO seam, all 13 script diagnostics, exact correction bounds, hashes, and captured commands are attached as artifacts.",
+  "acceptance": [
+    {
+      "criterion": "AC3: M10: offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+      "status": "met",
+      "evidence": "M10-tool-call-stop and M10-tool-call-is-not-round use an in-memory ProviderPort whose first round contains three real calls. With maxToolCalls=2, current code invokes all three, producing a direct RED signal independent of maxRounds. The first test also requires finishReason=tool-call-budget."
+    },
+    {
+      "criterion": "AC4: M10: stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+      "status": "met",
+      "evidence": "M10-stress-json spawns the stress entrypoint with an unmatched --only selector, temp --out, KERYX_AGENT_MAX_ROUNDS=7, and no credential; it fails at the nonexistent resolver before writing JSON. Two containment tests require a pure import-safe resolver to preserve a bound port and throw on undefined without fallback."
+    },
+    {
+      "criterion": "AC5: M10: a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls.",
+      "status": "met",
+      "evidence": "M10-scripts-target-current requires tsconfig.scripts.json to resolve representative benchmark/stress entrypoints and compile cleanly. M10-scripts-target-injected-error extends that real target with a temporary TS2322 probe. Root bun run typecheck exits 0; current full script compile exits 2 with 13 classified diagnostics."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Two offline ProviderPort regression tests proving a tool invocation cap is independent from round count and needs a distinct terminal reason.",
+      "hash": "3bc480596ba9e1edd37080d5c761ea6cf4b9553745b8ed3eb4c18723cba310ef"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Offline subprocess test for temporary stress JSON output and the existing maxRounds resolver.",
+      "hash": "8b4d37036e73ae7f1f0030cbbcc05085e0312be8fdeee7e4a16da71636747910"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pure import-safe tests requiring concrete-port preservation and fail-closed undefined-port handling.",
+      "hash": "ddac6138ae7e4c3cbc8a2ea04ca04c7f96d6b84d18596a6618603159320e244d"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/typecheck.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Scripts config coverage/current-clean test plus guarded temporary TS2322 injection test.",
+      "hash": "1af8fc2eb27c0a9cbe29a121cddf88c86897a282d61f4796f62cc34ee34932e3"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Exact test_case_specs with criterion mapping, test IDs, focused run command, required pure seam, and GREEN commands.",
+      "hash": "bd1c8e90d25b5b55c5c1a8350216ad86182bb6ee8fb8e772e07c8ce101d36591"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable RED, root typecheck, and full scripts diagnostic evidence with bounded corrections and routing audit.",
+      "hash": "2d5d5ad9e3e93d3f4ffc129a5c8d78530d59da81b109407fa506067d75fc83c9"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/commands/agent-tool-call-budget.test.ts",
+      "change": "created M10 offline actual-tool-invocation budget RED tests"
+    },
+    {
+      "path": "scripts/stress/keryx-shell-stress.test.ts",
+      "change": "created M10 offline stress JSON report RED test"
+    },
+    {
+      "path": "scripts/benchmark/run-containment.test.ts",
+      "change": "created M10 optional containment port RED tests"
+    },
+    {
+      "path": "scripts/typecheck.test.ts",
+      "change": "created M10 scripts typecheck coverage and injected-error tests"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
+      "change": "created exact task-implementer test_case_specs"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+      "change": "created immutable RED, root typecheck, and scripts diagnostic evidence"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-result.json",
+      "change": "created schema-conformant worker result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 7,
+    "red_passed": 0,
+    "red_failed": 7,
+    "root_typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 2,
+    "scripts_typecheck_diagnostics": 13
+  },
+  "timestamp_utc": "2026-09-06T10:53:52Z"
+}

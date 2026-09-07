@@ -1,0 +1,114 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T7",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Implemented the M01 shared routing entrypoint renderer/writer and made all lane acceptance tests GREEN. Init, update, rules sync, and rules distill now publish one compact index.md/full routing.md pair with security and source state preserved; orient and gdskills catalogue consumers resolve routing.md. Directly affected tests pass 57/57, typecheck passes, and normalized health passes. The shared changed-scope test command remains red only because the concurrently owned M10 tests are still in their pre-implementation RED phase; parent owns the integration rerun.",
+  "summary_markdown": "M01 is implemented and lane-GREEN. The shared changed-scope gate is temporarily partial due only to concurrent M10 RED tests, documented in `T7-verification.md`.",
+  "acceptance": [
+    {
+      "criterion": "AC1: M01: init, rules sync, rules distill, update and repeated sequences preserve a short index plus full routing document through a shared writer; enabled module/security flags and user-owned entrypoint blocks are preserved.",
+      "status": "met",
+      "evidence": "T5 lifecycle tests now pass init→sync→sync and init→distill→distill→update→update. The shared writer renders once, publishes routing.md then index.md under a lock, passes enableSecurity, ruleSources and distilled state, and preserves root user markers."
+    },
+    {
+      "criterion": "AC2: M01: orient/catalog and related consumers resolve the split entrypoint, regression fixtures assert correct ownership of both documents, failed pair publication is observable and recoverable on rerun without a false success.",
+      "status": "met",
+      "evidence": "Orient preserves the actual compact routing-pointer gate; metaproject-router and generated catalogue resolution point to routing.md. The fault-injection test makes routing.md a directory, observes rejection, removes the obstacle, reruns and verifies the recovered pair."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-implementation-report.json",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Task-implementer output contract with implementation scope and verification status.",
+      "hash": "a496a541d4a76764b0bcadf275eaa9e395b2ff30a48da9280bf81bf0057ec021"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable RED→GREEN, focused regression, typecheck, health, and shared-gate evidence with retained captures.",
+      "hash": "2e40d061c5a544e3cea2972d8a38b30ad7a957027e5c9c526a21c7fbb66024da"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/routing-entrypoint.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shared locked, atomic-per-file routing pair publisher.",
+      "hash": "03427445eed43e45fe7562971ebd464b0bed48100b2c300fa49b26ebd8706dc8"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Preserved T5 black-box lifecycle and fault-injection suite; now 3/3 GREEN.",
+      "hash": "f4f5759f0e818def06ac5544f872bdd7a562f3c807b876ff62bca128b1be9145"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/lib/templates.ts",
+      "change": "added shared routing option/pair types and pure pair renderer"
+    },
+    {
+      "path": "src/lib/routing-entrypoint.ts",
+      "change": "created shared locked atomic-per-file pair publisher"
+    },
+    {
+      "path": "src/commands/init.ts",
+      "change": "routed init through shared pair writer and corrected next-step ownership"
+    },
+    {
+      "path": "src/commands/update.ts",
+      "change": "routed update through shared pair writer and corrected next-step ownership"
+    },
+    {
+      "path": "src/commands/rules.ts",
+      "change": "routed sync/distill through shared pair writer and preserved security flag"
+    },
+    {
+      "path": "src/commands/rules.test.ts",
+      "change": "updated legacy assertions to verify compact index and full routing owners separately"
+    },
+    {
+      "path": "src/ctx/orient.ts",
+      "change": "preserved the actual bounded compact gate so routing.md remains visible to agents"
+    },
+    {
+      "path": "src/gdskills/catalog.ts",
+      "change": "pointed intent-router workflow and generated resolution order at routing.md"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-implementation-report.json",
+      "change": "created validated task-implementer implementation report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-verification.md",
+      "change": "created immutable verification evidence"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-result.json",
+      "change": "created subagent result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "tests_written": 0,
+    "tests_passing": 57,
+    "tests_failing": 0,
+    "t5_tests_passing": 3,
+    "shared_changed_tests_passing": 112,
+    "shared_changed_tests_failing_external": 7,
+    "typecheck_exit_code": 0,
+    "health_gate": "PASS"
+  },
+  "timestamp_utc": "2026-09-06T11:02:15Z"
+}

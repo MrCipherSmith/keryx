@@ -1,0 +1,69 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T5",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "M01 RED tests",
+    "description": "Write meaningful RED regression tests for split routing entrypoint lifecycle. Read actual code and reproduce rules sync/distill overwriting short index. Exercise sequence/repeat, flags/security/user blocks; include pair-write error observability/recovery where existing IO seams allow. Do not implement source. Return test_case_specs with exact test files/run command and RED evidence.",
+    "intent": "test"
+  },
+  "acceptance_criteria": [
+    "AC1: M01: init, rules sync, rules distill, update and repeated sequences preserve a short index plus full routing document through a shared writer; enabled module/security flags and user-owned entrypoint blocks are preserved.",
+    "AC2: M01: orient/catalog and related consumers resolve the split entrypoint, regression fixtures assert correct ownership of both documents, failed pair publication is observable and recoverable on rerun without a false success."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/lib/templates.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/init.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/update.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/rules.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/rules.test.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/templates.test.ts",
+    "/Users/Goodea/goodea/keryx/src/gdskills/catalog.ts",
+    "/Users/Goodea/goodea/keryx/src/ctx/orient.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md before code searches/reads.",
+    "Use local tests-creator skill and testing context; graph/wiki before deeper reads, keryx ctx rg only for code search.",
+    "Only write lane-owned tests and artifacts. No implementation code. No commits/staging/checkout/push; parent owns git.",
+    "Do not edit flow.json or frozen acceptance criteria; parent owns all flow transitions.",
+    "commit_test_stubs=false: shared feature branch with simultaneous workers.",
+    "Stats disabled; no external model calls, no private dataset copying.",
+    "Do not modify unrelated files. Coordinate shared test file ownership before edits.",
+    "Return STATUS first and validate subagent-result; persist RED command/output and test_case_specs in artifacts."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T10:43:01.915469+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

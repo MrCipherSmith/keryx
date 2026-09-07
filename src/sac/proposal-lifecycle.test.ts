@@ -45,7 +45,6 @@ async function wrapUp(service: ProposalLifecycleService, overrides: Partial<Trus
 }
 
 async function propose(service: ProposalLifecycleService, overrides: Record<string, unknown> = {}) {
-  const evidence = [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }];
   return service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-a", proposalRevision: "r1", kind: "wiki-update", wrapUp: await wrapUp(service), ...overrides } as any);
 }
 
@@ -114,7 +113,6 @@ test("rejection is terminal append-only and does not call a target writer", asyn
 test("a terminal transition in another proposal does not consume this proposal idempotency stream", async () => {
   const { service } = await setup();
   await propose(service);
-  const evidence = [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }];
   const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0002");
   const wrapUp = await (service as any).options.wrapUpAuthority.issue({ actor, source: "flow", sourceRef: "./flows/wrap-up" });
   await service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0002", workspaceId: "workspace-a", id: "proposal-b", proposalRevision: "r1", kind: "risk", wrapUp });

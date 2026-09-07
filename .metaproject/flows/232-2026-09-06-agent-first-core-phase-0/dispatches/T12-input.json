@@ -1,0 +1,22 @@
+{
+  "task": {
+    "task_id": "task-12",
+    "task_name": "Description-based worker bootstrap",
+    "task_type": "fix",
+    "description": "Allow worker dispatch without fabricating an issue",
+    "target_files": [
+      "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json"
+    ],
+    "acceptance_criteria": [
+      "Missing issue is allowed; invalid supplied issue is refused"
+    ]
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false
+  }
+}

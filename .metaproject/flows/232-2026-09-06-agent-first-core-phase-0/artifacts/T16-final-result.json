@@ -1,0 +1,222 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16-final",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent Stage 1 review of the M10 budget corrections after T19. All seven enumerated dispatch items and AC3, AC4, AC5 are MET, verified against the current code by re-running both preserved T16 probes unchanged and by fifteen new probe cases (eleven core, four child) written for this review, plus 173 focused tests and both TypeScript targets. The two earlier T16 defects are closed: maxRounds is now an inclusive hard ceiling on every provider.stream() request within one runAgentTurn (including the no-progress wrap-up, which consumes a round), maxRounds 0 issues no request, a text-only finish inside the final allowed round is a clean completion, a tool-bearing final round runs only its own tools and stops with finishReason budget, maxToolCalls is an independent actual-invocation counter with finishReason tool-call-budget, and spawn_subagent carries max_rounds and max_tool_calls as distinct limits whose reservation and prompt text report the values actually enforced (including the 24-round clamp). Stage 2 produced one major and three minor findings, none blocking merge: the unattended no-progress stop emits the round-budget terminal reason budget_exhausted while both budgets still have capacity (F-001); two doc comments in the functions T19 restructured now contradict the implemented contract (F-002, F-003); and the strict round-ceiling guard is duplicated at the loop tail (F-004). No production or test code was modified; no network, model API, or global test-suite run occurred.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+      "status": "met",
+      "evidence": "Preserved T16-recheck-round-budget-probe.ts rerun unchanged: max_rounds 1 now yields 1 provider request, 1 tool invocation, BudgetExhausted, reservation rounds<=1 (.metaproject/data/gdctx/raw/2026-09-06T13-18-40-919Z_run.log). Preserved T16-child-budget-probe.ts: max_tool_calls 1 yields 1 request and reservation rounds<=10 calls<=1, the two limits carried separately (.metaproject/data/gdctx/raw/2026-09-06T13-18-45-752Z_run.log). New core probe C1-C11 and child probe D1-D4 all pass (.metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log, .metaproject/data/gdctx/raw/2026-09-06T13-23-01-968Z_run.log): C8 shows maxRounds 10 with maxToolCalls 1 stopping at 1 request with finishReason tool-call-budget, C9 shows maxRounds 0 issuing no request, C3/C4 show the wrap-up consuming the last round or being skipped, D3 shows a 100-round ask reported as 24 everywhere. 110 focused agent/budget/child tests pass (.metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log) and 60 further child-seam tests pass (.metaproject/data/gdctx/raw/2026-09-06T13-28-02-406Z_run.log)."
+    },
+    {
+      "criterion": "AC4 (M10): stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+      "status": "met",
+      "evidence": "keryx-shell-stress.ts:1023-1032 builds the report from resolveShellSandboxMode(process.env) and resolveAgentMaxRounds(); keryx-shell-stress.test.ts runs the script offline with KERYX_AGENT_MAX_ROUNDS=7 and asserts exactly one stress-*.json whose maxRounds is 7. run-containment.ts:115 resolveContainmentPort throws RangeError for an absent or out-of-range port with no fallback, asserted in both directions by run-containment.test.ts. 3 pass / 0 fail, .metaproject/data/gdctx/raw/2026-09-06T13-23-29-634Z_run.log."
+    },
+    {
+      "criterion": "AC5 (M10): a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls.",
+      "status": "met",
+      "evidence": "tsconfig.scripts.json includes scripts/benchmark/**/*.ts and scripts/stress/**/*.ts; scripts/typecheck.test.ts parses that config and asserts run-ablation.ts, run-containment.ts and keryx-shell-stress.ts are in the resolved file set, then proves an extending project with an injected TS2322 fails. 2 pass / 0 fail (.metaproject/data/gdctx/raw/2026-09-06T13-23-39-457Z_run.log). bun run typecheck exit 0 (.metaproject/data/gdctx/raw/2026-09-06T13-23-53-162Z_run.log); bun run typecheck:scripts exit 0 (.metaproject/data/gdctx/raw/2026-09-06T13-24-00-402Z_run.log). No network or model call in any of them."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full Stage 1 + Stage 2 review: scope with source hashes, criterion table for dispatch items (1)-(7) and AC3/AC4/AC5, four findings, confirmed clean areas, evidence table with raw log hashes, routing audit, keryx:findings block."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This subagent-result record."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Deterministic in-memory core probe, cases C1-C11: clean text-only finish in the final allowed round, maxRounds 1 clean finish, no-progress wrap-up at and past the round boundary, toolless action reprompt at and below the ceiling, abort mid-batch, call-budget reason independence, zero call budget, zero rounds with an interactive picker, and the F-001 no-progress terminal-reason observation. 11/11 pass.",
+      "hash": "1c4c17ce1b15aa8c1f44b2f97197b49af4a735f7e40b7f9439632fd7f3b73bcf"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-child-budget-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Deterministic in-memory spawn_subagent probe, cases D1-D4: distinct max_rounds and max_tool_calls limits, a clean in-budget child mapping to Completed rather than BudgetExhausted, the 24-round clamp reported truthfully in reservation, task text and system instruction, and a zero call budget stopping the child at one request. 4/4 pass.",
+      "hash": "0ec1eea8580131ac37920afc0c21c5e5ed90fcc4091f02e43866d4909a173d4e"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Core probe execution log, C1-C11, allPassed true.",
+      "hash": "b10c0416a20d99a1b50db4db0dc6964a7809548aed8dc73e749c8c2ce818ac76"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-01-968Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Child probe execution log, D1-D4, allPassed true.",
+      "hash": "1a6566cf321b6ac859d69b7c585fd1398fdc4f4d43b3e921375bd29517880bc1"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-40-919Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Preserved T16-recheck-round-budget-probe.ts rerun, unchanged source: 1 provider request, 1 invocation, BudgetExhausted, rounds<=1. Closes the earlier F-002.",
+      "hash": "fac57c91238b5db356506b9535231a51e869effcf7f28b8b16e7f47f954bb3fa"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-45-752Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Preserved T16-child-budget-probe.ts rerun, unchanged source: 1 provider request, BudgetExhausted, reservation rounds<=10 calls<=1.",
+      "hash": "dcede35946a38dd7a34bce2d9e56f355e382e42e4909c7b2574e8ead82a1cc54"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun test agent.test.ts agent-tool-call-budget.test.ts spawn-subagent-tool.test.ts: 110 pass, 0 fail, 444 assertions.",
+      "hash": "f1997ae7e2c7d518409dd25e8f9124db078e48d33815a9de12bf8c6c4aa6e81f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-28-02-406Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun test over the five other spawn-subagent suites plus agent-permission-mode.test.ts: 60 pass, 0 fail, 175 assertions.",
+      "hash": "9e546c13260b0cb9eea3e447e5e6f97781935a64738fb2d3d68215e06421c606"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-29-634Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "AC4: keryx-shell-stress.test.ts and run-containment.test.ts, 3 pass, 0 fail, 10 assertions.",
+      "hash": "2192f10267accf6bfead86a5e5485b5d45af6ed2a22ae0ed5de75aaa8c9f342a"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-39-457Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "AC5: scripts/typecheck.test.ts, 2 pass, 0 fail, 8 assertions, including the injected TS2322 case.",
+      "hash": "3e43a75265b82d56b2a7ae33cc37040ca81c85912475196acb6ce021b2cb5618"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-53-162Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck, exit 0.",
+      "hash": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-24-00-402Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck:scripts, exit 0.",
+      "hash": "b93b65b9afcd13e93f4fda2aa54ee204580a21cf8cbb6889bd90fab11fb0bbd6"
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T16#F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/commands/agent.ts",
+      "line": 1680,
+      "symbol": "runAgentTurnCore",
+      "problem": "The unattended no-progress stop emits emitTerminalState(..., \"budget_exhausted\") even though neither the round budget nor the tool-call budget was exhausted; the stop is caused by the per-signature MAX_ATTEMPTS_PER_HASH guard. TerminalStateReason already distinguishes tool_call_budget_exhausted and carries an unused \"other\" member, so the distinction is expressible.",
+      "impact": "The machine-readable stop record consumed by unattended operators and automation (io.onTerminalState and the persisted terminal-state.json) misattributes the cause to the model-round budget. The remediation it invites, raising KERYX_AGENT_MAX_ROUNDS or max_rounds, cannot help. This is the same untruthful-budget-reporting class M10 exists to remove, on the one stop path that is not itself a budget stop.",
+      "suggested_fix": "Emit a reason matching the cause: add a \"no_progress\" member to TerminalStateReason in src/session/slate-terminal-state.ts:18 and pass it at agent.ts:1680, or pass the existing \"other\" until a dedicated member is agreed. Add a regression asserting the emitted reason for a no-progress stop while round and call capacity remain.",
+      "evidence": "Probe case C11 in .metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts (unattended, maxRounds 20, maxToolCalls 50, identically failing tool) observed providerRequests=4, roundsRemaining=16, invocations=3, callsRemaining=47, finishReason=\"no-progress\", terminalStateReasons=[\"budget_exhausted\"]. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log, SHA-256 b10c0416a20d99a1b50db4db0dc6964a7809548aed8dc73e749c8c2ce818ac76.",
+      "confidence": "high",
+      "dedupe_key": "agent.ts:no-progress-terminal-reason-misattribution",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/commands/agent.ts:1235",
+          "src/commands/agent.ts:1517",
+          "src/commands/agent.ts:1668",
+          "src/commands/agent.ts:1680"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"emitTerminalState\" src/commands/agent.ts returned the declaration at :954 plus exactly four call sites; each was read together with the finishReason returned on the same path and cross-checked against the TerminalStateReason union at src/session/slate-terminal-state.ts:18-21. Three of four are correct; :1680 (no-progress) is not."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T16#F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/commands/agent.ts",
+      "line": 1712,
+      "symbol": "offerRoundLimitReset",
+      "problem": "The doc comment still states that a cancel, a thrown picker, or an unwired picker \"falls through to the existing finishWithBudgetSummary wrap-up unchanged\". After T19 none of them does: stopAtRoundLimit prints a local notice and the caller returns finishReason \"budget\" with no further provider request, which agent.test.ts:985 asserts.",
+      "impact": "The next editor of the reset path reads a contract that the code and its own regression contradict, which is the documentation-promises-a-budget-the-code-does-not-honour failure mode this milestone exists to remove.",
+      "suggested_fix": "Rewrite the final sentence: cancel, a rejected picker, and an unwired picker all stop locally with no further provider request; finishWithBudgetSummary is now reached only from the no-progress path at agent.ts:1685 when a round remains.",
+      "evidence": "Read agent.ts:1704-1714 against the single remaining finishWithBudgetSummary call site at agent.ts:1685 (enumerated by keryx ctx rg -n \"finishWithBudgetSummary\" src/commands/agent.ts: declaration :1755, call :1685, comment :1712). agent.test.ts \"askUser answering 'cancel' at the round budget stops without a wrap-up request\" passes, raw .metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "agent.ts:offerRoundLimitReset-stale-wrapup-doc",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "T16#F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 70,
+      "symbol": "SubagentCompletionStatus",
+      "problem": "The type documents \"BudgetExhausted\" as the child's own maxRounds budget running out (finishReason \"budget\"), but the mapping at spawn-subagent-tool.ts:1186-1190 also assigns it for finishReason \"tool-call-budget\". The collapse is deliberate per the T19 verification, but undocumented.",
+      "impact": "A reader of the parent-facing advisory status contract attributes a tool-call-cap stop to the round budget. Runtime behaviour is correct and the MAE reservation line still reports both configured caps, so the defect is in the type contract's documentation rather than in execution.",
+      "suggested_fix": "Extend the bullet to name both reasons, e.g. the child's own round budget (finishReason \"budget\") or its tool-call budget (finishReason \"tool-call-budget\") ran out, and point at the MAE reservation line for which caps were configured.",
+      "evidence": "Probe case D1 in .metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-child-budget-probe.ts: max_rounds 5 with max_tool_calls 2 stops at 2 provider requests with status BudgetExhausted and reservation \"rounds<=5 calls<=2\", i.e. the round budget was unspent. Raw .metaproject/data/gdctx/raw/2026-09-06T13-23-01-968Z_run.log, SHA-256 1a6566cf321b6ac859d69b7c585fd1398fdc4f4d43b3e921375bd29517880bc1.",
+      "confidence": "high",
+      "dedupe_key": "spawn-subagent-tool.ts:BudgetExhausted-doc-omits-tool-call-budget",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T16#F-004",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/commands/agent.ts",
+      "line": 1695,
+      "symbol": "runAgentTurnCore",
+      "problem": "The trailing round-ceiling guard at agent.ts:1695-1699 is identical in condition and effect to the loop-entry guard at agent.ts:1257-1262 and is the last statement of the for(;;) body, so falling off the end reaches the entry guard on the next iteration with the same picker offer, message and finishReason.",
+      "impact": "Two hand-synchronised copies of the strict-ceiling rule. Given that the M10 defect history is exactly the ceiling check being in the wrong place, an edit that changes one copy and not the other is the concrete maintenance cost.",
+      "suggested_fix": "Delete the trailing block, or keep it and add a one-line comment marking it a fast path for the entry guard so the two are not edited independently.",
+      "evidence": "Both guards read in full from bounded excerpts of src/commands/agent.ts (:1256-1262 and :1695-1699); the trailing block is the final statement of the loop body. Every executed observation of the ceiling (probes C1-C11, raw .metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log, and the committed budget regressions, raw .metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log) is explained by the entry guard alone.",
+      "confidence": "medium",
+      "dedupe_key": "agent.ts:duplicate-round-ceiling-guard",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "stage1_criteria_met": 10,
+    "stage1_criteria_not_met": 0,
+    "probe_cases_executed": 15,
+    "probe_cases_passed": 15,
+    "focused_tests_passed": 175,
+    "focused_tests_failed": 0
+  },
+  "timestamp_utc": "2026-09-06T13:30:00Z"
+}

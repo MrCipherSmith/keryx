@@ -1,0 +1,50 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T41",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Stop canonical re-serialization from altering meaning and from losing the redaction signal",
+    "description": "The canonical structural equivalence rule closed a whole class of hidden-byte bypasses, and it stays. But an independent reviewer found that the re-serialization it emits can change the data it is supposed to be protecting, which is a correctness defect introduced by the security fix itself. Two shapes, regression first. (1) Major: an integer outside the double-precision range is re-serialized with its low digits corrupted, and negative zero loses its sign. The persistence materializer then discards the redaction result, so a durable sink receives the altered value with no signal that anything changed. Either preserve such values byte-exactly, or refuse them as format-unsafe on the grounds that no safe representation exists, but never silently emit a different number. Decide which, justify it against the policy that says to return the safe part when the operation schema is preserved and to fail closed when it is not, and make the persistence path carry the redaction outcome rather than dropping it, so a caller can tell a byte-preserved result from a re-serialized one. (2) Minor: a safe payload that spells non-ASCII characters as escapes, which is what several common encoders emit by default, is rewritten and then labelled as redacted although nothing sensitive was found; the reviewer measured twenty-two such files among two thousand and forty-one in this repository. A rewrite that removes nothing must not claim a redaction occurred. Treat the escape spelling as equivalent, or keep the rewrite but report it truthfully as a normalization rather than a redaction. Verify against the repository's own JSON corpus, as the reviewer did, and report the counts before and after. Write T41-spec.md before coding, then T41-implementation.md and T41-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC2 (AFC-02): a synthetic secret is absent from JSON, text and error output; safe JSON passes its schema; a value with no safe representation returns format-unsafe rather than a silently altered one.",
+    "No value is changed in meaning by the floor: an integer outside double range and a negative zero either survive byte-exactly or are refused, never re-emitted as a different number, and the persistence path carries the redaction outcome instead of discarding it.",
+    "A rewrite that removes nothing is not reported as a redaction; the repository JSON sweep shows no regression in byte-preserved counts and no remaining mislabelled results, with counts reported before and after."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-repojson.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-validator.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/redact-seam.ts",
+    "/Users/Goodea/goodea/keryx/src/security/persistence-sinks.test.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/security/output-validation.ts and its test, src/mcp/redact-seam.ts, and only the validateSerializedOutput and prepareOutputForPersistence regions of src/security/service.ts. Do not touch detect/exfil.ts: a concurrent worker owns it. Do not touch guard.ts, config.ts, the gate region of service.ts, path-scan.ts, src/commands/*, flow files, package.json or the lockfile.",
+    "Do not weaken the canonical equivalence rule that closed the hidden-byte class: the five duplicate-member shapes and their committed regressions must keep passing, and format-unsafe must remain reachable only when the structure itself has no safe representation.",
+    "Do not import the validator directly into src/mcp/redact-seam.ts; src/mcp/boundary.test.ts forbids it. Go through the ../security/service facade.",
+    "Keep the approved contract: constant failure text, fixed reason tokens carrying no rejected value or fingerprint, byte-for-byte preservation of safe scalars, and pretty-printed payloads preserved with no redaction state.",
+    "No git state changes, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic credentials only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T14:35:00+00:00", "created_by": "flow-orchestrator" }
+}

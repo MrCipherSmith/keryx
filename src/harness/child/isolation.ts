@@ -20,7 +20,7 @@
 // to the injected `deps.idSeq`. Optional fields are set via conditional spread to
 // respect `exactOptionalPropertyTypes`.
 import { axesOf, broadeningAxes, ISOLATION_RANK, OUTCOME_RANK, rankOf } from "../policy/ranks";
-import type { PolicyProfile, PolicyProfileDefaults, PolicyProfileRequiredControls } from "../policy/types";
+import type { PolicyProfile, PolicyProfileDefaults } from "../policy/types";
 import type { Provenance } from "../session/types";
 
 /** A concrete, granted (or requested) child budget reservation. */

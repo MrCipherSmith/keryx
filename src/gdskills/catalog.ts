@@ -22,7 +22,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Treat the user's natural-language request as an intent; do not require exact keryx command, skill, or MCP tool names.",
     "Classify the user request as navigation, understanding, implementation, review, planning, documentation, quality, testing, security, memory, or workflow.",
     "Prefer available MCP tools/resources for the selected Metaproject capability; otherwise use the corresponding project-local skill and `keryx` CLI command.",
-    "Use the Intent Router in `.metaproject/index.md` to map user intent to capability before reading broad source files.",
+    "Use the Intent Router in `.metaproject/routing.md` to map user intent to capability before reading broad source files.",
     "If the request asks to create, run, resume, track, or finish a managed flow and Task Manager is enabled, route implementation work to `gdskills/orchestration/flow-orchestrator/SKILL.md` before `job-orchestrator`.",
     "Prefer project-local skills and module manifests before broad raw file search.",
     "Route to the narrowest applicable skill and record unavailable modules explicitly.",
@@ -596,10 +596,11 @@ This catalog lists project-local working skills installed by \`keryx\`.
 Resolution order:
 
 1. \`.metaproject/index.md\`
-2. \`.metaproject/skills/catalog.md\`
-3. \`.metaproject/project-skills/**\`
-4. \`.metaproject/skills/gdskills/**\`
-5. Explicitly allowed global fallback skills
+2. \`.metaproject/routing.md\` when the compact index does not answer the intent
+3. \`.metaproject/skills/catalog.md\`
+4. \`.metaproject/project-skills/**\`
+5. \`.metaproject/skills/gdskills/**\`
+6. Explicitly allowed global fallback skills
 
 ## Agent Shortcuts
 

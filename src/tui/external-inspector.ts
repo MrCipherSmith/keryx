@@ -150,6 +150,7 @@ export function presentExternalInspector(
   let workNode: TextNode | undefined;
   let metaNode: TextNode | undefined;
   let commandNode: TextNode | undefined;
+  // eslint-disable-next-line prefer-const -- Assigned after modal setup so synchronously invoked callbacks safely observe undefined instead of a const TDZ.
   let unsubscribe: (() => void) | undefined;
 
   const refresh = (hint?: ExternalStoreHint): void => {

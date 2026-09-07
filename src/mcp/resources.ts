@@ -7,8 +7,9 @@
 // only shared libs (M-3).
 
 import path from "node:path";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../lib/fs";
+import { readContainedFile } from "../lib/contained-read";
 
 export type ResourceClass = "artifacts" | "wiki" | "memory";
 
@@ -50,10 +51,20 @@ function memoryRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "memory");
 }
 
-async function walkFiles(root: string): Promise<string[]> {
+const MAX_RESOURCE_BYTES = 8 * 1024 * 1024;
+
+async function walkFiles(root: string, ownerRoot = root, ancestors = new Set<string>()): Promise<string[]> {
   if (!(await pathExists(root))) {
     return [];
   }
+  const ownerInfo = await lstat(ownerRoot).catch(() => null);
+  if (!ownerInfo || !ownerInfo.isDirectory() || ownerInfo.isSymbolicLink()) return [];
+  const ownerReal = await realpath(ownerRoot).catch(() => null);
+  if (!ownerReal) return [];
+  const canonical = await realpath(root).catch(() => null);
+  if (!canonical || !isPathInside(ownerReal, canonical) || ancestors.has(canonical)) return [];
+  const nextAncestors = new Set(ancestors);
+  nextAncestors.add(canonical);
   const out: string[] = [];
   let entries: import("node:fs").Dirent[];
   try {
@@ -63,9 +74,11 @@ async function walkFiles(root: string): Promise<string[]> {
   }
   for (const entry of entries) {
     const full = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...(await walkFiles(full)));
-    } else if (entry.isFile()) {
+    const info = await stat(full).catch(() => null);
+    if (!info || !isPathInside(ownerReal, await realpath(full).catch(() => ""))) continue;
+    if (info.isDirectory()) {
+      out.push(...(await walkFiles(full, ownerRoot, nextAncestors)));
+    } else if (info.isFile()) {
       out.push(full);
     }
   }
@@ -213,6 +226,13 @@ export async function readResource(
   if (!info || !info.isFile()) {
     throw new Error(`Resource not found: ${uri}`);
   }
-  const text = await readFile(resolved.absolute, "utf8");
-  return { uri, mimeType: mimeForPath(resolved.absolute), text };
+  try {
+    const bytes = await readContainedFile(resolved.root, resolved.absolute, {
+      maxBytes: MAX_RESOURCE_BYTES,
+      requireRegularFile: true,
+    });
+    return { uri, mimeType: mimeForPath(resolved.absolute), text: bytes.toString("utf8") };
+  } catch {
+    throw new Error("Resource could not be read safely.");
+  }
 }

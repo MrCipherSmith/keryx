@@ -19,7 +19,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { archiveSlate, openSlateAtomic, readSlate, writeSlate, type Slate, type SlateAnchors } from "./slate";
 import { resolveProjectRoot } from "./paths";
-import { courseFromSlate, type CourseProjection } from "./slate-course";
+import type { CourseProjection } from "./slate-course";
 
 const execFileAsync = promisify(execFile);
 

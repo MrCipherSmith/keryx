@@ -1,0 +1,49 @@
+{
+  "task": {
+    "task_id": "task-7",
+    "task_name": "M01 shared routing entrypoint writer",
+    "task_type": "fix",
+    "complexity": "medium",
+    "dependencies": [],
+    "description": "Make T5 RED tests green by introducing the shared pair render/write owner used by init/update/rules sync/distill. Preserve module/security/user flags, short index and full routing; pair failure must be observable and rerun recoverable. Update affected orient/catalog consumers and tests honestly; preserve public APIs. Read task input T7-input.json.",
+    "target_files": [
+      "src/lib/templates.ts",
+      "src/commands/init.ts",
+      "src/commands/update.ts",
+      "src/commands/rules.ts",
+      "src/ctx/orient.ts",
+      "src/gdskills/catalog.ts"
+    ],
+    "acceptance_criteria": [
+      "AC1: M01: init, rules sync, rules distill, update and repeated sequences preserve a short index plus full routing document through a shared writer; enabled module/security flags and user-owned entrypoint blocks are preserved.",
+      "AC2: M01: orient/catalog and related consumers resolve the split entrypoint, regression fixtures assert correct ownership of both documents, failed pair publication is observable and recoverable on rerun without a false success."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+    "existing_tests": [
+      "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "src/lib/templates.test.ts",
+      "src/commands/rules.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Reuse existing pure renderers and node fs atomic writers; Bun black-box temp-root tests. Scope preserves model-independent routing semantics.",
+    "test_case_specs": {
+      "test_files": [
+        "src/commands/routing-entrypoint-lifecycle.test.ts"
+      ],
+      "run_command": "bun test src/commands/routing-entrypoint-lifecycle.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

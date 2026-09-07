@@ -605,12 +605,12 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     interactive: false,
   };
 
-  let events: NormalizedEvent[] = [];
-  let decisions: PolicyDecision[] = [];
-  let summary = "";
-  let runStatus: HarnessRunOutput["status"] = "completed";
+  let events: NormalizedEvent[];
+  let decisions: PolicyDecision[];
+  let summary: string;
+  let runStatus: HarnessRunOutput["status"];
   let runGate: string | undefined;
-  let unresolvedBlockerIds: string[] = [];
+  let unresolvedBlockerIds: string[];
   try {
     // The provider is about to be invoked, which is the point after which this
     // turn has HAD AN EFFECT: it may bill, it may reach the network, and its

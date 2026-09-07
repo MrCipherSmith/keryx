@@ -1,0 +1,131 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T9",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Phase 0 integrated verification completed. Root and scripts TypeScript targets pass. The single full Bun execution produced 6843 pass, 18 skip, and one pre-sync installed-contract failure; that exact mirror was synchronized and its focused install suite then passed 5/5, without another broad run. The global gate is INCOMPLETE because required ESLint is unavailable even though the health command printed PASS. The captured pre-fix HTTP/SSE snapshot also FAILS source verification because an arbitrary configured DNS hostname is admitted to the unauthenticated loopback endpoint's Host allowlist. No source, git, or flow state was changed by the verifier.",
+  "summary_markdown": "T9 completed with **global INCOMPLETE** and **pre-fix source FAIL**. TypeScript is green, the sole full-test contract drift has a green focused recheck, required ESLint is unavailable, and the captured HTTP Host allowlist admits a DNS-rebinding hostname.",
+  "acceptance": [
+    {
+      "criterion": "Root and scripts TypeScript targets pass.",
+      "status": "met",
+      "evidence": "`bun run typecheck` and `bun run typecheck:scripts` both exited 0 in independent gdctx captures."
+    },
+    {
+      "criterion": "Current full tests pass or every failure is explicitly reported with scope and reproduction.",
+      "status": "met",
+      "evidence": "The only full-suite failure was `src/gdskills/install.test.ts` reporting `task-implementer-input-contract.schema.json` drift. It reproduced in the focused run, then passed 5/5 after exact synchronization. The full suite was not repeated per orchestration instruction."
+    },
+    {
+      "criterion": "Required checks unavailable are INCOMPLETE, never PASS; source/schema parity correct.",
+      "status": "met",
+      "evidence": "Current schema copies share SHA-256 279cff73... and the install parity suite passes. ESLint is required and skipped, so this result records global INCOMPLETE despite the health tool printing PASS."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Integrated TypeScript, full-test, focused repair, MCP boundary, HTTP security, health, and tooling evidence with precise snapshot boundaries.",
+      "hash": "bad121f6fafa5cc44a0bf42b13c4e0a070ccaec64583ffaa5dc56331a6f49af3"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-verification.md",
+      "change": "created integrated verification report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-result.json",
+      "change": "created schema-valid verifier result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T9-F-001",
+      "reviewer": "code-verifier",
+      "severity": "blocker",
+      "file": "src/mcp/transport/http-sse.ts",
+      "line": 63,
+      "symbol": "startHttpTransport",
+      "problem": "The captured pre-fix request boundary includes the arbitrary configured DNS hostname in the trusted Host allowlist after resolving it only once for loopback binding.",
+      "impact": "An attacker-controlled hostname can rebind to loopback while retaining browser same-origin semantics, and its Host header is accepted by an unauthenticated local MCP endpoint.",
+      "suggested_fix": "Build the request Host allowlist from the verified numeric bound address and explicitly safe loopback literals or names only. Exclude an arbitrary original DNS hostname and add a regression proving that a configured DNS alias resolving to loopback is refused as a Host header.",
+      "evidence": "At source snapshot SHA-256 79c7ad4c..., `startHttpTransport` passed `[host, options.host, \"localhost\"]`. A local pure reproduction called `isTrustedMcpHttpRequest` with an attacker-controlled configured name and returned `{\"accepted\":true}` with exit 0.",
+      "confidence": "high",
+      "dedupe_key": "mcp-http-configured-dns-host-rebinding",
+      "blocking_merge": true,
+      "related_skill": null,
+      "learning_candidate": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Direct local invocation against the captured source accepted `attacker-controlled.example:43210` when that configured hostname was included beside the verified numeric loopback address.",
+        "verifier": "code-verifier-T9"
+      },
+      "class_scope": {
+        "sites": [
+          "src/mcp/transport/http-sse.ts:63"
+        ],
+        "enumeration_method": "Targeted keryx ctx rg over the exact HTTP transport and loopback-host files, followed by full source reads and a direct pure-function reproduction."
+      }
+    },
+    {
+      "id": "T9-F-002",
+      "reviewer": "code-verifier",
+      "severity": "blocker",
+      "file": ".metaproject/health.config.json",
+      "line": 19,
+      "symbol": null,
+      "problem": "The strict health command reports PASS although the configured required ESLint source is skipped and failOnMissingRequiredSource is true.",
+      "impact": "Automation can mistake an incomplete quality gate for a successful global certification while a required check did not execute.",
+      "suggested_fix": "Treat a skipped or unavailable required source as missing in strict gate evaluation, and keep the gate non-PASS until ESLint is available or the requirement is explicitly changed through the approved configuration workflow.",
+      "evidence": "`keryx health run --strict` exited 0 and printed PASS. Its generated report lists `eslint | skipped | auto | yes`, while health.config.json line 21 sets required true and line 71 sets failOnMissingRequiredSource true.",
+      "confidence": "high",
+      "dedupe_key": "health-required-skipped-source-false-pass",
+      "blocking_merge": true,
+      "related_skill": "health",
+      "learning_candidate": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Strict health execution and its normalized report directly contradict the active required-source configuration.",
+        "verifier": "code-verifier-T9"
+      },
+      "class_scope": {
+        "sites": [
+          ".metaproject/health.config.json:19-21",
+          ".metaproject/health.config.json:65-71",
+          ".metaproject/data/health/artifacts/latest.md"
+        ],
+        "enumeration_method": "Read the exact active health configuration, executed the strict health command, and compared its printed verdict with the generated source-status table."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "global_gate": "INCOMPLETE",
+    "source_snapshot_gate": "FAIL",
+    "root_typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 0,
+    "full_tests_passed": 6843,
+    "full_tests_failed": 1,
+    "full_tests_skipped": 18,
+    "full_tests_assertions": 51930,
+    "full_tests_files": 561,
+    "focused_contract_recheck_passed": 5,
+    "focused_contract_recheck_failed": 0,
+    "lint_status": "skipped-required-incomplete",
+    "health_tool_reported_gate": "PASS",
+    "circular_import_status": "skipped-unavailable",
+    "diff_check_exit_code": 0,
+    "open_blockers": 2
+  },
+  "timestamp_utc": "2026-09-06T11:30:55Z"
+}

@@ -133,7 +133,7 @@ async function cliWithoutGh(args: string[]): Promise<string> {
     new Response(proc.stderr).text(),
   ]);
   await proc.exited;
-  // eslint-disable-next-line no-control-regex
+
   return `${stdout}\n${stderr}`.replace(/\[[0-9;]*m/g, "");
 }
 

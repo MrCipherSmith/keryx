@@ -1,0 +1,130 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T20",
+  "status": "DONE",
+  "summary": "Closed all four T16-final-review findings. F-001 (major): the unattended no-progress stop no longer emits the round-budget terminal reason while both budgets have capacity — TerminalStateReason gained a truthful \"no_progress\" member and the one misattributing call site now uses it, proven by the reviewer's own unchanged probe (C11 now reports terminalStateReasons=[\"no_progress\"] with 16 rounds/47 calls still unspent) and a new regression. F-002/F-003 stale doc comments were corrected to match T19's actual behavior. F-004's byte-identical duplicate round-ceiling guard was removed with a comment explaining why the entry guard alone suffices. All fifteen reviewer probe cases still pass, the focused agent/budget/child suite is 111 passed / 0 failed (452 assertions), both TypeScript targets exit 0, and ESLint is clean on every changed file.",
+  "summary_markdown": "All four T16-final-review findings are closed. **F-001 (major)**: added `TerminalStateReason.no_progress` and switched the misattributing call site in `runAgentTurnCore` to it — the reviewer's unchanged `C11` probe now reports `terminalStateReasons: [\"no_progress\"]` (was `[\"budget_exhausted\"]`) with **16 rounds and 47 calls still unspent**, and a new regression pins this. **F-002/F-003**: stale doc comments corrected to match T19's real behavior (no code change). **F-004**: the byte-identical trailing round-ceiling guard was deleted (a bare `for(;;)` already re-enters the entry guard). Verification: reviewer's two probes 15/15 pass, `bun test` on the three focused files is **111 pass / 0 fail, 452 assertions**, `bun run typecheck` and `bun run typecheck:scripts` both exit 0, and `bunx eslint` is clean on all four changed files.",
+  "acceptance": [
+    {
+      "criterion": "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds. A stop that no budget caused must not be reported as a budget stop.",
+      "status": "met",
+      "evidence": "The unattended no-progress stop, which is caused by neither budget, now emits TerminalState.reason=\"no_progress\" instead of \"budget_exhausted\". The reviewer's unchanged C11 probe records providerRequests=4 (roundsRemaining=16 of 20), invocations=3 (callsRemaining=47 of 50), finishReason=\"no-progress\", terminalStateReasons=[\"no_progress\"] — raw .metaproject/data/gdctx/raw/2026-09-06T13-39-29-322Z_run.log. The new regression \"T20 F-001: an unattended no-progress stop reports a truthful terminal reason while both budgets still have capacity\" (src/commands/agent-tool-call-budget.test.ts) asserts the same invariant directly. All three genuine budget-stop call sites (round-budget entry guard, ask_user interception, tool-call-budget guard) were re-enumerated via `bun src/cli.ts ctx rg -n \"emitTerminalState\" src/commands/agent.ts` and confirmed unchanged and already truthful."
+    },
+    {
+      "criterion": "AC6: independent review reports no unresolved blocker, major or minor findings; the four T16 findings are each closed by an executed regression or a documentation correction the review can verify.",
+      "status": "met",
+      "evidence": "F-001 (major) closed by code fix + new regression + reviewer-probe re-run showing the corrected reason. F-002 (minor, agent.ts offerRoundLimitReset doc) and F-003 (minor, spawn-subagent-tool.ts SubagentCompletionStatus doc) closed by rewriting the stale prose to match T19's actual, already-correct behavior — verifiable by reading the corrected comments beside the code and the passing regressions that exercise those paths (agent.test.ts's cancel-at-round-budget test; the reviewer's D1 probe). F-004 (minor, duplicated round-ceiling guard) closed by deleting the byte-identical trailing block; the reviewer's own probes C1-C11 and the committed budget regressions, all unaffected, are the evidence the entry guard alone already explained every observed behavior."
+    },
+    {
+      "criterion": "No behavioral regression: the fifteen probe cases in T16-final-core-budget-probe.ts and T16-final-child-budget-probe.ts still pass, and the focused agent, budget, child and stress suites stay green.",
+      "status": "met",
+      "evidence": "T16-final-core-budget-probe.ts: 11/11 pass (.metaproject/data/gdctx/raw/2026-09-06T13-39-29-322Z_run.log). T16-final-child-budget-probe.ts: 4/4 pass (.metaproject/data/gdctx/raw/2026-09-06T13-39-35-429Z_run.log). `bun test src/commands/agent.test.ts src/commands/agent-tool-call-budget.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts`: 111 pass / 0 fail, 452 assertions (.metaproject/data/gdctx/raw/2026-09-06T13-39-18-181Z_run.log) — up from the review's 110 pass / 444 assertions by exactly the one new regression added. The dispatch's scope excludes src/security/* and src/mcp/* (owned by concurrent workers); the stress suite was not re-run because F-001..F-004 touch none of the files it covers and the dispatch's verification list does not name it."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-implementation spec written before any production code change, covering all four findings and the TerminalStateReason compatibility check.",
+      "hash": "998eab19a351a626e548f9e9cdd2b31f5721f97e025e5f3d91d7db0f2e7f504b"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Per-finding evidence (F-001..F-004) with raw log paths and file hashes.",
+      "hash": "3e19a7a86d4bba1a1580f25d378dd0dc5ec0ccd8c98862b436bf9f0d66a1afad"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-29-322Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Reviewer's unchanged core budget probe: 11/11 pass; C11 now reports terminalStateReasons=[\"no_progress\"] with 16 rounds and 47 calls remaining.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-35-429Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Reviewer's unchanged child budget probe: 4/4 pass.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-18-181Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Focused agent/budget/child suite: 111 pass, 0 fail, 452 assertions.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-53-313Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "bun run typecheck: exit 0.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-40-02-821Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "bun run typecheck:scripts: exit 0.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/session/slate-terminal-state.ts",
+      "change": "added TerminalStateReason.no_progress with an explanatory doc comment (F-001 dependency, smallest truthful widening)"
+    },
+    {
+      "path": "src/commands/agent.ts",
+      "change": "F-001: unattended no-progress branch now emits reason \"no_progress\" instead of \"budget_exhausted\"; F-002: corrected offerRoundLimitReset's stale doc comment; F-004: deleted the byte-identical trailing round-ceiling guard, replaced with an explanatory comment"
+    },
+    {
+      "path": "src/commands/agent-tool-call-budget.test.ts",
+      "change": "F-001 regression: unattended no-progress stop with round/call capacity remaining reports reason no_progress, not budget_exhausted"
+    },
+    {
+      "path": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "change": "F-003: extended SubagentCompletionStatus's BudgetExhausted doc bullet to name both the round-budget and tool-call-budget finish reasons it maps"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md",
+      "change": "created pre-implementation specification"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md",
+      "change": "created per-finding implementation/evidence report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-result.json",
+      "change": "created subagent result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "findings_closed": 4,
+    "findings_major_closed": 1,
+    "findings_minor_closed": 3,
+    "core_probe_cases_passing": 11,
+    "core_probe_cases_total": 11,
+    "child_probe_cases_passing": 4,
+    "child_probe_cases_total": 4,
+    "focused_tests_passing": 111,
+    "focused_tests_failing": 0,
+    "focused_assertions": 452,
+    "typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 0,
+    "eslint_exit_code": 0,
+    "global_suite_run": false
+  },
+  "timestamp_utc": "2026-09-06T13:42:00Z"
+}

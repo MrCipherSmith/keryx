@@ -1,0 +1,148 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T12",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Implemented truthful health completeness and supported dependency-audit parsing. Required missing, skipped, disabled, filtered, execution-failed and parse-failed evidence yields INCOMPLETE unless blocking findings or regression thresholds produce FAIL; coverage remains independently incomplete. Bun and npm audit formats preserve advisory identity, unknown/malformed JSON cannot pass, recognized findings survive nonzero exits, and CLI/service/report behavior agrees. The 12-case focused suite and all 83 src/health tests pass; targeted ESLint is clean. Root typecheck awaits the coordinated outside-owned harness gate-union propagation and concurrent containment work.",
+  "summary_markdown": "T12 health behavior is GREEN: 12 focused tests and 83 `src/health` tests pass, with targeted ESLint clean. Exact commands, hashes, and the outside-owned harness type propagation concern are recorded in `T12-change-report.md`. No network, audit service, model, package, lockfile, git, or flow-state mutation occurred.",
+  "acceptance": [
+    {
+      "criterion": "Required missing/skipped/disabled/unparsed outcomes yield incomplete absent blocking findings; findings retained and FAIL dominates with coverage incomplete.",
+      "status": "met",
+      "evidence": "Gate folding ranks fail above incomplete above warn/pass and emits an independent coverage field. Unit and runtime fixtures cover required missing/skipped/disabled/execution/parse failures, source filtering, and P0 plus incomplete coverage. Recognized nonzero findings remain in the report; nonzero exits without findings record execution failure."
+    },
+    {
+      "criterion": "Synthetic Bun package-keyed arrays and npm modern/legacy formats parse; unknown/malformed output cannot report clean even rc0.",
+      "status": "met",
+      "evidence": "Dependency audit decoding recognizes Bun package arrays, npm vulnerabilities, and npm advisories, including supported empty shapes. Advisory IDs, titles, and priorities are retained. Invalid JSON and unknown object shapes are explicitly invalid and drive required source parse failure at exit zero."
+    },
+    {
+      "criterion": "Strict health CLI/service reject incomplete; optional skips visible and source-filter coverage truthful.",
+      "status": "met",
+      "evidence": "Live JSON/text commands and stored service gates exit nonzero for incomplete. Strict warning mode rejects warn. Filters add explicit rows for omitted required sources, while optional skipped sources remain visible without reducing coverage completeness."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-implementation-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-code implementation contract for truthful gates, source evidence, parsers, CLI parity, and bounded verification.",
+      "hash": "ca5202b300193e7ff46de862a8949d6ef03c6110b3458a250b7d8b30d598b121"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Behavior, verification evidence, ownership-bounded concerns, file hashes, and routing audit.",
+      "hash": "0ce8e169d041aba8d566d31840636a935972ab622e96fdfa8e20202198bb7e4f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/health/health-truthful-gate.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Required-source completeness, filter, parse, execution and FAIL-dominance runtime tests.",
+      "hash": "09af44a1d72770fb6da11b58b85a7832d35a15ddf3b52161ef37822f71501bb8"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/health/dependency-audit-format.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Bun/npm audit format, identity, severity, empty, invalid and unknown-shape tests.",
+      "hash": "8c9ad4740a98b6f1e6ca7bce259685047ba106326b522586b3158c49ecc15391"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/health-incomplete.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Stored and live incomplete exit behavior plus strict warning parity.",
+      "hash": "4f05983bdffac1a364c3dc3915dbdade6cbc52e543f7181fcfd7575217e996b0"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-18-741Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused acceptance and edge suite: 12 pass, 0 fail, 68 assertions.",
+      "hash": "9a2cc956e4d7d05133a97e3af168a1e231065e7cbe5ac1660a058344eb4b0288"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-26-004Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "All src/health tests: 83 pass, 0 fail, 238 assertions.",
+      "hash": "730fe552665af528e159b637b370d0ecbb2173af22eb90d714bd15efb93935d8"
+    }
+  ],
+  "changed_files": [
+    { "path": "src/health/types.ts", "change": "added incomplete/coverage and additive execution/parse evidence contracts" },
+    { "path": "src/health/gate.ts", "change": "implemented deterministic severity and required-completeness folding" },
+    { "path": "src/health/run.ts", "change": "recorded filtered required sources and separated execution, parsing and findings" },
+    { "path": "src/health/service.ts", "change": "made stored incomplete gates exit nonzero" },
+    { "path": "src/health/report.ts", "change": "rendered coverage and source evidence states" },
+    { "path": "src/health/sources/dependency-audit.ts", "change": "implemented strict Bun/npm audit decoding and validation" },
+    { "path": "src/health/sources/eslint.ts", "change": "validated ESLint JSON shape explicitly" },
+    { "path": "src/health/gate.test.ts", "change": "updated obsolete required-source expectations to incomplete" },
+    { "path": "src/health/health-truthful-gate.test.ts", "change": "made T11 runtime RED cases green and added audit/execution edges" },
+    { "path": "src/health/dependency-audit-format.test.ts", "change": "made T11 parser RED green and added format-validity edges" },
+    { "path": "src/commands/health.ts", "change": "aligned live run exit behavior with incomplete and strict warnings" },
+    { "path": "src/commands/health-incomplete.test.ts", "change": "made T11 CLI/service RED green and added warning parity" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-implementation-spec.md", "change": "created pre-code implementation specification" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md", "change": "created implementation and verification report" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-result.json", "change": "created schema-conformant task result" }
+  ],
+  "findings": [
+    {
+      "id": "T12-C01",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "file": "src/harness/tool/metaproject-port.ts",
+      "line": 149,
+      "problem": "The outside-owned harness port health gate union still permits only pass, warn, and fail.",
+      "impact": "Root type checking rejects assignment of the health service GateStatus because it now correctly includes incomplete.",
+      "suggested_fix": "Add incomplete to HealthStatusResult.gate in the harness port and cover its propagation in the harness owner's tests.",
+      "evidence": "Typecheck raw log .metaproject/data/gdctx/raw/2026-09-06T11-47-52-845Z_run.log; error site src/harness/tool/metaproject-adapter.ts:495.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/metaproject-port.ts:149",
+          "src/harness/tool/metaproject-adapter.ts:495"
+        ],
+        "enumeration_method": "Searched source TypeScript declarations and assignments for the pass/warn/fail health gate union with `keryx ctx rg`; these are the only outside-owned harness declaration and failing assignment sites."
+      }
+    },
+    {
+      "id": "T12-C02",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "eslint.config.mjs",
+      "line": 1,
+      "problem": "The repository-wide lint command currently reports 168 errors and 2 warnings across existing and concurrent work.",
+      "impact": "A complete repository lint PASS cannot be claimed, although targeted lint for every T12-owned code and test file passes.",
+      "suggested_fix": "Resolve the repository lint baseline in the owning flows; retain the targeted T12 lint evidence for this bounded implementation.",
+      "evidence": "Full lint raw log .metaproject/data/gdctx/raw/2026-09-06T11-50-22-222Z_run.log; targeted lint artifact .metaproject/data/gdctx/artifacts/2026-09-06T11-50-29-442Z_run.md.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "original_red_tests": 8,
+    "edge_tests_added": 4,
+    "focused_tests_passed": 12,
+    "focused_tests_failed": 0,
+    "health_tests_passed": 83,
+    "health_tests_failed": 0,
+    "targeted_lint_exit_code": 0,
+    "full_lint_errors_unowned": 168,
+    "full_lint_warnings_unowned": 2,
+    "root_typecheck_exit_code": 2,
+    "external_model_calls": 0,
+    "network_calls": 0,
+    "commits_created": 0
+  },
+  "timestamp_utc": "2026-09-06T11:52:00Z"
+}

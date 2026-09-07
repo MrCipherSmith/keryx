@@ -1,0 +1,108 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T32",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Added 9 committed regression tests at the two public boundaries T24R#F-004 named: 3 in src/mcp/structural-redaction.test.ts (secret property name, $ref-sibling refusal, entity/srcset auto-fetch vs public-link control) and 6 in src/security/persistence-sinks.test.ts (5 duplicate-member shapes from T24-recheck-f002-class.ts, plus the metric-beside-long-digit-run control). All 9 genuinely fail in a scratch-copy revert (21 pass / 10 fail, vs 31 pass / 0 fail on the real tree) and none required a production change. No production file was edited; no existing test was deleted or weakened.",
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string.",
+      "status": "met",
+      "evidence": "New MCP property-name test asserts JSON.stringify(result) excludes the credential in payload and metadata for both a top-level and array-nested case; new duplicate-member persistence tests assert the credential is absent from prepareOutputForPersistence's materialized content in all 5 shapes; the existing numeric-secret transport test is untouched and stays green (216 pass, 3 skip, 0 fail wider run)."
+    },
+    {
+      "criterion": "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+      "status": "met",
+      "evidence": "New MCP test asserts entity-encoded <img src> and every srcset candidate are masked to [REDACTED:url] with reasons ['egress.html-image-exfil'], the attacker host is absent from the transported text, and the ordinary public Markdown link field in the same payload is byte-identical to the input."
+    },
+    {
+      "criterion": "Every closure the two reviews demanded is pinned by a committed test at the boundary where the defect was reachable, not only at the pure validator; the full focused security and MCP selection stays green.",
+      "status": "met",
+      "evidence": "bun src/cli.ts ctx run -- bun test src/security/output-validation.test.ts src/security/detect/exfil.test.ts src/mcp -> 216 pass, 3 skip, 0 fail, 844 expect() calls, 219 tests across 20 files (.metaproject/data/gdctx/raw/2026-09-06T14-01-58-957Z_run.log). Own-suite before/after: 22 pass -> 31 pass, 0 fail either way."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "src/mcp/structural-redaction.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "3 new committed tests added: secret property name -> format-unsafe with no leak, $ref-sibling refusal with $ref+$defs control, entity/srcset auto-fetch vs public-link control."
+    },
+    {
+      "path": "src/security/persistence-sinks.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "6 new committed tests added: 5 duplicate-member credential shapes (escaped, fully-escaped, empty/null/false survivor) plus the metric-beside-long-digit-run control, all against the real prepareOutputForPersistence materializer."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T32-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What each new test pins, the scratch-revert method and per-case evidence, before/after/wider-suite counts and raw log paths, and 4 disclosed concerns."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-01-48-091Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Own-suite BEFORE run (original committed test files, run from temporary sibling copies, then deleted): 22 pass, 0 fail."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-00-29-403Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Own-suite AFTER run (with the 9 new tests): 31 pass, 0 fail."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-01-58-957Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Wider required suite AFTER run: 216 pass, 3 skip, 0 fail, 219 tests across 20 files."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-07-36-078Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Scratch-revert experiment run (pre-fix reconstruction, scratch copy only): 21 pass, 10 fail -- all 9 new tests fail as required."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-08-29-384Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "bunx eslint on both changed files: exit 0, no output."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T14-08-41-199Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "bun run typecheck: exit 0."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/mcp/structural-redaction.test.ts",
+      "change": "New (previously untracked) file plus 3 new tests appended for the T24R#F-004 MCP transport closures; no existing content in this file was touched."
+    },
+    {
+      "path": "src/security/persistence-sinks.test.ts",
+      "change": "6 new tests appended (+85 lines, 0 deletions per git diff --stat) for the T24R#F-001 persistence closures; no existing test was modified or removed."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "new_tests_mcp": 3,
+    "new_tests_persistence": 6,
+    "own_suite_before_pass": 22,
+    "own_suite_after_pass": 31,
+    "wider_suite_pass": 216,
+    "wider_suite_skip": 3,
+    "scratch_revert_pass": 21,
+    "scratch_revert_fail": 10
+  },
+  "timestamp_utc": "2026-09-06T14:10:00Z"
+}

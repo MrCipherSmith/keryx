@@ -1,0 +1,324 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T70-recheck-2026-09-06",
+  "dispatch_id": "flow-233-T70",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of four repairs (T67 revert, T68 mode-rank + policy arm, T69 health reason leak, T73 shipped guidance) on branch codex/agent-first-core at base 0bc6418. Stage 1 rows 1, 2 and 4 PASS under my own execution; row 3 FAILS. Row 1: T62-exfil 13 cases / 0 bypasses (was 6), T62-boundary 0 leaking at four boundaries (was 4), all six reviewer shapes now findings and masked, the reverted symbols absent from src/security, and every piece of T63 valuable half present (BASE_REMEDIATION separate from FETCH_REMEDIATION, blast-radius disclosure, corrected asymmetry comment, T53#F-002 sufficiency argument and T53#F-003 EOF paragraph, both pinned by execution). The recorded reason in exfil.ts is accurate about why the approach failed and about the revisit condition. Row 2: my own probe drove all 12 ordered mode pairs with no broken window (a matrix T62-state.ts never runs), all 6 within-blocking transitions silent in incidents AND warnings, all 3 blocking->advisory transitions still detected, 5 spellings of an unrecognized mode all now surfacing a genuine policy disable, and 12 unusable-payload rows (including an all-five-policies-disabled prior) still silent - the implementers mathematical no-op argument tested, not accepted, and confirmed by reading (config.ts:254 passes a literal {} to mergeSecurityConfig; configUnreadable has exactly two producers). Row 4: measured ON THE ARTIFACT - the real runHealth() end to end, then latest.json and latest.md read back from disk and the gate re-read through createCodeHealthService().gate(); all three catch arms clean of path, credential and message, stage still named, gate verdict incomplete unmoved in memory, on disk and through the service; safeErrorCode rejects a smuggled and an oversized code; the implementers claim that run.ts is the only file in src/health binding a caught value verified independently (4 catch bindings, all in run.ts). Row 3 FAILS: three shipped documentation sites still describe security-mode exit behaviour the code does not have, and the error runs in the direction the dispatch asked me to check - stale about ci and enforced, i.e. about a fold this phase corrected (F-001, major, blocking). Both deliberate omissions ARE genuinely accurate. Every prior measurement holds (88 extraction, 615 resolution, 42, 48, 240 character-reference, surface matrix, canonicalization and persistence boundary rows), 380 tests pass / 0 fail, typecheck and eslint clean. Concurrent-worker drift in src/security/detect/exfil.ts and docs/requirements/.../policies.md was detected and handled: every row-1 matrix re-run post-drift, and the two decisive logs are byte-identical to the pre-drift ones, so no conclusion depends on the pre-drift bytes. Judgement calls: the runAdapter test-only export is acceptable (no production consumer, real hazard avoided, documented at the site) but the coverage it displaced was not restored (F-004); the working tree is whole after the git stash incident, verified four independent ways without changing git state.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-review.md",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): no required failed or incomplete check is relabeled PASS at any surface",
+      "status": "met",
+      "evidence": "T70-health-leak.log H1-H3: gate.status incomplete in memory, on disk in latest.json, and through createCodeHealthService().gate() at all three repaired sites; C0 control pass. T70-flow.log S01-S13: the health fold gives passed:true for exactly pass and warn and the shared constant refusal for every other value, including PASS-upper, warn-with-trailing-space, skipped, null, undefined, true and [warn]. T70-mode.log M1: 44 mode x surface x gate exit-code cells, advisory 0 everywhere and the three blocking modes 1 on every non-passing gate. 380 tests pass / 0 fail."
+    },
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; URL secret masked; a public link is not a network send",
+      "status": "met",
+      "evidence": "T70-post-T24-recheck2-exfil.log cases=48 bypasses=0 falsePositives=0; T70-post-T42-charrefs.log 240 cases, namedSpellingBypasses [], numericSpellingBypasses [], absentButUrlSyntax []; T70-post-T42-boundary.log ctlPublicLink state=none reasons=[] leaksHost=false; T70-post-T24-recheck2-boundary.log p.public-link state=none, every p.* leakS=false leakHost=false."
+    },
+    {
+      "criterion": "AC8: no durable or published record contains raw error text, a path or source bytes",
+      "status": "partial",
+      "evidence": "Met for the three sites T69 repaired, measured on the committable artifact (T70-health-leak.log H1-H6, all LEAK_* false). NOT structurally guaranteed: a fourth producer of the same field (src/health/run.ts:356, adapter-supplied validation.error) reaches the same artifact and the same flow record verbatim - reproduced in row P1 of the same log. Latent only: every shipped adapter supplies a constant (F-002)."
+    },
+    {
+      "criterion": "AC8: no shipped guidance describes behaviour the code does not have",
+      "status": "not_met",
+      "evidence": "F-001. docs/docs/cli-reference.md:2137-2141 and :2140-2141, docs/docs/modules.md:784-786 and :778 make four claims falsified by measured exit-code cells in T70-guidance.log (claims A2, A3, A4, A5 all CLAIM_HOLDS:false). Also F-003 (the security manifest keryx init/update ships) and F-005."
+    },
+    {
+      "criterion": "Every prior measurement holds: extraction, resolution, 42-case, 48-case, character-reference and surface matrices, and the boundary rows for the canonicalization and persistence repairs",
+      "status": "met",
+      "evidence": "All re-run post-drift: T53-extract 88 cases 0 bypasses; T53-resolve 41x15=615, 0 bypasses 0 FP; T42-exfil-attack 42 cases 0/0; T24-recheck2-exfil 48 cases 0/0; T42-charrefs 240 cases absentButUrlSyntax []; T46-surfaces flaggedNonFetching [X04.templateImg]; T24-recheck2-boundary 12 canonicalization + 28 persistence rows; T42-boundary ROW 1 with ctlPublicLink none; T53-base hostileNotNeutralized 0 with benignFlaggedIds [g05,g06,g07,g08] (T53s original set); T53-boundary 0 leaking; T52-base reachableAfterRedaction []; T53-corpus part B 7 of 30 with codeFenceBaseExample back."
+    },
+    {
+      "criterion": "Every verdict row cites an executed probe with a raw log path under .metaproject/data/gdctx/raw/",
+      "status": "met",
+      "evidence": "26 logs, SHA-256 recorded in .metaproject/data/gdctx/raw/T70-evidence-sha256.txt and tabulated in T70-review.md Evidence."
+    },
+    {
+      "criterion": "Judgement call: the runAdapter test-only export",
+      "status": "met",
+      "evidence": "Ruled acceptable. ctx rg runAdapter over src/ returns 4 hits (definition, run.ts own call site, 2 in the modules own focused test); no src/health/index.ts barrel; every non-test importer of run.ts imports only runHealth. The mock.module hazard it avoids was reproduced by T69 with either file ordered first. The displaced coverage was not restored - recorded as F-004."
+    },
+    {
+      "criterion": "Judgement call: tree integrity after the scoped git stash",
+      "status": "met",
+      "evidence": "Ruled whole, verified four ways with no git state change: (1) git stash list and git log -g refs/stash both show exactly 5 entries, none On codex/agent-first-core, which is what a successful pop leaves; (2) git stash push -- <path> is pathspec-scoped and does not touch untracked files, so the four untracked new src/health test files were never at risk; (3) git diff --stat -- src/health/run.ts shows 153 insertions / 15 deletions with the other tasks execution/parse/exitCode fields, filteredOutcome and T69s safeErrorCode all present simultaneously; (4) zero conflict markers in src/, typecheck exit 0, eslint exit 0 empty, 380 pass / 0 fail."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full recheck report: scope with start/end file hashes and the concurrent-worker drift, Stage 1 table, 7 findings, judgement calls on the test-only export and on tree integrity, confirmed clean areas, evidence table, routing audit, keryx:findings block.",
+      "hash": "4e19b8842f66a9d87b593bf48ee08e7aee6b2dfb81fdd8a678c1d70295ab3c6d"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-health-leak.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 4 probe: real runHealth() end to end via mock.module in its own process; asserts on the on-disk latest.json/latest.md and on createCodeHealthService().gate(); includes a positive control that proves the probe can see a leak.",
+      "hash": "3b339e0876e382e24e811d4a199879b672ea0155c70b9489f89420643ddc3c78"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-mode-policy.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 2 probe: all 12 ordered mode pairs with no broken window, 6 within-blocking transitions, 5 unrecognized-mode spellings, 12 unusable-payload shapes including an all-disabled prior, and the forced-substitute defensive reaction - all through the real analyze() and the durable incidents.jsonl.",
+      "hash": "d594e67532b294d8d6fa3b96601c80588ce1c31e3817f91cee956f76d18b98c3"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-guidance.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 3 oracle: 26 exit-code cells measured through the real securityCommand(...), then each shipped sentence evaluated as a predicate over them; plus an independent byte-level re-enumeration of seven shipped guidance surfaces and a render check of both templates.ts generators.",
+      "hash": "1282abe1ca63645cfb4263cd751449906dd8c84210639b99b8d97b456b30c885"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T70-evidence-sha256.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "SHA-256 of all 26 evidence logs.",
+      "hash": "ca1e95f0786db0b4675228e0f2ecbccdeda1c2b02ce912ba18454c9957711cbd"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T70-hashes-start.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "File hashes recorded before the review began.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T70-hashes-end.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "File hashes recorded after; diff shows drift confined to src/security/detect/exfil.ts and docs/requirements/keryx-agent-first-core/policies.md.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-result.json",
+      "change": "added (schema-validated result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-health-leak.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-mode-policy.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-guidance.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T70-*.log, T70-hashes-*.txt, T70-evidence-sha256.txt",
+      "change": "added (raw evidence; no production, test or documentation file was modified by this review)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T70#F-001",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "major",
+      "file": "docs/docs/cli-reference.md",
+      "line": 2137,
+      "symbol": "security command documented exit behaviour",
+      "problem": "Three shipped documentation sites still describe security-mode exit behaviour the code does not have. cli-reference.md:2137-2141 and modules.md:784-786 omit `gateway` entirely, claim `ci` exits 1 only on a gate `fail` (it also exits 1 on `needs-approval` and `incomplete`, an asymmetry T38/T39 F-003 closed in this phase) and claim `enforced` exits 1 only on `fail`/`needs-approval` (it also exits 1 on `incomplete`); cli-reference.md:2140-2141 and the modules.md:778 table cell claim `security report` exits 1 ONLY under `ci` and ONLY when the gate is `fail`, while reportExitCode (src/commands/security.ts:683) returns 1 for ci||enforced||gateway on `fail`, `needs-approval`, `incomplete` and any unrecognized stored gate. All three sites are inside T73's declared ownership; the cli-reference.md site is 38 lines below the paragraph T68 fixed. Neither T68's nor T73's enumeration reached them because both searched for the token pairing `enforced/ci`, and these sentences spell the modes out in prose and in a table cell.",
+      "impact": "AC8's clause 'no shipped guidance describes behaviour the code does not have' fails. Reachability is higher than T62 F-004's because the false half is about `ci`, the mode CI pipelines actually set: an operator reading the canonical CLI reference concludes that `keryx security report` exits 0 under `enforced` and `gateway` (so a pre-merge script gating on it silently passes) and that a `needs-approval` decision does not stop a `ci` run. Both are the 'a check that did not pass looks like a pass' shape this phase exists to close, one layer out from the code.",
+      "suggested_fix": "Rewrite cli-reference.md:2137-2146 and modules.md:784-786 to state the implemented fold - advisory always 0; enforced, ci and gateway exit 1 on fail, needs-approval, incomplete and any unrecognized stored gate - and change the modules.md:778 Exit cell to '1 in enforced/ci/gateway mode on a non-passing gate'. Derive these sentences from isBlockingMode's own doc comment, and add a doc oracle of the shape in T70-guidance.ts section A so a future re-ranking is caught by a test rather than by a review round.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-guidance.ts -> .metaproject/data/gdctx/raw/T70-guidance.log (sha256 b0d65a593d8b2dbba78d8b22312eed0877ca9478f31b4cd7b704b164170a1b6c). Section A0 measures 26 exit-code cells through the real securityCommand(...): report|enforced|fail 1, report|gateway|fail 1, report|ci|needs-approval 1, report|ci|incomplete 1, report|enforced|incomplete 1, scan|gateway|fail 1, check-input|gateway|secret 1, advisory 0 everywhere. Claims A2, A3, A4, A5 all CLAIM_HOLDS:false; A6 (the deliberate omission at cli-reference.md:2095-2099) CLAIM_HOLDS:true. Corroborated by .metaproject/data/gdctx/raw/T70-mode.log lines 23-44 (sha256 370580ee18e364da14f2f1e4312e5516ad574b679cd6bdf1af75015ce91e68f1).",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-mode-exit-behaviour/cli-reference-2137+modules-778-785",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "docs/docs/cli-reference.md:2137-2139 (scan/check-input/check-output mode enumeration) - DEFECT",
+          "docs/docs/cli-reference.md:2140-2141 (report exits 1 only under ci on fail) - DEFECT",
+          "docs/docs/modules.md:784-786 (same mode enumeration) - DEFECT",
+          "docs/docs/modules.md:778 (security report Exit table cell) - DEFECT",
+          "docs/docs/cli-reference.md:2095-2099 - correct (T68), measured accurate",
+          "docs/docs/cli-reference.md:330, :754, :912, :993, :1058 - correct (T73)",
+          "docs/docs/modules.md:766 - correct, deliberately left ('always-on' qualifier)",
+          "docs/docs/modules.md:865, :874, :881 - correct (T73)",
+          "docs/docs/architecture.md:547, :563, :634 - correct (T73)",
+          "docs/docs/workspace-and-lifecycle.md:339, :350 - correct (T73)",
+          ".metaproject/modules/security.md:48 - correct (T73)",
+          ".metaproject/core/security/README.md:17 - correct (T73)",
+          "src/security/templates.ts:63, :125 - correct (T68), generators verified by rendering",
+          "src/commands/init.ts:497 - correct (T73)"
+        ],
+        "enumeration_method": "Two independent passes, neither inheriting T68's or T73's table. (a) A byte-level line sweep in T70-guidance.ts section B over seven shipped surfaces for lines naming enforced/ci with a behaviour verb (block|suppress|exit|refus|stop the write|fail the gate|never blocks|warns) and no gateway: 5 hits, of which cli-reference.md:1226 is unrelated containment prose and :2096 is the T68-corrected paragraph whose gateway sits on the preceding line, leaving :2139, :2140 and modules.md:785. (b) 'bun src/cli.ts ctx rg' over docs, .metaproject/modules, .metaproject/core, src/security, src/commands, src/flow, src/health for enforced.{0,40}(ci|block)|(ci|advisory).{0,40}enforced|block.{0,40}enforced|gateway.{0,60}(not implemented|pending|unimplemented) - 98 raw lines read directly from .metaproject/data/gdctx/raw/2026-09-06T18-23-19-788Z_rg.log (NOT the compacted summary), then every hit's surrounding paragraph read with Read. Pass (b) found modules.md:778, whose table cell carries no behaviour verb and which pass (a) missed - recorded because it shows a single regex enumeration is not sufficient for this class, the same lesson T68 and T73 each learned once. Every claim was then executed as a predicate against measured exit-code cells rather than judged by reading."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T70#F-002",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "minor",
+      "file": "src/health/run.ts",
+      "line": 356,
+      "symbol": "runAdapter -> validation?.error -> SourceRunInfo.error -> computeGate -> HealthReport.gate.reasons",
+      "problem": "T69 closed the three catch arms (run.ts:279, :314, :336) and its claim that run.ts is the only file in src/health binding a caught error value is true (independently verified: ctx rg 'catch (' over src/health returns four hits, all in run.ts). But SourceRunInfo.error has a fourth producer that is not a catch arm: error: parseFailed ? validation?.error ?? \"source output format was not recognized\" : ... . `validation` is whatever the source adapter's optional validate?() returned (types.ts:224), so this line writes unconstrained adapter-supplied text into the same field the three repaired sites write, and gate.ts:78-79 folds it into 'INCOMPLETE: required source unavailable: <source>: <text>' identically. T69's two enumeration sweeps were over error.message|String(error)|error instanceof Error|\\.message\\b and over `catch`; neither pattern can reach a site that interpolates a return value.",
+      "impact": "Latent, not live. Every shipped adapter supplies a constant from a closed vocabulary (two literals in sources/eslint.ts, four in sources/dependency-audit.ts), so no payload reachable through today's code puts a path or credential into a durable record here. It matters because validate?() is an extension point on a public interface: the next adapter that returns 'parse failed: ${err.message}' reopens the exact leak F-005 named, in the exact field F-005 named, past a fix that looks complete. AC8's 'no durable or published record contains raw error text, a path or source bytes' is met today and is not structurally guaranteed.",
+      "suggested_fix": "Give this branch a constant category unconditionally and move validation.error to a field the gate does not serialise into reasons; or constrain SourceAdapter.validate()'s error to a closed vocabulary at the type level (a union of the literals the shipped adapters already use) so a future adapter cannot supply free text and tsc enforces the guarantee.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T70-health-leak.ts -> .metaproject/data/gdctx/raw/T70-health-leak.log (sha256 9bf31aaf424ff2dac1c7f74b7090f1ffcf5b4b5aa3de1d468c57a1bad8468eca), row P1: a synthetic adapter whose validate() returns 'synthetic validation failure /Users/attacker/.ssh/id_rsa AKIAIOSFODNN7EXAMPLE', driven through the real runHealth(), yields LEAK_committableArtifactJson {path:true,cred:true}, LEAK_committableArtifactMd {path:true,cred:true} and LEAK_serviceGateReasons {path:true,cred:true} - measured on the on-disk artifact and through createCodeHealthService().gate(). Rows H1-H6 in the same run are the negative controls and are all clean.",
+      "confidence": "high",
+      "dedupe_key": "health/source-run-info-error/unconstrained-adapter-validation-error",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/health/run.ts:356 (validation?.error interpolated verbatim) - DEFECT",
+          "src/health/run.ts:279, :314, :336 - repaired by T69, verified clean",
+          "src/health/run.ts:358 (source command exited <exitCode>) - numeric only, safe",
+          "src/health/run.ts:399 ('excluded by source filter') - constant, safe",
+          "src/health/sources/eslint.ts:122, :124 - constants",
+          "src/health/sources/dependency-audit.ts:28, :36, :97, :145 - constants"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg 'error:' src/health --glob '!*.test.ts' read from the raw log .metaproject/data/gdctx/raw/2026-09-06T18-19-34-569Z_rg.log (14 lines, every one read) - an enumeration over the FIELD rather than over the catch keyword, which is the axis T69's two sweeps did not cover. Cross-checked with ctx rg 'catch (' src/health (raw 2026-09-06T18-19-26-042Z_rg.log, 4 hits, all run.ts) to confirm T69's own claim independently."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T70#F-003",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "minor",
+      "file": "src/security/templates.ts",
+      "line": 103,
+      "symbol": "renderSecurityManifest",
+      "problem": "The manifest keryx init/update writes into every user project states 'A configChecksum mismatch or a mode downgrade is always surfaced as a finding plus an incident entry (self-protection, specification.md 14).' Only the checksum arm pushes a SecurityFinding (self-protect.ts:90, the module's only findings.push - one occurrence in the whole file); the mode-downgrade arm (:122-132) and the disabled-policy arm (:160-172) each push a warning and an incident and no finding. analyze() (service.ts:107-111) folds only selfProtection.findings into the decision, so a mode downgrade does not move the gate or any exit code either. The sentence also omits the disabled-policy arm that 14's own invariant (self-protect.ts:13-17) names alongside the other two.",
+      "impact": "AC8's 'no shipped guidance describes behaviour the code does not have', on a surface with wider blast radius than the docs site: this text is written into every project that enables the module and is read by agents as the module's own rules. An agent or operator relying on it would expect keryx security scan to fail on a mode downgrade; it exits 0. Pre-existing, introduced by none of the four repairs and outside T62 F-004's mode-blocking enumeration, which is why neither T68 nor T73 looked at it even though both edited this exact function.",
+      "suggested_fix": "Rewrite as: 'A configChecksum mismatch is surfaced as a finding plus an incident entry; a mode downgrade or a disabled policy is surfaced as a warning plus an incident entry (self-protection, specification.md 14).' Note in T73's migration terms that an already-scaffolded project keeps the old text until its owner runs keryx update.",
+      "evidence": ".metaproject/data/gdctx/raw/T70-guidance.log (sha256 b0d65a593d8b2dbba78d8b22312eed0877ca9478f31b4cd7b704b164170a1b6c), row 'B 14 manifest claim': manifestHasIt true, findingsPushSitesInSelfProtect 1, note 'only ONE findings.push in the whole module (the checksum arm) - the mode-downgrade arm emits warning+incident and NO finding'. Corroborated behaviourally by .metaproject/data/gdctx/raw/T70-mode-policy.log rows M1 gateway->advisory / enforced->advisory / ci->advisory, each recording mode-downgrade plus a warning while the run's decision leaves scan exiting 0.",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-manifest/mode-downgrade-claimed-as-finding",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T70#F-004",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "minor",
+      "file": "src/health/health-truthful-gate.test.ts",
+      "line": 326,
+      "symbol": "runThrowingSource / the three F-005 regressions",
+      "problem": "T69-spec.md's regression plan committed to asserting 'at the real runHealth() entry point (not a unit call to a helper)' and to checking that reasons reach neither the committable artifact nor the flow record. The delivered tests call runAdapter(...) and fold the result through computeGate(...) in memory: the mkdtemp workspace is created and never read back, and no test writes or reads .metaproject/data/health/artifacts/latest.json or latest.md, or goes through runHealth's writeOutputs. That covers the first two hops F-005 named and leaves the third (the committable artifact) and fourth (the flow record) unpinned - the same evidence-failure shape this phase has already been bitten by, 'a claim about an artifact must be tested on the artifact'.",
+      "impact": "No live defect: my own probe drives the real runHealth() and reads the artifact from disk, and it is clean at all three sites. The cost is future - a change to writeOutputs, to report.ts's markdown rendering, or to computeGate's consumer that reintroduced raw text between runAdapter and the persisted file would leave every shipped F-005 test green.",
+      "suggested_fix": "Add one end-to-end regression alongside the three unit ones, driving runHealth() with mock.module on src/health/sources/index.ts and asserting on the bytes of latest.json. The registry hazard T69 hit is a within-one-bun-test-process effect; snapshotting the real module, overriding only FINDING_ADAPTERS and restoring in afterAll (the discipline T47/T49 established), or a separate single-file invocation, both avoid it. T70-health-leak.ts is a working template.",
+      "evidence": "src/health/health-truthful-gate.test.ts:283-338 read in full - runThrowingSource's whole body is runAdapter(...) + compute([info]) inside a mkdtemp that is never read back. Contrast .metaproject/data/gdctx/raw/T70-health-leak.log (sha256 9bf31aaf424ff2dac1c7f74b7090f1ffcf5b4b5aa3de1d468c57a1bad8468eca), every row of which carries LEAK_committableArtifactJson, LEAK_committableArtifactMd and LEAK_serviceGateReasons measured from disk and through createCodeHealthService().gate().",
+      "confidence": "high",
+      "dedupe_key": "health/f-005-regressions/never-reach-runhealth-or-artifact",
+      "blocking_merge": false,
+      "related_skill": "tests-creator",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-005",
+      "global_id": "T70#F-005",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "info",
+      "file": "src/commands/security.ts",
+      "line": 801,
+      "symbol": "securityCommand (hooks install)",
+      "problem": "The operator-facing note printed after a hook install under advisory mode reads 'Set mode to enforced or ci in .metaproject/security.config.json to make it refuse.' Since T61/T65, gateway makes it refuse identically. Unlike init.ts:497, which T73 corrected because its 'mode only' made the sentence false, this one has no 'only' and is incomplete rather than false - but it is a runtime string an operator reads, not a code comment. T73's own enumeration regex (advisory.*enforced) matches this line and its stated scope included src/commands, yet only init.ts:497 was listed.",
+      "impact": "None demonstrated: no check is relabeled and nothing is let through; an operator who follows the advice gets a refusing guard. Recorded because it is a residual of the exact class the dispatch asked me to close, on a surface an operator actually reads.",
+      "suggested_fix": "Change to 'Set mode to enforced, ci or gateway ...'.",
+      "evidence": "src/commands/security.ts:799-803 read directly; behaviour measured in .metaproject/data/gdctx/raw/T70-guidance.log row A0 (check-input|gateway|secret: 1 vs check-input|advisory|secret: 0).",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-hooks-install-note/omits-gateway",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "T70#F-006",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "info",
+      "file": "src/security/guard.ts",
+      "line": 271,
+      "symbol": "assorted doc comments",
+      "problem": "Seven internal comments still enumerate enforced/ci as the blocking set where gateway behaves identically: src/security/guard.ts:271, :337, :349, :406; src/security/service.ts:373; src/flow/service.ts:647; src/flow/types.ts:214. guard.ts:9, :213, :260-262 and :418 in the same file are correct and name all three, so the file contradicts itself within eleven lines (:260 correct, :271 incomplete). src/security/service.ts:373 is notable because service.ts was inside T68's own declared ownership.",
+      "impact": "None at runtime. Developer- and agent-facing only; these are not written into user projects and are not published documentation, which is why this is info and not part of F-001. Recorded so the class is closed rather than rediscovered in a seventh round.",
+      "suggested_fix": "One pass adding gateway to each, or replacing the enumeration with a reference to isBlockingMode, whose own comment (guard.ts:212-213) is already correct and is the single source of truth.",
+      "evidence": "bun src/cli.ts ctx rg sweep, raw .metaproject/data/gdctx/raw/2026-09-06T18-23-19-788Z_rg.log, lines 1, 3, 7 and 56-59 read directly (the compacted summary is not sufficient - see the routing audit).",
+      "confidence": "high",
+      "dedupe_key": "internal-comments/blocking-mode-enumeration/omits-gateway",
+      "blocking_merge": false,
+      "related_skill": "review-style",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "T70#F-007",
+      "reviewer": "review-security-code+review-logic (T70 independent recheck)",
+      "severity": "info",
+      "file": "src/security/self-protect.ts",
+      "line": 51,
+      "symbol": "MODE_RANK",
+      "problem": "The new MODE_RANK comment says the surviving '-> advisory' invariant is 'verified in T62-state.ts's M3 matrix and security.test.ts'. T62-state.ts has no M3 section - its sections are A, B0-B3, C and D; M3 is in T62-mode.ts. A reader following the citation to check the claim finds nothing.",
+      "impact": "None on behaviour. The claim itself is true - I re-measured it independently across all twelve ordered pairs - only the pointer is wrong.",
+      "suggested_fix": "Cite T62-mode.ts's M3, or cite the section by name rather than by file.",
+      "evidence": ".metaproject/data/gdctx/raw/T70-state.log (full output of T62-state.ts, 29 rows, no M3) against .metaproject/data/gdctx/raw/T70-mode.log lines 49-60 (label 'M3 rank').",
+      "confidence": "high",
+      "dedupe_key": "self-protect/mode-rank-comment/wrong-probe-citation",
+      "blocking_merge": false,
+      "related_skill": "review-style",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage1_rows_passed": 3,
+    "stage1_rows_failed": 1,
+    "stage2_entered": false,
+    "probes_written": 3,
+    "probes_rerun": 18,
+    "evidence_logs": 26,
+    "tests_pass": 380,
+    "tests_fail": 0,
+    "test_files": 45,
+    "expect_calls": 2179,
+    "typecheck_exit": 0,
+    "eslint_exit": 0,
+    "findings_blocker": 0,
+    "findings_major": 1,
+    "findings_minor": 3,
+    "findings_info": 3,
+    "concurrent_drift_files": 2,
+    "conclusions_affected_by_drift": 0,
+    "gdctx_compaction_row_drops_observed": 3,
+    "graph_used": false,
+    "wiki_used": false,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "timestamp_utc": "2026-09-06T18:41:45.597Z"
+}

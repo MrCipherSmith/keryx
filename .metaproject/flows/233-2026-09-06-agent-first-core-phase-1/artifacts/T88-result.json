@@ -1,0 +1,110 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T88-independent-verifier-20260907",
+  "dispatch_id": "T88",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independently verified T85's closure of T84#F-001 (unmemoised destination read, a second quadratic) and T84#F-003 (escape-blind description bracket pairing). Built my own pre-T85 reconstruction from the shipped file (not reused from any prior round) by reverting exactly the two documented mechanisms, and reproduced both defects on it independently before confirming both are closed on shipped code, at the detector and all four public boundaries, pinned by regressions. Ran T84-bypass.ts, T84-escape.ts, T84b-destfail-check.ts, T84b-destfail-4boundary.ts and T85-parity.ts myself (the last against the real reconstruction, not a shim, reproducing T85's own 28000-document run byte-for-byte: spanMoveCount 0, hostReleaseCount 0). Wrote a new probe of my own (T88-neveroffset.ts) with three shapes that never repeat a destination offset, attacking the disjointness argument directly rather than trusting the cache; all stay linear-or-sub-linear to 1MB. Independently re-ran the full T85-cost.ts boundary sweep to completion (T84 had abandoned it as impractical pre-fix): boundariesOverOneSecond: [], worst shape escapedCloseRunWithDef at 660.3ms. Confirmed 18/19 prior matrices byte-identical, benign corpus unchanged (16 files/62 findings/7 Part-B ids), and the accepted container-block limitation (T84#F-002) unchanged at exactly 17 bypassing rows. Ratified the 'flag but never skip' cursor-guard rule as the correct permanent shape. No blocking findings; two documentation-grade info findings recorded (absence of a length gate at the boundary layer as defense-in-depth, and a one-count corpus-scan drift traced to this review's own gdctx tooling artifacts).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Both fixes closed at the detector and all four public boundaries, each pinned by a regression that fails without it",
+      "status": "met",
+      "evidence": "T84#F-001: reconstruction (cache removed) quadratic ~7.2s at 200001 bytes vs shipped 2-25ms; exfil.test.ts's T84#F-001 test and T84#F-003 test read and confirmed present, targeting exactly the shapes measured. T84#F-003: all 8 class-B rows in T84-bypass.ts/T84-escape.ts closed on shipped code, BYPASS/prechangeFindings:0 on my own reconstruction. See T88-review.md items 1-2."
+    },
+    {
+      "criterion": "No shape over a second at any public boundary up to a megabyte; state the worst you found",
+      "status": "met",
+      "evidence": "T85-cost.ts boundary sweep, independently re-run to completion: boundariesOverOneSecond: []. Worst shape found: escapedCloseRunWithDef at 1048615 bytes, 660.3ms at the persist boundary (T88-cost-boundary.log)."
+    },
+    {
+      "criterion": "Everything previously closed stays closed, verified by hash; accepted limitation unchanged in extent",
+      "status": "met",
+      "evidence": "18/19 matrix probes byte-identical to T82's own recorded logs (T83-matrices.sh, phase T88check). Benign corpus: 16 files/62 findings/7 Part-B ids, byte-identical. Container-block class: exactly 12 (T84-bypass.ts) + 5 (T84-escape.ts) = 17 BYPASS rows, unchanged. RESIDUALS.md accepted-limitation box unchanged. exfil.ts/exfil.test.ts hashes unchanged from T85's recorded 'after' values, re-checked at start and end of this review."
+    },
+    {
+      "criterion": "Every finding classified as blocking-and-reproduced or documentation-grade",
+      "status": "met",
+      "evidence": "Two info findings (T88#F-001, T88#F-002), both explicitly classified documentation-grade in the Residual classification section of T88-review.md. Zero blockers. Container-block class (T84#F-002) and record-correction (T84#F-004) also classified: accepted-unchanged and already-resolved respectively."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T88-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent verification review of T85's closure of T84#F-001 and T84#F-003, ruling on the cursor-guard rule and the three disclosed items, with full evidence and routing audit."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T88-neveroffset.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New probe built for this review: three shapes engineered to never repeat a destination offset, attacking the memoisation's disjointness argument directly."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T88-destfail-check-reconstruction.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T84b-destfail-check.ts run against a genuine pre-T85 reconstruction built fresh for this review: quadratic on the reconstruction, fast on shipped code, same process."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T88-parity-reconstruction.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T85-parity.ts (28000-document differential fuzz) re-run against the same reconstruction: spanMoveCount 0, hostReleaseCount 0, byte-identical to T85's own recorded run."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T88-cost-boundary.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T85-cost.ts boundary mode re-run to completion (the run T84 abandoned pre-fix as impractical): boundariesOverOneSecond: [], worst shape 660.3ms at 1048615 bytes."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T88#F-001",
+      "reviewer": "T88-independent-verifier",
+      "severity": "info",
+      "file": "src/mcp/dispatch.ts",
+      "line": 83,
+      "symbol": "dispatchCallTool",
+      "problem": "Neither dispatchCallTool (src/mcp/dispatch.ts:83-101) nor runDetectors/runDetectorsAsync (src/security/detect/index.ts:31-101) caps input length before running detection. Same structural absence T84#F-001's class_scope named across dispatch.ts, redact-seam.ts and guard.ts.",
+      "impact": "None currently: the only live cost defect this absence made exploitable (T84#F-001) is closed and independently re-verified in this round. Recorded so a future reintroduction of superlinear detector cost is not silently unguarded again.",
+      "suggested_fix": "None required by this round's scope. If ever revisited: a length gate at the boundary layer, independent of any one detector's own asymptotic argument.",
+      "evidence": "Full read of src/mcp/dispatch.ts (127 lines) and src/security/detect/index.ts (140 lines); no length check present in either.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "global_id": "T88#F-002",
+      "reviewer": "T88-independent-verifier",
+      "severity": "info",
+      "file": ".metaproject/data/gdctx/artifacts/2026-09-07T03-59-21-027Z_read.md",
+      "symbol": "T53-corpus scan artifact interaction",
+      "problem": "T53-corpus, re-run in this review, reports totalFindings 636 / filesWithFindings 105 / egress.html-image-exfil 398 against T85's own last-recorded 635/104/397, traced to a keryx ctx rg search this review ran whose gdctx artifact persisted exfil.ts's own illustrative header-comment prose (`<img src=\"URL\">`) as a new file the corpus scanner then matched.",
+      "impact": "None on the module. benignFilesWithFindings (16), benignFindings (62) and the 7 Part-B flagged ids are byte-identical to T85's claim. Identical class of noise T85-implementation.md disclosed for its own session.",
+      "suggested_fix": "None; a property of how the corpus scan and the routing tool's own artifact-writing interact.",
+      "evidence": "T83-T88check-T53-corpus.log vs T85-final-T53-corpus.log diff isolated to filesScanned/totalFindings/filesWithFindings/egress.html-image-exfil/elapsedMs; benign list and Part B byte-identical. keryx ctx rg over the new artifact files isolated the one match.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "matrices_reconfirmed": 18,
+    "matrices_total": 19,
+    "focused_suite_pass": 119,
+    "focused_suite_fail": 0,
+    "focused_suite_expect": 1393,
+    "worst_boundary_ms_at_1mb": 660.3,
+    "class_a_bypass_rows_unchanged": 17
+  },
+  "timestamp_utc": "2026-09-07T04:10:57Z"
+}

@@ -9,7 +9,6 @@ import {
   validateCalendarDate,
 } from "./temporal";
 import { searchEntries } from "./search";
-import { collectEntries } from "./store";
 import { relevantAcceptedMemory, proceduralMemoryForScope } from "./relevant";
 import { createMemoryService } from "./service";
 import { MemoryValidationError } from "./validation";

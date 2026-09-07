@@ -1,0 +1,145 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T8",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Implemented Phase 0 M10 AC3–AC5. Agent turns now support an independent validated maxToolCalls budget counted only at the actual tool.invoke boundary, with a truthful tool-call-budget finish reason and no extra provider round. Invalid limits fail before side effects; denied approvals, unknown tools, invalid inputs and trust-gated calls do not consume the cap; finite caps preserve deterministic ordering. Stress/containment scripts and a strict scripts TypeScript target are fixed and wired into package check. The focused acceptance suite is 11/11 green, root and scripts typechecks pass, and changed-related strict tests are 604/604 green. The observed health command returned PASS but skipped required ESLint, so no complete quality PASS is claimed. The full repository check has two independently reproduced failures in files owned by other Phase 0 workers.",
+  "summary_markdown": "T8 is GREEN for AC3–AC5. Run `bun test src/commands/agent-tool-call-budget.test.ts scripts/stress/keryx-shell-stress.test.ts scripts/benchmark/run-containment.test.ts scripts/typecheck.test.ts` (11 pass), `bun run typecheck`, and `bun run typecheck:scripts`. Detailed immutable evidence and hashes are in `T8-change-report.md`. No external model call or private dataset was used; auto_commit=false was honored.",
+  "acceptance": [
+    {
+      "criterion": "AC3: M10: offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+      "status": "met",
+      "evidence": "Six offline budget tests pass. A three-call single round invokes exactly two calls under maxToolCalls=2, performs no second provider request, and returns finishReason=tool-call-budget. Additional cases prove validation before activity, denied/unknown calls do not consume budget, cross-round accumulation, and preservation of finishReason=budget when the call cap is unreached. Agent/spawn/terminal regressions are 110/110 green."
+    },
+    {
+      "criterion": "AC4: M10: stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+      "status": "met",
+      "evidence": "The offline stress subprocess writes one JSON report with maxRounds=7 from resolveAgentMaxRounds and no maxToolCalls field. resolveContainmentPort preserves a concrete listener port and throws on undefined/invalid input. Both entrypoints are import-safe and no provider is called in these tests."
+    },
+    {
+      "criterion": "AC5: M10: a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls.",
+      "status": "met",
+      "evidence": "tsconfig.scripts.json extends root strict settings and covers benchmark/stress entrypoints. bun run typecheck and bun run typecheck:scripts both exit 0. The injected TS2322 test exits nonzero for the intended fixture. package.json check now runs both TypeScript targets before tests. The changed-file health command returned PASS with zero findings but recorded required ESLint as skipped; this is retained as command evidence and is not claimed as a complete quality PASS."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-implementation-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-code implementation contract for independent invocation counting, script corrections, and offline verification.",
+      "hash": "512ea425f933b8a817f8294efb1f2f517fe0e9c9a5e8cb8b5375f6951e5c6011"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Change report with behavior, exact commands, immutable logs, hashes, full-suite caveat, and routing audit.",
+      "hash": "d20f966e90cf530b68a5c70a10a3b2758901be9bc1e5c8c2450830738aacc02f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Offline actual-invocation budget acceptance and edge-case tests.",
+      "hash": "c25040491fb4726a5d5d1e17a5f95150e0f86043a16809bbe929db5f163c6553"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Offline temporary stress report fixture.",
+      "hash": "8b4d37036e73ae7f1f0030cbbcc05085e0312be8fdeee7e4a16da71636747910"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pure containment listener-port resolution tests.",
+      "hash": "ddac6138ae7e4c3cbc8a2ea04c7f96d6b84d18596a6618603159320e244d"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/scripts/typecheck.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Scripts target coverage/cleanliness and injected strict-error rejection tests.",
+      "hash": "3d1cf8d3648b4e2c0a2f5c5cccc4cb5dfc0aa190c9a30396be4ede3ff5965b03"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-13-11-373Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Changed-related strict test run: 604 passed, 0 failed.",
+      "hash": "b8cd22b287a449c7042505eea17a0f064c53b25d14703d77525401c604e25121"
+    }
+  ],
+  "changed_files": [
+    { "path": "src/commands/agent.ts", "change": "added validated independent actual-invocation budget and truthful terminal reason" },
+    { "path": "src/commands/agent-tool-call-budget.test.ts", "change": "made T6 RED tests GREEN and added four bounded edge cases" },
+    { "path": "src/session/slate-terminal-state.ts", "change": "added the tool-call-budget unattended reason" },
+    { "path": "src/harness/tool/builtin/spawn-subagent-tool.ts", "change": "mapped the new finish reason to BudgetExhausted" },
+    { "path": "scripts/benchmark/run-containment.ts", "change": "validated and used the concrete bound listener port" },
+    { "path": "scripts/benchmark/generate-express-deps-gold.ts", "change": "omitted undefined cwd under exactOptionalPropertyTypes" },
+    { "path": "scripts/benchmark/run-express-oracle.ts", "change": "omitted undefined cwd under exactOptionalPropertyTypes" },
+    { "path": "scripts/benchmark/run-gdctx-oracle.ts", "change": "omitted undefined cwd under exactOptionalPropertyTypes" },
+    { "path": "scripts/benchmark/run-memory-oracle.ts", "change": "omitted undefined cwd under exactOptionalPropertyTypes" },
+    { "path": "scripts/benchmark/run-testing-oracle.ts", "change": "omitted undefined cwd under exactOptionalPropertyTypes" },
+    { "path": "scripts/stress/keryx-shell-stress.ts", "change": "reported resolved maxRounds and guarded main for import safety" },
+    { "path": "scripts/stress/concurrent-suite-stress.ts", "change": "replaced unsafe top-level await with guarded error-handled main" },
+    { "path": "scripts/typecheck.test.ts", "change": "resolved the injected fixture from the repository dependency root" },
+    { "path": "tsconfig.scripts.json", "change": "created strict benchmark/stress TypeScript project" },
+    { "path": "package.json", "change": "added typecheck:scripts and wired it into check" },
+    { "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-implementation-spec.md", "change": "created pre-code implementation spec" },
+    { "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md", "change": "created implementation and verification report" },
+    { "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json", "change": "created schema-conformant task result" }
+  ],
+  "findings": [
+    {
+      "id": "T8-C01",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "src/mcp/transport/loopback-host.ts",
+      "line": 3,
+      "problem": "The full repository check fails the MCP boundary test because another Phase 0 worker's new loopback-host module imports ../../lib/serve-config.",
+      "impact": "bun run check cannot be globally green until the routing/loopback owner resolves or approves that boundary.",
+      "suggested_fix": "The owning worker should route through an allowed MCP service facade or update the boundary contract if the dependency is intentional.",
+      "evidence": "bun test src/mcp/boundary.test.ts src/gdskills/install.test.ts reproduces src/mcp/boundary.test.ts failure; raw log .metaproject/data/gdctx/raw/2026-09-06T11-12-04-845Z_run.log.",
+      "confidence": "high"
+    },
+    {
+      "id": "T8-C02",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+      "line": 1,
+      "problem": "The full repository check finds the task-implementer input contract source and installed copy differ during another Phase 0 worker's schema update.",
+      "impact": "bun run check cannot be globally green until the schema owner synchronizes the installed contract.",
+      "suggested_fix": "The schema owner should synchronize the validated source contract to the installed core copy using the repository's skill installation workflow.",
+      "evidence": "bun test src/mcp/boundary.test.ts src/gdskills/install.test.ts reproduces the installed-contract drift; raw log .metaproject/data/gdctx/raw/2026-09-06T11-12-04-845Z_run.log.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "focused_tests_passed": 11,
+    "focused_tests_failed": 0,
+    "changed_related_tests_passed": 604,
+    "changed_related_tests_failed": 0,
+    "full_tests_passed": 6826,
+    "full_tests_skipped": 18,
+    "full_tests_failed_unowned": 2,
+    "root_typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 0,
+    "health_findings": 0,
+    "health_required_eslint_status": "skipped",
+    "health_quality_claim": "incomplete-required-coverage",
+    "external_model_calls": 0,
+    "commits_created": 0
+  },
+  "timestamp_utc": "2026-09-06T11:15:18Z"
+}

@@ -70,12 +70,6 @@ export type ComparativeReport = {
   readonly cells: readonly ComparativeCellResult[];
 };
 
-function median(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2 : (sorted[mid] as number);
-}
 
 /** Recover a run's success count/n from its `rates.taskSuccess` (as ablation-runner.ts writes it). */
 function successRateFromRun(run: PairedBenchmarkRunV2): RateWithCI {

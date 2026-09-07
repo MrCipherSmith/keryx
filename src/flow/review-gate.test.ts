@@ -11,7 +11,7 @@
 // the wrong commit) and once as an unknown head (nothing said which commit the
 // PR is at). They are different failures with different fixes and the gate must
 // not collapse them.
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -19,6 +19,7 @@ import { createFlowService } from "./service";
 import {
   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
   REVIEW_GATE_CONFIG_PATH,
+  REVIEW_GATE_SEVERITY_FLOOR_DEFAULT,
   REVIEW_ROUND_CAP,
   blocksAtFloor,
   findingVerdict,
@@ -45,6 +46,18 @@ const PR_URL = "https://github.com/acme/app/pull/7";
 // head the fake tracker reports cannot drift: condition 4 compares them.
 const HEAD = FIXTURE_PR_HEAD;
 const STALE = "0f1e2d3c4b5a69788796a5b4c3d2e1f098765432";
+
+// Real `node:fs/promises` exports, snapshotted once so a mock's restore hands
+// back the genuine module rather than leaking the break into later tests —
+// same discipline `service.test.ts` uses for `./store`/`./review-gate`
+// (`realStoreExports`/`realReviewGateExports`), applied here because the two
+// reads this file's leak-safety tests target (`readReviewGateConfig`'s
+// config read, `readReviewRounds`'s `scope.md` read) both call `readFile`
+// from this exact module. Every override below spreads this snapshot and
+// replaces `readFile` alone, scoped to one exact path, so `pathExists`
+// (which calls `access` from the same module) and every other file these
+// tests touch keep using the real implementation.
+const realFsExports = { ...(await import("node:fs/promises")) };
 
 let ROOT = "";
 
@@ -601,6 +614,88 @@ test("an unreadable round fails condition 1 even when everything readable is cle
   expect(gate.detail).toContain("ingested-round (unobserved)");
   expect(gate.detail).toContain("round-0-abandoned");
   expect(gate.detail).toContain("do not complete over it");
+});
+
+// T49: `readReviewRounds` reads `manifest.json` and `findings.json` through
+// `readJson`, which already swallows every failure into `null` internally --
+// but its `scope.md` read sat outside that pattern, guarded only by a
+// preceding `pathExists` (a TOCTOU check, not a guarantee) and no `try` of
+// its own. Two things pinned here: (1) at the unit level, a `scope.md` read
+// failure must not throw out of `readReviewRounds` -- it must degrade to the
+// same `verification: null` a genuinely absent `scope.md` already produces,
+// never leaking the caught text anywhere in the returned records; (2) at the
+// full `complete()` level, that degradation must actually BLOCK the gate
+// (`verifier-stats` reads `unobserved` as a failure, per this module's own
+// rule 2) rather than let it pass silently, and the gate's `detail` must not
+// contain the caught text either.
+test("a scope.md read failure (not just a missing file) degrades to no verification stats, and never throws", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { dir } = await driveToGates(service);
+  const packageDir = await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+  const scopePath = path.join(packageDir, "scope.md");
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+
+  mock.module("node:fs/promises", () => ({
+    ...realFsExports,
+    readFile: (file: unknown, ...rest: unknown[]) => {
+      if (typeof file === "string" && path.resolve(file) === path.resolve(scopePath)) {
+        return Promise.reject(new Error(`ENOENT: no such file or directory, open '${secretPath}'`));
+      }
+      return (realFsExports.readFile as (...args: unknown[]) => Promise<unknown>)(file, ...rest);
+    },
+  }));
+  try {
+    // Resolves rather than rejects -- the whole point of the fix.
+    const rounds = await readReviewRounds(ROOT, dir);
+
+    expect(rounds).toHaveLength(1);
+    expect(rounds[0]?.verification).toBeNull();
+    // Reading scope.md is orthogonal to manifest/findings readability, so
+    // this round is still ingested -- exactly as it would be if scope.md
+    // were simply absent (see `writeReviewPackage`'s `omitScope` option and
+    // the "AC5/5 — a round with no verification stats is unobserved" test).
+    expect(rounds[0]?.ingested).toBe(true);
+    const serialized = JSON.stringify(rounds);
+    expect(serialized).not.toContain(secretPath);
+    expect(serialized).not.toContain("ENOENT");
+  } finally {
+    mock.module("node:fs/promises", () => realFsExports);
+  }
+});
+
+test("a scope.md read failure blocks flow completion, and never echoes the caught text", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  const packageDir = await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+  const scopePath = path.join(packageDir, "scope.md");
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+
+  mock.module("node:fs/promises", () => ({
+    ...realFsExports,
+    readFile: (file: unknown, ...rest: unknown[]) => {
+      if (typeof file === "string" && path.resolve(file) === path.resolve(scopePath)) {
+        return Promise.reject(new Error(`ENOENT: no such file or directory, open '${secretPath}'`));
+      }
+      return (realFsExports.readFile as (...args: unknown[]) => Promise<unknown>)(file, ...rest);
+    },
+  }));
+  try {
+    // Resolves rather than rejects -- an escaping exception here would be
+    // exactly the "throw past the gate machinery" outcome this task closes.
+    const result = await service.complete({ cwd: ROOT, id });
+    const gate = reviewOf(result.gates);
+
+    expect(gate.status).toBe("fail");
+    expect(gate.detail).not.toContain(secretPath);
+    expect(gate.detail).not.toContain("ENOENT");
+    expect(gate.detail).toContain("verifier-stats (unobserved)");
+    expect(result.passed).toBe(false);
+    expect(result.flow.status).toBe("in-progress");
+  } finally {
+    mock.module("node:fs/promises", () => realFsExports);
+  }
 });
 
 // --- AC5 condition 3 / AC-C2: the round ran against the PR head -------------
@@ -1296,6 +1391,50 @@ test("a malformed config file falls back to the defaults WITH a note, never sile
   expect(config.requireCleanRound).toBe(true);
   expect(config.notes).toHaveLength(1);
   expect(config.notes[0]).toContain("could not be parsed");
+});
+
+// T49: the `catch` above wraps BOTH the `readFile` and the `JSON.parse` --
+// the malformed-JSON test above exercises only the second half. A `readFile`
+// failure (the file vanishes or loses read permission between `pathExists`
+// and the read -- `pathExists` is a TOCTOU check, not a guarantee, per this
+// module's own header) used to fall into the identical `catch` and
+// interpolate `error.message` verbatim, which for a real Node fs error
+// embeds the resolved path. `evaluateReviewGate` renders `config.notes` into
+// `verdict.detail` on BOTH its pass and fail branches (`[config: ...]`), so
+// this reaches the durable, `flow.json`-persisted gate detail on every
+// completion, not only a failing one.
+test("a config file that fails to read (not just parse) never echoes the caught text into notes", async () => {
+  await fresh();
+  const configPath = path.join(ROOT, REVIEW_GATE_CONFIG_PATH);
+  // Must exist and be valid JSON so `pathExists` reports true and the real
+  // race this stands in for (removed, or permission lost, between the check
+  // and the read) is isolated to the `readFile` step alone.
+  await writeFile(configPath, "{}", "utf8");
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+
+  mock.module("node:fs/promises", () => ({
+    ...realFsExports,
+    readFile: (file: unknown, ...rest: unknown[]) => {
+      if (typeof file === "string" && path.resolve(file) === path.resolve(configPath)) {
+        return Promise.reject(new Error(`ENOENT: no such file or directory, open '${secretPath}'`));
+      }
+      return (realFsExports.readFile as (...args: unknown[]) => Promise<unknown>)(file, ...rest);
+    },
+  }));
+  try {
+    const config = await readReviewGateConfig(ROOT);
+
+    expect(config.notes).toHaveLength(1);
+    expect(config.notes[0]).not.toContain(secretPath);
+    expect(config.notes[0]).not.toContain("ENOENT");
+    expect(config.notes[0]).toContain("could not be read");
+    // The safe fallback still applies -- a read failure does not silently
+    // degrade to something other than the documented default.
+    expect(config.severityFloor).toBe(REVIEW_GATE_SEVERITY_FLOOR_DEFAULT);
+    expect(config.requireCleanRound).toBe(true);
+  } finally {
+    mock.module("node:fs/promises", () => realFsExports);
+  }
 });
 
 // --- units -----------------------------------------------------------------

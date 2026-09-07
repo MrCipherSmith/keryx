@@ -149,7 +149,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
     credentialSchema: { required: true, label: `${displayName} API key`, secret: true },
     documentationUrl: id === "brave" ? "https://api.search.brave.com/app/documentation" : id === "tavily" ? "https://docs.tavily.com/" : "https://docs.exa.ai/",
     capabilities: { localLoopback: false, supportsPublicationDate: Boolean(mapping.date) },
-    async testConnection(fields) {
+    async testConnection(_fields) {
       const key = credential(id, resolveCredential, injection, name);
       if (!key) return { ok: false, reason: "missing-credential" };
       const response = await transport.request(remoteRequest(id, endpoint, "keryx healthcheck", key));

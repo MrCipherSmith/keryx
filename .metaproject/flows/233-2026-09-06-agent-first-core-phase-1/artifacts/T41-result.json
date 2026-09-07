@@ -1,0 +1,90 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T41",
+  "status": "BLOCKED",
+  "summary": "Both correctness defects the reviewer found in the canonical re-serialization rule are fixed at the floor, with the security rule that closed the hidden-byte class strictly strengthened rather than weakened. Byte preservation is now decided by structural congruence against the validated value instead of by a string comparison against its canonical serialization: the original bytes are returned whenever they are a faithful spelling of that structure (spelling and member order free, membership not), so an integer outside IEEE-754 double range and a negative zero survive byte-exactly and a payload spelling non-ASCII with escapes is no longer rewritten or labelled a redaction. A duplicate member is still an extra member and still loses preservation before its value is read, so all five committed duplicate shapes and the reviewer's fourteen behave exactly as before, and format-unsafe remains reachable only from the structural walk. Repository JSON sweep: byte-preserved 1974 -> 1996, mislabelled 22 -> 0, rejected 0 -> 0. The third half of the task -- carrying the redaction outcome through the persistence path -- is NOT implemented: prepareOutputForPersistence lives in src/security/guard.ts, not in src/security/service.ts as the dispatch's ownership line states, and both that file and the two exact-shape assertions in src/security/persistence-sinks.test.ts are outside this dispatch's ownership, with guard.ts explicitly named as a concurrent worker's file. The exact change is written out in T41-implementation.md section 3 for a follow-up dispatch. Note that the correctness defect itself is gone at the source: no persistence caller can now receive a re-serialized number.",
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): a synthetic secret is absent from JSON, text and error output; safe JSON passes its schema; a value with no safe representation returns format-unsafe rather than a silently altered one.",
+      "status": "met",
+      "evidence": "T24-recheck2-validator.ts after-run (raw .metaproject/data/gdctx/raw/2026-09-06T14-43-13-396Z_run.log): every ROW1 property-name verdict, every ROW3 $ref verdict and all five T19 controls are byte-identical to the before-run; ctlNumericUnderCredentialKey and duplicateSurvivorNumericCredential still format-unsafe/sensitive-numeric-field, ctlSecretPropertyName and duplicateSecretKey still format-unsafe/sensitive-property-name, leaksSecret=false and leaksCred=false on every case. Focused suites 252 pass / 0 fail (raw 2026-09-06T14-42-55-342Z_run.log)."
+    },
+    {
+      "criterion": "No value is changed in meaning by the floor: an integer outside double range and a negative zero either survive byte-exactly or are refused, never re-emitted as a different number, and the persistence path carries the redaction outcome instead of discarding it.",
+      "status": "partial",
+      "evidence": "First half met: f002.bigIntegerPrecision and f002.negativeZero move from state=redacted/bytesRestored=false to state=none/bytesRestored=true; new regressions 'an out-of-double-range integer literal survives byte-exactly' and 'negative zero keeps its sign instead of being re-emitted as zero' failed before (raw 2026-09-06T14-41-50-948Z_run.log, 17 pass / 3 fail) and pass after (raw 2026-09-06T14-42-47-939Z_run.log, 20 pass / 0 fail). Second half NOT done: prepareOutputForPersistence is at src/security/guard.ts:52, outside this dispatch's ownership and named as a concurrent worker's file; the exact change is specified in T41-implementation.md section 3."
+    },
+    {
+      "criterion": "A rewrite that removes nothing is not reported as a redaction; the repository JSON sweep shows no regression in byte-preserved counts and no remaining mislabelled results, with counts reported before and after.",
+      "status": "met",
+      "evidence": "T24-recheck2-repojson.ts before (raw 2026-09-06T14-39-12-894Z_run.log): filesScanned 2047, bytePreserved 1974, rejected 0, normalizedOnly 22, redactedForContent 51. After (raw 2026-09-06T14-43-05-512Z_run.log): filesScanned 2047, bytePreserved 1996, rejected 0, normalizedOnly 0, redactedForContent 51. Byte-preserved rose by exactly the 22 previously mislabelled files; no new rejection; the content-redacted set is unchanged. Because valid JSON can only carry more than its parse through a duplicate member, a congruence failure now means a member was genuinely dropped, so the surviving redacted label names a real removal."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Decision and its justification against policies.md line 20, the congruence rule, the argument that it cannot become a hiding channel, the planned regressions, and the ownership conflict recorded before coding."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect decision and justification, the rule that replaced the string comparison, the non-regression argument, corpus counts before and after, every raw log path, and the exact unimplemented guard.ts change."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/output-validation.ts",
+      "change": "Replaced withoutInsignificantWhitespace/bytesAreCanonicalFor (a string comparison against the canonical serialization) with bytesAreFaithfulTo and its literal-faithful scanner (skipWhitespace, readStringLiteral, readNumberLiteral, matchesLiteralWord, matchesObject, matchesArray, matchesValue), which compares the byte stream against the validated structure: spelling and member order are free, membership is not, a duplicate key fails before its value is read, and anything the scanner cannot follow falls back to the canonical form. Updated the substitution site and the adapter doc comment."
+    },
+    {
+      "path": "src/security/output-validation.test.ts",
+      "change": "Five new regressions: out-of-double-range integer byte-exact, negative zero keeps its sign, value-preserving spellings not reported as a redaction (the three that failed before the fix), plus two guard rails - a faithfully spelled duplicate member is still replaced by the canonical form, and whitespace still round-trips while an extra member does not. No existing test changed or removed."
+    },
+    {
+      "path": "src/mcp/redact-seam.ts",
+      "change": "Comment only: the seam's description of the floor's byte-preservation rule now matches the implemented rule."
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T41-Q1",
+      "question": "prepareOutputForPersistence is in src/security/guard.ts:52, not in src/security/service.ts as the dispatch's ownership line states, and guard.ts is explicitly assigned to a concurrent worker. Grant ownership of that one function plus the two exact-shape assertions at src/security/persistence-sinks.test.ts:24 and :39, or re-dispatch the persistence signal to the worker who owns guard.ts?",
+      "why": "Acceptance criterion 2 requires the persistence path to carry the redaction outcome. The change is six lines plus two assertion updates and is written out verbatim in T41-implementation.md section 3, but both files are outside this dispatch's ownership and one is being edited concurrently, so performing it here risks a collision the dispatch explicitly told this worker to avoid.",
+      "options": [
+        { "id": "grant", "label": "Grant this worker the prepareOutputForPersistence function in guard.ts and the two assertions in persistence-sinks.test.ts, and re-dispatch T41 to finish it", "recommended": true },
+        { "id": "reassign", "label": "Hand the persistence signal to the worker who already owns guard.ts, with T41-implementation.md section 3 as the spec" },
+        { "id": "defer", "label": "Accept the partial criterion for now: the correctness defect is fixed at the source, only the signal is missing" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 5,
+    "tests_passing": 20,
+    "tests_failing": 0,
+    "repo_json_files_scanned": 2047,
+    "repo_json_byte_preserved_before": 1974,
+    "repo_json_byte_preserved_after": 1996,
+    "repo_json_rejected_before": 0,
+    "repo_json_rejected_after": 0,
+    "repo_json_mislabelled_before": 22,
+    "repo_json_mislabelled_after": 0
+  },
+  "timestamp_utc": "2026-09-06T14:46:00Z"
+}

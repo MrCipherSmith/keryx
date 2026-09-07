@@ -1,0 +1,93 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T38",
+  "status": "DONE",
+  "summary": "Closed T35 F-002: replaced the two SecurityGate-to-exit-code denylists in src/commands/security.ts (exitCodeFor for `security scan`/`check-*`, and handleReport's inline fold for `security report`) with a single exhaustive allowlist predicate (isPassGate) shared by both, so a needs-approval gate now refuses in ci mode the same as it already did in enforced mode, and an unrecognized gate value refuses instead of falling through to pass. Advisory permissiveness and the three-way fail/needs-approval/incomplete distinction in the printed/JSON output are unchanged. Two existing security.check-input.test.ts assertions that encoded the old (buggy) ci behavior were corrected to match the fix, and a new security-gate-exit.test.ts adds 16 regression tests (direct unit coverage of the exhaustive default arm plus CLI-level reproductions of the reviewer's T35-probe-cli.ts case E4 and T35-probe-cli2.ts ci row). handleReport's strict check stays ci-only (not widened to enforced), reproducing F-002's own suggested fix rather than making an independent scope decision; src/commands/health.ts has the identical denylist shape over a different gate vocabulary and is out of this task's ownership, so it was reported, not fixed, and flagged as a separate background task.",
+  "acceptance": [
+    {
+      "criterion": "AC8 / dispatch: no required failed or incomplete check is relabeled PASS at any surface, including the process exit code; strict modes accept only a pass.",
+      "status": "met",
+      "evidence": "T35-probe-cli.ts after: 0/7 cases mismatched (was 1/7, E4 stored needs-approval). T35-probe-cli2.ts after: ci scanExitCode=1 and reportExitCode=1 over a needs-approval artifact (were 0/0). Raw logs 2026-09-06T15-03-23-128Z_run.log and 2026-09-06T15-03-29-900Z_run.log."
+    },
+    {
+      "criterion": "Policy fold (policies.md): strict CI accepts only PASS; messages are constant and leak-safe.",
+      "status": "met",
+      "evidence": "isPassGate is exhaustive with the default arm refusing. Regression tests assert err/out never contain the injected payload or a planted secret (security-gate-exit.test.ts and the corrected security.check-input.test.ts case)."
+    },
+    {
+      "criterion": "The command layer and the service layer agree: a gate value that blocks in the service does not exit zero at the command, and an unrecognized value is treated as non-pass rather than falling through.",
+      "status": "met",
+      "evidence": "isPassGate mirrors runGate's switch (src/security/service.ts) and securityFlowGate's (src/security/guard.ts): same four-member exhaustiveness, default arm refuses. Unit tests in security-gate-exit.test.ts pin the unrecognized-value case at both fold sites in both ci and enforced."
+    },
+    {
+      "criterion": "Keep the advisory mode's existing permissiveness.",
+      "status": "met",
+      "evidence": "exitCodeFor/reportExitCode both return 0 unconditionally outside ci/enforced; pinned as an unchanged control in security-gate-exit.test.ts and in security.check-input.test.ts's existing advisory assertions."
+    },
+    {
+      "criterion": "Keep the distinction between a violation, an approval requirement and unavailable evidence visible in the output.",
+      "status": "met",
+      "evidence": "gateLabel still renders FAIL/NEEDS-APPROVAL/INCOMPLETE as distinct strings; the fix only changes which of those exit non-zero in strict mode, never the label."
+    },
+    {
+      "criterion": "Do not weaken the recursion behavior an earlier task (T34) fixed; a directory scanned without recursion must keep reporting incomplete.",
+      "status": "met",
+      "evidence": "src/security/path-scan.ts untouched. bun test src/commands/security-recursive-scan.test.ts: 6 pass / 0 fail / 46 expect() (raw 2026-09-06T15-04-14-746Z_run.log), including the non-recursive-directory case; the new incomplete-gate control test exercises the same path end to end through security scan --no-recursive."
+    },
+    {
+      "criterion": "Report what other command surfaces read a gate value the same way, and how the search was performed.",
+      "status": "met",
+      "evidence": "T38-implementation.md 'Alignment with the existing vocabulary, and the search for other surfaces' section: ctx rg over src/commands and a broader src sweep found workspace.ts (not the same shape), three already-correct allowlists (sac/index.ts, sac/proposal-lifecycle.ts, serve-turn.ts), and src/commands/health.ts's runExitCode (same denylist shape, different gate vocabulary, out of this task's ownership, flagged separately)."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T38-spec.md", "kind": "plan", "exists": true },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T38-implementation.md", "kind": "implementation-report", "exists": true },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-56-52-628Z_run.log", "kind": "diff", "exists": true, "summary": "T35-probe-cli.ts before fix: 1/7 cases mismatched (E4 needs-approval)." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-03-23-128Z_run.log", "kind": "diff", "exists": true, "summary": "T35-probe-cli.ts after fix: 0/7 cases mismatched." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-56-57-935Z_run.log", "kind": "diff", "exists": true, "summary": "T35-probe-cli2.ts before fix: ci scanExitCode=0, reportExitCode=0." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-03-29-900Z_run.log", "kind": "diff", "exists": true, "summary": "T35-probe-cli2.ts after fix: ci scanExitCode=1, reportExitCode=1." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-00-57-424Z_run.log", "kind": "diff", "exists": true, "summary": "security-gate-exit.test.ts RED: 9 pass / 7 fail / 40 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-02-11-758Z_run.log", "kind": "diff", "exists": true, "summary": "security-gate-exit.test.ts GREEN: 16 pass / 0 fail / 42 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-57-11-412Z_run.log", "kind": "diff", "exists": true, "summary": "security.check-input.test.ts baseline before any change: 32 pass / 0 fail / 97 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-02-28-984Z_run.log", "kind": "diff", "exists": true, "summary": "security.check-input.test.ts after source fix, before test correction: 30 pass / 2 fail / 96 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-03-17-650Z_run.log", "kind": "diff", "exists": true, "summary": "security.check-input.test.ts GREEN after test correction: 32 pass / 0 fail / 99 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-04-14-746Z_run.log", "kind": "diff", "exists": true, "summary": "bun test src/commands/security-recursive-scan.test.ts (dispatch-required command): 6 pass / 0 fail / 46 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-03-51-179Z_run.log", "kind": "diff", "exists": true, "summary": "Combined command-layer security selection (4 files): 62 pass / 0 fail / 224 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-59-31-833Z_run.log", "kind": "diff", "exists": true, "summary": "bun run typecheck before this task's edits: 1 pre-existing error in src/security/detect/exfil.test.ts (concurrent worker's file), 0 errors elsewhere." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-04-04-506Z_run.log", "kind": "diff", "exists": true, "summary": "bun run typecheck after this task's edits: same 1 pre-existing error, unchanged; 0 errors in any file this task touched." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-04-10-421Z_run.log", "kind": "diff", "exists": true, "summary": "bunx eslint on every file this task changed: clean, exit 0." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-53-27-791Z_rg.log", "kind": "diff", "exists": true, "summary": "Enumeration: gate-valued exit-code folds under src/commands." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-53-46-287Z_rg.log", "kind": "diff", "exists": true, "summary": "Enumeration: gate === / !== patterns across src, excluding already-covered surfaces." }
+  ],
+  "changed_files": [
+    { "path": "src/commands/security.ts", "change": "modified" },
+    { "path": "src/commands/security.check-input.test.ts", "change": "modified" },
+    { "path": "src/commands/security-gate-exit.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T38-F-001",
+      "global_id": "233-T38#T38-F-001",
+      "reviewer": "task-implementer (T38)",
+      "severity": "minor",
+      "file": "src/commands/health.ts",
+      "line": 90,
+      "symbol": "runExitCode",
+      "problem": "runExitCode(status, strict) is the same denylist shape T35 F-002 reported for src/commands/security.ts: `status === \"fail\" || status === \"incomplete\" || (strict && status === \"warn\") ? 1 : 0`. An unrecognized future `health` gate status falls through to 0 (a false pass) instead of refusing.",
+      "impact": "If a future health gate status is added without updating this fold, `keryx health run --strict` would exit 0 for it instead of refusing, the same class of bug as F-002 (an unrecognized/blocking value reads as a clean exit). Not exploitable today since the health gate's status union is presently closed, but the shape is latent.",
+      "suggested_fix": "Rewrite as an allowlist over the one non-blocking status the way T38 rewrote src/commands/security.ts's exitCodeFor/reportExitCode: exhaustive switch over the recognized health gate statuses with the default arm refusing.",
+      "evidence": "bun src/cli.ts ctx rg -n \"function runExitCode\" src/commands/health.ts, then read src/commands/health.ts:90-94 directly. Not executed against a live unrecognized status since the health gate's status type is closed today; found by shape comparison against the fixed exitCodeFor/reportExitCode.",
+      "confidence": "medium",
+      "dedupe_key": "health-runExitCode-denylist-fallthrough",
+      "blocking_merge": false,
+      "related_skill": null,
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T15:05:00Z"
+}

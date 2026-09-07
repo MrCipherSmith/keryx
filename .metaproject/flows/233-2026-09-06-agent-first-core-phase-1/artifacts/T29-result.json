@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T29",
+  "status": "DONE",
+  "summary": "Rewrote the stale control step in service.memo.test.ts's memoization test: it used to expect a FRESH service (PII policy off) to return the synthetic email raw, which contradicts the mandatory deterministic redaction floor added by T19/T22 (validateSerializedOutput inside redact() masks recognized PII unconditionally). The memoization property is now proven through the redact() findings array instead: a memoised service keeps reporting a pii-category finding after the on-disk config is switched off, a fresh service reports none, and `redacted` is asserted PII-free on every call without ever asserting raw PII. No production code changed; no other file changed.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02) and AC5 (AFC-15): the mandatory floor keeps masking the synthetic email in redacted output even when the advisory PII policy is disabled; the test does not assert raw PII in output.",
+      "status": "met",
+      "evidence": "All three calls (first/second/fresh) assert expect(<call>.redacted).not.toContain(\"nobody@example.com\"); no assertion in the file expects raw PII. After: bun test src/security/service.memo.test.ts -> 6 pass / 0 fail (raw .metaproject/data/gdctx/raw/2026-09-06T13-55-48-329Z_run.log)."
+    },
+    {
+      "criterion": "The memoization property remains under test: a service created before the config change keeps behaving per the old config on a later call, and a fresh service observes the new config; both halves are asserted via a signal the floor does not mask.",
+      "status": "met",
+      "evidence": "Verified by reading src/security/detect/index.ts:40 (config.policies.pii.enabled gates whether detectPii runs at all) and src/security/resolve.ts:74-111 (a finding is built from whatever matches exist, regardless of action) that the pii-category presence in redact()'s findings array is config-dependent and untouched by the floor (output-validation.ts's own detectPii call feeds only `redacted`, not `findings`). first.findings and second.findings (same memoised service, config file changed to disabled on disk) both assert a pii finding present; fresh.findings (new service, same disk state) asserts none."
+    },
+    {
+      "criterion": "bun test src/security/service.memo.test.ts passes fully; no other file is changed.",
+      "status": "met",
+      "evidence": "Before: 5 pass / 1 fail, failing at the old raw-PII control assertion (raw .metaproject/data/gdctx/raw/2026-09-06T13-52-59-963Z_run.log). After: 6 pass / 0 fail, 26 expect() calls (raw .metaproject/data/gdctx/raw/2026-09-06T13-55-48-329Z_run.log). Combined with guard.test.ts and persistence-sinks.test.ts: 40 pass / 0 fail, 110 expect() calls (raw .metaproject/data/gdctx/raw/2026-09-06T13-55-58-627Z_run.log). git status --porcelain shows only ` M src/security/service.memo.test.ts` (raw .metaproject/data/gdctx/raw/2026-09-06T13-56-18-376Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T29-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Root cause of the stale expectation, the config-dependent observable used instead, what changed in the test, and before/after evidence with raw log paths.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/service.memo.test.ts",
+      "change": "Rewrote the failing control step in the 'one service keeps the config it loaded; a fresh one picks up the change' test: dropped the raw-PII expectation on a fresh service's redacted output (now impossible under the T19/T22 mandatory floor) and instead assert on redact()'s findings array — a memoised service keeps reporting a pii-category finding after the on-disk policy is disabled, a fresh service reports none — while keeping the existing not.toContain(raw email) assertion on redacted for every call. Updated the immediately preceding explanatory comment block to describe the new rationale. No other test, describe block, or file touched."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 0,
+    "tests_rewritten": 1,
+    "tests_passing_before": 5,
+    "tests_failing_before": 1,
+    "tests_passing_after": 6,
+    "tests_failing_after": 0,
+    "combined_suite_pass_after": 40,
+    "combined_suite_fail_after": 0,
+    "eslint_errors": 0,
+    "typecheck_errors": 0
+  },
+  "timestamp_utc": "2026-09-06T13:58:00Z"
+}

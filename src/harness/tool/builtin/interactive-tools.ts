@@ -11,7 +11,7 @@
 // resolves outside the root (via `..` or an absolute escape) is rejected and
 // nothing outside the root is ever read.
 
-import { readFile, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { realpathSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";

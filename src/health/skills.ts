@@ -25,7 +25,7 @@ export async function loadSkillOwnership(cwd: string): Promise<SkillOwnership> {
     return EMPTY;
   }
 
-  let registry: RegistryEntry[] = [];
+  let registry: RegistryEntry[];
   try {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       modules?: { gdskills?: { projectSkillRegistry?: RegistryEntry[] } };

@@ -1,0 +1,66 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T27",
+  "status": "DONE",
+  "summary": "Fixed the 4 RED tests in src/security/guard.test.ts by editing only guard.ts: enforced/ci guardOutput now blocks an incomplete engine gate (not just fail/needs-approval); formatGuardWarning no longer returns null for an incomplete decision with zero findings; securityFlowGate maps a stored latest report with gate incomplete, and any gate() error, to status fail with a constant leak-safe detail instead of pass/skipped. Refreshed stale no-op/fail-open comments. All 17 guard.test.ts tests pass; the required combined selection is 39 passed / 1 pre-existing failure (service.memo.test.ts:162, owned by T29, unmodified); eslint and typecheck are clean.",
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+      "status": "met",
+      "evidence": "formatGuardWarning's findings branch already interpolates decision.gate (so incomplete + findings both show); new zero-findings branch surfaces 'incomplete' on its own. guard.test.ts parametrized incomplete-evidence tests (enforced/ci/advisory), 3/3 passed."
+    },
+    {
+      "criterion": "AC8: no required failed/incomplete check is relabeled PASS; strict (enforced/ci) guards and the strict flow gate refuse incomplete evidence while advisory retains truthful incomplete diagnostics.",
+      "status": "met",
+      "evidence": "guardOutput blocks on gate 'incomplete' in enforced/ci (allowed:false) while advisory keeps allowed:true with the true decision; securityFlowGate maps stored 'incomplete' reports and gate() errors to status 'fail' (not 'pass'/'skipped'). guard.test.ts: 'strict flow gate refuses incomplete security evidence' and the 3 parametrized tests all pass."
+    },
+    {
+      "criterion": "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS. The guard test file's 17 tests pass; no raw error, path or content leaks into reasons or details.",
+      "status": "met",
+      "evidence": "src/security/guard.test.ts: 17/17 passed (raw .metaproject/data/gdctx/raw/2026-09-06T13-13-10-267Z_run.log). securityFlowGate's catch branch and formatGuardWarning's incomplete message are constant strings; no error.message, cwd or file path interpolated; tests assert JSON.stringify(result) does not contain the workspace root."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full implementation report with per-change rationale, acceptance evidence, verification counts, and raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T27 spec context read before implementation."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Prior T20 report documenting runGate's incomplete-status behavior in service.ts."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Trust/completeness/access policy including the PASS/FAIL/INCOMPLETE fold."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/guard.ts",
+      "change": "guardOutput blocks gate 'incomplete' in enforced/ci; formatGuardWarning reports 'incomplete' with zero findings instead of null; securityFlowGate maps a stored 'incomplete' report and a gate() error to status 'fail' with a constant leak-safe detail (no longer 'skipped' with raw error text); stale no-op/fail-open comments refreshed."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T13:15:00Z"
+}
