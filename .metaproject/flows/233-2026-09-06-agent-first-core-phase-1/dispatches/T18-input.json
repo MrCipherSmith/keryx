@@ -1,0 +1,46 @@
+{
+  "task": {
+    "task_id": "task-18",
+    "task_name": "Fix owner identity replacement race",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Pin identities from authorization/canonical resolution across descriptor opening. Root integration probe T17-owner-race-probe.ts currently returns replacement directory data. Add failing regression before code; fix shared contained/descriptor reader so replacing owner root with another REAL directory is refused; also pin target identity before beforeOpen so same-path real-file replacement is refused. Preserve internal symlinks and SAC nofollow semantics. Do not weaken unsupported/FIFO/byte bound behavior. Root independently reruns probe.",
+    "target_files": [
+      "src/lib/contained-read.ts",
+      "src/lib/descriptor-read.ts",
+      "src/lib/contained-read.test.ts",
+      "src/sac/secure-resource-read.ts"
+    ],
+    "acceptance_criteria": [
+      "Owner real-directory replacement after resolution is refused without returning replacement data.",
+      "Original target identity survives pre-open hook; regular-file replacement refused.",
+      "Existing87 containment/SAC/interactive tests remain green."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T17-owner-race-probe.ts",
+    "existing_tests": [
+      "src/lib/contained-read.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Deterministic security boundary, preserve public compatibility except approved fixes, fail closed with typed constant errors.",
+    "test_case_specs": {
+      "test_files": [
+        "src/lib/contained-read.test.ts"
+      ],
+      "run_command": "bun test src/lib/contained-read.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

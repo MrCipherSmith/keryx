@@ -1,0 +1,142 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T73-security-mode-prose-remediation",
+  "dispatch_id": "233-T73",
+  "status": "DONE",
+  "summary": "Closed the remaining T62 F-004 residuals T68 disclosed but did not own: the init interactive prompt and five documentation files that still described only `enforced`/`ci` as blocking, omitting `gateway` (which T61/T65/T68 already made block identically at the write seam, the flow completion gate, and every command exit code). Enumerated sites via ctx rg across docs, .metaproject/modules, and src/commands (four search passes plus a raw-log read after the compacted summary undercounted one file's hit list), verified each hit's surrounding paragraph by direct Read, and cross-checked current behaviour directly against src/security/guard.ts (isBlockingMode) and src/security/types.ts (SecurityMode) rather than trusting prior task prose. Corrected 15 in-scope sites (src/commands/init.ts:497 prompt string; .metaproject/modules/security.md; docs/docs/architecture.md x2 + a heading disambiguation; docs/docs/modules.md x3; docs/docs/workspace-and-lifecycle.md x2; docs/docs/cli-reference.md x5) plus one out-of-list site corrected under the dispatch's own 'same sentence' exception (.metaproject/core/security/README.md, this repo's own stale checked-in copy of the templates.ts output T68 already fixed at the source). Left docs/docs/modules.md:766 unedited as already accurate (it correctly scopes 'always-on gateway mode (Phase 4)' rather than conflating it with the blocking mode value). Left docs/docs/cli-reference.md:2086-2099 untouched per the explicit constraint. No behaviour changed: only prose/string edits. No code defect found in this pass.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC8: no shipped guidance describes behaviour the code does not have. A reader of any description in this repository, including one written into a user project, is told what the code actually does.",
+      "status": "met",
+      "evidence": "15 sites corrected to enumerate enforced/ci/gateway as the three blocking modes, matching src/security/guard.ts:212-213 (isBlockingMode, read directly: 'advisory alone reports and continues; enforced, ci and gateway block') and src/security/types.ts:93 (SecurityMode union). The operator-facing interactive prompt (src/commands/init.ts:497) — named by the dispatch as mattering most — was corrected. The generated-into-user-projects file .metaproject/modules/security.md (renderSecurityManifest output) was corrected; this repo's own stale checked-in copy of the sibling generated file (.metaproject/core/security/README.md, renderSecurityCoreReadme output) was also corrected under the dispatch's same-sentence exception. Full site table with disposition and reasons in T73-implementation.md."
+    },
+    {
+      "criterion": "Every mode description site is enumerated, and each is accurate, corrected, or left with a stated reason.",
+      "status": "met",
+      "evidence": "T73-implementation.md's 'Enumeration method' section documents four independent ctx rg passes plus a directory listing and targeted guide-page checks; T73-spec.md and T73-implementation.md both include a disposition table covering 18 sites plus two excluded categories (LLM-provider 'gateway' mentions, and historical/unrelated-feature docs that matched the search regexes by coincidence), each with a stated reason."
+    },
+    {
+      "criterion": "Check the direction of the error too: any place that describes another mode's behaviour incorrectly.",
+      "status": "met",
+      "evidence": "Searched gateway.*not implemented|not implemented.*gateway|still pending specifically for understatement of gateway's implementation. Found docs/docs/architecture.md:634 (heading corrected — it dropped the 'always-on' qualifier and read as unqualified 'gateway mode still pending', the same ambiguity T62 F-004 flagged in the pre-T68 cli-reference.md wording) and docs/docs/modules.md:766 (reviewed and left unedited — already correctly qualified as 'always-on gateway mode (Phase 4)', not conflating it with the blocking mode value)."
+    },
+    {
+      "criterion": "No behaviour changes: this is a documentation and string task. If you find a code defect, report it rather than fixing it.",
+      "status": "met",
+      "evidence": "Only .md prose and one confirm-prompt string were edited; no file under src/security/ was touched. No code defect was found in this pass — guard.ts and types.ts were read read-only and already agree with each other and with the corrected prose."
+    },
+    {
+      "criterion": "The focused suites for anything you touch stay green.",
+      "status": "met",
+      "evidence": "bun src/cli.ts ctx run -- bun test src/commands/init.test.ts: 3 pass / 0 fail / 11 expect() calls, before and after (no test pinned the stale prompt string, confirmed by ctx rg before editing). bun run typecheck: clean, exit 0. bunx eslint on src/commands/init.ts: clean, 0 errors/0 warnings. bunx eslint on the six changed Markdown files: clean, 0 errors, 6 informational 'no config for .md' warnings (expected, same as T68's own precedent)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T73-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-edit spec: enumeration method, read-only code verification, full site disposition table, fix pattern, verification plan.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T73-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Post-edit report: enumeration method with raw-log correction noted, full before/after site table, verification results, acceptance table, routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-04-00-233Z_rg.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Raw ctx rg log the compacted summary undercounted for docs/docs/cli-reference.md; read directly to recover the missing hit (line 1058).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-07-15-656Z_rg.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Post-edit re-scan of all seven changed files: 16 matches, all enforced/ci/gateway except the untouched, already-correct cli-reference.md:2096.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-07-23-442Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun test src/commands/init.test.ts: 3 pass / 0 fail / 11 expect().",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-07-36-501Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck: clean, exit 0.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-07-40-874Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bunx eslint src/commands/init.ts: clean, 0 errors, 0 warnings.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-07-46-365Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bunx eslint on the six changed Markdown files: clean, 0 errors, 6 informational no-config warnings.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/commands/init.ts",
+      "change": "Corrected the pre-push hook confirm prompt (line 497) to enumerate enforced/ci/gateway instead of 'enforced/ci mode only'."
+    },
+    {
+      "path": ".metaproject/modules/security.md",
+      "change": "Corrected the git pre-push gate description to enumerate enforced/ci/gateway as blocking; reflowed the affected paragraph."
+    },
+    {
+      "path": "docs/docs/architecture.md",
+      "change": "Corrected two mode enumerations (the security-edges callout and the write-seam guard rule) to include gateway; disambiguated the 'Known limitations' heading that previously read as unqualified 'gateway mode still pending'."
+    },
+    {
+      "path": "docs/docs/modules.md",
+      "change": "Corrected three mode enumerations (write-seam semantics, hooks summary, pre-push hook detail) to include gateway; left the separate, already-accurate 'always-on gateway mode (Phase 4)' sentence at line 766 unedited."
+    },
+    {
+      "path": "docs/docs/workspace-and-lifecycle.md",
+      "change": "Corrected the git-hooks prose line and the hooks table's security-pre-push row to include gateway."
+    },
+    {
+      "path": "docs/docs/cli-reference.md",
+      "change": "Corrected five mode enumerations (pre-push hook description, wiki collect, testing run, memory ingest, flow complete gate) to include gateway. Did not touch the already-corrected gateway-specific lines around 2086-2099."
+    },
+    {
+      "path": ".metaproject/core/security/README.md",
+      "change": "Corrected the check() blocking-mode enumeration to include gateway — out of the named ownership list but plainly the same sentence as templates.ts's renderSecurityCoreReadme() output, already fixed at the generator source by T68; this repo's own checked-in copy predated a re-render."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "sites_enumerated": 18,
+    "sites_corrected_in_scope": 15,
+    "sites_corrected_out_of_list_same_sentence_exception": 1,
+    "sites_reviewed_and_left_accurate": 1,
+    "sites_excluded_out_of_scope": 2,
+    "tests_run": "3 pass / 0 fail / 11 expect() (src/commands/init.test.ts, unmodified)",
+    "typecheck": "clean",
+    "eslint_source_errors": 0,
+    "eslint_markdown_warnings": 6
+  },
+  "timestamp_utc": "2026-09-06T18:10:00.000Z"
+}

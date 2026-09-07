@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T35",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Independent recheck of the security gate path repair and the scan coverage fixes",
+    "description": "You wrote neither repair nor either review that prompted them. Verify with your own probes that all seven defects are genuinely closed and that closing them changed nothing else. From the gate repair: a missing latest report and an unparseable one are classified as incomplete rather than pass, including through the report-building path that shares the same reader; the fold is exhaustive over the four recognized gate values with an unrecognized value, a missing gate field, a non-object payload and an array all treated as incomplete; an enabled module that cannot read its own posture blocks in enforced and ci rather than allowing; the flow gate's mode-load failure returns a blocking result instead of the null reserved for a disabled module; and the flow gate's mapping is exhaustive so a stored needs-approval report no longer reads as pass. From the coverage fixes: per-file rows are keyed on the encountered entry with no contradictory duplicates and no missing row for a symlink, while cycles and duplicate scanning are still suppressed by canonical identity; and a directory scanned without recursion never reports a clean pass. Confirm the two consumer-facing claims yourself rather than accepting them: that the flow completion gate blocks only on a failing status, and that the pass-to-incomplete fold inside the scan path survived the gate rewrite so the non-recursive outcome is still truthful end to end. Two verdict changes need your judgement, both disclosed: a stored pass carrying incomplete coverage now reads as incomplete at read time, and the gate validation is deliberately narrower than the full report schema, on the argument that full-schema rejection would relabel legitimate narrower artifacts while buying nothing against a forged schema-valid pass. Finally, rule on the disclosed residual: a security config that parses but is not an object now takes the defaults, whose mode is advisory, so a destroyed config downgrades enforcement instead of failing closed, detected only in a workspace that has run before. State whether task T37 must close before phase acceptance and name the minimal change. Stage 2 only after Stage 1 passes. Write T35-review.md and T35-result.json.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+    "AC8: no required failed or incomplete check is relabeled PASS; strict guards and the strict flow gate refuse incomplete evidence; advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+    "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; per-file coverage reports what actually happened to each encountered entry and exposes no closed name; findings survive independently of coverage; reasons and details are constant and leak-safe."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-failopen.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/config.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts",
+    "/Users/Goodea/goodea/keryx/src/flow/service.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-security-code/SKILL.md and review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Read-only on all production and test code. Write only T35-review.md, T35-result.json and probe scripts named T35-*.ts under the flow artifacts dir; temp fixtures under mkdtemp, removed afterwards. Do not modify earlier review or probe artifacts.",
+    "Re-run the two reviewer probes unchanged as part of your evidence, but do not treat them as sufficient: they were written against the pre-fix code and one of them asserts the defect, so its failure is the signal.",
+    "Another worker may be adding tests to src/mcp/structural-redaction.test.ts and src/security/persistence-sinks.test.ts; record file hashes at start and end and exclude that area.",
+    "No git state changes, no flow state, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic fixtures only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T14:08:00+00:00", "created_by": "flow-orchestrator" }
+}

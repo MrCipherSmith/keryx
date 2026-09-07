@@ -1,0 +1,86 @@
+{
+  "contractVersion": "1.0.0",
+  "packageId": "handoff-demo",
+  "packageVersion": "v1",
+  "scope": {
+    "projectId": "demo-project",
+    "checkoutId": "demo-checkout",
+    "workspaceId": "demo-workspace",
+    "taskId": "demo-task"
+  },
+  "snapshot": {
+    "revision": "demo-parent-revision",
+    "dirtyFingerprint": "demo-clean",
+    "configFingerprint": "demo-config",
+    "producerVersion": "1.0.0"
+  },
+  "goal": "Подготовить спецификацию обновления.",
+  "constraints": [
+    {
+      "text": "Обновление согласовано, но реализация отложена.",
+      "source": {
+        "ref": "wiki:demo-policy",
+        "version": "v7",
+        "fragment": "section:dependency-policy#lines=3-5"
+      },
+      "sourceStatus": "known"
+    }
+  ],
+  "permissionEvidenceRefs": [
+    {
+      "ref": "wiki:demo-policy",
+      "version": "v7",
+      "fragment": "section:dependency-policy#lines=3-5"
+    }
+  ],
+  "decisions": [
+    {
+      "text": "Согласовано направление обновления зависимостей.",
+      "provenance": {
+        "claimType": "decision",
+        "sourceStatus": "known",
+        "source": {
+          "ref": "wiki:demo-policy",
+          "version": "v7",
+          "fragment": "section:dependency-policy#lines=3-5"
+        },
+        "authorRef": "participant:requester",
+        "confirmedBy": "participant:requester",
+        "acceptanceBasisRef": "decision:demo-approval",
+        "constraints": [
+          {
+            "text": "Обновление согласовано, но реализация отложена.",
+            "source": {
+              "ref": "wiki:demo-policy",
+              "version": "v7",
+              "fragment": "section:dependency-policy#lines=3-5"
+            },
+            "sourceStatus": "known"
+          }
+        ]
+      }
+    }
+  ],
+  "verifiedResults": [
+    {
+      "checkRef": "check:demo-schema",
+      "checkedSource": {
+        "ref": "document:demo-spec",
+        "version": "v1",
+        "fragment": "whole-document"
+      },
+      "outcome": "PASS",
+      "observedAt": "2098-12-01T00:00:00Z"
+    }
+  ],
+  "openQuestions": [
+    "Какие major-переходы требуют миграции?"
+  ],
+  "sources": [
+    {
+      "ref": "wiki:demo-policy",
+      "version": "v7",
+      "fragment": "section:dependency-policy#lines=3-5"
+    }
+  ]
+}

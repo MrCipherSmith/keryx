@@ -1,0 +1,48 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16-final",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent final tool-call and model-round budget review (M10)",
+    "description": "Independent Stage 1 review of the M10 budget corrections after T19. History: T16 first found child max_tool_calls mapped onto maxRounds (fixed by root), then found max_rounds=1 producing 2 tool-bearing rounds plus a 3rd tool-free wrap-up provider request (F-002); the reviewer who found F-002 then authored the T19 fix, so a different reviewer is mandatory. Verify against current code with bounded deterministic in-memory providers only: (1) maxRounds is an inclusive hard ceiling on every provider.stream() request within one runAgentTurn call, including any wrap-up; (2) maxRounds=0 issues no provider request and stops with the round-budget reason; (3) a text-only completion within the final allowed round is a clean completion; a tool-bearing final round executes only that response's tools then stops with finishReason budget and no further request; (4) interactive reset raises the ceiling before the next request, cancel stops locally with no wrap-up; (5) maxToolCalls counts actual successful tool invocations across batches, is independent from maxRounds, and yields finishReason tool-call-budget; (6) the spawn_subagent child maps max_tool_calls and max_rounds to distinct limits, its reservation/prompt text is truthful, and a strict round stop maps to BudgetExhausted; (7) benchmark/stress scripts terminate finitely with typed errors and the stress report uses the existing resolver. Re-run the two preserved probes (T16-child-budget-probe.ts, T16-recheck-round-budget-probe.ts) and the focused tests; write your own additional probe if a case is uncovered. Stage 2 (code quality) only after Stage 1 passes. Write T16-final-review.md and T16-final-result.json.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+    "AC4 (M10): stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+    "AC5 (M10): a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run. The global keryx binary is stale: use bun src/cli.ts.",
+    "Read-only on production and test code. Write only T16-final-review.md, T16-final-result.json and probe scripts named T16-final-*.ts under the flow 232 artifacts dir. No flow/git/deps/global-suite/network/model API actions. Stats off. You did not implement these changes.",
+    "Other workers concurrently edit src/security/*; exclude them. Stage 1 before Stage 2; preserve the original T16 review evidence; bounded synthetic providers only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:12:00+00:00", "created_by": "flow-orchestrator" }
+}

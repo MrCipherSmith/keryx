@@ -1,0 +1,76 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T33",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Five defects on one path, from loading the security config to the flow completion gate, repaired together, regression first. loadSecurityConfig no longer throws on a non-object JSON payload (it takes the existing malformed-JSON fallback); readLatestReport returns a discriminated outcome so missing, unreadable, unparseable, shape-invalid and unrecognized evidence all map to incomplete with constant reasons; runGate folds exhaustively over the four recognized gate values and keeps needs-approval distinct; runReport synthesizes an incomplete report instead of a pass; guardOutput refuses a write when the posture cannot be read instead of degrading to allow; securityFlowGate returns a blocking fail instead of the null that means 'module disabled', and maps statuses exhaustively so only a verified pass leaves flow completion unblocked. The T28 gate probe went from 8 false passes in 13 cases to 13/13 correct; the T30 fail-open probe no longer reproduces. runScanPath's pass-to-incomplete fold is untouched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+      "status": "met",
+      "evidence": "T28-gate-probe.ts after-run: case g (gate fail + coverage incomplete) stays fail with the violation preserved; case h (gate pass + coverage incomplete) is now incomplete rather than pass; the non-recursive directory section still reports incomplete, so T34's fold is intact. Raw .metaproject/data/gdctx/raw/2026-09-06T14-04-49-334Z_run.log (SUMMARY at line 158)."
+    },
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS; strict guards and the strict flow gate refuse incomplete evidence; advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+      "status": "met",
+      "evidence": "13/13 probe cases correct (was 8 false passes). Regression T33 D2 asserts securityFlowGate returns fail for all ten non-pass artifact states; T33 D3/D4 close both posture-unavailable paths; the three committed 'guard preserves incomplete engine evidence in <mode> mode' tests pass unchanged, so advisory still reports without blocking. Raw .metaproject/data/gdctx/raw/2026-09-06T14-04-49-125Z_run.log."
+    },
+    {
+      "criterion": "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; an optional skip warns and is never signed as passed. Reasons and details are constant and leak-safe.",
+      "status": "met",
+      "evidence": "Mapping table in T33-spec.md; every reason/detail is a string literal (NO_REPORT_REASON, UNUSABLE_REPORT_REASON, INCOMPLETE_COVERAGE_REASON, POSTURE_UNAVAILABLE_REASON). T33 D1/D3/D4 assert the strings contain neither the workspace root, nor raw error text, nor the planted key."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Design written before coding: the five defects, why flow/service.ts decides the mapping, and the narrow-validation decision."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect evidence with before/after raw log paths and exact counts."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/config.ts",
+      "change": "loadSecurityConfig: a parsed payload that is not a non-null, non-array object takes the existing malformed-JSON defaults fallback instead of throwing inside mergeSecurityConfig."
+    },
+    {
+      "path": "src/security/service.ts",
+      "change": "readLatestReport returns a discriminated LatestReportOutcome with shape validation (hasRecognizedGate); runGate folds exhaustively over the four gate values, keeps needs-approval, and maps absent/unusable plus a pass-over-incomplete-coverage artifact to incomplete with constant reasons; runReport synthesizes an incomplete report instead of a pass. runScanPath untouched."
+    },
+    {
+      "path": "src/security/types.ts",
+      "change": "Additive SecurityGateStatus (pass | needs-approval | incomplete | fail); SecurityService.gate now returns it."
+    },
+    {
+      "path": "src/security/guard.ts",
+      "change": "guardOutput loads the mode in its own try and refuses the write with an incomplete decision when the posture cannot be read; the engine-error catch degrades to an incomplete decision that flows through the existing mode fold; securityFlowGate's mode-load catch returns a blocking fail instead of the null that means 'module disabled'; the status mapping is an exhaustive switch defaulting to fail; mislabelling comments corrected."
+    },
+    {
+      "path": "src/security/guard.test.ts",
+      "change": "Seven tests added: one regression per defect (D1-D5), a non-regression pin that a genuine pass still reads pass end to end, and the T30 root-trigger reproducer over four non-object config payloads."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 7,
+    "tests_red_before": 6,
+    "tests_failing_after": 0,
+    "probe_false_passes_before": 8,
+    "probe_false_passes_after": 0
+  },
+  "timestamp_utc": "2026-09-06T14:10:00Z"
+}

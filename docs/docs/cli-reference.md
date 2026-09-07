@@ -327,7 +327,7 @@ The two security hooks are offered only when the `security` module is enabled an
 default on (confirm prompt; accepted under `--yes`). The **pre-push** hook adds a
 managed block to `.git/hooks/pre-push` that scans changed files with
 `keryx security scan` before a push — it warns in `advisory` (the default)
-and blocks the push only in `enforced`/`ci` mode; it coexists with the testing
+and blocks the push in `enforced`/`ci`/`gateway` mode; it coexists with the testing
 pre-push hook and any user content. The **agent** hook merges (merge-safe, never
 clobbering existing settings) two Claude Code hooks into `.claude/settings.json`:
 `UserPromptSubmit` → `security check-input` and `PreToolUse(Write|Edit)` →
@@ -751,7 +751,7 @@ Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
 
 When the `security` module is enabled, `collect` runs an advisory security check
 before writing each draft. Advisory (the default) reports and writes anyway;
-`enforced`/`ci` mode can suppress a draft's write with a masked reason.
+`enforced`/`ci`/`gateway` mode can suppress a draft's write with a masked reason.
 
 ---
 
@@ -909,8 +909,8 @@ The `smoke` tier (`--kind smoke`) selects the fast smoke subset.
 
 When the `security` module is enabled, `run` runs an advisory security check on the
 captured raw log before persisting it. Advisory (the default) reports and still
-writes the log; `enforced`/`ci` mode can suppress raw-log persistence with a masked
-reason (the run itself is never broken).
+writes the log; `enforced`/`ci`/`gateway` mode can suppress raw-log persistence
+with a masked reason (the run itself is never broken).
 
 ---
 
@@ -990,7 +990,7 @@ Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 
 When the `security` module is enabled, `ingest` runs an advisory security check
 before writing each accepted entry. Advisory (the default) reports and writes;
-`enforced`/`ci` mode can skip an entry's write with a masked reason.
+`enforced`/`ci`/`gateway` mode can skip an entry's write with a masked reason.
 
 ---
 
@@ -1055,8 +1055,8 @@ Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
 
 When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
-`enforced`/`ci` mode can fail the gate and hold the flow in `in-progress`. The gate
-is omitted entirely when the module is disabled.
+`enforced`/`ci`/`gateway` mode can fail the gate and hold the flow in
+`in-progress`. The gate is omitted entirely when the module is disabled.
 
 ### The default task scaffold
 
@@ -2092,8 +2092,11 @@ entropy detectors, no model backend) and local-first: config lives at
 and the local-only HMAC key under `data/security/raw/` (gitignored). This is
 Phase 1+2+3 of the spec — the engine, the CLI below, and the write-seam
 integrations (an advisory-by-default guard at `memory ingest`, `wiki collect`,
-`test run`, `gdctx`, and `flow complete`) are shipped. Model/API backends and
-gateway mode (Phase 4) are not implemented.
+`test run`, `gdctx`, and `flow complete`) are shipped. `mode: "gateway"`
+already blocks exactly like `enforced`/`ci` — the write seam, the flow
+completion gate, and the exit code of `scan`, `report`, `check-input`, and
+`check-output` — it is not a report-only mode. Model/API backends and
+`gateway`'s own Phase-4 proxy behaviour are not implemented.
 
 ```
 keryx security status
@@ -2113,7 +2116,7 @@ keryx security eval [--corpus <name|all>] [--with-model] [--json]
 |---|---|---|
 | `status` | — | Print the effective config: mode, raw-retention, gate (`failOn` + `minConfidence`), config-checksum state, and each policy with its action. |
 | `scan <path>` | `<path>`, `--json`, `--source <kind>` | Scan a file, resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
-| `scan-mcp <manifest\|dir>` | `--json`, `--pin <manifest>`, `--strict` | Scan one MCP tool manifest (or every `*.json` under a directory, recursively) for MCP threats. Findings are leak-safe (category + policy id only). `--pin` records a rug-pull baseline instead of scanning; `--strict` exits `1` when any threat is found. Pure and network-free. |
+| `scan-mcp <manifest\|dir>` | `--json`, `--pin <manifest>`, `--strict` | Scan one MCP tool manifest (or every `*.json` under a directory, recursively) for MCP threats. Findings are leak-safe (category + policy id only). `--pin` records a rug-pull baseline instead of scanning; `--strict` exits `1` when any threat is found, or when the scan could not read a manifest or the pinned baseline (`coverage: incomplete`). Pure and network-free. |
 | `check-input` | `--source <kind>`, `--file <path>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. |
 | `check-output` | `--target <kind>`, `--file <path>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
 | `redact <path>` | `<path>`, `--out <path>` | Apply fixed-width masks to detected sensitive spans. Writes to `--out`, else prints the redacted content to stdout. Reads from the path or stdin. |
@@ -2131,13 +2134,17 @@ Source kinds (`--source`): `trusted-project`, `trusted-user`,
 `untrusted-external`, `tool-output`, `generated`. Target kinds (`--target`):
 `model`, `memory`, `wiki`, `report`, `external`, `task`, `unknown`.
 
-**Exit behavior.** `scan`, `check-input`, and `check-output` honor the config
-`mode`: in **advisory** mode (the default) they always exit `0` after reporting;
-in **ci** mode they exit `1` on a gate **fail**; in **enforced** mode they exit
-`1` on a gate **fail** or **needs-approval**. `report` exits `1` only under `ci`
-mode when the aggregated gate is `fail`. `policy validate` exits `1` on schema or
-checksum failure. `scan-mcp` exits `1` only with `--strict` when a threat is
-found; `eval` exits `1` when any detector breaches its threshold; `hooks` exits
+**Exit behavior.** `scan`, `check-input`, `check-output`, and `report` all honor
+the config `mode` through the same fold (`exitCodeFor`/`reportExitCode`,
+`src/commands/security.ts`): in **advisory** mode (the default) they always
+exit `0` after reporting; in **enforced**, **ci**, or **gateway** mode they
+exit `1` on any gate other than **pass** — that is, on **fail**,
+**needs-approval**, **incomplete**, or an unrecognized stored gate value.
+`report` never re-scans; it reads the gate from the last stored scan artifact
+and applies the identical fold. `policy validate` exits `1` on schema or
+checksum failure. `scan-mcp` exits `1` only with `--strict`, when a threat is
+found or when the scan could not read a manifest or the pinned baseline
+(`coverage: incomplete`); `eval` exits `1` when any detector breaches its threshold; `hooks` exits
 `1` on an unknown runtime or a post-install validation error. `status`, `redact`,
 and `incidents` do not gate. An unknown subcommand prints an error and exits `1`.
 

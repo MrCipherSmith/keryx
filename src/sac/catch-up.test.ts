@@ -919,7 +919,7 @@ test("dismissUnboundCandidate is idempotent — dismissing a missing artifact st
   const report = await buildCatchUp({ cwd });
   const item = report.unboundCandidates.find((i) => i.sessionId === unbound.sessionId);
   expect(item).toBeDefined();
-  const result = await dismissUnboundCandidate(item!.evidencePath);
+  await dismissUnboundCandidate(item!.evidencePath);
   // second call: artifact already gone
   const again = await dismissUnboundCandidate(item!.evidencePath);
   expect(again.receipt).toBeDefined();

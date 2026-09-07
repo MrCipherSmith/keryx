@@ -1,0 +1,219 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T83",
+  "dispatch_id": "233-T83-exfil-escaped-reference-label",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T82#F-001: a backslash-escaped `]` in a reference-definition label made the definition invisible to the auto-fetch floor, so five spellings reached all four public boundaries with redaction.state \"none\" while marked fetched the attacker host. The definition site now reads the line escape-aware and registers the label truncated at its first `]`, which is exactly the byte string the use side already produces. The disjointness argument survives with step (i) strengthened: a key contains no `]` by construction of the truncation rather than by a regex's character class. The regex scan was replaced by a linear hand-written scanner, which also removed a pre-existing quadratic in the same pattern (24 643.6 ms at a public boundary on 704 000 bytes). 24 000-document differential fuzz shows 0 releases and 640 additions, all from documents containing an escaped `]`. 18 of 19 prior matrices byte-identical to T82's own logs; the benign corpus is unchanged.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "The reference-label spelling bypass that made AC5 partial is closed: T82-escape.ts reports bypasses: [] (was [s01..s05]), each row 1 finding / state \"redacted\" / no boundary carrying the host. T83-after-escape.log adds 16 further spellings with rendererFetchesButNoFinding: []. The other two halves of AC5 were re-confirmed by T82 and are unaffected: the 19 prior matrices are byte-identical, including T72-doc and T77-doc which carry the URL-secret and public-link rows."
+    },
+    {
+      "criterion": "All five reviewer spellings are findings at the detector and at all four public boundaries, plus added spellings including an escaped+unescaped bracket and an escaped backslash before a bracket",
+      "status": "met",
+      "evidence": "T83-after-T82-escape.log: bypasses: []. T83-after-escape.log: 21 shapes at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput; m01EscapedAndUnescapedBracket and m02EscapedCloseThenBracketPair are asserted as NOT fetched by marked (CommonMark forbids an unescaped `[` in a label) rather than as findings; m03EscapedBackslashThenEscapedClose and m04EscapedBackslashBeforeClose are findings; rendererFetchesButNoFinding: []."
+    },
+    {
+      "criterion": "The cost property still holds: no shape over a second at any boundary at any size up to a megabyte, exponents near one, attacker dials swept at constant size",
+      "status": "met",
+      "evidence": "T83-after-cost-ladder.log: 11 shapes x 4 sizes, overOneSecond: [], superLinear: [], exponents 0.70-1.11 (before: 5 shapes over a second, 5 super-linear, exponents up to 2.03). T83-after-cost-boundary.log: the only row over a second is escapedDefsAllResolving at 3 817 780 bytes (1 126.4 ms), outside the megabyte the criterion names; at 937 780 bytes it reads 250.7 ms. Worst shape found under a megabyte: T82's own resolvingBangUses at 1 048 618 bytes, 715.4 ms at validateOutputForTransport. Dials at constant 262 144 bytes: my four spread 3.0 / 0.3 / 0.4 / 5.4 ms (the last was 432.1 ms before); T82's six spread 2.3 / 14.9 / 4.1 / 36.8 / 25.5 / 31.5 ms."
+    },
+    {
+      "criterion": "Everything the last two rounds closed stays closed, verified by hash against their recorded matrices; duplicate-definition behaviour unchanged",
+      "status": "met",
+      "evidence": "T83-matrices.txt: 18 of 19 probes byte-identical to T82's own logs and hash-identical to T81's recorded table (seven-way agreement T66/T72/T77/T78/T81/T82/T83). T53-corpus moved in its whole-repository Part A header only. T82-dup.ts: only the two escape rows changed (e1EscapedCloseInLabel, e2EscapedCloseDup, leaking -> closed); the other 27 rows are byte-identical and zeroClickLeaks is now []. T82-boundary.ts budget output is byte-identical (62595fb8...)."
+    },
+    {
+      "criterion": "The benign corpus does not grow, or the change is explained with the correct vector enumerated",
+      "status": "met",
+      "evidence": "benignFilesWithFindings 16, benignFindings 62, Part B flagged 7 with the same ids - byte-identical to T82's run. Part A's header moved by +50 files scanned and +2 findings, enumerated by running every file newer than T82's corpus run through detectExfil: exactly two carry new findings, T82-review.md (the reviewer's own artifact, written after its corpus run) and T83-spec.md, both egress.html-image-exfil, both quoting the same <img src=...> sentence. The 30 T83-* logs carry zero findings (T83-corpus-delta.log)."
+    },
+    {
+      "criterion": "Write T83-spec.md before any code, stating what happens to the disjointness argument and how the cost will be demonstrated",
+      "status": "met",
+      "evidence": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-spec.md, written before the first edit to exfil.ts, weighing full escape handling against the definition-site over-approximation and stating the disjointness answer in advance."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Spec written before any code: the defect, the two alternatives weighed on cost and false positives, the disjointness answer, and the cost demonstration plan.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full implementation report with the cost tables, the matrix comparison, the corpus delta enumeration and six concerns.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-escape.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "21 label spellings at the four public boundaries and against marked; bypasses: [].",
+      "hash": "e2ca548fee425ad167c5904f6ba248ec22cda1c04b3f9d5c2c7ee2bdc923aa53"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-cost.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "ladder / sweep / boundary modes over 11 shapes the prior rounds' shapes could not reach.",
+      "hash": "3277fcaeff0cbc2d7fe68e8536f68871919c663b94016c55e53b80749e8ca179"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-parity.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "24 000-document seeded differential fuzz recording every finding's offset, length and value.",
+      "hash": "2efbb2c030551f6e97df61a6349275aad04a8299c24412219e4162a83e5dadb7"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-parity-diff.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Diffs the two parity logs: releases 0, additions 640.",
+      "hash": "6f5596a1b24b05ab0887a7e9e73e02eb068a743d658cda8be667977a8718a37b"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-corpus-delta.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Enumerates the corpus delta by driving every file this task wrote through detectExfil.",
+      "hash": "8c1fe84662782ccb32af133ca9b4cb4f5eabfec6100c0b1ef337d310c86082cd"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T83-matrices.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Runs the 19 prior matrix probes and compares each byte for byte against T82's own log.",
+      "hash": "875a1f2c545ca22c9b8e485181fdb8e46391261cacc026e23701067319e7e67f"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-matrices.txt",
+      "kind": "report",
+      "exists": true,
+      "summary": "18 of 19 identical-to-T82; T53-corpus differs in its whole-repository header only.",
+      "hash": "614583402f5b8b767c232dcaaef41c4367473ee6cab75f0742faab455f1de82a"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-before-T82-escape.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Baseline, byte-identical to the hash T82 recorded for its own run: bypasses [s01..s05].",
+      "hash": "2f86456d015816ee1837b6aa736bd789e752c4c3906238d2f5144ca19fe81ae3"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-after-T82-escape.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bypasses: []; every one of the 19 rows closed.",
+      "hash": "9c6fdb9ef2d21f067c0c31f3296ea6cc76becdbc47d783e455509e21fabffc0e"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-after-escape.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "21 further spellings, four boundaries; rendererFetchesButNoFinding: [].",
+      "hash": "52903b89a646c72253944263e47c22b430817364bd814c440041d15ad271f3b2"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-parity-diff.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "24 000 documents: releases 0, additions 640, all from documents containing an escaped `]`.",
+      "hash": "fd38756312c15c48ced8d295159368adbe0d7a727b0e0b522f61f0f78e375866"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-before-cost-ladder.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Pre-change ladder: 5 shapes over a second, 5 super-linear, exponents up to 2.03.",
+      "hash": "eedc8b683eb1c21e97e70643e78bd02bac0bdf94af5dba97eb00b18efb7ab55f"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-after-cost-ladder.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Post-change ladder: overOneSecond [], superLinear [], exponents 0.70-1.11.",
+      "hash": "8bc7bbf05ea4c74ea81e164bd952be3e7b3ac25148db637302eda3d1a8458aef"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-before-cost-boundary.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Pre-change boundaries: five rows over a second, worst 24 643.6 ms at 704 000 bytes.",
+      "hash": "522f95b9666accfd90d3665da98517309bb79a537d7f58ba948421fb442083ec"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-after-cost-boundary.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Post-change boundaries: one row over a second, at 3.8 MB, outside the megabyte criterion.",
+      "hash": "705420af127dc12e9d653ed3d33d9e5881faf792d8b32336f4138fc3c3b36aa7"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T83-after-suites.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "115 pass / 0 fail / 1 281 expect() across the four focused suites.",
+      "hash": "9befc021794e35bfdeefee2ab8aa182cf5315138983c29a9c3c4bec21e726e36"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "Replaced the REFERENCE_DEF regex scan with readReferenceDefinitions(), a linear hand-written scanner. Reading 1 reproduces the pattern exactly, including its lastIndex resume; reading 2 adds CommonMark's escape-aware label (first unescaped `]`, no unescaped `[` inside) and never moves the cursor. A key is now the label truncated at its first `]`, which is the byte string the use side produces and which keeps the cost proof's step (i) true by construction. Added REFERENCE_DESTINATION (the replaced pattern's destination tail, sticky) and LINE_TERMINATORS. Rewrote the three comments that stated the old reason for the `]` fact."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Three tests added, all RED before the change: T83#F-001 escape spellings at the detector and through the redaction, persistence and transport seams, with no-release and no-false-positive controls; T83#F-001 structural property, 125 generated labels that must all still resolve when used (the observable form of \"no key contains `]`\"); T83#F-001 cost, eight definition-scan shapes under the same 500 ms budget the other perf tests use."
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "REFERENCE_DEF was quadratic at HEAD (24 643.6 ms at a public boundary on 704 000 bytes of `[aaaaaaaaa\\n`, exponent 2.01), and the mechanism this repair needed removed it. Should that have been its own round under the scope decision's exception, and does it need an independent review pass of its own?",
+      "why": "It is a blocker reproduced at a public boundary, so it fires the same exception T82#F-001 fired, but declaring the exception is a reviewer/orchestrator call and not the implementer's. The removal was not optional: the alternative mechanism (a second escape-aware pattern) roughly doubles that reading, which the cost acceptance criterion forbids.",
+      "options": [
+        { "id": "a", "label": "Accept it as part of T83 and record the measurement in RESIDUALS.md as closed", "recommended": true },
+        { "id": "b", "label": "Open a separate finding and a separate independent verification for the quadratic" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Label matching is now an over-approximation for labels carrying a backslash escape: two labels differing only after their first `]` share a key. policies.md still says the label is matched the way CommonMark matches it. Should that sentence gain a clause and the document bump to 0.1.5?",
+      "why": "The dispatch permits editing the auto-fetch subsection only if the change MAKES the current wording untrue. It was already untrue before this change, in the release direction; it is now untrue in the flagging direction. The strict reading of the condition says do not edit, but the document's own discipline is to name every deviation explicitly.",
+      "options": [
+        { "id": "a", "label": "Leave 0.1.4 unchanged and record the deviation in RESIDUALS.md" },
+        { "id": "b", "label": "Add one clause naming the escaped-label over-approximation and bump to 0.1.5", "recommended": true }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "tests_passing": 115,
+    "tests_failing": 0,
+    "matrices_compared": 19,
+    "matrices_byte_identical": 18,
+    "parity_documents": 24000,
+    "parity_releases": 0,
+    "parity_additions": 640,
+    "benign_corpus_files_with_findings": 16,
+    "benign_corpus_findings": 62
+  },
+  "timestamp_utc": "2026-09-07T05:20:00Z"
+}

@@ -5,6 +5,7 @@ export interface ToolEntry {
   module: string; // "gdgraph" — filtered by the manifest (M-11)
   description: string;
   inputSchema: JsonSchema;
+  outputSchema?: JsonSchema;
   // When true, the tool calls a gate-preserving service method (M-10). Block A
   // exposes only read-only or report-writing tools; no mutating flow transition.
   mutating: boolean;

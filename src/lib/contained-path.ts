@@ -15,8 +15,8 @@
 //   * The comparison is segment-aware. `/home/u/proj-secrets` is not inside
 //     `/home/u/proj`, even though its path string starts with it.
 
-import { realpath } from "node:fs/promises";
-import { existsSync, realpathSync } from "node:fs";
+import { lstat, realpath } from "node:fs/promises";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 export type ContainedPathResult =
@@ -79,6 +79,14 @@ export async function resolveContainedPath(
   projectRoot: string,
   candidate: string,
 ): Promise<ContainedPathResult> {
+  try {
+    const rootStat = await lstat(projectRoot);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+      return { ok: false, reason: "outside-project", message: "refused: project root changed" };
+    }
+  } catch {
+    return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
+  }
   const rootReal = await realpath(projectRoot).catch(() => path.resolve(projectRoot));
   const absolute = path.resolve(rootReal, candidate);
 
@@ -110,6 +118,14 @@ export async function resolveContainedPath(
  * path first, containment before existence.
  */
 export function resolveContainedPathSync(projectRoot: string, candidate: string): ContainedPathResult {
+  try {
+    const rootStat = lstatSync(projectRoot);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+      return { ok: false, reason: "outside-project", message: "refused: project root changed" };
+    }
+  } catch {
+    return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
+  }
   let rootReal: string;
   try {
     rootReal = realpathSync(projectRoot);

@@ -115,7 +115,7 @@ test("clicking the balance value re-fetches", async () => {
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }) as unknown) as typeof fetch;
-  const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
+  mountBalancePanel(sidebar, fakeOtui, {}, {
     provider: "deepseek",
     fetch: fetchFn,
     env: { DEEPSEEK_API_KEY: "sk-test" },

@@ -311,7 +311,7 @@ function extractImportSpecifiersFallback(content: string): string[] {
 
   // Java patterns (import com.example.Class;)
   const javaPatterns = [
-    /\bimport\s+(?:static\s+)?([a-zA-Z_][a-zA-Z0-9_\.]*(?:\.\*)?)\s*;/g,
+    /\bimport\s+(?:static\s+)?([a-zA-Z_][a-zA-Z0-9_.]*(?:.*)?)\s*;/g,
   ];
 
   // Python patterns (import module, from module import name).
@@ -321,9 +321,9 @@ function extractImportSpecifiersFallback(content: string): string[] {
   //   before because the module regex required a leading letter; the third
   //   pattern captures the leading-dot forms.
   const pythonPatterns = [
-    /^[ \t]*import\s+([a-zA-Z_][a-zA-Z0-9_\.]*)/gm,
-    /\bfrom\s+([a-zA-Z_][a-zA-Z0-9_\.]*)\s+import/g,
-    /\bfrom\s+(\.+[a-zA-Z0-9_\.]*)\s+import/g,
+    /^[ \t]*import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/gm,
+    /\bfrom\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+import/g,
+    /\bfrom\s+(\.+[a-zA-Z0-9_.]*)\s+import/g,
   ];
 
   for (const pattern of [...jsPatterns, ...javaPatterns, ...pythonPatterns]) {

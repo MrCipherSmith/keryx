@@ -1,0 +1,213 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T84-independent-verifier",
+  "dispatch_id": "T84",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Re-ran the interrupted T84 attempt's four probes myself (byte-identical results on all of them) against a freshly reconstructed pre-T83 copy of exfil.ts. Confirmed: (1) T83's escaped-bracket closure holds for all 21 spellings at all four boundaries; (3) the pre-existing quadratic T83 removed is real, reproduced on the reconstructed pre-change copy; (4) the interrupted attempt's 18-case discovery is real, pre-existing, renderer-fetched and released at all four boundaries, but is TWO distinct classes (a block-container line-anchor gap with no narrow fix, and an escape-blind bracket-depth-pairing gap with a plausible narrow fix), not one. Item (2) is only PARTIALLY confirmed: while re-running the interrupted attempt's own cost probe I found and independently reproduced a THIRD, previously-unreported blocker -- an unmemoized destination-read function that is quadratic on a shape none of the last four rounds' ladders tried, costing 7.4-7.8s at all four public boundaries at under 200KB and ~198s in the detector alone at 1MB, with no attacker host needed at all. All three blockers are confirmed pre-existing (not T83 regressions) and all three fire the scope decision's one exception (blocker reproduced at a public boundary).",
+  "acceptance": [
+    {
+      "criterion": "Item 1 -- the escaped-bracket bypass is closed at the detector and all four public boundaries, for the five original spellings and the sixteen T83 added",
+      "status": "met",
+      "evidence": "T83-escape.ts and T82-escape.ts re-run byte-identical to the interrupted attempt's own logs: bypasses:[] on all 21+18 spellings. Focused suite 115 pass / 0 fail / 1281 expect(), matching T83's own count."
+    },
+    {
+      "criterion": "Item 2 -- the cost argument holds on every path that registers a label, and no shape costs more than a second at any boundary up to a megabyte",
+      "status": "not_met",
+      "evidence": "The label-registration/disjointness argument itself is confirmed sound. But destFailWhitespaceTail/destFailNewlineTail -- found in the interrupted attempt's own T84-cost.ts ladder log and independently re-verified by me -- cost 12.6s at 262144 bytes and ~198s at 1048576 bytes in the detector alone, and all four public boundaries cost 7.4-7.8s each at a mere 196610 bytes. New blocker T84#F-001, pre-existing (confirmed against a reconstructed pre-T83 copy), not a T83 regression."
+    },
+    {
+      "criterion": "Item 3 -- the pre-existing quadratic is real, confirmed on a copy of the pre-change code",
+      "status": "met",
+      "evidence": "A reconstructed pre-T83 copy (readReferenceDefinitions replaced by the literal REFERENCE_DEF regex the header comment quotes) reproduces T82#F-001 exactly and the quadratic exactly: 352000 bytes -> 5848.8ms, exponent 2.02, against the shipped code's 9.9ms at the same size."
+    },
+    {
+      "criterion": "Item 4 -- confirm or refute the eighteen-case container-block class: genuinely renderer-fetched, genuinely released, genuinely pre-existing; smallest description; one class or several",
+      "status": "partial",
+      "evidence": "Confirmed renderer-fetched, released, and pre-existing on all 18 rows (verified against a reconstructed pre-T83 copy, not the probe's self-reported field). But it is TWO distinct classes, not one: T84#F-002 (12 cases, block-container line anchor, no narrow fix) and T84#F-003 (6+ cases, escape-blind bracket-depth pairing on the description side, a narrow fix is plausible). Status is 'partial' because the dispatch's framing of a single class undercounts the true structure, even though the underlying bypass behaviour is fully confirmed."
+    },
+    {
+      "criterion": "AC5 -- no field-name or spelling bypass; URL secret masked; public link not a network send",
+      "status": "not_met",
+      "evidence": "Three live, pre-existing, renderer-fetched spelling bypasses reach all four public boundaries with redaction.state carrying no signal (T84#F-001 cost/DoS, T84#F-002 container-block, T84#F-003 description-escape). The URL-secret-masking and public-link-is-not-a-send halves are unaffected and remain confirmed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T84-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full independent verification report: four dispatch items, three blocking findings, container-block class analysis, residual classification, evidence and routing audit."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-bypass-rerun.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Re-run of the interrupted attempt's T84-bypass.ts, byte-identical to its own T84-bypass.log; includes prechangeFindings confirming both container-block and description-escape classes are pre-existing."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-escape-rerun.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Re-run of T84-escape.ts, byte-identical to the interrupted attempt's log; independent confirmation of both bypass classes plus a fresh instance (x09EscapeInAltOnly)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-prechange-rerun.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Re-run of T84-prechange.ts against my own freshly reconstructed pre-T83 copy (not the interrupted attempt's removed temp dir): fidelity confirmed (zero control drift), T82#F-001 reproduced exactly, pre-existing quadratic reproduced exactly."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84-cost-ladder.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Interrupted attempt's own cost-ladder log, the one that first surfaced destFailWhitespaceTail/destFailNewlineTail as superlinear and over one second -- read and used as the primary evidence for the new T84#F-001 finding."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-destfail-check.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "This reviewer's own probe: pre-T83 vs shipped cost on the destFail shapes, statistically indistinguishable (pre-existing), plus one boundary call at 262144 bytes costing 12918ms."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-destfail-4boundary.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "This reviewer's own probe: all four public boundaries, one call each, 196610 bytes, 7.4-7.8s each -- the public-boundary reproduction for T84#F-001."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-focused-suites.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "bun test on the four focused security suites: 115 pass / 0 fail / 1281 expect(), matching T83's own reported count exactly -- non-regression confirmation."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T84b-T83-escape-rerun.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Re-run of T83-escape.ts, byte-identical to the interrupted attempt's log: bypasses:[] across baseline plus 20 spellings."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T84#F-001",
+      "reviewer": "T84-independent-verifier",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 719,
+      "symbol": "readDefinitionDestination",
+      "problem": "readDefinitionDestination (exfil.ts:719-736) reads a reference definition's destination with a sticky regex, REFERENCE_DESTINATION = /\\s*(?:<([^<>\\n]*)>|(\\S+))/y, at a fixed content offset, and unlike its sibling readInlineDestination (:1027-1055, explicitly memoized by descriptionEnd for exactly this reason) it has no memoization. When many surviving line-start `[` candidates in readReferenceDefinitions's loop (:789-855) share the same `]:` offset -- either because the document has one `]:` for many opens, or because the destination read keeps failing so resumeAt never advances -- the sticky regex is re-evaluated from scratch at that same offset once per line-start. When the remainder of the document past that offset is a long whitespace or newline run with no non-whitespace before end of input, evaluating the regex once costs O(remaining), so evaluating it once per line-start over O(n) line-starts costs O(n^2).",
+      "impact": "A live, zero-click-reachable denial-of-service in the mandatory floor, requiring no attacker host in the payload at all. destFailWhitespaceTail costs 12631.7ms at 262144 bytes and 198325.1ms at 1048576 bytes in the detector alone (exponent ~2.0); destFailNewlineTail is equally quadratic. All four public boundaries have no length gate before invoking detection and each cost 7.4-7.8 seconds at a mere 196610 bytes. Confirmed pre-existing against a reconstructed pre-T83 copy, statistically indistinguishable in cost from the shipped code on this shape.",
+      "suggested_fix": "Memoize readDefinitionDestination by its afterColon offset, mirroring readInlineDestination's existing memoization by descriptionEnd.",
+      "evidence": "bun T84-cost.ts ladder (re-run byte-identical to the interrupted attempt's log): overOneSecondAtOrUnderOneMb: [destFailWhitespaceTail, destFailNewlineTail], exponents 2.01/2.00. Raw: .metaproject/data/gdctx/raw/T84-cost-ladder.log. This reviewer's T84b-destfail-check.ts and T84b-destfail-4boundary.ts independently reproduce the quadratic against a freshly built pre-T83 copy and at all four public boundaries. Raw: .metaproject/data/gdctx/raw/T84b-destfail-check.log, .metaproject/data/gdctx/raw/T84b-destfail-4boundary.log.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:719-736 (readDefinitionDestination, the unmemoized function)",
+          "src/security/detect/exfil.ts:789-855 (readReferenceDefinitions's loop, call sites at :804 and :836)",
+          "src/mcp/dispatch.ts (dispatchCallTool, no length gate before invoking detection)",
+          "src/mcp/redact-seam.ts:29-35 (redactToolOutput, same absence)",
+          "src/security/guard.ts (prepareOutputForPersistence, validateOutputForTransport, same absence)"
+        ],
+        "enumeration_method": "Read every caller of readDefinitionDestination and every function readReferenceDefinitions's output feeds; read dispatch.ts, redact-seam.ts and guard.ts in full for a length gate at each of the four named public boundaries -- none exists at any of them."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T84-cost.ts ladder re-run byte-identical to the interrupted attempt's own log; two of this reviewer's own probes independently reproduce the quadratic against a freshly reconstructed pre-T83 copy and at all four public boundaries.",
+        "verifier": "T84-independent-verifier"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T84#F-002",
+      "reviewer": "T84-independent-verifier",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 789,
+      "symbol": "readReferenceDefinitions",
+      "problem": "The line-start test inside readReferenceDefinitions (:789-798) recognises a reference-definition line only when, after skipping [ \\t]*, the next byte is `[`. CommonMark's block grammar strips a blockquote marker or a list-item marker before parsing the remaining content as an ordinary paragraph, so `> [a]: URL` and `- [a]: URL` are definitions to a renderer -- but this scanner has no model of block-container structure and never recognises them.",
+      "impact": "Zero-click exfiltration bypass in the mandatory floor. 12 shapes (blockquote plain/escaped/nested, list dash/star/ordered, various definition/use placements, both reference forms) each have marked fetch the attacker host while detectorFindings is 0, mcpState is \"none\", and all four public boundaries carry the host. A non-empty allowlist does not help. Confirmed pre-existing against a reconstructed pre-T83 copy.",
+      "suggested_fix": "No narrow fix exists. Faithful closure needs real block-structure parsing -- container boundaries, nesting depth, lazy continuation -- which this scanner is not.",
+      "evidence": "bun T84-bypass.ts (re-run byte-identical), rows a01Blockquote..a12BlockquoteCollapsed (excluding controls), all verdict BYPASS. Raw: .metaproject/data/gdctx/raw/T84b-bypass-rerun.log. Independently reached via T84-escape.ts rows x20BlockquoteDefPlain, x20bBlockquoteDefEscaped, x21ListItemDefPlain, x21bListItemDefEscaped, x22NestedBlockquoteDef. Raw: .metaproject/data/gdctx/raw/T84b-escape-rerun.log.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:789-798 (the line-start recognition, definition side only)",
+          "src/security/detect/exfil.ts:639 (BRACKET_OPEN, the use-side scan, which has no line anchor and already finds a use inside a container)",
+          "docs/requirements/keryx-agent-first-core/policies.md (any completeness claim about reference-definition coverage)"
+        ],
+        "enumeration_method": "Every CommonMark container-block kind that can precede a leaf paragraph driven with the definition and use both inside, definition-inside-use-outside, a plain and an escaped label, and both the shortcut and full reference form -- 12 cases, all BYPASS; 3 inline-image controls in the same containers, all correctly flagged."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T84-bypass.ts and T84-escape.ts each reach the class independently at all four public boundaries; a reconstructed pre-T83 copy confirms it is pre-existing rather than a T83 regression.",
+        "verifier": "T84-independent-verifier"
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T84#F-003",
+      "reviewer": "T84-independent-verifier",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 570,
+      "symbol": "indexContent / descriptionEnds",
+      "problem": "indexContent (:570-601) pairs `[`/`]` with a plain stack that treats every `]` as a real close, with no backslash-escape awareness, unlike readReferenceDefinitions's definition-side scan which T83 made escape-aware. When an image/link DESCRIPTION contains a backslash-escaped `]` that the plain stack treats as the pair's close, descriptionEnds (:627-635) computes both of its candidate ends as the same wrong position, and the correct end is never offered, so the construct is not recognised as an image/link at all.",
+      "impact": "Zero-click exfiltration bypass for inline and full-reference spellings whose description carries an escaped `]`. Six of eight class-B shapes plus one found independently by a second probe: marked fetches the attacker host, detectorFindings is 0, mcpState is \"none\", all four boundaries carry the host. Confirmed pre-existing against a reconstructed pre-T83 copy.",
+      "suggested_fix": "A narrower fix is plausible than F-002's: extend the escape-parity check already implemented twice in this file into indexContent's stack-building loop. Confined to one function and a precedented technique, but needs the disjointness argument re-derived and a differential fuzz re-run against every consumer of descriptionEnds.",
+      "evidence": "bun T84-bypass.ts, rows b01FullRefEscapedAlt, b02FullRefEscapedAltTwice, b03FullRefLeadingEscape, b05FullRefEscapedAltEscapedRef, b07InlineEscapedAlt, b08InlineEscapedAltAngle, all verdict BYPASS. Raw: .metaproject/data/gdctx/raw/T84b-bypass-rerun.log. bun T84-escape.ts, row x09EscapeInAltOnly (identical text to b01, found independently). Raw: .metaproject/data/gdctx/raw/T84b-escape-rerun.log.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:570-601 (indexContent)",
+          "src/security/detect/exfil.ts:627-635 (descriptionEnds)",
+          "src/security/detect/exfil.ts:1057-1117 (readBracketConstructs, every branch consuming a descriptionEnd)",
+          "src/security/detect/exfil.ts:529-531 (the comment asserting the no-escape design, correct for the inline destination itself but not for description-end computation)"
+        ],
+        "enumeration_method": "Every CommonMark description/text position where a backslash-escaped `]` can appear driven through both detectExfil and marked -- 8 cases plus 2 plain-escape controls in T84-bypass.ts's class B, one more independently in T84-escape.ts."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T84-bypass.ts and T84-escape.ts each reach the class independently at all four public boundaries; a reconstructed pre-T83 copy confirms it is pre-existing rather than a T83 regression.",
+        "verifier": "T84-independent-verifier"
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T84#F-004",
+      "reviewer": "T84-independent-verifier",
+      "severity": "info",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T84-bypass.ts",
+      "symbol": "header comment",
+      "problem": "The interrupted attempt's own probe header correctly distinguishes two mechanisms (class A and class B), but the dispatch describing its forwarded partial results collapsed them into one class, which is only class A.",
+      "impact": "None on the verdict -- both classes are verified independently and reported as T84#F-002 and T84#F-003, each with its own class_scope.",
+      "suggested_fix": "None; this finding exists to correct the record, not to change code.",
+      "evidence": "Comparing T84#F-002's class_scope (one function) against T84#F-003's (a different function entirely); disjoint reachable shapes -- a05ListDash (class A only) and b07InlineEscapedAlt (class B only).",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Three blocking, pre-existing, boundary-reproduced findings (T84#F-001 cost/DoS, T84#F-002 container-block bypass, T84#F-003 description-escape bypass) each fire the scope decision's one exception. Should all three be opened as tasks now, or does the user want to make an explicit accepted-risk decision for any of them (in particular T84#F-002, which has no narrow fix and would require real block-structure parsing to close faithfully)?",
+      "why": "The recorded scope decision in RESIDUALS.md closes this surface to further rounds except for a blocker reproduced at a public boundary. All three findings meet that bar with executed evidence. Only the user (per the flow's own decision history) can choose between opening tasks, scoping a narrower interim mitigation (e.g. a boundary-level size/time cap for T84#F-001), or explicitly accepting a known gap.",
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T23:22:02Z"
+}

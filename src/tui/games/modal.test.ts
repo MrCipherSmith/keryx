@@ -3,7 +3,7 @@
 // No OpenTUI, no TTY — fakes live in modal.test-helpers.ts.
 import { expect, test } from "bun:test";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../harness/provider/types";
-import type { ProviderFactory } from "../../harness/provider/single-turn";
+import type { } from "../../harness/provider/single-turn";
 import { getTheme } from "../theme";
 import { presentGamesModal } from "./modal";
 import { createRegistry } from "./registry";
@@ -198,12 +198,10 @@ test("extra games appear as tabs and keep their own state", () => {
   };
   const registry = createRegistry([ticTacToeGame, second]);
   const captured: CapturedModal = {};
-  let keyHandler: ((key: { name: string; sequence: string }) => void) | undefined;
   const handle = presentGamesModal(fakeHost(captured), fakeOtui, {}, {
     providerFactory: factoryFor(() => stubProvider("0")),
     env: {},
-    onKeypress: (handler) => {
-      keyHandler = handler;
+    onKeypress: (_handler) => {
       return () => {};
     },
   }, registry);

@@ -20,6 +20,7 @@ let originalXdg: string | undefined;
 
 function output(): string {
   // Strip SGR so assertions match on text, not on styling.
+  // eslint-disable-next-line no-control-regex -- The fixture intentionally strips ANSI SGR bytes.
   return captured.join("\n").replace(/\[[0-9;]*m/g, "");
 }
 

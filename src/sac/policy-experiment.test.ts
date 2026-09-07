@@ -384,7 +384,7 @@ describe("offline corpus construction", () => {
       const artifactHash = createHash("sha256").update(JSON.stringify(artifact)).digest("hex");
       expect(artifactHash).toBe(row.outcome.artifactHash);
     }
-    expect(JSON.stringify(corpus)).not.toMatch(/synthetic-workspace|agent:synthetic-producer|\"outcome\":\"useful\"/);
+    expect(JSON.stringify(corpus)).not.toMatch(/synthetic-workspace|agent:synthetic-producer|"outcome":"useful"/);
   });
 });
 

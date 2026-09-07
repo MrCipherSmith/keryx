@@ -79,7 +79,7 @@ test("init --no-security-hook skips the pre-push hook but keeps the agent hook",
     await initCommand(["--yes", "--no-security-hook", ...SECURITY_ONLY]);
 
     const prePushPath = path.join(root, ".git", "hooks", "pre-push");
-    let hook = "";
+    let hook: string;
     try {
       hook = await readFile(prePushPath, "utf8");
     } catch {
@@ -292,7 +292,7 @@ test("re-init with --no-security strips the security pre-push block but keeps th
 
     // The .claude agent hooks are gone too (the settings file may remain, but it
     // must no longer carry the security sentinel).
-    let settingsRaw = "";
+    let settingsRaw: string;
     try {
       settingsRaw = await readFile(path.join(root, ".claude", "settings.json"), "utf8");
     } catch {
@@ -321,7 +321,7 @@ test("init --no-security installs neither security hook", async () => {
     ]);
 
     const prePushPath = path.join(root, ".git", "hooks", "pre-push");
-    let prePush = "";
+    let prePush: string;
     try {
       prePush = await readFile(prePushPath, "utf8");
     } catch {

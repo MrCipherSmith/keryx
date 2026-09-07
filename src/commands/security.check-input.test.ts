@@ -144,12 +144,20 @@ describe("what refuses is the operator's declared policy", () => {
     writeConfig("enforced", { injectionFloor: 0.3 });
     expect((await checkInput(INJECTION, "untrusted-external")).exit).toBe(1);
 
-    // NOT ci, and that is the documented split rather than a gap: `ci` refuses
-    // on a gate FAIL and `enforced` also on `needs-approval`. The default
-    // injection action is `require-approval`, which is a needs-approval gate, so
-    // an operator who wants ci to refuse declares the stronger action.
+    // `ci` refuses too (T38/T35 F-002): the default injection action is
+    // `require-approval`, a needs-approval gate, and `ci` used to accept it —
+    // a two-value denylist (`fail`/`incomplete` only) that made `ci` *more*
+    // permissive than `enforced` at the CLI. Fixed to an allowlist over the
+    // one acceptable value (`pass`), so `ci` and `enforced` now agree.
     writeConfig("ci", { injectionFloor: 0.3 });
-    expect((await checkInput(INJECTION, "untrusted-external")).exit).toBe(0);
+    expect((await checkInput(INJECTION, "untrusted-external")).exit).toBe(1);
+
+    // `gateway` refuses too (T65, aligning with T61's corrected
+    // `isBlockingMode`): `gateway` now joins `enforced`/`ci` on the blocking
+    // side of both `guard.ts`'s write-seam guard and this command's own
+    // exit-code fold, so it must refuse here on the same finding.
+    writeConfig("gateway", { injectionFloor: 0.3 });
+    expect((await checkInput(INJECTION, "untrusted-external")).exit).toBe(1);
   }, 60_000);
 
   test("declaring `block` makes ci refuse too — the second knob", async () => {
@@ -179,6 +187,10 @@ describe("what refuses is the operator's declared policy", () => {
     // refuses. Secrets clear the gate floor on their own, which is why that half
     // of the class always worked and the injection half never did.
     writeConfig("enforced");
+    expect((await checkInput(AWS_KEY, "untrusted-external")).exit).toBe(1);
+    // `gateway` (T65): blocks like `enforced`/`ci`, per the corrected
+    // `isBlockingMode` (T61) this command's exit-code fold now agrees with.
+    writeConfig("gateway");
     expect((await checkInput(AWS_KEY, "untrusted-external")).exit).toBe(1);
     writeConfig("advisory");
     expect((await checkInput(AWS_KEY, "untrusted-external")).exit).toBe(0);
@@ -479,16 +491,26 @@ describe("a mode that does not refuse is not an approval", () => {
     }
   }, 60_000);
 
-  test("ci + needs-approval emits NOTHING — `require-approval` means ask a human", async () => {
-    // The sharpest form. Answering "ask a human" with a machine-readable
-    // approval is the same error with the intent inverted.
+  test("ci + needs-approval now refuses — T38/T35 F-002 closed the gap where ci was more permissive than enforced", async () => {
+    // Before T38 this asserted `{ exit: 0, out: "" }`: `ci`'s exit-code fold
+    // was a two-value denylist (`fail`/`incomplete` only), so `needs-approval`
+    // did not refuse and `decideHookOutcome` fell to `{kind:"silent"}` —
+    // emitting nothing. That silence WAS the bug this test's own title
+    // ("means ask a human") argued was intentional; it was `ci` accepting a
+    // gate the shipped default gate floor exists to stop. `exitCodeFor` is
+    // now an allowlist over `pass`, so `ci` refuses like `enforced` does, and
+    // cursor — a stdout-JSON runtime — gets its deny document. The exit code
+    // itself stays 0: that is cursor's own convention (refusal is the
+    // document, not the process exit code), unrelated to this fix.
     writeConfig("ci", { injectionFloor: 0.3 });
     const { exit, out, err } = await checkInput(INJECTION, "untrusted-external", [
       "--runtime",
       "cursor",
     ]);
-    expect({ exit, out }).toEqual({ exit: 0, out: "" });
+    expect(exit).toBe(0);
+    expect(JSON.parse(out)).toMatchObject({ permission: "deny" });
     expect(err).toContain("NEEDS-APPROVAL");
+    expect(err).not.toContain(INJECTION);
   }, 30_000);
 
   test("a genuine PASS still gets its allow document", async () => {

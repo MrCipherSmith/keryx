@@ -10,8 +10,6 @@ import {
   projectNodeItems,
   recentTurnNodeItems,
   statusNodeLabel,
-  type FlowListEntry,
-  type SacProposalEntry,
 } from "./tree-view-logic";
 
 // --- Status node -----------------------------------------------------------
@@ -118,8 +116,8 @@ test("parsePendingProposals returns an empty array for garbled/missing output, n
 });
 
 test("needsAttentionItems merges flow tasks and sac proposals, flows sorted before proposals", () => {
-  const flows: FlowListEntry[] = [{ id: "185", status: "in-progress", title: "vscode ext", tasksDone: 2, tasksTotal: 11 }];
-  const proposals: SacProposalEntry[] = [{ type: "decision", workspaceId: "ws-1", proposalId: "p-1" }];
+  const flows = [{ id: "185", status: "in-progress", title: "vscode ext", tasksDone: 2, tasksTotal: 11 }];
+  const proposals = [{ type: "decision", workspaceId: "ws-1", proposalId: "p-1" }];
   const items = needsAttentionItems(flows, proposals);
   expect(items).toHaveLength(2);
   expect(items[0]?.kind).toBe("flow");

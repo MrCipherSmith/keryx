@@ -1,0 +1,138 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "audit-2026-09-06",
+  "dispatch_id": "security",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Full-project static security audit found a blocker symlink-containment defect across MCP resources and harness wiki/skill readers, plus a major unauthenticated non-loopback MCP HTTP configuration gap. Dependency audit reports 28 advisories, but runtime reachability was not established. Platform restrictions prevented live reproduction and additional security tests.",
+  "summary_markdown": "Подробности: `.metaproject/jobs/audit-2026-09-06/security.md`.",
+  "acceptance": [
+    {
+      "criterion": "Evidence-based report with exact file:line references and concrete scenarios",
+      "status": "met",
+      "evidence": "security.md contains exact source ranges, scenarios, impacts and fixes for SEC-001 and SEC-002."
+    },
+    {
+      "criterion": "Distinguish verified defects, risks, intentional limitations and strengths",
+      "status": "met",
+      "evidence": "Report separates findings, dependency reachability, defensive controls, documented process limitation and platform limitations."
+    },
+    {
+      "criterion": "No source modifications or commits; save report and list validation limitations",
+      "status": "met",
+      "evidence": "Only audit artifacts security.md and security-result.json were added; no source or test files changed and no commit was created."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Russian full-project security audit with findings, defensive posture and limitations.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-05T21-00-56-429Z_run.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Existing bun audit result: 28 advisories.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security.md",
+      "change": "created audit report"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security-result.json",
+      "change": "created subagent result contract"
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "global_id": "audit-2026-09-06-security#SEC-001",
+      "reviewer": "security",
+      "severity": "blocker",
+      "repo": null,
+      "file": "src/mcp/resources.ts",
+      "line": 168,
+      "symbol": "resolveConfined",
+      "problem": "MCP resources and harness wiki/skill readers use lexical path containment before file reads, so a symlink can resolve outside the permitted root.",
+      "impact": "An untrusted repository can cause local host files to be read and returned as project context; MCP resource output also bypasses tool-output redaction.",
+      "suggested_fix": "Canonicalize root and target with realpath through the existing contained-path helper, require a regular contained file, add symlink regression tests, and apply redaction to resource output.",
+      "evidence": "Site-check of src/mcp/resources.ts:168-217, src/mcp/dispatch.ts:82-117, and src/harness/tool/metaproject-adapter.ts:141-175,214-252,417-429,627-650; correct contrasting implementation at src/lib/contained-path.ts:78-105.",
+      "confidence": "high",
+      "dedupe_key": "filesystem-symlink-containment-project-readers",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/mcp/resources.ts:168",
+          "src/harness/tool/metaproject-adapter.ts:141",
+          "src/harness/tool/metaproject-adapter.ts:214"
+        ],
+        "enumeration_method": "keryx ctx rg over readFile, resolveConfined, confineToWiki and realpath in MCP resources and the metaproject adapter, followed by reading every matching reader and dispatcher."
+      }
+    },
+    {
+      "id": "SEC-002",
+      "global_id": "audit-2026-09-06-security#SEC-002",
+      "reviewer": "security",
+      "severity": "major",
+      "repo": null,
+      "file": "src/mcp/config.ts",
+      "line": 72,
+      "symbol": "mergeMcpConfig",
+      "problem": "The unauthenticated MCP HTTP bridge is described as localhost-only, but its configuration accepts any host and startup binds it without a loopback check.",
+      "impact": "With the explicit HTTP capability and launch opt-ins enabled, a project configuration can expose project resources and HTTP-unguarded tools to unauthenticated network clients.",
+      "suggested_fix": "Reject non-loopback MCP hosts or require serve-equivalent external-bind acknowledgement and bearer authentication; enforce an HTTP tool allowlist and path containment centrally.",
+      "evidence": "Site-check of src/mcp/config.ts:72-82, src/mcp/server.ts:136-153, src/mcp/transport/http-sse.ts:21-45, src/mcp/dispatch.ts:103-117 and src/mcp/tools.ts:549-568. No listener was started.",
+      "confidence": "high",
+      "dedupe_key": "mcp-http-nonloopback-no-auth",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/mcp/config.ts:72",
+          "src/mcp/server.ts:136",
+          "src/mcp/transport/http-sse.ts:21",
+          "src/mcp/dispatch.ts:103",
+          "src/mcp/tools.ts:549"
+        ],
+        "enumeration_method": "keryx ctx rg for mergeMcpConfig, HTTP transport declarations, localhost claims, transport guards and mutating registry entries across src/mcp, followed by reading all matches."
+      }
+    },
+    {
+      "id": "SEC-003",
+      "global_id": "audit-2026-09-06-security#SEC-003",
+      "reviewer": "security",
+      "severity": "info",
+      "repo": null,
+      "file": "bun.lock",
+      "line": 21,
+      "symbol": null,
+      "problem": "The installed dependency tree reports 28 known advisories, including one critical and thirteen high, but vulnerable API reachability was not established.",
+      "impact": "Development model tooling and optional MCP runtime dependencies may expose denial-of-service, code-generation, parsing or host-confusion weaknesses if affected APIs receive attacker-controlled input.",
+      "suggested_fix": "Update compatible dependency versions, regenerate the lockfile, rerun audit, and trace production-only reachability for the MCP SDK dependency tree.",
+      "evidence": ".metaproject/data/gdctx/artifacts/2026-09-05T21-00-56-429Z_run.md records bun audit exit code 1 with 28 advisories; bun.lock confirms the transitive chains.",
+      "confidence": "high",
+      "dedupe_key": "dependency-audit-2026-09-06",
+      "blocking_merge": false,
+      "related_skill": "security-audit",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": 0,
+    "retries": 0,
+    "platform_limited": true,
+    "tests_executed_by_security_agent": 0,
+    "dependency_advisories": 28
+  },
+  "timestamp_utc": "2026-09-05T21:03:00Z"
+}

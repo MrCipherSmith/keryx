@@ -1,0 +1,133 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T11",
+  "status": "DONE",
+  "summary": "Added eight meaningful Bun RED tests for AFC-05 across three lane-owned files. They reproduce required coverage incorrectly folding to warn/pass, absent incomplete coverage when FAIL dominates, source filters dropping required checks, malformed rc0 audit output reporting clean, Bun package-keyed advisories being lost, and service/CLI exit zero for incomplete. Synthetic Bun/npm fixtures are public and local; runtime cases invoke runHealth through a temporary fake node_modules/.bin/bun and perform no network or real audit. The focused result is 0 pass / 8 fail while root typecheck remains green. No production, dependency, git, flow-state, or acceptance-criteria file was changed.",
+  "summary_markdown": "TEST_CASE_SPECS: three health/health-CLI test files contain **8 RED runtime tests**. Run `bun test src/health/health-truthful-gate.test.ts src/health/dependency-audit-format.test.ts src/commands/health-incomplete.test.ts`; expected pre-implementation result is 0 pass / 8 fail. Exact cases, immutable output, hashes, and the corrected T8 health caveat are attached.",
+  "acceptance": [
+    {
+      "criterion": "Required missing/skipped/disabled/unparsed outcomes yield incomplete absent blocking findings; findings retained and FAIL dominates with coverage incomplete.",
+      "status": "met",
+      "evidence": "AFC05-required-completeness-fold covers missing, skipped, disabled, and execution-failed required checks plus optional skip behavior. AFC05-fail-dominates-incomplete requires P0 to remain FAIL with coverage=incomplete. AFC05-audit-rc0-unparsed and AFC05-audit-rc1-findings exercise parse validity and finding retention through the real runHealth adapter path."
+    },
+    {
+      "criterion": "Synthetic Bun package-keyed arrays and npm modern/legacy formats parse; unknown/malformed output cannot report clean even rc0.",
+      "status": "met",
+      "evidence": "AFC05-audit-public-formats uses only invented package/advisory values and requires deterministic unique identities plus P0/P1 severity mapping for Bun, npm modern, and npm legacy formats. The separate rc0 malformed fixture proves invalid output cannot become a clean available source."
+    },
+    {
+      "criterion": "Strict health CLI/service reject incomplete; optional skips visible and source-filter coverage truthful.",
+      "status": "met",
+      "evidence": "AFC05-service-blocks-incomplete and AFC05-cli-blocks-incomplete require exit code one. AFC05-source-filter-coverage requires omitted policy-required eslint/typescript checks to remain in the report and make the gate incomplete; the gate-fold case keeps optional skip visible without degrading required coverage."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/health/health-truthful-gate.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Five RED runtime tests for deterministic gate completeness, source-filter scope, malformed audit output, and recognized nonzero audit findings.",
+      "hash": "e452950e8c821767f324cc8dc51c82ec055cc69da637298c07221652f1a78da9"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/health/dependency-audit-format.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Synthetic Bun and npm modern/legacy parser contract with stable advisory identity and severity assertions.",
+      "hash": "4b769239c3936bea26d3b58e7f6a0119c01162c818727e476b8a2a11cecc5322"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/health-incomplete.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Stored-report service and strict health-run CLI RED checks for nonzero incomplete exits.",
+      "hash": "c9a4eebd1c8f862820c99b3f1f0bf8e89f194e384526fc46667ebd909f4722dd"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-test-case-specs.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Exact test-case specification with criteria, IDs, focused run command, GREEN checks, and offline boundary notes.",
+      "hash": "e047fa4ca781da578cf767b44c9872c27570abd138e62b57e11b558a15bd7d70"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-red.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable RED and typecheck evidence, reproduced defect table, synthetic fixture boundary, hashes, and routing audit.",
+      "hash": "cfaf83f3c8abe7d8ce2381f4f915ab92f90e8bb6aba8e422297d439cd51f41ef"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-36-12-293Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused RED execution: 0 pass, 8 fail, 11 assertions reached.",
+      "hash": "6d5b6589bb02090f3016e8980c3ccd96893d47d5f43e319a0319d7437b7e3184"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-36-26-668Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Root TypeScript check after RED test creation: exit 0.",
+      "hash": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Updated schema-valid Phase 0 result with corrected report hash and explicit required-ESLint coverage caveat.",
+      "hash": "29fad9d7eb99778f2ecef54fd792bead7aee2caf2f5f9f09d94ba8adf9c4a9e1"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/health/health-truthful-gate.test.ts",
+      "change": "created five AFC-05 gate and adapter-runtime RED tests"
+    },
+    {
+      "path": "src/health/dependency-audit-format.test.ts",
+      "change": "created synthetic Bun/npm audit-format RED test"
+    },
+    {
+      "path": "src/commands/health-incomplete.test.ts",
+      "change": "created strict service and CLI incomplete-exit RED tests"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-test-case-specs.json",
+      "change": "created exact task-implementer test-case specification"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-red.md",
+      "change": "created immutable RED/typecheck evidence and routing audit"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-result.json",
+      "change": "created schema-valid tests-creator result"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json",
+      "change": "updated corrected T8 report hash and health completeness caveat"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 8,
+    "test_files_created": 3,
+    "red_passed": 0,
+    "red_failed": 8,
+    "red_assertions_reached": 11,
+    "root_typecheck_exit_code": 0,
+    "external_network_calls": 0,
+    "real_audit_calls": 0,
+    "production_files_modified": 0,
+    "commits_created": 0
+  },
+  "timestamp_utc": "2026-09-06T11:37:10Z"
+}

@@ -65,7 +65,20 @@ export type SecurityAction =
   | "require-approval"
   | "warn";
 
-export type SecurityGate = "pass" | "needs-approval" | "fail";
+export type SecurityGate = "pass" | "needs-approval" | "incomplete" | "fail";
+
+/**
+ * What the gate over the latest STORED scan artifact reports.
+ *
+ * The same four members as `SecurityGate`, and deliberately not an alias: this
+ * one is the service contract's answer about evidence on disk, where the other
+ * is a property of a single decision. It carries `needs-approval` because the
+ * gate must keep the three outcomes apart — an established violation, a
+ * requirement for a human, and evidence that is unavailable — instead of
+ * folding two of them into the third. `pass` is the only member a strict
+ * consumer may treat as clean.
+ */
+export type SecurityGateStatus = "pass" | "needs-approval" | "incomplete" | "fail";
 
 export type SecuritySeverity = "critical" | "high" | "medium" | "low" | "info";
 
@@ -143,6 +156,27 @@ export type SecurityReport = {
   rawRetention: RawRetention;
   summary: SecurityReportSummary;
   findings: SecurityFinding[];
+  coverage?: {
+    status: "complete" | "incomplete";
+    required: boolean;
+    reasons: string[];
+  };
+  files?: Array<{
+    path: string;
+    status: "scanned" | "skipped" | "failed";
+    reason?: string;
+  }>;
+  scope?: {
+    path: string;
+    recursive: boolean;
+    exclusions: string[];
+    limits: {
+      maxFiles: number;
+      maxBytes: number;
+      maxDirectories: number;
+      maxDepth: number;
+    };
+  };
   integrations?: Record<string, unknown>;
 };
 
@@ -191,6 +225,16 @@ export type SecurityConfig = {
   };
   gate: { failOn: SecuritySeverity; minConfidence: number };
   configChecksum?: string;
+  /**
+   * Set only by `loadSecurityConfig` when `security.config.json` EXISTS but
+   * could not be read as a mergeable object (T35 F-003) -- not when the file
+   * is simply absent. The rest of this config is still the safe default
+   * shape (`mode` forced to `"enforced"`), so a caller that ignores the flag
+   * gets the strictest defaults rather than a crash; `guardOutput` and
+   * `securityFlowGate` consume the flag to report the workspace's posture as
+   * unavailable instead of silently downgrading enforcement.
+   */
+  configUnreadable?: boolean;
 };
 
 // Internal detector output. Carries the raw sensitive `value` so redaction and
@@ -226,5 +270,5 @@ export type SecurityService = {
   report(input: { cwd: string; since?: string }): Promise<SecurityReport>;
   gate(input: {
     cwd: string;
-  }): Promise<{ status: "pass" | "fail"; reasons: string[] }>;
+  }): Promise<{ status: SecurityGateStatus; reasons: string[] }>;
 };

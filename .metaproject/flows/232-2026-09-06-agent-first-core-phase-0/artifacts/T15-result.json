@@ -1,0 +1,71 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T15",
+  "status": "DONE",
+  "summary": "Independent two-stage M01 review passed. AC1 and AC2 are implemented through one awaited, locked routing-pair publisher used by init, update, rules sync, and rules distill; orient and catalogue consumers resolve the split ownership. The bounded lifecycle suite passes 57/57, and offline probes verified coherent concurrent publication plus observable second-write failure and clean rerun recovery. No blocker, major, or minor logic findings were reproduced. No global quality PASS is claimed.",
+  "summary_markdown": "T15 M01 review: **PASS**, with 0 blocker/major/minor findings. Full evidence and line-scoped reasoning are in `T15-review.md`.",
+  "acceptance": [
+    {
+      "criterion": "AC1 and AC2 behavior is met in production code with credible lifecycle tests.",
+      "status": "met",
+      "evidence": "The shared pair renderer and locked publisher feed all four required lifecycle callers; routed search found no competing production writer. The eight-file focused suite passed 57 tests with 416 assertions and covers repeated init/sync/distill/update sequences, flags, security, user markers, and consumer ownership."
+    },
+    {
+      "criterion": "No reproducible major/blocker logic defects; failures and recovery are truthful, no lost user blocks or divergent writers.",
+      "status": "met",
+      "evidence": "No blocker, major, or minor defect was reproduced. Checked-in fault injection proves rejection and rerun recovery; a separate second-write failure probe rejected then recovered, and a concurrent opposing-options probe left one coherent rendered pair. Every caller awaits the publisher and the writer does not touch root user-owned blocks."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent Stage 1 specification and Stage 2 logic review with exact source lines, bounded tests, probes, snapshot hashes, and routing audit.",
+      "hash": "7c68ead98a6e64e865fe6dfbbc405fb9186b91469c9017f937b3b86f8ff767c7"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Preserved T8 evidence with appended correction that required ESLint was skipped and no complete quality PASS is claimed.",
+      "hash": "d20f966e90cf530b68a5c70a10a3b2758901be9bc1e5c8c2450830738aacc02f"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-review.md",
+      "change": "created independent M01 two-stage review report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-result.json",
+      "change": "created schema-valid subagent review result"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "change": "appended the requested health-gate correction while preserving original evidence"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage_1": "PASS",
+    "stage_2": "PASS",
+    "tests_passed": 57,
+    "tests_failed": 0,
+    "assertions": 416,
+    "offline_probes_passed": 2,
+    "blocker_findings": 0,
+    "major_findings": 0,
+    "minor_findings": 0,
+    "global_suite_run": false,
+    "quality_gate_claim": "bounded-only"
+  },
+  "timestamp_utc": "2026-09-06T11:26:13Z"
+}

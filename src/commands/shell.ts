@@ -195,7 +195,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let archive: NormalizedMessage[] = [];
   if (sessionsOn) {
     try {
-      let resumeId = deps.session?.resumeId;
+      const resumeId = deps.session?.resumeId;
       if (resumeId === undefined && deps.session?.continueLast !== true) {
         // plain new session
       }
@@ -1170,7 +1170,7 @@ async function runAgentRepl(
   let slateSession: SlateSessionRef | undefined;
   if (sessionsOn) {
     try {
-      let resumeId = sessionOpts?.resumeId;
+      const resumeId = sessionOpts?.resumeId;
       if (resumeId === undefined && sessionOpts?.continueLast !== true && sessionOpts !== undefined) {
         // if pick flag was mapped to continue by caller, resumeId may be set to latest
       }
@@ -1623,6 +1623,7 @@ export async function resolveTuiStartup(opts: {
 
 /** Parsed flags for the interactive shell entrypoint. */
 export interface ShellCliFlags {
+  help?: boolean;
   providerArg?: string;
   modelArg?: string;
   baseUrl?: string;
@@ -1653,6 +1654,19 @@ export interface ShellCliFlags {
  * Session flags (`-c`/`-r`) are per-project only.
  */
 export function parseShellCliFlags(args: string[]): ShellCliFlags {
+  if (args.includes("--help") || args.includes("-h")) {
+    return { help: true, wantTui: true };
+  }
+  const invalid = (message: string): never => {
+    throw new Error(`${message}. See keryx shell --help. Example: keryx shell --provider ollama --model llama3.1:latest`);
+  };
+  const valueAfter = (index: number): string => {
+    const value = args[index + 1];
+    if (value === undefined || value.trim() === "" || value.startsWith("-")) {
+      return invalid(`Missing value for ${args[index]}`);
+    }
+    return value;
+  };
   let providerArg: string | undefined;
   let modelArg: string | undefined;
   let baseUrl: string | undefined;
@@ -1665,14 +1679,16 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
-      providerArg = args[++i] ?? providerArg;
+      providerArg = valueAfter(i++);
     } else if (arg === "--model") {
-      modelArg = args[++i] ?? modelArg;
+      modelArg = valueAfter(i++);
     } else if (arg === "--base-url") {
-      baseUrl = args[++i];
+      baseUrl = valueAfter(i++);
     } else if (arg === "--agent") {
+      if (modeFlag === false) invalid("--agent and --chat cannot be combined");
       modeFlag = true;
     } else if (arg === "--chat") {
+      if (modeFlag === true) invalid("--agent and --chat cannot be combined");
       modeFlag = false;
     } else if (arg === "--tui") {
       wantTui = true;
@@ -1689,13 +1705,17 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
         resumePick = true;
       }
     } else if (arg === "--permission-mode") {
-      const next = args[++i];
-      if (next !== undefined && isPermissionMode(next)) {
-        permissionModeFlag = next;
-      }
+      const next = valueAfter(i++);
+      if (!isPermissionMode(next)) invalid("--permission-mode must be ask, trust or auto");
+      permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else {
+      invalid("Unknown shell argument");
     }
+  }
+  if (continueLast && (resumeId !== undefined || resumePick)) {
+    invalid("--continue and --resume cannot be combined");
   }
   return {
     ...(providerArg !== undefined ? { providerArg } : {}),
@@ -1762,15 +1782,35 @@ export interface ShellCommandRuntime {
 }
 
 export async function shellCommand(args: string[], runtime: ShellCommandRuntime = {}): Promise<void> {
+  const flags = parseShellCliFlags(args);
+  if (flags.help) {
+    console.log(`Usage: keryx shell [options]
+
+  --help, -h                    Show this help without starting a session
+  --provider <name>             Use this provider (otherwise choose interactively)
+  --model <name>                Use this model
+  --base-url <url>              Override the provider endpoint
+  --agent | --chat              Choose agent (default) or chat mode
+  --tui | --no-tui              Prefer TUI (default) or readline; last flag wins
+  --continue, -c                Continue the latest project session
+  --resume, -r [id-or-title]     Resume a session, or open the session picker
+  --permission-mode <mode>      Agent permissions: ask, trust or auto
+  --ask | --trust | --auto       Permission shortcuts; last flag wins
+
+Session continuation and resume are mutually exclusive. Permission flags
+are ignored in chat mode. Without a TTY, resume without an ID uses the latest session.
+
+Example: keryx shell --provider ollama --model llama3.1:latest`);
+    return;
+  }
   // Start exactly once, before provider detection, renderer creation, or
   // readline. Nothing below awaits this promise during startup.
   const versionCheck = (runtime.checkVersion ?? (() => checkVersion({
     currentVersion: packageJson.version,
     ...(runtime.cacheDir !== undefined ? { cacheDir: runtime.cacheDir } : {}),
   })))();
-  const flags = parseShellCliFlags(args);
-  let providerArg = flags.providerArg;
-  let modelArg = flags.modelArg;
+  const providerArg = flags.providerArg;
+  const modelArg = flags.modelArg;
   let baseUrl = flags.baseUrl;
   // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
   // interactive picker asks (agent-default), and the non-interactive path
@@ -1822,7 +1862,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       // locally right below, not threaded in from the caller.
       const getSessionDir = (): string | undefined => getSlateSession()?.dir;
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
-      let orient = "";
+      let orient: string;
       try {
         orient = await buildOrientation(cwd);
       } catch {
@@ -2069,7 +2109,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     if (agentMode) {
       // Agent mode: give the model read-only hands + metaproject orientation.
       const agentProvider = baseFactory(provider, model, baseUrl);
-      let orient = "";
+      let orient: string;
       try {
         orient = await buildOrientation(process.cwd());
       } catch {

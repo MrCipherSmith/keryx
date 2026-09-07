@@ -1,0 +1,77 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T58",
+  "status": "DONE",
+  "summary": "Closed T39 F-008's second half: analyze() in src/security/service.ts now skips writeState(cwd, currentState(config)) whenever config.configUnreadable is true, so a forced-closed posture (unusable config or unrecognized mode) never becomes the recorded previous mode/policies. Considered three options (skip the write, record declared settings without the forced mode, record the forced posture with a marker) and chose skip-the-write, documented in T58-spec.md: recording declared settings is not viable because the fully-unreadable cases have no declared mode to record, and a marker only prevents the immediate false positive, not the mirror-image failure of masking a genuine downgrade across a broken-config window (found while designing the regression, not in the original review). Added a doc comment on writeState in self-protect.ts stating the invariant; no comparison-logic change. Three new regressions in security.test.ts: repairing to the same real mode raises no incident, a genuine downgrade across a broken-config window still fires, and a first run whose config is already broken establishes no state until the config is readable.",
+  "summary_markdown": "See T58-implementation.md for the three-case description of what a reader of the recorded state sees, the full argument for why 'skip the write' was chosen over the other two options, and the discovered masked-downgrade failure mode.",
+  "acceptance": [
+    {
+      "criterion": "A forced-closed posture does not become the recorded configured mode, and repairing the config afterwards produces no incident that did not happen.",
+      "status": "met",
+      "evidence": "T58 D1: after a broken-config run forces mode to 'enforced', readState(root) still returns the real 'advisory' recorded before the break. Repairing the config back to the same real 'advisory' raises no 'downgraded' warning and no mode-downgrade incident. RED (2026-09-06T16-07-12-182Z_run.log) failed exactly at the intermediate readState assertion showing the forced value had overwritten the real one; GREEN (2026-09-06T16-07-29-562Z_run.log) passes."
+    },
+    {
+      "criterion": "A genuine mode downgrade is still detected, and a first run whose config is already broken behaves sensibly and is described in the report.",
+      "status": "met",
+      "evidence": "T58 D2: real 'gateway' recorded, config breaks (forced 'enforced', lower rank), readState stays 'gateway' through the broken run, then a genuine reconfigure to 'ci' (a real downgrade from gateway) fires the downgraded warning and mode-downgrade incident -- proving the fix does not just avoid false positives but avoids masking a true one (before this fix, the forced 'enforced' recorded during the break would have made 'ci' compare as a non-downgrade, silently missing it). T58 D3 plus the 'First run whose config is already broken' section of T58-implementation.md: readState/previous stays null through repeated broken runs (both the mode-downgrade and policy-disabled checks are if(previous)-guarded; the checksum check cannot fire either, since a fully-unreadable payload's forced config has configChecksum undefined, which verifyConfigChecksum treats as a match), and the first readable config establishes real state with no spurious warning -- behaves exactly as if the broken runs never happened."
+    },
+    {
+      "criterion": "Nothing the earlier repairs closed reopens: an unusable or unrecognized-mode config still fails closed at the guard and the flow gate, the config file on disk is never written, and reasons stay constant and leak-safe.",
+      "status": "met",
+      "evidence": "src/security/config.ts, src/security/guard.ts, src/security/guard.test.ts and src/security/types.ts were only ever Read, never Edit/Write, in this task -- byte-unmodified by construction, so T37/T54's blocking behaviour at guardOutput/securityFlowGate is untouched. No new reason string was added; the new tests assert on warnings text and incident type only, never on new leak surfaces. git status --porcelain on .metaproject/security.config.json and .metaproject/data/security is empty before and after. Wider sweep of flow/security/sac/wiki suites T37 and T54 also ran: 154 pass / 0 fail (2026-09-06T16-08-10-964Z_run.log)."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; the security and flow focused suites stay green.",
+      "status": "met",
+      "evidence": "RED 11 pass / 3 fail, 62 expect() (2026-09-06T16-07-12-182Z_run.log) -> GREEN 14 pass / 0 fail, 71 expect() (2026-09-06T16-07-29-562Z_run.log), both in src/security/security.test.ts. Required command 'bun src/cli.ts ctx run -- bun test src/security/': 233 pass / 0 fail, 1315 expect(), 22 files (2026-09-06T16-08-38-195Z_run.log). bun run typecheck: clean, exit 0. bunx eslint on service.ts/self-protect.ts/security.test.ts: clean, exit 0."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T58-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: what is broken, who reads the recorded state (exactly one reader, evaluateSelfProtection via analyze()), the three options weighed with the masked-downgrade failure mode found while designing option 3, the decision, and the three-case description",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T58-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What changed, why option 1 was chosen over the other two, the three-case description of what a reader of the recorded state sees, per-regression evidence, verification counts and raw log paths, routing audit and concerns",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/service.ts",
+      "change": "In analyze()'s state-write region (~line 95): writeState(cwd, currentState(config)) is now gated behind !config.configUnreadable, so a forced-closed posture (unusable config or unrecognized mode) is never persisted as the recorded previous mode/policies for the next self-protection comparison"
+    },
+    {
+      "path": "src/security/self-protect.ts",
+      "change": "Added a doc comment on writeState stating the invariant its one caller must uphold (never pass a forced/synthesized state) and pointing to T58-spec.md; no behaviour change, function body/signature untouched"
+    },
+    {
+      "path": "src/security/security.test.ts",
+      "change": "Added a writeConfigBody helper and three regressions (T58 D1, D2, D3) covering: repairing to the same real mode after a broken window raises no incident; a genuine downgrade across a broken-config window is still detected, not masked; a first run whose config is already broken establishes no state until the config becomes readable. No existing test deleted, weakened, or re-expected"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "tests_passed": 233,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T16:09:00Z"
+}

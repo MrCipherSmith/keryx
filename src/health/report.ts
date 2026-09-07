@@ -25,6 +25,7 @@ export function renderReportMarkdown(
   return `# Code Health
 
 Gate: **${report.gate.status.toUpperCase()}**
+Coverage: **${(report.gate.coverage ?? "unknown").toUpperCase()}**
 Generated: ${report.generatedAt}
 Scope: ${report.scope}${report.strict ? " (strict)" : ""}
 Git: ${report.gitRef ?? "n/a"}
@@ -42,12 +43,12 @@ ${renderProject(project)}
 
 ## Sources
 
-| Source | Status | Mode | Required | Findings | Tool |
-|--------|--------|------|----------|----------|------|
+| Source | Status | Execution | Parse | Mode | Required | Findings | Tool |
+|--------|--------|-----------|-------|------|----------|----------|------|
 ${report.sources
   .map(
     (s) =>
-      `| ${s.source} | ${s.status} | ${s.mode} | ${s.required ? "yes" : "no"} | ${s.findings} | ${s.toolVersion ?? "-"} |`,
+      `| ${s.source} | ${s.status} | ${s.execution ?? "legacy"} | ${s.parse ?? "legacy"} | ${s.mode} | ${s.required ? "yes" : "no"} | ${s.findings} | ${s.toolVersion ?? "-"} |`,
   )
   .join("\n")}
 
@@ -159,6 +160,9 @@ function renderNextAction(report: HealthReport): string {
   }
   if (report.gate.status === "warn") {
     return "Review warnings; address regressions and low-coverage scopes.";
+  }
+  if (report.gate.status === "incomplete") {
+    return "Restore every required source and rerun health before merging.";
   }
   return "No blocking issues. Keep the baseline updated with `keryx health baseline update`.";
 }

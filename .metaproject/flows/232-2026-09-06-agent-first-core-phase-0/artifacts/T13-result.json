@@ -1,0 +1,79 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T13",
+  "status": "DONE",
+  "summary": "Independent bounded recheck completed with contract gate PASS. Root repaired all four issue-reference prose sites across all ten task-implementer builds; targeted inspection found no stale unconditional wording, both package trees remain byte-identical, 33 focused tests pass, and the current source CLI accepts the actual issue-free T7 request. The original FAIL evidence remains immutable in T13-verification.md. No source was modified by the verifier. Lint remains skipped/unavailable and no global PASS is claimed.",
+  "summary_markdown": "T13 recheck is a bounded **PASS**. The initial FAIL is preserved in `T13-verification.md`; the successful independent recheck is recorded in `T13-recheck.md`.",
+  "acceptance": [
+    {
+      "criterion": "Valid description task accepted without fabricated issue; real positive issue accepted; invalid supplied identifier and missing root/branch refused.",
+      "status": "met",
+      "evidence": "The preserved initial source-CLI matrix verified all valid and invalid shapes. On recheck, 33 focused tests passed and the actual issue-free T7 input validated through the current source CLI with exit 0."
+    },
+    {
+      "criterion": "Bundled and local five skill builds + companion docs agree with schema; no misleading required issue claims remain.",
+      "status": "met",
+      "evidence": "Targeted inspection confirmed optional input wording, conditional issue-reference lines in both commit templates, and conditional Rule 8 in every one of the ten builds. No stale unconditional wording remains. All nine corresponding files in the bundled and local package trees are byte-identical."
+    },
+    {
+      "criterion": "Current focused checks and source CLI evidence persisted; no unrelated author changes, no global PASS from unavailable lint.",
+      "status": "met",
+      "evidence": "T13-recheck.md records current commands and outcomes while T13-verification.md preserves the initial failure. This verifier changed only T13 artifacts, reports lint as skipped/unavailable, and makes no global certification claim."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable initial verification evidence with the confirmed pre-repair FAIL and exact finding.",
+      "hash": "e9c42a8839400c9a5ad9fb9310458be345373125997e8bae5e5f1e7de99c159f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-recheck.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Successful independent prose, byte-parity, focused-test, and source-CLI recheck with bounded gate semantics.",
+      "hash": "48204d1bc437ac74545462b541761882dce0fe87470d856462b77ea4a4e27dc7"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-verification.md",
+      "change": "preserved unchanged as immutable initial FAIL evidence"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-recheck.md",
+      "change": "created successful bounded recheck report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-result.json",
+      "change": "updated schema-valid result to the current scoped PASS verdict"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "gate": "PASS",
+    "scope": "task-implementer-contract",
+    "initial_gate": "FAIL",
+    "recheck_gate": "PASS",
+    "recorded_events": 3,
+    "verification_executions": 2,
+    "tests_passed": 33,
+    "tests_failed": 0,
+    "assertions": 522,
+    "source_cli_issue_free_exit_code": 0,
+    "lint_status": "skipped-unavailable",
+    "type_check_status": "not-run-bounded-scope",
+    "circular_import_status": "skipped-unavailable",
+    "open_findings": 0
+  },
+  "timestamp_utc": "2026-09-06T11:15:40Z"
+}

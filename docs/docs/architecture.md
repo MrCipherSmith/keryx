@@ -544,7 +544,7 @@ flowchart TB
 ```
 
 > The five `security` edges are advisory by default (report and continue, never
-> block); enforced/ci blocks or suppresses the guarded write.
+> block); enforced/ci/gateway blocks or suppresses the guarded write.
 
 The three **in-process code imports** (solid) are:
 
@@ -560,7 +560,7 @@ The three **in-process code imports** (solid) are:
 - **gdctx run/read → security** (`redactRaw`) to redact secrets from raw output before persist/summarize;
 - **flow complete → security** (`securityFlowGate`) as completion gate 4.
 
-The guard wraps the frozen Phase 1+2 engine and enforces one rule: **advisory (the default) reports and continues — it never blocks or mutates** (the gdctx seam still redacts detected secrets as a pure safety step); **enforced/ci blocks or suppresses the write with a masked category+count reason**; **disabled is a zero-cost no-op**. It imports only from the security engine + shared libs (so the seam stays acyclic) and degrades to allow on any engine error, so a seam is never broken.
+The guard wraps the frozen Phase 1+2 engine and enforces one rule: **advisory (the default) reports and continues — it never blocks or mutates** (the gdctx seam still redacts detected secrets as a pure safety step); **enforced/ci/gateway blocks or suppresses the write with a masked category+count reason**; **disabled is a zero-cost no-op**. It imports only from the security engine + shared libs (so the seam stays acyclic) and degrades to allow on any engine error, so a seam is never broken.
 
 The **file-mediated flows** (dashed) are the backbone of the system:
 
@@ -631,4 +631,4 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **Heuristic precision limits (deliberate trade-offs).** gdgraph import extraction is regex (can miss unusual syntax) and reports one representative per canonical cycle rotation; testing's failure/count parsers are bun-test-shaped (approximate for vitest/jest/playwright); health complexity is token-based, not AST.
 - **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` has no `src/ctx/` dir (logic lives entirely in `commands/ctx.ts`).
 - **External agent runtime — verified offline only, and supervision is unbuilt.** The whole `src/harness/external/` layer is tested against recorded transcripts in `fixtures/external/`; no part of it has been run against a real `codex` or `claude` process, so version drift in either CLI is caught by a parse-skip counter rather than by a passing test. The specification's folded, trigger-driven view of a *running* external child is not implemented at all — the parent receives the child's result and nothing before it. `worktree-write` is refused, so only read-only dispatches execute. `/delegate` bypasses the policy engine and the subagent admission ledger (a recorded, reasoned amendment, not an oversight). Resume argv is built and displayed for detaching by hand; keryx never spawns a resume itself.
-- **Security — gateway mode still pending.** The `security` module ships Phase 1+2+3 (deterministic engine + CLI + the write-seam integrations wired at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion — see the cross-module data-flow section) **plus** shipped Phase-4-class surfaces: merge-safe agent security hooks (`security hooks install --runtime …`, `src/security/agent-hooks.ts`), a config-checksum self-protect tamper guard (`src/security/self-protect.ts`), and a model-eval path (`security eval --with-model`, `src/security/eval/`) that forces the asset-gated injection/PII model backends on (warn-once → deterministic fallback when the asset is absent). What remains unimplemented is chiefly the always-on gateway/proxy mode (spec §16 Phase 4).
+- **Security — gateway's Phase-4 proxy mode still pending (its blocking behavior already ships).** The `security` module ships Phase 1+2+3 (deterministic engine + CLI + the write-seam integrations wired at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion — see the cross-module data-flow section) **plus** shipped Phase-4-class surfaces: merge-safe agent security hooks (`security hooks install --runtime …`, `src/security/agent-hooks.ts`), a config-checksum self-protect tamper guard (`src/security/self-protect.ts`), and a model-eval path (`security eval --with-model`, `src/security/eval/`) that forces the asset-gated injection/PII model backends on (warn-once → deterministic fallback when the asset is absent). What remains unimplemented is chiefly the always-on gateway/proxy mode (spec §16 Phase 4).

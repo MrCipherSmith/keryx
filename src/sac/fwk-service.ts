@@ -240,6 +240,7 @@ async function resolveLedgerState(ledger: string, checkpointPath: string, verifi
   const document = await readCheckpoint(checkpointPath); let ledgerBytes: number;
   try { ledgerBytes = await ledgerByteLength(ledger); } catch (error) {
     if (!isMissing(error)) throw error;
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     if (document.present) throw new Error("invalid access receipt ledger: orphaned-checkpoint");
     return { ledgerBytes: 0, recordCount: 0, headHash: "GENESIS", tailOffset: 0, digest: createHash("sha256") };
   }

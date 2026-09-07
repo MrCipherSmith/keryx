@@ -1,0 +1,124 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T30",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independently reviewed T27's change to src/security/guard.ts with fresh, executed probes (not the implementer's report). Stage 1: all criteria MET -- enforced/ci block on incomplete engine evidence with a masked reason, advisory keeps allowed:true with truthful incomplete diagnostics, formatGuardWarning surfaces incomplete with zero findings and still returns null for a genuine pass (including a finding+incomplete combination case the shipped test suite does not cover), securityFlowGate maps a stored incomplete report to fail and its .gate()-call catch is a constant leak-safe string, and no regression in the 13 previously-passing guard.test.ts cases (17/17 independently re-run; combined selection 39/1 pre-existing failure at service.memo.test.ts:162, confirmed unrelated, matches the disclosed T29-owned issue exactly). Attacking the residual fail-open beyond Stage 1: the implementer disclosed that guardOutput's outer catch degrades to allowed:true on any loadSecurityConfig failure; I reproduced that live with a minimal trigger (security.config.json containing literally 'null') and found an undisclosed twin of the identical root cause in securityFlowGate's own mode-load catch, which returns null (gate silently omitted from flow completion, not fail/skipped) under the same trigger -- verdict: blocker, T31 must close both call sites plus the root cause in config.ts before phase acceptance. Also answered the dispatch's forward-looking question: securityFlowGate's status mapping is a non-exhaustive two-value ternary that already silently reads a stored needs-approval decision as pass today, and will keep doing so once T33's runGate fix surfaces that status distinctly unless guard.ts is given a matching exhaustive mapping -- filed as major (F-002). One info-level finding on two pre-existing, misleading comments (F-003).",
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+      "status": "met",
+      "evidence": "T30-probe-ac6-ac8.ts Probe A (finding + incomplete gate constructed directly, a case not present in guard.test.ts) and Probe C (enforced, real HMAC-key-unreadable fixture): formatGuardWarning shows both 'incomplete' and the finding's category simultaneously; guardOutput's decision.gate stays 'incomplete', never 'pass'. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-31-45-118Z_run.log."
+    },
+    {
+      "criterion": "AC8: no required failed/incomplete check is relabeled PASS; strict (enforced/ci) guards and the strict flow gate refuse incomplete evidence while advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+      "status": "partial",
+      "evidence": "MET for T27's own diff (engine-evidence-incomplete propagation): probes C/D confirm enforced/ci block with a masked reason and advisory keeps allowed:true with truthful diagnostics; read src/flow/service.ts directly to confirm only 'fail' blocks flow completion (gates.every(status !== 'fail')), so the .gate()-call catch's skipped-to-fail change was necessary and correct. NOT MET at the phase level: F-001 (blocker) shows a config-load failure -- a required check that is 'unparsed' per the policy fold -- is still relabeled PASS (guardOutput) or silently omitted (securityFlowGate), reproduced live via T30-probe-failopen.ts, raw log .metaproject/data/gdctx/raw/2026-09-06T13-32-10-423Z_run.log. Per AC8's own text, this partial state does not constitute full phase completion; T31 must close it."
+    },
+    {
+      "criterion": "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS. Reasons and details must be constant and leak-safe.",
+      "status": "partial",
+      "evidence": "MET for the scenarios T27 covers: guardReason/formatGuardWarning's incomplete branch and securityFlowGate's stored-incomplete and .gate()-catch branches are read verbatim in source as literal strings with no interpolation of error/cwd/content -- confirmed by direct read plus probe assertions (result.reason not containing the workspace root). NOT MET for the config-load-failure path covered by F-001, which the fold's own wording (INCOMPLETE when a required check is unparsed) assigns to INCOMPLETE but both current handlers instead resolve toward PASS/omission."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full independent review: Stage 1 table with executed-probe evidence, residual fail-open verdict (F-001, blocker), exhaustive-mapping verdict (F-002, major), one info finding (F-003), confirmed clean areas, evidence table, routing audit, and the keryx:findings JSON block."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-ac6-ac8.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Executable probe: AC6 finding+incomplete combined case (not in guard.test.ts), genuine-pass null regression check, and end-to-end enforced/advisory incomplete-engine-evidence checks via an independently built fixture. 10/10 assertions pass."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-failopen.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Executable probe reproducing the disclosed guardOutput fail-open and the undisclosed twin in securityFlowGate, both from a single minimal trigger (security.config.json == 'null'). 4/4 assertions pass, confirming both fail-open outcomes on demand."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-exhaustive-mapping.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Executable probe demonstrating securityFlowGate's non-exhaustive status mapping: a stored gate:'needs-approval' report in enforced mode is read as pass end-to-end today, and guard.ts's own ternary has no distinct branch for that status."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T30#F-001",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/guard.ts",
+      "line": 146,
+      "symbol": "guardOutput",
+      "problem": "loadSecurityConfig(cwd) throws on any non-object-but-valid JSON config (e.g. the file containing literally `null`); guardOutput's outer catch (line 146) then unconditionally returns { allowed: true, decision: ALLOW_DECISION } regardless of configured mode, and securityFlowGate's separate mode-load catch (line 240) returns null -- indistinguishable from the intentional 'module disabled' null -- causing src/flow/service.ts Gate 6 to omit the security gate entirely rather than fail or skip it visibly. The implementer disclosed only the guardOutput half of this; the securityFlowGate half is undisclosed and untested.",
+      "impact": "A corrupted or foreign-written .metaproject/security.config.json silently disables the entire secret/PII/prompt-injection detection floor for every guardOutput caller (memory, wiki, testing, gdctx, flow writes) in a workspace configured for strict enforcement, AND silently removes the security check from flow-completion gating -- with zero trace in either case. Reproduced live: a planted AWS-shaped secret passes guardOutput with allowed:true, decision.gate:'pass' under this trigger in a nominally-enforced workspace.",
+      "suggested_fix": "Root cause in src/security/config.ts::loadSecurityConfig -- validate the parsed JSON is a non-null object before merging; fall back to mergeSecurityConfig({}) exactly as already done for malformed JSON. Additionally, in src/security/guard.ts: guardOutput's catch (~146) must not default to ALLOW_DECISION unconditionally (surface gate:'incomplete' instead), and securityFlowGate's mode-load catch (~240) must not return the same null used for 'module disabled' -- it should return a fail-shaped result like the sibling .gate()-call catch two branches below.",
+      "evidence": "T30-probe-failopen.ts, executed via bun src/cli.ts ctx run -- bun run .../T30-probe-failopen.ts; raw log .metaproject/data/gdctx/raw/2026-09-06T13-32-10-423Z_run.log. All assertions pass, confirming the trigger and both fail-open outcomes reproduce on demand.",
+      "confidence": "high",
+      "dedupe_key": "guard-ts-loadsecurityconfig-failopen",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": ["src/security/guard.ts:146", "src/security/guard.ts:240"],
+        "enumeration_method": "grep for loadSecurityConfig( call sites in guard.ts (bun src/cli.ts ctx rg loadSecurityConfig src/security/guard.ts) -- 2 non-import matches (line 137 inside guardOutput, line 238 inside securityFlowGate), each traced to its enclosing catch block. No third call site exists in this file."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T30#F-002",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/security/guard.ts",
+      "line": 253,
+      "symbol": "securityFlowGate",
+      "problem": "securityFlowGate maps createSecurityService(cwd).gate({cwd})'s result with a two-value ternary (result.status === \"fail\" || result.status === \"incomplete\" ? fail : pass) that is not exhaustive over SecurityGate (\"pass\"|\"needs-approval\"|\"incomplete\"|\"fail\", src/security/types.ts:68). A stored report with gate:\"needs-approval\" is read as pass end-to-end today (via runGate's own fold, tracked separately as T33), and guard.ts's own mapping provides no distinct branch for it either -- so fixing runGate alone (T33) will not close the gap unless guard.ts is given a matching exhaustive mapping.",
+      "impact": "Once T33 makes runGate surface 'needs-approval' (or a broadened 'incomplete') as its own literal status, securityFlowGate's ternary will keep silently coercing it to 'pass' for flow-completion purposes, reproducing the same class of fail-open one call frame up, in code T33 does not own and would not fix.",
+      "suggested_fix": "Replace the ternary at guard.ts:253 with an exhaustive switch/if over every runGate/SecurityGate status value, with an unrecognized/future value defaulting to fail (never pass). Land together with or before T33's runGate fix.",
+      "evidence": "T30-probe-exhaustive-mapping.ts, executed via bun src/cli.ts ctx run -- bun run .../T30-probe-exhaustive-mapping.ts; raw log .metaproject/data/gdctx/raw/2026-09-06T13-32-33-942Z_run.log. Live demonstration: stored gate:'needs-approval' report in enforced mode -> runGate status:'pass' -> securityFlowGate status:'pass', detail:'security gate: needs-approval' (truthful detail, wrong/non-blocking status).",
+      "confidence": "high",
+      "dedupe_key": "guard-ts-securityflowgate-nonexhaustive-mapping",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": ["src/security/guard.ts:253"],
+        "enumeration_method": "grep for 'result.status ===' in guard.ts (bun src/cli.ts ctx rg 'result.status ===' src/security/guard.ts) -- 1 match. guardOutput's own blocking condition (~line 151) was checked separately and confirmed exhaustive (3-way OR covering fail/needs-approval/incomplete against the 4-value SecurityGate union, with pass as the sole remaining default) -- not part of this class."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T30#F-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/security/guard.ts",
+      "line": 145,
+      "symbol": "guardOutput",
+      "problem": "The comment '// Advisory-safe: an engine error must not break the caller.' at guard.ts:145 mislabels its catch's scope -- it applies unconditionally (including enforced/ci), not just to advisory mode, since mode itself is loaded inside the same try. guard.ts:220's securityFlowGate doc comment says null is returned 'when the module is disabled' but does not mention the second null-return path (module enabled, config load failed) this review found at line 240.",
+      "impact": "No independent runtime effect. Documentation-only, but plausibly contributed to F-001 going unnoticed: a maintainer scanning the blocking logic would reasonably assume this catch is scoped to non-blocking mode only.",
+      "suggested_fix": "Update both comments when F-001 is fixed to describe the corrected scope; no separate task needed.",
+      "evidence": "git diff HEAD -- src/security/guard.ts, raw log .metaproject/data/gdctx/raw/2026-09-06T13-27-03-615Z_run.log -- both lines are unchanged context, confirming pre-existing scope, not introduced by T27.",
+      "confidence": "high",
+      "dedupe_key": "guard-ts-stale-advisory-safe-comment",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T13:40:00Z"
+}

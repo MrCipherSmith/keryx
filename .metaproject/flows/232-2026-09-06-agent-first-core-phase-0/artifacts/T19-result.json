@@ -1,0 +1,128 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T19",
+  "status": "DONE",
+  "summary": "Implemented a strict inclusive maxRounds boundary across the direct agent and native child path. max_rounds 1 now permits exactly one provider request, never a second tool round or hidden wrap-up, while maxToolCalls continues to cap actual invocations independently. Updated obsolete N+1 tests and documentation. The unchanged independent probe now reports one provider request, one tool invocation, and BudgetExhausted; 129 focused tests, both TypeScript targets, and scoped ESLint pass.",
+  "summary_markdown": "T19 is complete: **the unchanged reproduction now observes 1 provider request and 1 tool invocation at `max_rounds: 1`**, with truthful `BudgetExhausted` status. Focused verification is **129 passed, 0 failed**; both TypeScript targets and scoped ESLint pass.",
+  "acceptance": [
+    {
+      "criterion": "max_rounds1 permits at most one model round and no hidden wrap-up request.",
+      "status": "met",
+      "evidence": "The unchanged T16 recheck probe records configuredMaxRounds=1, providerRequests=1, actualToolInvocations=1, and resultStatus=BudgetExhausted in 2026-09-06T12-28-36-521Z_run.log. Core and child regressions assert the same invariant."
+    },
+    {
+      "criterion": "Model round cap and actual tool call cap remain independent; correct finish/terminal/child status.",
+      "status": "met",
+      "evidence": "The model-round counter gates every provider request; the invocation counter still gates only admitted tool.invoke calls. Focused tests cover direct finish reasons, unattended terminal state, interactive reset/cancel, per-round batched calls, and native child BudgetExhausted/NoProgress mapping."
+    },
+    {
+      "criterion": "Focused agent/child/script tests and strict typecheck/lint pass; no model/network calls.",
+      "status": "met",
+      "evidence": "129 focused tests passed with 0 failures and 502 assertions; bun run typecheck, bun run typecheck:scripts, and scoped ESLint all exited 0. All providers were scripted offline fixtures; no model or network call was made."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Implementation specification written before production changes, including inclusive round semantics and compatibility rules.",
+      "hash": "e3737fa71f0e7821574fefb8dc67d9dfeb98a6dfe9dbedfe39048a74520477d2"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Schema-valid task-implementer report for the strict round-budget fix.",
+      "hash": "f531073e8c1c9c430d3aa42a34bc521faa9d58e0596fa96ed3f425794ea6795c"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "TDD, probe, focused test, typecheck, lint, compatibility, and routing evidence.",
+      "hash": "92024d30880851b8c1cd88e1cbaf180e999342440bef959e04e791ad254ce752"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-22-51-489Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Immutable initial RED execution: 21 passed and the two strict-cap assertions failed.",
+      "hash": "0ce4dbf433a0d44171f0de7b8f65fa4f0da26e731abc16ee4d5b56cfac0ab7f8"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-50-292Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Immutable final bounded integration execution: 129 passed, 0 failed, 502 assertions.",
+      "hash": "c25206370852610131b636783c44d105847964e1a8685c27e839398cc2143513"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-36-521Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Immutable unchanged-probe execution proving one provider request and one invocation at max_rounds 1.",
+      "hash": "fac57c91238b5db356506b9535231a51e869effcf7f28b8b16e7f47f954bb3fa"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/commands/agent.ts",
+      "change": "enforced the inclusive pre-request round guard across normal, reprompt, reset, and no-progress paths; documented exact semantics"
+    },
+    {
+      "path": "src/commands/agent.test.ts",
+      "change": "replaced obsolete N+1 expectations with strict final-round, reset/cancel, zero-round, and terminal-state assertions"
+    },
+    {
+      "path": "src/commands/agent-tool-call-budget.test.ts",
+      "change": "added strict maxRounds one and zero regressions while retaining independent actual-invocation cap coverage"
+    },
+    {
+      "path": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "change": "documented inclusive child round-reservation semantics"
+    },
+    {
+      "path": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "change": "strengthened the child BudgetExhausted regression with real provider-request and tool-event counts"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "change": "created pre-implementation specification"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
+      "change": "created task-implementer output report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "change": "created immutable verification and routing report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json",
+      "change": "created subagent result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "red_tests_passing": 21,
+    "red_tests_failing": 2,
+    "focused_tests_passing": 129,
+    "focused_tests_failing": 0,
+    "focused_assertions": 502,
+    "probe_provider_requests": 1,
+    "probe_tool_invocations": 1,
+    "typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 0,
+    "eslint_exit_code": 0,
+    "global_suite_run": false
+  },
+  "timestamp_utc": "2026-09-06T12:33:00Z"
+}

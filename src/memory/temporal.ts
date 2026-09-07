@@ -44,7 +44,7 @@ export function isCurrentAt(entry: Pick<MemoryEntry, "validFrom" | "validTo" | "
   return !entry.supersededBy && isValidAt(entry, currentDay(now));
 }
 
-export function validateAsOf(value: string, now: Date): string {
+export function validateAsOf(value: string, _now: Date): string {
   validateCalendarDate(value, "as-of");
   // As-of is historical/event-time inspection and may intentionally target a
   // planned future date. Future *entries* remain excluded from current recall

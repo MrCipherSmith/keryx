@@ -1,0 +1,43 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T27",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Propagate incomplete security checks through strict guards and the flow completion gate",
+    "description": "Make the four RED tests in src/security/guard.test.ts GREEN by fixing src/security/guard.ts only: (1) enforced and ci modes must block (allowed=false) when decision.gate is 'incomplete' (engine evidence unavailable, e.g. HMAC key unreadable), with a constant leak-safe reason; (2) advisory mode keeps allowed=true but preserves the truthful incomplete diagnostics in the decision; (3) formatGuardWarning must not return null for an incomplete decision with zero findings; it must mention 'incomplete'; (4) securityFlowGate must map a stored latest report with gate 'incomplete' (and any unparseable/unrecognized report) to status 'fail' with a constant detail that echoes no raw error text, file path or source bytes; the catch branch must not pretend a verified result. Refresh stale comments in guard.ts that still describe a full no-op / fail-open when the module is disabled: the mandatory deterministic floor (validateSerializedOutput) already applies regardless of advisory settings. Write T27-implementation.md and T27-result.json to the flow artifacts dir. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+    "AC8: no required failed/incomplete check is relabeled PASS; strict (enforced/ci) guards and the strict flow gate refuse incomplete evidence while advisory retains truthful incomplete diagnostics.",
+    "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS. The guard test file's 17 tests pass; no raw error, path or content leaks into reasons or details."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; long outputs via bun src/cli.ts ctx run.",
+    "Ownership: ONLY src/security/guard.ts and src/security/guard.test.ts. Read service.ts/types.ts but do not edit them: another worker owns service.ts concurrently. If the fix truly needs a runGate change in service.ts, stop and return BLOCKED naming the exact needed change instead of editing.",
+    "Keep the existing RED tests unchanged except for genuinely wrong expectations, which must be justified in the report. Do not delete tests. Run: bun src/cli.ts ctx run -- bun test src/security/guard.test.ts src/security/persistence-sinks.test.ts src/security/service.memo.test.ts (the memo test line 162 failure is pre-existing and owned by T29; report it, do not fix it). Then run targeted eslint on guard.ts and bun run typecheck.",
+    "No git state changes, no network, no model calls, no global suite, no dependency changes, no flow file edits. Stats disabled.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:08:00+00:00", "created_by": "flow-orchestrator" }
+}

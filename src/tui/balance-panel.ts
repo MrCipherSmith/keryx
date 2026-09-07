@@ -9,7 +9,7 @@
 // provider that has no reading. The fetch
 // is fail-closed and never throws — a slow or down balance API must not hang
 // the shell or spam the transcript. Clicking the value re-fetches.
-import { balanceCapableProvider, fetchProviderBalance, providerApiKey, providerBaseUrlEnvKey, resolveProviderBaseUrl, type ProviderBalance } from "../commands/providers";
+import { balanceCapableProvider, fetchProviderBalance, providerApiKey, resolveProviderBaseUrl, type ProviderBalance } from "../commands/providers";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 
 type OpenTui = typeof import("@opentui/core");

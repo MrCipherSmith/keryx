@@ -1,0 +1,10 @@
+# AFC-01 Contained resource reading specification
+Version: 0.1.0
+
+Allow symlinks whose resolved target remains inside the authorized owner root. Owner roots are per-resource class (wiki, memory, module artifacts) or skills root, not the entire project. Reject sibling-prefix traversal, external/escaping links, root replacement and identity changes before returning bytes. Broken targets and non-files fail with typed safe errors. Unsupported secure read capability must fail closed with an actionable capability error, not claim that a realpath check followed by readFile is race-proof.
+
+Scope: MCP resources/list/read, harness readWiki and skills catalog/load. Handle internal linked files/directories with a visited canonical identity to bound enumeration; external links must not disclose target names/contents. Tests use temp roots/internal links/external synthetic secret sentinel, owner-root escapes and race fixture/hook. Maintain equivalent authorization for list/discovery and direct reads. No broad unrelated source modifications.
+
+Implementation navigation: lexical-only src/mcp/resources.ts resolveConfined/readResource and harness/tool/metaproject-adapter.ts confineToWiki/confineToSkills/walkSkillCatalog/parseCatalogSummaries/skill load. Existing lib/contained-path.ts only checks realpath and is not a TOCTOU guarantee. src/sac/secure-resource-read.ts already uses Bun/POSIX openat descriptor chains, O_DIRECTORY/O_NOFOLLOW and fail-closed unsupported capability; reuse a shared lower-level seam without importing SAC internals into MCP/harness. It currently reads unbounded and lacks regular-file/identity checks, so assess these before reuse. Existing MCP boundary permits lib and service facades and now resolves nested relative imports correctly. Keep source-root ownership pinned; resolving the owner root after it is replaced cannot silently authorize a new outside tree.
+
+AFC-02 resource/tool-error output redaction belongs to the structural redaction owner; coordinate dispatch.ts/redact-seam.ts ownership. Containment errors must already be safe and must not interpolate arbitrary input or target paths.

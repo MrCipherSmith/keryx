@@ -145,8 +145,8 @@ export interface HealthStatusResult {
   enabled: boolean;
   /** ISO timestamp of the last health run, or null when none exists. */
   lastRunAt: string | null;
-  /** Latest gate status (pass/warn/fail), or null when no report exists. */
-  gate: "pass" | "warn" | "fail" | null;
+  /** Latest gate status (pass/warn/incomplete/fail), or null when no report exists. */
+  gate: "pass" | "warn" | "incomplete" | "fail" | null;
   /** Per-source availability status from the latest report. */
   sources: Array<{ source: string; status: string }>;
   /** Latest project-level health score, or null when unavailable. */

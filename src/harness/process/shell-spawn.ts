@@ -34,7 +34,7 @@ export function resolveShellSandboxMode(
 ): ShellSandboxMode {
   if (env.KERYX_DANGEROUSLY_DISABLE_SANDBOX === "1") return "off";
   const envRaw = env.KERYX_SANDBOX_SHELL;
-  let raw = "";
+  let raw: string;
   if (envRaw !== undefined && envRaw.trim().length > 0) {
     raw = envRaw.toLowerCase();
   } else {

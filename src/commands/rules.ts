@@ -1,10 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import {
-  renderIndexMarkdown,
-  renderProjectRulesReadme,
-} from "../lib/templates";
+import { writeRoutingEntrypointPair } from "../lib/routing-entrypoint";
+import { renderProjectRulesReadme } from "../lib/templates";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import {
   distillAgentEntrypoints,
@@ -60,7 +58,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
       enableTasks,
       manifestSources: manifest.agentEntrypoints?.root ?? [],
     });
-    await refreshRulesIndex(metaprojectRoot, manifest, result.sources, true);
+    await refreshRoutingEntrypoints(metaprojectRoot, manifest, result.sources, true);
     await persistManifestEntrypoints(manifestPath, manifest, result.sources);
 
     console.log(`# rules distill`);
@@ -84,7 +82,12 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   await writeTextIfChanged(path.join(metaprojectRoot, "rules", "README.md"), renderProjectRulesReadme());
 
   await persistManifestEntrypoints(manifestPath, manifest, ruleSources);
-  await refreshRulesIndex(metaprojectRoot, manifest, ruleSources, await hasDistilledEntrypoints(metaprojectRoot));
+  await refreshRoutingEntrypoints(
+    metaprojectRoot,
+    manifest,
+    ruleSources,
+    await hasDistilledEntrypoints(metaprojectRoot),
+  );
 
   console.log(`# rules sync`);
   console.log("");
@@ -138,27 +141,25 @@ async function persistManifestEntrypoints(
   await writeJsonIfChanged(manifestPath, manifest);
 }
 
-async function refreshRulesIndex(
+async function refreshRoutingEntrypoints(
   metaprojectRoot: string,
   manifest: MetaprojectManifest,
   ruleSources: string[],
   hasDistilled: boolean,
 ): Promise<void> {
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, "index.md"),
-    renderIndexMarkdown({
-      enableGdgraph: moduleEnabled(manifest, "gdgraph"),
-      enableGdctx: moduleEnabled(manifest, "gdctx"),
-      enableGdwiki: moduleEnabled(manifest, "gdwiki"),
-      enableGdskills: moduleEnabled(manifest, "gdskills"),
-      enableHealth: moduleEnabled(manifest, "health"),
-      enableTesting: moduleEnabled(manifest, "testing"),
-      enableMemory: moduleEnabled(manifest, "memory"),
-      enableTasks: moduleEnabled(manifest, "tasks"),
-      ruleSources,
-      hasDistilledEntrypoints: hasDistilled,
-    }),
-  );
+  await writeRoutingEntrypointPair(metaprojectRoot, {
+    enableGdgraph: moduleEnabled(manifest, "gdgraph"),
+    enableGdctx: moduleEnabled(manifest, "gdctx"),
+    enableGdwiki: moduleEnabled(manifest, "gdwiki"),
+    enableGdskills: moduleEnabled(manifest, "gdskills"),
+    enableHealth: moduleEnabled(manifest, "health"),
+    enableTesting: moduleEnabled(manifest, "testing"),
+    enableMemory: moduleEnabled(manifest, "memory"),
+    enableTasks: moduleEnabled(manifest, "tasks"),
+    enableSecurity: moduleEnabled(manifest, "security"),
+    ruleSources,
+    hasDistilledEntrypoints: hasDistilled,
+  });
 }
 
 function printHelp(): void {

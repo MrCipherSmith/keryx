@@ -1,0 +1,44 @@
+{
+  "source_ref": "origin/results/keryx-context-measurement:docs/requirements/keryx-context-measurement/data/keryx-2026-09-05-results.jsonl",
+  "branch_sha": "27d04fb6c1843e2056f1eed3d186b10d34666ba3",
+  "pairs": 13,
+  "contextTokens": {
+    "on": 1272685,
+    "off": 960592
+  },
+  "costUsd": {
+    "on": 1.001889,
+    "off": 0.949008
+  },
+  "toolCalls": {
+    "on": 21.076923,
+    "off": 22.615385
+  },
+  "stepsToFirstGold": {
+    "on": 5.076923,
+    "off": 3.846154
+  },
+  "recall": {
+    "on": 0.803114,
+    "off": 0.828755
+  },
+  "precision": {
+    "on": 0.423124,
+    "off": 0.448332
+  },
+  "f1": {
+    "on": 0.532894,
+    "off": 0.562831
+  },
+  "recall_wins": 0,
+  "recall_ties": 12,
+  "token_increase_pct": 32.489644,
+  "wiki_page_counts": [
+    41,
+    42,
+    48,
+    49,
+    51
+  ],
+  "off_graph_at_end": 0
+}

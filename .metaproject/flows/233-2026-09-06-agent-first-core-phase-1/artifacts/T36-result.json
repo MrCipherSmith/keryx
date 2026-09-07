@@ -1,0 +1,137 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T36",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Replaced pre-walk byte-span accountability with canonical structural equivalence decided after the structural walk, and replaced the digit-bounded character-reference decoder with one matching the grammar a renderer applies. All five hidden-byte shapes, the false rejection and all nine residual auto-fetch vectors are closed at the validator, the persistence materializer and the MCP transport, with regressions that fail before and pass after.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string.",
+      "status": "met",
+      "evidence": "Required suite 249 pass / 3 skip / 0 fail (raw 2026-09-06T13-47-15-029Z_run.log), including src/mcp/structural-redaction.test.ts. T24-stage1-probe: secretPropertyName.leaked false, mcpBoundary.secretPropertyNameLeaks false, optionalUndefined non-json-value (raw 2026-09-06T13-48-02-187Z_run.log). Validator probe after: passwordKeyNumericValue format-unsafe / sensitive-numeric-field; the serialized path no longer restores hidden bytes (persistence.escapedDuplicate leakedEscapedBytes true->false, persistence.credentialDuplicate leakedCredential true->false in T36-after-boundary.json)."
+    },
+    {
+      "criterion": "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+      "status": "met",
+      "evidence": "Validator probe f004 after: 33/33 cases correct; nine vectors move flagged false->true with hostStillPresent true->false (zeroPadded8, zeroPadded10, hexZeroPadded7, tabInsideSchemeEntity, literalTabInsideScheme, newlineInsideScheme, leadingSpace, leadingNewline, leadingTabEntity). Controls unchanged: ordinaryPublicLink, bareUrl, relativeImage, dataUriImage, srcsetProtocolLess all unflagged. Transport: mcp.paddedEntityImage and mcp.leadingSpaceImage move from state none / leaksHost true to state redacted / leaksHost false; mcp.publicLink unchanged (T36-after-boundary.json)."
+    },
+    {
+      "criterion": "Every shape named in the recheck is closed by a regression that fails before and passes after; the public-docs-URL-beside-an-email payload is accepted as redacted; no previously passing case regresses.",
+      "status": "met",
+      "evidence": "New regressions were RED first: 21 pass / 6 fail (raw 2026-09-06T13-45-26-967Z_run.log), then 27 pass / 0 fail / 163 assertions (raw 2026-09-06T13-46-57-688Z_run.log). Covered: JSON-escaped duplicate and its fully escaped variant, duplicate members surviving as empty string / null / false, zero-padded decimal and hexadecimal character references, tab/newline/CR inside the scheme, leading whitespace and an encoded tab before the URL, and the urlThenEmail payload asserted byte-identical to the same value validated as a parsed object. Repository sweep rejections 5 -> 0 over 401 real JSON files. No previously passing case regresses; one committed test's expected verdict changed by design (see concerns)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Spec written before coding: why span accountability is structurally wrong, the canonical-equivalence decision rule, the renderer-grammar decoder, and the regression table.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect root cause, fix and before/after evidence with raw log paths; verification table; concerns; routing audit.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-after-compare.txt",
+      "kind": "report",
+      "exists": true,
+      "summary": "Field-by-field before/after comparison of the three recheck probes.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-validator.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck validator probe, before the change.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-validator.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck validator probe, after the change.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-f002-class.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck F-002 class probe, before the change: 5 hidden-byte shapes open, 5 rejections over 401 repository JSON files.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-f002-class.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck F-002 class probe, after the change: 0 hidden-byte shapes, 0 rejections over 401 repository JSON files.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-boundary.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck boundary probe, before the change: persistence and seam leaks plus one false rejection.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-boundary.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recheck boundary probe, after the change: no leaks, no false rejections, F-001/F-003 verdicts unchanged.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/output-validation.ts",
+      "change": "Removed reachableScalarText and parsedValueAccountsForBytes; added withoutInsignificantWhitespace / bytesAreCanonicalFor and the constant reason serialized-content-normalized; rewrote validateSerializedContentForTransport to decide byte preservation after the structural walk by canonical structural equivalence. serialized-content-mismatch retired."
+    },
+    {
+      "path": "src/security/output-validation.test.ts",
+      "change": "Rewrote the duplicate-member regression to the new contract and added five regressions: JSON-escaped duplicates, contextual-key duplicates with empty/null/false survivors, serialized-versus-parsed parity for the false-rejection payload, byte preservation for compact and pretty-printed JSON, and structures that must still fail closed."
+    },
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "CHARACTER_REFERENCE now allows unbounded decimal and hexadecimal digit runs with the bound moved onto the code point (MAX_CODE_POINT); added renderableUrl (tab/LF/CR removal plus stripC0OrSpace) and applied it in considerUrl, keeping start/end on the raw span."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Added three regressions: zero-padded decimal and hexadecimal character references, whitespace and control characters inside or before the URL, and benign controls that must stay unflagged under the new decoder."
+    },
+    {
+      "path": "src/mcp/redact-seam.ts",
+      "change": "Comment only: it described the retired accountability gate. No code change; the seam already reaches the adapter through the ../security/service facade as src/mcp/boundary.test.ts (M-3) requires."
+    },
+    {
+      "path": "src/security/service.ts",
+      "change": "Comment only, inside the validateSerializedOutput helper region."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 8,
+    "tests_passing": 27,
+    "tests_failing": 0,
+    "required_suite_pass": 249,
+    "required_suite_fail": 0,
+    "required_suite_skip": 3,
+    "red_phase_failures": 6,
+    "repo_json_rejections_before": 5,
+    "repo_json_rejections_after": 0,
+    "f004_vectors_closed": 9,
+    "hidden_byte_shapes_closed": 5
+  },
+  "timestamp_utc": "2026-09-06T13:52:00Z"
+}

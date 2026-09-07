@@ -522,7 +522,6 @@ export class ProposalLifecycleService {
 }
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
-function eventHash(value: Transition): string { return hash(JSON.stringify(value)); }
 function recordHash(value: LedgerRecord): string { return hash(JSON.stringify(value)); }
 
 /**

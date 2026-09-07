@@ -95,7 +95,7 @@ function scriptedTextProvider(replies: readonly string[]): ProviderPort {
         for (const piece of reply.match(/[\s\S]{1,12}/g) ?? []) {
           yield { sequence: sequence++, attemptId: opts.attemptId, kind: "text_delta", text: piece };
         }
-        yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end" };
+        yield { sequence, attemptId: opts.attemptId, kind: "model_end" };
       })();
     },
   };

@@ -1,0 +1,125 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T19",
+  "status": "DONE",
+  "summary": "Implemented the pure structural output validator and deterministic contextual detector corrections. JSON-compatible values retain shape and scalar types; provider-pattern and sensitive-field string credentials are masked; safe numeric IDs and metrics remain unchanged; numeric credential fields, unsupported schema constructs, schema-incompatible masks and non-JSON values return a constant leak-safe format-unsafe result. Sensitive URL query/path values and auto-fetch image surfaces are neutralized while ordinary public Markdown links remain content. The 22-case focused suite, 14-case root integration boundary, targeted ESLint and project TypeScript check pass.",
+  "summary_markdown": "T19 is GREEN. `validateOutputForTransport` now provides the stable pure boundary for root guard/MCP wiring, with explicit JSON/text formats and typed redaction metadata. Focused verification: 22 core tests and 14 root integration boundary tests passed, targeted ESLint passed, and `bun run typecheck` passed. No global tests, network, model, dependency, git, or flow-state mutation occurred.",
+  "acceptance": [
+    {
+      "criterion": "Safe metrics and IDs retain values and types; provider-pattern secrets always masked despite key name.",
+      "status": "met",
+      "evidence": "Pure JSON tests preserve finite numeric metrics, numeric and string IDs, decimals and booleans while masking provider-pattern credentials under id/metric keys. Generic strings under explicit credential keys are masked and numeric credential fields fail closed."
+    },
+    {
+      "criterion": "Sensitive URL query/path values masked; ordinary public markdown link creates no exfil finding, autofetch/injection defenses remain.",
+      "status": "met",
+      "evidence": "New deterministic URL query/path rules mask only credential value spans. Public inline/reference links are not exfil operations; Markdown images, reference images and HTML images remain redactable, sensitive inline-link locators remain findings, and existing send-operation/SSRF tests pass."
+    },
+    {
+      "criterion": "Pure transport validator preserves JSON shape and reports metadata; unsafe numeric/schema representations return constant format-unsafe without secret or hash.",
+      "status": "met",
+      "evidence": "The discriminated result preserves safe values and JSON serialization, keeps text unquoted and JSON string scalars quoted, emits sorted leak-safe policy reasons, screens the supported schema subset, and returns only the constant failure text plus reason tokens for unsafe cases."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-production contract for the pure validator, schema subset, contextual detection and bounded verification.",
+      "hash": "8bfe8e1ce3530ef5b4ea5b6825d1f417637e5930872a2d44aa3edd2e645a2751"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Stable exports, behavior, file hashes, RED/GREEN evidence, verification and routing audit.",
+      "hash": "4dff0b2483919a101ebdae04b5f606dd5374710864559572254fa513636175de"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pure structural transport validator and schema-subset fail-closed boundary.",
+      "hash": "c6ec113558cb19c3ddef660554630801751febb60139ee370bb95238657c9e50"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Seven pure boundary tests for preservation, redaction, format safety, schemas and auto-fetch content.",
+      "hash": "9ee097770d05b6d9131489990435cc9f5f0a6af6de2b29a7e4cedffea5d37f10"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-20-20-779Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Initial RED evidence: missing pure module produced 0 pass and 2 fail.",
+      "hash": "d6035d568b98d7a836a5f758572879633816e5b4a27cda1d6c8bb2884b615d59"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-30-169Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Refinement RED evidence: contextual credential regression produced 6 pass and 1 fail.",
+      "hash": "12a14960db029dbf642cc1df7300e0ce17a4c8431d98a6c0e3032adffa055e1e"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-57-041Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Final focused GREEN evidence: 22 pass, 0 fail, 92 assertions.",
+      "hash": "ba4ac6090784bd84a137974916d2f07d903a5563718e011bb5f4f4edf93b1fa9"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-31-45-015Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Root integration boundary: 14 pass, 0 fail after guard/MCP adoption of the pure helper.",
+      "hash": "1ddd20a3fa0f76a595692fcff7646d61594717cd2f17461808c0b0ef83d83db7"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-06-710Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Project TypeScript check passed.",
+      "hash": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    }
+  ],
+  "changed_files": [
+    { "path": "src/security/output-validation.ts", "change": "created pure structural output validator, public result types and supported-schema screening" },
+    { "path": "src/security/output-validation.test.ts", "change": "created pure transport boundary and fail-closed regression tests" },
+    { "path": "src/security/structural-detection.test.ts", "change": "converted T7 core cases to the pure seam and retained detector/egress controls" },
+    { "path": "src/security/redact.ts", "change": "extended the mandatory deterministic text floor to redact auto-fetch exfil spans" },
+    { "path": "src/security/detect/secrets.ts", "change": "added contextual sensitive URL query and path value rules" },
+    { "path": "src/security/detect/exfil.ts", "change": "distinguished ordinary inline/reference links from auto-fetch and sensitive-link surfaces" },
+    { "path": "fixtures/exfil/cases.json", "change": "updated the synthetic reference-link control to the accepted public-link policy" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md", "change": "created the pre-code implementation specification" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md", "change": "created the implementation and verification report" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-result.json", "change": "created the schema-conformant task result" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "initial_red_tests_passed": 0,
+    "initial_red_tests_failed": 2,
+    "refinement_red_tests_passed": 6,
+    "refinement_red_tests_failed": 1,
+    "focused_tests_passed": 22,
+    "focused_tests_failed": 0,
+    "integration_boundary_tests_passed": 14,
+    "integration_boundary_tests_failed": 0,
+    "targeted_lint_exit_code": 0,
+    "typecheck_exit_code": 0,
+    "external_model_calls": 0,
+    "network_calls": 0,
+    "commits_created": 0
+  },
+  "timestamp_utc": "2026-09-06T12:29:43Z"
+}

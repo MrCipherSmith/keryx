@@ -14,7 +14,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { serveCommand } from "./serve";
-import { DEFAULT_SERVE_PROFILE, loadServeConfig, serveConfigPath } from "../lib/serve-config";
+import { loadServeConfig, serveConfigPath } from "../lib/serve-config";
 import { loadServeCredential, serveCredentialPath, verifyServeToken } from "../lib/serve-credential";
 
 let xdgRoot = "";

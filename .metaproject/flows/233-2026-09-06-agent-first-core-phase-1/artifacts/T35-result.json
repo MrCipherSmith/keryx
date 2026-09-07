@@ -1,0 +1,267 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T35",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of the T33 gate-path repair and the T34 coverage fixes. All seven reported defects reproduce as CLOSED under probes written fresh for this review (30 read-time gate cases including three filesystem-level unreadability shapes and two prototype-pollution payloads; symlink-first, hard-link, mutual-cycle and self-link coverage fixtures; non-recursive scans across three shapes end to end). Both consumer-facing claims are CONFIRMED by execution rather than accepted: src/flow/service.ts:672 blocks only on `fail` (null, pass, skipped and a throwing gate all leave passed:true, driven through the real complete() pipeline), and the pass-to-incomplete fold in runScanPath survived, with runGate reading `incomplete` on the same workspace afterwards. Stage 1 nevertheless does NOT pass: F-001 is an undisclosed defect of the SAME class T33 repaired, in the sibling reader of the same file -- `.metaproject/metaproject.json` containing `null` makes isSecurityEnabled throw, securityFlowGate throws despite its documented contract, and flow/service.ts records the gate as `skipped`, so flow completion passes with the security gate silently removed. Stage 2 (code quality) was therefore not started. Judgement calls: (1) the stored-pass-over-incomplete-coverage verdict change is ACCEPTED, with the caveat that it is a self-consistency check and not a tamper control, and is incomplete until runReport shares it; (2) the narrow gate validation argument HOLDS and both halves were tested -- a twelve-byte {\"gate\":\"pass\"} passes, so strictness buys nothing, while full-schema rejection would relabel {\"gate\":\"fail\"} and {\"gate\":\"needs-approval\"} as incomplete; (3) T37 MUST close before phase acceptance, because the residual's stated §14 mitigation does not exist -- with state.json recording mode \"ci\", the outcome is byte-identical to a fresh workspace. The mock.module restoration technique is SOUND and the eager snapshot is load-bearing: restoring from a live namespace reproduces the leak, restoring from the snapshot does not, and both test orderings are green.",
+  "summary_markdown": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+      "status": "met",
+      "evidence": "T35-probe-scan.ts B1-B8 (raw .metaproject/data/gdctx/raw/2026-09-06T14-15-56-305Z_run.log): nested traversal completes with no EISDIR; a mutual x<->y symlink cycle plus a self-link to the scan root terminates in 2ms with four rows and no duplicates; a chmod-000 entry yields `failed: unreadable or denied entry` with coverage incomplete; B8 shows gate `fail` with findings:1 AND coverage `incomplete` at the same time, one row per encountered entry. B5 confirms an external symlink is refused without exposing the outside path."
+    },
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS; strict guards and the strict flow gate refuse incomplete evidence; advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+      "status": "partial",
+      "evidence": "Met on the repaired surface: 30/30 gate cases in T35-probe-gate.ts resolve without a false pass, and T35-probe-flowfold.ts C2 shows the real securityFlowGate blocking flow completion for stored needs-approval, fail and missing evidence in both ci and enforced while advisory stays informational. NOT met on two surfaces this recheck reached: F-001 (a `null` metaproject.json removes the security gate from flow completion entirely, raw 2026-09-06T14-18-21-503Z_run.log) and F-002 (`keryx security scan`/`security report` exit 0 on a needs-approval verdict in ci mode, raw 2026-09-06T14-23-05-816Z_run.log), against policies.md:28's `strict CI accepts only PASS`."
+    },
+    {
+      "criterion": "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; per-file coverage reports what actually happened to each encountered entry and exposes no closed name; findings survive independently of coverage; reasons and details are constant and leak-safe.",
+      "status": "partial",
+      "evidence": "FAIL/INCOMPLETE fold, per-file coverage and finding survival are met (probe A cases A1-A30, probe B B1-B8; findings retained alongside incomplete coverage in B8). Reasons and details are constant and leak-safe on the repaired paths: across 30 gate cases, 3 posture-unavailable modes and 8 flow-gate cases no reason contains the workspace root, the error text, `JSON`, `ENOENT` or the planted key. `Strict CI accepts only PASS` is NOT met at the CLI (F-002). Leak-safety is NOT met one frame up, at src/flow/service.ts:663, which interpolates raw error text into a persisted gate detail (F-005, info: no reachable trigger once F-001 is fixed)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full review: scope, file hashes, Stage 1 table with one row per defect (1)-(7) plus the two consumer claims, findings, judgement calls, confirmed clean areas, evidence digests, routing audit."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-result.json",
+      "kind": "final-report",
+      "exists": false,
+      "summary": "This file."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-gate.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "30 read-time gate cases attacking hasRecognizedGate, the exhaustive switch and the coverage fold."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-scan.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Per-file coverage rows under symlink-first, hard-link, mutual-cycle, symlinked-directory and external-escape fixtures, plus non-recursive scans end to end."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-flowfold.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The consumer claim, driven through the real createFlowService().complete() pipeline: 6 injected statuses and 8 real securityFlowGate workspaces."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-residual.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The disclosed residual with and without prior state, the posture-unavailable branches in all three modes, and the F-001 sibling-reader trigger."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`keryx security report` exit codes over 7 stored artifacts."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli2.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`exitCodeFor` over a real needs-approval decision in ci, enforced and advisory."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-mock.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The mock.module restoration technique, including a positive reproduction of the live-namespace leak it avoids."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T35#F-001",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "blocker",
+      "file": "src/security/guard.ts",
+      "line": 104,
+      "symbol": "isSecurityEnabled",
+      "problem": "isSecurityEnabled dereferences the result of readJsonFileOr without an object guard: `.metaproject/metaproject.json` containing the four bytes `null` parses successfully, is returned as-is, and `manifest.modules` throws TypeError. securityFlowGate awaits isSecurityEnabled outside its try, so it throws despite its documented 'Never throws' contract; src/flow/service.ts:663-669 catches that and records the gate as `skipped`, which :672 `gates.every(g => g.status !== \"fail\")` treats as non-blocking. This is the same shape T30 F-001 reported for security.config.json, in the same file, in the sibling reader T33 did not repair. The correct guard already exists two modules away (config.ts:192 isMergeableConfigPayload) and at src/gdgraph/symbols-capability.ts:24.",
+      "impact": "The flow-completion security gate is removed silently -- the exact AC8 failure the phase exists to close. Secondarily, guardOutput throws on the same trigger (also contrary to its documented contract), so every write seam that calls it (memory, wiki, testing, gdskills, metrics, sac, workspace, harness) raises an unhandled TypeError; that half fails closed, the flow-gate half fails open.",
+      "suggested_fix": "In guard.ts, read the manifest as `unknown` and require a non-null, non-array object before reaching `.modules`, and require `.modules` itself to be a non-null object; return false (module disabled) otherwise, which is the pre-existing semantics for a missing manifest and so changes nothing for any workspace whose manifest reads. Pair with F-005 so a future throw cannot fail open again.",
+      "evidence": "T35-probe-residual.ts section D3, raw .metaproject/data/gdctx/raw/2026-09-06T14-18-21-503Z_run.log lines 44-78: isSecurityEnabledThrew / guardOutputThrew / securityFlowGateThrew all equal \"null is not an object (evaluating '(await readJsonFileOr(manifestPath, {})).modules')\"; the real createFlowService().complete() pipeline then returns passed:true with {name:\"security\", status:\"skipped\", detail:\"security unavailable: null is not an object (...)\"}. Non-null non-object manifests ([], 42, \"enabled\", true) do NOT throw and return enabled:false, which bounds the trigger to the JSON literal null.",
+      "confidence": "high",
+      "dedupe_key": "security-guard-manifest-null-dereference-failopen",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/guard.ts:104",
+          "src/testing/capability.ts:26",
+          "src/capability/seam.ts:70",
+          "src/mcp/discovery.ts:123",
+          "src/gdskills/project-skills.ts:664",
+          "src/gdskills/project-skills.ts:681",
+          "src/gdskills/export.ts:199",
+          "src/gdskills/export-plugin.ts:189",
+          "src/commands/ctx.ts:131"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"readJsonFileOr\" src --glob '!*.test.ts' (raw 2026-09-06T14-18-44-363Z_rg.log) intersected with keryx ctx rg -n \"manifest\\.modules\" src --glob '!*.test.ts' (raw 2026-09-06T14-18-56-684Z_rg.log): 9 call sites read a metaproject.json-shaped payload through readJsonFileOr and dereference it without an object guard; src/gdgraph/symbols-capability.ts:24 and src/capability/wiring.ts:107 are the two that do guard, which establishes the shape. Only guard.ts:104 has a consumer that converts the throw into a non-blocking gate; the other eight crash their caller (fail-closed) and are listed as the class, not as blockers."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T35#F-002",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "major",
+      "file": "src/commands/security.ts",
+      "line": 800,
+      "symbol": "exitCodeFor",
+      "problem": "The two CLI folds that turn a security gate into an exit code are two-value denylists rather than an allowlist over `pass`. exitCodeFor refuses only fail/incomplete in `ci` mode (enforced additionally refuses needs-approval), and handleReport:559 refuses only fail/incomplete and only when the stored report's mode is `ci`. policies.md:28 states that strict CI accepts only PASS, and the two folds T33 just made exhaustive agree with it: guardOutput refuses fail/needs-approval/incomplete in BOTH enforced and ci (guard.ts:190-196) and securityFlowGate maps needs-approval to fail in both. The same stored value is therefore refused at the write seam and at flow completion and accepted at the CLI, and `ci` is more permissive than `enforced` at the CLI, which inverts the intended ordering. runGate is not exposed as a CLI command at all, so these exit codes are the CLI gate.",
+      "impact": "A CI job whose security gate is `keryx security scan` or `keryx security report` exits 0 on a needs-approval verdict -- the value that exists specifically to stop an unattended write pending a human -- so an approval-requiring finding ships without the approval. Directly contradicts AC8 and the policies.md fold.",
+      "suggested_fix": "Make both folds allowlists over the one acceptable value: in exitCodeFor, `if (mode === \"ci\" || mode === \"enforced\") return decision.gate === \"pass\" ? 0 : 1;`, and in handleReport, `process.exitCode = mode === \"ci\" && report.gate !== \"pass\" ? 1 : 0;` (taking report.gate through the same read-time consistency check runGate applies, per F-004).",
+      "evidence": "T35-probe-cli2.ts, raw .metaproject/data/gdctx/raw/2026-09-06T14-23-05-816Z_run.log: with policies.promptInjection.minConfidence lowered to 0.1 (the mechanism documented at security.ts:790-796), `keryx security scan corpus/note.md --json` yields gate needs-approval with exit 0 in ci mode and exit 1 in enforced mode, and `keryx security report --json` exits 0 in every mode. T35-probe-cli.ts case E4, raw 2026-09-06T14-19-26-982Z_run.log: ci mode, stored latest.json gate needs-approval, `security report --json` exit 0 while runGate returns needs-approval.",
+      "confidence": "high",
+      "dedupe_key": "security-cli-exitcode-denylist-accepts-needs-approval",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/commands/security.ts:800",
+          "src/commands/security.ts:803",
+          "src/commands/security.ts:559"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"process.exitCode\" src/commands/security.ts (16 sites, raw 2026-09-06T14-22-16-448Z_rg.log) then keryx ctx rg -n \"exitCode = .*gate|gate === \\\"fail\\\"|gate !== \\\"pass\\\"|decision.gate ===\" src/commands/security.ts (raw 2026-09-06T14-22-22-784Z_rg.log): exactly 3 of the 16 fold a security gate value into an exit code and all 3 are listed. security.ts:719 folds an eval-suite gate, not a security gate, and is out of the class. exitCodeFor is reached from :250 (handleScan) and :513 (applyRuntimeDecision, both check paths)."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T35#F-003",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "major",
+      "file": "src/security/config.ts",
+      "line": 200,
+      "symbol": "loadSecurityConfig",
+      "problem": "The disclosed residual, with its stated mitigation refuted. A security.config.json that parses but is not an object now takes mergeSecurityConfig({}), whose mode is `advisory`, so an enforced/ci workspace silently becomes report-only: the planted secret is still detected (decision.gate `fail`, one finding) and the write is still allowed, and securityFlowGate returns an informational `pass` so flow completion is not blocked. The T33 report states that §14 self-protection catches this as a mode downgrade in any workspace that has run before; it does not. evaluateSelfProtection pushes a mode-downgrade warning and an incident but never a finding, analyze folds only findings into the gate, and guardOutput discards warnings entirely -- so the downgrade changes no outcome at any decision point, with or without prior state.",
+      "impact": "Four bytes convert an enforced workspace into an advisory one with no refusal, no blocking gate and no operator-visible signal on the guarded path. This is the same outcome T30 F-001 described; only the mechanism moved from a throw to a permissive default. Under AC8, a config that cannot be read is incomplete evidence about the workspace's own posture -- guard.ts:151-155 argues exactly that for the throwing case and refuses, while the non-throwing case reaches the opposite conclusion from the same premise.",
+      "suggested_fix": "In loadSecurityConfig, distinguish an ABSENT config (keep today's defaults/advisory behaviour exactly) from a PRESENT-but-unusable one: when pathExists is true and isMergeableConfigPayload(parsed) is false, return the defaults with mode forced to \"enforced\" plus an additive `configUnreadable: true`, and have guardOutput:156-163 and securityFlowGate:269-277 treat that flag through their existing posture-unavailable branches so the refusal carries the existing constant POSTURE_UNAVAILABLE_REASON. Keeps loadSecurityConfig total (T33's invariant), reuses T33's leak-safe constants, and changes nothing for a workspace with no config file or a readable one. The malformed-JSON (non-parsing) fallback should move with it; splitting them leaves the cheaper corruption open.",
+      "evidence": "T35-probe-residual.ts section D1, raw .metaproject/data/gdctx/raw/2026-09-06T14-18-21-503Z_run.log lines 4-42, run twice -- once in a fresh workspace and once in a workspace with .metaproject/data/security/raw/state.json recording mode \"ci\". Both rows are identical: guardAllowed true, decisionGate \"fail\", findingCount 1, flowGateStatus \"pass\", detail \"security advisory: informational (advisory does not block)\", flowGateBlocksCompletion false. Prior state changes nothing.",
+      "confidence": "high",
+      "dedupe_key": "security-config-nonobject-downgrades-mode-to-advisory",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/config.ts:200",
+          "src/security/guard.ts:183",
+          "src/security/guard.ts:279"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"loadSecurityConfig\" src --glob '!*.test.ts' and keryx ctx rg -n \"readJsonFileOr\" src/security: security.config.json has exactly one reader (config.ts:200), and the resulting `mode` has exactly two blocking consumers, both isBlockingMode call sites in guard.ts; both are listed."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T35#F-004",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "minor",
+      "file": "src/security/service.ts",
+      "line": 286,
+      "symbol": "runGate",
+      "problem": "The read-time coverage consistency fold added by T33 is neither shared nor exhaustive. (a) It is an equality against the single literal \"incomplete\", so coverage {status: \"partial\"} and a coverage value that is the string \"incomplete\" both read as covered -- while the gate switch two lines above was deliberately made exhaustive with the default arm on the blocking side for exactly this reason. (b) runReport shares readLatestReport but not the fold, so one artifact is `incomplete` at runGate and `pass` at runReport, and via F-002 exits 0 in strict CI.",
+      "impact": "keryx security report and the flow gate give opposite answers about the same artifact. Kept at minor rather than higher because this fold is not a tamper control: probe A20 shows a forger writes {\"gate\":\"pass\"} with no coverage key and passes by design, so its value is catching a legitimate artifact that has become inconsistent, not an adversary.",
+      "suggested_fix": "Extract one helper used by both runGate and runReport: a present `coverage` whose status is anything other than \"complete\" -- including a coverage value that is not an object -- reads as incomplete, with the existing INCOMPLETE_COVERAGE_REASON constant.",
+      "evidence": "T35-probe-gate.ts, raw .metaproject/data/gdctx/raw/2026-09-06T14-14-13-134Z_run.log lines 208-262: A21 (coverage.status \"incomplete\") runGate incomplete but runReport pass; A22 (\"partial\") runGate pass; A23 (coverage is the string \"incomplete\") runGate pass; A24 (coverage null) and A25 (\"complete\") pass, correctly. T35-probe-cli.ts case E7, raw 2026-09-06T14-19-26-982Z_run.log: the CLI prints gate pass and exits 0 for the artifact runGate calls incomplete.",
+      "confidence": "high",
+      "dedupe_key": "security-gate-coverage-fold-not-shared-not-exhaustive",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "T35#F-005",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "info",
+      "file": "src/flow/service.ts",
+      "line": 663,
+      "symbol": "complete (Gate 6 catch arm)",
+      "problem": "Two things at one site. (a) A gate whose implementation throws is recorded as `skipped`, which :672 treats as non-blocking, so an unexpected error in a gate is indistinguishable from a pass; the review gate at :631 gets this right (`status: \"fail\"`, 'A gate that cannot run has not passed') and the security and health arms do not. (b) The detail interpolates error.message verbatim into a string persisted into flow state and into buildIssueComment, against policies.md's requirement that reasons and details stay constant and leak-safe -- the property guard.ts is scrupulous about one frame down.",
+      "impact": "Info rather than higher because with F-001 fixed securityFlowGate is total (pathExists and readJsonFileOr swallow every filesystem fault, resolveProjectRoot uses existsSync), so no remaining trigger can be named. Today it is the mechanism that converts F-001 into a silent pass, and the leak is observable.",
+      "suggested_fix": "Make the security and health catch arms `status: \"fail\"` with a constant detail, matching the review arm, and keep the error text out of the persisted string.",
+      "evidence": "T35-probe-flowfold.ts C1, raw .metaproject/data/gdctx/raw/2026-09-06T14-16-56-663Z_run.log: an injected gate that throws yields {name:\"security\", status:\"skipped\", detail:\"security unavailable: T35-THROW-SENTINEL\"} with passed:true and leaksSentinel:true. T35-probe-residual.ts D3, raw 2026-09-06T14-18-21-503Z_run.log: the internal TypeError text lands in the persisted gate row.",
+      "confidence": "high",
+      "dedupe_key": "flow-gate-catch-arm-skipped-and-leaky",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-006",
+      "global_id": "T35#F-006",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "info",
+      "file": "src/security/guard.ts",
+      "line": 1,
+      "symbol": "module header",
+      "problem": "The file header states the module's '#1 rule': advisory mode ONLY reports, it never blocks. The T33 mode-load catch at :156-163 returns allowed:false before isBlockingMode(mode) is consulted, so an advisory workspace whose config read fails is now refused. The behaviour is correct -- the posture is unknown and the inline comment at :151-155 argues the case -- but the header asserts an invariant the code no longer holds unconditionally.",
+      "impact": "Documentation only, and unreachable today because loadSecurityConfig is total. Recorded so a later reader does not resolve the contradiction in the wrong direction.",
+      "suggested_fix": "Amend the header to say advisory never blocks on a KNOWN posture, and name the posture-unknown exception.",
+      "evidence": "T35-probe-mock.ts F1, raw .metaproject/data/gdctx/raw/2026-09-06T14-20-55-210Z_run.log: with the config loader broken, the advisory workspace returns allowed:false with reason \"security posture unavailable: check could not complete\".",
+      "confidence": "high",
+      "dedupe_key": "guard-header-advisory-never-blocks-stale",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "T35#F-007",
+      "reviewer": "review-security-code+review-logic (T35 independent recheck)",
+      "severity": "info",
+      "file": "src/security/path-scan.ts",
+      "line": 241,
+      "symbol": "scanContainedPath (visit, scanned branch)",
+      "problem": "Because rows now key on displayPath (the T34 repair), a symlink walked before its target carries the `scanned` row and the finding's path, while the real file's row reads `skipped: canonical identity already visited`. This is the intended direction of the fix and is truthful -- the reason states why -- but an operator grepping the report for the real path sees `skipped` for a file whose content was scanned.",
+      "impact": "None on the gate: content is scanned exactly once, every encountered entry has a row, no duplicate or contradictory rows appear, and no path outside the owner root is exposed. Recorded so the next round does not rediscover the attribution as a defect.",
+      "suggested_fix": "None required. If the report shape grows, an optional canonicalOf field on a duplicate-skip row would close the loop without changing the key.",
+      "evidence": "T35-probe-scan.ts B1, raw .metaproject/data/gdctx/raw/2026-09-06T14-15-56-305Z_run.log lines 41-55: with the symlink sorted before its target, rows are corpus/a-link.env=scanned and corpus/z-real/creds.env=skipped (canonical identity already visited), zero duplicate paths, contents row matching the scanned row.",
+      "confidence": "high",
+      "dedupe_key": "path-scan-symlink-first-attribution",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should F-002 (the CLI exit-code denylist accepting needs-approval in ci mode) be repaired inside this phase, or filed against the CLI surface separately?",
+      "why": "It is pre-existing rather than introduced by T33/T34, so it is outside the two repairs under review -- but it is the phase's own AC8/policies.md criterion, on the only surface a CI job invokes, and T33 is what made the divergence load-bearing by widening SecurityGateStatus to carry needs-approval. The fix is two one-line changes.",
+      "options": [
+        {
+          "id": "in-phase",
+          "label": "Fix in this phase alongside T37",
+          "recommended": true
+        },
+        {
+          "id": "separate",
+          "label": "File as a follow-up task against the security CLI"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T14:30:00Z"
+}

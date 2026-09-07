@@ -1,0 +1,160 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T71",
+  "dispatch_id": "233-T71-auto-fetch-floor-t66-blockers",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed the two T66 blockers and the major documentation defect on the auto-fetch floor. F-001: hasAttributeValue now compares the character-reference-DECODED attribute value, so the <input type=image> and <meta http-equiv=refresh> gates read what a renderer reads; fixed in the one helper both gates share, which is the class's single choke point. T66-gates gateBypasses 7 -> 0. F-002: the CommonMark description and label grammars were replaced by an unbounded bracket-depth scanner with a first-close fallback that keeps the change a strict superset of the old extraction, so the collapsed (![a][]), shortcut (![a]) and balanced-bracket (![a[b]c](URL)) image forms are now findings while all four LINK spellings stay released. T66-md-oracle bypasses 5 -> 0; T66-boundary hostileLeakingCount 7 -> 0, hostileFullyClosed 17 -> 24. F-003: the policies.md auto-fetch subsection and the module header were corrected in both directions - the markdown entry now names all four image spellings, the gate entries say the value is decoded, three context departures replace the one named, and ASCII case-insensitivity is stated with its measured component-markup carrier. A new T71-doc-parity probe checks the subsection against the detector mechanically: parity true over 33 covered, 23 released and 16 property rows. All eleven prior matrices are byte-identical, the benign corpus count is 16 before and 16 after with the same files and policy ids, and Part B flags the same 7 synthetic shapes. A quadratic bracket scan the first implementation introduced (207869 ms on a 200 KB run of '[') was found by a new perf probe and fixed to 36.6 ms before shipping; the patterns it replaces cost 42106 ms on the same input.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-implementation.md",
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T71-after-gates.log gateBypasses []; T71-after-md-oracle.log bypasses []; T71-after-T42-charrefs.log (240 cases) and T71-after-T53-extract.log (88 cases) byte-identical at 0 bypasses; T71-after-T24-recheck2-boundary.log field-name rows byte-identical; egress.markdown-link-sensitive-value still fires 3x in T71-after-T53-corpus.log; ctlPublicLink and fpPublicLink state=none and byte-identical at all four boundaries in T71-after-boundary.log; the four markdown LINK spellings pinned released in exfil.test.ts and in T71-doc-parity.log."
+    },
+    {
+      "criterion": "All seven attribute spellings and all three markdown forms are findings, verified at the detector and at all four public boundaries, with no attacker host released",
+      "status": "met",
+      "evidence": "T71-after-gates.log gateBypasses [] (7 spellings); T71-after-md-oracle.log bypasses [] (3 forms over 5 rows); T71-after-boundary.log hostileLeakingAtAnyBoundary [], leakingWithStateNone [], hostileFullyClosed 17 -> 24; exfil.test.ts T71_CLASS_VECTORS drives all seven through prepareOutputForPersistence and validateOutputForTransport."
+    },
+    {
+      "criterion": "The normative subsection matches the implementation exactly in both directions after the change",
+      "status": "met",
+      "evidence": "T71-doc-parity.log: coveredRows 33, releasedRows 23, propertyRows 16, docSaysCoveredButReleased [], docSaysReleasedButFlagged [], propertyFailures [], parity true. The same three corrections applied to the module header block at exfil.ts:41-63, T66#F-003's third site."
+    },
+    {
+      "criterion": "Every prior measurement holds: extraction, resolution, 42-case, 48-case, character-reference and surface matrices, and the boundary rows for the canonicalization and persistence repairs",
+      "status": "met",
+      "evidence": "Eleven matrices run before the first edit and after the last, compared programmatically: T42-exfil-attack, T24-recheck2-exfil, T42-charrefs, T53-extract, T53-resolve, T53-base, T53-boundary, T42-boundary, T24-recheck2-boundary, T52-base, T46-surfaces - all BYTE-IDENTICAL (T71-before-*.log vs T71-after-*.log)."
+    },
+    {
+      "criterion": "State the benign corpus count before and after",
+      "status": "met",
+      "evidence": "T53-corpus.ts Part A benignFilesWithFindings 16 before, 16 after; benignFindings 60 before, 60 after; the same 16 files with the same policy ids and no new policy id in benign content. Part B 7 flagged before, 7 after, the same ids. Raw T71-before-T53-corpus.log / T71-after-T53-corpus.log."
+    },
+    {
+      "criterion": "Required suites, typecheck and lint",
+      "status": "met",
+      "evidence": "ctx run of the four focused suites: 97 pass / 0 fail / 865 expect before (raw 2026-09-06T18-04-24-363Z_run.log), 102 pass / 0 fail / 980 expect after (raw 2026-09-06T18-26-03-968Z_run.log), both exit 0. bun run typecheck exit 0. bunx eslint on both changed source files exit 0 with 0 errors; policies.md and the three new probes are outside the lint scope, stated rather than omitted."
+    },
+    {
+      "criterion": "TDD: failing tests written before the implementation",
+      "status": "met",
+      "evidence": "Five new tests written first and run RED against the pre-fix detector (46 pass / 5 fail), GREEN after (51 pass / 0 fail / 682 expect). No existing test modified, weakened or removed: all 46 pre-existing tests pass before and after."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Implementation spec written before any edit: the three defects re-measured on the current file, the fix for each, what must not change, and the verification to run."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect report with the oracle used for each, the before/after wording of the normative subsection, and every count with its raw log path."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-md-oracle.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New probe: 31 markdown cases against `marked` - the four image and four link spellings, the shapes where the two description readings disagree, and nesting depth 1..6. 0 bypasses."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-doc-parity.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New probe: the policies.md covered/released lists and its three how-it-matches statements checked against the DETECTOR, in both directions. parity true."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-perf.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New probe: 8 shapes including adversarial bracket runs. Found the quadratic scan the first implementation introduced and confirmed the fix."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T71-after-gates.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "T66-gates.ts after: gateBypasses [] (was 7)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T71-after-md-oracle.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "T66-md-oracle.ts after: bypasses [] (was 5)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T71-after-boundary.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "T66-boundary.ts after: hostileLeakingCount 0 (was 7), hostileFullyClosed 24 (was 17), benign rows unchanged."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T71-after-T53-corpus.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Benign corpus after: 16 benign files with findings, 60 benign findings, Part B 7 flagged - all identical to before."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T71-doc-parity.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "parity true: 0 doc-says-covered-but-released, 0 doc-says-released-but-flagged, 0 property failures."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-26-03-968Z_run.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "The four required focused suites via ctx run, after: 102 pass / 0 fail / 980 expect, exit 0."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "hasAttributeValue compares the character-reference-decoded value (T66#F-001). The markdown description and label grammars replaced by indexBrackets/descriptionEnds/readBracketConstructs - an unbounded bracket-depth scanner with the old first-close span kept as a fallback, so collapsed, shortcut and balanced-bracket image forms are covered while link forms stay released (T66#F-002). Header comment corrected in both directions: the four image spellings, the released link forms, ASCII case-insensitivity, gate decoding, and the three context departures (T66#F-003). 956 -> 1198 lines; sha256 63edcc57... -> ef029fe3..."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Five new tests, written RED first: the seven gate spellings plus the negatives that must stay released and a mask-offset assertion; every CommonMark image spelling with the click-gated and undefined-label controls; unbounded nesting depth 1..6; and T71_CLASS_VECTORS driven through the persistence materializer and the transport validator. No existing test touched. 1089 -> 1272 lines."
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/policies.md",
+      "change": "The auto-fetch subsection corrected in both directions: covered markdown entry now names the four CommonMark image spellings; a new paragraph states that markdown links are not covered by this floor and that both attribute gates compare the decoded value; the context paragraph now states ASCII case-insensitivity with its component-markup carrier and names all three departures from context blindness instead of one, with <base href> described as a disclosed cost rather than a suppression. Version 0.1.2 -> 0.1.3. 52 -> 56 lines."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 5,
+    "tests_passing": 51,
+    "tests_failing": 0,
+    "focused_suite_pass_before": 97,
+    "focused_suite_pass_after": 102,
+    "focused_suite_fail_after": 0,
+    "gate_bypasses_before": 7,
+    "gate_bypasses_after": 0,
+    "markdown_bypasses_before": 5,
+    "markdown_bypasses_after": 0,
+    "boundary_leaking_before": 7,
+    "boundary_leaking_after": 0,
+    "boundary_fully_closed_before": 17,
+    "boundary_fully_closed_after": 24,
+    "prior_matrices_byte_identical": 11,
+    "benign_corpus_files_with_findings_before": 16,
+    "benign_corpus_files_with_findings_after": 16,
+    "benign_corpus_part_b_flagged_before": 7,
+    "benign_corpus_part_b_flagged_after": 7,
+    "doc_parity_mismatches": 0,
+    "worst_case_scan_ms_first_implementation": 207869,
+    "worst_case_scan_ms_shipped": 37,
+    "worst_case_scan_ms_replaced_patterns": 42106
+  },
+  "timestamp_utc": "2026-09-06T18:30:00Z"
+}

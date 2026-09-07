@@ -777,6 +777,7 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
     try {
       raw = file === "-" ? await Bun.stdin.text() : await Bun.file(file).text();
     } catch (error) {
+      // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
       throw new Error(
         `--catalog ${file} could not be read: ${error instanceof Error ? error.message : String(error)}. ` +
           `Pass a readable file containing \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns — or \`--catalog -\` to read it from stdin.`,
@@ -786,6 +787,7 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch (error) {
+      // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
       throw new Error(
         `--catalog ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}. ` +
           `Expected \`[{"name": "<provider>", "models": ["<id>", …]}]\` — the shape \`detectProviders()\` returns.`,
@@ -1352,6 +1354,7 @@ async function readRefuted(source: string | undefined): Promise<ReviewFindingsSo
   try {
     return JSON.parse(raw) as ReviewFindingsSource;
   } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(
       `--refuted ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was recorded.`,
     );
@@ -1374,6 +1377,7 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
@@ -1451,6 +1455,7 @@ async function readCrossFamilyReview(source: string | undefined): Promise<CrossF
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(
       `--cross-family-review ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Pass the output of \`keryx providers cross-family --json\`.`,
     );

@@ -105,7 +105,7 @@
       "type": "object",
       "description": "Workspace context managed by the orchestrator.",
       "additionalProperties": false,
-      "required": ["codebase_path", "branch", "issue_number"],
+      "required": ["codebase_path", "branch"],
       "properties": {
         "codebase_path": {
           "type": "string",
@@ -120,7 +120,7 @@
         "issue_number": {
           "type": "integer",
           "minimum": 1,
-          "description": "GitHub issue number for commit references"
+          "description": "Optional real GitHub issue number for commit references; omit for description-based tasks and flows"
         },
         "issue_title": {
           "type": "string",

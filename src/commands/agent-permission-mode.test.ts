@@ -16,7 +16,6 @@ import { createJobRegistry } from "../harness/tool/builtin/background-job-regist
 import type { BackgroundProcessHandle, JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type {
   NormalizedEvent,
-  NormalizedMessage,
   ProviderDescription,
   ProviderPort,
 } from "../harness/provider/types";

@@ -7,7 +7,22 @@ import type {
   SourceRunInfo,
 } from "./types";
 
-const RANK: Record<GateStatus, number> = { pass: 0, warn: 1, fail: 2 };
+const RANK: Record<GateStatus, number> = {
+  pass: 0,
+  warn: 1,
+  incomplete: 2,
+  fail: 3,
+};
+
+// T64: `loadHealthConfig` (T59) forces the strictest reachable `gate` and
+// `sources[*].required` when the config file exists but is unusable, and
+// sets `config.configUnreadable` to say so (mirrors
+// `SecurityConfig.configUnreadable`, consumed by `guard.ts` through its own
+// constant `POSTURE_UNAVAILABLE_REASON`). Constant and non-interpolated by
+// design: no path, no raw error text, no file contents -- naming the FACT
+// that the read was not trusted, not any detail of why.
+const CONFIG_UNREADABLE_REASON =
+  "CONFIG: health configuration is unreadable; gate forced to strictest thresholds";
 
 export function computeGate(input: {
   findings: Finding[];
@@ -16,8 +31,16 @@ export function computeGate(input: {
   config: HealthConfig;
   strict: boolean;
 }): GateResult {
-  const { findings, projectMetrics, sources, config, strict } = input;
+  const { findings, projectMetrics, sources, config } = input;
   const reasons: string[] = [];
+  // Legibility, not escalation: this never calls `escalate` and never moves
+  // `status` by itself. `config.gate`/`config.sources[*].required` are
+  // already forced to their strictest values upstream (T59) when this flag
+  // is set, so the verdict this produces is unchanged by this line -- it
+  // only explains a verdict already reached by the unmodified logic below.
+  if (config.configUnreadable) {
+    reasons.push(CONFIG_UNREADABLE_REASON);
+  }
   let status: GateStatus = "pass";
   const escalate = (next: GateStatus, reason: string) => {
     reasons.push(`${next.toUpperCase()}: ${reason}`);
@@ -42,17 +65,23 @@ export function computeGate(input: {
     escalate("warn", `health regression ${regression} vs baseline`);
   }
 
-  const brokenRequired = sources.filter(
-    (s) =>
-      s.required && (s.status === "missing" || s.status === "configured-but-failed"),
-  );
+  const brokenRequired = sources.filter((s) =>
+    s.required && (
+      s.status !== "available" ||
+      s.execution === "failed" ||
+      s.execution === "not-run" ||
+      s.parse === "failed" ||
+      s.parse === "not-run"
+    ));
   if (brokenRequired.length > 0) {
-    const names = brokenRequired.map((s) => s.source).join(", ");
-    if (strict && config.gate.failOnMissingRequiredSource) {
-      escalate("fail", `required source unavailable: ${names}`);
-    } else {
-      escalate("warn", `required source unavailable: ${names}`);
+    for (const source of brokenRequired) {
+      const detail = source.error ? `: ${source.error}` : "";
+      escalate("incomplete", `required source unavailable: ${source.source}${detail}`);
     }
+  }
+  const skippedOptional = sources.filter((s) => !s.required && s.status === "skipped");
+  for (const source of skippedOptional) {
+    reasons.push(`OPTIONAL: ${source.source} source skipped`);
   }
 
   const brokenOptional = sources.filter(
@@ -74,5 +103,9 @@ export function computeGate(input: {
     reasons.push("PASS: no gate conditions triggered");
   }
 
-  return { status, reasons };
+  return {
+    status,
+    reasons,
+    coverage: brokenRequired.length > 0 ? "incomplete" : "complete",
+  };
 }

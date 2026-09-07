@@ -44,6 +44,7 @@ async function readManifest(cwd: string): Promise<MetaprojectManifest> {
     return JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(`Invalid .metaproject/metaproject.json: ${detail}`);
   }
 }

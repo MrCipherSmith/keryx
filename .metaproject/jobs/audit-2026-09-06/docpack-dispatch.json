@@ -1,0 +1,96 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "keryx-agent-first-core-docpack",
+  "dispatch_id": "docpack-author-resumed",
+  "orchestrator": "root",
+  "target_skill": "docpack-orchestrator",
+  "task": {
+    "title": "Prepare Keryx agent-first core requirements package",
+    "description": "Resume docpack-orchestrator phases 0–4 for approved decisions 01–32 plus enrichment M01–M11 and W01–W06; request independent phase5 review from parent. Documentation only.",
+    "intent": "documentation",
+    "scope": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core"
+  },
+  "acceptance_criteria": [
+    "README, PRD, specification and justified contracts/policies/lifecycle/implementation plan with Version after H1",
+    "Trace all decisions 01–32 to normative requirements and acceptance criteria",
+    "Clear as-is versus target, no model dependency in core, separate optional Shell client",
+    "Structural/schema/link verification and roadmap integration",
+    "Request independent docpack-review from parent once draft ready; fix review blockers",
+    "Explicit coverage matrix for all 49 IDs (01–32,M01–M11,W01–W06) mapping normative requirements and acceptance tests",
+    "Dedicated actionable wiki specification covering W01–W06; baseline before compact gate, no false inference wiki useless",
+    "Public-safe normative package: do not copy private research dataset names, paths, task hashes, metrics or results; no links to untracked audit artifacts in distributable documents"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "32 approved decisions; source of truth over older research proposals"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-methodology.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/origin-main-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    ".metaproject/skills/gdskills/planning/docpack-orchestrator/SKILL.md",
+    ".metaproject/rules/core/requirements-package-standard.mdc",
+    ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+    ".metaproject/jobs/audit-2026-09-06/report.md",
+    ".metaproject/jobs/audit-2026-09-06/memory-wiki-trends-2026-09-06.md",
+    "docs/requirements/roadmap.md",
+    ".metaproject/jobs/audit-2026-09-06/measurement-analysis.md",
+    ".metaproject/jobs/audit-2026-09-06/measurement-methodology.md",
+    ".metaproject/jobs/audit-2026-09-06/origin-main-analysis.md"
+  ],
+  "constraints": [
+    "Exact project root /Users/Goodea/goodea/keryx; read .metaproject/index.md before other repo actions",
+    "User authorizes docs/specs, not implementation, commits, dependency updates or runtime calls to models",
+    "User opted OUT of execution statistics",
+    "Russian prose; Version under each H1; schemas English keys",
+    "Reuse existing SAC/provenance/lifecycle; never duplicate engine",
+    "Design details not explicitly decided must be marked proposed/assumptions; resolve routine details without reasking approved choices",
+    "All code search via keryx ctx rg; graph/wiki/memory routing; no bare rg/grep",
+    "Do not publish arbitrary numeric targets as approved; define measurement/calibration gates",
+    "No broad source read; use audit notes and narrow current-code verification",
+    "Keep core free of provider/model selection, credentials, LLM calls and mandatory embedding runtime",
+    "Main baseline 0bc6418fa1a038f8ec909cf949fecba077acf9a4; research evidence b65aa0173a6148c12595a4e134ecfbca8c562a0d; src identical, short gate partially implemented, rules writer regression confirmed",
+    "Do not reuse original d0a2a01 as current baseline or old full-test status as current",
+    "Own writes ONLY docs/requirements/keryx-agent-first-core/**, minimal docs/requirements/roadmap.md entry/version, and own audit result. Parent owns separate verify/review reports",
+    "Use normative concrete contracts and acceptance criteria, examples JSON Schema where justified; avoid merely repeating the plan",
+    "Design stable names/fields and reasonable routine choices yourself, distinguish proposed wire contracts from approved user intent",
+    "Notify parent once files exist and draft is reviewable; remain available for fixing review findings; no execution metrics",
+    "No new runtime scripts in source, installs, benchmarks, commits or push. Markdown/JSON examples and schemas permitted as specification artifacts."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/jobs/audit-2026-09-06/docpack-author-result.json",
+    "summary_max_tokens": 600
+  },
+  "budget": {},
+  "provenance": {
+    "created_at": "2026-09-06T08:36:56.153828+00:00",
+    "created_by": "root",
+    "source_request": "запускай docpack-orchestrator и готовь пакет документации и спецификации"
+  }
+}

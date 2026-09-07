@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T50",
+  "status": "DONE",
+  "summary": "Verified the sixth reported instance of the denylist-with-unconditional-pass-fallthrough defect myself before changing anything: src/health/service.ts's gate() reads latest.gate.status from an on-disk latest.json through an unchecked `as HealthReport` cast in readLatest(), so an unrecognized/corrupted status string is reachable at runtime even though GateStatus (pass|warn|incomplete|fail, src/health/types.ts) closes the type. Confirmed reachability with a hand-written fixture (gate.status: \"banana\") read back through the real readLatest() parse path, and confirmed with a RED run that the pre-fix fold returned exitCode 0 for it instead of 1. The report was correct. Added an exported gateExitCode(status, strictWarn) helper: an exhaustive switch over GateStatus with the default arm on the blocking side, mirroring runExitCode (src/commands/health.ts), isPassGate (src/commands/security.ts), runGate's switch (src/security/service.ts) and securityFlowGate (src/security/guard.ts) in shape only, over health's own GateStatus vocabulary, no cross-module import. gate() now delegates its exitCode computation to this helper instead of the inline denylist; the status field itself is unchanged (still a pass-through of latest.gate.status). All four recognized values are byte-identical to before (truth table); only the previously-reachable-but-unenumerated fallthrough changes, from exit 0 to exit 1, in both strictWarn true and false. New src/health/service-gate-exit.test.ts adds 4 tests / 17 expect() calls: pass control, fail/incomplete unconditional blocking, warn at both strictWarn settings (asserting status stays \"warn\", never relabeled \"pass\"), and the unrecognized-value fixture. RED-before/GREEN-after verified by running the tests before and after the code change (not a revert-in-place, since the test file was written first per TDD).",
+  "acceptance": [
+    {
+      "criterion": "AC4 / AFC-05: fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome, and violations are not lost when another check is unavailable.",
+      "status": "met",
+      "evidence": "incomplete (required-source-unavailable) and fail block unconditionally before and after this fix, pinned in the truth table and the unmodified src/commands/health-incomplete.test.ts (still green, raw 2026-09-06T15-24-10-048Z_run.log). The new corrupted-payload case (an unrecognized gate.status string in a hand-written latest.json fixture, read through the real readLatest() parse path) now blocks (exitCode 1) instead of silently passing (raw 2026-09-06T15-23-57-657Z_run.log, GREEN)."
+    },
+    {
+      "criterion": "No health gate value that should block is treated as a pass by this method; the default arm blocks; an optional skip still warns and is never signed as passed.",
+      "status": "met",
+      "evidence": "gateExitCode's switch is exhaustive with default: return 1. Truth table: all four recognized values byte-identical to before; the unrecognized-value case inverts 0 -> 1 at both strictWarn settings (raw 2026-09-06T15-23-35-145Z_run.log RED -> 2026-09-06T15-23-57-657Z_run.log GREEN). skippedOptional never sets GateStatus in computeGate (src/health/gate.ts, read-only, traced directly) so optional-skip warnings are untouched; the warn case's status field is asserted to stay \"warn\" (not.toBe(\"pass\")) directly in the new test."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; the health suites stay green and no currently passing invocation stops passing.",
+      "status": "met",
+      "evidence": "RED: 3 pass / 1 fail / 14 expect() (raw 2026-09-06T15-23-35-145Z_run.log). GREEN: 4 pass / 0 fail / 17 expect() (raw 2026-09-06T15-23-57-657Z_run.log). Full src/health/ suite (19 files): 90 pass / 0 fail / 273 expect() (raw 2026-09-06T15-24-05-649Z_run.log). Out-of-ownership sibling tests that call this same gate() method (src/commands/health-incomplete.test.ts, src/commands/health-gate-exit.test.ts), unmodified: 9 pass / 0 fail / 26 expect() (raw 2026-09-06T15-24-10-048Z_run.log)."
+    },
+    {
+      "criterion": "bun run typecheck reports only errors that reference files this task touched.",
+      "status": "met",
+      "evidence": "tsc --noEmit: clean, no output, exit 0 (raw 2026-09-06T15-24-21-815Z_run.log)."
+    },
+    {
+      "criterion": "bunx eslint on every file this task changed.",
+      "status": "met",
+      "evidence": "bunx eslint src/health/service.ts src/health/service-gate-exit.test.ts: clean, no output, exit 0 (raw 2026-09-06T15-24-26-360Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T50-spec.md", "kind": "plan", "exists": true },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T50-implementation.md", "kind": "implementation-report", "exists": true },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-23-35-145Z_run.log", "kind": "diff", "exists": true, "summary": "service-gate-exit.test.ts RED (before the fix): 3 pass / 1 fail / 14 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-23-57-657Z_run.log", "kind": "diff", "exists": true, "summary": "service-gate-exit.test.ts GREEN (after the fix): 4 pass / 0 fail / 17 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-24-05-649Z_run.log", "kind": "diff", "exists": true, "summary": "Full src/health/ module suite (19 files): 90 pass / 0 fail / 273 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-24-10-048Z_run.log", "kind": "diff", "exists": true, "summary": "Out-of-ownership sibling gate() callers (health-incomplete.test.ts, health-gate-exit.test.ts), unmodified: 9 pass / 0 fail / 26 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-24-21-815Z_run.log", "kind": "diff", "exists": true, "summary": "bun run typecheck: clean, exit 0." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-24-26-360Z_run.log", "kind": "diff", "exists": true, "summary": "bunx eslint on both changed files: clean, exit 0." }
+  ],
+  "changed_files": [
+    { "path": "src/health/service.ts", "change": "modified" },
+    { "path": "src/health/service-gate-exit.test.ts", "change": "added" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T15:26:00Z"
+}

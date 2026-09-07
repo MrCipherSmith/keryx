@@ -1,0 +1,28 @@
+{
+  "task_id": "task-7",
+  "task_name": "M01 shared routing entrypoint writer",
+  "task_type": "fix",
+  "status": "partial",
+  "description": "Introduced a shared pure renderer and locked atomic-per-file publisher for the compact index.md/full routing.md pair, routed init/update/rules sync/rules distill through it, preserved security and rule-source state, made orient retain the compact gate pointer, and updated catalogue and lifecycle guidance to resolve routing.md.",
+  "files_modified": [
+    "src/lib/templates.ts",
+    "src/commands/init.ts",
+    "src/commands/update.ts",
+    "src/commands/rules.ts",
+    "src/commands/rules.test.ts",
+    "src/ctx/orient.ts",
+    "src/gdskills/catalog.ts"
+  ],
+  "files_created": [
+    "src/lib/routing-entrypoint.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "normalized health gate PASS; eslint source skipped because the current project has no available ESLint command",
+  "type_check_result": "pass: bun run typecheck exited 0",
+  "test_result": "lane pass: 57 passed, 0 failed across the eight directly affected files; shared changed-scope gate reported 112 passed and 7 actual failures, all from the concurrent M10 RED suite (its normalized counter reports 14)",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "notes": "auto_commit=false, so no git action was taken. T5 tests are 3/3 GREEN. Shared changed-scope verification remains partial only because the independently owned M10 tests are still intentionally RED; parent owns the post-integration rerun. The testing context also selects stale .worktrees paths, as recorded in the flow context."
+}

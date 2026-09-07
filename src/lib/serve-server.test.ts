@@ -29,7 +29,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Glob } from "bun";
 import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../harness/policy/profiles";
 // The SHARED stripper and tree walk. The guard below used to carry its own,
 // which stripped comments but not string literals — so a mention of the seam

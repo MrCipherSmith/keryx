@@ -1,0 +1,53 @@
+{
+  "task": {
+    "task_id": "task-8",
+    "task_name": "M10 effective tool-call budgets and script correctness",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Implement phase0 AC3–5 and make T6 RED tests green. Add a real independent optional tool-call cap counted at actual invocation boundary, preserve round budget and report truthful terminal reason. Fix stress JSON resolver, validate missing/invalid bound port, add strict scripts TypeScript target wired into project check and fix classified script diagnostics without weakening strictness or running models. Read T8-input.json and T6 evidence.",
+    "target_files": [
+      "src/commands/agent.ts",
+      "scripts/benchmark/run-containment.ts",
+      "scripts/stress/keryx-shell-stress.ts",
+      "tsconfig.scripts.json",
+      "package.json"
+    ],
+    "acceptance_criteria": [
+      "AC3: M10: offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+      "AC4: M10: stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+      "AC5: M10: a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+    "existing_tests": [
+      "src/commands/agent-tool-call-budget.test.ts",
+      "scripts/stress/keryx-shell-stress.test.ts",
+      "scripts/benchmark/run-containment.test.ts",
+      "scripts/typecheck.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Bun, strict TypeScript, in-memory ProviderPort and temp subprocess artifacts; main guards for executable scripts. Keep rounds separate from actual tools.",
+    "test_case_specs": {
+      "test_files": [
+        "src/commands/agent-tool-call-budget.test.ts",
+        "scripts/stress/keryx-shell-stress.test.ts",
+        "scripts/benchmark/run-containment.test.ts",
+        "scripts/typecheck.test.ts"
+      ],
+      "run_command": "bun test src/commands/agent-tool-call-budget.test.ts scripts/stress/keryx-shell-stress.test.ts scripts/benchmark/run-containment.test.ts scripts/typecheck.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

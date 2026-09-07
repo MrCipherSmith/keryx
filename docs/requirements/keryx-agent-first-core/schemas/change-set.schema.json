@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "change-set.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposalId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposalRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "previewBinding": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "owner": {
+            "enum": [
+              "wiki",
+              "memory",
+              "skills"
+            ]
+          },
+          "targetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operation": {
+            "enum": [
+              "create",
+              "replace",
+              "archive",
+              "supersede"
+            ]
+          },
+          "expectedVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/source"
+            }
+          },
+          "supersedesRef": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "owner",
+          "targetRef",
+          "operation",
+          "expectedVersion",
+          "evidence"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operation": {
+                  "const": "create"
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "expectedVersion": {
+                  "type": "null"
+                },
+                "content": {}
+              },
+              "required": [
+                "content"
+              ],
+              "type": "object"
+            },
+            "else": {
+              "properties": {
+                "expectedVersion": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operation": {
+                  "enum": [
+                    "replace",
+                    "supersede"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "required": [
+                "content"
+              ],
+              "properties": {
+                "content": {}
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operation": {
+                  "const": "supersede"
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "required": [
+                "supersedesRef"
+              ],
+              "properties": {
+                "supersedesRef": {}
+              },
+              "type": "object"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "contractVersion",
+    "scope",
+    "workspaceId",
+    "proposalId",
+    "proposalRevision",
+    "previewBinding",
+    "idempotencyKey",
+    "changes"
+  ]
+}

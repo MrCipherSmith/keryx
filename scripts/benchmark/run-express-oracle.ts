@@ -43,7 +43,7 @@ const systemFixtureUrl = new URL("gdgraph-affected.json", fixtureRoot);
 type SpawnResult = { stdout: string; stderr: string; ok: boolean };
 
 function run(cmd: string[], cwd?: string): SpawnResult {
-  const result = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
+  const result = Bun.spawnSync(cmd, { ...(cwd !== undefined ? { cwd } : {}), stdout: "pipe", stderr: "pipe" });
   return {
     stdout: result.stdout.toString("utf8"),
     stderr: result.stderr.toString("utf8"),

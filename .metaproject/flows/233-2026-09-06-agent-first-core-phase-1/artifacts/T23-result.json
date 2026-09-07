@@ -1,0 +1,67 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T23",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Stage 1 found a blocker: the shared contained reader correctly enforces identity, regular-file, byte-limit, and platform guarantees, but the SAC wrapper calls the lower-level descriptor reader without the required regular-file and maximum-byte policy. Stage 2 was blocked by the failed specification gate.",
+  "summary_markdown": "See T23-review.md for the Stage 1 matrix, F-001, bounded evidence, interrupted-attempt disclosure, and Stage 2 gate decision.",
+  "acceptance": [
+    {
+      "criterion": "Internal symlink chains read the same bytes within a narrow owner root; external/replaced owner/target paths are refused without disclosure.",
+      "status": "met",
+      "evidence": "The shared reader pins root and target identities; 17 focused containment tests pass and the existing T17 probe returns CONTAINED_READ_RACE."
+    },
+    {
+      "criterion": "Descriptor/platform/file-type/size guarantees hold for the supported runtime and fail explicitly otherwise; SAC nofollow is not weakened.",
+      "status": "partial",
+      "evidence": "The shared reader and descriptor seam implement the guarantees, but src/sac/secure-resource-read.ts:15 supplies neither maxBytes nor requireRegularFile; a bounded 8 MiB+1 fixture was accepted."
+    },
+    {
+      "criterion": "Stage 1 then Stage 2 independent verdict with concrete evidence and no own-code review.",
+      "status": "partial",
+      "evidence": "Stage 1 was completed independently and failed on F-001; Stage 2 was explicitly blocked by the local review workflow. Own output-validator and health code were excluded."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "T23 containment/SAC Stage 1 review and blocker finding",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "blocker",
+      "problem": "The SAC secure reader invokes readDescriptorChain without maxBytes or requireRegularFile, so SAC inputs bypass the approved file-type and size policy.",
+      "impact": "Repository-controlled SAC evidence/resource inputs can be read beyond the shared 8 MiB bound, and non-regular inputs reach a potentially blocking final open instead of being refused by policy.",
+      "suggested_fix": "Pass an explicit approved maxBytes value and requireRegularFile: true from readWorkspaceFileNoFollow, then add direct SAC-wrapper regressions for over-limit and non-regular inputs while retaining O_NOFOLLOW and fail-closed platform behavior.",
+      "evidence": "src/sac/secure-resource-read.ts:15; src/lib/descriptor-read.ts:89-95 and :140-159; bounded fixture result in .metaproject/data/gdctx/raw/2026-09-06T12-40-02-860Z_run.log.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/sac/secure-resource-read.ts:15"
+        ],
+        "enumeration_method": "Inspected the complete SAC wrapper and every descriptor option/enforcement path for file type, byte count, and platform capability."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_passed": 17,
+    "tests_failed": 0,
+    "stage1": "failed",
+    "stage2": "blocked",
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:43:46.712Z"
+}

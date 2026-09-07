@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "packageId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "packageVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "snapshot": {
+      "$ref": "common.schema.json#/$defs/snapshot"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/constraint"
+      }
+    },
+    "permissionEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/source"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provenance": {
+            "$ref": "common.schema.json#/$defs/provenance"
+          }
+        },
+        "required": [
+          "text",
+          "provenance"
+        ]
+      }
+    },
+    "verifiedResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checkRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checkedSource": {
+            "$ref": "common.schema.json#/$defs/source"
+          },
+          "outcome": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "INCOMPLETE"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "checkRef",
+          "checkedSource",
+          "outcome",
+          "observedAt"
+        ]
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/source"
+      }
+    }
+  },
+  "required": [
+    "contractVersion",
+    "packageId",
+    "packageVersion",
+    "scope",
+    "snapshot",
+    "goal",
+    "constraints",
+    "permissionEvidenceRefs",
+    "decisions",
+    "verifiedResults",
+    "openQuestions",
+    "sources"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "measurement-b65aa01-analysis",
+  "dispatch_id": "measurement-methodology",
+  "orchestrator": "root",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Review measurement harness and published evidence",
+    "description": "Read branch b65aa0173a6148c12595a4e134ecfbca8c562a0d benchmark modules, tests and data. Verify scoring, ablation, isolation, measurement limitations and public-safe fixes reverted from main. Parent reads research reports and edits plan.",
+    "intent": "review",
+    "scope": "origin/measurement/context-2026-09-05 benchmark implementation"
+  },
+  "acceptance_criteria": [
+    "Identify meaningful methodology safeguards and gaps for the plan",
+    "Recompute published verdicts offline or verify formulas against data",
+    "Distinguish current-main defects, preserved branch work and untested hypotheses"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "32 approved decisions; source of truth over older research proposals"
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read index first",
+    "No source edits, branch switching, installs, network model calls, benchmark sweep, commits or publication",
+    "Read git objects with keryx ctx run -- git show; current main graph does not represent branch benchmark modules; record limitation",
+    "Use exact pinned branch b65aa0173a6148c12595a4e134ecfbca8c562a0d",
+    "Write only measurement-methodology.md in existing audit directory; Version under H1; sanitize private repository names, task hashes, file paths from research",
+    "Security-check output before writing artifact; report STATUS prefix with evidence",
+    "No need global full review pipeline; narrow review-logic bounded subtask"
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command",
+    "write"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/jobs/audit-2026-09-06/measurement-methodology-result.json",
+    "summary_max_tokens": 900
+  },
+  "budget": {},
+  "provenance": {
+    "created_at": "2026-09-06T08:36:56.153828+00:00",
+    "created_by": "root",
+    "source_request": "Изучить measurement/context-2026-09-05 и обогатить согласованный план"
+  }
+}

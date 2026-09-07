@@ -1,0 +1,77 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "keryx-agent-first-core-docpack",
+  "dispatch_id": "docpack-review",
+  "orchestrator": "root",
+  "target_skill": "docpack-review",
+  "task": {
+    "title": "Adversarial review of agent-first documentation package",
+    "description": "Review every package file for consistency, completeness, contracts and honest status. Begin with already-written README/PRD/decision-traceability; remaining files are being drafted. Do not issue final verdict until parent confirms full draft ready.",
+    "intent": "review",
+    "scope": "docs/requirements/keryx-agent-first-core"
+  },
+  "acceptance_criteria": [
+    "Read every file in package and roadmap entry",
+    "All 49 decision IDs map to substantive specification and acceptance",
+    "Schema/prose/example alignment, atomic CAS and batch, authority vs freshness, redaction, wiki section lifecycle, model-independent core",
+    "No private dataset contents or untracked audit links in distributable package",
+    "Report concrete blockers/warnings with exact files and proposed resolution; no editing package"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "32 approved decisions; source of truth over older research proposals"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-methodology.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/origin-main-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewed evidence, use for design without copying private data"
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    ".metaproject/skills/gdskills/planning/docpack-review/SKILL.md",
+    ".metaproject/rules/core/requirements-package-standard.mdc",
+    ".metaproject/jobs/audit-2026-09-06/improvement-plan.md"
+  ],
+  "constraints": [
+    "Exact root /Users/Goodea/goodea/keryx; read index first",
+    "Read-only package; write only own .metaproject/jobs/audit-2026-09-06/docpack-review.md/result.json",
+    "Russian user-facing report, Version below H1; security-check artifact; no execution metrics",
+    "Do not require reapproval for already authorized decisions; no runtime source implementation, no commits or installs",
+    "Source baseline 0bc6418; 32 accepted directions plus M01–M11/W01–W06; all 49 required",
+    "Parent performs structural links/Ajv checks, focus semantic consistency and contract gaps",
+    "Author drafting remaining docs: review existing 3 now, send early findings; parent will signal full draft readiness; all changed files must be rechecked at final review"
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/jobs/audit-2026-09-06/docpack-review-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {},
+  "provenance": {
+    "created_at": "2026-09-06T08:36:56.153828+00:00",
+    "created_by": "root",
+    "source_request": "запускай docpack-orchestrator и готовь пакет документации и спецификации"
+  }
+}

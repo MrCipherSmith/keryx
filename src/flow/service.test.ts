@@ -1,10 +1,22 @@
-import { afterAll, test, expect } from "bun:test";
+import { afterAll, mock, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
 import { writeCleanReviewPackage } from "./review-fixtures";
 import type { FlowServiceDeps, TrackerAdapter } from "./types";
+
+// Real `./review-gate` and `./store` exports, snapshotted eagerly so a
+// mock's restore hands back the genuine implementation rather than leaking
+// the break into later tests (same discipline as
+// src/security/guard.test.ts's breakConfigLoad/restoreConfigLoad).
+// `reviewGate` has exactly one call site in service.ts (Gate 4's try), so
+// mocking it for the span of one test cannot disturb any other method under
+// test here. `./store` is used far more broadly, so its mock below overrides
+// only `readAcCriteria` and is applied only after every setup step (freeze,
+// start, taskDone, implemented, acConfirm) has already run for real.
+const realReviewGateExports = { ...(await import("./review-gate")) };
+const realStoreExports = { ...(await import("./store")) };
 
 // Each test gets its own OS temp dir (no shared path -> no cross-test/CI flakes).
 let ROOT = "";
@@ -253,6 +265,337 @@ test("merged completion closes a flow without a PR when main contains the commit
     "health",
   ]);
   expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
+});
+
+// T35 F-005 / T45 regression: a healthGate that THROWS is a check that could
+// not run, not one that was deliberately skipped. Before the fix the catch
+// arm recorded `status: "skipped"`, which the pass/fail fold
+// (`gates.every((gate) => gate.status !== "fail")`) treats as non-blocking --
+// so an unexpected error in the health gate let the flow complete anyway.
+// The detail must not echo the thrown text either: it can carry a path or
+// file content.
+test("healthGate that throws blocks completion, not skips it, and never echoes the thrown text", async () => {
+  await fresh();
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+  const service = createFlowService(
+    makeDeps({
+      healthGate: async () => {
+        throw new Error(`ENOENT: no such file or directory, open '${secretPath}'`);
+      },
+    }),
+  );
+
+  const { flow } = await service.init({ cwd: ROOT, title: "Health gate throws" });
+  const dir = `001-2026-07-07-health-gate-throws`;
+  await writeAc(dir, ["Must be verified"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/9" });
+
+  const result = await service.complete({ cwd: ROOT, id: flow.id });
+  const health = result.gates.find((gate) => gate.name === "health");
+  expect(health?.status).toBe("fail");
+  expect(health?.detail).not.toContain(secretPath);
+  expect(health?.detail).not.toContain("ENOENT");
+  expect(result.passed).toBe(false);
+  expect(result.flow.status).toBe("in-progress");
+});
+
+// T39 F-001 / T56 regression: the pre-fix fold was `status === "fail" ? fail
+// : pass`, so `incomplete` -- the value the health module produces exactly
+// when a REQUIRED source is unavailable, failed to execute, or failed to
+// parse (src/health/gate.ts:58-63) -- fell through to the permissive arm and
+// was recorded `pass`, letting completion succeed on evidence policies.md
+// calls INCOMPLETE, not PASS. This is the AC8 sentence itself: "no required
+// failed or incomplete check is relabeled PASS at any surface, including the
+// recorded completion row."
+test("healthGate -> incomplete blocks completion, not relabeled pass", async () => {
+  await fresh();
+  const service = createFlowService(
+    makeDeps({
+      healthGate: async () => ({
+        status: "incomplete",
+        reasons: ["INCOMPLETE: required source unavailable: typescript"],
+      }),
+    }),
+  );
+
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Health gate incomplete" });
+  const dir = path.basename(created);
+  await writeAc(dir, ["Must be verified"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/9" });
+
+  const result = await service.complete({ cwd: ROOT, id: flow.id });
+  const health = result.gates.find((gate) => gate.name === "health");
+  expect(health?.status).toBe("fail");
+  expect(health?.status).not.toBe("pass");
+  expect(health?.detail).toContain("required source unavailable");
+  expect(result.passed).toBe(false);
+  expect(result.flow.status).toBe("in-progress");
+});
+
+// T39 F-001 / T56 regression: the same fallthrough also passed any value the
+// fold had not been taught -- a future GateStatus member, or a non-conforming
+// healthGate dependency. The fix's default arm must block like every sibling
+// fold's default arm (gateExitCode, runExitCode, isPassGate,
+// securityFlowGate's switch), and must not echo the unrecognized value into
+// the detail that reaches flow.json history and buildIssueComment.
+test("healthGate -> unrecognized status blocks completion, not relabeled pass, and does not echo the value", async () => {
+  await fresh();
+  const service = createFlowService(
+    makeDeps({
+      healthGate: async () => ({ status: "banana", reasons: ["should never surface verbatim"] }),
+    }),
+  );
+
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Health gate unrecognized" });
+  const dir = path.basename(created);
+  await writeAc(dir, ["Must be verified"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/9" });
+
+  const result = await service.complete({ cwd: ROOT, id: flow.id });
+  const health = result.gates.find((gate) => gate.name === "health");
+  expect(health?.status).toBe("fail");
+  expect(health?.status).not.toBe("pass");
+  expect(health?.detail).not.toContain("banana");
+  expect(health?.detail).not.toContain("should never surface verbatim");
+  expect(result.passed).toBe(false);
+  expect(result.flow.status).toBe("in-progress");
+});
+
+// T56: pins the deliberate `warn` decision (see T56-spec.md) so a future edit
+// to this fold changes it visibly rather than by accident. Both health CLI
+// surfaces (`keryx health run`, `keryx health gate`) exit 0 for `warn` unless
+// an explicit strict opt-in is passed, and `flow complete()` has no strict
+// equivalent to opt into -- so `warn` stays non-blocking here too. The row
+// still differs from a genuine pass in its detail, even though `status` is
+// the same "pass" both times.
+//
+// T57 F-001 / T60 regression: the in-memory checks below (`result.gates`)
+// were already true and already passing before T60's fix -- they are exactly
+// the assertions an independent review found insufficient, because the
+// detail they pin never reached the two durable/published surfaces a reader
+// actually sees. Added here: read `flow.json` back off disk (not the return
+// value) and check `result.issueComment` (the string that would actually be
+// posted), so this test would have failed while the defect stood.
+test("healthGate -> warn still completes, but the row is not identical to a genuine pass", async () => {
+  await fresh();
+  const service = createFlowService(
+    makeDeps({
+      healthGate: async () => ({ status: "warn", reasons: ["WARN: coverage 40% below soft floor 60%"] }),
+    }),
+  );
+
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Health gate warn" });
+  const dir = path.basename(created);
+  await writeAc(dir, ["Must be verified"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/9" });
+
+  const result = await service.complete({ cwd: ROOT, id: flow.id });
+  const health = result.gates.find((gate) => gate.name === "health");
+  expect(health?.status).toBe("pass");
+  expect(health?.detail).toBe("health gate: warn");
+  expect(health?.detail).not.toBe("health gate: pass");
+  expect(result.passed).toBe(true);
+  expect(result.flow.status).toBe("done");
+
+  // The persisted artifact, not the return value.
+  const stored = JSON.parse(
+    await readFile(path.join(ROOT, ".metaproject", "flows", dir, "flow.json"), "utf8"),
+  ) as { history: { event: string; detail?: string }[] };
+  const doneEvent = stored.history.at(-1);
+  expect(doneEvent?.event).toBe("done");
+  expect(doneEvent?.detail).toContain("warn");
+  expect(doneEvent?.detail).not.toBe("all gates passed");
+
+  // The comment that would actually be posted, not a status field.
+  expect(result.issueComment).toContain("warn");
+});
+
+// T57 F-001 / T60 regression: a committed version of the reviewer's own
+// probe (T57-flow.ts, row C99). Drives complete() twice end to end, against
+// two independent fixtures -- one health pass, one health warn -- and
+// compares the PERSISTED flow.json and the PUBLISHED issue comment byte for
+// byte, exactly as a machine or a human reading the tracker would. Before
+// T60's fix these were byte-identical in both slots; this pins that they are
+// not, and that a genuine pass's record/comment are unaffected by the fix
+// (no new field, no new text for the common case).
+test("a warn completion's stored flow.json and issue comment are NOT identical to a genuine pass's", async () => {
+  async function driveToComplete(status: "pass" | "warn"): Promise<{ stored: string; comment: string }> {
+    const root = await mkdtemp(path.join(tmpdir(), "gd-flow-warncompare-"));
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    try {
+      const service = createFlowService(
+        makeDeps({
+          healthGate: async () => ({ status, reasons: status === "warn" ? ["WARN: coverage low"] : [] }),
+        }),
+      );
+      // Same title/slug/id for both runs (each root starts fresh, so both
+      // allocate "001") -- the ONLY difference driving the two fixtures must
+      // be the health gate's status, or a difference in the stored record
+      // would prove nothing about this fix specifically.
+      const { flow, dir: created } = await service.init({ cwd: root, title: "Health gate check" });
+      const dir = path.basename(created);
+      await writeFile(
+        path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+        "# Acceptance Criteria\n\n## Criteria\n\n- AC1: Must be verified\n",
+        "utf8",
+      );
+      await service.freeze({ cwd: root, id: flow.id });
+      await service.start({ cwd: root, id: flow.id });
+      for (const taskId of ["T1", "T2", "T3", "T4"]) {
+        await service.taskDone({ cwd: root, id: flow.id, taskId });
+      }
+      await service.implemented({ cwd: root, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+      await service.acConfirm({ cwd: root, id: flow.id, criterion: "AC1" });
+      await writeCleanReviewPackage({
+        cwd: root,
+        flowDir: dir,
+        head: HEAD,
+        prUrl: "https://github.com/acme/app/pull/9",
+      });
+      const result = await service.complete({ cwd: root, id: flow.id });
+      const stored = await readFile(path.join(root, ".metaproject", "flows", dir, "flow.json"), "utf8");
+      return { stored, comment: result.issueComment ?? "" };
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  const genuinePass = await driveToComplete("pass");
+  const warn = await driveToComplete("warn");
+
+  // Not identical -- the actual defect (T57 F-001) was that these matched.
+  expect(warn.stored).not.toBe(genuinePass.stored);
+  expect(warn.comment).not.toBe(genuinePass.comment);
+
+  // The word is actually present in both durable surfaces for the warn run.
+  expect(warn.stored.toLowerCase()).toContain("warn");
+  expect(warn.comment.toLowerCase()).toContain("warn");
+
+  // A genuine pass carries no trace of "warn" and is byte-identical to the
+  // pre-fix constant in its "done" history entry -- the fix changes nothing
+  // for the common case.
+  expect(genuinePass.stored.toLowerCase()).not.toContain("warn");
+  expect(genuinePass.comment.toLowerCase()).not.toContain("warn");
+  const genuineHistory = (
+    JSON.parse(genuinePass.stored) as { history: { at: string; event: string; detail?: string }[] }
+  ).history;
+  expect(genuineHistory.at(-1)).toEqual({
+    at: "2026-07-07T10:00:00.000Z",
+    event: "done",
+    detail: "all gates passed",
+  });
+});
+
+// T45 flagged and deliberately left open, T47 closes it: gates 1
+// (acceptance-criteria) and 4 (review) already recorded `status: "fail"` on a
+// throw -- the blocking half was correct -- but their `detail` interpolated
+// the caught error's message verbatim, which can carry a filesystem path or
+// file content (policies.md, "Redaction и security scan").
+//
+// `readAcCriteria`/`assertAcIntact` are direct `./store` imports used by
+// several other service methods (freeze, start's `transition()`, acConfirm,
+// and `complete()`'s own top-of-function `assertAcIntact` check before the
+// gates loop even starts) -- deleting the on-disk file would trip that
+// earlier, unguarded call first, never reaching Gate 1's own catch. So this
+// mocks only `readAcCriteria` (leaving the real `assertAcIntact` in place,
+// which is why every setup step and `complete()`'s own preflight check keep
+// passing) and restores it in `finally`, the same snapshot/break/restore
+// discipline `src/security/guard.test.ts` uses for `loadSecurityConfig`.
+test("acceptance-criteria gate that throws blocks completion, not skips it, and never echoes the thrown text", async () => {
+  await fresh();
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+  const service = createFlowService(makeDeps());
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "AC gate throws" });
+  const dir = path.basename(created);
+  await writeAc(dir, ["Must be verified"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/9" });
+
+  mock.module("./store", () => ({
+    ...realStoreExports,
+    readAcCriteria: async () => {
+      throw new Error(`ENOENT: no such file or directory, open '${secretPath}'`);
+    },
+  }));
+  try {
+    const result = await service.complete({ cwd: ROOT, id: flow.id });
+    const ac = result.gates.find((gate) => gate.name === "acceptance-criteria");
+    expect(ac?.status).toBe("fail");
+    expect(ac?.detail).not.toContain(secretPath);
+    expect(ac?.detail).not.toContain("ENOENT");
+    expect(result.passed).toBe(false);
+    expect(result.flow.status).toBe("in-progress");
+  } finally {
+    mock.module("./store", () => ({ ...realStoreExports }));
+  }
+});
+
+test("review gate that throws blocks completion, not skips it, and never echoes the thrown text", async () => {
+  await fresh();
+  const secretPath = "/Users/attacker/.ssh/id_rsa";
+  mock.module("./review-gate", () => ({
+    ...realReviewGateExports,
+    reviewGate: async () => {
+      throw new Error(`ENOENT: no such file or directory, open '${secretPath}'`);
+    },
+  }));
+  try {
+    const service = createFlowService(makeDeps());
+    const { flow } = await service.init({ cwd: ROOT, title: "Review gate throws" });
+    const dir = `001-2026-07-07-review-gate-throws`;
+    await writeAc(dir, ["Must be verified"]);
+    await service.freeze({ cwd: ROOT, id: flow.id });
+    await service.start({ cwd: ROOT, id: flow.id });
+    for (const taskId of ["T1", "T2", "T3", "T4"]) {
+      await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+    }
+    await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/9" });
+    await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+
+    const result = await service.complete({ cwd: ROOT, id: flow.id });
+    const review = result.gates.find((gate) => gate.name === "review");
+    expect(review?.status).toBe("fail");
+    expect(review?.detail).not.toContain(secretPath);
+    expect(review?.detail).not.toContain("ENOENT");
+    expect(result.passed).toBe(false);
+    expect(result.flow.status).toBe("in-progress");
+  } finally {
+    mock.module("./review-gate", () => ({ ...realReviewGateExports }));
+  }
 });
 
 test("block stores the previous status and unblock restores it", async () => {

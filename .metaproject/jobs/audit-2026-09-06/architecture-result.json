@@ -1,0 +1,195 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "audit-2026-09-06",
+  "dispatch_id": "architecture",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Полный архитектурный аудит main выявил два major-дефекта жизненного цикла производных артефактов и пять minor-рисков точности, масштабируемости и границ модулей. Главные проблемы: stale testing context из удалённых worktree и не обновляемые accepted wiki snapshots.",
+  "acceptance": [
+    {
+      "criterion": "Проверены архитектурные сильные стороны, риски и конкретные дефекты полного текущего проекта",
+      "status": "met",
+      "evidence": "architecture.md: разделы «Сильные стороны», «Findings», «Границы модулей и связность»"
+    },
+    {
+      "criterion": "Проверены границы модулей, lifecycle consistency, schema enforcement и scalability",
+      "status": "met",
+      "evidence": "ARCH-001, ARCH-003, ARCH-004, ARCH-005, ARCH-006 и раздел «Жизненный цикл и схемы»"
+    },
+    {
+      "criterion": "Оценена измеримая польза graph/wiki/keryx и stale-context failure modes",
+      "status": "met",
+      "evidence": "architecture.md: раздел «Насколько graph/wiki/keryx помогают по сравнению с обычным поиском»; cycle precision 1/10, stale wiki counters и paired benchmark"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "report",
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture.md",
+      "exists": true,
+      "summary": "Подробный русскоязычный архитектурный аудит"
+    },
+    {
+      "kind": "graph",
+      "path": ".metaproject/data/gdgraph/graph.json",
+      "exists": true,
+      "summary": "Перестроенный граф 1 172 узла / 3 515 рёбер"
+    },
+    {
+      "kind": "wiki",
+      "path": ".metaproject/data/wiki/freshness/latest.json",
+      "exists": true,
+      "summary": "Freshness 50 страниц: 34 fresh, 12 affected, 4 not-code-scoped"
+    },
+    {
+      "kind": "memory",
+      "path": ".metaproject/memory/constraints/stale-installed-keryx-binary.md",
+      "exists": true,
+      "summary": "Ограничение на проверку текущего поведения через source CLI"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture.md",
+      "change": "created audit report"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture-result.json",
+      "change": "created machine-readable subagent result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "ARCH-001",
+      "reviewer": "review-architecture",
+      "severity": "major",
+      "problem": "Testing context recursively indexes nested worktrees and accepts its cache without input freshness or existence validation.",
+      "impact": "Related/scoped test selection can return or execute deleted tests from another branch, invalidating verification of the current checkout.",
+      "suggested_fix": "Exclude nested worktrees in a shared walker, persist an input fingerprint, rebuild stale context, and filter nonexistent cached paths.",
+      "evidence": "src/testing/service.ts:23, src/testing/service.ts:319, src/testing/service.ts:388, src/testing/service.ts:620, src/testing/selection.ts:19; 1041/1570 cached tests belong to two deleted .worktrees.",
+      "confidence": "high",
+      "file": "src/testing/service.ts",
+      "line": 23,
+      "symbol": "IGNORED_DIRS",
+      "class_scope": {
+        "sites": [
+          "src/testing/service.ts:23",
+          "src/testing/service.ts:319",
+          "src/testing/service.ts:327",
+          "src/testing/service.ts:620",
+          "src/testing/service.ts:665",
+          "src/testing/selection.ts:19"
+        ],
+        "enumeration_method": "Used gdgraph to locate the testing subsystem, keryx ctx rg to enumerate TestingContext load/selection sites, then inspected both naming and import-based lookup and counted every cached .worktrees path."
+      },
+      "blocking_merge": true,
+      "dedupe_key": "testing-context-nested-worktree-stale-cache"
+    },
+    {
+      "id": "ARCH-002",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "gdgraph classifies fallback type-only imports as unknown-static and includes them in a query presented as runtime/load-order cycles.",
+      "impact": "Nine of ten reported SCCs are not established runtime cycles, creating false architectural findings and unnecessary refactoring.",
+      "suggested_fix": "Add type-only ImportKind, parse import/export type in fallback, and separate runtime, type and unknown cycle output.",
+      "evidence": "src/gdgraph/build.ts:239,262; src/gdgraph/types.ts:25; src/gdgraph/query.ts:108; 9/10 SCC contain unknown-static edges, including explicit import type statements.",
+      "confidence": "high",
+      "file": "src/gdgraph/query.ts",
+      "line": 108,
+      "symbol": "queryCycles",
+      "blocking_merge": false,
+      "dedupe_key": "gdgraph-type-only-runtime-cycle-false-positive"
+    },
+    {
+      "id": "ARCH-003",
+      "reviewer": "review-architecture",
+      "severity": "major",
+      "problem": "Accepted generated wiki snapshots are skipped by collection while Describes:none excludes them from code freshness checks.",
+      "impact": "Authoritative-looking accepted maps can remain materially stale without warning; project-map reports 685 nodes/1502 edges/0 unresolved versus 1172/3515/50 now.",
+      "suggested_fix": "Separate machine-owned snapshot blocks from prose, track producer revision/hash, refresh snapshots regardless editorial status, and report producer-stale.",
+      "evidence": "src/wiki/service.ts:474,792; src/wiki/describes.ts:173; src/wiki/freshness/report.ts:183; .metaproject/wiki/architecture/project-map.md:5,15.",
+      "confidence": "high",
+      "file": "src/wiki/service.ts",
+      "line": 792,
+      "class_scope": {
+        "sites": [
+          ".metaproject/wiki/architecture/project-map.md:5",
+          ".metaproject/wiki/architecture/quality-map.md:5",
+          ".metaproject/wiki/architecture/testing-map.md:5",
+          "src/wiki/service.ts:792",
+          "src/wiki/describes.ts:173",
+          "src/wiki/freshness/report.ts:183"
+        ],
+        "enumeration_method": "Used keryx ctx rg to enumerate every Describes:none page (four total), classified the three generated snapshot maps versus the decision page, and traced generation, accepted-page skip policy and freshness classification."
+      },
+      "blocking_merge": true,
+      "dedupe_key": "wiki-accepted-generated-snapshot-bypasses-freshness"
+    },
+    {
+      "id": "ARCH-004",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "Wiki freshness performs per-page Git queries in a sequential loop.",
+      "impact": "Freshness cost grows linearly through process spawning; current 50-page run already performs 96 Git calls and takes about 1.05 seconds.",
+      "suggested_fix": "Batch pages by verified revision, compute changed paths once per revision, cache ancestry/existence, and bound concurrency for remaining checks.",
+      "evidence": "src/wiki/freshness/report.ts:174; src/wiki/freshness/page-freshness.ts:65; instrumented source run: 96 Git calls for 50 pages.",
+      "confidence": "high",
+      "file": "src/wiki/freshness/report.ts",
+      "line": 174,
+      "symbol": "generateFreshnessReport",
+      "blocking_merge": false,
+      "dedupe_key": "wiki-freshness-sequential-per-page-git-spawn"
+    },
+    {
+      "id": "ARCH-005",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "src/lib is documented as the bottom layer but owns serve/narrate/template orchestration with 20 upward cross-module production edges.",
+      "impact": "The namespace no longer communicates dependency direction and increases future cycle/extraction cost.",
+      "suggested_fix": "Move orchestration to feature owners, keep lib inward-only, and enforce allowed dependency directions with an architecture test.",
+      "evidence": "docs/docs/architecture.md; src/lib/serve-turn.ts:22; graph shows 14 lib-to-harness edges and 20 upward edges total.",
+      "confidence": "high",
+      "file": "src/lib/serve-turn.ts",
+      "line": 22,
+      "blocking_merge": false,
+      "dedupe_key": "lib-bottom-layer-upward-feature-dependencies"
+    },
+    {
+      "id": "ARCH-006",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "Init and update duplicate lifecycle helpers and already differ in parent-directory preparation.",
+      "impact": "Fixes to installation atomicity, permissions or hook reconciliation can apply to only one lifecycle path.",
+      "suggested_fix": "Extract shared reconcile/install primitives and cover init/update with common table-driven contract tests.",
+      "evidence": "src/commands/init.ts:1373,1821; src/commands/update.ts:1325,1558; six overlapping helper names.",
+      "confidence": "medium",
+      "file": "src/commands/init.ts",
+      "line": 1373,
+      "blocking_merge": false,
+      "dedupe_key": "init-update-duplicated-lifecycle-primitives"
+    },
+    {
+      "id": "ARCH-007",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "Wiki collect/provenance/describes form a genuine static dependency cycle.",
+      "impact": "Future top-level initialization or isolated reuse can become load-order fragile; parser-level code depends back on orchestration.",
+      "suggested_fix": "Move shared types/key-file inference to a leaf module and remove the describes-to-collect dependency.",
+      "evidence": "src/wiki/collect.ts:5 -> src/wiki/provenance.ts:23 -> src/wiki/describes.ts:26 -> src/wiki/collect.ts; SCC has no unknown-static edges.",
+      "confidence": "high",
+      "file": "src/wiki/collect.ts",
+      "line": 5,
+      "blocking_merge": false,
+      "dedupe_key": "wiki-collect-provenance-describes-static-cycle"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "retries": 0,
+    "findings_total": 7,
+    "findings_major": 2,
+    "findings_minor": 5
+  },
+  "timestamp_utc": "2026-09-06T00:00:00Z"
+}

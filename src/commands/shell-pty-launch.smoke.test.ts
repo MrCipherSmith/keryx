@@ -101,6 +101,7 @@ function shq(value: string): string {
  * bytes that the CSI pattern would otherwise chew into.
  */
 function visibleText(raw: string): string {
+  /* eslint-disable no-control-regex -- These expressions intentionally strip terminal control sequences from captured PTY output. */
   return raw
     .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
     .replace(/\u001b[P^_X][^\u001b]*\u001b\\/g, "")
@@ -108,6 +109,7 @@ function visibleText(raw: string): string {
     .replace(/\u001b[()][A-B0-2]/g, "")
     .replace(/\u001b[=>78MD]/g, "")
     .replace(/\u0000/g, "");
+  /* eslint-enable no-control-regex */
 }
 
 /**

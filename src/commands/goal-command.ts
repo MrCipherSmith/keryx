@@ -929,7 +929,6 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         if (!reopenOk) {
           return;
         }
-        roundsLeft -= 1;
         round += 1;
         const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
         systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — one more round after the verifier found gaps.\n`);

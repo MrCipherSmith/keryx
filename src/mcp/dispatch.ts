@@ -15,7 +15,7 @@ import {
   type ResourceContents,
   type ResourceListing,
 } from "./resources";
-import { redactToolOutput } from "./redact-seam";
+import { validateToolOutput, validateTextOutput, type OutputRedaction } from "./redact-seam";
 
 export interface McpContext {
   cwd: string;
@@ -74,6 +74,7 @@ export function dispatchListTools(ctx: McpContext): ToolListing[] {
 export interface ToolCallResult {
   text: string;
   isError: boolean;
+  redaction: OutputRedaction;
 }
 
 // Invoke a tool and return its redaction-routed, JSON-serialized result. A
@@ -86,17 +87,16 @@ export async function dispatchCallTool(
 ): Promise<ToolCallResult> {
   const tool = visibleTools(ctx).find((entry) => entry.name === name);
   if (!tool) {
-    return { text: `Unknown or unavailable tool: ${name}`, isError: true };
+    return { text: "Unknown or unavailable tool.", isError: true, redaction: { state: "none", reasons: [] } };
   }
   try {
     const result = await tool.invoke(ctx.cwd, args ?? {}, { transport: ctx.transport });
-    const json = JSON.stringify(result ?? null, null, 2);
-    // M-5 / AC4: EVERY tool result passes through redactRaw before transport.
-    const redacted = await redactToolOutput(ctx.cwd, json, ctx.config.redactToolOutput);
-    return { text: redacted, isError: false };
+    const safe = validateToolOutput(result ?? null, tool.outputSchema);
+    return { text: safe.text, isError: !safe.ok, redaction: safe.redaction };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { text: `Tool ${name} failed: ${message}`, isError: true };
+    const message = error instanceof Error ? error.message : typeof error === "string" ? error : "Tool execution failed.";
+    const safe = validateTextOutput(message);
+    return { text: safe.text, isError: true, redaction: safe.redaction };
   }
 }
 
@@ -110,9 +110,18 @@ export async function dispatchListResources(ctx: McpContext): Promise<ResourceLi
 export async function dispatchReadResource(
   ctx: McpContext,
   uri: string,
-): Promise<ResourceContents> {
+): Promise<ResourceContents & { redaction: OutputRedaction }> {
   if (!ctx.discovery.mcpEnabled || !ctx.discovery.exposeResources) {
     throw new Error("Resources are not exposed for this workspace.");
   }
-  return readResource(ctx.cwd, ctx.config.resources.roots, uri);
+  try {
+    const contents = await readResource(ctx.cwd, ctx.config.resources.roots, uri);
+    const safe = contents.mimeType === "application/json"
+      ? validateToolOutput(JSON.parse(contents.text))
+      : validateTextOutput(contents.text);
+    if (!safe.ok) throw new Error("format-unsafe: resource output cannot be represented safely");
+    return { ...contents, text: safe.text, redaction: safe.redaction };
+  } catch {
+    throw new Error("Resource unavailable or format-unsafe.");
+  }
 }

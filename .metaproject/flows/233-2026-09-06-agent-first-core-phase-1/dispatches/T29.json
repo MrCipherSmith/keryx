@@ -1,0 +1,40 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T29",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Retain the config memoization regression under the mandatory redaction floor",
+    "description": "src/security/service.memo.test.ts:162 currently fails: it expects a FRESH service created after the PII policy is disabled to return the email raw, which conflicts with the new mandatory deterministic redaction floor (T19/T22) that masks recognized PII/secrets regardless of advisory policy. Rewrite only this test so it still proves memoization (one service keeps the config it loaded; a fresh one picks up the change) through an observable that the floor does not mask: e.g. the advisory findings array / categories reported by redact(), or another config-dependent signal you verify by reading service.ts. Do not weaken the floor, do not delete the regression, do not touch production code. Keep the rest of the file intact. Write T29-implementation.md and T29-result.json.",
+    "intent": "test"
+  },
+  "acceptance_criteria": [
+    "AC2 (AFC-02) and AC5 (AFC-15): the mandatory floor keeps masking the synthetic email in redacted output even when the advisory PII policy is disabled; the test does not assert raw PII in output.",
+    "The memoization property remains under test: a service created before the config change keeps behaving per the old config on a later call, and a fresh service observes the new config; both halves are asserted via a signal the floor does not mask.",
+    "bun test src/security/service.memo.test.ts passes fully; no other file is changed."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T22-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/service.memo.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/quality/tests-creator/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; use bun src/cli.ts (global keryx is stale).",
+    "Ownership: ONLY src/security/service.memo.test.ts. No production edits. No git state, network, model, global suite, dependency or flow-file changes. Synthetic values only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T29-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:12:00+00:00", "created_by": "flow-orchestrator" }
+}

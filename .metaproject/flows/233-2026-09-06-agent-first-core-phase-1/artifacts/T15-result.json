@@ -1,0 +1,94 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T15",
+  "status": "DONE",
+  "summary": "Stage 1 MCP HTTP host/port validation and pinned loopback binding remain compliant. The original F-001 DNS-rebinding Host/Origin finding was confirmed pre-fix and resolved by restricting the request allowlist to the verified numeric bind address and reserved localhost.",
+  "summary_markdown": "See T15-review.md for the preserved pre-fix finding and T15-recheck.md for current-path evidence, regression results, and scoped limitations.",
+  "acceptance": [
+    {
+      "criterion": "Only verified unambiguous loopback binds; wildcard/nonloopback and resolution errors fail before SDK connection/bind.",
+      "status": "met",
+      "evidence": "loopback-host.ts validates numeric literals, resolves hostnames with bounded all-address lookup, rejects non-loopback/ambiguous/error results; local tests cover invalid hosts and ports before connect."
+    },
+    {
+      "criterion": "Host/Origin cannot bypass local HTTP boundary; failures do not leak unsafe input or report startup success.",
+      "status": "met",
+      "evidence": "Foreign Host/Origin, cross-site headers, and configured-name same-origin headers are refused; the guard receives only the verified numeric bind address and reserved localhost, and errors remain generic."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "T15 staged MCP HTTP security review",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "T15 subagent result contract",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-recheck.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "T15 post-fix security recheck",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "problem": "The MCP HTTP request guard allows the original arbitrary configured DNS hostname in Host and matching Origin headers after binding to a single verified loopback address.",
+      "impact": "An attacker controlling that hostname's DNS/origin can issue same-origin browser requests to the unauthenticated local MCP transport after DNS rebinding, bypassing the intended browser-origin boundary.",
+      "suggested_fix": "Allow only the pinned numeric bind address and reserved localhost, or revalidate the configured hostname against the pinned address on each request before dispatch.",
+      "evidence": "src/mcp/transport/http-sse.ts:32-37 and :65; direct deterministic call with an arbitrary configured host and matching Host/Origin returned accepted=true; transport.handleRequest then executes and http-sse.ts:6 documents no authentication.",
+      "confidence": "high",
+      "file": "src/mcp/transport/http-sse.ts",
+      "line": 65,
+      "symbol": "startHttpTransport",
+      "class_scope": {
+        "sites": [
+          "src/mcp/transport/http-sse.ts:32-37",
+          "src/mcp/transport/http-sse.ts:65"
+        ],
+        "enumeration_method": "Read all target transport code and trace the only request guard call from startHttpTransport to isTrustedMcpHttpRequest; direct pure-function reproduction confirmed acceptance."
+      },
+      "blocking_merge": false,
+      "related_skill": "gdskills/review/review-security-code",
+      "learning_candidate": true,
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Root change removed the configured DNS name from the runtime allowlist and made the guard reject nonnumeric/non-localhost entries; T15-recheck.md records the post-fix reproduction and focused test evidence."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "The pre-fix deterministic reproduction accepted the configured-name Host/Origin pair. The post-fix reproduction rejects it and accepts the pinned numeric and reserved-localhost cases; focused HTTP, boundary, and installer tests pass 26/0.",
+        "verifier": "review-security-code"
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "targeted_tests_pass": 26,
+    "targeted_tests_fail": 0,
+    "stage1": "pass",
+    "source_edits": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T11:34:00Z"
+}

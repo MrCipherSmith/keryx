@@ -1,0 +1,66 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T20",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Recursive security scan with explicit coverage",
+    "description": "Implement AFC17 and security completeness portionAFC05 from T7 RED and policies. CLI scan accepts a file or recursive directory by default, flags --recursive, --max-files, --max-bytes, explicit exclusions. Walk narrow authorized scope, internal symlinks only, canonical identities visited once, no cycles, bound directories/depth/count/bytes; refuse external targets, never leak external names/content. Use shared readContainedFile descriptor reader after T18 identity fix. Capture declared scope/excludes/limits before traversal; preserve all valid findings when another file is unavailable/denied/limited. coverage:{status,required,reasons}, files:[{path,status,reason?}] additive; scan report FAIL dominates finding threshold but coverage incomplete remains. Missing required source/report and parser/execution failure must not be called PASS. Propagate incomplete through CLI/gate/service/report/schema consumers and tell root about outside ownership adapter unions. Keep root-added service validateSerializedOutput and redact integration intact. No guard/output-validation/detector changes; root owns these. Use path-scan module to avoid command/service monolith and avoid import cycles. Security service.check error should be incomplete rather than fabricated pass if touching that path, inform root for guard strict rejection.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "Nested directory default recursion, internal symlink canonical duplicate once, cycle termination.",
+    "Denied/unreadable/limit yields incomplete required coverage without dropping already established findings or exposing unauthorized target names.",
+    "File and directory CLI/runtime reports include declared scope/exclusions/limits and per-file scanned/skipped/failed outcomes; matching gate/exit statuses truthful."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
+    "/Users/Goodea/goodea/keryx/src/security/report.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
+    "Branch codex/agent-first-core; no git/flow/frozen AC/dependencies/package/lock modifications, stats disabled, auto_commit false. No real models/network.",
+    "Explicit target_files ownership only plus same-area focused test files; root owns cross-module integration. No global tests while independent RED work runs.",
+    "Write implementation spec before production; preserve initial RED evidence and add targeted GREEN result. Validate typed report/result and security-check artifacts. Do not review own implementation."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:30:39.400349+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

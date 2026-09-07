@@ -1,0 +1,62 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "origin-main-0bc6418-analysis",
+  "dispatch_id": "incoming-logic",
+  "orchestrator": "root",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Review incoming routing changes only",
+    "description": "Bounded independent review of commit 0bc6418 (HEAD^..HEAD), checking actual init/update gate migration and new tests. Do not review earlier benchmark removals; parent handles history comparison.",
+    "intent": "review",
+    "scope": "HEAD^..HEAD"
+  },
+  "acceptance_criteria": [
+    "Explain new behavior and existing-project migration",
+    "Report only reproducible correctness findings with exact current lines",
+    "Read changed tests; avoid claims full32planned requirements were scope of this commit"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "32 approved decisions; source of truth over older research proposals"
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+    ".metaproject/data/testing/context.md",
+    "src/lib/templates.ts",
+    "src/lib/templates.test.ts",
+    "src/commands/init.ts",
+    "src/commands/update.ts",
+    "src/commands/update.test.ts",
+    "src/lib/agent-entrypoint-blocks.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read index first",
+    "Read-only source; no implementation, installs, commits, or docs package work",
+    "CurrentHEAD0bc6418fa1a038f8ec909cf949fecba077acf9a4; graph refreshed; code searches through keryx ctx rg",
+    "Write only own review report .metaproject/jobs/audit-2026-09-06/origin-main-logic.md; Version underH1",
+    "User stopped docpack temporarily to analyze incoming main; no execution metrics",
+    "Parent runs focusedtests; you need not rerun them",
+    "Treat commit message compact gate/navigation pointers as expectedbehavior, not entire32pointplan"
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command",
+    "write"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/jobs/audit-2026-09-06/origin-main-logic-result.json",
+    "summary_max_tokens": 600
+  },
+  "budget": {},
+  "provenance": {
+    "created_at": "2026-09-06T08:36:56.153828+00:00",
+    "created_by": "root",
+    "source_request": "запускай docpack-orchestrator и готовь пакет документации и спецификации"
+  }
+}

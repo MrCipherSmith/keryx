@@ -1,0 +1,82 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T69",
+  "status": "DONE",
+  "summary": "Closed T62-review.md F-005: three sites in src/health/run.ts (the adapter.detect, adapter.import/run, and adapter.parse catch arms in runAdapter) interpolated a caught error's raw message into SourceRunInfo.error, which computeGate (gate.ts:78-79, unmodified, out of ownership) folds verbatim into gate.reasons -- reaching both the committable latest.json artifact and, through the flow completion gate, flow.json's durable history. Verified the three sites live and enumerated exhaustively (two ctx-rg sweeps of the whole src/health/ tree: only run.ts binds a caught error value anywhere in the module; every other catch in src/health/ uses the bare `catch { }` form that cannot leak by construction) before changing anything -- no fourth site exists. Fixed by adding safeErrorCode/errorCodeSuffix helpers mirroring T49's safeFsErrorCode pattern (duplicated, not imported, across the ownership boundary): each site now builds error from a constant category name (\"source detection failed\" / \"source execution failed\" / \"source parse failed\") plus an optional closed-vocabulary Node errno code, never the message. Confirmed by reading gate.ts in full that the fold (brokenRequired filter, status escalation) branches only on status/execution/parse, never on error's content, so no verdict can move by construction. Four regression tests plant a filesystem path and a fake credential in a thrown Error at each site and assert neither survives into SourceRunInfo.error or into computeGate's reasons, while the source name and the incomplete gate status still do. First test design (mock.module(\"./sources\", ...) driving the full runHealth()) was rejected after it was found to corrupt an unrelated test in provenance.test.ts when both files ran in the same bun test process (Bun's mock.module replaces the shared module registry process-wide); redesigned to export runAdapter (test-only, documented) and drive it directly with computeGate instead, eliminating the module-registry risk entirely. bun test src/health/ src/commands: 1099 pass / 0 fail (re-run twice, stable), bun run typecheck clean, eslint clean on both changed files.",
+  "acceptance": [
+    {
+      "criterion": "AC8: reasons and details reaching a durable or published artifact are constant or built only from safe enumerable tokens; no raw error text, path or source bytes.",
+      "status": "met",
+      "evidence": "All three sites in src/health/run.ts's runAdapter now build SourceRunInfo.error from a constant category string plus errorCodeSuffix(error), which returns either '' or a Node errno code matched against /^[A-Z][A-Z0-9]{2,15}$/ -- never error.message or String(error). computeGate (unmodified) interpolates source.error verbatim into gate.reasons, so a safe producer guarantees a safe consumer output for this path. Four regression tests plant /Users/attacker/.ssh/id_rsa and AKIAIOSFODNN7EXAMPLE in a thrown Error at each of the three catch sites and assert both are absent from info.error AND from computeGate(...).reasons.join('\\n'); pre-fix (RED) all three leaked verbatim, post-fix (GREEN) none does. A fourth test asserts the errno code (ENOENT) IS kept, proving the fix removes only the unsafe part."
+    },
+    {
+      "criterion": "Enumerate every place in the health run path that builds a reason/message carrying caught text or a path, and say how; check whether there are more than the three F-005 names.",
+      "status": "met",
+      "evidence": "Two ctx-rg sweeps over the whole src/health/ tree (not only run.ts), documented in T69-implementation.md and T69-spec.md: (1) every error.message/String(error)/'.message' occurrence in run.ts, gate.ts, service.ts, config.ts, sources/ -- 8 matches, 3 are the named sites, the other 5 are Finding.message (a structurally different, out-of-scope field that never reaches gate.reasons); (2) every 'catch' in src/health/ -- 22 matches across 14 files, and run.ts is the ONLY file that binds the caught value (catch (error)); every other catch uses the bare catch { } form, which cannot interpolate by construction. Result: exactly three sites, matching F-005 exactly, no fourth found anywhere in the module."
+    },
+    {
+      "criterion": "Keep diagnostic value where possible; where the only safe answer removes it, say so and propose the alternative.",
+      "status": "met",
+      "evidence": "Each site keeps the category of failure (which of detect/execution/parse could not be completed) as a constant, and a closed-vocabulary Node errno code when the caught value carries one (the realistic shape for detect/execution failures, which read config files or spawn tools). Parse failures typically carry no .code (JSON.parse throws a plain SyntaxError); for those the category name alone survives, but this is not a diagnostic regression: every source adapter's well-understood parse failures (malformed JSON, unrecognized format) already have their own dedicated safe messages via adapter.validate(), untouched by this fix -- the parse catch this fix changes is reserved for a genuinely unexpected parser bug, for which 'parse failed' with no further detail is the honest ceiling, documented explicitly in T69-implementation.md rather than silently accepted."
+    },
+    {
+      "criterion": "The gate verdicts do not move: a source that fails still yields the same status it yields today, and every currently passing invocation still passes.",
+      "status": "met",
+      "evidence": "Read gate.ts's brokenRequired filter and escalate() calls in full: they branch only on source.required/status/execution/parse, never on source.error's content -- confirmed by inspection, not merely by testing, so no verdict can move by construction. All three regression tests assert gate.status === 'incomplete' post-fix, matching the status a required unavailable source has always produced. Full bun test src/health/ src/commands (1105 tests, 1099 pass/6 skip/0 fail, run twice) shows zero regressions among any pre-existing test."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/health/ src/commands stays green.",
+      "status": "met",
+      "evidence": "RED (bun test src/health/health-truthful-gate.test.ts -t F-005, run against run.ts with the three error: lines temporarily reverted via sed, not git): 3 failed / 1 passed, all three on the identical not-toContain(ATTACKER_PATH) assertion with the planted path and credential shown verbatim in the received value. GREEN (same command, run.ts restored): 4 pass / 0 fail / 32 expect(). bun src/cli.ts ctx run -- bun test src/health/ src/commands: 1099 pass / 6 skip / 0 fail / 4067 expect() across 97 files, run twice for stability, identical both times."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The site enumeration (method and result) written before any code change, the fix design (safeErrorCode/errorCodeSuffix mirroring T49's pattern), the per-site diagnostic-value analysis, what must not move (gate.ts's fold reasoning), the regression-test plan and the verification plan."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full writeup: the enumeration re-confirmed, the fix, the diagnostic-value tradeoff per site, the mock.module cross-file hazard found and worked around (with the redesigned test approach), RED/GREEN transcripts, every verification command with raw log paths, and a Concerns section disclosing an accidental git stash on run.ts that was caught and reversed within the same turn."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/health/run.ts",
+      "change": "Added safeErrorCode (returns a caught error's Node errno code only when it matches the short uppercase constant shape, else undefined -- never error.message) and errorCodeSuffix (renders that as ' (CODE)' or '') above runAdapter. The three F-005 catch arms (adapter.detect, adapter.import/run, adapter.parse) now build SourceRunInfo.error from a constant category name plus errorCodeSuffix(error) instead of interpolating error.message/String(error). runAdapter changed from a private function to `export async function runAdapter`, documented inline as a test-only export so this module's focused tests can drive its throwing paths directly without mocking ./sources. No other line, type, exported signature, or gate-fold logic changed."
+    },
+    {
+      "path": "src/health/health-truthful-gate.test.ts",
+      "change": "Added HealthContext and SourceAdapter to the ./types import and runAdapter to the ./run import. Added four regression tests (one per F-005 catch site, plus one proving the errno code is deliberately kept) and their shared fixtures (ATTACKER_PATH, FAKE_CREDENTIAL, leakyError, unreachable, healthContext, runThrowingSource) at the end of the file. These call runAdapter and computeGate directly rather than mocking ./sources through runHealth(), after the mocking approach was found to corrupt an unrelated test in provenance.test.ts when both files ran in the same bun test process."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 4,
+    "tests_passing_focused_file": 12,
+    "tests_failing_focused_file": 0,
+    "tests_passing_dispatch_suite": 1099,
+    "tests_failing_dispatch_suite": 0,
+    "tests_skipped_dispatch_suite": 6,
+    "typecheck_errors": 0,
+    "eslint_errors_changed_files": 0
+  },
+  "timestamp_utc": "2026-09-06T18:15:00Z"
+}

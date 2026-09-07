@@ -42,7 +42,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
-import type { AnthropicCapabilityGrant, AnthropicProviderDeps } from "./anthropic-provider";
+import type { AnthropicCapabilityGrant } from "./anthropic-provider";
 import { AnthropicProvider } from "./anthropic-provider";
 import type { NormalizedError, NormalizedEvent, NormalizedRequest, StreamOptions } from "../types";
 

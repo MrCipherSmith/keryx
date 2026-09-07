@@ -2,9 +2,14 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { pathExists } from "../lib/fs";
-import { readJsonFileOr } from "../lib/json";
+import { readJsonObjectFile } from "../lib/json";
 import { SECURITY_CONFIG_SCHEMA, validateAgainstSchema } from "./schemas";
-import type { InjectionModelBackend, PolicyConfig, SecurityConfig } from "./types";
+import type {
+  InjectionModelBackend,
+  PolicyConfig,
+  SecurityConfig,
+  SecurityMode,
+} from "./types";
 
 // Default config from specification.md §5. `configChecksum` is intentionally
 // omitted from the default object and computed on demand (see below).
@@ -178,16 +183,88 @@ export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityCo
   return merged;
 }
 
+/**
+ * The closed `SecurityMode` union (`types.ts`), which the shipped config schema
+ * also enumerates (`schemas.ts`), as a runtime check.
+ *
+ * `mergeSecurityConfig` takes `parsed.mode` on trust, and every consumer that
+ * branches on the mode -- `isBlockingMode` in `guard.ts`, `exitCodeFor` and
+ * `reportExitCode` in `commands/security.ts`, `MODE_RANK` in `self-protect.ts`
+ * -- tests it for the STRICT values and falls through to the permissive side.
+ * So a mode this build does not know (`"ENFORCED"`, a trailing space, a typo,
+ * a schema drift between versions) used to make an enforced/ci workspace
+ * report-only with no operator-visible signal at any decision point, and
+ * `MODE_RANK[mode]` being `undefined` kept the §14 downgrade check silent about
+ * it too (T39 F-002). That is the same shape T35 F-003 described for the config
+ * file's SHAPE, one field further in: a declared posture this build cannot
+ * recognize is an UNESTABLISHED posture, not a permissive one.
+ */
+const SECURITY_MODES: ReadonlySet<string> = new Set<SecurityMode>([
+  "advisory",
+  "enforced",
+  "ci",
+  "gateway",
+]);
+
+function isSecurityMode(value: unknown): value is SecurityMode {
+  return typeof value === "string" && SECURITY_MODES.has(value);
+}
+
 // Load `.metaproject/security.config.json`, falling back to the built-in
-// defaults when it is absent. Malformed JSON also falls back to defaults so the
-// module keeps operating (advisory-safe).
+// defaults when the file is ABSENT -- that is the ordinary, non-blocking
+// "never configured" case and is unchanged from before.
+//
+// A file that EXISTS but cannot be read as one -- invalid JSON, or JSON that
+// parses to something other than a plain object (`null`, an array, a number,
+// a string) -- is a different case: the workspace's own posture cannot be
+// established, so the result is the defaults with `mode` forced to
+// `"enforced"` and `configUnreadable: true`, not the permissive `advisory`
+// default a missing file gets (T35 F-003, the residual of T30 F-001/T33: a
+// destroyed config used to silently downgrade an enforced/ci workspace to
+// report-only with no operator-visible signal at any decision point).
+// `guardOutput` and `securityFlowGate` treat `configUnreadable` through their
+// existing posture-unavailable branches, so this stays leak-safe -- the flag
+// carries no error text, path, or source bytes.
+//
+// A file that parses to a mergeable object but DECLARES a mode outside the
+// closed `SecurityMode` union takes the same path (T39 F-002). The rest of that
+// config is kept -- it parsed fine, and the operator's own `policies` and the
+// `configChecksum` §14 verifies against them are still theirs -- but the mode
+// is forced to `"enforced"` and the posture is flagged unreadable, because an
+// unrecognized mode is a posture this build cannot establish and must never be
+// more permissive than the strictest mode it can. An ABSENT `mode` key is not
+// that case: it is the ordinary "no mode configured" a bare `{}` produces, and
+// keeps resolving to the `advisory` default exactly as before.
 export async function loadSecurityConfig(cwd: string): Promise<SecurityConfig> {
   const file = configPath(cwd);
   if (!(await pathExists(file))) {
     return mergeSecurityConfig({});
   }
-  const parsed = await readJsonFileOr<Partial<SecurityConfig>>(file, {});
-  return mergeSecurityConfig(parsed);
+  // `readJsonObjectFile` (`../lib/json`) answers the two questions this branch
+  // has to tell apart -- "did it parse" and "is it the object `mergeSecurityConfig`
+  // can merge" -- in one result. It replaces a module-local `Symbol` sentinel
+  // and a local `isMergeableConfigPayload` predicate that existed only because
+  // `readJsonFileOr` collapses a parse failure into whatever fallback is
+  // passed, and `{}` is a value a real config file can also produce (T39
+  // "Judgement calls" #4). The verdict is unchanged: a payload that does not
+  // parse and a payload that parses to `null`/`[]`/`42`/`"advisory"` are both
+  // a posture this workspace cannot establish.
+  const read = await readJsonObjectFile(file);
+  if (read.state !== "object") {
+    return { ...mergeSecurityConfig({}), mode: "enforced", configUnreadable: true };
+  }
+  const parsed = read.value as Partial<SecurityConfig>;
+  const merged = mergeSecurityConfig(parsed);
+  // The value that must be recognized is the one the FILE declares. `merged.mode`
+  // cannot answer this alone: `mergeSecurityConfig` applies `??`, so a present
+  // `"mode": null` -- a key that is there and is not a mode -- would otherwise
+  // arrive here already replaced by the permissive default.
+  const declaredMode = read.value.mode;
+  const configuredMode = declaredMode === undefined ? merged.mode : declaredMode;
+  if (!isSecurityMode(configuredMode)) {
+    return { ...merged, mode: "enforced", configUnreadable: true };
+  }
+  return merged;
 }
 
 // Stable JSON stringify with sorted object keys, so the checksum is stable

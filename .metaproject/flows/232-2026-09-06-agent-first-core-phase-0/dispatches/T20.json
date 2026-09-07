@@ -1,0 +1,45 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T20",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Correct the untruthful terminal reason and the stale budget documentation found by the final independent review",
+    "description": "Close the four findings of the final independent M10 review (T16-final-review.md), regression first. F-001 (major): an unattended no-progress stop emits TerminalState reason budget_exhausted while both budgets still have capacity; probe C11 observed 16 rounds and 47 calls remaining with finishReason no-progress reported as the round budget. Report the reason the stop actually had: the TerminalState reason union already carries tool_call_budget_exhausted and an unused other, so pick or add the truthful value rather than reusing the budget one, and add a regression asserting that a no-progress stop with remaining capacity is not reported as budget exhaustion while the genuine budget stops keep their existing reasons. Enumerate all four emitTerminalState call sites and confirm the other three already report truthfully. F-002 (minor): offerRoundLimitReset's documentation still promises that cancel falls through to finishWithBudgetSummary, which T19 removed and agent.test.ts:985 asserts against. F-003 (minor): spawn-subagent-tool.ts documents BudgetExhausted as the round budget only, while the tool-call budget deliberately maps there too; document the real mapping. F-004 (minor): the trailing round guard is byte-identical to the loop-entry guard and is the loop body's last statement, so the same rule is hand-synced in two places; remove the duplication so a future edit cannot desynchronise them, without changing behavior. Write T20-spec.md before coding, then T20-implementation.md and T20-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds. A stop that no budget caused must not be reported as a budget stop.",
+    "AC6: independent review reports no unresolved blocker, major or minor findings; the four T16 findings are each closed by an executed regression or a documentation correction the review can verify.",
+    "No behavioral regression: the fifteen probe cases in T16-final-core-budget-probe.ts and T16-final-child-budget-probe.ts still pass, and the focused agent, budget, child and stress suites stay green."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-child-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/commands/agent.ts and its focused tests, src/harness/tool/builtin/spawn-subagent-tool.ts and its test. Do not touch src/security/*, src/mcp/*, .metaproject/flows state, package.json or the lockfile: other workers own the security files concurrently.",
+    "Deterministic in-memory providers only. No real provider, no network, no API key, no paid model call, no bun test without file arguments.",
+    "If changing the TerminalState reason union would break a recorded consumer, say so and choose the smallest truthful option instead of widening the change.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:35:00+00:00", "created_by": "flow-orchestrator" }
+}

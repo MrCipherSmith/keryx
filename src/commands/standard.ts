@@ -15,7 +15,7 @@ import {
 } from "../standard/service";
 import { STANDARD_VERSION } from "../standard/profiles";
 import { emitLlms, validateLlms } from "../standard/emit-llms";
-import type { Issue, ValidationResult } from "../standard/types";
+import type { Issue } from "../standard/types";
 import { classifyBaselineStatuses, type BaselineStatus } from "../standard/baseline";
 import { optionValue } from "../lib/args";
 

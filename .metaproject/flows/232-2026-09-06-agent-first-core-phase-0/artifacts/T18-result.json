@@ -1,0 +1,441 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T18",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Resolved all 146 manifest-listed ESLint findings across the 90 explicitly owned files with no blanket suppression. Intentional ANSI/control patterns, hanging generators, generated-template escapes, and sanitized public error boundaries use narrow explained exceptions; other edits are mechanical or preserve side-effectful calls. The TUI side-worker finally block now contains cleanup only, with queue control flow immediately afterward. Manifest lint and 350 focused tests pass. Full typecheck has no T18-owned diagnostics but remains nonzero for 12 concurrent containment-lane diagnostics, so no global quality PASS is claimed.",
+  "summary_markdown": "T18 is lane-complete: **90/90 files lint clean, 350/350 focused tests pass, and zero T18-owned TypeScript diagnostics**. Full typecheck remains externally incomplete on 12 concurrent containment-lane diagnostics.",
+  "acceptance": [
+    {
+      "criterion": "Owned files pass recommended lint with no blanket suppression.",
+      "status": "met",
+      "evidence": "Explicit ESLint invocation over all 90 paths from T18-lint-scope.json exited 0 with 0 findings. Exceptions are rule-specific and limited to intentional constructs or sanitized catch boundaries."
+    },
+    {
+      "criterion": "Behavior is preserved or any necessary defect correction has focused runtime regression and explanation.",
+      "status": "met",
+      "evidence": "Side-effectful initializers were retained, code-point ranges remain identical, and queue control flow moved immediately after finally. Existing focused TUI, Markdown-width, templates, command, search, tool, registry, balance, and VSCode suites passed 350/350; T18-verification.md records the semantic assessment."
+    },
+    {
+      "criterion": "No conflicting source/config/dependency/flow/git mutations; exact check evidence and unresolved concerns reported.",
+      "status": "met",
+      "evidence": "Only the explicit 90-file manifest and T18 artifacts were edited; no package/config/dependency/flow state/git operations. Full typecheck\u2019s 12 remaining diagnostics are all in concurrently owned containment files and are reported without a global PASS claim."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-implementation-report.json",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Validated task-implementer output with exact scope and verification classification.",
+      "hash": "639f08563d77da1b43505e21a3f00e42f4b8e2e3c4f48f2bbe546aeecc4d5512"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Exact lint/test/typecheck evidence, semantic assessment, finding-class inventory, and routing audit.",
+      "hash": "865463f7f2b30006cf69ec7a7fcad6f07ed3b2fcf14551d243ac245cc2bf89fa"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-lint-scope.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Immutable initial 90-file/146-finding manifest authored by the orchestrator.",
+      "hash": "6bf3aefed8d7df3ee9c1d77e405a8558d8873b6de4adbde090276f64308570bf"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "scripts/benchmark/run-containment.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "scripts/stress/keryx-shell-stress.ts",
+      "change": "resolved manifest lint: require-yield, @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/commands/goal-command.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/commands/harness.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/commands/init.no-git.test.ts",
+      "change": "resolved manifest lint: no-control-regex"
+    },
+    {
+      "path": "src/commands/init.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/commands/review.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/commands/serve.cli.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/commands/shell-pty-launch.smoke.test.ts",
+      "change": "resolved manifest lint: no-control-regex"
+    },
+    {
+      "path": "src/commands/shell.ts",
+      "change": "resolved manifest lint: prefer-const, no-useless-assignment"
+    },
+    {
+      "path": "src/commands/standard.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/commands/test.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/commands/workspace.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/ctx/runtimes.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/flow/review-gate.e2e.test.ts",
+      "change": "resolved manifest lint: parser compatibility"
+    },
+    {
+      "path": "src/flow/service.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/gdgraph/build.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/gdgraph/fallback.test.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/gdskills/bundled-eval.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/gdskills/project-skills.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/harness/child/escalation.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/harness/child/isolation.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/extension/execute.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/mutation/guard.loopback.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/policy/profiles.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/process/sandbox/proxy.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/process/shell-spawn.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/harness/provider/anthropic/anthropic-negatives.hardening.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/resume/recovery.hardening.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/run/run.test.ts",
+      "change": "resolved manifest lint: parser compatibility"
+    },
+    {
+      "path": "src/harness/search/controller.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/search/registry.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/tool/builtin/interactive-tools.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/harness/web/web-worker-runner.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/fs.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/lib/gdgraph-post-commit.test.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/lib/git-hooks.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/json.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/lib/md-blocks.ts",
+      "change": "resolved manifest lint: no-irregular-whitespace, no-misleading-character-class"
+    },
+    {
+      "path": "src/lib/metaproject-gitignore.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/lib/project-registry.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/project-registry.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/serve-config.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/lib/serve-credential.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/serve-server.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/serve-server.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/lib/serve-turn.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/lib/templates.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/lib/version-check.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/mcp-client/client.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/memory/embedding/embedding.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/memory/p5-temporal-config-catalog.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/memory/supersede.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/memory/temporal.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/metrics/comparative.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/metrics/service.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/review/managed.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/rules/agent-entrypoints.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/sac/catch-up.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/sac/fwk-service.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/sac/machine-wrap-up.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/sac/policy-experiment.test.ts",
+      "change": "resolved manifest lint: no-useless-escape"
+    },
+    {
+      "path": "src/sac/proposal-lifecycle.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/sac/proposal-lifecycle.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/session/slate-lifecycle.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/session/store.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/standard/emit-llms.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/standard/service.ts",
+      "change": "resolved manifest lint: preserve-caught-error"
+    },
+    {
+      "path": "src/testing/service.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/tui/background-job-inspector.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/balance-panel.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/tui/balance-panel.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/tui/chat-shell.test.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/tui/external-inspector.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/game-modal.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/games/modal.test-helpers.ts",
+      "change": "resolved manifest lint: require-yield"
+    },
+    {
+      "path": "src/tui/games/modal.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/tui/games/modal.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars, prefer-const"
+    },
+    {
+      "path": "src/tui/mcp-inspector.test.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/mcp-inspector.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/tui/review-buttons.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "src/tui/shell-chrome.ts",
+      "change": "resolved manifest lint: no-useless-assignment"
+    },
+    {
+      "path": "src/tui/shell-fallback.test.ts",
+      "change": "resolved manifest lint: no-control-regex"
+    },
+    {
+      "path": "src/tui/subagent-inspector.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/theme-picker.ts",
+      "change": "resolved manifest lint: prefer-const"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars, no-unsafe-finally"
+    },
+    {
+      "path": "src/wiki/refresh.test.ts",
+      "change": "resolved manifest lint: @typescript-eslint/no-unused-vars"
+    },
+    {
+      "path": "vscode-extension/src/hover-logic.test.ts",
+      "change": "resolved manifest lint: parser compatibility"
+    },
+    {
+      "path": "vscode-extension/src/status-bar-logic.test.ts",
+      "change": "resolved manifest lint: parser compatibility"
+    },
+    {
+      "path": "vscode-extension/src/tree-view-logic.test.ts",
+      "change": "resolved manifest lint: parser compatibility"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-implementation-report.json",
+      "change": "created task-implementer output report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-verification.md",
+      "change": "created exact lint, test, typecheck, semantic-assessment, and routing evidence"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-result.json",
+      "change": "created subagent result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 2,
+    "initial_lint_findings": 146,
+    "final_lint_findings": 0,
+    "owned_files": 90,
+    "tests_passing": 350,
+    "tests_failing": 0,
+    "typecheck_t18_errors": 0,
+    "typecheck_external_errors": 12,
+    "global_suite_run": false,
+    "quality_gate_claim": "lane-pass-only"
+  },
+  "timestamp_utc": "2026-09-06T12:06:47Z"
+}

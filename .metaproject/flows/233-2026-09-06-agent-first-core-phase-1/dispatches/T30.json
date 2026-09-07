@@ -1,0 +1,45 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T30",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Independent review of the strict guard and flow-gate incomplete propagation fix (T27)",
+    "description": "Independently review the T27 change to src/security/guard.ts. You did not write it. Stage 1 (specification compliance) must verify with your own executed probes, not the implementer's report: (1) enforced and ci modes block on gate incomplete with a masked reason that leaks no raw error, path or content; (2) advisory keeps allowed true and still carries truthful incomplete diagnostics; (3) formatGuardWarning reports incomplete even with zero findings, still returns null for a genuine zero-finding pass, and shows a finding together with an incomplete gate; (4) securityFlowGate maps an incomplete stored report to fail, and its catch branch returns a constant fail rather than a non-blocking skipped with an interpolated error message; confirm against src/flow/service.ts how each gate status is actually consumed, since a status the completion gate ignores is not a gate. Then assess the residual fail-open the implementer disclosed: guardOutput's outer try/catch still degrades to allowed true on any thrown error, including a loadSecurityConfig failure. Decide and state whether the current perimeter is acceptable under AC8 and policies.md, or whether task T31 must close it before phase acceptance, and name the exact minimal change and its owner file. Also verify no security-relevant behavior regressed for the previously passing 13 cases. Stage 2 (code quality: comment accuracy, constant strings, dead branches, test quality) only after Stage 1 passes. Write T30-review.md and T30-result.json.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a found violation and an incomplete coverage state are visible at the same time; incomplete is never relabeled as pass.",
+    "AC8: no required failed/incomplete check is relabeled PASS; strict (enforced/ci) guards and the strict flow gate refuse incomplete evidence while advisory retains truthful incomplete diagnostics; partial acceptance is not full phase completion.",
+    "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS; no reason or detail echoes raw error text, a path, or source bytes."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-result.json", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/config.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/flow/service.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-security-code/SKILL.md and review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Read-only on production and test code. Write only T30-review.md, T30-result.json and probe scripts named T30-*.ts under the flow artifacts dir; temp fixtures under mkdtemp, removed afterwards.",
+    "No git state changes, no flow state, no network, no model calls, no global test suite, no dependency changes, no real credentials or PII. Stats disabled. Stage1 before Stage2.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:17:00+00:00", "created_by": "flow-orchestrator" }
+}

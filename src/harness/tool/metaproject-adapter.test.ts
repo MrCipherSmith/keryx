@@ -216,11 +216,17 @@ test("memorySearch validates automatic-recall inputs at the port boundary", asyn
 });
 
 test("readWiki rejects a path that escapes the wiki root with a structured error result", async () => {
+  // Corrected expectation (T51): the old message interpolated the requested
+  // path into the error string. T6's contained-reader hardening replaced it
+  // with a constant, leak-safe literal that names no path — the same bar
+  // `metaproject-adapter-containment.test.ts`'s `assertSafeWikiError` holds
+  // readWiki to elsewhere in this file's own test suite. This is a corrected
+  // assertion catching up to that deliberate change, not a weakened one.
   const port = createMetaprojectAdapter(CWD, fakeDeps({}).deps);
   const result = await port.readWiki({ path: "../../etc/passwd" });
   expect(result.isError).toBe(true);
   expect(result.content).toBe("");
-  expect(result.error).toContain("escapes the wiki root");
+  expect(result.error).toContain("wiki path is outside its root");
 });
 
 test("readWiki rejects an absolute path escape", async () => {

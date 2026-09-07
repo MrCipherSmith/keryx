@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T19",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Core structural output validator and contextual detectors",
+    "description": "Implement pure validateOutputForTransport({value,format:json|text,schema?}) with ok discriminant, safe value/text and redaction state/reasons. Follow T7 proposal; core schema validation must fail closed on unsupported schema constructs instead of claiming complete JSON Schema. Keep JSON types, reject secret numeric fields as format-unsafe, preserve safe IDs/metrics, no field-name bypass for real secrets. Integrate existing redactSensitiveText into structural handling without import cycles. Improve sensitive URL query/path detection and distinguish ordinary public Markdown links from autofetch images/actual exfil operations. Keep deterministic model-independent/no-network. Add pure helper unit edge cases before implementation as needed. Root owns guard/service/MCP integration; scanner worker owns service/report/types/CLI. Do not edit these shared files.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "Safe metrics and IDs retain values and types; provider-pattern secrets always masked despite key name.",
+    "Sensitive URL query/path values masked; ordinary public markdown link creates no exfil finding, autofetch/injection defenses remain.",
+    "Pure transport validator preserves JSON shape and reports metadata; unsafe numeric/schema representations return constant format-unsafe without secret or hash."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/redact.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/pii.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/secrets.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.ts",
+    "/Users/Goodea/goodea/keryx/src/security/structural-detection.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
+    "Branch codex/agent-first-core; no git/flow/frozen AC/dependencies/package/lock modifications, stats disabled, auto_commit false. No real models/network.",
+    "Explicit target_files ownership only plus same-area focused test files; root owns cross-module integration. No global tests while independent RED work runs.",
+    "Write implementation spec before production; preserve initial RED evidence and add targeted GREEN result. Validate typed report/result and security-check artifacts. Do not review own implementation."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:14:40.078377+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

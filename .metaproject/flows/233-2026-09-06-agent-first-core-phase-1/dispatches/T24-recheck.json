@@ -1,0 +1,52 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T24-recheck",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Independent recheck of the four structural output boundary blockers after the T26 fix",
+    "description": "You are a third party: you neither wrote the original T24 review nor the T26 fix. Stage 1 (specification compliance) must re-establish, with your own probes rather than the previous artifacts, that each of the four blockers is genuinely closed and that the fix introduced no new hole. F-001: a recognized secret or PII span in an enumerable JSON property name returns format-unsafe and never renames the key; check that a safe key with digits, an ordinary numeric-string key and a key literally named password-with-safe-value still behave per the approved contract; verify the same closure through the real MCP transport, not only the pure validator. F-002: the new serialized adapter must not restore original bytes when a sensitive span present in the raw text is absent from the parsed value; the implementer chose byte-accountability over emitting a canonical redacted serialization, which is fail-closed but can reject a payload whose raw bytes carry a detected span missing from the parsed value; probe that trade-off deliberately, including the previously required allowed-and-redacted case with a long digit run next to a secret, and state whether the chosen branch satisfies policies.md. F-003: a local $ref with any unsupported sibling fails closed with reason schema.unsupported-reference-siblings while a bare $ref and an unresolvable $ref keep their previous reasons and leak no attacker-controlled text. F-004: HTML character references (decimal, hex, named, optional semicolon, doubly-encoded) and every srcset candidate are classified as auto-fetch, masking lands on the original bytes, and an ordinary public Markdown link is still not a finding; probe the decoder for a bypass it does not cover, such as whitespace or control characters inside the entity or a scheme-relative candidate. Also confirm no reason token, error text, metadata field or fingerprint carries the rejected value. Stage 2 (code quality) only after Stage 1 passes. Write T24-recheck.md and T24-recheck-result.json.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string.",
+    "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+    "Each of T24 F-001, F-002, F-003 and F-004 is closed by executed evidence, at the pure validator and at the public MCP/persistence boundary; the fix introduces no new bypass and no new false rejection of a payload the approved contract requires to pass."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/secrets.ts",
+    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/redact-seam.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/dispatch.ts",
+    "/Users/Goodea/goodea/keryx/src/security/persistence-sinks.test.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-security-code/SKILL.md and review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Read-only on production and test code. Write only T24-recheck.md, T24-recheck-result.json and probe scripts named T24-recheck-*.ts under the flow artifacts dir; never modify the original T24 artifacts.",
+    "No git state changes, no flow state, no network, no model calls, no global test suite, no dependency changes. Synthetic credentials only; never embed a real secret in an artifact.",
+    "Another reviewer may be probing src/security/path-scan.ts and runGate in service.ts concurrently; record file SHA-256 at start and end and exclude those areas.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:23:00+00:00", "created_by": "flow-orchestrator" }
+}

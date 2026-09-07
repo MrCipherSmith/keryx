@@ -141,7 +141,7 @@ function parseIpv6(value: string): number[] | null {
     return null;
   }
 
-  let head: string[] = [];
+  let head: string[];
   let tail: string[] = [];
   if (compressions === 1) {
     const [before, after] = text.split("::");

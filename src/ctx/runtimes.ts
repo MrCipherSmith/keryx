@@ -404,7 +404,6 @@ export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">
 }
 
 function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
-  const command = hookCommand(runtime.id);
   const expected = preToolUseMatcher(runtime);
   if (!hasRunnableGuard(settings, runtime)) {
     return [`${runtime.id}: missing PreToolUse(${expected}) guard`];
@@ -430,7 +429,6 @@ function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
  * forever.
  */
 export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): string | null {
-  const command = hookCommand(runtime.id);
   if (!hasRunnableGuard(settings, runtime)) return null;
   if (!hasStalePreToolUseMatcher(settings, runtime)) return null;
   const found = managedGroupsFor(settings, runtime)

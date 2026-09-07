@@ -107,15 +107,12 @@ import {
   renderGdgraphSkillReadme,
   renderHooksReadme,
   renderMetaprojectCoreReadme,
-  renderMetaprojectGitignoreBlock,
   renderMetaprojectDashboardHtml,
-  renderIndexGateMarkdown,
-  renderIndexMarkdown,
-  ROUTING_FILENAME,
   renderMetaprojectReadme,
   renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
+import { writeRoutingEntrypointPair } from "../lib/routing-entrypoint";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints } from "../rules/distill";
 import {
@@ -497,7 +494,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableSecurityPrePushHook = true;
     } else {
       enableSecurityPrePushHook = await confirm(
-        "Install git pre-push hook to run the security guard and block pushes on secret/critical findings (enforced/ci mode only)? Recommended",
+        "Install git pre-push hook to run the security guard and block pushes on a failing or needs-approval finding (enforced/ci/gateway mode)? Recommended",
         true,
       );
     }
@@ -730,36 +727,19 @@ export async function initCommand(args: string[]): Promise<void> {
   // index.md is the compact gate; the full router is routing.md beside it. The
   // gate is re-sent on every turn, so its size is multiplied by task length —
   // docs/requirements/keryx-context-measurement/context-loading.md.
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, "index.md"),
-    renderIndexGateMarkdown({
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-    }),
-  );
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, ROUTING_FILENAME),
-    renderIndexMarkdown({
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-      ruleSources: agentRuleSources,
-      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-    }),
-  );
+  await writeRoutingEntrypointPair(metaprojectRoot, {
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+    ruleSources: agentRuleSources,
+    hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+  });
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
     renderMetaprojectDashboardHtml({
@@ -1088,7 +1068,7 @@ export async function initCommand(args: string[]): Promise<void> {
   registerInitializedProject(projectRoot, (message) => console.log(message));
 
   const steps = [
-    `Read ${style.cyan(".metaproject/index.md")} - the agent entrypoint and module map.`,
+    `Read ${style.cyan(".metaproject/index.md")} first; open ${style.cyan(".metaproject/routing.md")} for the full module map and intent router.`,
   ];
   if (enableGdgraph) {
     steps.push(`Generate the code graph: ${style.cyan("keryx gdgraph build")}.`);
@@ -1785,41 +1765,6 @@ function buildManifest({
       root: agentRuleSources,
     },
   };
-}
-
-async function syncGitignore(projectRoot: string): Promise<void> {
-  const gitignorePath = path.join(projectRoot, ".gitignore");
-  const blockStart = "# keryx:begin";
-  const blockEnd = "# keryx:end";
-  const metaprojectIgnoreBlock = renderMetaprojectGitignoreBlock().trim();
-  const managedBlock = `${blockStart}\n${metaprojectIgnoreBlock}\n${blockEnd}`;
-  const existing = (await pathExists(gitignorePath))
-    ? await readFile(gitignorePath, "utf8")
-    : "";
-
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  const metaprojectIgnoreLines = new Set(metaprojectIgnoreBlock.split("\n"));
-  const withoutExistingManagedBlock = existing.replace(blockPattern, "");
-  const withoutLegacyMetaprojectIgnore = withoutExistingManagedBlock
-    .split("\n")
-    .filter((line) => {
-      const trimmed = line.trim();
-      return (
-        trimmed !== ".metaproject/" &&
-        !metaprojectIgnoreLines.has(trimmed)
-      );
-    })
-    .join("\n");
-
-  const next = `${withoutLegacyMetaprojectIgnore.trimEnd()}\n\n${managedBlock}\n`;
-
-  if (existing === next) {
-    return;
-  }
-
-  await writeFile(gitignorePath, next, "utf8");
 }
 
 function escapeRegExp(value: string): string {

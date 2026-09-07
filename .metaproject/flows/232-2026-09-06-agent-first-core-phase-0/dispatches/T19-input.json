@@ -1,0 +1,51 @@
+{
+  "task": {
+    "task_id": "task-19",
+    "task_name": "Enforce actual model round budgets",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Fix independently reproduced max_rounds off-by-one and unbudgeted wrap-up. Existing probe T16-recheck-round-budget-probe.ts shows configured1 permits two tool-bearing rounds plus wrapup. Add RED regression, then make configured maxRounds a true provider/model-round cap: no tool or extra model wrap-up after exhausted cap. Preserve independent actual invocation maxToolCalls semantics, truthful reasons, legacy behavior only where no declared bound is violated. Update obsolete tests with approved strict-budget rationale, not by dropping assertions. Document inclusive round semantics and any user-visible corrected stop behavior. Root assigns independent reviewer after implementation.",
+    "target_files": [
+      "src/commands/agent.ts",
+      "src/commands/agent.test.ts",
+      "src/commands/agent-tool-call-budget.test.ts",
+      "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "scripts/stress/keryx-shell-stress.ts"
+    ],
+    "acceptance_criteria": [
+      "max_rounds1 permits at most one model round and no hidden wrap-up request.",
+      "Model round cap and actual tool call cap remain independent; correct finish/terminal/child status.",
+      "Focused agent/child/script tests and strict typecheck/lint pass; no model/network calls."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+    "existing_tests": [
+      "src/commands/agent.test.ts",
+      "src/commands/agent-tool-call-budget.test.ts",
+      "src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Deterministic security boundary, preserve public compatibility except approved fixes, fail closed with typed constant errors.",
+    "test_case_specs": {
+      "test_files": [
+        "src/commands/agent-tool-call-budget.test.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+      ],
+      "run_command": "bun test src/commands/agent-tool-call-budget.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

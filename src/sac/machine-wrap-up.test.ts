@@ -73,7 +73,7 @@ import type { MachineWrapUpResolution, WrapUpOutcome } from "./machine-wrap-up";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import type { Slate, SlateSeed } from "../session/slate";
 import { readSlate } from "../session/slate";
-import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
+import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
 const time = "2026-08-16T00:00:00.000Z";
 

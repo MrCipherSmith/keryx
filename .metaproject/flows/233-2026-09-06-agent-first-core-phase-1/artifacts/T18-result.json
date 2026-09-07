@@ -1,0 +1,110 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T18",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Owner and target identity replacement races are fixed. The focused 89-test containment/SAC/interactive suite, T17 integration probe, and owned source build pass. Full project typecheck remains blocked by two unrelated missing security-module imports.",
+  "summary_markdown": "See T18-implementation.md for design, exact verification paths, limitation, and routing audit.",
+  "acceptance": [
+    {
+      "criterion": "Owner real-directory replacement after resolution is refused without returning replacement data.",
+      "status": "met",
+      "evidence": "T17-owner-race-probe returns refused=true and code=CONTAINED_READ_RACE; dedicated regression passes."
+    },
+    {
+      "criterion": "Original target identity survives pre-open hook; regular-file replacement refused.",
+      "status": "met",
+      "evidence": "Dedicated same-path regular-file replacement regression passes; final descriptor is compared with the identity captured before beforeOpen."
+    },
+    {
+      "criterion": "Existing87 containment/SAC/interactive tests remain green.",
+      "status": "met",
+      "evidence": "Combined current suite passes 89/89, including the original coverage plus the two T18 regressions."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pins owner-root and canonical-target identities before descriptor opening.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Checks pinned root and final target identities while retaining descriptor no-follow checks.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Adds real-owner-directory and same-path-target replacement regressions.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-code contract and design for the identity pinning fix.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Implementation and verification report.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/lib/contained-read.ts",
+      "change": "pin owner-root and canonical-target identities"
+    },
+    {
+      "path": "src/lib/descriptor-read.ts",
+      "change": "enforce expected root and target identities"
+    },
+    {
+      "path": "src/lib/contained-read.test.ts",
+      "change": "add two deterministic replacement-race regressions"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T18-TYPECHECK-001",
+      "severity": "major",
+      "problem": "Full project typecheck remains blocked by missing ./output-validation imports in two security tests outside T18 ownership.",
+      "impact": "The repository-wide typecheck cannot be reported green from this shared working tree, although the T18-owned identity code has no remaining type errors.",
+      "suggested_fix": "The owning security worker should restore or implement src/security/output-validation.ts and rerun the project typecheck.",
+      "evidence": "src/security/output-validation.test.ts:2 and src/security/structural-detection.test.ts:6; raw .metaproject/data/gdctx/raw/2026-09-06T12-21-02-534Z_run.log",
+      "confidence": "high",
+      "reviewer": "task-implementer",
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.test.ts:2",
+          "src/security/structural-detection.test.ts:6"
+        ],
+        "enumeration_method": "Used the current typecheck output; these files are outside T18 target ownership."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 1,
+    "tests_written": 2,
+    "tests_passed": 89,
+    "tests_failed": 0,
+    "typecheck_exit_code": 2,
+    "source_build_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:22:00Z"
+}

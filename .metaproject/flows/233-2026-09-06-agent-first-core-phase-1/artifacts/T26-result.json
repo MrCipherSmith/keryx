@@ -1,0 +1,116 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T26",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "All four T24 blockers are closed. F-001: a redactable span in a JSON property name now fails closed with reason sensitive-property-name (keys are never renamed). F-002: serialized content is only returned byte-identically when the parsed value accounts for every sensitive span in the bytes, otherwise format-unsafe with reason serialized-content-mismatch; the same adapter now backs src/mcp/redact-seam.ts. F-003: a $ref carrying validation siblings is rejected with schema.unsupported-reference-siblings. F-004: HTML character references are decoded for classification while masking stays on raw offsets, and every img srcset candidate is enumerated; the public-link control is unchanged. RED baseline 14 pass/5 fail; after the fix the focused security/MCP suite is 274 pass, 3 skip, 0 fail across 29 files, typecheck and targeted ESLint are clean, and the T24 probe shows no leak for any finding.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret is not replaced by an invalid string (format-unsafe instead).",
+      "status": "met",
+      "evidence": "src/mcp/structural-redaction.test.ts and src/security/output-validation.test.ts are green in the focused run (274 pass, 0 fail, raw .metaproject/data/gdctx/raw/2026-09-06T13-18-20-357Z_run.log); the T24 probe shows secretPropertyName.leaked=false and mcpBoundary.secretPropertyNameLeaks=false (raw .metaproject/data/gdctx/raw/2026-09-06T13-18-25-093Z_run.log)."
+    },
+    {
+      "criterion": "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+      "status": "met",
+      "evidence": "src/security/detect/exfil.test.ts (19 pass with the two new auto-fetch regressions) plus the fixture corpus test; probe autoFetch.encodedHtmlImageChanged=true, srcsetHtmlImageChanged=true, ordinaryLinkChanged=false. Safe numeric IDs and metrics still round-trip (output-validation.test.ts case 1)."
+    },
+    {
+      "criterion": "T24 F-001..F-004 are each closed by a regression that fails before and passes after the fix; the existing 78 focused security/MCP tests stay green; no reason token or failure text contains the rejected value, a raw secret, or a fingerprint.",
+      "status": "met",
+      "evidence": "RED baseline 14 pass/5 fail (raw .metaproject/data/gdctx/raw/2026-09-06T13-12-32-484Z_run.log) then 19 pass/0 fail (raw .metaproject/data/gdctx/raw/2026-09-06T13-17-47-772Z_run.log). Focused suite 274 pass, 3 skip, 0 fail. Reasons are the fixed tokens sensitive-property-name, serialized-content-mismatch, schema.unsupported-reference-siblings; probe attackerControlledReasons.keyReasonLeaks=false and refReasonLeaks=false. Note: five RED tests exist, not the six the dispatch text expected."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Implementation spec written before any production edit: RED baseline, the invariants, and the chosen rule per finding."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What changed per finding, with per-finding probe evidence and every raw gdctx log path."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-12-32-484Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "RED baseline: 14 pass, 5 fail."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-20-357Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused security/MCP suite after the fix: 274 pass, 3 skip, 0 fail, 902 assertions, 29 files."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-25-093Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T24 stage-1 probe after the fix: no leak on F-001..F-004."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-42-358Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck, exit 0."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-47-396Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bunx eslint on the four changed files, exit 0 with no output."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-19-57-058Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Equivalence proof that the non-JSON text path is byte-identical to the pre-T26 adapter (the pre-existing service.memo.test.ts failure is not caused by T26)."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-20-07-561Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Guarded persistence sinks regression: bun test src/memory src/wiki src/gdskills, 569 pass, 0 fail."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/output-validation.ts",
+      "change": "Added isSensitivePropertyName + the property-name screen in sanitizeJsonValue (F-001, reason sensitive-property-name); added REFERENCE_SAFE_SIBLINGS and the $ref sibling rejection in screenSchema (F-003, reason schema.unsupported-reference-siblings); added validateSerializedContentForTransport with parsedValueAccountsForBytes/reachableScalarText (F-002, reason serialized-content-mismatch)."
+    },
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "Added decodeCharacterReferences (decimal/hex/named URL-syntax refs, optional semicolon, bounded repeat) used by considerUrl for classification only, and HTML_IMG_SRCSET enumeration of every srcset candidate with raw offsets preserved (F-004)."
+    },
+    {
+      "path": "src/security/service.ts",
+      "change": "validateSerializedOutput helper region only: import swapped to validateSerializedContentForTransport and the body reduced to a delegation."
+    },
+    {
+      "path": "src/mcp/redact-seam.ts",
+      "change": "redactToolOutput now delegates to validateSerializedOutput through the allow-listed ../security/service facade instead of re-implementing the parse-then-restore shape."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "tests_red_before": 5,
+    "tests_focused_passed": 274,
+    "tests_focused_skipped": 3,
+    "tests_focused_failed": 0,
+    "focused_files": 29,
+    "eslint_errors": 0,
+    "typecheck_errors": 0
+  },
+  "timestamp_utc": "2026-09-06T13:22:00Z"
+}

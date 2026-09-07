@@ -1,0 +1,14 @@
+# AFC-05 Health completeness and audit parsing specification
+Version: 0.1.0
+
+Normative sources: PRD AFC-05 and policies.md Health/security gate. Scope: src/health, health CLI/service/report and focused tests. Preserve existing finding severity thresholds; dependency upgrades belong to phase 8.
+
+Required coverage is determined by project policy before source detection. A required skipped, missing, disabled, failed execution or unparsed result cannot produce PASS. Finding and coverage axes are independent: confirmed blocking findings produce FAIL even when coverage is incomplete; otherwise required incompleteness produces INCOMPLETE. Existing nonblocking warnings remain visible and cannot masquerade as an executed optional check. Strict CI accepts only PASS; align run CLI and stored-report gate behavior, include source-filter scope truthfully. Do not make ESLint optional merely because it is unavailable.
+
+Keep execution outcome, parse outcome and finding outcome separate. Tool exit 1 can mean valid findings (npm/Bun audit, TypeScript, ESLint), so blindly treating every nonzero as parser failure is wrong; define supported adapter outcomes. Unknown or malformed output and command failure must not silently parse to [] or crash the entire aggregation. Preserve findings that were successfully parsed while reporting uncovered checks. Required adapters that cannot demonstrate successful parsing are incomplete. No report must read as incomplete, not a completed check.
+
+Bun audit current package-keyed arrays and npm modern vulnerabilities/legacy advisories require synthetic fixtures with unique advisory identity, deterministic counts and stable severities. Empty recognized output is clean only with a supported success outcome; unknown shape/invalid JSON (including rc0) is not clean. Never quote or copy real secrets/private fixtures into tests.
+
+Known source inventory: runAdapter in run.ts ignores raw.exitCode and always records available after parse, with no catch around parse; several adapters return [] on malformed input. computeGate only considers missing/configured-but-failed and ignores skipped required. gate/report/CLI currently support pass/warn/fail and must represent incomplete. Source selection currently may remove required sources from the run; inspect and make scope visible. Existing Bun audit evidence is private audit output and should inform format only; write public synthetic fixture values.
+
+RED cases: required skipped/missing/disabled/parse failure without findings -> incomplete; same plus P0 -> fail with incomplete coverage; required execution nonzero with recognized findings retains findings; optional skip explicitly visible; unknown audit shape/JSON rc0 rejected; current Bun/package-keyed and npm fixtures parsed; strict CLI rejects incomplete and warns, report/service expose same status. Integration tests must exercise runAdapter via real injectable boundary/temporary fixture, not merely type assertions.

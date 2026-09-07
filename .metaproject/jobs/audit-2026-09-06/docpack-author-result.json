@@ -1,0 +1,142 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "keryx-agent-first-core-docpack",
+  "dispatch_id": "docpack-author-resumed",
+  "status": "DONE",
+  "summary": "Подготовлен spec-ready пакет требований: 49 ID, подробная wiki-спецификация, model-independent core/optional Shell, SAC/CAS/provenance/lifecycle, SDK/batch, migration и независимые измерения. Политики и proposed contracts не объявлены runtime реализацией. Независимое docpack-review PASS без blockers/warnings.",
+  "acceptance": [
+    {
+      "criterion": "Полное покрытие 01–32, M01–M11, W01–W06",
+      "status": "met",
+      "evidence": "decision-traceability.md: 49 нормативов и acceptance scenarios"
+    },
+    {
+      "criterion": "README/PRD/specification/wiki/policies/lifecycle/protocol/measurement/plan",
+      "status": "met",
+      "evidence": "10 Markdown с Version непосредственно после H1; metrics-and-validation дополнен parent"
+    },
+    {
+      "criterion": "Schemas/examples/structural/link/roadmap verification",
+      "status": "met",
+      "evidence": "Ajv strict:true: 6 schemas, 5 examples, 18 validation cases; parent independently verified structure/links/coverage"
+    },
+    {
+      "criterion": "Independent docpack-review",
+      "status": "met",
+      "evidence": "Parent confirmed final PASS; blockers 0, warnings 0"
+    },
+    {
+      "criterion": "Documentation only; no private research content or model dependency in core",
+      "status": "met",
+      "evidence": "Only documentation/schema/examples/roadmap/result authored; runtime not executed"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/requirements/keryx-agent-first-core/README.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "spec ready; proposed technical contracts; runtime not implemented"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "docs/requirements/keryx-agent-first-core/README.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/agent-protocol.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/artifact-lifecycle.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/decision-traceability.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/batch.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/change-set.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/handoff.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/operation-response.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/validation-cases.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/wiki-evidence.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/implementation-plan.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/metrics-and-validation.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/policies.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/prd.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/batch.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/change-set.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/common.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/handoff.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/operation-response.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/wiki-evidence.schema.json",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/specification.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/wiki-specification.md",
+      "change": "created documentation/schema/example"
+    },
+    {
+      "path": "docs/requirements/roadmap.md",
+      "change": "minimal package entry/version/status"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T09:57:00.015751+00:00",
+  "summary_markdown": "Routing audit: graph_used yes (navigation, current rebuild supplied by parent); wiki_used yes (index and wiki-graph-sac, freshness caveat); memory_used yes (accepted recall); ctx_used yes (compact reads); raw_rg_used no. Full source audit was not duplicated."
+}

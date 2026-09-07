@@ -1,0 +1,50 @@
+{
+  "task": {
+    "task_id": "task-19",
+    "task_name": "Core structural output validator and contextual detectors",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Implement pure validateOutputForTransport({value,format:json|text,schema?}) with ok discriminant, safe value/text and redaction state/reasons. Follow T7 proposal; core schema validation must fail closed on unsupported schema constructs instead of claiming complete JSON Schema. Keep JSON types, reject secret numeric fields as format-unsafe, preserve safe IDs/metrics, no field-name bypass for real secrets. Integrate existing redactSensitiveText into structural handling without import cycles. Improve sensitive URL query/path detection and distinguish ordinary public Markdown links from autofetch images/actual exfil operations. Keep deterministic model-independent/no-network. Add pure helper unit edge cases before implementation as needed. Root owns guard/service/MCP integration; scanner worker owns service/report/types/CLI. Do not edit these shared files.",
+    "target_files": [
+      "src/security/output-validation.ts",
+      "src/security/output-validation.test.ts",
+      "src/security/redact.ts",
+      "src/security/detect/pii.ts",
+      "src/security/detect/secrets.ts",
+      "src/security/detect/exfil.ts",
+      "src/security/structural-detection.test.ts"
+    ],
+    "acceptance_criteria": [
+      "Safe metrics and IDs retain values and types; provider-pattern secrets always masked despite key name.",
+      "Sensitive URL query/path values masked; ordinary public markdown link creates no exfil finding, autofetch/injection defenses remain.",
+      "Pure transport validator preserves JSON shape and reports metadata; unsafe numeric/schema representations return constant format-unsafe without secret or hash."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+    "existing_tests": [
+      "src/security/output-validation.test.ts",
+      "src/security/structural-detection.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Deterministic security boundary, preserve public compatibility except approved fixes, fail closed with typed constant errors.",
+    "test_case_specs": {
+      "test_files": [
+        "src/security/structural-detection.test.ts"
+      ],
+      "run_command": "bun test src/security/structural-detection.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}
