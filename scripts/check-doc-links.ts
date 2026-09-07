@@ -11,6 +11,12 @@
 //   * inline   `[text](./path.md)`  and  `[text](path.md#anchor)`
 //   * reference `[label]: ./path.md`
 //   * absolute (`https:`, `mailto:`) and bare-anchor (`#x`) targets are skipped
+//   * code is not prose: link syntax inside a fenced block or a backtick span
+//     is quoted text, not a link. A normative document that has to SPELL a
+//     markdown construct in order to define it was being failed for the
+//     spelling — docs/requirements/keryx-agent-first-core/policies.md quotes
+//     `![alt](URL)` to say which forms the auto-fetch floor covers, and this
+//     gate reported three broken links pointing at a file named URL.
 //   * an anchor is verified against the target file's headings when the target
 //     is Markdown, because `file.md#missing-section` is the failure that
 //     survives a plain existence check
@@ -50,10 +56,49 @@ function anchorsOf(file: string): Set<string> {
   return out;
 }
 
-function linksIn(text: string): string[] {
+/**
+ * Blank out code so its contents are never read as prose, preserving every
+ * newline and every column so that line-anchored patterns still line up.
+ *
+ * Fences are removed first: a backtick span cannot span a fence boundary, and
+ * an unbalanced backtick inside a fenced block would otherwise swallow the
+ * rest of the document. Inline spans follow CommonMark's rule that a run of N
+ * backticks closes only on a run of exactly N.
+ */
+export function blankCode(text: string): string {
+  const blank = (line: string): string => line.replace(/[^\n]/g, " ");
+
+  // Fences first, line by line. A backtick span cannot cross a fence
+  // boundary, and an unbalanced backtick inside a fenced block would
+  // otherwise swallow the rest of the document.
+  const lines = text.split("\n");
+  let open: { char: string; length: number } | undefined;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (open === undefined) {
+      const opener = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      // An info string on a backtick fence may not itself contain a backtick.
+      if (opener && !(opener[1]!.startsWith("`") && opener[2]!.includes("`"))) {
+        open = { char: opener[1]![0]!, length: opener[1]!.length };
+        lines[i] = blank(line);
+      }
+      continue;
+    }
+    lines[i] = blank(line);
+    const closer = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+    if (closer && closer[1]![0] === open.char && closer[1]!.length >= open.length) open = undefined;
+  }
+
+  // Then inline spans, over the whole remaining text so a span may wrap a
+  // line. A run of N backticks closes only on a run of exactly N.
+  return lines.join("\n").replace(/(`+)[\s\S]*?\1(?!`)/g, blank);
+}
+
+export function linksIn(text: string): string[] {
+  const prose = blankCode(text);
   const targets: string[] = [];
-  for (const m of text.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) targets.push(m[1]!);
-  for (const m of text.matchAll(/^\[[^\]]+\]:\s*(\S+)$/gm)) targets.push(m[1]!);
+  for (const m of prose.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) targets.push(m[1]!);
+  for (const m of prose.matchAll(/^\[[^\]]+\]:\s*(\S+)$/gm)) targets.push(m[1]!);
   return targets;
 }
 
@@ -105,4 +150,4 @@ function main(): void {
   if (broken.length > 0) process.exitCode = 1;
 }
 
-main();
+if (import.meta.main) main();
