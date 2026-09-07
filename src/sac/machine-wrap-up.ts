@@ -238,7 +238,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   //    folds into the deterministic PROPOSAL id (AC4's actual dedup
   //    mechanism, via `ProposalLifecycleService.create()`'s existing
   //    same-path `"conflict"` rejection — no new lock invented here).
-  const sourceRevision = sha256([safeDiff.content, safeFlow.content, safeSeeds.content].join(" "));
+  const sourceRevision = sha256([safeDiff.content, safeFlow.content, safeSeeds.content].join("\u0000"));
   const shortHash = sourceRevision.slice(0, 16);
 
   // 4. Model summary, raced against a bounded timeout — mirrors

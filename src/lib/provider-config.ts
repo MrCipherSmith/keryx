@@ -248,7 +248,7 @@ export function crossFamilyCandidates(
   const seen = new Set<string>();
   const push = (candidate: CrossFamilyCandidate): void => {
     if (candidate.family === authorFamily) return;
-    const key = `${candidate.provider} ${candidate.model ?? ""}`;
+    const key = `${candidate.provider}\u0000${candidate.model ?? ""}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push(candidate);
