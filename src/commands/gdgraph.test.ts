@@ -345,6 +345,31 @@ describe("keryx gdgraph — the four AC5 conditions carry four different codes",
     expect(process.exitCode).toBe(0);
   });
 
+  // T14 (flow 235). Reproduced through the real CLI on 2026-09-08 in a temp
+  // project of 14 files all under `alpha/`, after a real `keryx gdgraph build`:
+  //
+  //   keryx gdgraph find "alpha" --json
+  //     → code "no-match", reason "…no path or symbol contains any of: alpha.",
+  //       ubiquitousTerms ["alpha"], exit 0
+  //
+  // Every path contained `alpha`. A ranking filter (a term in every document
+  // scores zero, and zero-score candidates are dropped) emptied the list before
+  // the classifier could see there had been fourteen matches, and the command
+  // then printed a false statement about the corpus at exit 0.
+  //
+  // Every path in this fixture starts with `src/`, so it reproduces the same
+  // condition at the command boundary a caller actually reads.
+  test("a term in every indexed path is insufficient-evidence, not a false no-match", async () => {
+    await gdgraphCommand(["find", "src", "--json"]);
+    const result = payload() as { code?: string; reason?: string; ubiquitousTerms?: string[] };
+    expect(result.code).toBe("insufficient-evidence");
+    expect(result.ubiquitousTerms).toContain("src");
+    // The half that made the old payload self-contradictory: the reason denied
+    // what the very next field asserted.
+    expect(result.reason).not.toContain("no path or symbol contains");
+    expect(process.exitCode).toBe(0);
+  });
+
   test("the four conditions really are four different codes", async () => {
     const codes: string[] = [];
 

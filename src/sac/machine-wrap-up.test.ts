@@ -957,3 +957,175 @@ test("runWrapUp surfaces a floor refusal as an 'error' group outcome, never as '
   expect(group.message).toContain("security floor");
   expect(group.message).not.toContain(PLANTED_SECRET);
 });
+
+// --- The floor's SECOND asymmetry (flow 236 T12) ----------------------------
+//
+// The suite above closed the asymmetry BETWEEN the two producers of a
+// `TrustedWrapUpResolution`. This one closes the asymmetry WITHIN this
+// producer, between its two write paths. Measured before this suite existed,
+// on an unbound slate whose only seed read
+// `follow up on the key AKIAIOSFODNN7EXAMPLE in config`:
+//
+//   groups: [{"kind":"follow-up","outcome":"unbound-candidate"}]
+//   --- 2026-09-07T21-56-36-330Z-unbound-candidate.json
+//       contains raw secret: true
+//
+// while the identical bytes through `applyEvidenceRedactionFloor` — the floor
+// the BOUND path of the very same function already ran — came back as
+// `follow up on the key [REDACTED:secret] in config`, `altered: true`.
+// `resolveMachineWrapUp` floored its seeds before hashing, prompting and
+// writing; `writeUnboundCandidateArtifact` wrote the same seed texts verbatim.
+//
+// As with the suite above, nothing here is injected: a real seed, the real
+// `runWrapUp` writer, the real `guardOutput` seam.
+
+/** Everything sitting in a session's `slate-archive/`, by filename. */
+async function slateArchiveFiles(dir: string): Promise<Map<string, string>> {
+  const archiveDir = path.join(dir, "slate-archive");
+  const out = new Map<string, string>();
+  let names: string[];
+  try {
+    names = await readdir(archiveDir);
+  } catch {
+    return out;
+  }
+  for (const name of names) out.set(name, await readFile(path.join(archiveDir, name), "utf8"));
+  return out;
+}
+
+test("a secret in a SEED never reaches the unbound-candidate artifact, and the rewrite is announced", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    // No workspaceId, and the external-slate source, so this takes the
+    // unbound-candidate path unconditionally (AC-38) — the exact path the
+    // reviewer reproduced on.
+    slate: baseSlate({ seeds: [seed("s1", `follow up on the key ${PLANTED_SECRET} in config`)] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(outcome.groups).toEqual([{ kind: "follow-up", outcome: "unbound-candidate" }]);
+
+  const files = await slateArchiveFiles(dir);
+  const candidateName = [...files.keys()].find((name) => name.endsWith("-unbound-candidate.json"))!;
+  const candidate = files.get(candidateName)!;
+  expect(candidate).not.toContain(PLANTED_SECRET);
+  // Not "the floor ate the artifact": the seed is still recorded, and still
+  // attributed, with only the credential masked.
+  expect(candidate).toContain("[REDACTED:secret]");
+  const parsed = JSON.parse(candidate) as { groups: Array<{ kind: string; seeds: Array<{ text: string; source: string }> }> };
+  expect(parsed.groups[0]!.kind).toBe("follow-up");
+  expect(parsed.groups[0]!.seeds[0]!.source).toBe("parent");
+  expect(parsed.groups[0]!.seeds[0]!.text).toContain("follow up on the key");
+
+  // Altered and NOT silent: a sibling notice names the rewritten artifact.
+  const noticeName = `${candidateName}.redaction.md`;
+  const notice = files.get(noticeName);
+  expect(notice).toBeDefined();
+  expect(notice!).toContain("## Rewritten");
+  expect(notice!).toContain(`- ${candidateName}`);
+  expect(notice!).not.toContain(PLANTED_SECRET);
+  // The notice must not be mistaken for a second record by `catch-up.ts`,
+  // which scans this directory by exactly these two filename suffixes.
+  expect(noticeName.endsWith("-unbound-candidate.json")).toBe(false);
+  expect(noticeName.endsWith("-wrap-up-outcome.json")).toBe(false);
+});
+
+test("an unaltered unbound-candidate artifact carries no redaction notice", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ seeds: [seed("s1", "an ordinary follow-up with nothing sensitive in it")] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  const files = await slateArchiveFiles(dir);
+  expect([...files.keys()].some((name) => name.endsWith("-unbound-candidate.json"))).toBe(true);
+  expect([...files.keys()].some((name) => name.endsWith(".redaction.md"))).toBe(false);
+});
+
+test("a floor REFUSAL on the unbound path is its own outcome, never reported as 'unbound-candidate'", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await enableSecurity(cwd, "enforced");
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ seeds: [seed("s1", `follow up on the key ${PLANTED_SECRET} in config`)] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  // "unbound-candidate" means "a durable artifact for these seeds exists on
+  // disk" — and `catch-up.ts` treats it as a completed dispatch that outranks
+  // every failure signal. After a refusal that is simply false, so it must not
+  // be what comes back.
+  expect(outcome.groups.length).toBe(1);
+  const group = outcome.groups[0]!;
+  expect(group.outcome).not.toBe("unbound-candidate");
+  expect(group.outcome).toBe("error");
+  if (group.outcome !== "error") return;
+  expect(group.message).toContain("security floor");
+  expect(group.message).not.toContain(PLANTED_SECRET);
+  // Leak-safe: categories and counts, never the span it matched.
+  expect(group.message).toMatch(/secret:\d/);
+
+  // Fail-closed: nothing half-written, and above all no artifact carrying the
+  // seed text the floor just refused to let through.
+  const files = await slateArchiveFiles(dir);
+  expect([...files.keys()].some((name) => name.endsWith("-unbound-candidate.json"))).toBe(false);
+  for (const body of files.values()) expect(body).not.toContain(PLANTED_SECRET);
+});
+
+test("a secret in a thrown error message never reaches the wrap-up-outcome artifact", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "236-outcome-floor-flow");
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ workspaceId: "workspace-a", course: { flowRef: "236" }, seeds: [seed("s1", "a decision finding", "decision")] }),
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    // A provider that rejects by echoing back the request it would not serve
+    // is an ordinary shape, and `proposeOneGroup` puts `error.message`
+    // straight into the group outcome this artifact records. "Thrown-Error
+    // message" is not a category anyone should assume is free of user content.
+    modelTurn: () => {
+      throw new Error(`provider rejected request: aws_key = ${PLANTED_SECRET}`);
+    },
+  });
+
+  expect(outcome.groups.length).toBe(1);
+  expect(outcome.groups[0]!.outcome).toBe("error");
+
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(1);
+  const recorded = JSON.stringify(artifacts[0]);
+  expect(recorded).not.toContain(PLANTED_SECRET);
+  // Still a usable failure record — `classifySession` reads these groups to
+  // tell "wrap-up genuinely failed" from "wrap-up never triggered".
+  expect(recorded).toContain("provider rejected request");
+  expect(recorded).toContain("[REDACTED:secret]");
+
+  const files = await slateArchiveFiles(dir);
+  const outcomeName = [...files.keys()].find((name) => name.endsWith("-wrap-up-outcome.json"))!;
+  expect(files.get(`${outcomeName}.redaction.md`)).toBeDefined();
+});

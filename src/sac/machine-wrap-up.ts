@@ -428,21 +428,108 @@ export type RunWrapUpInput = {
 };
 
 /**
+ * The outcome of writing ONE `slate-archive/` artifact through the redaction
+ * floor. `security_denied` is kept as its own code — never collapsed into
+ * "written" — for the same reason `MachineWrapUpResolution` keeps it: a
+ * refusal that reports itself as the ordinary result is a failure disguised as
+ * a success, and here the ordinary result (`"unbound-candidate"`) means
+ * "a durable artifact for this session already exists", which after a refusal
+ * is simply false. `detail` is `prepareOutputForPersistence`'s own reason,
+ * already leak-safe (categories and counts, never spans).
+ */
+type ArchiveArtifactResult =
+  | { ok: true; altered: boolean }
+  | { ok: false; code: "security_denied"; detail: string };
+
+/**
+ * Every `slate-archive/` write in this module goes through here, and here
+ * goes through `applyEvidenceRedactionFloor` — the SAME floor
+ * `resolveMachineWrapUp` runs over its diff/flow/seeds bodies, not a second
+ * implementation of it.
+ *
+ * This seam exists because the floor used to be applied to only ONE of this
+ * producer's two write paths. `resolveMachineWrapUp` floored its bodies before
+ * hashing, prompting and writing; the `slate-archive/` writers below wrote the
+ * same seed texts — and, in the outcome record, thrown-`Error` messages —
+ * verbatim. Measured on an unbound slate whose single seed read `follow up on
+ * the key AKIAIOSFODNN7EXAMPLE in config`, the artifact on disk contained that
+ * key in the clear while the identical bytes through this floor came back as
+ * `follow up on the key [REDACTED:secret] in config`. Same producer, same
+ * user-authored content, opposite outcome — which is the asymmetry the
+ * previous lane closed BETWEEN the two producers, reappearing WITHIN one of
+ * them.
+ *
+ * Alteration is never silent: when the floor rewrites the body, a sibling
+ * `<artifact>.redaction.md` notice lands next to it carrying the same
+ * `renderRedactionNotice` text the evidence path attaches as a
+ * `redaction-notice` evidence item. There is no `evidence[]` to append to
+ * here — these artifacts are read back by filename suffix
+ * (`catch-up.ts`'s `*-unbound-candidate.json` / `*-wrap-up-outcome.json`
+ * scans) — so the notice is a sibling FILE instead, deliberately named so it
+ * matches neither suffix and cannot be mistaken for a second record.
+ *
+ * The `path` handed to the guard is a best-effort workspace-relative hint for
+ * its path-scoped policies. A session dir is not necessarily under `cwd` at
+ * all (`runWrapUp` takes the two separately for exactly that reason), so this
+ * names the artifact's location within the archive rather than inventing an
+ * absolute path the policy layer would not recognise.
+ */
+async function writeFlooredArchiveArtifact(params: {
+  cwd: string;
+  dir: string;
+  filename: string;
+  content: string;
+}): Promise<ArchiveArtifactResult> {
+  const floor = await applyEvidenceRedactionFloor(params.cwd, [
+    {
+      name: params.filename,
+      content: params.content,
+      path: path.posix.join("slate-archive", params.filename),
+      source: "generated",
+    },
+  ]);
+  if (!floor.ok) return { ok: false, code: "security_denied", detail: floor.reason };
+  const body = floor.bodies[0]!;
+
+  const archiveDir = path.join(params.dir, "slate-archive");
+  await mkdir(archiveDir, { recursive: true });
+  await writeFileAtomic(path.join(archiveDir, params.filename), body.content);
+  if (floor.notice !== undefined) {
+    await writeFileAtomic(path.join(archiveDir, `${params.filename}${ARCHIVE_REDACTION_NOTICE_SUFFIX}`), floor.notice);
+  }
+  return { ok: true, altered: body.altered };
+}
+
+/**
+ * Suffix for the sibling notice a floored archive artifact gets. Chosen so it
+ * ends in neither `-unbound-candidate.json` nor `-wrap-up-outcome.json` —
+ * `catch-up.ts` scans `slate-archive/` by exactly those suffixes, and a notice
+ * that matched one would be parsed as a malformed record instead of read as
+ * what it is.
+ */
+const ARCHIVE_REDACTION_NOTICE_SUFFIX = ".redaction.md";
+
+/**
  * AC6: the unbound-candidate degrade — never a guessed/default workspaceId,
  * ever. Written under the SESSION dir's `slate-archive/` (NOT the workspace
  * tree, which does not exist to write into when there is no workspaceId at
  * all), one artifact per `runWrapUp` call covering every non-empty kind
  * group at once.
+ *
+ * The seed texts this records are user-authored session content — the same
+ * category `resolveMachineWrapUp` floors into `<kind>.seeds.json` — so this
+ * write goes through the same floor (`writeFlooredArchiveArtifact`). The JSON
+ * is floored as a whole serialized body, exactly as `seedsJson` already is on
+ * the bound path, rather than field by field.
  */
 async function writeUnboundCandidateArtifact(
+  cwd: string,
   dir: string,
   trigger: WrapUpTrigger,
   now: () => Date,
   grouped: Map<SlateSeedKind, AttributedSeed[]>,
   nonEmptyKinds: SlateSeedKind[],
-): Promise<void> {
-  const archiveDir = path.join(dir, "slate-archive");
-  await mkdir(archiveDir, { recursive: true });
+): Promise<ArchiveArtifactResult> {
   const nowIso = now().toISOString();
   const filename = `${nowIso.replace(/[:.]/g, "-")}-unbound-candidate.json`;
   const content = {
@@ -454,7 +541,7 @@ async function writeUnboundCandidateArtifact(
       seeds: (grouped.get(kind) ?? []).map((seed) => ({ text: seed.text, source: describeSource(seed.source) })),
     })),
   };
-  await writeFileAtomic(path.join(archiveDir, filename), `${JSON.stringify(content, null, 2)}\n`);
+  return writeFlooredArchiveArtifact({ cwd, dir, filename, content: `${JSON.stringify(content, null, 2)}\n` });
 }
 
 /**
@@ -471,20 +558,66 @@ async function writeUnboundCandidateArtifact(
  * transiently — this write must never become a NEW way for that to happen).
  * `classifySession` (`catch-up.ts`) reads this artifact back to distinguish
  * "wrap-up genuinely failed" from "wrap-up never triggered" in the Review UI.
+ *
+ * Floored like every other archive write. The reviewer who found the unbound
+ * -candidate leak measured this record clean on their probe — it carries only
+ * kinds, outcomes, proposal ids and thrown-`Error` messages — but "clean on
+ * one probe" is not a category. `WrapUpGroupOutcome`'s `message` is
+ * `error.message` from ANY throw inside `proposeOneGroup`, including one
+ * raised by the injected `ModelTurnPort`, whose prompt is built from the
+ * working-tree diff and the session's seeds; a provider that echoes the
+ * request it rejected puts that content straight into this field. Flooring it
+ * costs one guard call and removes the assumption.
  */
 async function writeWrapUpOutcomeArtifact(
+  cwd: string,
   dir: string,
   trigger: WrapUpTrigger,
   now: () => Date,
   groups: WrapUpGroupOutcome[],
 ): Promise<void> {
   try {
-    const archiveDir = path.join(dir, "slate-archive");
-    await mkdir(archiveDir, { recursive: true });
     const nowIso = now().toISOString();
     const filename = `${nowIso.replace(/[:.]/g, "-")}-wrap-up-outcome.json`;
     const content = { recordType: "wrap-up-outcome", trigger, generatedAt: nowIso, groups };
-    await writeFileAtomic(path.join(archiveDir, filename), `${JSON.stringify(content, null, 2)}\n`);
+    const written = await writeFlooredArchiveArtifact({
+      cwd,
+      dir,
+      filename,
+      content: `${JSON.stringify(content, null, 2)}\n`,
+    });
+    if (written.ok) return;
+
+    // The floor refused this record outright. Writing nothing would be the
+    // easy answer and the wrong one: `classifySession` reads the ABSENCE of
+    // this artifact as "wrap-up never triggered", so a silent refusal would
+    // erase a session that did run from the Review UI entirely — the same
+    // "an alteration rendered indistinguishable from a legitimate result"
+    // shape this programme keeps closing. So a refusal marker goes down
+    // instead: the record type, trigger and timestamp are preserved (they are
+    // this module's own values, never session content), `groups` is empty
+    // because none of it could be recorded, and `redaction` says why. The
+    // reason is `prepareOutputForPersistence`'s own, already leak-safe
+    // (categories and counts, never spans) — the same string
+    // `proposeOneGroup` already puts on a group's `message`.
+    const refusalIso = now().toISOString();
+    const refusalFilename = `${refusalIso.replace(/[:.]/g, "-")}-wrap-up-outcome.json`;
+    const archiveDir = path.join(dir, "slate-archive");
+    await mkdir(archiveDir, { recursive: true });
+    await writeFileAtomic(
+      path.join(archiveDir, refusalFilename),
+      `${JSON.stringify(
+        {
+          recordType: "wrap-up-outcome",
+          trigger,
+          generatedAt: refusalIso,
+          groups: [],
+          redaction: { refused: true, reason: written.detail },
+        },
+        null,
+        2,
+      )}\n`,
+    );
   } catch {
     // Best-effort — a failure to record the outcome (including the `mkdir`
     // above) must not itself throw and must not prevent runWrapUp from
@@ -658,15 +791,41 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
     return { groups: [] };
   }
 
+  /**
+   * The unbound degrade, shared by the two branches below. A floor refusal
+   * must NOT come back as `"unbound-candidate"`: that outcome means "a durable
+   * artifact for this session's seeds already exists on disk", which is
+   * exactly what a refusal makes untrue, and `catch-up.ts`'s `classifySession`
+   * treats it as a completed dispatch that outranks every failure signal — so
+   * reporting it after a refusal would hide the refusal behind a success.
+   *
+   * It lands on the existing `"error"` outcome rather than a new union member
+   * for the reason `MachineWrapUpResolution` already documents for
+   * `security_denied`: `WrapUpGroupOutcome` is read exhaustively by
+   * `./catch-up.ts` and `../tui/review-inspector.ts`, files this change does
+   * not own, and `"error"` is their existing "this group failed, here is why"
+   * slot. The message names the security floor, so it is never mistaken for
+   * the generic-throw case that shares the slot.
+   */
+  const unboundDegrade = async (): Promise<WrapUpOutcome> => {
+    const written = await writeUnboundCandidateArtifact(input.cwd, input.dir, input.trigger, now, grouped, nonEmptyKinds);
+    const groups: WrapUpGroupOutcome[] = written.ok
+      ? nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }))
+      : nonEmptyKinds.map((kind) => ({
+          kind,
+          outcome: "error" as const,
+          message: `unbound-candidate artifact refused by the security floor: ${written.detail}`,
+        }));
+    await writeWrapUpOutcomeArtifact(input.cwd, input.dir, input.trigger, now, groups);
+    return { groups };
+  };
+
   let workspaceId = input.slate.workspaceId;
   if (workspaceId === undefined && input.wrapUpSource === "external-slate") {
     // AC-38 (flow 182): an EXTERNAL slate that never bound a workspaceId
     // must never have one created for it at close — the artifact path is
     // the ONLY outcome, unconditionally.
-    await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-    const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
-    await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
-    return { groups };
+    return unboundDegrade();
   }
   if (workspaceId === undefined) {
     // Flow 200 (lazy binding): a SESSION with REAL Seeds but no bound
@@ -692,10 +851,7 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
       ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
     });
     if (!resolved.ok) {
-      await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-      const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
-      await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
-      return { groups };
+      return unboundDegrade();
     }
     workspaceId = resolved.workspaceId;
     // Bind the resolved workspace to the slate so future wrap-ups reuse it
@@ -728,6 +884,6 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
       }),
     ),
   );
-  await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
+  await writeWrapUpOutcomeArtifact(input.cwd, input.dir, input.trigger, now, groups);
   return { groups };
 }

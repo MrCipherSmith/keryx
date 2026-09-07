@@ -238,12 +238,118 @@ function reasonFor(
   return parts.join("; ");
 }
 
-// Rank symbol nodes by name match — the precise half of `find` when the symbol
-// layer is active. Exact name match is boosted so `find "clonePipeline"` returns
-// the definition, not just path hits. Term weighting is computed over symbol
-// NAMES (their own corpus), not over paths: a term common among file paths can
-// still be a precise symbol name and vice versa.
-export function findSymbols(graph: GraphData, query: string, limit = 15): SymbolFindResult[] {
+// MATCHING vs RANKING — WHY THESE ARE TWO STEPS (flow 235, T14)
+//
+// They used to be one loop, and that produced a false statement about the
+// world. Reproduced at the real command line on 2026-09-08, in a temp project
+// of 14 files ALL under `alpha/`, after a real `keryx gdgraph build`:
+//
+//   $ keryx gdgraph find "alpha" --json
+//   { "code": "no-match",
+//     "reason": "the search completed over 14 indexed files; no path or symbol
+//                contains any of: alpha.",
+//     "ubiquitousTerms": ["alpha"], "files": [] }          exit=0
+//
+// Every one of the fourteen paths contains `alpha`. The payload even said so —
+// `ubiquitousTerms: ["alpha"]` sat in the same object as a reason denying it.
+//
+// The mechanism: `alpha` is in ALL 14 documents, so `termWeight` returns
+// `log(15/15) = 0`, every file scored 0, and the ballast filter dropped every
+// one of them. `findCandidates` then read the empty list as "nothing matched"
+// and made a claim about the corpus that the corpus contradicts — at exit 0,
+// sending the caller off to a text search they did not need.
+//
+// Dropping zero-weight ballast is a RANKING decision: it says "this file is not
+// worth showing you", never "this file does not exist". So the scan below
+// collects every file that matched, score included and nothing filtered, and
+// ranking is a separate step applied only to what gets DISPLAYED. The
+// classifier reads the scan, never the ranked page — which is also why slicing
+// to `limit` can no longer decide a code either.
+
+interface FileScan {
+  /** Every file whose path contains ≥1 query term. Unfiltered, unsorted, unsliced. */
+  readonly matches: FindResult[];
+  readonly ubiquitous: string[];
+  readonly corpusSize: number;
+}
+
+function scanFiles(graph: GraphData, query: string): FileScan {
+  const terms = tokenize(query);
+  const files = graph.nodes.filter((node) => node.kind === "file");
+  const paths = files.map((node) => node.path.toLowerCase());
+  const frequencies = documentFrequencies(terms, paths);
+  const ubiquitous = ubiquitousOf(terms, frequencies, paths.length);
+  const ubiquitousSet = new Set(ubiquitous);
+  const scan = { ubiquitous, corpusSize: files.length };
+
+  if (terms.length === 0) {
+    return { matches: [], ...scan };
+  }
+
+  // fan-in (dependents) per node id: how many edges point at it.
+  const fanIn = new Map<string, number>();
+  for (const edge of graph.edges) {
+    fanIn.set(edge.to, (fanIn.get(edge.to) ?? 0) + 1);
+  }
+
+  const matches: FindResult[] = [];
+  for (const node of files) {
+    const lowerPath = node.path.toLowerCase();
+    const base = lowerPath.split("/").pop() ?? lowerPath;
+    const matched = terms.filter((t) => lowerPath.includes(t));
+    if (matched.length === 0) {
+      continue;
+    }
+    const basenameHits = matched.filter((t) => base.includes(t));
+    let score = 0;
+    for (const term of matched) {
+      const weight = termWeight(frequencies.get(term) ?? 0, paths.length);
+      // The basename boost is weighted too: a filename hit on a term that
+      // narrows nothing is still worth nothing.
+      score += weight * 10 + (basenameHits.includes(term) ? weight * 5 : 0);
+    }
+    const dependents = fanIn.get(node.id) ?? 0;
+    const discriminating = matched.filter((term) => !ubiquitousSet.has(term));
+    matches.push({
+      path: node.path,
+      score,
+      matched,
+      discriminating,
+      dependents,
+      reason: reasonFor(
+        matched,
+        discriminating,
+        basenameHits.length > 0 ? `in the filename (${basenameHits.join(", ")})` : undefined,
+        dependents,
+      ),
+    });
+  }
+  return { matches, ...scan };
+}
+
+/**
+ * The ranking half: drop zero-score ballast, order, and cut to `limit`.
+ *
+ * Every decision here is about what is worth SHOWING. None of it may reach the
+ * classifier — see the note above `scanFiles`.
+ */
+function rankFiles(matches: readonly FindResult[], limit = 20): FindResult[] {
+  return matches
+    .filter((match) => match.score > 0)
+    .sort(
+      // Score first, fan-in ONLY as a tie-break: global popularity may separate
+      // two files the query cannot, and may never outrank the query itself.
+      (a, b) => b.score - a.score || b.dependents - a.dependents || a.path.localeCompare(b.path),
+    )
+    .slice(0, limit);
+}
+
+// Match symbol nodes by name — the precise half of `find` when the symbol layer
+// is active. Exact name match is boosted so `find "clonePipeline"` returns the
+// definition, not just path hits. Term weighting is computed over symbol NAMES
+// (their own corpus), not over paths: a term common among file paths can still
+// be a precise symbol name and vice versa.
+function scanSymbols(graph: GraphData, query: string): SymbolFindResult[] {
   const terms = tokenize(query);
   const symbols = graph.symbols ?? [];
   if (terms.length === 0 || symbols.length === 0) {
@@ -256,7 +362,7 @@ export function findSymbols(graph: GraphData, query: string, limit = 15): Symbol
   const frequencies = documentFrequencies(terms, names, matchesAtWordBoundary);
   const ubiquitous = new Set(ubiquitousOf(terms, frequencies, names.length));
 
-  const results: SymbolFindResult[] = [];
+  const matches: SymbolFindResult[] = [];
   for (const symbol of symbols) {
     const nameLower = symbol.name.toLowerCase();
     const matched = terms.filter((t) => matchesAtWordBoundary(symbol.name, t));
@@ -268,13 +374,8 @@ export function findSymbols(graph: GraphData, query: string, limit = 15): Symbol
     for (const term of matched) {
       score += termWeight(frequencies.get(term) ?? 0, names.length) * 10;
     }
-    // Ballast: a name whose only hits are corpus-wide terms, with no exact
-    // match, is not a candidate — and skipping it must not stop the scan.
-    if (score <= 0) {
-      continue;
-    }
     const discriminating = matched.filter((term) => !ubiquitous.has(term));
-    results.push({
+    matches.push({
       id: symbol.id,
       name: symbol.name,
       kind: symbol.kind,
@@ -291,71 +392,25 @@ export function findSymbols(graph: GraphData, query: string, limit = 15): Symbol
       ),
     });
   }
-  results.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.startLine - b.startLine);
-  return results.slice(0, limit);
+  return matches;
+}
+
+/** Ranking only — a name whose hits are all corpus-wide, with no exact match, is not worth showing. */
+function rankSymbols(matches: readonly SymbolFindResult[], limit = 15): SymbolFindResult[] {
+  return matches
+    .filter((match) => match.score > 0)
+    .sort(
+      (a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.startLine - b.startLine,
+    )
+    .slice(0, limit);
+}
+
+export function findSymbols(graph: GraphData, query: string, limit = 15): SymbolFindResult[] {
+  return rankSymbols(scanSymbols(graph, query), limit);
 }
 
 export function findNodes(graph: GraphData, query: string, limit = 20): FindResult[] {
-  const terms = tokenize(query);
-  if (terms.length === 0) {
-    return [];
-  }
-
-  // fan-in (dependents) per node id: how many edges point at it.
-  const fanIn = new Map<string, number>();
-  for (const edge of graph.edges) {
-    fanIn.set(edge.to, (fanIn.get(edge.to) ?? 0) + 1);
-  }
-
-  const files = graph.nodes.filter((node) => node.kind === "file");
-  const paths = files.map((node) => node.path.toLowerCase());
-  const frequencies = documentFrequencies(terms, paths);
-  const ubiquitous = new Set(ubiquitousOf(terms, frequencies, paths.length));
-
-  const results: FindResult[] = [];
-  for (const node of files) {
-    const lowerPath = node.path.toLowerCase();
-    const base = lowerPath.split("/").pop() ?? lowerPath;
-    const matched = terms.filter((t) => lowerPath.includes(t));
-    if (matched.length === 0) {
-      continue;
-    }
-    const basenameHits = matched.filter((t) => base.includes(t));
-    let score = 0;
-    for (const term of matched) {
-      const weight = termWeight(frequencies.get(term) ?? 0, paths.length);
-      // The basename boost is weighted too: a filename hit on a term that
-      // narrows nothing is still worth nothing.
-      score += weight * 10 + (basenameHits.includes(term) ? weight * 5 : 0);
-    }
-    if (score <= 0) {
-      // Zero-score ballast — `continue`, never `break`: the remaining files
-      // have not been scored yet.
-      continue;
-    }
-    const dependents = fanIn.get(node.id) ?? 0;
-    const discriminating = matched.filter((term) => !ubiquitous.has(term));
-    results.push({
-      path: node.path,
-      score,
-      matched,
-      discriminating,
-      dependents,
-      reason: reasonFor(
-        matched,
-        discriminating,
-        basenameHits.length > 0 ? `in the filename (${basenameHits.join(", ")})` : undefined,
-        dependents,
-      ),
-    });
-  }
-
-  results.sort(
-    // Score first, fan-in ONLY as a tie-break: global popularity may separate
-    // two files the query cannot, and may never outrank the query itself.
-    (a, b) => b.score - a.score || b.dependents - a.dependents || a.path.localeCompare(b.path),
-  );
-  return results.slice(0, limit);
+  return rankFiles(scanFiles(graph, query).matches, limit);
 }
 
 /**
@@ -370,6 +425,12 @@ export function findNodes(graph: GraphData, query: string, limit = 20): FindResu
  * The classification order matters and is not arbitrary: an index that cannot
  * answer must be reported before "nothing matched", because "nothing matched"
  * is a claim about the corpus and an empty index has no standing to make it.
+ *
+ * For the same reason (T14) every test below reads the SCAN — the full set of
+ * files and symbols that matched — and never `foundFiles`/`foundSymbols`, which
+ * are the ranked, ballast-free, `limit`-sliced page meant for a reader. A
+ * display decision must never be able to turn a corpus that contains your terms
+ * into a `no-match` that says it does not.
  */
 export interface FindOutcome {
   readonly code: RetrievalCode;
@@ -392,20 +453,16 @@ export function findCandidates(
   options: FindOptions = {},
 ): FindOutcome {
   const queryTerms = tokenize(query);
-  const files = graph.nodes.filter((node) => node.kind === "file");
-  const paths = files.map((node) => node.path.toLowerCase());
-  const ubiquitousTerms = ubiquitousOf(
-    queryTerms,
-    documentFrequencies(queryTerms, paths),
-    paths.length,
-  );
+  const scan = scanFiles(graph, query);
+  const symbolMatches = scanSymbols(graph, query);
+  const ubiquitousTerms = scan.ubiquitous;
 
   const empty = { files: [], symbols: [], queryTerms, ubiquitousTerms };
 
   if (query.trim().length === 0) {
     return outcome("invalid-input", "no query was given — `find` needs at least one term.", empty);
   }
-  if (files.length === 0) {
+  if (scan.corpusSize === 0) {
     return outcome(
       "index-incomplete",
       "the graph index holds no file nodes — it was never built here, or its storage is unreadable. " +
@@ -424,26 +481,32 @@ export function findCandidates(
     );
   }
 
-  const foundFiles = findNodes(graph, query, options.fileLimit);
-  const foundSymbols = findSymbols(graph, query, options.symbolLimit);
+  const foundFiles = rankFiles(scan.matches, options.fileLimit);
+  const foundSymbols = rankSymbols(symbolMatches, options.symbolLimit);
   const found = { files: foundFiles, symbols: foundSymbols, queryTerms, ubiquitousTerms };
 
-  if (foundFiles.length === 0 && foundSymbols.length === 0) {
+  const matchCount = scan.matches.length + symbolMatches.length;
+  if (matchCount === 0) {
     return outcome(
       "no-match",
-      `the search completed over ${files.length} indexed files; no path or symbol contains any of: ${queryTerms.join(", ")}.`,
+      `the search completed over ${scan.corpusSize} indexed files; no path or symbol contains any of: ${queryTerms.join(", ")}.`,
       found,
     );
   }
 
   const anyDiscriminating =
-    foundFiles.some((file) => file.discriminating.length > 0) ||
-    foundSymbols.some((symbol) => symbol.discriminating.length > 0);
+    scan.matches.some((file) => file.discriminating.length > 0) ||
+    symbolMatches.some((symbol) => symbol.discriminating.length > 0);
   if (!anyDiscriminating) {
+    const noise = ubiquitousTerms.join(", ") || queryTerms.join(", ");
     return outcome(
       "insufficient-evidence",
-      `every candidate matched only on ${ubiquitousTerms.join(", ") || queryTerms.join(", ")}, ` +
-        "a term that appears across this corpus, so the ranking below is not evidence for this question.",
+      `${matchCount} candidates matched, every one of them only on ${noise} — ` +
+        "a term that appears across this corpus and so narrows nothing" +
+        (foundFiles.length + foundSymbols.length > 0
+          ? ", which is why the ranking below is not evidence for this question."
+          : ". Every match scored zero, so no ranking is shown; this is not a claim " +
+            "that the corpus lacks your terms — it is that they cannot separate anything in it."),
       found,
     );
   }
