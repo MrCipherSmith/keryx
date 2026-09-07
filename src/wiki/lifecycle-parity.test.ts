@@ -177,3 +177,137 @@ describe("AC1 parity: wiki and memory admit/reject the same seven input classes 
     },
   );
 });
+
+// T24 (flow 234) F-004 (MAJOR): AC1's SECOND half -- "historical режим явно
+// размечен" -- is not just about labelling; the reviewer's finding is that
+// `--as-of` SCOPED INCLUSION on `memory search` (`searchEntries`'s `asOf`
+// branch, `../memory/search.ts`) while `wiki ask --as-of` only used the date
+// to LABEL a citation, admitting every non-current item unconditionally the
+// instant historical mode was on. Because `wikiAsk`'s memory candidates read
+// the exact same `.md` files `memory search` does, this meant the SAME
+// memory entry file got one verdict from `keryx memory search --as-of` and a
+// different one from `keryx wiki ask --as-of` -- not merely two independent
+// surfaces disagreeing, but one retrieval path silently overriding the
+// other's answer about the identical fact.
+//
+// Six classes per AC1 (`Дата границы, future, deprecated, conflict,
+// superseded и malformed`), each driven at ONE fixed `ASOF` query date
+// through THREE verdicts on facts written once:
+//   - `memoryAdmitted`   -- `searchEntries` with `{ asOf: ASOF }`, the exact
+//     function `keryx memory search --as-of` runs (mirrors the describe
+//     block above's `memoryCurrent`, but historical-mode).
+//   - `wikiAskMemoryAdmitted` -- `wikiAsk({ asOf: ASOF })`'s citation for
+//     `memory/decisions/subject.md` -- the SAME memory `.md` file, read
+//     through `wikiAsk`'s OWN memory-candidate pass rather than
+//     `searchEntries`. This is the assertion that catches F-004 directly:
+//     before the fix this was `true` for every non-current class regardless
+//     of `memoryAdmitted`.
+//   - `wikiAskWikiAdmitted` -- `wikiAsk({ asOf: ASOF })`'s citation for the
+//     wiki-authored `wiki/decisions/subject.md` fixture, proving the fix
+//     also applies to genuine wiki pages, not only to the memory candidates
+//     `wikiAsk` happens to also search.
+// Class 5 (conflict-shaped) is asserted at the admit/reject level only, for
+// the same reason the default-mode table above is: neither retrieval path
+// threads a `SupersessionLookup`, so an unresolved/cyclic `supersededBy`
+// pointer resolves through the same presence-only branch as a plain
+// superseded pointer (`computeLifecycle`, `../memory/lifecycle.ts`).
+describe("AC1 second half: --as-of SCOPES inclusion identically on memory search and wiki ask (historical mode, six classes)", () => {
+  const ASOF = TODAY;
+  const OLD_START = addDays(TODAY, -400);
+  const FAR_FUTURE = addDays(TODAY, 3650);
+
+  type HistoricalClass = {
+    name: string;
+    memoryFields: Record<string, string>;
+    wikiFields: Record<string, string>;
+    // Whether BOTH `memory search --as-of ASOF` and `wiki ask --as-of ASOF`
+    // should admit this fact -- the identical verdict AC1 requires.
+    expectAdmit: boolean;
+  };
+
+  const HISTORICAL_CLASSES: HistoricalClass[] = [
+    {
+      name: "date boundary / valid-then: interval containing ASOF is admitted on both surfaces",
+      memoryFields: { Status: "accepted", "Valid-From": OLD_START, "Valid-To": FAR_FUTURE },
+      wikiFields: { Status: "accepted", ValidFrom: OLD_START, ValidTo: FAR_FUTURE },
+      expectAdmit: true,
+    },
+    {
+      name: "future: Valid-From later than ASOF is rejected on both surfaces (F-004: wiki used to admit it)",
+      memoryFields: { Status: "accepted", "Valid-From": FAR_FUTURE },
+      wikiFields: { Status: "accepted", ValidFrom: FAR_FUTURE },
+      expectAdmit: false,
+    },
+    {
+      name: "expired: Valid-To at/before ASOF is rejected on both surfaces (F-004: wiki used to admit it)",
+      memoryFields: { Status: "accepted", "Valid-From": OLD_START, "Valid-To": ASOF },
+      wikiFields: { Status: "accepted", ValidFrom: OLD_START, ValidTo: ASOF },
+      expectAdmit: false,
+    },
+    {
+      name: "deprecated: admitted at any ASOF (no interval restriction) -- agreed before and after the fix",
+      memoryFields: { Status: "deprecated" },
+      wikiFields: { Status: "deprecated" },
+      expectAdmit: true,
+    },
+    {
+      name: "conflict-shaped (accepted + unresolved supersededBy pointer): rejected at any ASOF on both surfaces (F-004: wiki used to admit it)",
+      memoryFields: { Status: "accepted", "Superseded-By": "decisions/cycle-a.md" },
+      wikiFields: { Status: "accepted", SupersededBy: "decisions/cycle-a.md" },
+      expectAdmit: false,
+    },
+    {
+      name: "superseded: accepted + a live supersededBy pointer is rejected at any ASOF on both surfaces (F-004: this is the finding's own example)",
+      memoryFields: { Status: "accepted", "Superseded-By": "decisions/replacement.md" },
+      wikiFields: { Status: "accepted", SupersededBy: "decisions/replacement.md" },
+      expectAdmit: false,
+    },
+    {
+      name: "malformed: an unparsable Valid-From is rejected at any ASOF on both surfaces (F-004: wiki used to admit it)",
+      memoryFields: { Status: "accepted", "Valid-From": "not-a-date" },
+      wikiFields: { Status: "accepted", ValidFrom: "not-a-date" },
+      expectAdmit: false,
+    },
+  ];
+
+  test.each(HISTORICAL_CLASSES.map((c) => [c.name, c] as const))(
+    "%s",
+    async (_name, klass) => {
+      const root = await mkdtemp(path.join(tmpdir(), "gd-lifecycle-parity-historical-"));
+      try {
+        await mkdir(path.join(root, ".metaproject", "memory", "decisions"), { recursive: true });
+        await writeFile(
+          path.join(root, ".metaproject", "memory", "decisions", "subject.md"),
+          renderMemoryEntry("Subject entry", klass.memoryFields),
+          "utf8",
+        );
+        await mkdir(path.join(root, ".metaproject", "wiki", "decisions"), { recursive: true });
+        await writeFile(
+          path.join(root, ".metaproject", "wiki", "decisions", "subject.md"),
+          renderWikiPage("Subject page", klass.wikiFields),
+          "utf8",
+        );
+
+        // `keryx memory search --as-of ASOF` -- the reference verdict.
+        const entries = await collectEntries(root);
+        const searchResults = searchEntries(entries, TAG, { asOf: ASOF }, DEFAULT_MEMORY_CONFIG, NOW);
+        const memoryAdmitted = searchResults.some((r) => r.entry.relativePath === "decisions/subject.md");
+
+        // `keryx wiki ask --as-of ASOF` -- both its memory-candidate pass
+        // (over the SAME memory/decisions/subject.md file) and its
+        // wiki-candidate pass (over the wiki-authored page).
+        const askResult = await wikiAsk({ cwd: root, question: TAG, asOf: ASOF });
+        const wikiAskMemoryAdmitted = askResult.citations.some((c) => c.path === "memory/decisions/subject.md");
+        const wikiAskWikiAdmitted = askResult.citations.some((c) => c.path === "wiki/decisions/subject.md");
+
+        expect(memoryAdmitted).toBe(klass.expectAdmit);
+        // The core F-004 assertion: the SAME memory entry file must get the
+        // SAME verdict from `memory search --as-of` and `wiki ask --as-of`.
+        expect(wikiAskMemoryAdmitted).toBe(memoryAdmitted);
+        expect(wikiAskWikiAdmitted).toBe(klass.expectAdmit);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+});

@@ -152,6 +152,36 @@ function parseTestingReport(raw: RawSourceResult): Finding[] {
       }),
     );
   }
+
+  // F-008 (flow 234 T25, major): `report.context` (AFC-09 / T21, AC2) says
+  // whether the testing-context refresh this report used could fully walk
+  // the tree. Before this, that field was imported and never read here: a
+  // report whose context was `incomplete` (e.g. a permission-denied
+  // subdirectory) contributed zero findings and left this source recorded as
+  // completed/parsed with clean coverage, indistinguishable from a tree that
+  // really was fully examined and found clean. Optional chaining so an older
+  // report written before `context` existed is silently skipped rather than
+  // throwing (caught by `runAdapter`'s own `parse` try/catch as a "parse
+  // failed" source, which is a worse, less specific signal than just not
+  // adding this finding).
+  if (report.context?.status === "incomplete") {
+    findings.push(
+      makeFinding({
+        source: "tests",
+        severity: "error",
+        priority: "P0",
+        category: "test",
+        message: `Testing context is incomplete, so this report cannot certify full-tree coverage: ${report.context.incompleteReasons.join("; ")}`,
+        ruleKey: "tests-context-incomplete",
+        file: null,
+        line: null,
+        suggestedAction: "Re-run the testing context refresh so the full project tree can be walked, then re-import.",
+        command: report.command,
+        toolVersion: report.runner,
+        rawLog: report.rawLogPath,
+      }),
+    );
+  }
   return findings;
 }
 

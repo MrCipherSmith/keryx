@@ -13,7 +13,7 @@ import { readJsonFileOr } from "../lib/json";
 import { computeLifecycle, type LifecycleState } from "../memory/lifecycle";
 import { collectEntries } from "../memory/store";
 import { jaccard, tokenSet } from "../memory/text";
-import { validateAsOf } from "../memory/temporal";
+import { isValidAt, validateAsOf } from "../memory/temporal";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { collectPages } from "./collect";
 import type { WikiAskCitation, WikiAskInput, WikiAskResult } from "./types";
@@ -102,8 +102,8 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
   const observedAt = asOf ? new Date(`${asOf}T00:00:00.000Z`) : todayObservedAt();
 
   const candidates = [
-    ...(await wikiCandidates(input.cwd, observedAt, historicalMode)),
-    ...(await memoryCandidates(input.cwd, observedAt, historicalMode)),
+    ...(await wikiCandidates(input.cwd, observedAt, historicalMode, asOf)),
+    ...(await memoryCandidates(input.cwd, observedAt, historicalMode, asOf)),
   ];
 
   let scored = scoreByQuestion(input.question, questionTokens, candidates);
@@ -351,10 +351,37 @@ function todayObservedAt(): Date {
   return new Date(`${today}T00:00:00.000Z`);
 }
 
+// T24 (flow 234) F-004 (MAJOR): the historical-mode admission test, kept
+// IDENTICAL to `searchEntries`'s own `asOf` branch (`temporalMatch`, `../
+// memory/search.ts`) -- an `accepted`-status item still carrying a live
+// `supersededBy` pointer is rejected unconditionally, matching that
+// function's own comment: `supersedeEntry` (`../memory/supersede.ts`) always
+// flips `Status` to `"superseded"` in the same write that sets the pointer,
+// so `accepted` + a live `supersededBy` is never a normal state and is never
+// "valid at" any date. Everything else is the shared `isValidAt` interval
+// primitive (`../memory/temporal.ts`) both surfaces already import. This is
+// what `--as-of` SCOPES inclusion by, as opposed to the `computeLifecycle`
+// call above, which only LABELS a citation once it is already admitted.
+function isAdmittedAtAsOf(
+  input: {
+    status: string | null;
+    supersededBy?: string | null | undefined;
+    validFrom?: string | null | undefined;
+    validTo?: string | null | undefined;
+  },
+  asOf: string,
+): boolean {
+  if (input.status === "accepted" && input.supersededBy) {
+    return false;
+  }
+  return isValidAt({ validFrom: input.validFrom ?? null, validTo: input.validTo ?? null }, asOf);
+}
+
 async function wikiCandidates(
   cwd: string,
   observedAt: Date,
   historicalMode: boolean,
+  asOf: string | undefined,
 ): Promise<Candidate[]> {
   const pages = await collectPages(cwd);
   // AFC-06 (flow 234) AC1: this used to admit every wiki page unconditionally,
@@ -370,13 +397,12 @@ async function wikiCandidates(
   // changed by the same task and populates all three (see `types.ts`'s
   // corrected comment). Reads the already-parsed fields directly, exactly
   // mirroring `memoryCandidates` below, so a wiki page and a memory entry go
-  // through the identical `computeLifecycle` call shape. The one real loss:
-  // `collect.ts` only recognizes the unhyphenated spelling (`ValidFrom`), so
-  // a page written with the memory-style hyphenated alias (`Valid-From`) is
-  // no longer honored on this path -- `parsePageLifecycle`'s alias fallback
-  // is not reachable from parsed `WikiPage` fields. That belongs in the
-  // collector itself (residual, not fixed here — out of this file's
-  // ownership).
+  // through the identical `computeLifecycle` call shape. `collect.ts` (see
+  // its own comment there) recognizes BOTH the unhyphenated (`ValidFrom`) and
+  // the memory-style hyphenated (`Valid-From`) spellings, so a page written
+  // with either alias is honored on this path -- closed, see
+  // `ask.test.ts`'s "a hyphenated Valid-From ... is honoured on the wiki
+  // path".
   //
   // T22 (flow 234) AC1, second half: `observedAt`/`historicalMode` come from
   // `wikiAsk`'s `asOf` (default: "today", default retrieval). Default mode
@@ -384,6 +410,16 @@ async function wikiCandidates(
   // additionally admits a non-current page but tags it with the same
   // `LifecycleResult` the classifier already computed, rather than dropping
   // it or re-deriving a second verdict for the label.
+  //
+  // T24 (flow 234) F-004 (MAJOR): historical mode used to admit every
+  // non-current page unconditionally the instant it was on, using `asOf`
+  // only to LABEL the citation -- so a future-dated or already-expired page
+  // was cited as applying at `asOf` regardless of whether its own validity
+  // interval actually contained that date. `isAdmittedAtAsOf` below applies
+  // the SAME validity-interval test `searchEntries`'s `asOf` branch
+  // (`temporalMatch`, `../memory/search.ts`) already applies to memory
+  // entries, so `--as-of` scopes inclusion identically on both surfaces; the
+  // label (`lifecycle.state`/`.reasons`) is unchanged.
   const result: Candidate[] = [];
   for (const page of pages) {
     const lifecycle = computeLifecycle(
@@ -395,8 +431,13 @@ async function wikiCandidates(
       },
       observedAt,
     );
-    if (!lifecycle.current && !historicalMode) {
-      continue;
+    if (!lifecycle.current) {
+      if (!historicalMode) {
+        continue;
+      }
+      if (!asOf || !isAdmittedAtAsOf(page, asOf)) {
+        continue;
+      }
     }
     result.push({
       path: `wiki/${page.relativePath}`,
@@ -420,6 +461,7 @@ async function memoryCandidates(
   cwd: string,
   observedAt: Date,
   historicalMode: boolean,
+  asOf: string | undefined,
 ): Promise<Candidate[]> {
   const entries = await collectEntries(cwd);
   // AFC-06 (flow 234) AC1: the shared lifecycle formula (`computeLifecycle`,
@@ -431,6 +473,16 @@ async function memoryCandidates(
   // mirroring as `wikiCandidates` above, so the memory citations `wikiAsk`
   // embeds in an answer go through the identical historical-mode admission
   // and labelling as the wiki citations do.
+  //
+  // T24 (flow 234) F-004 (MAJOR): same `isAdmittedAtAsOf` scoping as
+  // `wikiCandidates` above. Before this fix, THIS function admitted every
+  // non-current memory entry unconditionally once `historicalMode` was on --
+  // so the identical memory entry `.md` file that `keryx memory search
+  // --as-of` (`searchEntries`'s `temporalMatch`, `../memory/search.ts`)
+  // rejects (future, expired, or an `accepted` status with a live
+  // `supersededBy` pointer) was cited by `keryx wiki ask --as-of` as though
+  // it applied at that date, because this function never scoped by the date
+  // at all.
   const result: Candidate[] = [];
   for (const entry of entries) {
     const lifecycle = computeLifecycle(
@@ -442,8 +494,13 @@ async function memoryCandidates(
       },
       observedAt,
     );
-    if (!lifecycle.current && !historicalMode) {
-      continue;
+    if (!lifecycle.current) {
+      if (!historicalMode) {
+        continue;
+      }
+      if (!asOf || !isAdmittedAtAsOf(entry, asOf)) {
+        continue;
+      }
     }
     result.push({
       path: `memory/${entry.relativePath}`,

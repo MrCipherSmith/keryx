@@ -13,6 +13,7 @@ import type {
   ScoredEntry,
 } from "../../memory/types";
 import type { FlowService } from "../../flow/types";
+import type { TestingContext } from "../../testing/types";
 import { createMetaprojectAdapter, type MetaprojectAdapterDeps } from "./metaproject-adapter";
 
 const CWD = "/proj";
@@ -185,16 +186,55 @@ test("memorySearch delegates to the injected memory fake and maps ranked hits", 
   expect(calls.search[0]?.filters).toMatchObject({ module: "harness", status: "accepted", limit: 5 });
   expect(calls.search[0]?.filters?.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(result.filters).toMatchObject({ module: "harness", status: "accepted" });
-  expect(result.hits).toEqual([
-    {
-      path: "decisions/x.md",
-      title: "Offline determinism",
-      type: "decision",
-      status: "accepted",
-      score: 0.75,
-      excerpt: "Keep the harness core offline and deterministic.",
-    },
-  ]);
+  expect(result.hits).toHaveLength(1);
+  // T51 finding F-007 (flow 234 review, MAJOR): the OLD assertion here was
+  // `toEqual` against the exact six-field object literal below — it failed
+  // the moment provenance fields were added, so the F-002 omission read as
+  // intentional and the correct fix looked like a regression. Pin the
+  // identity fields with `toMatchObject` (which does NOT forbid additional
+  // properties) instead of a shape that forbids growth.
+  expect(result.hits[0]).toMatchObject({
+    path: "decisions/x.md",
+    title: "Offline determinism",
+    type: "decision",
+    status: "accepted",
+    score: 0.75,
+    excerpt: "Keep the harness core offline and deterministic.",
+  });
+  // F-002 (flow 234 review, BLOCKER): the provenance fields themselves must
+  // be present, and an entry with no captured source must carry the literal
+  // "unknown" sentinel rather than being silently omitted or blank.
+  expect(result.hits[0]?.version).toBe("unknown");
+  expect(result.hits[0]?.provenance).toEqual({ source: "unknown", link: "unknown" });
+  expect(result.hits[0]?.author).toBe("unknown");
+  expect(result.hits[0]?.confirmedBy).toBe("unknown");
+  expect(result.hits[0]?.caveat).toBeNull();
+});
+
+test("memorySearch carries a fully provenanced entry through byte-for-byte, distinct from an unsourced one", async () => {
+  const scored: ScoredEntry = {
+    entry: entry({
+      version: "v3",
+      provenance: { source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" },
+      author: "alice",
+      confirmedBy: "council:2026-01-09",
+      caveat: "superseded once the migration lands",
+    }),
+    score: 0.9,
+    components: { relevance: 1, recency: 0, confidence: 1, status: 1, scope: 0 },
+    reason: "match",
+  };
+  const { deps } = fakeDeps({
+    search: { schemaVersion: 1, query: "offline", results: [scored] },
+  });
+  const port = createMetaprojectAdapter(CWD, deps);
+  const result = await port.memorySearch({ query: "offline" });
+
+  expect(result.hits[0]?.version).toBe("v3");
+  expect(result.hits[0]?.provenance).toEqual({ source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" });
+  expect(result.hits[0]?.author).toBe("alice");
+  expect(result.hits[0]?.confirmedBy).toBe("council:2026-01-09");
+  expect(result.hits[0]?.caveat).toBe("superseded once the migration lands");
 });
 
 test("memorySearch validates automatic-recall inputs at the port boundary", async () => {
@@ -237,24 +277,77 @@ test("readWiki rejects an absolute path escape", async () => {
 
 // --- flow 043: new adapter methods -------------------------------------------
 
-test("testRelated delegates to the injected resolver and sorts the results", async () => {
+/** Minimal complete TestingContext stub for a testRelated fake. */
+function testingContext(overrides: Partial<TestingContext> = {}): TestingContext {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    status: "complete",
+    incompleteReasons: [],
+    frameworks: [],
+    scripts: [],
+    configs: [],
+    testFiles: [],
+    ciFiles: [],
+    instructionFiles: [],
+    conventions: [],
+    recommendations: [],
+    ...overrides,
+  };
+}
+
+test("testRelated delegates to the injected computation + lookup and sorts the results", async () => {
+  const calls: Array<{ cwd: string; target: string }> = [];
+  const context = testingContext();
   const adapter = createMetaprojectAdapter("/proj", {
-    findRelatedTests: async (_cwd, _target) => ["b.test.ts", "a.test.ts"],
+    computeTestingContext: async (cwd) => {
+      expect(cwd).toBe("/proj");
+      return context;
+    },
+    relatedTestsInContext: async (cwd, ctx, target) => {
+      calls.push({ cwd, target });
+      expect(ctx).toBe(context);
+      return ["b.test.ts", "a.test.ts"];
+    },
   });
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
+  expect(calls).toEqual([{ cwd: "/proj", target: "src/a.ts" }]);
   expect(result?.tests).toEqual(["a.test.ts", "b.test.ts"]);
+  expect(result?.context).toEqual({ status: "complete", incompleteReasons: [] });
   expect(result?.error).toBeUndefined();
 });
 
-test("testRelated returns a structured error (never throws) when the resolver fails", async () => {
+test("testRelated returns a structured error (never throws) when the computation fails", async () => {
   const adapter = createMetaprojectAdapter("/proj", {
-    findRelatedTests: async () => {
+    computeTestingContext: async () => {
       throw new Error("testing boom");
     },
   });
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
   expect(result?.tests).toEqual([]);
   expect(result?.error).toMatch(/testing boom/);
+});
+
+// F-003 (flow 234 review, MAJOR) / AC2: an inability to fully refresh the
+// testing context must reach this boundary as `incomplete`, not as a
+// legitimate-looking empty `tests: []` result indistinguishable from "this
+// file genuinely has no related tests".
+test("testRelated surfaces an incomplete context refresh instead of a silent empty result", async () => {
+  const incompleteContext = testingContext({
+    status: "incomplete",
+    incompleteReasons: ["src/locked: EACCES: permission denied"],
+  });
+  const adapter = createMetaprojectAdapter("/proj", {
+    computeTestingContext: async () => incompleteContext,
+    relatedTestsInContext: async () => [],
+  });
+  const result = await adapter.testRelated?.({ file: "src/locked/a.ts" });
+  expect(result?.tests).toEqual([]);
+  expect(result?.context).toEqual({
+    status: "incomplete",
+    incompleteReasons: ["src/locked: EACCES: permission denied"],
+  });
+  expect(result?.error).toBeUndefined();
 });
 
 // --- flow_status: Task Manager flow listing (read-risk alternative to `shell_exec`ing `keryx flow list`) ---

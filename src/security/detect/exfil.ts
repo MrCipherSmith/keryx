@@ -596,6 +596,11 @@ interface ContentIndex {
   // carry" is an O(log n) question. Built under the same condition; `closes`
   // above answers the same question for `]` and is always built.
   openBrackets: number[] | null;
+  // every line-terminator position, ascending, so "does [a, b) cross a line
+  // ending" is an O(log n) question. Built under the same condition as
+  // `nonWhitespace`, which is the array whose bound it protects — see
+  // `readLabel` (T91).
+  lineTerminators: number[] | null;
 }
 
 // The whitespace `normaliseLabel` collapses. ASCII is decided by code unit so
@@ -616,6 +621,12 @@ function indexContent(content: string, withLabelCounts: boolean): ContentIndex {
     ? new Uint32Array(content.length + 1)
     : null;
   const openBrackets: number[] | null = withLabelCounts ? [] : null;
+  // T91. Every line-terminator position, so `readLabel` can ask in O(log n)
+  // whether a candidate span crosses one — see that function for why it must.
+  // Built under the same `withLabelCounts` gate as `nonWhitespace`: this array
+  // exists only to protect that one's bound, so it has no reason to exist when
+  // that one does not either.
+  const lineTerminators: number[] | null = withLabelCounts ? [] : null;
   // One native scan decides whether the escape-aware pairing has to exist at
   // all. A document with no `\` in it cannot have an escaped bracket, so the two
   // pairings would be identical and the second one would be pure overhead — in
@@ -631,6 +642,9 @@ function indexContent(content: string, withLabelCounts: boolean): ContentIndex {
     if (nonWhitespace) {
       if (!isCollapsibleSpace(content.charCodeAt(index), character)) counted += 1;
       nonWhitespace[index + 1] = counted;
+    }
+    if (lineTerminators && LINE_TERMINATORS.has(content.charCodeAt(index))) {
+      lineTerminators.push(index);
     }
     // Read the run BEFORE this character, then extend or clear it. An ODD run
     // means this character is escaped; `\\` is one literal backslash and leaves
@@ -668,6 +682,7 @@ function indexContent(content: string, withLabelCounts: boolean): ContentIndex {
     closeParens,
     nonWhitespace,
     openBrackets,
+    lineTerminators,
   };
 }
 
@@ -732,10 +747,14 @@ function descriptionEnds(index: ContentIndex, open: number): DescriptionEnds {
 // auto-fetching image from a user-initiated link.
 const BRACKET_OPEN = /(!?)\[/g;
 
-// The inline destination, `(URL …)`, anchored (sticky) at the character just
-// after the description so it can only match where a renderer would look for it.
-// Groups: 1 = angle-bracket destination, 2 = bare destination.
-const INLINE_DESTINATION = /\(\s*(?:<([^<>\n]*)>|([^)\s]+))[^)]*\)/y;
+// The inline destination, `(URL …)`. Anchored (sticky) at the first byte of the
+// destination itself — NOT at the `(` — because the leading whitespace, and any
+// newline plus repeated block-container marker it crosses, is read by
+// `skipDestinationLeadingWhitespace` below rather than by a `\s*` prefix on this
+// pattern. That is the same split T90 made for `REFERENCE_DESTINATION`, made
+// here for the same reason and with the SAME helper (T93#A). Groups:
+// 1 = angle-bracket destination, 2 = bare destination.
+const INLINE_DESTINATION = /(?:<([^<>\n]*)>|([^)\s]+))[^)]*\)/y;
 // A reference definition's destination, `: URL`. Groups: 1 = angle-bracket
 // destination, 2 = bare destination. Anchored (sticky) at the first byte of the
 // destination itself — NOT at `]:` — because leading whitespace, including any
@@ -827,6 +846,59 @@ function skipDestinationLeadingWhitespace(content: string, from: number): number
   }
 }
 
+// T91. The block-container bypass RESIDUALS.md recorded as accepted, then
+// reversed: a reference-definition or reference-use LABEL that wraps to a
+// second physical line inside a blockquote (or bullet/ordered list), with the
+// marker repeated on the continuation line, was never matched. T89 taught the
+// label-OPENING skip (`skipBlockContainerPrefix`, called from
+// `readReferenceDefinitions` before testing for the definition's own `[`) to
+// cross a container prefix; T90 taught the DESTINATION reader the same thing.
+// Neither taught the LABEL TEXT itself — the bytes between `[` and the
+// terminating `]` — to do so, so a label that wraps mid-span still carries the
+// repeated `>`/bullet/ordered marker as a literal character. The definition
+// key then normalises to (for example) `"foo > bar"` while the use key
+// normalises to the same bytes read at a different offset with the same
+// leftover marker — both sides agree on the WRONG key, so they still never
+// join, and the renderer — which strips the container marker before handing
+// the paragraph text to inline parsing — resolves a key neither side produced.
+// Reproduced against `marked`, not inferred: eight spellings (definition-side
+// wrap, use-side wrap, each in full/collapsed/image-in-link form, plus nested
+// containers) reach the renderer's fetch while the detector found nothing.
+//
+// THE CHOKE POINT. `normaliseLabel` is the one function BOTH the definition
+// key (`readReferenceDefinitions`'s `register`) and the use key (`readLabel`)
+// pass their raw span through — see the comment above this function's
+// original body for why that single-choke-point design exists. One edit here
+// closes both directions at once, exactly as it did for T72#F-005.
+//
+// THE REPAIR REUSES `skipBlockContainerPrefix`, NOT A SECOND MARKER GRAMMAR —
+// the same discipline T90's header comment insists on for the destination
+// side, for the same reason: a second copy of the marker grammar is exactly
+// how the label side and the destination side diverged in T89, and writing a
+// third copy here would only relocate the next divergence rather than close
+// this one. `stripBlockContainerMarkers` below calls the destination-reader's
+// own helper at every line terminator INSIDE the label, before the whitespace
+// collapse that already ran here.
+//
+// THE INVARIANT THIS BREAKS, AND WHY IT IS HANDLED AT THE CALLER, NOT HERE.
+// `readLabel`'s cheap O(1) pre-filter rests on
+// `normalise(span).length >= nonWhitespaceCount(span)` — true before this
+// change because normalisation only ever COLLAPSES whitespace, never deletes
+// a non-whitespace byte. Stripping a repeated marker deletes non-whitespace
+// bytes (`>`, a bullet, an ordered marker's digits and punctuation), so for a
+// span that crosses a line terminator the invariant no longer holds: the
+// final normalised length can be SHORTER than the span's raw non-whitespace
+// count. Fixing `normaliseLabel` alone, without also fixing the filter that
+// gates whether it ever RUNS, would just move this bypass one call earlier —
+// a wrapped label would be rejected by the O(1) filter before normalisation
+// gets a chance to strip anything, for the same reason it was never matched
+// before. `readLabel` carries the fix for that: see its own comment for the
+// argument that the filter's exact form survives unchanged for every span
+// that does NOT cross a line terminator (the overwhelming majority, and the
+// only shape the original invariant was proved for), and is relaxed — not
+// weakened in a way that can miss a definition — only for the spans this
+// change can affect.
+//
 // CommonMark matches a link label after Unicode case folding AND after
 // collapsing every run of internal whitespace — a newline included — to a
 // single space, on BOTH sides of the match. `trim().toLowerCase()` alone left
@@ -834,8 +906,67 @@ function skipDestinationLeadingWhitespace(content: string, from: number): number
 // fetches (T72#F-005). Applied identically at the definition site and the use
 // site; a normalisation applied to one side only is a bypass, not a repair.
 const LABEL_WHITESPACE_RUN = /\s+/g;
+
+// Consumes a repeated block-container marker after every line terminator
+// INSIDE `label`, before any whitespace is collapsed. Mirrors
+// `skipDestinationLeadingWhitespace`'s treatment of a wrapped destination
+// (T90) exactly, one line down: cross the terminator, hand the position just
+// past it to `skipBlockContainerPrefix`, and repeat if another terminator
+// follows the marker it consumed.
+//
+// `skipBlockContainerPrefix` is a pure function of a string and an offset —
+// it reads no state beyond the two — so calling it on `label` (an extracted
+// substring) rather than on the full document is exactly as sound as calling
+// it on the full document at the corresponding absolute offset would be: the
+// bytes from that offset forward are identical either way, and the function
+// never looks backward. It also cannot read past `label`'s own end, which is
+// exactly right — a marker written AFTER the label's closing `]` is not part
+// of the label and must never be consumed here.
+//
+// FAST PATH: a label with no line terminator at all — the overwhelming
+// majority — returns `label` itself, unexamined beyond the scan that proves
+// it, with no allocation. Even a label that DOES cross a line terminator but
+// carries no repeated marker (T89's own control case, and the common case of
+// an ordinary multi-line label with no blockquote around it) returns `label`
+// unchanged: `result` stays `null` until `skipBlockContainerPrefix` actually
+// advances past something, so "wrap with no container" costs one scan and no
+// copy, same as before this change.
+//
+// COST. A single forward pass: `at` only ever advances, by one character step
+// in the loop or by however far one `skipBlockContainerPrefix` call travels,
+// and that call's own cost is bounded by the line it is called on (see that
+// function's comment). Summed over every line terminator in `label`, total
+// work is bounded by `label.length` — the same linear shape as
+// `skipDestinationLeadingWhitespace`, and for the same reason: neither
+// function ever revisits a byte once it has advanced past it.
+function stripBlockContainerMarkers(label: string): string {
+  let result: string | null = null;
+  let copiedUpTo = 0;
+  let at = 0;
+  while (at < label.length) {
+    const code = label.charCodeAt(at);
+    if (!LINE_TERMINATORS.has(code)) {
+      at += 1;
+      continue;
+    }
+    const skipped = skipBlockContainerPrefix(label, at + 1);
+    if (skipped > at + 1) {
+      if (result === null) result = "";
+      result += label.slice(copiedUpTo, at + 1);
+      copiedUpTo = skipped;
+    }
+    at = skipped;
+  }
+  if (result === null) return label;
+  result += label.slice(copiedUpTo);
+  return result;
+}
+
 function normaliseLabel(label: string): string {
-  return label.trim().replace(LABEL_WHITESPACE_RUN, " ").toLowerCase();
+  return stripBlockContainerMarkers(label)
+    .trim()
+    .replace(LABEL_WHITESPACE_RUN, " ")
+    .toLowerCase();
 }
 
 // THE REFERENCE-DEFINITION TABLE, AND WHY IT IS NO LONGER A REGEX (T82#F-001).
@@ -1015,6 +1146,132 @@ function skipBlockContainerPrefix(content: string, from: number): number {
     break;
   }
   return at;
+}
+
+// T93. THE CLASS, rather than its fifth member.
+//
+// T89, T90, T91 and T92 each closed ONE reader that crosses a line terminator
+// without consuming the block-container marker a renderer repeats on the
+// continuation line, and each declared the class closed. The enumeration this
+// round required found FIVE more members. One of them is markdown (the inline
+// destination, closed above with the same helper T90 used). The other four are
+// all HTML, and they are not closed one at a time:
+//
+//   - `readStartTag`'s three whitespace skips accept a line terminator
+//     (`isHtmlSpace` matches LF and CR), so a start tag whose ATTRIBUTE LIST
+//     wraps crosses the newline and meets the repeated `>` — which that reader
+//     reads as the END OF THE TAG. `> <img` \ `> src="URL">` produced no
+//     attributes at all while `marked` emitted `<img src="URL">`;
+//   - a quoted attribute VALUE is read with `content.indexOf(quote, …)`, which
+//     crosses a line terminator freely, so `src="https://` \ `> host/p.png"`
+//     classified `https://` + a marker byte and resolved to no host, while the
+//     renderer emitted the value with the marker stripped and the URL parser
+//     removed the newline left behind;
+//   - a `srcset` candidate is `candidate.trim().split(/\s+/)[0]`, and `trim()`
+//     crosses the leading line terminator onto the marker byte;
+//   - `META_REFRESH_CONTENT`'s `[\s\S]*` crosses it too.
+// All four measured fetching in `marked` with ZERO findings here.
+//
+// WHY A VIEW AND NOT FOUR EDITS. Teaching each of those four readers to consume
+// a marker is the fifth repetition of what has already failed four times: it
+// closes the readers that exist today and leaves the next one to the next
+// round. And on the HTML side it cannot even be done safely reader by reader —
+// the marker a blockquote repeats is `>`, which is also the character that ENDS
+// a start tag, so a marker-consuming tag walk either runs past the tag end (and
+// is quadratic on `"<img\n> ".repeat(n)`, the shape three earlier rounds were
+// each bitten by) or moves the scan cursor past tags it never examined (a
+// release).
+//
+// So the HTML pass is instead run a SECOND time over the renderer's own view of
+// the document: the content with block-container prefixes removed. Any HTML
+// reader — the four above, and any future one — is covered by construction,
+// because it is reading the same bytes the renderer's inline parser reads.
+//
+// THE PREFIXES ARE REMOVED WITH `skipBlockContainerPrefix`, THE SAME FUNCTION,
+// at line starts, exactly as `readReferenceDefinitions` already calls it. No
+// second marker grammar exists in this file, and this does not add one.
+//
+// ADDITIVE, NEVER SUBSTITUTIVE. The raw pass runs first and unchanged, so every
+// finding this floor produces today it still produces, at the same offset and
+// in the same order; the view pass appends only spans the raw pass did not
+// report. That is what keeps the direction right: a view can only ADD findings,
+// including false ones (a `- ` that was prose, not a bullet), which is the
+// direction this floor may err in.
+//
+// OFFSETS STAY ON THE ORIGINAL BYTES. `origin` maps each character of the view
+// back to the index it came from in `content`, so a view-pass finding reports
+// `[origin[start], origin[end])` — a span in the ORIGINAL, one that CONTAINS
+// the marker bytes the view removed. Nothing reports an offset into the
+// rewritten copy; the rewritten text is only ever the string to CLASSIFY, which
+// is what `UrlHit.classify` already exists for (T46).
+//
+// COST. One extra left-to-right pass to build the view (each line's prefix skip
+// is bounded by that line, per `skipBlockContainerPrefix`'s own argument) and
+// one extra HTML pass over a string no longer than the input, whose own cost is
+// already linear. Two linear passes are still linear; the constant is what
+// changes, and only for a document that actually carries a container marker —
+// `null` is returned, with no allocation beyond the scan, when none does.
+interface ContainerStrippedView {
+  // the content with every line's block-container prefix removed
+  text: string;
+  // origin[i] = the index in the ORIGINAL content that text[i] came from, with
+  // one extra entry at the end so an exclusive span maps too
+  origin: Uint32Array;
+}
+
+// Exported for ONE consumer: the metamorphic guard in this module's test suite,
+// which asserts that this floor is at least as capable on a document as it is
+// on the renderer's own view of it. The guard has to be able to build that view
+// with the same function the detector uses; re-deriving the marker grammar in
+// the test would be the sixth spelling of it, and would let the two drift apart
+// exactly as the label and destination readers did in T89. Not part of the
+// detector's public contract.
+export function containerStrippedView(
+  content: string,
+): ContainerStrippedView | null {
+  // [start, end) pairs of the content that survive, ascending and disjoint.
+  const kept: number[] = [];
+  let segmentStart = 0;
+  let lineStart = 0;
+  let stripped = false;
+  for (;;) {
+    const prefixEnd = skipBlockContainerPrefix(content, lineStart);
+    if (prefixEnd > lineStart) {
+      stripped = true;
+      kept.push(segmentStart, lineStart);
+      segmentStart = prefixEnd;
+    }
+    let at = prefixEnd;
+    while (at < content.length && !LINE_TERMINATORS.has(content.charCodeAt(at))) {
+      at += 1;
+    }
+    if (at >= content.length) break;
+    // `at` is a terminator and `lineStart` strictly increases, so this
+    // terminates; a CRLF is two rounds, the second one starting on the LF and
+    // consuming no prefix (LF is neither space, tab nor a marker byte).
+    lineStart = at + 1;
+  }
+  if (!stripped) return null;
+  kept.push(segmentStart, content.length);
+
+  let text = "";
+  const origin = new Uint32Array(content.length + 1);
+  let out = 0;
+  for (let pair = 0; pair < kept.length; pair += 2) {
+    const start = kept[pair] as number;
+    const end = kept[pair + 1] as number;
+    if (end <= start) continue;
+    text += content.slice(start, end);
+    for (let at = start; at < end; at += 1) {
+      origin[out] = at;
+      out += 1;
+    }
+  }
+  // The end sentinel. When the document ends inside a stripped prefix there is
+  // no surviving character to point at, and `content.length` is the coarser —
+  // never the shorter — answer, which is the direction this floor may err in.
+  origin[out] = content.length;
+  return { text, origin: origin.subarray(0, out + 1) };
 }
 
 interface ReferenceDefinitions {
@@ -1356,7 +1613,43 @@ function readLabel(
   // key is non-empty, so an all-whitespace span normalises to "" and matches
   // nothing (T72#F-002).
   const nonWhitespace = (counts[end] ?? 0) - (counts[start] ?? 0);
-  if (nonWhitespace === 0 || nonWhitespace > budget.maxLength) return null;
+  if (nonWhitespace === 0) return null;
+  // T91. The invariant the line above still leans on — and the ONLY thing the
+  // `=== 0` rejection needs, since a span with zero raw non-whitespace bytes
+  // has no marker bytes to strip either, so it stays valid unconditionally —
+  // stops holding for the `> budget.maxLength` rejection once `normaliseLabel`
+  // can DELETE non-whitespace bytes (a repeated block-container marker) from a
+  // span that crosses a line terminator. For such a span the raw count is an
+  // OVER-estimate of the final normalised length, so rejecting on it is no
+  // longer necessary — it could reject a span that would have matched a key
+  // after stripping, which is exactly the bypass this file exists to close,
+  // not reproduce at one remove. So the length rejection below applies only
+  // to a span PROVEN not to cross a line terminator, an O(log n) question
+  // over `index.lineTerminators` (built alongside `nonWhitespace` for exactly
+  // this test) — the same cost class as the `closes`/`openBrackets` checks
+  // this function already runs unconditionally. For every such span — the
+  // overwhelming majority, and the only shape the original invariant was ever
+  // proved for — the check is BYTE-FOR-BYTE what it was before this change:
+  // no regression in precision, no new cost.
+  //
+  // A span that DOES cross a line terminator instead falls through to the
+  // width/`budget.work` check below unfiltered by length. That is not an
+  // unbounded relaxation: `width` is still charged against `budget.work`
+  // exactly as for any other span, so the total this path can spend is still
+  // capped at `LABEL_WORK_FACTOR * content.length` (see that constant's own
+  // comment), and once the budget is exhausted every further call — crossing
+  // a line terminator or not — returns null in O(log n) without slicing
+  // (`width > budget.work` short-circuits before `content.slice` runs). The
+  // only externally visible effect of skipping this one rejection for a
+  // multi-line span that turns out NOT to match any key is that it spends
+  // from the shared budget instead of being dismissed for free; when the
+  // budget survives, the outcome is identical, and when it does not, the
+  // failure direction is `exhausted` flagging every definition — a finding,
+  // never a release (T78#F-001's own invariant, unchanged).
+  const crossesLineTerminator =
+    index.lineTerminators !== null &&
+    countInRange(index.lineTerminators, start, end) > 0;
+  if (!crossesLineTerminator && nonWhitespace > budget.maxLength) return null;
   // No key can contain `]` — a key is a label truncated at its first one — and
   // no key can contain more `[` than the most any key carries (T78#F-001).
   if (countInRange(index.closes, start, end) > 0) return null;
@@ -1373,14 +1666,109 @@ function readLabel(
   return normaliseLabel(content.slice(start, end));
 }
 
+// T92. The 22nd shape of the block-container bypass class, and the one
+// RESIDUALS.md recorded as open after T91: a reference USE's SECOND bracket
+// (`![desc][HERE]`) whose only content is a line terminator plus a REPEATED
+// container marker — `![foo bar][\n> ]`, `![foo bar][\n- ]`, and every other
+// marker T89-T91 already enumerate, alone or nested, LF or CRLF — has a raw
+// non-whitespace byte count of 1-or-more (the marker byte itself) even though
+// CommonMark's block parser strips that marker before inline parsing ever
+// sees it, leaving nothing behind. This function is the ONE place that count
+// decided a semantic branch directly, with no normalisation in between: `true`
+// here sends `readBracketConstructs` down the FULL-REFERENCE path, using the
+// second bracket's bytes as the label; `false` sends it down the
+// COLLAPSED/SHORTCUT path, using the description instead (T66#F-002's own
+// distinction). A marker-only second bracket always answered `true` — the
+// bytes are read as an explicit label, `readLabel` normalises them through
+// `normaliseLabel` (which DOES strip the marker, per T91), the result is `""`,
+// and `""` is returned to a caller that only rejects `null` — so the
+// construct is built with an empty label, resolves against no key in the
+// table (every registered key is non-empty), and the finding is lost. The
+// renderer meanwhile falls back to the SHORTCUT form — the description
+// resolves against the real definition, and it fetches. Reproduced against
+// `marked`, not inferred: every marker kind (blockquote, bullet, ordered, `+`
+// and `*`), nested, and CRLF-terminated all resolve and fetch; a companion
+// shape on the DEFINITION side (a reference-definition's own label reduced to
+// a bare marker, `[\n> ]: URL`) was also measured and does NOT bypass — that
+// path already runs the raw label through `normaliseLabel` directly in
+// `readReferenceDefinitions`'s `register`, which rejects an empty result
+// before ever storing a key, so there is no second byte-counting site there to
+// carry the same mistake.
+//
+// THE FIX IS THE SAME RELAXATION `readLabel` ALREADY CARRIES (T91), APPLIED
+// ONE CALL EARLIER. A span that does not cross a line terminator cannot
+// contain a container marker at all — `skipBlockContainerPrefix` only ever
+// fires at a LINE START — so the raw count is already the exact answer for
+// the overwhelming majority of spans, and that fast path is BYTE-FOR-BYTE
+// unchanged below: no new allocation, no new cost, same result as before T92.
+// Only a span that crosses a line terminator can owe its raw count entirely to
+// marker bytes, so only that span is re-examined, and it is re-examined with
+// the SAME function `normaliseLabel` already uses to strip those bytes
+// (`stripBlockContainerMarkers`), so the branch this function selects and the
+// label `readLabel` goes on to compute from that branch can never disagree
+// about what counts as content.
+//
+// COST. Charged against the SAME `budget.work` counter `readLabel` charges for
+// its own slicing — not a second, independent budget. That reuse is the
+// difference between closing this and reopening the exact shape that has cost
+// three rounds on this file a quadratic blowup (`readInlineDestination`,
+// `readDefinitionDestination`, `readLabel` itself): many opening brackets can
+// share the identical second-bracket span — `"[".repeat(n) + "][\n> ]"` gives
+// every one of the n opens the same `descriptionEnd` and therefore the same
+// `close`, exactly the amplification `readInlineDestination`'s own comment
+// describes for its `)` — and calling `stripBlockContainerMarkers` on that
+// span once per open, unmemoised, would be O(n · width). Charging `width`
+// against a budget that starts at `LABEL_WORK_FACTOR * content.length` and
+// only ever decreases bounds the TOTAL bytes this function may ever slice,
+// across every call and every span, shared or not, to that same constant — so
+// the n-opens-one-span shape now costs at most a handful of charges before the
+// budget refuses the (n+1)th, not n. On exhaustion this returns `true`
+// (unchanged from what any span with a non-zero raw count already answered
+// pre-T92) rather than guessing `false`: the construct built from that
+// guess is left to `readLabel`, which is charged against the same exhausted
+// budget and answers `null` in O(log n) with no further slicing, so nothing
+// is examined twice. The construct this produces no direct finding for is not
+// released — `budget.exhausted` is what triggers `detectExfil`'s own
+// fallback, which flags EVERY reference definition in the document
+// (T78#F-001's invariant, unchanged), this attacker's included. Exhaustion is
+// therefore a finding, same as everywhere else in this file, never a release.
+//
+// DIRECTION. The only behaviour this changes is `true` → `false`: a span whose
+// raw bytes are non-whitespace but whose STRIPPED form is empty now correctly
+// routes to the collapsed/shortcut branch instead of a hollow full-reference
+// one. That branch uses the DESCRIPTION as the label — exactly what a
+// renderer's own shortcut fallback resolves against — so this can only ADD a
+// finding (the description now gets a chance to match a real definition where
+// before the hollow label matched nothing), never remove one: every span this
+// function still answers `true` for is examined by `readLabel` exactly as
+// before, and the fast (non-crossing) path is untouched entirely.
 function spanHasNonWhitespace(
+  content: string,
+  index: ContentIndex,
   budget: LabelBudget,
   start: number,
   end: number,
 ): boolean {
   const counts = budget.nonWhitespace;
   if (!counts) return false;
-  return (counts[end] ?? 0) - (counts[start] ?? 0) > 0;
+  if ((counts[end] ?? 0) - (counts[start] ?? 0) === 0) return false;
+  const crossesLineTerminator =
+    index.lineTerminators !== null &&
+    countInRange(index.lineTerminators, start, end) > 0;
+  if (!crossesLineTerminator) return true;
+  const width = end - start;
+  if (width > budget.work) {
+    budget.exhausted = true;
+    return true;
+  }
+  budget.work -= width;
+  // Exactly the prefix of `normaliseLabel` that decides emptiness: strip
+  // repeated container markers, then trim. Collapsing internal whitespace and
+  // lower-casing (the rest of `normaliseLabel`) can change a non-empty string
+  // to a different non-empty string but never to an empty one, so this is
+  // precisely equivalent to `normaliseLabel(content.slice(start, end)).length
+  // > 0` without paying to compute the parts that cannot flip the answer.
+  return stripBlockContainerMarkers(content.slice(start, end)).trim().length > 0;
 }
 
 // One markdown bracket construct, resolved the way CommonMark resolves it.
@@ -1435,13 +1823,41 @@ function readInlineDestination(
     content[descriptionEnd] === "(" &&
     firstAtOrAfter(index.closeParens, descriptionEnd) !== -1
   ) {
-    INLINE_DESTINATION.lastIndex = descriptionEnd;
+    // T93#A. Was the pattern's own `\s*`. `\s` matches LF, so the run crossed
+    // the newline and landed on the continuation line's first byte; when that
+    // byte started a repeated block-container marker (`> ![a](` \ `> URL`) the
+    // bare alternative `[^)\s]+` took the marker itself as the destination —
+    // one byte, no host, ZERO findings — while `marked` resolved the image
+    // through the repeated marker and fetched the attacker host. Byte-for-byte
+    // the bypass T90 closed on the DEFINITION destination, on the INLINE one,
+    // left open because T90 fixed a reader instead of the class. Reproduced
+    // against `marked`, not inferred.
+    //
+    // Closed with `skipDestinationLeadingWhitespace` — the SAME function
+    // `readDefinitionDestination` calls, not a second spelling of the marker
+    // grammar. Offsets stay on the original bytes: `at` is an index into this
+    // same `content`, and `start` is computed from it exactly as before.
+    //
+    // MEMOISATION STAYS SOUND for the reason it already was: the skip is a
+    // pure function of `content` (fixed for the cache's lifetime) and
+    // `descriptionEnd`, so the cached answer is still a function of the key
+    // alone.
+    //
+    // COST STAYS LINEAR, by the disjointness argument
+    // `readDefinitionDestination` already carries, transposed one character:
+    // the run at one `descriptionEnd + 1` cannot reach the next, because
+    // `content[descriptionEnd] === "("` and `(` matches none of the skip's
+    // advance conditions (not whitespace, not a marker byte). Distinct
+    // memoised calls therefore cover pairwise-disjoint spans of `content`, so
+    // total inline-destination skipping is bounded by `content.length`.
+    const at = skipDestinationLeadingWhitespace(content, descriptionEnd + 1);
+    INLINE_DESTINATION.lastIndex = at;
     const match = INLINE_DESTINATION.exec(content);
     const url = match ? (match[1] ?? match[2] ?? "") : "";
     if (match && url) {
       destination = {
         url,
-        start: descriptionEnd + match[0].indexOf(url),
+        start: at + match[0].indexOf(url),
         end: INLINE_DESTINATION.lastIndex,
       };
     }
@@ -1503,7 +1919,7 @@ function readBracketConstructs(
       const close = firstAtOrAfter(index.closes, descriptionEnd + 1);
       if (close !== -1) {
         end = close + 1;
-        if (spanHasNonWhitespace(budget, descriptionEnd + 1, close)) {
+        if (spanHasNonWhitespace(content, index, budget, descriptionEnd + 1, close)) {
           labelStart = descriptionEnd + 1;
           labelEnd = close;
         }
@@ -1873,6 +2289,13 @@ function countCommas(value: string): number {
   return total;
 }
 
+// The whitespace run that separates a `srcset` candidate's URL from its
+// descriptor. Named, top-level and beside every other pattern in this file so
+// the source-level reader census in the test suite can see it — an inline
+// regex literal is a reader that joins the class without being counted, which
+// is precisely what T93's guard exists to prevent.
+const SRCSET_DESCRIPTOR = /\s+/;
+
 export function detectExfil(
   content: string,
   allowlist: string[] = [],
@@ -2121,14 +2544,89 @@ export function detectExfil(
     }
   }
 
-  // HTML start tags, walked once left to right. Each tag's attributes are read
-  // with the tokenizer's states and the scan then resumes past that tag, so
-  // markup written inside a quoted value stays data.
+  scanHtmlStartTags(content, content, null, allowlist, matches);
+
+  // T93. The SAME pass, over the renderer's own view of the document — the
+  // content with block-container prefixes removed — so that every HTML reader
+  // that crosses a line terminator reads the bytes a renderer's inline parser
+  // reads. See `containerStrippedView` for the class this closes and why it is
+  // a view rather than four more marker-consuming readers.
+  //
+  // Purely ADDITIVE: the raw pass above has already run, and only spans it did
+  // not report are appended, so no existing finding moves, changes span, or
+  // changes its position in `matches`. Deduplication is by the span and policy
+  // the caller actually sees, which is what makes "found twice" and "found
+  // once" indistinguishable to every consumer of this list.
+  const view = containerStrippedView(content);
+  if (view) {
+    const fromView: DetectorMatch[] = [];
+    scanHtmlStartTags(view.text, content, view.origin, allowlist, fromView);
+    const seen = new Set(
+      matches.map((match) => `${match.start}:${match.end}:${match.policyId}`),
+    );
+    for (const match of fromView) {
+      const key = `${match.start}:${match.end}:${match.policyId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      matches.push(match);
+    }
+  }
+
+  return matches;
+}
+
+// HTML start tags, walked once left to right. Each tag's attributes are read
+// with the tokenizer's states and the scan then resumes past that tag, so
+// markup written inside a quoted value stays data.
+//
+// `source` is the bytes being READ; `content` the bytes being REPORTED. They are
+// the same string for the ordinary pass (`origin === null`); for the
+// container-stripped view they differ and `origin` maps every offset back, so a
+// finding always names a span of `content` and never one of the view (T93).
+function scanHtmlStartTags(
+  source: string,
+  content: string,
+  origin: Uint32Array | null,
+  allowlist: string[],
+  out: DetectorMatch[],
+): void {
+  // The span of `content` covered by the view's [start, start + length). It
+  // CONTAINS the marker bytes the view removed, so the span masked is a
+  // superset of the value classified: coarser in the original bytes, never
+  // released.
+  const originalSpan = (start: number, length: number): [number, number] =>
+    origin === null
+      ? [start, start + length]
+      : [
+          origin[start] ?? content.length,
+          origin[start + length] ?? content.length,
+        ];
+
+  // Classify what the RENDERER reads; mask what the AUTHOR wrote.
+  const emit = (hit: UrlHit): void => {
+    if (origin === null) {
+      considerUrl(hit, allowlist, out);
+      return;
+    }
+    const [start, end] = originalSpan(hit.start, hit.url.length);
+    considerUrl(
+      {
+        ...hit,
+        url: content.slice(start, end),
+        classify: hit.classify ?? hit.url,
+        start,
+      },
+      allowlist,
+      out,
+    );
+  };
+
+  let m: RegExpExecArray | null;
   HTML_START_TAG.lastIndex = 0;
-  while ((m = HTML_START_TAG.exec(content)) !== null) {
+  while ((m = HTML_START_TAG.exec(source)) !== null) {
     const tag = (m[1] ?? "").toLowerCase();
     const nameEnd = m.index + m[0].length;
-    const { attributes, end } = readStartTag(content, nameEnd);
+    const { attributes, end } = readStartTag(source, nameEnd);
     HTML_START_TAG.lastIndex = Math.max(end, nameEnd);
 
     // Resuming past this tag's own `>` is a DECISION, not a side effect
@@ -2171,17 +2669,13 @@ export function detectExfil(
         if (isMetaRefresh && attribute.name === "content") {
           const destination = metaRefreshDestination(attribute.value);
           if (destination) {
-            considerUrl(
-              {
-                url: attribute.value,
-                classify: destination,
-                start: attribute.valueStart,
-                policyId: "egress.html-meta-refresh-exfil",
-                remediation: META_REFRESH_REMEDIATION,
-              },
-              allowlist,
-              matches,
-            );
+            emit({
+              url: attribute.value,
+              classify: destination,
+              start: attribute.valueStart,
+              policyId: "egress.html-meta-refresh-exfil",
+              remediation: META_REFRESH_REMEDIATION,
+            });
           }
         }
         continue;
@@ -2205,16 +2699,12 @@ export function detectExfil(
       // for the reason and for what a future implementation would have to prove.
       if (tag === "base") {
         if (attribute.name === "href") {
-          considerUrl(
-            {
-              url: attribute.value,
-              start: attribute.valueStart,
-              policyId: "egress.html-base-href-exfil",
-              remediation: BASE_REMEDIATION,
-            },
-            allowlist,
-            matches,
-          );
+          emit({
+            url: attribute.value,
+            start: attribute.valueStart,
+            policyId: "egress.html-base-href-exfil",
+            remediation: BASE_REMEDIATION,
+          });
         }
         continue;
       }
@@ -2226,15 +2716,11 @@ export function detectExfil(
       if (!site) continue;
 
       if (site.kind === "url") {
-        considerUrl(
-          {
-            url: attribute.value,
-            start: attribute.valueStart,
-            policyId: site.policyId,
-          },
-          allowlist,
-          matches,
-        );
+        emit({
+          url: attribute.value,
+          start: attribute.valueStart,
+          policyId: site.policyId,
+        });
         continue;
       }
 
@@ -2265,18 +2751,22 @@ export function detectExfil(
         const reachable = decodedValue
           .split(",")
           .some((candidate) => {
-            const url = candidate.trim().split(/\s+/)[0] ?? "";
+            const url = candidate.trim().split(SRCSET_DESCRIPTOR)[0] ?? "";
             return url.length > 0 && isExfilDestination(url, allowlist);
           });
         if (reachable) {
-          matches.push({
+          const [start, end] = originalSpan(
+            attribute.valueStart,
+            attribute.value.length,
+          );
+          out.push({
             category: "egress",
             policyId: site.policyId,
             severity: "critical",
             confidence: EXFIL_CONFIDENCE,
-            start: attribute.valueStart,
-            end: attribute.valueStart + attribute.value.length,
-            value: attribute.value,
+            start,
+            end,
+            value: content.slice(start, end),
             mask: "url",
             remediation: FETCH_REMEDIATION,
           });
@@ -2286,22 +2776,16 @@ export function detectExfil(
 
       let offset = 0;
       for (const candidate of attribute.value.split(",")) {
-        const url = candidate.trim().split(/\s+/)[0] ?? "";
+        const url = candidate.trim().split(SRCSET_DESCRIPTOR)[0] ?? "";
         if (url) {
-          considerUrl(
-            {
-              url,
-              start: attribute.valueStart + offset + candidate.indexOf(url),
-              policyId: site.policyId,
-            },
-            allowlist,
-            matches,
-          );
+          emit({
+            url,
+            start: attribute.valueStart + offset + candidate.indexOf(url),
+            policyId: site.policyId,
+          });
         }
         offset += candidate.length + 1; // + the comma that split removed
       }
     }
   }
-
-  return matches;
 }

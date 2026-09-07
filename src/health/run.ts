@@ -15,10 +15,11 @@ import { renderReportMarkdown } from "./report";
 import { loadSkillOwnership } from "./skills";
 import { analyzeSourceFiles } from "./source-analysis";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
+import { makeFinding } from "./sources/helpers";
 import {
   commandExists,
   dataRoot,
-  listSourceFiles,
+  listSourceFilesWithReasons,
   matchesAnyPattern,
   moduleOfFile,
   runCommand,
@@ -43,7 +44,8 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   const config = await loadHealthConfig(cwd);
   const selector: ScopeSelector = input.scope ?? { kind: "project" };
   const strict = input.strict ?? false;
-  const sourceFiles = await listSourceFiles(cwd, config.ignore.paths);
+  const { files: sourceFiles, incompleteReasons: sourceFileIncompleteReasons } =
+    await listSourceFilesWithReasons(cwd, config.ignore.paths);
   const sourceAnalysis = await analyzeSourceFiles(cwd, sourceFiles);
   const changedFiles = await resolveChanged(cwd, selector);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -61,6 +63,33 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   const filter = input.sources ? new Set(input.sources) : null;
   const sourceInfos: SourceRunInfo[] = [];
   const findings: Finding[] = [];
+
+  // AFC-09 (flow 234 T26): the project-wide source-file walk above survives
+  // an unreadable subdirectory now, but a directory it could not read must
+  // never be silently indistinguishable from a directory with no source
+  // files -- that would let this run report clean coverage over a tree it
+  // never actually saw. Mirrors `tests.ts`'s own `tests-context-incomplete`
+  // finding (same rule-key shape, same P0/error, same blocking-priority
+  // convention) for the identical problem one layer over
+  // (`src/testing/service.ts`'s `listProjectFiles`/`walk`).
+  if (sourceFileIncompleteReasons.length > 0) {
+    findings.push(
+      makeFinding({
+        source: "sourceFiles",
+        severity: "error",
+        priority: "P0",
+        category: "source-discovery",
+        message: `Source file discovery is incomplete, so this run cannot certify full-tree coverage: ${sourceFileIncompleteReasons.join("; ")}`,
+        ruleKey: "source-files-incomplete",
+        file: null,
+        line: null,
+        suggestedAction: "Make the listed paths readable (fix permissions or remove the obstruction), then re-run `keryx health run`.",
+        command: null,
+        toolVersion: null,
+        rawLog: null,
+      }),
+    );
+  }
 
   const adapterOutcomes = await Promise.all(
     FINDING_ADAPTERS.map((adapter) => {
