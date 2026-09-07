@@ -130,7 +130,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: normaliseLabel strips repeated container markers after every line terminator, reusing skipBlockContainerPrefix. Verified by the orchestrator against a renderer oracle: the reported spellings flag."
+      "evidence": "Closed by flow 233 T91: normaliseLabel strips repeated container markers after every line terminator, reusing skipBlockContainerPrefix. Verified by the orchestrator against a renderer oracle: the reported spellings flag."
     }
   },
   {
@@ -164,7 +164,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the adapter carries version, provenance, author, confirmedBy and caveat into the hit with the unknown sentinel, and the memory formatter renders them. The MCP tool shares the adapter and is fixed with it."
+      "evidence": "Closed by flow 234 T23: the adapter carries version, provenance, author, confirmedBy and caveat into the hit with the unknown sentinel, and the memory formatter renders them. The MCP tool shares the adapter and is fixed with it."
     }
   },
   {
@@ -199,7 +199,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: TestRelatedResult carries the context status, the adapter computes it instead of discarding it, and the formatter branches on incomplete before the empty branch."
+      "evidence": "Closed by flow 234 T23: TestRelatedResult carries the context status, the adapter computes it instead of discarding it, and the formatter branches on incomplete before the empty branch."
     }
   },
   {
@@ -229,7 +229,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: wiki historical mode gates inclusion on the same validity-interval test memory applies, and the parity test was extended to historical mode, which it did not cover."
+      "evidence": "Closed by flow 234 T24: wiki historical mode gates inclusion on the same validity-interval test memory applies, and the parity test was extended to historical mode, which it did not cover."
     }
   },
   {
@@ -257,7 +257,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the JSON payload is built from the report projection, so the machine form carries the same provenance fields and the same unknown sentinel as the text form."
+      "evidence": "Closed by flow 234 T24: the JSON payload is built from the report projection, so the machine form carries the same provenance fields and the same unknown sentinel as the text form."
     }
   },
   {
@@ -285,7 +285,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: T12 was closed with its actual outcome, the four placeholder tasks were dispositioned as superseded, DELIVERY.md was written, and every confirmation was revoked and re-issued only after the round's findings were closed."
+      "evidence": "Closed by the orchestrator: T12 was closed with its actual outcome, the four placeholder tasks were dispositioned as superseded, DELIVERY.md was written, and every confirmation was revoked and re-issued only after the round's findings were closed."
     }
   },
   {
@@ -319,7 +319,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the exact-shape assertion became a match assertion plus explicit sentinel checks, and the previously untested formatter gained tests."
+      "evidence": "Closed by flow 234 T23: the exact-shape assertion became a match assertion plus explicit sentinel checks, and the previously untested formatter gained tests."
     }
   },
   {
@@ -351,7 +351,7 @@ not hold on sites the repairs did not reach.
     "confidence": "medium",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: an incomplete testing context now produces a blocking finding carrying its reasons. The finding's own note about a second instance in the same file was checked and refuted; the live second instance was F-018 on a sibling adapter."
+      "evidence": "Closed by flow 234 T25: an incomplete testing context now produces a blocking finding carrying its reasons. The finding's own note about a second instance in the same file was checked and refuted; the live second instance was F-018 on a sibling adapter."
     }
   },
   {
@@ -366,7 +366,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: evidence capture now writes the command, the working directory and the exit code into each log, so an empty output stays checkable. The two zero-byte logs were replaced."
+      "evidence": "Closed by the orchestrator: evidence capture now writes the command, the working directory and the exit code into each log, so an empty output stays checkable. The two zero-byte logs were replaced."
     }
   },
   {
@@ -382,7 +382,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: keryx review attach wrote a managed review package under all three flow directories, which is what the completion gate reads."
+      "evidence": "Closed by the orchestrator: keryx review attach wrote a managed review package under all three flow directories, which is what the completion gate reads."
     }
   },
   {
@@ -399,7 +399,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the comment claiming the collector recognises one spelling was corrected; the collector accepts both, and an existing test proves it end to end."
+      "evidence": "Closed by flow 234 T24: the comment claiming the collector recognises one spelling was corrected; the collector accepts both, and an existing test proves it end to end."
     }
   },
   {
@@ -414,7 +414,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Recorded in commit 60848c77, in the phase 2 residuals. The two overrides are named in flow 234 RESIDUALS.md as untested combinations, with the reason no fix exists in the branch each parent allows. The verifier established both load in this environment, which narrows the risk without removing it."
+      "evidence": "Recorded rather than changed. The two overrides are named in flow 234 RESIDUALS.md as untested combinations, with the reason no fix exists in the branch each parent allows. The verifier established both load in this environment, which narrows the risk without removing it."
     }
   },
   {
@@ -430,7 +430,7 @@ not hold on sites the repairs did not reach.
     "confidence": "medium",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Recorded in commit 60848c77, in the phase 2 residuals. The verifier re-ran the measurements and two of them did not reproduce: the walk is about a third of a call rather than a quarter, and the ten-call comparison inverted. The conclusion survives, the numbers do not, and that correction is recorded with it."
+      "evidence": "Recorded in flow 234 RESIDUALS.md. The verifier re-ran the measurements and two of them did not reproduce: the walk is about a third of a call rather than a quarter, and the ten-call comparison inverted. The conclusion survives, the numbers do not, and that correction is recorded with it."
     }
   },
   {
@@ -474,7 +474,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77, which fixed the class rather than this member: five readers carried the shape, the inline-destination reader now calls the existing helper, and the four HTML readers are covered by re-running the pass over the renderer's own view. Two guards were added, both proved by mutation."
+      "evidence": "Closed by flow 233 T93, which fixed the class rather than this member: five readers carried the shape, the inline-destination reader now calls the existing helper, and the four HTML readers are covered by re-running the pass over the renderer's own view. Two guards were added, both proved by mutation."
     }
   },
   {
@@ -508,7 +508,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77 for test explain and test suggest, and by the orchestrator for test context and coverage-map build, which T27's own enumeration named and left. Both orchestrator fixes are pinned by tests proved red by mutating the exact inserted lines."
+      "evidence": "Closed by flow 234 T27 for test explain and test suggest, and by the orchestrator for test context and coverage-map build, which T27's own enumeration named and left. Both orchestrator fixes are pinned by tests proved red by mutating the exact inserted lines."
     }
   },
   {
@@ -535,7 +535,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the status surface renders the same report's context status that the report surface already rendered."
+      "evidence": "Closed by flow 234 T27: the status surface renders the same report's context status that the report surface already rendered."
     }
   },
   {
@@ -562,7 +562,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the sonarqube adapter declares validation following the two sibling adapters that already did, so a corrupt report records as failed rather than parsed with zero findings."
+      "evidence": "Closed by flow 234 T27: the sonarqube adapter declares validation following the two sibling adapters that already did, so a corrupt report records as failed rather than parsed with zero findings."
     }
   }
 ]

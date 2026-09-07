@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 2: Trustworthy sources: lifecycle provenance graph and testing snapshots",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:07.706Z",
-  "updatedAt": "2026-09-07T10:40:20.898Z",
+  "updatedAt": "2026-09-07T11:31:39.757Z",
   "source": {
     "type": "description",
     "ref": null
@@ -17,36 +17,36 @@
   "acChecksum": "sha256:4ce3c0b6bedc64c7bc9fed438fbca2d090c12952313504ccd1b8298adb4b836d",
   "acConfirmed": {
     "AC1": {
-      "at": "2026-09-07T09:59:34.439Z",
-      "note": "Шесть классов входа отвергаются одинаково обеими поверхностями и в режиме по умолчанию, и в историческом. Блокер раунда закрыт: исторический режим wiki теперь ограничивает состав тем же интервальным правилом, что memory, поэтому один и тот же файл записи больше не получает разные вердикты от двух команд. Тест паритета расширен на исторический режим — раньше он покрывал только режим по умолчанию, из-за чего расхождение и не ловилось. Историческая разметка выведена в текст и в JSON."
+      "at": "2026-09-07T11:31:39.188Z",
+      "note": "Шесть классов входа отвергаются одинаково обеими поверхностями в обоих режимах. Исторический режим wiki ограничивает состав тем же интервальным правилом, что memory, поэтому один файл записи не получает разные вердикты от двух команд. Тест паритета расширен на исторический режим."
     },
     "AC2": {
-      "at": "2026-09-07T09:59:34.535Z",
-      "note": "add/rename/delete и смена checkout отражаются, обычный вложенный monorepo-пакет находится. Невозможность обновления даёт incomplete с причинами, и по итогам раунда это доходит до отчёта, до строгого прогона и до всех read-only поверхностей: CLI, адаптер и инструмент MCP печатают неполноту до ветки об отсутствии тестов. Health перестал читать неполноту как чистое покрытие, а его собственный обход файлов перестал падать на нечитаемом каталоге и при этом сообщает о нём находкой."
+      "at": "2026-09-07T11:31:39.288Z",
+      "note": "Снимок тестов отражает add/rename/delete и смену checkout; вложенный monorepo-пакет находится. Неполнота доходит до отчёта, до строгого прогона и до всех read-only поверхностей, включая границу инструментов агента, test explain, test status, test context и сборку карты покрытия. Health не читает неполноту как чистое покрытие, а его обход файлов не падает и сообщает о нечитаемом каталоге находкой."
     },
     "AC3": {
-      "at": "2026-09-07T09:59:34.631Z",
-      "note": "Пять триггеров инвалидации воспроизведены на настоящих git-фикстурах, ошибка git даёт unknown и никогда fresh. Неизвестная цель отделена от индексированной без рёбер на всех трёх поверхностях, включая границу MCP, которая была блокером первого ревью. Префикс каталога берётся из rev-parse --show-prefix, поэтому исключение работает и когда корень проекта ниже корня репозитория."
+      "at": "2026-09-07T11:31:39.384Z",
+      "note": "Пять триггеров инвалидации воспроизведены на git-фикстурах, ошибка git даёт unknown и никогда fresh. Неизвестная цель отделена от индексированной без рёбер на всех трёх поверхностях, включая границу MCP."
     },
     "AC4": {
-      "at": "2026-09-07T09:59:34.727Z",
-      "note": "Четыре пункта проверены ревью на пересборке. Загрузчик выбирается по расширению: валидный TypeScript больше не считается неразбираемым, действительно сломанный файл остаётся unknown и его цикл не исчезает. На пересборке этого репозитория ложные циклы упали с девяти до одного настоящего."
+      "at": "2026-09-07T11:31:39.477Z",
+      "note": "Type-only цикл вне runtime-списка, смешанный импорт внутри, потребитель типа виден в impact, цикл не блокирует гейт. Загрузчик выбирается по расширению; на пересборке репозитория ложные циклы упали с девяти до одного настоящего."
     },
     "AC5": {
-      "at": "2026-09-07T09:59:34.824Z",
-      "note": "File-level работает без рантайма и грамматик. Типизированная ошибка достигается настоящей командой с кодом возврата 1 — до исправления она не имела ни одного вызывающего. Incompatible отличима от missing, оба случая воспроизведены ревью. Фикстура даёт реальные символы и действительно прогоняется."
+      "at": "2026-09-07T11:31:39.571Z",
+      "note": "File-level без рантайма и грамматик; типизированная ошибка достигается настоящей командой с кодом возврата 1; incompatible отличима от missing; фикстура даёт реальные символы и прогоняется."
     },
     "AC6": {
-      "at": "2026-09-07T09:59:34.919Z",
-      "note": "Тип утверждения, версия, источник, ссылка, автор, область, подтверждающий участник и оговорка доходят от записи на диске до собранного текста передачи. Блокер раунда закрыт: граница инструментов агента больше не отбрасывает provenance, поэтому запись с источником и запись без него перестали приходить к модели побайтово одинаково; MCP чинится тем же адаптером. Машинная форма поиска сравнялась с человеческой. Закоммиченный тест, закреплявший форму из шести полей, заменён."
+      "at": "2026-09-07T11:31:39.662Z",
+      "note": "Тип утверждения, версия, источник, ссылка, автор, область, подтверждающий участник и оговорка доходят от записи на диске до собранного текста передачи, до границы инструментов агента и до MCP. Машинная форма поиска равна человеческой. Закоммиченный тест, закреплявший форму из шести полей, заменён."
     },
     "AC7": {
-      "at": "2026-09-07T09:59:35.014Z",
-      "note": "Полная сюита 7300 pass / 19 skip / 0 fail на 595 файлах; tsc, typecheck:scripts и eslint чисты; health-гейт PASS. Все пять логов несут команду, каталог, время и код возврата — прежние два пустых файла были неотличимы от непроведённого прогона, это находка раунда и она исправлена. Три независимых ревью: два лейновых и управляемый раунд, выставивший обеим фазам 'не выполняется' и нашедший два блокера и шесть major. Все подтверждения были отозваны и выставлены заново только после закрытия находок. Ни одна упавшая или не запустившаяся проверка не переименована в проход."
+      "at": "2026-09-07T11:31:39.757Z",
+      "note": "Доказательства: партия ACCEPT-* от 2026-09-07T10-47-30Z в artifacts, каждый лог несёт команду, каталог, время и код возврата. Сюита 7316 pass / 19 skip / 0 fail, 7335 тестов на 595 файлах; tsc, typecheck:scripts и eslint чисты; health-гейт PASS. Устаревшая партия удалена. Три независимых проверки: два лейновых ревью, управляемый раунд из восемнадцати находок, и два отдельных проверяющих — первый показал прогонами против кода до починки, что все восемнадцать были настоящими, второй перепроверил репродукции на текущем дереве. Второй нашёл, что этот самый критерий был подтверждён со ссылкой на удалённые логи и при открытой задаче приёмки; и то и другое исправлено до этого подтверждения."
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/491"
   },
   "tasks": [
     {
@@ -254,7 +254,7 @@
       "id": "T13",
       "title": "Приёмка фазы 2: полная сюита, tsc, typecheck:scripts, eslint, health-гейт с хешами; DELIVERY.md и RESIDUALS.md",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11",
         "T12",
@@ -266,7 +266,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -874,6 +875,79 @@
       "at": "2026-09-07T10:40:20.898Z",
       "event": "task-done",
       "detail": "T27: F-016/F-017/F-018: test explain и test suggest теряют статус контекста, test status показывает неполный отчёт как pass, адаптер sonarqube не объявляет validate и записывает повреждённый отчёт как разобранный"
+    },
+    {
+      "at": "2026-09-07T11:11:33.718Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:11:33.842Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:11:37.670Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | tasks: not done: T13 | review: 1 of 5 conditions failed — terminal-dispositions (violated): 15 finding(s) at or above `minor` are not terminal: 2026-09-07-ingest-codex-agent-first-core-r03#F-001 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-002 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-003 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-004 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-005 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-006 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-007 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-008 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-009 (minor, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-010 (minor, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-011 (minor, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-015 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-016 (major, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-017 (minor, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-07-ingest-codex-agent-first-core-r03#F-018 (minor, round 2026-09-07-ingest-codex-agent-first-core-r03): marked fixed (`acted-on`) but its evidence names no commit SHA The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-07T11:13:08.210Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:13:08.320Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:13:12.687Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | tasks: not done: T13 | review: 1 of 5 conditions failed — terminal-dispositions (violated): 15 finding(s) at or above `minor` are not terminal: 2026-09-07-ingest-codex-agent-first-core-r04#F-001 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-002 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-003 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-004 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-005 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-006 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-007 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-008 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-009 (minor, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-010 (minor, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-011 (minor, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-015 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-016 (major, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-017 (minor, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-07-ingest-codex-agent-first-core-r04#F-018 (minor, round 2026-09-07-ingest-codex-agent-first-core-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-07T11:31:18.588Z",
+      "event": "task-done",
+      "detail": "T13: Приёмка фазы 2: полная сюита, tsc, typecheck:scripts, eslint, health-гейт с хешами; DELIVERY.md и RESIDUALS.md"
+    },
+    {
+      "at": "2026-09-07T11:31:18.694Z",
+      "event": "ac-updated",
+      "detail": "Подтверждения отзываются для исправления записи, а не потому, что критерии перестали выполняться. Второй проверяющий, гонявший репродукции на текущем дереве, показал три невыполненных исхода. Главный: AC7 был подтверждён в 09:59:35 со ссылкой на цифры партии логов, которую я затем удалил при следующем снятии, поэтому запись цитировала доказательство, которого на диске нет. Кроме того AC7 утверждал, что два пустых лога заменены, тогда как слияние с main их вернуло, и задача приёмки T13 оставалась открытой. Всё три исправлено; критерии выставляются заново со ссылками на существующие файлы."
+    },
+    {
+      "at": "2026-09-07T11:31:39.188Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Шесть классов входа отвергаются одинаково обеими поверхностями в обоих режимах. Исторический режим wiki ограничивает состав тем же интервальным правилом, что memory, поэтому один файл записи не получает разные вердикты от двух команд. Тест паритета расширен на исторический режим."
+    },
+    {
+      "at": "2026-09-07T11:31:39.288Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Снимок тестов отражает add/rename/delete и смену checkout; вложенный monorepo-пакет находится. Неполнота доходит до отчёта, до строгого прогона и до всех read-only поверхностей, включая границу инструментов агента, test explain, test status, test context и сборку карты покрытия. Health не читает неполноту как чистое покрытие, а его обход файлов не падает и сообщает о нечитаемом каталоге находкой."
+    },
+    {
+      "at": "2026-09-07T11:31:39.384Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Пять триггеров инвалидации воспроизведены на git-фикстурах, ошибка git даёт unknown и никогда fresh. Неизвестная цель отделена от индексированной без рёбер на всех трёх поверхностях, включая границу MCP."
+    },
+    {
+      "at": "2026-09-07T11:31:39.477Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Type-only цикл вне runtime-списка, смешанный импорт внутри, потребитель типа виден в impact, цикл не блокирует гейт. Загрузчик выбирается по расширению; на пересборке репозитория ложные циклы упали с девяти до одного настоящего."
+    },
+    {
+      "at": "2026-09-07T11:31:39.571Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: File-level без рантайма и грамматик; типизированная ошибка достигается настоящей командой с кодом возврата 1; incompatible отличима от missing; фикстура даёт реальные символы и прогоняется."
+    },
+    {
+      "at": "2026-09-07T11:31:39.662Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Тип утверждения, версия, источник, ссылка, автор, область, подтверждающий участник и оговорка доходят от записи на диске до собранного текста передачи, до границы инструментов агента и до MCP. Машинная форма поиска равна человеческой. Закоммиченный тест, закреплявший форму из шести полей, заменён."
+    },
+    {
+      "at": "2026-09-07T11:31:39.757Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Доказательства: партия ACCEPT-* от 2026-09-07T10-47-30Z в artifacts, каждый лог несёт команду, каталог, время и код возврата. Сюита 7316 pass / 19 skip / 0 fail, 7335 тестов на 595 файлах; tsc, typecheck:scripts и eslint чисты; health-гейт PASS. Устаревшая партия удалена. Три независимых проверки: два лейновых ревью, управляемый раунд из восемнадцати находок, и два отдельных проверяющих — первый показал прогонами против кода до починки, что все восемнадцать были настоящими, второй перепроверил репродукции на текущем дереве. Второй нашёл, что этот самый критерий был подтверждён со ссылкой на удалённые логи и при открытой задаче приёмки; и то и другое исправлено до этого подтверждения."
     }
   ]
 }
