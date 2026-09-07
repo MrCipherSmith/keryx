@@ -68,6 +68,151 @@ interface RawSymbol {
   node: SymbolNode;
 }
 
+// --- Built-in method surface -------------------------------------------------
+//
+// Both resolution passes below match a call to a project symbol BY NAME, using
+// only the last dotted segment of the call expression. That threw the receiver
+// away, so `SEMVER_RE.test(value)` — the RegExp method — was recorded as a call
+// to whichever project symbol happens to be named `test`. Measured on this
+// repository before the fix: 1,567 resolved call edges came from member
+// expressions and 873 of them (56%) named a built-in method, including 272
+// `.test` edges all pointing at `SearchController.test`
+// (src/harness/search/controller.ts:40), 254 `console.log`/`Math.log` edges and
+// 174 `Object.entries` edges. `keryx gdgraph symbol wikiAsk` listed
+// `test (src/harness/search/controller.ts:40)` among its callees for exactly
+// this reason: there is no such call.
+//
+// A member call is NOT noise in general — `service.wikiAsk(...)` is a real edge
+// worth keeping — so the fix is not "drop member calls". What a structural walk
+// cannot do is type the receiver: `x.get(k)` is `Map.prototype.get` or a project
+// `get`, and nothing in the syntax says which. The rule below is therefore about
+// OWNERSHIP of the name, not about the shape of the call:
+//
+//   * bare identifier call (`helper()`)          -> resolve by name (unchanged)
+//   * `this` / `self` / `super` receiver         -> resolve by name; the
+//                                                   receiver is the enclosing
+//                                                   object, so the method is
+//                                                   project-defined by
+//                                                   construction
+//   * any other receiver + a name owned by an
+//     ECMAScript intrinsic or `console`          -> DO NOT resolve
+//   * any other receiver + any other name        -> resolve by name (unchanged)
+//
+// A call we refuse to resolve is NOT dropped: it stays an `unresolved-call`
+// edge carrying the full source expression (`SEMVER_RE.test`), which
+// `querySymbol` renders through `SymbolRef.resolved:false` and
+// `src/commands/gdgraph.ts` prints as `SEMVER_RE.test  (unresolved)`. Silently
+// dropping it would make a real call vanish; resolving it makes a non-call look
+// real. Marking it unresolved is the honest third option, and it reuses the
+// marker the CLI already reads rather than adding a new one.
+//
+// The list is an EXPLICIT frozen set, not `Object.getOwnPropertyNames(...)` of
+// the live intrinsics: the graph is a checked-in artifact and must not shift
+// with the engine (Bun alone adds `console.screenshot`, `console.write`,
+// `Math.sumPrecise`, `Map.prototype.getOrInsert`). Scope is the ECMAScript
+// intrinsic surface plus `console`; host APIs (`stream.write`,
+// `emitter.on`) are deliberately out — see the residuals in the flow report.
+const BUILTIN_METHOD_NAMES: ReadonlySet<string> = new Set([
+  // Object (statics + Object.prototype)
+  "assign", "create", "defineProperties", "defineProperty", "entries", "freeze",
+  "fromEntries", "getOwnPropertyDescriptor", "getOwnPropertyDescriptors",
+  "getOwnPropertyNames", "getOwnPropertySymbols", "getPrototypeOf", "groupBy",
+  "hasOwn", "hasOwnProperty", "is", "isExtensible", "isFrozen", "isPrototypeOf",
+  "isSealed", "keys", "preventExtensions", "propertyIsEnumerable", "seal",
+  "setPrototypeOf", "toLocaleString", "toString", "valueOf", "values",
+  // Array (statics + Array.prototype)
+  "at", "concat", "copyWithin", "every", "fill", "filter", "find", "findIndex",
+  "findLast", "findLastIndex", "flat", "flatMap", "forEach", "from", "includes",
+  "indexOf", "isArray", "join", "lastIndexOf", "map", "of", "pop", "push",
+  "reduce", "reduceRight", "reverse", "shift", "slice", "some", "sort", "splice",
+  "toReversed", "toSorted", "toSpliced", "unshift", "with",
+  // String (statics + String.prototype)
+  "charAt", "charCodeAt", "codePointAt", "endsWith", "fromCharCode",
+  "fromCodePoint", "isWellFormed", "localeCompare", "match", "matchAll",
+  "normalize", "padEnd", "padStart", "raw", "repeat", "replace", "replaceAll",
+  "search", "split", "startsWith", "substr", "substring", "toLocaleLowerCase",
+  "toLocaleUpperCase", "toLowerCase", "toUpperCase", "toWellFormed", "trim",
+  "trimEnd", "trimStart",
+  // Number / Math
+  "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh", "cbrt",
+  "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "hypot",
+  "imul", "isFinite", "isInteger", "isNaN", "isSafeInteger", "log", "log10",
+  "log1p", "log2", "max", "min", "parseFloat", "parseInt", "pow", "random",
+  "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "toExponential",
+  "toFixed", "toPrecision", "trunc",
+  // JSON
+  "parse", "stringify",
+  // Map / Set / WeakMap / WeakSet
+  "add", "clear", "delete", "difference", "get", "has", "intersection",
+  "isDisjointFrom", "isSubsetOf", "isSupersetOf", "set", "symmetricDifference",
+  "union",
+  // Promise
+  "all", "allSettled", "any", "catch", "finally", "race", "reject", "resolve",
+  "then", "withResolvers",
+  // RegExp
+  "compile", "exec", "test",
+  // Date (statics + the get*/set*/to* surface)
+  "getDate", "getDay", "getFullYear", "getHours", "getMilliseconds",
+  "getMinutes", "getMonth", "getSeconds", "getTime", "getTimezoneOffset",
+  "getUTCDate", "getUTCDay", "getUTCFullYear", "getUTCHours",
+  "getUTCMilliseconds", "getUTCMinutes", "getUTCMonth", "getUTCSeconds", "now",
+  "setDate", "setFullYear", "setHours", "setMilliseconds", "setMinutes",
+  "setMonth", "setSeconds", "setTime", "setUTCDate", "setUTCFullYear",
+  "setUTCHours", "setUTCMilliseconds", "setUTCMinutes", "setUTCMonth",
+  "setUTCSeconds", "toDateString", "toISOString", "toJSON",
+  "toLocaleDateString", "toLocaleTimeString", "toTimeString", "toUTCString",
+  "UTC",
+  // Function.prototype / Reflect
+  "apply", "bind", "call", "construct", "deleteProperty", "ownKeys",
+  // Symbol
+  "for", "keyFor",
+  // console
+  "assert", "count", "countReset", "debug", "dir", "dirxml", "error", "group",
+  "groupCollapsed", "groupEnd", "info", "table", "time", "timeEnd", "timeLog",
+  "trace", "warn",
+]);
+
+// Receivers that are the enclosing object itself: a method reached through one
+// of these is project-defined by construction, so the built-in guard above must
+// never apply to it (`this.emit(...)` stays a resolved edge).
+const SELF_RECEIVERS: ReadonlySet<string> = new Set(["this", "self", "super"]);
+
+interface CalleeShape {
+  /** Last dotted segment — the method/function name being invoked. */
+  name: string;
+  /** Everything before it, or `null` for a bare identifier call. */
+  receiver: string | null;
+}
+
+// Split a raw callee expression (`SEMVER_RE.test`, `this.emit`, `helper`,
+// `foo.bar(a, b)` from the Java/Python whole-node fallback) into receiver +
+// name, using the same "cut at the first `(`" normalization `lastSegment` has
+// always used.
+function calleeShape(callee: string): CalleeShape {
+  const withoutCall = callee.replace(/\(.*$/s, "").trim();
+  const dot = withoutCall.lastIndexOf(".");
+  if (dot < 0) {
+    return { name: withoutCall, receiver: null };
+  }
+  // `a?.b` / `a!.b` — the optional/non-null marker belongs to the receiver.
+  const receiver = withoutCall.slice(0, dot).trim().replace(/[?!]+$/, "");
+  return { name: withoutCall.slice(dot + 1).trim(), receiver };
+}
+
+// Whether this call expression may be matched to a project symbol by name.
+// See BUILTIN_METHOD_NAMES for the reasoning; `false` leaves the call as an
+// `unresolved-call` edge that still carries the full source expression.
+function isNameResolvableCallee(callee: string): boolean {
+  const { name, receiver } = calleeShape(callee);
+  if (!name) {
+    return false;
+  }
+  if (receiver === null || SELF_RECEIVERS.has(receiver)) {
+    return true;
+  }
+  return !BUILTIN_METHOD_NAMES.has(name);
+}
+
 // Extract the symbol layer from a parsed tree root. `filePath` is the owning
 // file path (matches a file GraphNode.path).
 export function extractSymbolLayer(root: TsNode, filePath: string, language: Language): SymbolLayer {
@@ -131,6 +276,8 @@ export function extractSymbolLayer(root: TsNode, filePath: string, language: Lan
   }));
 
   // Resolve CALL targets to same-file symbols by name; else unresolved-call.
+  // A call on a receiver we cannot type (`SEMVER_RE.test`) is never matched by
+  // name when the name belongs to a built-in — see BUILTIN_METHOD_NAMES.
   const nameToId = new Map<string, string>();
   for (const symbol of symbolNodes) {
     if (!nameToId.has(symbol.name)) {
@@ -139,7 +286,7 @@ export function extractSymbolLayer(root: TsNode, filePath: string, language: Lan
   }
   const resolvedCalls: CallEdge[] = calls.map((call, index) => {
     const calleeName = lastSegment(call.to);
-    const target = nameToId.get(calleeName);
+    const target = isNameResolvableCallee(call.to) ? nameToId.get(calleeName) : undefined;
     if (target) {
       return {
         id: `call:${call.from}->${target}:${index}`,
@@ -204,7 +351,10 @@ export function resolveCrossFileCalls(symbols: SymbolNode[], calls: CallEdge[]):
   const out: CallEdge[] = [];
   for (const call of calls) {
     let edge = call;
-    if (call.kind === "unresolved-call") {
+    // The same built-in guard the per-file pass applies: without it this pass
+    // is strictly WORSE, because a unique project `test` anywhere in the graph
+    // captures every `<regexp>.test(...)` in every file.
+    if (call.kind === "unresolved-call" && isNameResolvableCallee(call.to)) {
       const name = lastSegment(call.to);
       const target = nameCount.get(name) === 1 ? nameToId.get(name) : undefined;
       if (target && target !== call.from) {
@@ -359,9 +509,7 @@ function renderSignature(node: TsNode, kind: SymbolKind, container: string | nul
 }
 
 function lastSegment(callee: string): string {
-  const withoutCall = callee.replace(/\(.*$/s, "");
-  const parts = withoutCall.split(".");
-  return (parts[parts.length - 1] ?? withoutCall).trim();
+  return calleeShape(callee).name;
 }
 
 function firstLine(text: string): string {

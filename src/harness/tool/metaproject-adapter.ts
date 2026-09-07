@@ -390,6 +390,11 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   return entries.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/** A symbol reference as one display label, unresolved refs marked as the CLI marks them. */
+function refLabel(ref: { label: string; resolved: boolean }): string {
+  return ref.resolved ? ref.label : `${ref.label} (unresolved)`;
+}
+
 export function createMetaprojectAdapter(
   cwd: string,
   overrides: Partial<MetaprojectAdapterDeps> = {},
@@ -820,8 +825,16 @@ export function createMetaprojectAdapter(
             startLine: symbol.startLine,
             container: symbol.container,
           })),
-          callers: result.callers.map((ref) => ref.label),
-          callees: result.callees.map((ref) => ref.label),
+          // The marker travels with the label, because the port declares these
+          // as DISPLAY LABELS and an unresolved callee displayed identically to
+          // a resolved one is a claim the graph never made. `CYRILLIC_RE.test`
+          // is a call to a RegExp method the index cannot attribute to any
+          // project symbol; dropping the flag here made it read, at the agent
+          // boundary only, as a resolved call to a project function named
+          // `test`. The CLI has always rendered it this way — this is the same
+          // rendering, not a second spelling of it.
+          callers: result.callers.map(refLabel),
+          callees: result.callees.map(refLabel),
           staleness: await staleness(),
         };
       } catch (cause) {
