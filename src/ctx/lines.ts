@@ -124,6 +124,14 @@ export function shownSuffix(shown: number, total: number): string {
 // ---------------------------------------------------------------------------
 // Compaction
 
+/** A contiguous run of source lines that is not in the compacted body. */
+export type OmittedRange = {
+  /** 1-based, inclusive. */
+  start: number;
+  /** 1-based, inclusive. */
+  end: number;
+};
+
 export type Compaction = {
   lines: string[];
   /** Source lines not present in `lines`. */
@@ -132,6 +140,15 @@ export type Compaction = {
   rescued: number;
   /** Verdict lines in the omitted range that did not fit the budget. */
   droppedVerdicts: number;
+  /**
+   * Where the omitted lines actually are, as addressable source ranges.
+   *
+   * The scalar `omitted` count says how much went missing; it cannot say where,
+   * so nothing downstream could offer to fetch it. Rescuing verdict lines out
+   * of the elided middle also splits that middle into several runs, which is
+   * why this is a list rather than one range.
+   */
+  omittedRanges: OmittedRange[];
 };
 
 /**
@@ -149,7 +166,7 @@ export function compactLines(
   verdictBudget: number,
 ): Compaction {
   if (lines.length <= limit) {
-    return { lines, omitted: 0, rescued: 0, droppedVerdicts: 0 };
+    return { lines, omitted: 0, rescued: 0, droppedVerdicts: 0, omittedRanges: [] };
   }
 
   const head = Math.ceil(limit * 0.45);
@@ -169,7 +186,44 @@ export function compactLines(
     omitted,
     rescued: rescued.length,
     droppedVerdicts: verdicts.length - rescued.length,
+    omittedRanges: omittedRanges(lines, head, lines.length - tail, new Set(rescued)),
   };
+}
+
+/**
+ * The runs of `[from, to)` (0-based) that are neither shown nor rescued, as
+ * 1-based inclusive source ranges.
+ *
+ * A rescued line is matched by VALUE, because that is how it was rescued — the
+ * rescue deduplicates, so a repeated failure line keeps only its first
+ * occurrence and the later ones are genuinely still omitted. Treating every
+ * equal line as kept would under-report the loss, which is the direction of
+ * error this whole module exists to stop.
+ */
+function omittedRanges(
+  lines: string[],
+  from: number,
+  to: number,
+  kept: Set<string>,
+): OmittedRange[] {
+  const ranges: OmittedRange[] = [];
+  const seen = new Set<string>();
+  let start: number | null = null;
+  for (let index = from; index < to; index += 1) {
+    const line = lines[index] as string;
+    const isKept = kept.has(line) && !seen.has(line);
+    if (isKept) seen.add(line);
+    if (isKept) {
+      if (start !== null) {
+        ranges.push({ start: start + 1, end: index });
+        start = null;
+      }
+      continue;
+    }
+    if (start === null) start = index;
+  }
+  if (start !== null) ranges.push({ start: start + 1, end: to });
+  return ranges;
 }
 
 function compactionMarker(

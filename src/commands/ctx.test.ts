@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -350,29 +350,60 @@ test("summarizeCommandOutput does not treat a clean verdict as a failure", () =>
 // .metaproject/data/gdgraph/artifacts/module-map.json` produced a body starting
 // `{` and ending `}` that JSON.parse rejected at the elision marker.
 
-test("summarizeCompact labels an elided JSON document as an excerpt that does not parse", () => {
+// Flow 235 / T9, AC3 ("JSON валиден"). The step above stopped a truncated
+// document from *claiming* to be whole; it did not give the reader a JSON
+// document. A fragment labelled "does not parse" is honest and useless — the
+// consumer of `ctx read` on a JSON file is an agent that wants to parse it.
+// The elided form is now a bounded STRUCTURAL SUMMARY with its own type, which
+// parses, states that it is incomplete, and carries the address of the rest.
+test("summarizeCompact renders an elided JSON document as a summary that still parses", () => {
   const document = JSON.stringify(
-    { files: Array.from({ length: 400 }, (_, i) => `src/file-${i}.ts`) },
+    {
+      exitCode: 7,
+      failedTests: 3,
+      files: Array.from({ length: 400 }, (_, i) => `src/file-${i}.ts`),
+    },
     null,
     2,
   ).split("\n");
   const out = summarizeCompact("module-map.json", document, CONFIG);
 
-  expect(out).toContain("omitted");
-  // The tell of the defect: a body that opens `{` and closes `}` with nothing
-  // saying it is a fragment.
   expect(out.toLowerCase()).toContain("excerpt");
-  expect(out.toLowerCase()).toContain("json");
-  expect(out).toContain("does not parse");
+  const body = fencedBody(out);
+  const parsed = JSON.parse(body) as Record<string, unknown>;
+
+  // Its own type, and it says out loud that it is not the document.
+  const envelope = parsed.keryxSummary as Record<string, unknown>;
+  expect(envelope.type).toBe("json-structure");
+  expect(envelope.complete).toBe(false);
+  expect(typeof envelope.recover).toBe("string");
+
+  // Critical structural fields survive the summary rather than surviving by
+  // the accident of sitting near the head of the file.
+  const doc = parsed.document as Record<string, unknown>;
+  expect(doc.exitCode).toBe(7);
+  expect(doc.failedTests).toBe(3);
+  // And the loss is stated where it happened.
+  expect(JSON.stringify(doc.files)).toContain("omitted");
 });
 
 test("summarizeCompact leaves a JSON document that fits entirely alone, and it parses", () => {
   const document = JSON.stringify({ a: 1, b: [1, 2, 3] }, null, 2).split("\n");
   const out = summarizeCompact("small.json", document, CONFIG);
   expect(out).not.toContain("excerpt");
-  const body = out.split("```text\n")[1]?.split("\n```")[0] ?? "";
-  expect(() => JSON.parse(body) as unknown).not.toThrow();
+  const parsed = JSON.parse(fencedBody(out)) as Record<string, unknown>;
+  // The whole document, verbatim — not wrapped in a summary envelope it does
+  // not need. "Короткий ввод не раздувается" applies to shape as well as size.
+  expect(parsed).toEqual({ a: 1, b: [1, 2, 3] });
 });
+
+/** The first fenced block's body, whatever the fence's language tag. */
+function fencedBody(out: string): string {
+  const open = out.indexOf("```");
+  const bodyStart = out.indexOf("\n", open) + 1;
+  const close = out.indexOf("\n```", bodyStart);
+  return out.slice(bodyStart, close === -1 ? undefined : close);
+}
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
 
@@ -565,6 +596,202 @@ test("ctx read on a large file still compacts and keeps the raw/summary pointer 
     expect(stdout).toContain("raw: ");
     expect(stdout).toContain("summary: ");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// ---------------------------------------------------------------------------
+// Flow 235 / T9 — AC3 (ctx preservation) and AC4 (loss manifest) at the real
+// surface. Every test below drives `bun src/cli.ts ctx …`, not a summariser,
+// because the standing failure in this programme is a capability implemented
+// where no live path calls it.
+
+async function runCtx(
+  root: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(["bun", CLI, "ctx", ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { stdout, stderr, exitCode };
+}
+
+// AC3, JSON clause. Measured before the fix on a 1,084,141-byte document:
+// `ctx read --mode compact` emitted a 6,043-byte body that opened `{`, closed
+// `}` and failed `JSON.parse` at the elision marker.
+test("ctx read hands back JSON that parses, at both size ends", async () => {
+  const root = await initTinyProject();
+  try {
+    const small = path.join(root, "small.json");
+    await writeFile(small, `${JSON.stringify({ ok: true, items: [1, 2] }, null, 2)}\n`, "utf8");
+    const smallRun = await runCtx(root, ["read", small]);
+    expect(smallRun.exitCode).toBe(0);
+    expect(JSON.parse(fencedBody(smallRun.stdout))).toEqual({ ok: true, items: [1, 2] });
+
+    const big = path.join(root, "big.json");
+    await writeFile(
+      big,
+      JSON.stringify(
+        {
+          exitCode: 7,
+          failedTests: 3,
+          errors: [{ message: "boom" }],
+          records: Array.from({ length: 4_000 }, (_, i) => ({ id: i, detail: "x".repeat(40) })),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const bigRun = await runCtx(root, ["read", big]);
+    expect(bigRun.exitCode).toBe(0);
+    const parsed = JSON.parse(fencedBody(bigRun.stdout)) as Record<string, unknown>;
+    const envelope = parsed.keryxSummary as Record<string, unknown>;
+    expect(envelope.complete).toBe(false);
+    expect(String(envelope.recover)).toContain("keryx ctx show");
+    const doc = parsed.document as Record<string, unknown>;
+    expect(doc.exitCode).toBe(7);
+    expect(doc.failedTests).toBe(3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// The same clause for JSON Lines, driven through the CLI rather than the
+// helper — a repair nothing calls would be worth nothing.
+test("ctx read on an elided JSONL file leaves every row parseable", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "events.jsonl");
+    const rows = Array.from({ length: 2_000 }, (_, i) => JSON.stringify({ i, kind: "event" }));
+    await writeFile(file, rows.join("\n"), "utf8");
+
+    const run = await runCtx(root, ["read", file]);
+    expect(run.exitCode).toBe(0);
+    const body = fencedBody(run.stdout);
+    expect(body).toContain("keryxOmitted");
+    for (const row of body.split("\n").filter((line) => line.trim().length > 0)) {
+      expect(() => JSON.parse(row) as unknown).not.toThrow();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// AC3, base clause. `--base` was accepted and silently discarded: exit 0, an
+// ordinary view, and nothing saying the argument had no effect.
+test("ctx read with a base it cannot honour returns the full view and says why", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "small.json");
+    await writeFile(file, `${JSON.stringify({ ok: true }, null, 2)}\n`, "utf8");
+    const run = await runCtx(root, ["read", file, "--base", "no-such-snapshot"]);
+
+    expect(run.exitCode).toBe(0);
+    // The full view is still returned…
+    expect(JSON.parse(fencedBody(run.stdout))).toEqual({ ok: true });
+    // …with a stated reason, not silence.
+    expect(run.stdout).toContain("Base ignored");
+    expect(run.stdout.toLowerCase()).toContain("no delta");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// AC4, recovery by address. The pointer already existed; feeding it back was
+// measured to fail — `ctx show .metaproject/data/gdctx/raw/<id>.log` joined the
+// address onto the root a second time and reported "Artifact not found".
+test("an omitted range is recoverable from the printed address without searching", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "big.txt");
+    const lines = Array.from({ length: 1_000 }, (_, i) => `line ${i}`);
+    await writeFile(file, lines.join("\n"), "utf8");
+
+    const read = await runCtx(root, ["read", file]);
+    expect(read.exitCode).toBe(0);
+
+    // The manifest names the omitted range and the exact command to recover it.
+    const entry = /- lines (\d+)-(\d+)\b/.exec(read.stdout);
+    expect(entry).not.toBeNull();
+    const address = /^raw: (\S+)$/m.exec(read.stdout)?.[1] ?? "";
+    expect(address).not.toBe("");
+
+    const [, startText, endText] = entry as RegExpExecArray;
+    const recovered = await runCtx(root, [
+      "show",
+      address,
+      "--raw",
+      "--lines",
+      `${startText}-${endText}`,
+    ]);
+    expect(recovered.exitCode).toBe(0);
+    // Exactly the omitted range, addressed — no second search over the source.
+    expect(recovered.stdout).toContain(lines[Number(startText) - 1] as string);
+    expect(recovered.stdout).toContain(lines[Number(endText) - 1] as string);
+    expect(recovered.stdout).not.toContain(`${lines[0] as string}\n`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// AC4, manifest truncation. Rescuing verdict lines out of the elided middle
+// splits it into many ranges, so the manifest itself has to be bounded — and
+// when it is cut, that has to show.
+test("a loss manifest that is itself shortened says so", async () => {
+  const root = await initTinyProject();
+  try {
+    const file = path.join(root, "suite.log");
+    const lines = Array.from({ length: 4_000 }, (_, i) =>
+      i % 40 === 0 && i > 200 && i < 3_800 ? `not ok ${i} - failure ${i}` : `ok ${i} - passing case`,
+    );
+    await writeFile(file, lines.join("\n"), "utf8");
+
+    const run = await runCtx(root, ["read", file]);
+    expect(run.exitCode).toBe(0);
+    // Measured on this checkout while writing the test: `ctx read --mode
+    // compact` sliced head+tail with its own code and never called
+    // `compactLines`, so the verdict rescue that `ctx run` got was absent here.
+    // An agent told to read the test log still lost every failure in it.
+    expect(run.stdout).toContain("not ok ");
+    expect(run.stdout).toContain("## Omitted");
+    expect(run.stdout).toContain("manifest truncated");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+// AC4, closed object. Measured before the fix: `EACCES: permission denied,
+// open '/etc/master.passwd'` versus `ENOENT: no such file or directory, open
+// '<abs path>'` — the first positively confirms the object exists, and both
+// echo a path the caller never supplied.
+test("a denied read and a missing read are indistinguishable and leak no path", async () => {
+  const root = await initTinyProject();
+  try {
+    const denied = path.join(root, "closed.txt");
+    await writeFile(denied, "secret\n", "utf8");
+    await chmod(denied, 0o000);
+
+    const deniedRun = await runCtx(root, ["read", "closed.txt"]);
+    const missingRun = await runCtx(root, ["read", "absent.txt"]);
+
+    expect(deniedRun.exitCode).toBe(missingRun.exitCode);
+    expect(deniedRun.exitCode).not.toBe(0);
+    // Same shape, differing only in the caller's own argument.
+    expect(deniedRun.stderr.replace("closed.txt", "<p>")).toBe(
+      missingRun.stderr.replace("absent.txt", "<p>"),
+    );
+    for (const out of [deniedRun.stderr, missingRun.stderr]) {
+      expect(out).not.toContain("EACCES");
+      expect(out).not.toContain("ENOENT");
+      // Not the resolved absolute path: the caller gave a relative one.
+      expect(out).not.toContain(root);
+    }
+  } finally {
+    await chmod(path.join(root, "closed.txt"), 0o600).catch(() => {});
     await rm(root, { recursive: true, force: true });
   }
 }, 60_000);

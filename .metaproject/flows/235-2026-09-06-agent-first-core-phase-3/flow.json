@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 3: Useful retrieval: wiki sections ranking repomap and bounded context",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:08.483Z",
-  "updatedAt": "2026-09-07T16:59:35.635Z",
+  "updatedAt": "2026-09-07T19:46:53.119Z",
   "source": {
     "type": "description",
     "ref": null
@@ -139,6 +139,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Лейн C: сохранение и продолжение в ctx — манифест усечения, продолжение по указателю, ограничение при переполнении",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -194,6 +209,16 @@
       "at": "2026-09-07T16:59:35.635Z",
       "event": "task-done",
       "detail": "T7: Найдено инвентаризацией: ctx read --mode compact теряет строку FAIL и ломает JSON, сообщая об экономии; wiki ask пишет запрос пользователя на диск из неизменяющей команды; запрос из стоп-слов даёт уверенный ответ"
+    },
+    {
+      "at": "2026-09-07T19:25:06.157Z",
+      "event": "task-added",
+      "detail": "T9: Лейн C: сохранение и продолжение в ctx — манифест усечения, продолжение по указателю, ограничение при переполнении"
+    },
+    {
+      "at": "2026-09-07T19:46:53.119Z",
+      "event": "task-done",
+      "detail": "T9: Лейн C: сохранение и продолжение в ctx — манифест усечения, продолжение по указателю, ограничение при переполнении"
     }
   ]
 }
