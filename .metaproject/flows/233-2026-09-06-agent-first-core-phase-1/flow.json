@@ -7,9 +7,9 @@
   "id": "233",
   "slug": "agent-first-core-phase-1",
   "title": "Agent-first core phase 1: Interface trust: containment redaction HTTP health scan and Shell parser",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-09-06T10:44:07.081Z",
-  "updatedAt": "2026-09-07T11:11:31.659Z",
+  "updatedAt": "2026-09-07T11:51:24.325Z",
   "source": {
     "type": "description",
     "ref": null
@@ -4341,6 +4341,15 @@
       "at": "2026-09-07T11:11:31.659Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:51:20.179Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:51:24.325Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

@@ -7,9 +7,9 @@
   "id": "232",
   "slug": "agent-first-core-phase-0",
   "title": "Agent-first core phase 0: routing lifecycle and benchmark correctness",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-09-06T10:39:45.467Z",
-  "updatedAt": "2026-09-07T11:11:29.685Z",
+  "updatedAt": "2026-09-07T11:51:19.962Z",
   "source": {
     "type": "description",
     "ref": null
@@ -1016,6 +1016,15 @@
       "at": "2026-09-07T11:11:29.685Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:51:15.008Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:51:19.962Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

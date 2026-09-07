@@ -7,9 +7,9 @@
   "id": "234",
   "slug": "agent-first-core-phase-2",
   "title": "Agent-first core phase 2: Trustworthy sources: lifecycle provenance graph and testing snapshots",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-06T10:44:07.706Z",
-  "updatedAt": "2026-09-07T11:31:39.757Z",
+  "updatedAt": "2026-09-07T11:51:08.802Z",
   "source": {
     "type": "description",
     "ref": null
@@ -948,6 +948,34 @@
       "at": "2026-09-07T11:31:39.757Z",
       "event": "ac-confirmed",
       "detail": "AC7: Доказательства: партия ACCEPT-* от 2026-09-07T10-47-30Z в artifacts, каждый лог несёт команду, каталог, время и код возврата. Сюита 7316 pass / 19 skip / 0 fail, 7335 тестов на 595 файлах; tsc, typecheck:scripts и eslint чисты; health-гейт PASS. Устаревшая партия удалена. Три независимых проверки: два лейновых ревью, управляемый раунд из восемнадцати находок, и два отдельных проверяющих — первый показал прогонами против кода до починки, что все восемнадцать были настоящими, второй перепроверил репродукции на текущем дереве. Второй нашёл, что этот самый критерий был подтверждён со ссылкой на удалённые логи и при открытой задаче приёмки; и то и другое исправлено до этого подтверждения."
+    },
+    {
+      "at": "2026-09-07T11:40:47.182Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:40:47.294Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:40:51.813Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 14 finding(s) at or above `minor` are not terminal: 2026-09-07-ingest-codex-agent-first-core-r05#F-001 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-002 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-003 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-004 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-005 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-006 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77, f593cc84 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-007 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-008 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-010 (minor, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-011 (minor, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-015 (blocker, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-016 (major, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-017 (minor, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-07-ingest-codex-agent-first-core-r05#F-018 (minor, round 2026-09-07-ingest-codex-agent-first-core-r05): marked fixed at 60848c77 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#491 was last collected against ecdbc094d02f2df6897a43ee3f911b34a8cd6fb3 (round 1), but the PR head is f593cc84de6831106d366cb5fe9265603c1d1b97. Everything anyone said after ecdbc094d02f2df6897a43ee3f911b34a8cd6fb3 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 491 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-07T11:51:04.711Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:51:04.833Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:51:08.802Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
