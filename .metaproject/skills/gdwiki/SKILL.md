@@ -37,6 +37,27 @@ model, and `keryx wiki verify --page <p>` records that someone reviewed a
 page. Do not stamp provenance on a human's behalf — the field means a person
 looked.
 
+## A page count is not coverage
+
+`keryx wiki status` prints `total pages: N`, `keryx wiki index` reports
+`(N pages)`, and the orientation block injected each turn opens with
+`pages: N`. Every one of those is a **count of files**, not a completeness
+claim: none of them knows which questions the wiki cannot answer, so **it is
+not a completeness measure** and must never be quoted as one.
+
+What to read instead:
+
+- The **per-type** breakdown under `## Pages by type`. A type at `0` means no
+  page of that kind exists at all — on this repository, `business-rule`,
+  `user-scenario`, `domain-model`, `service` and `integration` have all
+  been `0` while the total read `50`.
+- The page's own `## Questions this page must close` table, where each
+  question is `covered`, `partial`, `unknown` or `not-applicable` with a
+  basis. A filled heading is not an answer.
+- `keryx wiki ask`'s status. `no-match` and `insufficient-evidence` are
+  answers about the corpus; treat them as "the wiki does not cover this", not
+  as a gap in your own reading.
+
 Use this skill for project knowledge that is not a literal code detail:
 architecture, domain models, business rules, user scenarios, service/component
 responsibilities, integrations, and known decisions. The user does not need to

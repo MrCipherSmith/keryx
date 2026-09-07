@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
@@ -6,6 +7,14 @@ import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
 import { collectPages } from "./collect";
+import {
+  assembleEvidencePackage,
+  type EvidencePackage,
+  type EvidenceScope,
+  type EvidenceSeed,
+} from "./evidence";
+import { buildSectionIndex } from "./section-index";
+import { readSectionRegistry } from "./section-tombstone";
 import { resolveWikiSourceGate } from "./staleness";
 import {
   WIKI_INDEX_BEGIN,
@@ -387,7 +396,150 @@ export async function validModuleNames(cwd: string): Promise<Set<string> | undef
   return modules;
 }
 
-export function createGdWikiService(): GdWikiService {
+// AFC-W04 (flow 235, phase 3, T12) — the evidence surface.
+//
+// `wikiAsk` stays the ONE retrieval implementation (wiki-specification.md §8:
+// "перевести wiki search adapters на evidence envelope ... без второй
+// retrieval реализации"). This function does not re-rank and does not
+// re-search: it takes the citations that live path already produced, resolves
+// each one's section identity, and renders the agreed
+// `wiki-evidence.schema.json` envelope around it. The index it builds is the
+// same in-memory projection `wikiCandidates` builds, from the same bytes.
+//
+// Nothing here writes. The section registry is read; `syncSectionRegistry` —
+// the one write in the identity lane — is not called, because a search that
+// mutates state is the AC4 defect this phase removed from `wikiAsk`.
+export type WikiEvidenceInput = {
+  cwd: string;
+  question: string;
+  k?: number | undefined;
+  /** Whole-package token budget. The required set fits, or the call fails. */
+  budgetTokens?: number | undefined;
+  /** Maximum items in the package; the required set is never trimmed to it. */
+  maxItems?: number | undefined;
+  asOf?: string | undefined;
+  scope?: Partial<EvidenceScope> | undefined;
+  /**
+   * sectionRef → snapshot version from a real freshness run. Only a supplied,
+   * verified snapshot can make a section `fresh`; absent one, every section
+   * reports `unknown` ("not verified"), which is the honest state.
+   */
+  verified?: Readonly<Record<string, string>> | undefined;
+};
+
+const DEFAULT_EVIDENCE_BUDGET_TOKENS = 4000;
+const DEFAULT_EVIDENCE_MAX_ITEMS = 8;
+
+export async function wikiEvidence(input: WikiEvidenceInput): Promise<EvidencePackage> {
+  const ask = await wikiAsk({
+    cwd: input.cwd,
+    question: input.question,
+    ...(input.k === undefined ? {} : { k: input.k }),
+    ...(input.asOf === undefined ? {} : { asOf: input.asOf }),
+  });
+
+  // A non-`ok` retrieval outcome is passed through with its own code, not
+  // re-spelled and not upgraded into an empty envelope that reads like an
+  // answer. `wikiAsk` already distinguishes no-match from
+  // insufficient-evidence; a second vocabulary here would lose that.
+  if (ask.status !== undefined && ask.status !== "ok") {
+    return {
+      status: ask.status,
+      reason: ask.reason ?? "the wiki returned no usable evidence for this question.",
+      items: [],
+      refused: [],
+      omittedOptional: [],
+      partial: false,
+      overflow: null,
+      suggestion: "",
+    };
+  }
+
+  const pages = await collectPages(input.cwd);
+  const index = buildSectionIndex(
+    await Promise.all(
+      pages.map(async (page) => ({
+        page,
+        content: await readFile(page.absolutePath, "utf8").catch(() => ""),
+      })),
+    ),
+  );
+  const registry = await readSectionRegistry(input.cwd);
+
+  const pageStatus: Record<string, string | null> = {};
+  for (const page of pages) {
+    pageStatus[page.relativePath] = page.status;
+  }
+
+  const seeds: EvidenceSeed[] = [];
+  const historicalRefs: string[] = [];
+  const preOmitted: string[] = [];
+  ask.citations.forEach((citation, rank) => {
+    if (citation.sectionRef === undefined) {
+      // A memory citation carries no wiki section identity, so it cannot be
+      // rendered as wiki evidence. Named in the loss manifest rather than
+      // dropped: an omission the caller cannot see is the same defect class.
+      preOmitted.push(citation.path);
+      return;
+    }
+    seeds.push({ sectionRef: citation.sectionRef, rank });
+    if (citation.historical === true) {
+      historicalRefs.push(citation.sectionRef);
+    }
+  });
+
+  return assembleEvidencePackage({
+    index,
+    registry,
+    scope: resolveEvidenceScope(input.cwd, input.scope),
+    seeds,
+    pageStatus,
+    historicalRefs,
+    ...(input.verified ? { verified: input.verified } : {}),
+    maxItems: input.maxItems && input.maxItems > 0 ? input.maxItems : DEFAULT_EVIDENCE_MAX_ITEMS,
+    maxTokens:
+      input.budgetTokens && input.budgetTokens > 0
+        ? input.budgetTokens
+        : DEFAULT_EVIDENCE_BUDGET_TOKENS,
+    preOmitted,
+  });
+}
+
+/**
+ * The envelope's `scope`, derived rather than invented.
+ *
+ * `checkoutId` is a digest of this checkout's absolute path: it identifies the
+ * working copy an evidence item was read from, which is what a continuation
+ * bound to a `sourceVersion` will later have to be compared against. A caller
+ * that has richer identity (a workspace, a task) supplies it.
+ */
+function resolveEvidenceScope(
+  cwd: string,
+  override: Partial<EvidenceScope> | undefined,
+): EvidenceScope {
+  const absolute = path.resolve(cwd);
+  return {
+    projectId: override?.projectId ?? (path.basename(absolute) || "project"),
+    checkoutId:
+      override?.checkoutId ??
+      `checkout:${createHash("sha256").update(absolute).digest("hex").slice(0, 16)}`,
+    ...(override?.workspaceId ? { workspaceId: override.workspaceId } : {}),
+    ...(override?.taskId ? { taskId: override.taskId } : {}),
+  };
+}
+
+/**
+ * The service object MCP's `wiki.ask` and the CLI build.
+ *
+ * Widened here rather than in `./types.ts` (another lane owns that file this
+ * phase): `GdWikiEvidenceService` is a superset, so every existing consumer
+ * typed as `GdWikiService` is unaffected.
+ */
+export type GdWikiEvidenceService = GdWikiService & {
+  evidence(input: WikiEvidenceInput): Promise<EvidencePackage>;
+};
+
+export function createGdWikiService(): GdWikiEvidenceService {
   return {
     status: (input) => wikiStatus(input.cwd),
     createPage: (input) => wikiCreatePage(input),
@@ -396,6 +548,7 @@ export function createGdWikiService(): GdWikiService {
     validate: (input) => wikiValidate(input.cwd),
     collect: (input) => wikiCollect(input),
     ask: (input) => wikiAsk(input),
+    evidence: (input) => wikiEvidence(input),
   };
 }
 

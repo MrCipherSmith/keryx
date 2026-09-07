@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { querySymbol, resolveSymbols, transitiveCallers } from "./symbol";
+import { querySymbol, resolveSymbolCandidates, resolveSymbols, transitiveCallers } from "./symbol";
 import type { GraphData, SymbolNode, CallEdge } from "./types";
 
 function sym(id: string, name: string, path: string, startLine: number): SymbolNode {
@@ -72,6 +72,32 @@ test("transitiveCallers walks the reverse call graph with hop distances", () => 
   expect(byName["bar"]).toBe(1);
   expect(byName["baz"]).toBe(2);
   expect(impact.some((n) => n.label.startsWith("foo"))).toBe(false); // seed excluded
+});
+
+// AC6 (AFC-M04, flow 235) — the SYMBOL fixture must have explainable
+// candidates. Measured before this change: `keryx gdgraph symbol "wikiAsk"`
+// returned three definitions with no indication of WHY each was returned, so a
+// reader could not tell an exact-name definition from a substring capture that
+// merely contains the query. The tier is that reason, and it is carried in the
+// data rather than re-derived by whichever renderer happens to print it.
+
+test("a symbol candidate carries the tier that explains why it matched", () => {
+  const exact = resolveSymbolCandidates(GRAPH.symbols!, "foo");
+  expect(exact.map((c) => [c.symbol.id, c.tier])).toEqual([["src/a.ts#foo", "exact-name"]]);
+
+  const insensitive = resolveSymbolCandidates(GRAPH.symbols!, "FOO");
+  expect(insensitive.every((c) => c.tier === "case-insensitive-name")).toBe(true);
+  expect(insensitive.map((c) => c.symbol.name).sort()).toEqual(["Foo", "foo"]);
+
+  const substring = resolveSymbolCandidates(GRAPH.symbols!, "ba");
+  expect(substring.map((c) => [c.symbol.name, c.tier])).toEqual([["bar", "name-contains-query"]]);
+});
+
+test("querySymbol reports which tier answered, so a substring hit is not read as a definition", () => {
+  expect(querySymbol(GRAPH, "foo").matchTier).toBe("exact-name");
+  expect(querySymbol(GRAPH, "ba").matchTier).toBe("name-contains-query");
+  // No candidates at all ⇒ no tier to report, rather than a misleading one.
+  expect(querySymbol(GRAPH, "nonexistent").matchTier).toBeUndefined();
 });
 
 test("transitiveCallers respects maxDepth", () => {

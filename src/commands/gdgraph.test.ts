@@ -241,6 +241,159 @@ describe("keryx gdgraph symbol — explicit symbol requirement (AFC-13/AC5, T19 
 });
 
 // ---------------------------------------------------------------------------
+// AC5 (AFC-M03, flow 235) — "Missing file, broken index, nonsense и слабый
+// lexical сигнал дают разные коды".
+//
+// What was already true before this block, measured on 2026-09-08 against the
+// live repo: `gdgraph affected` DID separate a target the graph never indexed
+// from an indexed target with zero edges — distinct exit codes (1 vs 0) and
+// distinct output. What it did not have was a code from the norm's closed
+// vocabulary: the JSON said `error: "unknown-graph-target"`, a spelling that
+// appears nowhere in specification.md §3.
+//
+// What was NOT true: `keryx gdgraph find` printed the identical
+// "No files or symbols matched" line in a directory with no graph at all and
+// for a genuine no-match (both exit 0), and printed a confident ranked list
+// for a query whose only matching term was in most of the corpus. Three
+// different situations, one answer.
+// ---------------------------------------------------------------------------
+
+describe("keryx gdgraph — the four AC5 conditions carry four different codes", () => {
+  let root = "";
+  let emptyRoot = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let loggedErr: string[] = [];
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-codes-"));
+    // A second root with NO gdgraph storage at all — a broken/unbuilt index.
+    emptyRoot = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-noindex-"));
+    cwd = process.cwd();
+    process.chdir(root);
+
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    // 20 file nodes: enough corpus for document frequency to mean something
+    // (see MIN_WEIGHTED_CORPUS in gdgraph/find.ts). "search" is in 18 of them
+    // — a term with no discriminating power here; "wiki" is in one.
+    const nodes = [
+      '{"id":"src/wiki/ask.ts","kind":"file","path":"src/wiki/ask.ts","language":"typescript"}',
+      '{"id":"src/memory/search.ts","kind":"file","path":"src/memory/search.ts","language":"typescript"}',
+    ];
+    for (let i = 0; i < 18; i += 1) {
+      nodes.push(
+        `{"id":"src/mod${i}/search-helper-${i}.ts","kind":"file","path":"src/mod${i}/search-helper-${i}.ts","language":"typescript"}`,
+      );
+    }
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      `${nodes.join("\n")}\n`,
+      "utf8",
+    );
+
+    loggedOut = [];
+    loggedErr = [];
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    console.error = (...parts: unknown[]) => {
+      loggedErr.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    console.error = originalError;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+    await rm(emptyRoot, { recursive: true, force: true });
+  });
+
+  function payload(): { code?: string; nextActions?: string[]; reason?: string } {
+    return JSON.parse(loggedOut.join("\n")) as { code?: string; nextActions?: string[] };
+  }
+
+  test("a missing file is target-not-indexed", async () => {
+    await gdgraphCommand(["affected", "src/does-not-exist.ts", "--json"]);
+    expect(payload().code).toBe("target-not-indexed");
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("a broken or unbuilt index is index-incomplete, not a cheerful no-match", async () => {
+    process.chdir(emptyRoot);
+    await gdgraphCommand(["find", "wiki ask", "--json"]);
+    expect(payload().code).toBe("index-incomplete");
+    // The operation produced no result — status `error` in the norm's terms.
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("a nonsense query is no-match — a search that completed, so exit 0", async () => {
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    expect(payload().code).toBe("no-match");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("a weak lexical signal is insufficient-evidence, not a confident ranking", async () => {
+    await gdgraphCommand(["find", "search", "--json"]);
+    expect(payload().code).toBe("insufficient-evidence");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("the four conditions really are four different codes", async () => {
+    const codes: string[] = [];
+
+    await gdgraphCommand(["affected", "src/does-not-exist.ts", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    process.chdir(emptyRoot);
+    await gdgraphCommand(["find", "wiki", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    process.chdir(root);
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    await gdgraphCommand(["find", "search", "--json"]);
+    codes.push(payload().code!);
+
+    expect(new Set(codes).size).toBe(4);
+  });
+
+  test("the suggested next action is bounded — it never orders a tour of every layer", async () => {
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    const actions = payload().nextActions ?? [];
+    expect(actions.length).toBeGreaterThanOrEqual(1);
+    expect(actions.length).toBeLessThanOrEqual(3);
+    expect(actions.join(" ").toLowerCase()).not.toMatch(/all layers|every layer|full (tour|traversal)/);
+  });
+
+  test("a successful find calls its number a ranking score, never a probability", async () => {
+    await gdgraphCommand(["find", "wiki ask"]);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("ranking score");
+    expect(output.toLowerCase()).not.toMatch(/probability|likelihood|confidence/);
+  });
+
+  test("a find candidate is rendered with the reason it was chosen", async () => {
+    await gdgraphCommand(["find", "wiki ask"]);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("src/wiki/ask.ts");
+    // AC6: explainable candidates — which terms hit, and which of them narrowed.
+    expect(output).toContain("matched");
+    expect(output).toContain("narrowing on");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Flow 237 T6 defect 1 (AFC-28/AC-28, "a check that could not run is unknown
 // rather than passed"): `checkGraphStaleness` (src/gdgraph/staleness.ts)
 // returns a tri-state {fresh, stale, unknown} result with reasons — written

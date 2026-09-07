@@ -6,8 +6,16 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
-import { findNodes, findSymbols } from "../gdgraph/find";
-import { querySymbol, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
+import { findCandidates } from "../gdgraph/find";
+import { querySymbol, resolveSymbolCandidates, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
+import {
+  RANKING_SCORE_LABEL,
+  RETRIEVAL_NEXT_ACTIONS,
+  formatRankingScore,
+  formatRetrievalOutcome,
+  retrievalOutcome,
+  retrievalStatus,
+} from "../lib/retrieval-codes";
 import { findPath, labelNode } from "../gdgraph/path";
 import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 import { isCapabilityEnabled } from "../capability/seam";
@@ -305,11 +313,17 @@ async function runSymbol(rest: string[]): Promise<void> {
       if (!(error instanceof SymbolsUnavailableError)) {
         throw error;
       }
+      // AC5 (AFC-M03): the norm's cause for this is `capability-unavailable`.
+      // `error` keeps the finer-grained `SymbolsUnavailableCode`
+      // (`no-symbol-layer` / `grammar-missing` / `grammar-incompatible`),
+      // which says WHICH capability failed and how — a strict refinement of
+      // the shared code, not a competing spelling for it.
       if (asJson) {
         console.log(
           JSON.stringify(
             {
               schemaVersion: 1,
+              code: "capability-unavailable",
               error: error.code,
               message: error.message,
               remedy: error.remedy,
@@ -319,6 +333,7 @@ async function runSymbol(rest: string[]): Promise<void> {
           ),
         );
       } else {
+        console.error("code: capability-unavailable");
         console.error(error.message);
         console.error(error.remedy);
       }
@@ -336,26 +351,52 @@ async function runSymbol(rest: string[]): Promise<void> {
     return;
   }
 
-  const matches = resolveSymbols(graph.symbols, name);
+  const candidates = resolveSymbolCandidates(graph.symbols, name);
+  const matches = candidates.map((candidate) => candidate.symbol);
   if (matches.length === 0) {
+    // AC5: a completed lookup that found nothing is `no-match` — a real
+    // answer, at exit 0 — and it escalates to exactly one bounded next step.
     console.log(`# gdgraph symbol: ${name}`);
     console.log("");
-    console.log("No matching symbol. Try `keryx gdgraph find` or `keryx ctx rg`.");
+    for (const line of formatRetrievalOutcome(
+      retrievalOutcome(
+        "no-match",
+        `the symbol layer holds ${graph.symbols.length} symbols; none is named "${name}" or contains it.`,
+      ),
+    )) {
+      console.log(line);
+    }
+    await printStaleNote();
     return;
   }
 
   // Ambiguity guard: a loose query (e.g. "clone") matches several DIFFERENT
   // names, and unioning their callers/callees/impact is noise. List the matches
   // and ask for an exact name. Same-name overloads (one name, N defs) proceed.
+  //
+  // AC5: this is exactly `insufficient-evidence` — "кандидаты есть, но
+  // недостаточны для заявленного контекста" — and naming it as such is what
+  // lets a caller tell it apart from a no-match without parsing the prose.
   const distinctNames = [...new Set(matches.map((m) => m.name))];
   if (distinctNames.length > 1) {
     console.log(`# gdgraph symbol: ${name}`);
     console.log("");
-    console.log(`"${name}" matches ${matches.length} symbols across ${distinctNames.length} names — pick an exact one:`);
-    for (const m of matches.slice(0, 25)) {
-      console.log(`- ${m.name} (${m.kind}) — ${m.path}:${m.startLine}`);
+    for (const line of formatRetrievalOutcome(
+      retrievalOutcome(
+        "insufficient-evidence",
+        `"${name}" matches ${matches.length} symbols across ${distinctNames.length} different names — ` +
+          "pick an exact one rather than unioning their callers and callees.",
+      ),
+    )) {
+      console.log(line);
+    }
+    console.log("");
+    for (const candidate of candidates.slice(0, 25)) {
+      const m = candidate.symbol;
+      console.log(`- ${m.name} (${m.kind}) — ${m.path}:${m.startLine}  [${candidate.tier}]`);
     }
     if (matches.length > 25) console.log(`- … +${matches.length - 25} more`);
+    await printStaleNote();
     return;
   }
 
@@ -363,7 +404,12 @@ async function runSymbol(rest: string[]): Promise<void> {
 
   console.log(`# gdgraph symbol: ${name}`);
   console.log("");
-  console.log(`## Definitions (${result.definitions.length})`);
+  console.log("code: ok");
+  console.log("");
+  // AC6 (AFC-M04) — an explainable candidate. The tier is WHY this definition
+  // is here: an exact name is an answer, a substring capture may be a
+  // coincidence, and the two used to render identically.
+  console.log(`## Definitions (${result.definitions.length}, matched by ${result.matchTier})`);
   for (const def of result.definitions) {
     const container = def.container ? ` in ${def.container}` : "";
     console.log(`- ${def.name} (${def.kind})${container} — ${def.path}:${def.startLine}`);
@@ -450,46 +496,83 @@ function printRefs(refs: Array<{ label: string; resolved: boolean }>): void {
   }
 }
 
+// AC5 (AFC-M03) + AC6 (AFC-M04), flow 235.
+//
+// The measured defect: this renderer printed the identical
+// "No files or symbols matched" line for a genuine no-match AND for a
+// directory with no graph at all — both at exit 0 — and printed a confident
+// ranked list for a query whose only matching term was in most of the corpus.
+// It also discarded `FindResult.matched`, the reason each candidate was
+// chosen, which was computed on every call and never rendered.
+//
+// `findCandidates` (gdgraph/find.ts) now classifies the outcome and carries
+// the reason; this function's job is only to render one or the other.
 async function runFind(rest: string[]): Promise<void> {
+  const asJson = rest.includes("--json");
   const query = positionals(rest).join(" ").trim() || rest.filter((a) => !a.startsWith("--")).join(" ").trim();
-  if (!query) {
-    console.error('Usage: keryx gdgraph find "<terms>"');
-    process.exitCode = 1;
-    return;
-  }
 
   const graph = await loadGraph(process.cwd());
-  const symbols = findSymbols(graph, query);
-  const results = findNodes(graph, query);
+  const outcome = findCandidates(graph, query);
+  // A completed search is exit 0 even when it found nothing: "результат с
+  // нулём элементов не стирает coverage". Only `error` — the operation
+  // produced no result — is non-zero.
+  process.exitCode = retrievalStatus(outcome.code) === "error" ? 1 : 0;
 
-  if (results.length === 0 && symbols.length === 0) {
-    console.log(`# gdgraph find: ${query}`);
-    console.log("");
-    console.log("No files or symbols matched. For content search use:");
-    console.log(`  keryx ctx rg "<pattern>"`);
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          query,
+          code: outcome.code,
+          reason: outcome.reason,
+          nextActions: outcome.nextActions,
+          queryTerms: outcome.queryTerms,
+          ubiquitousTerms: outcome.ubiquitousTerms,
+          // `score` keeps its field name (a caller may already read it); the
+          // NOUN for it, wherever it is rendered for a human, is "ranking
+          // score" and never a probability (specification.md §3).
+          scoreKind: RANKING_SCORE_LABEL,
+          symbols: outcome.symbols,
+          files: outcome.files,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  console.log(`# gdgraph find: ${query}`);
+  console.log(`# gdgraph find: ${query || "<empty>"}`);
   console.log("");
+  for (const line of formatRetrievalOutcome(outcome)) {
+    console.log(line);
+  }
 
-  if (symbols.length > 0) {
-    console.log(`## Symbols (${symbols.length})`);
-    for (const symbol of symbols) {
-      console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
-    }
+  if (outcome.symbols.length > 0) {
     console.log("");
+    console.log(`## Symbols (${outcome.symbols.length})`);
+    for (const symbol of outcome.symbols) {
+      console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
+      console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(symbol.score)} · ${symbol.reason}`);
+    }
   }
 
-  console.log(`## Files (${results.length})`);
-  if (results.length === 0) {
-    console.log("- none");
+  if (outcome.files.length > 0) {
+    console.log("");
+    console.log(`## Files (${outcome.files.length})`);
+    for (const result of outcome.files) {
+      console.log(`- ${result.path}`);
+      console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(result.score)} · ${result.reason}`);
+    }
   }
-  for (const result of results) {
-    console.log(`- ${result.path}  (score ${result.score}, dependents ${result.dependents})`);
+
+  if (outcome.code === "ok" || outcome.code === "insufficient-evidence") {
+    console.log("");
+    console.log('Next: keryx gdgraph symbol "<name>" · keryx gdgraph affected <file>');
   }
-  console.log("");
-  console.log('Next: keryx gdgraph symbol "<name>" · keryx gdgraph affected <file>');
+  // Staleness is reported on EVERY outcome now, not only on a hit: a caller
+  // told "nothing matched" most needs to know the index predates the tree.
   await printStaleNote();
 }
 
@@ -553,6 +636,45 @@ async function runAffected(rest: string[]): Promise<void> {
   // input unchanged when nothing matched, so membership in the loaded node set
   // is exactly the signal that distinguishes "never indexed" from "indexed,
   // zero edges".
+  // AC5 (AFC-M03, flow 235): "index-incomplete — индекс не позволяет ответить"
+  // is a DIFFERENT cause from "target-not-indexed", and it must be checked
+  // first. An index with no file nodes has no standing to say a target was
+  // never indexed — it cannot say anything about any target. Before this,
+  // running `affected` in a directory with no graph reported every target as
+  // not-a-node, which reads as "your path is wrong" when the truth is "there
+  // is no index here".
+  if (graph.nodes.length === 0) {
+    const outcome = retrievalOutcome(
+      "index-incomplete",
+      "the graph index holds no file nodes — it was never built here, or its storage is unreadable. " +
+        "No claim is being made about whether this target exists.",
+    );
+    if (asJson) {
+      console.log(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            code: outcome.code,
+            error: outcome.code,
+            reason: outcome.reason,
+            nextActions: outcome.nextActions,
+            target,
+            dependencies: [],
+            dependents: [],
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      for (const line of formatRetrievalOutcome(outcome)) {
+        console.error(line);
+      }
+    }
+    process.exitCode = 1;
+    return;
+  }
+
   const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
   if (!isKnownNode) {
     // A caller error (typo, wrong path, or a new file the graph has not been
@@ -569,12 +691,23 @@ async function runAffected(rest: string[]): Promise<void> {
     // `commands/modules.ts`'s own convention (its "not-initialized" branch):
     // a structured error object on stdout under `--json`, prose on stderr
     // otherwise — never both for the same failure.
+    //
+    // AC5 (AFC-M03, flow 235): the DISTINCTION this branch makes was already
+    // right; what it lacked was a stable code. `unknown-graph-target` was a
+    // spelling private to this file — a caller could not branch on it and a
+    // transport could not preserve it, because it is not in the norm's closed
+    // vocabulary. `code` is now that vocabulary's `target-not-indexed`;
+    // `error` keeps carrying a value for existing consumers, and carries the
+    // same one so the two can never disagree.
     if (asJson) {
       console.log(
         JSON.stringify(
           {
             schemaVersion: 1,
-            error: "unknown-graph-target",
+            code: "target-not-indexed",
+            error: "target-not-indexed",
+            reason: message,
+            nextActions: RETRIEVAL_NEXT_ACTIONS["target-not-indexed"],
             target,
             dependencies: [],
             dependents: [],
@@ -584,6 +717,7 @@ async function runAffected(rest: string[]): Promise<void> {
         ),
       );
     } else {
+      console.error("code: target-not-indexed");
       console.error(message);
     }
     process.exitCode = 1;

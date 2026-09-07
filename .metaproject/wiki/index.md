@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-22T15:31:04.690Z | pages: 50 -->
+<!-- generated: 2026-09-07T20:30:07.611Z | pages: 51 -->
 
 ### Architecture
 
@@ -49,7 +49,7 @@ _No pages yet._
 
 ### Business Rule
 
-_No pages yet._
+- [Code Search Routing Rule](business-rules/code-search-routing.md) (accepted) - Every text, symbol or pattern search an agent runs over this project's code goes through `keryx ctx rg`, never a bare `rg` or `grep`. A `PreToolUse` hook enforces the rule before the command runs and refuses the raw form with a message naming the routed replacement. The one sanctioned way out is an inline escape marker that states a reason.
 
 ### User Scenario
 

@@ -10,27 +10,64 @@ export interface SymbolRef {
   resolved: boolean;
 }
 
+/**
+ * Which of the three resolution tiers produced a candidate (AC6 / AFC-M04,
+ * flow 235: "объяснимые candidates").
+ *
+ * The tiers always existed inside `resolveSymbols` — exact, then
+ * case-insensitive, then substring — but the function returned bare
+ * `SymbolNode`s, so the tier that selected each one was computed and thrown
+ * away. Measured consequence: `keryx gdgraph symbol "wikiAsk"` listed three
+ * definitions with nothing to say which was a real name match and which merely
+ * contains the query as a substring. A caller reading that list cannot tell an
+ * answer from a coincidence.
+ */
+export type SymbolMatchTier = "exact-name" | "case-insensitive-name" | "name-contains-query";
+
+export interface SymbolCandidate {
+  symbol: SymbolNode;
+  tier: SymbolMatchTier;
+}
+
 export interface SymbolQueryResult {
   query: string;
   definitions: SymbolNode[];
+  /** The tier every definition came from, or `undefined` when nothing matched. */
+  matchTier?: SymbolMatchTier;
   callers: SymbolRef[];
   callees: SymbolRef[];
 }
 
 // Resolve a name to matching symbols: exact name, then case-insensitive, then
 // substring — stopping at the first tier that yields hits so precise names win.
-export function resolveSymbols(symbols: SymbolNode[], name: string, limit = 25): SymbolNode[] {
+// Each candidate carries the tier that selected it.
+export function resolveSymbolCandidates(
+  symbols: SymbolNode[],
+  name: string,
+  limit = 25,
+): SymbolCandidate[] {
   const q = name.trim();
   if (!q) return [];
   const lower = q.toLowerCase();
 
+  const tag = (matches: SymbolNode[], tier: SymbolMatchTier): SymbolCandidate[] =>
+    matches.slice(0, limit).map((symbol) => ({ symbol, tier }));
+
   const exact = symbols.filter((s) => s.name === q);
-  if (exact.length > 0) return exact.slice(0, limit);
+  if (exact.length > 0) return tag(exact, "exact-name");
 
   const ci = symbols.filter((s) => s.name.toLowerCase() === lower);
-  if (ci.length > 0) return ci.slice(0, limit);
+  if (ci.length > 0) return tag(ci, "case-insensitive-name");
 
-  return symbols.filter((s) => s.name.toLowerCase().includes(lower)).slice(0, limit);
+  return tag(
+    symbols.filter((s) => s.name.toLowerCase().includes(lower)),
+    "name-contains-query",
+  );
+}
+
+// The bare-node view, unchanged for every existing caller.
+export function resolveSymbols(symbols: SymbolNode[], name: string, limit = 25): SymbolNode[] {
+  return resolveSymbolCandidates(symbols, name, limit).map((candidate) => candidate.symbol);
 }
 
 function labelFor(token: string, byId: Map<string, SymbolNode>): SymbolRef {
@@ -107,7 +144,9 @@ export function transitiveCallers(
 export function querySymbol(graph: GraphData, name: string): SymbolQueryResult {
   const symbols = graph.symbols ?? [];
   const calls = graph.calls ?? [];
-  const definitions = resolveSymbols(symbols, name);
+  const candidates = resolveSymbolCandidates(symbols, name);
+  const definitions = candidates.map((candidate) => candidate.symbol);
+  const matchTier = candidates[0]?.tier;
   const ids = new Set(definitions.map((s) => s.id));
   const byId = new Map(symbols.map((s) => [s.id, s]));
 
@@ -119,5 +158,5 @@ export function querySymbol(graph: GraphData, name: string): SymbolQueryResult {
     callEdges.filter((c) => ids.has(c.from)).map((c) => labelFor(c.to, byId)),
   ).sort((a, b) => a.label.localeCompare(b.label));
 
-  return { query: name, definitions, callers, callees };
+  return { query: name, definitions, ...(matchTier ? { matchTier } : {}), callers, callees };
 }
