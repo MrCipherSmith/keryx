@@ -114,6 +114,62 @@ Adopt canary deploys for the release pipeline.
     const payload = JSON.parse(loggedOut.join("\n")) as { results: Array<{ path: string }> };
     expect(payload.results.map((r) => r.path)).toContain("decisions/canary.md");
   });
+
+  // T24 (flow 234) F-005 (MAJOR): `--json` used to hand-roll five fields
+  // (score/title/type/status/path), dropping every AC6 provenance carrier the
+  // human text form above already shows (version, provenance.source/link,
+  // author, confirmedBy) -- and because the keys were simply absent, a
+  // consumer of the JSON form could not tell "this entry has no source" apart
+  // from "this surface doesn't report sources at all". These assert the JSON
+  // form now carries the SAME provenance the text form does, built from the
+  // report formatter's own per-result projection (`renderMemorySearchReport`,
+  // `../memory/report.ts`) rather than a hand-rolled, strictly weaker subset.
+  test("--json carries the same AC6 provenance the text form does (version, provenance, author, confirmedBy)", async () => {
+    await memoryCommand(["search", "canary deploys release pipeline", "--json"]);
+
+    expect(process.exitCode).toBe(0);
+    const payload = JSON.parse(loggedOut.join("\n")) as {
+      results: Array<{
+        path: string;
+        version: string;
+        provenance: { source: string; link: string };
+        author: string;
+        confirmedBy: string;
+      }>;
+    };
+    const canary = payload.results.find((r) => r.path === "decisions/canary.md");
+    expect(canary?.version).toBe("3.4.1");
+    expect(canary?.provenance).toEqual({ source: "pr#901", link: "https://example.invalid/pr/901" });
+    expect(canary?.author).toBe("author:carol");
+    expect(canary?.confirmedBy).toBe("reviewer:alice");
+  });
+
+  test("--json shows the explicit 'unknown' sentinel for an unsourced entry, never a dropped/absent key", async () => {
+    await writeFile(
+      path.join(root, ".metaproject", "memory", "decisions", "unsourced.md"),
+      "# Adopt trunk-based development for the release pipeline\n\nType: decision\nStatus: accepted\n\n## Summary\n\nAdopt trunk-based development for the release pipeline.\n",
+      "utf8",
+    );
+
+    await memoryCommand(["search", "trunk-based development release pipeline", "--json"]);
+
+    expect(process.exitCode).toBe(0);
+    const payload = JSON.parse(loggedOut.join("\n")) as {
+      results: Array<{
+        path: string;
+        version: string;
+        provenance: { source: string; link: string };
+        author: string;
+        confirmedBy: string;
+      }>;
+    };
+    const unsourced = payload.results.find((r) => r.path === "decisions/unsourced.md");
+    expect(unsourced).toBeDefined();
+    expect(unsourced?.version).toBe("unknown");
+    expect(unsourced?.provenance).toEqual({ source: "unknown", link: "unknown" });
+    expect(unsourced?.author).toBe("unknown");
+    expect(unsourced?.confirmedBy).toBe("unknown");
+  });
 });
 
 // AFC-06 (flow 234) T22 -- AC1's second half: "historical режим явно

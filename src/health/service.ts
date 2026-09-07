@@ -121,6 +121,15 @@ async function readLatest(cwd: string): Promise<HealthReport | null> {
 
 async function detectStatuses(cwd: string): Promise<HealthSourcesResult> {
   const config = await loadHealthConfig(cwd);
+  // Flow 234 T26: deliberately the lossy `listSourceFiles` compat wrapper
+  // (`./util.ts`), not `listSourceFilesWithReasons`. This function only
+  // answers "which sources are configured/detected right now" for `keryx
+  // health sources` -- a live, unpersisted listing with no `findings`/`gate`
+  // of its own to attach incompleteness to (unlike `runHealth` in `./run.ts`,
+  // which persists a gated report and does consume the reasons). An
+  // unreadable subdirectory here can at most under-detect `complexity`'s
+  // availability (`sourceFiles.length > 0`), never certify false coverage,
+  // so silently continuing is the deliberate call, not an oversight.
   const sourceFiles = await listSourceFiles(cwd, config.ignore.paths);
   const ctx: HealthContext = {
     cwd,

@@ -1,3 +1,7 @@
+# command: bun test
+# cwd: /Users/Goodea/goodea/keryx
+# started: 2026-09-07T10:47:30Z
+# ---- output below, may legitimately be empty ----
 bun test v1.3.12 (700fc117)
 
 src/security/web-taint-durable-boundary.test.ts:
@@ -146,7 +150,7 @@ src/wiki/enrich-rlm.test.ts:
 src/standard/standard.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-59xKMD/
+  Setting up a .metaproject workspace in keryx-standard-IiEeLP/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -178,7 +182,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-vk7LJW/
+  Setting up a .metaproject workspace in keryx-standard-WKMrZk/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -210,7 +214,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-6dop9w/
+  Setting up a .metaproject workspace in keryx-standard-kUpTFy/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -242,7 +246,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-rsB3RQ/
+  Setting up a .metaproject workspace in keryx-standard-8U8nJy/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -274,7 +278,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-7AeWuW/
+  Setting up a .metaproject workspace in keryx-standard-TKdQQ2/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -306,7 +310,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-L8aEmt/
+  Setting up a .metaproject workspace in keryx-standard-TAQU08/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -338,7 +342,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-standard-UXUzih/
+  Setting up a .metaproject workspace in keryx-standard-mH73bc/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -370,16 +374,16 @@ src/review/managed.test.ts:
 lightweight review mode: report-only; no managed review artifacts created
 
 src/lib/serve-listener.turns.test.ts:
-keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/keryx-r4c-socket-2OrwEO/config/turns'
+keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/keryx-r4c-socket-r6bGsA/config/turns'
 
 src/lib/serve-turns.route.test.ts:
-keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/keryx-r4c-12oH2b/config/turns/abcdabcd-1234-4567-89ab-cdefcdefcdef'
+keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/keryx-r4c-hkw0GF/config/turns/abcdabcd-1234-4567-89ab-cdefcdefcdef'
 keryx serve: request failed: the durable record for turn abcdabcd-1234-4567-89ab-cdefcdefcdef could not be written
 
 src/commands/module-commands.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-cmds-zPAVD0/
+  Setting up a .metaproject workspace in keryx-cmds-zpytPp/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -532,7 +536,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest
 src/commands/init.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-init-uyG1Cd/
+  Setting up a .metaproject workspace in keryx-init-hAbVuq/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -561,7 +565,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-init-memory-policy-MAJFlc/
+  Setting up a .metaproject workspace in keryx-init-memory-policy-ilkt0v/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -585,7 +589,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-init-memory-index-upwNfz/
+  Setting up a .metaproject workspace in keryx-init-memory-index-EhnC5S/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -615,7 +619,7 @@ Search scans canonical Markdown directly and does not depend on this catalog.
 src/commands/security-hooks-init.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-JfTbS8/
+  Setting up a .metaproject workspace in keryx-sec-hooks-7XfbiO/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -643,7 +647,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-naODQR/
+  Setting up a .metaproject workspace in keryx-sec-hooks-4sgg6t/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -671,7 +675,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-IWCR5k/
+  Setting up a .metaproject workspace in keryx-sec-hooks-ZNVLJK/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -699,7 +703,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-3EZ7Ru/
+  Setting up a .metaproject workspace in keryx-sec-hooks-Or1eUd/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -727,7 +731,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-Mr2lQs/
+  Setting up a .metaproject workspace in keryx-sec-hooks-ilbpVB/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -755,7 +759,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-uvY5XV/
+  Setting up a .metaproject workspace in keryx-sec-hooks-zjZVX5/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -783,7 +787,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Updating the .metaproject workspace in keryx-sec-hooks-uvY5XV/
+  Updating the .metaproject workspace in keryx-sec-hooks-zjZVX5/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Updated .metaproject
@@ -809,7 +813,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-Ks4FP6/
+  Setting up a .metaproject workspace in keryx-sec-hooks-03e9Hp/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -837,7 +841,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Updating the .metaproject workspace in keryx-sec-hooks-Ks4FP6/
+  Updating the .metaproject workspace in keryx-sec-hooks-03e9Hp/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Updated .metaproject
@@ -859,7 +863,7 @@ Next steps
   → After pulling changes, run keryx update to refresh service files.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-sec-hooks-uugLsQ/
+  Setting up a .metaproject workspace in keryx-sec-hooks-c9eirD/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -885,7 +889,7 @@ Next steps
 src/commands/update.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-515BBu/
+  Refreshing the .metaproject workspace in keryx-update-fP2Ylx/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -905,7 +909,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-memory-policy-CbqlvX/
+  Refreshing the .metaproject workspace in keryx-update-memory-policy-0NBALf/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -925,7 +929,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-legacy-lQAfVw/
+  Refreshing the .metaproject workspace in keryx-update-legacy-ZlIbiu/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -946,7 +950,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-wiki-migrate-0I5Y7C/
+  Refreshing the .metaproject workspace in keryx-update-wiki-migrate-aX4TBt/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -966,7 +970,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-hooks-m8tbn1/
+  Refreshing the .metaproject workspace in keryx-update-hooks-tB47U7/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -985,7 +989,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-hooks-m8tbn1/
+  Refreshing the .metaproject workspace in keryx-update-hooks-tB47U7/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1004,7 +1008,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-backfill-krnq9Q/
+  Refreshing the .metaproject workspace in keryx-update-backfill-IzOW4r/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1025,7 +1029,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-notasks-aQjYjd/
+  Refreshing the .metaproject workspace in keryx-update-notasks-UOFfgN/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1045,7 +1049,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-update-sec-KZHWvS/
+  Refreshing the .metaproject workspace in keryx-update-sec-HV9QpA/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1077,7 +1081,7 @@ Unknown runtime(s): bogus
 src/commands/routing-entrypoint-lifecycle.test.ts:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-routing-sync-FstN4z/
+  Setting up a .metaproject workspace in keryx-routing-sync-sv5LHG/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -1116,7 +1120,7 @@ synced: 2
 - CLAUDE.md -> .metaproject/rules/claude-md.md (high)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx init
-  Setting up a .metaproject workspace in keryx-routing-distill-vUVuFk/
+  Setting up a .metaproject workspace in keryx-routing-distill-yJ5JVl/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Created .metaproject
@@ -1159,7 +1163,7 @@ kept_root_sections: 3
 index: .metaproject/rules/entrypoints/index.md
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-routing-distill-vUVuFk/
+  Refreshing the .metaproject workspace in keryx-routing-distill-yJ5JVl/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1179,7 +1183,7 @@ Next steps
   → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   keryx update
-  Refreshing the .metaproject workspace in keryx-routing-distill-vUVuFk/
+  Refreshing the .metaproject workspace in keryx-routing-distill-yJ5JVl/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Refreshed service files
@@ -1234,20 +1238,38 @@ _(flow-init skill appends here)_
 
 src/security/detect/exfil.test.ts:
 T89 cost measurement:
-manyNestedContainerLines: 1254890 bytes in 22.7ms
-oneLineMillionMarkers: 1050021 bytes in 9.5ms
-nestedDefsThenAttacker: 941228 bytes in 14.6ms
+manyNestedContainerLines: 1254890 bytes in 28.0ms
+oneLineMillionMarkers: 1050021 bytes in 11.6ms
+nestedDefsThenAttacker: 941228 bytes in 20.6ms
 T90 cost measurement:
-manyWrappedNestedDefs: 1097890 bytes in 16.9ms
-wrappedNestedDefsThenAttacker: 941228 bytes in 14.8ms
-sharedOffsetWrappedThenFails: 160283 bytes in 3.7ms
+manyWrappedNestedDefs: 1097890 bytes in 21.8ms
+wrappedNestedDefsThenAttacker: 941228 bytes in 18.6ms
+sharedOffsetWrappedThenFails: 160283 bytes in 4.5ms
+T91 cost measurement:
+manyWrappedNestedLabels: 957780 bytes in 19.9ms
+oneLabelManyWrappedLines: 1142919 bytes in 19.8ms
+wrappedLabelsThenAttacker: 798405 bytes in 16.3ms
+T92 cost measurement:
+manyOpensSharingOneMarkerOnlySecondBracket: 500317 bytes in 96.5ms
+manyIndependentMarkerOnlySecondBrackets: 1959780 bytes in 69.3ms
+manyThenAttacker: 1960119 bytes in 71.1ms
+T93 cost measurement:
+manyOpensSharingOneWrappedDestination: 400316 bytes in 5.6ms
+manyIndependentWrappedDestinations: 1113000 bytes in 25.4ms
+megabyteOfContainerPrefixedLines: 987000 bytes in 11.2ms
+manyWrappedTags: 1035000 bytes in 80.0ms
+manyWrappedTagsThenAttacker: 1035047 bytes in 72.9ms
+manyUnterminatedTagsOnMarkerLines: 840000 bytes in 52.1ms
 [capability] gdgraph.treesitter unavailable: optional dependency "web-tree-sitter" is not installed; using deterministic fallback
 [capability] gdgraph.treesitter unavailable: missing grammar for [typescript]; using deterministic fallback
 [capability] security.piiNer unavailable: asset "pii-ner" is missing or failed checksum verification; using deterministic fallback
 [capability] security.injectionModel unavailable: asset "prompt-guard-2-22m" is missing or failed checksum verification; using deterministic fallback
 
- 7262 pass
+ 7316 pass
  19 skip
  0 fail
- 54932 expect() calls
-Ran 7281 tests across 592 files. [152.82s]
+ 55375 expect() calls
+Ran 7335 tests across 595 files. [143.61s]
+# ---- output above ----
+# finished: 2026-09-07T10:49:53Z
+# exit code: 0

@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { createMemoryService } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
 import { renderSearchMarkdown } from "../memory/search";
+import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
 import { runAssetsSubcommand } from "../assets/command";
@@ -197,18 +199,34 @@ async function runSearch(args: string[]): Promise<void> {
   }
 
   if (args.includes("--json")) {
+    // T24 (flow 234) F-005 (MAJOR): this used to hand-roll five fields
+    // (score/title/type/status/path), silently dropping every AC6 provenance
+    // carrier (version, provenance.source/link, author, confirmedBy, caveat,
+    // scope) the human `renderSearchMarkdown` form of this SAME command
+    // already carries -- and because the keys were simply absent rather than
+    // an explicit sentinel, a consumer of the JSON form could not tell "this
+    // entry has no source" apart from "this surface doesn't report sources".
+    // Built from the report formatter's own per-result projection
+    // (`renderMemorySearchReport`, `../memory/report.ts`) -- the identical
+    // bounded, "unknown"-sentineled shape AFC-25/AC6 already specify and
+    // `--save-report` already persists -- so the JSON form carries the same
+    // provenance the text form does, instead of a strictly weaker subset.
+    // Pure/no disk I/O: computing the projection here does not persist a
+    // report; only `--save-report` (above) does that, unchanged.
+    const projection = renderMemorySearchReport({
+      runId: randomUUID(),
+      generatedAt: new Date(),
+      search: result,
+      filters,
+    });
     console.log(
       JSON.stringify(
         {
           query,
-          results: result.results.map((item) => {
-            const lifecycle = historicalByPath.get(item.entry.relativePath);
+          results: projection.results.map((item) => {
+            const lifecycle = historicalByPath.get(item.path);
             return {
-              score: item.score,
-              title: item.entry.title,
-              type: item.entry.type,
-              status: item.entry.status,
-              path: item.entry.relativePath,
+              ...item,
               ...(lifecycle
                 ? { historical: true, lifecycleState: lifecycle.state, lifecycleReasons: lifecycle.reasons }
                 : {}),

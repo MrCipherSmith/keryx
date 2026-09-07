@@ -1,7 +1,6 @@
 import {
   analyzeTestingProject,
   computeTestingContext,
-  findRelatedTests,
   loadTestingConfig,
   loadTestingContext,
   loadTestingReport,
@@ -110,6 +109,17 @@ async function runSuggest(args: string[]): Promise<void> {
       "a case needs a short illustrative snippet.",
     user: [
       `Frameworks: ${context.frameworks.join(", ") || "unknown"}`,
+      // F-016 (flow 234 T27, major): `context.status`/`incompleteReasons` were
+      // computed above and then discarded before the prompt was built - a
+      // testing-context refresh that could not fully walk the tree (e.g. a
+      // permission-denied subdirectory) must not silently read as "these are
+      // all the related tests there are", the same way `keryx test related`
+      // and `keryx test explain` now surface it (see runRelated/runExplain).
+      `Testing context: ${context.status}${
+        context.status === "incomplete"
+          ? ` (incomplete - could not fully walk the tree: ${context.incompleteReasons.join("; ")})`
+          : ""
+      }`,
       `Existing related tests: ${related.length > 0 ? related.join(", ") : "none"}`,
       "",
       `Source file: ${target}`,
@@ -192,6 +202,19 @@ async function runStatus(): Promise<void> {
   console.log(`test files: ${context?.testFiles.length ?? 0}`);
   console.log(`latest run: ${report?.generatedAt ?? "never"}`);
   console.log(`latest status: ${report?.status ?? "n/a"}`);
+  // F-017 (flow 234 T27, minor): `report.status` alone can read as a clean
+  // pass while `report.context` (the same report, same file on disk) says the
+  // testing-context refresh that run used was `incomplete` - `keryx test
+  // report latest` already renders that (see runReport above); this surface
+  // must not give the opposite impression of the same report.
+  if (report?.context) {
+    console.log(`latest run context: ${report.context.status}`);
+    if (report.context.status === "incomplete") {
+      for (const reason of report.context.incompleteReasons) {
+        console.log(`  - ${reason}`);
+      }
+    }
+  }
 }
 
 async function runContext(): Promise<void> {
@@ -203,6 +226,16 @@ async function runContext(): Promise<void> {
   console.log("# testing context");
   console.log("");
   console.log(`generatedAt: ${context.generatedAt}`);
+  // The same class the rest of this file was repaired for: a context that could
+  // not walk the whole tree must not read as a complete one. `test run`,
+  // `test related`, `test explain` and `test status` all say so; this surface
+  // prints every other field of the same object and used to omit this one.
+  console.log(`status: ${context.status}`);
+  if (context.status === "incomplete") {
+    for (const reason of context.incompleteReasons) {
+      console.log(`  - ${reason}`);
+    }
+  }
   console.log(`frameworks: ${context.frameworks.join(", ") || "none"}`);
   console.log(`scripts: ${context.scripts.map((script) => script.name).join(", ") || "none"}`);
   console.log(`configs: ${context.configs.length}`);
@@ -254,8 +287,21 @@ async function runRelated(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const related = await findRelatedTests(process.cwd(), target);
+  // F-003 (flow 234 review, MAJOR) / AC2: compute the context once (read-only,
+  // no write) and share it with the relatedness lookup — the same pair
+  // `findRelatedTests` itself calls internally — so the context's incomplete
+  // status/reasons are available to print here, the same way `keryx test run`
+  // already surfaces `report.context` (see runRun above).
+  const context = await computeTestingContext(process.cwd());
+  const related = await relatedTestsInContext(process.cwd(), context, target);
   console.log(`# related tests: ${target}`);
+  console.log("");
+  console.log(`context: ${context.status}`);
+  if (context.status === "incomplete") {
+    for (const reason of context.incompleteReasons) {
+      console.log(`  - ${reason}`);
+    }
+  }
   console.log("");
   if (related.length === 0) {
     console.log("- none");
@@ -273,12 +319,23 @@ async function runExplain(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const context = await loadTestingContext(process.cwd());
+  // Flow 234 T27 (F-016): mirror `test related` (runRelated) - compute the
+  // context once (read-only) and share it with the relatedness lookup, so the
+  // context's incomplete status/reasons are visible here too instead of being
+  // silently discarded inside `findRelatedTests`, the same way `keryx test
+  // related` already surfaces it (see runRelated above).
+  const context = await computeTestingContext(process.cwd());
   const report = await loadTestingReport(process.cwd());
-  const related = await findRelatedTests(process.cwd(), target);
+  const related = await relatedTestsInContext(process.cwd(), context, target);
   console.log(`# testing explain: ${target}`);
   console.log("");
-  console.log(`frameworks: ${context?.frameworks.join(", ") || "none"}`);
+  console.log(`frameworks: ${context.frameworks.join(", ") || "none"}`);
+  console.log(`context: ${context.status}`);
+  if (context.status === "incomplete") {
+    for (const reason of context.incompleteReasons) {
+      console.log(`  - ${reason}`);
+    }
+  }
   console.log(`related tests: ${related.length}`);
   for (const file of related) {
     console.log(`- ${file}`);
@@ -312,6 +369,14 @@ async function runCoverageMap(args: string[]): Promise<void> {
     console.log("# testing coverage-map build");
     console.log("");
     console.log(`source: ${config.coverageMap.source}`);
+    // A map built from a partially-walked tree is smaller than the truth and
+    // looks exactly like a small project. Same class as above.
+    console.log(`context: ${context.status}`);
+    if (context.status === "incomplete") {
+      for (const reason of context.incompleteReasons) {
+        console.log(`  - ${reason}`);
+      }
+    }
     console.log(`entries: ${Object.keys(result.map.map).length}`);
     console.log(`artifact: ${coverageMapPath(cwd, config)}`);
     for (const warning of result.securityWarnings) {

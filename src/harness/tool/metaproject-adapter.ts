@@ -33,7 +33,8 @@ import { parseSkillFrontmatter } from "../../gdskills/skill-frontmatter";
 import { createMemoryService } from "../../memory/service";
 import { acceptedCurrentSearchFilters, clipAutomaticRecallText, MAX_AUTOMATIC_RECALL_RESULTS } from "../../memory/relevant";
 import { MEMORY_CLASS_VALUES, type MemoryClass, type MemoryService, type SearchFilters } from "../../memory/types";
-import { findRelatedTests } from "../../testing/service";
+import { computeTestingContext, relatedTestsInContext } from "../../testing/service";
+import type { TestingContext } from "../../testing/types";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
 import { createFlowService } from "../../flow/service";
@@ -68,8 +69,17 @@ import type {
 export interface MetaprojectAdapterDeps {
   createGdgraphService: () => GdgraphService;
   createMemoryService: () => MemoryService;
-  /** Related-tests resolver (default: the real testing facade). Injectable for tests. */
-  findRelatedTests: (cwd: string, target: string) => Promise<string[]>;
+  /**
+   * Pure testing-context computation — no disk write (default: the real
+   * `computeTestingContext` facade). Injectable for tests. F-003 (flow 234
+   * review, MAJOR): `testRelated` uses this PLUS `relatedTestsInContext`
+   * below instead of the old `findRelatedTests` wrapper, so the context's
+   * `status`/`incompleteReasons` are available to populate the result — and
+   * so only ONE tree walk happens per call, not a second hidden one.
+   */
+  computeTestingContext: (cwd: string) => Promise<TestingContext>;
+  /** Relatedness lookup over an already-computed context (default: the real `relatedTestsInContext` facade). Injectable for tests. */
+  relatedTestsInContext: (cwd: string, context: TestingContext, target: string) => Promise<string[]>;
   /** Code-health facade factory (default: the real health service). Injectable for tests. */
   createCodeHealthService: () => CodeHealthService;
   /**
@@ -103,7 +113,8 @@ export interface MetaprojectAdapterDeps {
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   createGdgraphService,
   createMemoryService,
-  findRelatedTests,
+  computeTestingContext,
+  relatedTestsInContext,
   createCodeHealthService,
   createFlowService: () =>
     createFlowService({
@@ -127,6 +138,13 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
 /** Bounded excerpt/output cap so a structured result stays modest. */
 const MAX_EXCERPT_BYTES = 400;
 const MAX_QUERY_BYTES = 4096;
+// F-002 (flow 234 review, BLOCKER) / AFC-25: explicit sentinel for a
+// provenance field never captured upstream. Mirrors memory/report.ts's own
+// `UNKNOWN` constant (not exported there, so not importable — same literal,
+// kept in sync deliberately) so an entry's version/source/link/author/
+// confirmedBy reads identically at both the compressed-report boundary and
+// this agent-facing one. Never an omitted key, never an empty string.
+const UNKNOWN_PROVENANCE = "unknown";
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -366,6 +384,20 @@ export function createMetaprojectAdapter(
                   status: scored.entry.status,
                   score: scored.score,
                   excerpt: clipAutomaticRecallText(scored.entry.summary, MAX_EXCERPT_BYTES),
+                  // F-002 (flow 234 review, BLOCKER): carried through to the
+                  // agent-facing boundary, bounded with the SAME clipping
+                  // already applied to recalled text above — never a raw,
+                  // unbounded field. Absent upstream -> the explicit
+                  // "unknown" sentinel (never a dropped key); `caveat` alone
+                  // stays nullable, distinct from "not captured".
+                  version: clipAutomaticRecallText(scored.entry.version ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  provenance: {
+                    source: clipAutomaticRecallText(scored.entry.provenance.source ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                    link: clipAutomaticRecallText(scored.entry.provenance.link ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  },
+                  author: clipAutomaticRecallText(scored.entry.author ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  confirmedBy: clipAutomaticRecallText(scored.entry.confirmedBy ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  caveat: scored.entry.caveat ? clipAutomaticRecallText(scored.entry.caveat, MAX_EXCERPT_BYTES) : null,
                 };
           })
           .filter((hit): hit is NonNullable<typeof hit> => hit !== null)
@@ -500,8 +532,21 @@ export function createMetaprojectAdapter(
 
     async testRelated(input): Promise<TestRelatedResult> {
       try {
-        const tests = await deps.findRelatedTests(cwd, input.file);
-        return { file: input.file, tests: [...tests].sort() };
+        // F-003 (flow 234 review, MAJOR) / AC2: the pure computation plus the
+        // relatedness lookup over it (both already exported by
+        // testing/service.ts) instead of the old `findRelatedTests` wrapper —
+        // that wrapper computed the SAME context internally but only
+        // returned `tests`, discarding `status`/`incompleteReasons` and,
+        // when a caller separately needed the context, forcing a second
+        // tree walk. One walk, and the incomplete status now reaches this
+        // boundary instead of silently reading as a clean empty result.
+        const context = await deps.computeTestingContext(cwd);
+        const tests = await deps.relatedTestsInContext(cwd, context, input.file);
+        return {
+          file: input.file,
+          tests: [...tests].sort(),
+          context: { status: context.status, incompleteReasons: context.incompleteReasons },
+        };
       } catch (cause) {
         return { file: input.file, tests: [], error: errorMessage(cause) };
       }

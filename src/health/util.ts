@@ -1,4 +1,5 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 
@@ -77,14 +78,60 @@ export async function writeRaw(
   return path.relative(cwd, file);
 }
 
+// Flow 234 T26: compatibility wrapper over `listSourceFilesWithReasons` below.
+// Kept returning bare `string[]` (never `throw`s past an unreadable
+// subdirectory, same survival fix as the reasons-carrying form) so existing
+// callers outside this task's file ownership -- `complexity-findings.test.ts`
+// (tests `../metrics/complexity-findings.ts`, not this module) and
+// `detectStatuses` in `./service.ts` (a live "which sources are configured"
+// listing, not a persisted/gate-bearing report; see that call site's own
+// comment) -- keep compiling and keep working unchanged. A caller that only
+// needs the file list and has no findings/gate to attach incompleteness to is
+// not reintroducing AFC-09: it never claimed completeness in the first place.
+// `runHealth` (`./run.ts`), which DOES persist a gated report, uses
+// `listSourceFilesWithReasons` instead so an unreadable subtree cannot read
+// as clean coverage there.
 export async function listSourceFiles(cwd: string, ignorePaths: string[] = []): Promise<string[]> {
-  const results: string[] = [];
-  await walk(cwd, cwd, results);
-  return results.filter((file) => !matchesAnyPattern(file, ignorePaths)).sort();
+  const { files } = await listSourceFilesWithReasons(cwd, ignorePaths);
+  return files;
 }
 
-async function walk(root: string, dir: string, out: string[]): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true });
+// AFC-09-style fix (flow 234 T26), mirroring `listProjectFiles`/`walk` in
+// `src/testing/service.ts` (fixed for the identical defect class one module
+// over, T21): `walk` used to call `readdir` with no guard, so a subdirectory
+// it could not read (e.g. permission denied) threw uncaught and crashed the
+// entire health run. The obvious fix -- catch and keep walking -- is not
+// enough on its own: it would make an unreadable subtree indistinguishable
+// from a subtree with no source files, and a caller could then report clean
+// coverage over a tree it never actually saw. So this carries the unreadable
+// paths and their reasons out to the caller, exactly the shape
+// `listProjectFiles` returns, for the caller to decide what "incomplete"
+// means for it (`./run.ts` turns this into a blocking finding).
+export async function listSourceFilesWithReasons(
+  cwd: string,
+  ignorePaths: string[] = [],
+): Promise<{ files: string[]; incompleteReasons: string[] }> {
+  const results: string[] = [];
+  const incompleteReasons: string[] = [];
+  await walk(cwd, cwd, results, incompleteReasons);
+  return {
+    files: results.filter((file) => !matchesAnyPattern(file, ignorePaths)).sort(),
+    incompleteReasons,
+  };
+}
+
+async function walk(root: string, dir: string, out: string[], incompleteReasons: string[]): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = (await readdir(dir, { withFileTypes: true })) as Dirent[];
+  } catch (error) {
+    // Record why and keep walking the rest of the tree; the caller is
+    // responsible for treating this as incomplete rather than clean.
+    incompleteReasons.push(
+      `${path.relative(root, dir) || "."}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
   for (const entry of entries) {
     if (entry.name.startsWith(".") && entry.name !== ".") {
       if (entry.isDirectory() && !IGNORED_DIRS.has(entry.name)) {
@@ -97,7 +144,7 @@ async function walk(root: string, dir: string, out: string[]): Promise<void> {
       if (IGNORED_DIRS.has(entry.name)) {
         continue;
       }
-      await walk(root, abs, out);
+      await walk(root, abs, out, incompleteReasons);
     } else if (entry.isFile() && SOURCE_EXT.has(path.extname(entry.name))) {
       out.push(path.relative(root, abs));
     }
