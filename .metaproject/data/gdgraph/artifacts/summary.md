@@ -2,12 +2,12 @@
 
 ## Stats
 
-- Source files indexed: 1245
+- Source files indexed: 1264
 - Imported asset files indexed: 4
-- Total nodes: 1249
-- Edges: 3754
-- Import edges: 3692
-- Asset edges: 9
+- Total nodes: 1268
+- Edges: 3798
+- Import edges: 3735
+- Asset edges: 10
 - Unresolved imports: 53
 - Import resolution: 98.6%
 - Skipped generated/static directories: 10
@@ -17,9 +17,9 @@
 | Module | Source Files |
 |---|---:|
 | harness | 257 |
-| commands | 130 |
+| commands | 131 |
 | tui | 100 |
-| lib | 92 |
+| lib | 95 |
 | sac | 55 |
 | health | 51 |
 | wiki | 51 |
@@ -28,13 +28,13 @@
 | memory | 43 |
 | gdgraph | 42 |
 | gdskills | 40 |
+| metrics | 38 |
 | flow | 34 |
 | review | 30 |
-| metrics | 29 |
 | mcp | 26 |
 | vscode-extension | 22 |
+| ctx | 21 |
 | fixtures | 19 |
-| ctx | 17 |
 | session | 16 |
 
 ## Unresolved By Type
