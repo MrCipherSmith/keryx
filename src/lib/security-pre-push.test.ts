@@ -95,6 +95,41 @@ test("rendered security hook reads stdin and handles the new-ref (zero-sha) case
   expect(hook).toContain("security status >/dev/null 2>&1");
 });
 
+// ---------------------------------------------------------------------------
+// T76 F-001/F-004: the hook's own shell comments are written verbatim into
+// every scaffolded project's `.git/hooks/pre-push` (`init.ts:1369`,
+// `update.ts`'s equivalent call). They must name every mode that actually
+// blocks (T61/T65 made `gateway` block identically to `enforced`/`ci`), and
+// must not narrow the block condition to "secret/critical" when
+// `computeGate` (`resolve.ts:132-161`) blocks on any category's `block`
+// action, any category at/above the configured severity, or any category's
+// `require-approval` action.
+// ---------------------------------------------------------------------------
+
+test("rendered pre-push hook names gateway alongside enforced/ci as a blocking mode, in both comments", () => {
+  const hook = renderSecurityPrePushHook();
+
+  // Header comment: the three blocking modes named together, not split across
+  // a wrapped line (a line-based sweep for "enforced/ci without gateway on
+  // the same line" would otherwise still flag a wrapped split as stale).
+  expect(hook).toContain("'enforced'/'ci'/'gateway' exit non-zero");
+  expect(hook).not.toMatch(/'enforced'\/'ci'\s+exit non-zero/);
+
+  // Per-file loop comment.
+  expect(hook).toContain("# enforced/ci/gateway mode blocked on this file.");
+  expect(hook).not.toContain("# enforced/ci mode blocked on this file.");
+});
+
+test("rendered pre-push hook does not narrow the block condition to secret/critical", () => {
+  const hook = renderSecurityPrePushHook();
+
+  // computeGate blocks on any category's block action or severity, and on
+  // any category's require-approval action -- not only a secret/critical
+  // finding.
+  expect(hook).not.toContain("(secret/critical)");
+  expect(hook).toContain("failing or needs-approval gate");
+});
+
 test("security hook scans every commit of a first push, not just HEAD", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-prepush-scan-"));
   try {

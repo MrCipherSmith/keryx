@@ -120,7 +120,7 @@ describe("registration", () => {
   });
 
   test("stores an absolute path even when given a relative one", () => {
-    const root = makeProject("alpha");
+    makeProject("alpha");
     const previous = process.cwd();
     process.chdir(workspace);
     try {

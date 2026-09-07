@@ -1,0 +1,30 @@
+{
+  "contractVersion": "1.0.0",
+  "scope": {
+    "projectId": "demo-project",
+    "checkoutId": "demo-checkout",
+    "workspaceId": "demo-workspace",
+    "taskId": "demo-task"
+  },
+  "workspaceId": "demo-workspace",
+  "proposalId": "proposal-demo",
+  "proposalRevision": "r2",
+  "previewBinding": "digest-preview-demo",
+  "idempotencyKey": "request-demo-1",
+  "changes": [
+    {
+      "owner": "wiki",
+      "targetRef": "wiki:demo-policy",
+      "operation": "replace",
+      "expectedVersion": "v7",
+      "content": "Обновление согласовано. Реализация отложена до отдельного поручения.",
+      "evidence": [
+        {
+          "ref": "wiki:demo-policy",
+          "version": "v7",
+          "fragment": "section:dependency-policy#lines=3-5"
+        }
+      ]
+    }
+  ]
+}

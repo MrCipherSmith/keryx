@@ -137,7 +137,7 @@ function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status
   const mark = isSelected ? ">" : " ";
   const label = runtimeLabel(runtime.id).padEnd(20);
   const statusText = runtime.connected ? "● keryx connected" : "○ keryx not connected";
-  let action = "";
+  let action: string;
   if (!isActionable(runtime.id)) {
     action = "  (copy snippet manually)";
   } else if (status.kind === "armed" && status.target.id === runtime.id) {

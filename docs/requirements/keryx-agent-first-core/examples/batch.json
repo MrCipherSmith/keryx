@@ -1,0 +1,35 @@
+{
+  "contractVersion": "1.0.0",
+  "scope": {
+    "projectId": "demo-project",
+    "checkoutId": "demo-checkout",
+    "workspaceId": "demo-workspace",
+    "taskId": "demo-task"
+  },
+  "onFailure": "stop-dependent",
+  "steps": [
+    {
+      "id": "find-code",
+      "operation": "graph.find",
+      "arguments": {
+        "query": "configuration",
+        "maxBytes": 4096
+      },
+      "dependsOn": []
+    },
+    {
+      "id": "find-impact",
+      "operation": "graph.affected",
+      "arguments": {
+        "seed": {
+          "fromStep": "find-code",
+          "pointer": "/result/candidates/0/targetRef"
+        },
+        "maxBytes": 4096
+      },
+      "dependsOn": [
+        "find-code"
+      ]
+    }
+  ]
+}

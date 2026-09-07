@@ -105,6 +105,7 @@ export async function createMcpServer(ctx: McpContext): Promise<SdkServer> {
     return {
       content: [{ type: "text", text: result.text }],
       isError: result.isError,
+      _meta: { "keryx/redaction": result.redaction },
     };
   });
 
@@ -116,6 +117,7 @@ export async function createMcpServer(ctx: McpContext): Promise<SdkServer> {
     const uri = typeof request.params?.uri === "string" ? request.params.uri : "";
     const contents = await dispatchReadResource(ctx, uri);
     return {
+      _meta: { "keryx/redaction": contents.redaction },
       contents: [
         { uri: contents.uri, mimeType: contents.mimeType, text: contents.text },
       ],

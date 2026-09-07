@@ -1,0 +1,85 @@
+{
+  "phase": "COMPLETION",
+  "intent": "analyze",
+  "job_name": "audit-2026-09-06",
+  "context": {
+    "project_dir": "/Users/Goodea/goodea/keryx"
+  },
+  "plan": {
+    "steps": [
+      {
+        "id": "analyze",
+        "type": "analyze",
+        "agent": "issue-analyzer",
+        "depends": [],
+        "status": "completed"
+      },
+      {
+        "id": "context",
+        "type": "context",
+        "agent": "context-collector",
+        "depends": [
+          "analyze"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "report",
+        "type": "report",
+        "agent": "orchestrator",
+        "depends": [
+          "context"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "proposal",
+        "type": "proposal",
+        "agent": "orchestrator",
+        "depends": [
+          "report"
+        ],
+        "status": "skipped"
+      }
+    ]
+  },
+  "documentation": {
+    "job_path": ".metaproject/jobs/audit-2026-09-06",
+    "documents_created": [
+      "analysis.md",
+      "verification-report.md"
+    ]
+  },
+  "metrics": {
+    "steps": [
+      {
+        "step_id": "analyze",
+        "retries": 0,
+        "started_at": "2026-09-05T20:51:31.741Z",
+        "status": "completed",
+        "completed_at": "2026-09-05T21:10:41.937Z",
+        "duration_ms": 1150196
+      },
+      {
+        "step_id": "context",
+        "retries": 0,
+        "completed_at": "2026-09-05T21:04:18.785Z",
+        "status": "completed"
+      },
+      {
+        "step_id": "report",
+        "retries": 0,
+        "completed_at": "2026-09-05T21:10:42.166Z",
+        "status": "completed"
+      },
+      {
+        "step_id": "proposal",
+        "retries": 0,
+        "completed_at": "2026-09-05T21:10:42.341Z",
+        "status": "skipped"
+      }
+    ]
+  },
+  "jobs_root": ".metaproject/jobs",
+  "updated_at": "2026-09-05T21:14:32.660Z"
+}

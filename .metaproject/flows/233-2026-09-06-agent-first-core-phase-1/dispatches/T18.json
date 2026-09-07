@@ -1,0 +1,57 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T18",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix owner identity replacement race",
+    "description": "Pin identities from authorization/canonical resolution across descriptor opening. Root integration probe T17-owner-race-probe.ts currently returns replacement directory data. Add failing regression before code; fix shared contained/descriptor reader so replacing owner root with another REAL directory is refused; also pin target identity before beforeOpen so same-path real-file replacement is refused. Preserve internal symlinks and SAC nofollow semantics. Do not weaken unsupported/FIFO/byte bound behavior. Root independently reruns probe.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "Owner real-directory replacement after resolution is refused without returning replacement data.",
+    "Original target identity survives pre-open hook; regular-file replacement refused.",
+    "Existing87 containment/SAC/interactive tests remain green."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T17-owner-race-probe.ts",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+    "/Users/Goodea/goodea/keryx/src/sac/secure-resource-read.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
+    "Branch codex/agent-first-core; no git/flow/frozen AC/dependencies/package/lock modifications, stats disabled, auto_commit false. No real models/network.",
+    "Explicit target_files ownership only plus same-area focused test files; root owns cross-module integration. No global tests while independent RED work runs.",
+    "Write implementation spec before production; preserve initial RED evidence and add targeted GREEN result. Validate typed report/result and security-check artifacts. Do not review own implementation."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:14:40.077813+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

@@ -136,7 +136,7 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
 
   let status: TestingStatus = "skipped";
   let exitCode: number | null = null;
-  let raw = "";
+  let raw: string;
   // Security-safe copy of the raw output used for everything that flows into the
   // committable report (failures/counts/messages). Redaction is byte-identical
   // when security is disabled or nothing is detected, so normal output is

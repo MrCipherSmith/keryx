@@ -1,0 +1,42 @@
+{
+  "scope": "Actual source CLI subprocesses without provider credentials; isolated cwd/config/cache",
+  "cases": [
+    {
+      "args": [
+        "--help"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "keryxProjectConfigSessionWrites": 0,
+      "bunRuntimeCacheExcluded": true
+    },
+    {
+      "args": [
+        "-h"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "keryxProjectConfigSessionWrites": 0,
+      "bunRuntimeCacheExcluded": true
+    },
+    {
+      "args": [
+        "--provder",
+        "fixture"
+      ],
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "keryxProjectConfigSessionWrites": 0,
+      "bunRuntimeCacheExcluded": true
+    },
+    {
+      "args": [
+        "--provider"
+      ],
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "keryxProjectConfigSessionWrites": 0,
+      "bunRuntimeCacheExcluded": true
+    }
+  ]
+}

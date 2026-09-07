@@ -1,0 +1,52 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T36",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Close the residual serialized-byte and entity-decoding bypasses by canonical structural equivalence",
+    "description": "The first fix for T24 F-002 and F-004 was independently rechecked and found incomplete; this is a deliberate second approach, not a retry of the same one. Three defects to close, regression first. (1) Blocker: byte accountability recognizes strictly less than the floor it stands in for, because it matches sensitive spans as substrings of the raw serialized text without JSON-escape normalization and without the contextual sensitive-field and property-name rules. Five shapes still return original bytes with redaction state none, including a JSON-escaped duplicate member and duplicate members whose surviving value is empty string, null or false, and they reach both the persistence materializer and the MCP tool-output seam. Replace pre-walk span accountability with a decision made after the structural walk: return the original bytes only when they are canonically equivalent to the validated structure, otherwise emit the safe canonical serialization when the structure is safe, and format-unsafe only when it is not. (2) Major, and the same change should remove it: the current adapter refuses a payload whose raw-text span straddles the member separator even though the parsed value has a valid safe representation; the reviewer's example is an object with a public docs URL and an email note, which returns format-unsafe while the identical parsed value returns state redacted. policies.md requires returning the safe part redacted when the operation schema is preserved. (3) Blocker: the character-reference decoder is bounded by digit count and does no whitespace or control stripping before host classification, so zero-padded decimal and hexadecimal references, a tab or newline inside the scheme, and leading whitespace or an encoded tab before the URL still pass with the host intact, reproduced at the transport. Make the decoder and classifier match the grammar a renderer actually applies rather than a fixed digit budget. Write T36-spec.md before coding, then T36-implementation.md and T36-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string.",
+    "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+    "Every shape named in the recheck is closed by a regression that fails before and passes after: the JSON-escaped duplicate member and its fully escaped variant, duplicate members surviving as empty string, null and false, zero-padded decimal and hexadecimal character references, whitespace or control characters inside the scheme, and leading whitespace or an encoded tab before the URL. The payload with a public docs URL beside an email note is accepted as redacted rather than refused. No previously passing case regresses."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/exfil.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/detect/secrets.ts",
+    "/Users/Goodea/goodea/keryx/src/security/redact.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/redact-seam.ts",
+    "/Users/Goodea/goodea/keryx/src/security/persistence-sinks.test.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/security/output-validation.ts and its test, src/security/detect/exfil.ts and its test, src/mcp/redact-seam.ts, and only the validateSerializedOutput helper region at the top of src/security/service.ts. Do not touch guard.ts, path-scan.ts, the scan and runGate regions of service.ts, schemas.ts, src/mcp/dispatch.ts, src/commands/*, flow files, package.json or the lockfile. Other workers own those concurrently.",
+    "Do not import the validator directly into src/mcp/redact-seam.ts: the existing src/mcp/boundary.test.ts forbids it. Go through the ../security/service facade.",
+    "Keep the approved T19 contract: constant format-unsafe text, fixed reason tokens carrying no rejected value or fingerprint, byte-for-byte preservation of safe scalars, rejection of a numeric value under a sensitive credential key, and an own undefined member as format-unsafe.",
+    "No git state changes, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic credentials only; never write a real secret into an artifact.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:45:00+00:00", "created_by": "flow-orchestrator" }
+}

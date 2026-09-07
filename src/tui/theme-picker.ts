@@ -256,6 +256,7 @@ export function presentThemePicker(
 ): ModalHandle | undefined {
   let selected: ThemeId = options.current;
   let applied = false;
+  // eslint-disable-next-line prefer-const -- Assigned after modal setup so synchronously invoked callbacks safely observe undefined instead of a const TDZ.
   let handle: ModalHandle | undefined;
   let listBox: BoxLike | undefined;
   let previewBox: BoxLike | undefined;

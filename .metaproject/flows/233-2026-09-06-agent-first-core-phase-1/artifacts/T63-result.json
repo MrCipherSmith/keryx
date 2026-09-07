@@ -1,0 +1,230 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T63",
+  "dispatch_id": "233-T63-task-implementer-exfil-t53-findings",
+  "status": "DONE",
+  "summary": "Closed T53's four findings against the auto-fetch floor (src/security/detect/exfil.ts, src/security/detect/exfil.test.ts only). All four reproduced against the current tree before acting. F-001 (minor): base branch comment and a dedicated remediation string now disclose that a masked <base href> re-points the whole document, not one image (T52's <img> asymmetry); and a base finding is now suppressed when the tag sits inside a CLOSED HTML comment or CommonMark fenced code block, bounded so an unterminated delimiter is left eager rather than suppressed, base-only (img/image unchanged). F-002 (info, most consequential): rewrote the two-base sufficiency argument to name resolvedHost's http(s) filter as the fact that actually closes the FILE-state and opaque-path branches, and states that widening resolvedHost invalidates the argument; comment only, two new regression tests pin the fact directly. F-003 (info): readStartTag's doc comment now states both the eager (unterminated tag) and conservative (unterminated quoted value swallows the rest of the fragment) halves of EOF handling; comment only, one new regression test pins the conservative half in this file's own suite. F-004 (info): recorded, as a named decision rather than an incidental lastIndex side effect, that markup inside a quoted attribute value is released unmasked because it is text under any conformant HTML parser; behaviour kept, not reversed, per the dispatch. Every reviewer probe (T53-extract/-resolve/-base/-boundary/-corpus, T42-exfil-attack, T24-recheck2-exfil, T42-charrefs, T42-boundary, T24-recheck2-boundary) re-run unmodified: all matrices byte-identical to T53's recorded numbers except T53-base.ts and T53-corpus.ts, which show the intended, measured improvement (g07/g08 and codeFenceBaseExample no longer flagged; 0/15 hostile still neutralized, unchanged). 87 pass / 0 fail / 629 expect() on the four required focused suites (36/0/331 on exfil.test.ts alone, including 12 new tests). typecheck and eslint clean on both changed files. A RED-before/GREEN-after probe (temporary in-file inversion of the new guard, restored to a byte-identical file) confirmed 3 of the 12 new tests fail without the fix.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T53-extract.ts 88 cases 0 bypasses (identical to T53); T53-resolve.ts 615 resolutions 0 bypasses 0 false positives (identical); T42-exfil-attack.ts 42 cases 0/0; T24-recheck2-exfil.ts 48 cases 0/0; T42-charrefs.ts 240 cases 0 bypasses; p.password-key still gives secrets.sensitive-field via the persistence-sinks suite; ctlPublicLink stays state=none, byte-identical at all boundaries (T42-boundary.ts, T53-boundary.ts)."
+    },
+    {
+      "criterion": "Every argument recorded in the module is true for the reason it states, and any argument that depends on another part of the code says so",
+      "status": "met",
+      "evidence": "F-002: the sufficiency comment now names resolvedHost's http(s) filter as the load-bearing fact and states the dependency (widening resolvedHost past http(s) invalidates the argument); pinned by two new regression tests (file:/ws:/wss:/ftp: destinations stay unflagged under either base pair). F-003: readStartTag's comment now states both EOF halves and cites the measurement (a conformant tokenizer emits no element for the unterminated-quoted-value case either); pinned by one new regression test. F-004: recorded as a named decision at the lastIndex line and in the loop's header, with its premise (conformant-tokenizer threat model) stated rather than left implicit."
+    },
+    {
+      "criterion": "If behaviour changes for the base element in inert contexts, the fifth review's measurements still hold: 42/48-case matrices at 0 bypasses/0 FP, the character-reference matrix unchanged, boundary rows for neighbouring repairs unchanged",
+      "status": "met",
+      "evidence": "Behaviour did change (F-001b, base-only, bounded to closed comment/fence spans). T42-exfil-attack.ts (42 cases) 0/0; T24-recheck2-exfil.ts (48 cases) 0/0; T42-charrefs.ts (240 cases) identical absentButUrlSyntax:[] and 0 bypasses; T42-boundary.ts ROW 1 and T24-recheck2-boundary.ts (28 cases) both byte-identical to T53's numbers, including ctlPublicLink and every reason token. T53-boundary.ts (19 hostile classes incl. non-base neighbours) hostileLeakingAtAnyBoundary:0, unchanged."
+    },
+    {
+      "criterion": "No blocker or major introduced; every finding either reproduced-and-fixed or explicitly decided",
+      "status": "met",
+      "evidence": "All four T53 findings verified reproducible before acting (T63-spec.md, verification section). No new blocker/major found. Item 4 explicitly decided KEEP with reasoning recorded, per the dispatch's own framing (\"needs a decision rather than a sentence\") rather than silently reversed or silently left undocumented."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T63-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Verification of all four T53 findings against the current tree, the decision for each (with reasoning), the planned code and test changes, and the verification plan."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T63-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-item disposition (reproduced/changed/measured), files changed with end-state hashes, before/after table for every reviewer probe with raw log paths, RED/GREEN regression evidence, concerns, routing audit."
+    },
+    {
+      "path": "src/security/detect/exfil.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Detector source. Comment corrections (F-002, F-003, F-004) plus the base-only inert-span suppression and per-policy remediation text (F-001).",
+      "hash": "4ec5a9244fc7b6998ebf60b5c04da957785f3b23e457eebb0ee59b299f5b1691"
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "12 new regression tests appended for F-001/F-002/F-003; no existing test modified or removed.",
+      "hash": "6732d06d6063e9ba67e82984c4fe99f0b9af983da7ab02789ebc6ba3517d3339"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-after-T53-extract.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T53-extract.ts re-run after: 88 cases, 0 bypasses, 14 over-approximations, identical id set to T53."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-after-T53-resolve.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T53-resolve.ts re-run after: 41x15=615 resolutions, 0 bypasses, 0 false positives, identical to T53."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-after-T53-base.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T53-base.ts re-run after: hostileNotNeutralized 0/15 unchanged; benignFlaggedIds shrank from [g05,g06,g07,g08] to [g05,g06] - the measured effect of F-001b."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-after-T53-boundary.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T53-boundary.ts re-run after: hostileLeakingAtAnyBoundary 0/19, benignNotByteIdenticalIds [ctlCdnBaseDoc], both identical to T53."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-after-T53-corpus.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T53-corpus.ts re-run after: part B codeFenceBaseExample no longer flagged; part A no benign repository file gained a base-href-exfil finding."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-red-probe.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "RED probe: 3 of the 12 new tests fail when the new base-inert-span guard is temporarily disabled in-file (no git operation; file hash restored identical)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T63-green-final.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "GREEN after restoring the guard: 36 pass, 0 fail on exfil.test.ts."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T16-55-30-741Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Required focused suites via bun src/cli.ts ctx run: exfil.test.ts, output-validation.test.ts, structural-redaction.test.ts, persistence-sinks.test.ts -> 87 pass, 0 fail, 629 expect()."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/security/detect/exfil.ts", "change": "modified" },
+    { "path": "src/security/detect/exfil.test.ts", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "T53#F-001",
+      "global_id": "T53-review#F-001",
+      "reviewer": "review-security-code",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "src/security/detect/exfil.ts:726-741 (blast-radius comment), :17-26 (header pointer), :322-337 (BASE_REMEDIATION), :539-620 (nonRenderedSpans/isInNonRenderedSpan), :742-758 (guard applied); T53-base.ts re-run: benignFlaggedIds [g05,g06,g07,g08] -> [g05,g06]; T53-corpus.ts part B: codeFenceBaseExample no longer flagged."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T53-base.ts and T53-corpus.ts (unmodified reviewer probes) re-run before and after; RED/GREEN probe on 3 new tests; bun test src/security/detect/exfil.test.ts 36 pass 0 fail.",
+        "verifier": "task-implementer"
+      },
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "line": 726,
+      "symbol": "detectExfil",
+      "problem": "The <base href> class did not disclose that a false positive is a whole-document effect (unlike <img src>'s one-image cost), and inherited the extractor's non-element-context over-approximation for comment/fenced-code content, which the corpus could not exercise because the repository contains no benign <base href> at all.",
+      "impact": "No bypass; the direction was toward over-flagging. A benign <base href> quoted in documentation (a markdown fence or an HTML comment) was masked, silently changing every relative URL's resolution in that document.",
+      "suggested_fix": "State the whole-document effect in the branch's comment and remediation string; decide whether the class should still fire inside a span no renderer parses as markup.",
+      "evidence": "T53-base.ts g07.cdnBaseInFence and g08.cdnBaseInComment no longer flagged after the fix; g05/g06 (not comment/fence cases) still flagged, unchanged; hostileNotNeutralizedIds stayed []. T53-corpus.ts part B: codeFenceBaseExample removed from flaggedIds.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:base-href-class-blast-radius-and-non-element-contexts",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    },
+    {
+      "id": "T53#F-002",
+      "global_id": "T53-review#F-002",
+      "reviewer": "review-security-code",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "src/security/detect/exfil.ts:229-254 (corrected comment); two new regression tests in exfil.test.ts pinning the file:/ws:/wss:/ftp: -> resolvedHost-filter fact directly."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T53-resolve.ts (unmodified) re-run: 615 resolutions, 0 bypasses, 0 false positives, identical to T53; new tests pass."
+      },
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 229,
+      "symbol": "SYNTHETIC_BASE_PAIRS",
+      "problem": "The sufficiency argument named only the scheme-equality predicate and did not name resolvedHost's http(s) filter as the fact that makes the FILE state and the opaque-path branch harmless, so the argument would silently stop being true if resolvedHost's filter widened.",
+      "impact": "None today (measured, 0 bypasses across 615 resolutions); risk is a future maintainer deriving base-pair sufficiency from a comment that omits its own dependency.",
+      "suggested_fix": "State the two-part reason: scheme-equality coverage from the pairs, plus resolvedHost's protocol filter closing the FILE/opaque-path branches; name the widening consequence.",
+      "evidence": "T53-resolve.ts unchanged: {destinations:41, rendererBases:15, bypasses:0, falsePositives:0}.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:two-pair-sufficiency-argument-incomplete",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    },
+    {
+      "id": "T53#F-003",
+      "global_id": "T53-review#F-003",
+      "reviewer": "review-logic",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "src/security/detect/exfil.ts:433-449 (corrected comment); one new regression test in exfil.test.ts pinning the unterminated-quoted-value-swallows-the-rest behaviour."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T53-extract.ts (unmodified) re-run: 88 cases, 0 bypasses, identical overApproximationIds (14) to T53, including y01/y02 renderer=false detector=false."
+      },
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 433,
+      "symbol": "readStartTag",
+      "problem": "The EOF-in-tag justification was stated one-directionally (eager half only); the same code path's conservative half (unterminated quoted value swallows the rest of the fragment) was unstated, and the eager-half premise would, read literally, argue for the opposite treatment of that half.",
+      "impact": "None measured; behaviour is faithful to a conformant tokenizer. The finding was about the completeness of the argument, not the behaviour.",
+      "suggested_fix": "State both halves in the doc comment and cite the measurement that makes the conservative half acceptable.",
+      "evidence": "T53-extract.ts y01.unterminatedSwallows, y02.unterminatedThenTag: renderer=false detector=false, unchanged.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:eof-in-tag-justification-one-directional",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "T53#F-004",
+      "global_id": "T53-review#F-004",
+      "reviewer": "review-security-code",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "src/security/detect/exfil.ts:708-721: decision recorded with its premise (conformant-tokenizer threat model) at the HTML_START_TAG.lastIndex line; behaviour kept, not reversed, per the dispatch's own instruction to decide rather than silently pick a side."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Existing test 'tokenizer-faithful attribute scanning adds no false positives' (unmodified) still passes; T53-extract.ts s14/b10 unchanged."
+      },
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 708,
+      "symbol": "detectExfil",
+      "problem": "Releasing markup inside a quoted attribute value unmasked was an incidental consequence of the lastIndex resumption line rather than a recorded decision, even though it is the one point where this floor trusts the reader's parser instead of assuming the worst.",
+      "impact": "None demonstrated against a conformant renderer; recorded as a decision rather than reversed, matching the dispatch's framing that this item needs a decision.",
+      "suggested_fix": "Record it as a decision with its premise named.",
+      "evidence": "src/security/detect/exfil.ts:708-721 now states the decision and its premise explicitly.",
+      "confidence": "medium",
+      "dedupe_key": "afc15:exfil:markup-in-value-released-on-parser-conformance",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T17:01:51Z"
+}

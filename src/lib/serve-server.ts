@@ -36,7 +36,7 @@ import {
 import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
 import { AuthFailureThrottle } from "./serve-throttle";
-import { isServerFault, isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
+import { isServerFault, readTurnEvents, readTurnRecord } from "./serve-turn-store";
 import {
   resolveProject,
   type SubmitOutcome,

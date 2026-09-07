@@ -422,7 +422,7 @@ export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string
   { prefix: "rules/entrypoints/", producedBy: "keryx rules distill" },
 ];
 
-const PATH_REFERENCE = /(?:^|[\s"'`(\[])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@-]*[\w.@-])/g;
+const PATH_REFERENCE = /(?:^|[\s"'`([])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@-]*[\w.@-])/g;
 
 /** Normalise an installed-layout path to its bundled-relative form. */
 function normaliseReferencePath(reference: string): string | undefined {

@@ -1,0 +1,55 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16-recheck",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent final tool-call and model-round budget review",
+    "description": "T16 previously found max_tool_calls miswired, then model-round ceiling exceeded by hidden wrapup. Root fixed child tool cap; previous reviewer authored T19 round fix so a different independent reviewer is mandatory. Read T19 spec/report and approved M10. Stage1 verify inclusive every-provider-request ceiling, maxRounds0, interactive reset, no hidden wrapup; actual successful tool invokes across batches, child max_tool_calls distinct from max_rounds, typed errors and finite scripts. Stage2 only after Stage1 passes. Review current code bounded deterministic fake providers only.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Tool/resource/error/SDK output contains no synthetic secret and carries safe metadata without altering operation JSON schema.",
+    "Safe numeric values/IDs retained; recognized secrets cannot bypass by fieldkey; unsafe numeric/schema returns format-unsafe.",
+    "Disabled advisory settings do not disable mandatory floor; persistence materializer applies it too; plain publiclinks allowed while autofetchexfil blocked."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/harness/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tools/spawn-subagent.ts",
+    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx, explicitly read .metaproject/index.md first. Local review-logic fully, wiki/testing context, gdgraph/ctx; code search only keryx ctx rg. Known paths in dispatch may require graph resolution if unavailable.",
+    "Read-only production; write T16-final-review/result/probes only in flow232 artifacts. No flow/git/deps/global/network/model API actions. Stats off. Independent author: you did not implement these changes.",
+    "Root/otherworkers security files only; budget source stable. Stage1 before Stage2; preserve original review evidence. Bounded synthetic providers only."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:06:15.356975+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

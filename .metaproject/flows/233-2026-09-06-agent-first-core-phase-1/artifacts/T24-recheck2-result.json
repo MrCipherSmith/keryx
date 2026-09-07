@@ -1,0 +1,220 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T24-recheck2-2026-09-06",
+  "dispatch_id": "T24-recheck2",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Second recheck of the structural output boundary on codex/agent-first-core. Three of the four original blockers (F-001 secret property names, F-002 duplicate serialized members, F-003 $ref siblings) are closed at the pure validator, the real MCP transport and the persistence materializer, with every approved-contract control intact and no new false rejection (0 rejections over 2041 repository JSON files). The second approach to F-002 - canonical structural equivalence decided after the structural walk - is sound: no payload could be constructed whose original bytes are returned while carrying content the walk did not see, and returning the safe canonical form with a redacted state is what policies.md requires. F-004 remains open: a 48-case matrix adjudicated by a WHATWG URL oracle found 17 renderer-equivalent auto-fetch URLs still released unchanged, eight of them reproduced at dispatchCallTool with isError:false and redaction.state none and three of them byte-identical through prepareOutputForPersistence. Two further defects in the new rule: canonical re-serialization silently rounds an out-of-double-range integer literal and prepareOutputForPersistence drops the only signal (major), and a safe payload spelling non-ASCII with backslash-u escapes is rewritten and mislabelled redacted (minor, 22 of 2041 repository files). Of the nine newly committed regressions, eight genuinely pin their defect - established with seven single-line inverses of the current code rather than a reconstruction - and the ninth is an acceptance control that fails under no mutation in the class.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string",
+      "status": "met",
+      "evidence": "T24-recheck2-boundary.ts: p.secret-key / p.deep-secret-key / p.email-key isError:true, state format-unsafe, reasons [sensitive-property-name], constant text, secret absent from JSON.stringify(result); p.throws-secret isError:true, state redacted, secret absent; p.safe-scalars and p.ref-defs-sibling pass with state none; p.password-numeric format-unsafe / sensitive-numeric-field and persistence.numericUnderCredentialKey refused. Advisory redaction was disabled (redactToolOutput:false) for every case."
+    },
+    {
+      "criterion": "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "partial",
+      "evidence": "No field-name bypass survives at the validator or the transport (seven sensitive-key shapes fail closed; safe digit, numeric-string, path, env and public-URL keys pass byte-identical). requiredAllowedAndRedacted returns {\"metric\":\"[REDACTED:secret]\",\"count\":123456789} with the 9-digit count intact. p.public-link is byte-identical with state none, alone and beside a redacted sibling. FAILS on auto-fetch: 17 renderer-equivalent URLs reach the client unflagged (T24R2#F-001)."
+    },
+    {
+      "criterion": "All four original blockers closed by evidence executed by this reviewer, at the pure validator and the public boundary, with no new bypass and no new false rejection",
+      "status": "not_met",
+      "evidence": "F-001, F-002 and F-003 verified closed at both layers by T24-recheck2-validator.ts and T24-recheck2-boundary.ts. F-004 is not closed: T24-recheck2-exfil.ts reports 17 bypasses with 0 false positives, reproduced at dispatchCallTool, prepareOutputForPersistence and redactToolOutput. No new false rejection was found (0 of 2041 repository JSON files rejected), but the new rule introduces a silent numeric-precision change (T24R2#F-002) and a false redacted state on reserialized safe payloads (T24R2#F-003)."
+    },
+    {
+      "criterion": "Stage 1 rows 1-6 verified with this reviewer's own probes",
+      "status": "partial",
+      "evidence": "Rows 1, 2, 3, 5 MET; row 6 MET for 8 of 9 regressions; row 4 NOT MET. Stage 2 (code quality) was not started, as required when Stage 1 does not pass."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full second-recheck report: scope with start/end file hashes, Stage 1 table for rows 1-6, four findings, confirmed clean areas, evidence hashes and routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-exfil.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "48-case adversarial matrix against the new character-reference decoder and URL classifier, each case adjudicated by a WHATWG URL oracle. 17 bypasses, 0 false positives.",
+      "hash": "cf003cd3de078f9c399c7f7105c521f0eacab47f0eaa52b5cfe0afeab21b99be"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-validator.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pure-validator probes for rows 1, 2, 3 and 5: property-name closure and its controls, 14 duplicate-member shapes plus attacks on canonical re-serialization itself, ten $ref-sibling shapes and their controls, and the false-rejection parity check.",
+      "hash": "2a96ce74aca4c64c461c7edd729ddfae3e789f38d60fda34c652f12430f6bdff"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The same rows at dispatchCallTool, prepareOutputForPersistence and redactToolOutput, with advisory redaction disabled.",
+      "hash": "7fa37ea14c8be163b8ad7a3ebd8ddd569bcc722059775e9835ab829dd5b0b264"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-repojson.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Sweep of all 2041 repository JSON files through the real adapter, classifying byte-preserved / rejected / normalized-only / redacted-for-content.",
+      "hash": "e316c0531278c8b32634e8edce20d6540ee748eb29005ef81da83b8cd515e3b2"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-mutations.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Seven single-line inverses of the current code applied one at a time in a throwaway rsync copy, to establish which committed regression fails under which specific defect. Never touches the real checkout.",
+      "hash": "0e1bc6d6f50f10da056b0025c749fd75f7f12bb9208289059f0cd105b887e059"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This structured result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T24R2#F-001",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 144,
+      "symbol": "exfilHost",
+      "problem": "The auto-fetch classifier recognizes only the literal authority spellings https?:// and //, uses a 26-entry named-character-reference table that omits Tab and NewLine, matches only <img> and not <image>, and applies its new whitespace stripping after extraction regexes that already truncated the destination at the first whitespace. Seventeen URL spellings that a conformant WHATWG URL parser resolves to the attacker host are therefore released unchanged.",
+      "impact": "The mandatory no-auto-fetch floor is bypassed for the same class T24 F-004 and T24R#F-002 recorded. The payload reaches the MCP client inside operation JSON with isError:false and redaction.state none, and reaches durable sinks byte-identical through prepareOutputForPersistence, so rendering it is a zero-click request to an attacker host carrying attacker-encoded context. Advisory redaction was disabled in the probe, so the mandatory floor is what failed.",
+      "suggested_fix": "Resolve the decoded, whitespace-stripped candidate with the platform URL parser against a synthetic same-origin base and treat any differing origin as external, instead of pattern-matching the authority; let the whitespace-bearing remainder reach considerUrl by widening the extraction regexes; match <image> alongside <img>; add the HTML5 named references whose decoded character the URL parser removes. Add one regression per class in exfil.test.ts and one at the transport, keeping the four benign controls.",
+      "evidence": "T24-recheck2-exfil.ts (48 cases, each adjudicated by a WHATWG URL oracle) reports 17 bypasses and 0 false positives; T24-recheck2-boundary.ts reproduces eight of them at dispatchCallTool as isError:false, state none, attacker host present, and three of them as allowed:true byte-identical through prepareOutputForPersistence and redactToolOutput. Raw .metaproject/data/gdctx/raw/2026-09-06T14-16-23-620Z_run.log and 2026-09-06T14-20-51-242Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:renderer-equivalent-url-classes",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:144",
+          "src/security/detect/exfil.ts:34",
+          "src/security/detect/exfil.ts:135",
+          "src/security/detect/exfil.ts:164",
+          "src/security/detect/exfil.ts:192",
+          "src/security/detect/exfil.ts:196",
+          "src/security/detect/exfil.ts:198",
+          "src/security/detect/exfil.ts:201",
+          "src/security/detect/exfil.ts:289"
+        ],
+        "enumeration_method": "Complete read of src/security/detect/exfil.ts, then a 48-case matrix crossing the two axes the code exposes - the character-reference grammar (decimal/hex/named, case, optional semicolon, zero padding, double encoding) and the URL syntax the WHATWG parser accepts or removes (tab/LF/CR, leading C0-or-space, backslash-for-slash, unbounded slash runs, userinfo) - against every extraction surface (INLINE, REFERENCE_DEF, HTML_IMG, HTML_IMG_SRCSET, <image>), each paired with a benign control and adjudicated by a WHATWG URL oracle rather than by inspection."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T24R2#F-002",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/security/output-validation.ts",
+      "line": 563,
+      "symbol": "validateSerializedContentForTransport",
+      "problem": "When the bytes are not canonically equivalent to the validated structure the canonical re-serialization is substituted, but for an integer literal outside IEEE-754 double range that re-serialization is lossy: a 20-digit integer is returned rounded. The rule's stated guarantee that only spelling is normalized does not hold for that case, and negative zero becomes zero.",
+      "impact": "Integrity rather than confidentiality: a durable sink writes a corrupted identifier (snowflake id, int64 key, epoch in nanoseconds). prepareOutputForPersistence returns only allowed and content and discards redaction, so every persistence caller receives the altered value with no signal at all; at the MCP transport the only signal is the reason token serialized-content-normalized, which names a spelling change, not a value change.",
+      "suggested_fix": "Compare the token stream rather than the final string, and treat a numeric literal whose re-serialization differs as data loss: either preserve the original bytes for that case (a whitespace- or number-literal-only difference hides no member) or return format-unsafe with a distinct fixed token. At minimum propagate redaction through prepareOutputForPersistence so a persistence caller can see that its bytes were rewritten.",
+      "evidence": "T24-recheck2-validator.ts f002.bigIntegerPrecision returns ok:true, state redacted, reasons [serialized-content-normalized] with the integer rounded; f002.negativeZero turns -0 into 0. Raw .metaproject/data/gdctx/raw/2026-09-06T14-18-12-601Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc02:serialized-json:canonicalisation-precision-loss",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.ts:563",
+          "src/security/output-validation.ts:534",
+          "src/security/service.ts:47",
+          "src/security/guard.ts:59",
+          "src/mcp/redact-seam.ts:31",
+          "src/memory/write.ts",
+          "src/wiki/service.ts",
+          "src/wiki/enrich.ts",
+          "src/sac/wiki-owner-writer.ts",
+          "src/sac/session-wrap-up.ts",
+          "src/gdskills/project-skills.ts",
+          "src/metrics/lifecycle.ts"
+        ],
+        "enumeration_method": "ctx rg over validateSerializedOutput|validateSerializedContentForTransport|prepareOutputForPersistence across src enumerates the single adapter, its two wrappers and every durable-sink consumer against the current tree; the input class was enumerated by replaying every way JSON.stringify(JSON.parse(x)) can differ from x outside whitespace - number literal spelling, number literal precision, negative zero, string escape spelling, object key ordering - as a 9-case matrix, of which precision and negative zero are the only value-altering members."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T24R2#F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/security/output-validation.ts",
+      "line": 566,
+      "symbol": "SERIALIZED_NORMALIZED_REASON",
+      "problem": "A serialized payload whose strings spell non-ASCII characters with backslash-u escapes, or whose numbers are spelled 1.0, is not canonically equivalent to its parsed structure, so its bytes are rewritten and the result carries state redacted even though nothing sensitive is present and nothing was removed. Producers that do this by default include Python json.dumps with ensure_ascii and Go encoding/json.",
+      "impact": "No disclosure and no rejection. A caller that branches on redaction.state (a warning banner, an audit counter, a was-anything-removed check) is told a redaction occurred when none did, and durable artifacts are silently reformatted on every guarded write, perturbing diffs and content hashes. 22 of 2041 real repository JSON files are affected.",
+      "suggested_fix": "Split the signal: keep state none when the difference is confined to escape spelling and value-preserving number spelling, or introduce a third non-redaction reason such as serialized-content-reserialized so a caller can distinguish removal from reprinting. Amend the T36 note that reads as a byte-preservation claim but measured only the absence of rejections.",
+      "evidence": "T24-recheck2-repojson.ts over the whole checkout reports filesScanned 2041, bytePreserved 1969, rejected 0, normalizedOnly 22. Diffing the whitespace-stripped content against the canonical serialization on those files shows the divergence is a backslash-u escape for an em-dash or curly quote, and 1.0 for 1; the parsed value is unchanged in every sampled case. Raw .metaproject/data/gdctx/raw/2026-09-06T14-19-15-778Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc02:serialized-json:false-redacted-state-on-reserialization",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T24R2#F-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/security/persistence-sinks.test.ts",
+      "line": 108,
+      "symbol": "materializer keeps a metric string beside a long digit run allowed and redacted",
+      "problem": "The ninth committed regression fails under none of seven single-line inverses of the current code, including the literal inverse of the byte-preservation rule the other five persistence tests pin: its payload takes the redacted early-return branch, so that rule never runs on it. It also near-duplicates the pre-existing test at src/security/persistence-sinks.test.ts line 27. T32 disclosed that its failure under their scratch revert was a reconstruction artifact, and that disclosure is confirmed.",
+      "impact": "None on correctness - the test is a valid AC5 control and passes. The risk is only bookkeeping: counting it among the nine closures would leave the next round believing a defect is pinned that is not.",
+      "suggested_fix": "Keep the test and relabel it in the flow record as an acceptance control rather than a regression, and record that the zero-padding and URL-whitespace defects are pinned by src/security/detect/exfil.test.ts only - the T32 transport tests stay green under both of those mutations.",
+      "evidence": "T24-recheck2-mutations.ts, seven single-line mutations in a throwaway rsync copy: baseline 31 pass 0 fail; M1 fails exactly the property-name MCP test; M2 exactly the ref-sibling MCP test; M3 and M4 each independently fail the entity/srcset MCP test; M5 fails exactly the five duplicate-member persistence tests and nothing else; M6 and M7 fail only exfil.test.ts cases.",
+      "confidence": "high",
+      "dedupe_key": "afc02:regressions:ninth-test-is-a-control",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-1",
+      "question": "Should the auto-fetch floor cover auto-fetching HTML elements beyond <img> and <img srcset> - specifically <input type=\"image\" src>, <source srcset> inside <picture>, <iframe src>, <video poster>, <object data> and <embed src>?",
+      "why": "src/security/detect/exfil.ts currently has a matcher for <img> only. Fixing the <image> alias closes a spec-level alias of the same element, but the elements above are separate auto-fetch surfaces with no matcher at all. Whether they are in scope for AFC-15 is a specification decision, not something this review can settle, and it changes how wide the T24R2#F-001 fix must be.",
+      "options": [
+        { "id": "a", "label": "Scope the floor to <img>/<image> and their srcset, and record the other elements as accepted risk", "recommended": false },
+        { "id": "b", "label": "Extend the floor to every auto-fetching element and attribute, with one regression each", "recommended": true }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "stage1_rows_met": 5,
+    "stage1_rows_total": 6,
+    "probe_cases_executed": 178,
+    "exfil_matrix_cases": 48,
+    "exfil_bypasses": 17,
+    "exfil_false_positives": 0,
+    "repo_json_files_swept": 2041,
+    "repo_json_rejections": 0,
+    "repo_json_normalized_only": 22,
+    "mutations_applied": 7,
+    "focused_tests_pass": 58,
+    "focused_tests_fail": 0,
+    "files_changed_in_checkout": 0
+  },
+  "timestamp_utc": "2026-09-06T14:30:00Z"
+}

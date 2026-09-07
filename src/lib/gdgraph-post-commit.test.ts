@@ -63,7 +63,7 @@ async function withRepo(
       stdout: "pipe",
       stderr: "pipe",
     });
-    let calls = "";
+    let calls: string;
     try {
       calls = await readFile(callLog, "utf8");
     } catch {

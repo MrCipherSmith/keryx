@@ -26,7 +26,7 @@ import { describe, expect, test } from "bun:test";
 import { isLoopbackHost } from "./guard";
 import type { OllamaCapabilityGrant, OllamaProviderDeps } from "../provider/ollama/ollama-provider";
 import { OllamaProvider } from "../provider/ollama/ollama-provider";
-import type { NormalizedError, NormalizedEvent, NormalizedRequest, StreamOptions } from "../provider/types";
+import type { NormalizedError, NormalizedEvent, NormalizedRequest } from "../provider/types";
 
 // --- Section 1: isLoopbackHost(host) pure-predicate contract ---------------
 

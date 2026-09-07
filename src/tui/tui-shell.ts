@@ -2183,7 +2183,7 @@ export async function launchTuiAgentShell(opts: {
     // balance endpoint (Z.AI/Cerebras/Groq/…).
     // Default fetch + merged shell auth keys; the active provider resolves
     // from `sel.provider`. Clicking the value re-fetches.
-    const balancePanel = mountBalancePanel(sidebar, otui, r, {
+    mountBalancePanel(sidebar, otui, r, {
       provider: sel.provider,
     });
     // The directory the agent's tools act on — directly under Model, matching the
@@ -2205,7 +2205,6 @@ export async function launchTuiAgentShell(opts: {
       flexShrink: 0,
     });
     sidebar.add(sbWorkspace);
-    let currentWorkspace: WorkspaceInfo | undefined;
     let currentSlates: SlateInspectorItem[] = [];
     /** Rebuild the Workspace panel: no bound workspace ⇒ no rows at all. */
     const paintWorkspaceSidebar = (workspace: WorkspaceInfo | undefined, slates: readonly SlateInspectorItem[]): void => {
@@ -2228,7 +2227,6 @@ export async function launchTuiAgentShell(opts: {
       const dir = slateSession?.dir;
       const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
       if (workspaceId === undefined) {
-        currentWorkspace = undefined;
         currentSlates = [];
         paintWorkspaceSidebar(undefined, currentSlates);
         return;
@@ -2238,7 +2236,6 @@ export async function launchTuiAgentShell(opts: {
         loadInspectorWorkspace(cwd, workspaceId),
         loadInspectorSlates(cwd, workspaceId),
       ]);
-      currentWorkspace = workspace;
       currentSlates = slates;
       paintWorkspaceSidebar(workspace, slates);
     };
@@ -4005,12 +4002,12 @@ export async function launchTuiAgentShell(opts: {
             fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "failed", detail: "error" });
           } finally {
             sideWorkerRunning = false;
-            if (sideQueue.length > 0) {
-              showSideQueueStatus();
-              continue;
-            }
-            clearSideWorkerSlot();
           }
+          if (sideQueue.length > 0) {
+            showSideQueueStatus();
+            continue;
+          }
+          clearSideWorkerSlot();
         }
       })();
     };

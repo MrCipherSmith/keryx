@@ -1,0 +1,50 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T37",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Stop an unusable config or manifest from silently removing the security posture",
+    "description": "An independent recheck found one blocker and confirmed one residual, both the same shape: a four-byte file that parses but is not an object makes the security posture vanish instead of failing closed. Fix them together, regression first. (1) Blocker: isSecurityEnabled dereferences the parsed manifest without an object guard, so a metaproject manifest containing literally null parses, reading its modules throws, securityFlowGate throws although its own documentation says it never throws, and the flow service records the gate as skipped, which is non-blocking, so completion passes with the security gate silently gone. Guard the dereference and make the unreadable-manifest case a blocking posture-unavailable outcome rather than a disappearance. The reviewer enumerated nine unguarded read sites of this shape and noted two sites elsewhere that do guard, which establishes the intended shape; review all of them and fix those on the security posture path, listing any you deliberately leave. (2) The residual, whose previously assumed mitigation the reviewer refuted by measurement: a security config that parses but is not an object takes the defaults, whose mode is advisory, so a destroyed config downgrades enforcement. With a recorded prior mode of ci the outcome is byte-identical to a fresh workspace, and the self-protection path emits a warning and an incident but never a finding, which guardOutput discards. The reviewer named the minimal change: in loadSecurityConfig distinguish an absent config, which keeps defaults, from a present but unusable one, which returns defaults with the mode forced to enforced and a flag saying the config is unreadable, consumed by the two posture-unavailable branches already built. (3) Minor from the same review: the coverage fold that turns a stored pass carrying incomplete coverage into incomplete is neither shared with the report-building path nor exhaustive, so a coverage status of partial still reads as pass. Share it and make it exhaustive. Also correct the two stale statements the reviewer flagged: the guard header still claims advisory never blocks, and the flow-gate catch arms still return skipped while interpolating raw error text. Write T37-spec.md before coding, then T37-implementation.md and T37-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC8: no required failed or incomplete check is relabeled PASS; a security gate that cannot establish its posture blocks rather than disappearing; advisory retains truthful diagnostics; partial acceptance is not full phase completion.",
+    "Policy fold (policies.md): INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; reasons and details are constant and leak-safe, with no raw error text, path or source bytes.",
+    "Each defect is closed by a regression that fails before and passes after: a manifest that parses but is not an object, a config that parses but is not an object with a recorded prior strict mode, and a stored report whose coverage status is neither complete nor incomplete. No previously passing case regresses."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-residual.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-flowfold.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
+    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
+    "/Users/Goodea/goodea/keryx/src/security/config.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/flow/service.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/security/guard.ts and its test, src/security/config.ts, and the runGate, runReport and readLatestReport region of src/security/service.ts, plus additive shapes in src/security/types.ts if a type genuinely requires it. Do not touch src/commands/security.ts: a concurrent worker owns the CLI exit-code folds. Do not touch output-validation.ts, detect/*, path-scan.ts, src/mcp/*, src/flow/service.ts, flow files, package.json or the lockfile.",
+    "src/flow/service.ts is read-only here but decides the outcome: an independent probe confirmed that null, pass, skipped and even a throwing gate all let completion pass, and only fail blocks. Choose your outcomes against that fact, not against the doc comment.",
+    "Preserve the pass-to-incomplete fold inside runScanPath and the truthful non-recursive directory outcome that depends on it.",
+    "Forcing the mode to enforced on an unusable config is a deliberate fail-closed choice; make it observable through a flag rather than by silently rewriting user configuration on disk. Never write to the user's config file.",
+    "No git state changes, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic fixtures under mkdtemp only.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T37-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T14:30:00+00:00", "created_by": "flow-orchestrator" }
+}

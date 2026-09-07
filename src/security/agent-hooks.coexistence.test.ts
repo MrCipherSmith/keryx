@@ -156,7 +156,7 @@ describe("the security and ctx hook installers coexist in one file", () => {
     // A config written before the split has managed groups in `hooks`. They must
     // move, or an uninstall leaves them behind and a re-install duplicates them.
     // Only ours, though: an array a user wrote is theirs.
-    withRoot((root) => {
+    withRoot(() => {
       const { security, ctx } = pair("cursor");
 
       const legacy: Record<string, unknown> = {
@@ -181,7 +181,7 @@ describe("the security and ctx hook installers coexist in one file", () => {
   });
 
   test("a legacy array holding ONLY our entries is removed entirely", () => {
-    withRoot((root) => {
+    withRoot(() => {
       const { security } = pair("windsurf");
       const legacy: Record<string, unknown> = {
         hooks: [
@@ -274,7 +274,7 @@ describe("the combinations the first version of this file did not drive", () => 
     // only the merge call site was driven. Deleting it from `flatStrip` left the
     // whole suite green, so an uninstall would leave the old managed entries
     // behind for a re-install to duplicate.
-    withRoot((root) => {
+    withRoot(() => {
       const { security } = pair("cursor");
       const legacy: Record<string, unknown> = {
         hooks: [
@@ -296,7 +296,7 @@ describe("the combinations the first version of this file did not drive", () => 
   test("a user entry under the NEW key survives a re-install", () => {
     // `...userGroups` in `flatMerge` exists for this and nothing drove it:
     // removing the spread left the suite green.
-    withRoot((root) => {
+    withRoot(() => {
       const { security } = pair("windsurf");
       const withUserEntry: Record<string, unknown> = {
         [SECURITY_HOOKS_KEY]: [{ on: "custom", command: "the operator's own hook" }],
@@ -313,7 +313,7 @@ describe("the combinations the first version of this file did not drive", () => 
     // right `on` — and `flatMerge` appends the managed entries after preserved
     // user groups, so an attacker's line was the one validated. Every other
     // validator in both registries already used `.some` over managed entries.
-    withRoot((root) => {
+    withRoot(() => {
       const { security } = pair("cursor");
       const hostile: Record<string, unknown> = {
         [SECURITY_HOOKS_KEY]: [
@@ -341,7 +341,7 @@ describe("the combinations the first version of this file did not drive", () => 
     // The security side grew a careful migration and ctx did not, so whichever
     // installer ran first still lost everything when the other ran. This is the
     // ordering the first version of this file never drove.
-    withRoot((root) => {
+    withRoot(() => {
       const { ctx, security } = pair("cursor");
       const legacy: Record<string, unknown> = {
         hooks: [{ on: "input", command: "the operator's own hook" }],

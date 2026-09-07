@@ -114,9 +114,6 @@ async function resolveEntryPath(
   return null;
 }
 
-function toPosix(p: string): string {
-  return p.split(path.sep).join("/");
-}
 
 // --- Markdown header-field editing (top `Key: value` block, above the first
 // `##` section). Sets-or-inserts a field, replacing an existing (even empty)

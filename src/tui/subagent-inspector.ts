@@ -114,6 +114,7 @@ export function presentSubagentInspector(
 
   let workNode: TextNode | undefined;
   let metaNode: TextNode | undefined;
+  // eslint-disable-next-line prefer-const -- Assigned after modal setup so synchronously invoked callbacks safely observe undefined instead of a const TDZ.
   let unsubscribe: (() => void) | undefined;
 
   const GONE_TEXT = "Subagent is gone.";

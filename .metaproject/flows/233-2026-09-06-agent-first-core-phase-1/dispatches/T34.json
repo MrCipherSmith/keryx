@@ -1,0 +1,45 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T34",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix per-file scan coverage rows and make the non-recursive directory outcome truthful",
+    "description": "Close the two coverage defects an independent review reproduced in the recursive security scanner, regression first. (1) Per-file outcome rows are keyed on the canonical path rather than on the entry actually encountered, so a directory reported skipped although it was fully traversed, one file appeared twice with contradictory statuses, and the symlink that produced the second row got no row at all. Key each row on the encountered entry while keeping canonical identity for the visited set that stops cycles and duplicate work, so a file reachable by two names is scanned once and still reported once per encountered path with a consistent status. (2) A non-recursive scan of a directory returns coverage complete and gate pass with zero files scanned, even over a directory holding a detectable secret; that is a clean bill of health for a check that never ran. A directory target with recursion disabled must yield an incomplete coverage outcome or a typed error, never a clean pass. The path is latent through the CLI today because --recursive is parsed and then discarded, which is the third thing to fix: make the flag mean what it says, so the reachable API and the CLI agree. Root has already decided the direction: repair the non-recursive path, do not delete it, and do not silently force recursion on. Write T34-spec.md before coding, then T34-implementation.md and T34-result.json. Do not review your own fix.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+    "Policy (policies.md, security scan): the report contains per-file scanned/skipped/failed outcomes with reasons that match what actually happened to each encountered entry, no contradictory duplicate rows, and no closed name exposed to an unauthorized caller; findings are preserved independently of coverage.",
+    "A directory target scanned without recursion never reports a clean pass over zero scanned files; the CLI flag and the exported API agree on what recursion means; the three existing recursive-scan tests and the focused security selection stay green."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/report.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Ownership: src/security/path-scan.ts, src/commands/security.ts, src/commands/security-recursive-scan.test.ts, and additive scan-shape changes in src/security/types.ts and src/security/report.ts only if a type or renderer genuinely requires it. Do not touch src/security/service.ts, guard.ts, config.ts, output-validation.ts, detect/*, src/mcp/*, src/commands/agent.ts, flow files, package.json or the lockfile: other workers own those concurrently.",
+    "Preserve everything the review confirmed clean and re-verify it after the change: recursion without EISDIR, cycle termination by device and inode, containment by resolving before the inside check, zero leakage of external target names or content into either the JSON report or the committable latest.md, findings surviving limit truncation, and fail staying fail alongside incomplete coverage.",
+    "No git state changes, no network, no model calls, no bun test without file arguments, no dependency changes. Synthetic fixtures under mkdtemp only; never scan a real credential store.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:50:00+00:00", "created_by": "flow-orchestrator" }
+}

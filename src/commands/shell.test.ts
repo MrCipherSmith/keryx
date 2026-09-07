@@ -786,8 +786,8 @@ describe("parseShellCliFlags — default TUI agent shell", () => {
     expect(parseShellCliFlags(["--auto"]).permissionModeFlag).toBe("auto");
   });
 
-  test("--permission-mode with an unknown value is ignored, not thrown", () => {
-    expect(parseShellCliFlags(["--permission-mode", "yolo"]).permissionModeFlag).toBeUndefined();
+  test("--permission-mode with an unknown value fails before launch", () => {
+    expect(() => parseShellCliFlags(["--permission-mode", "yolo"])).toThrow("--permission-mode must be ask, trust or auto");
   });
 
   test("no permission flag leaves permissionModeFlag unset", () => {

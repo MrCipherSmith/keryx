@@ -8,6 +8,7 @@ import type {
   SecurityReport,
   SecurityReportSummary,
 } from "./types";
+import type { SecurityScanCoverage, SecurityScanFile, SecurityScanScope } from "./path-scan";
 
 const SCHEMA_VERSION = 1;
 
@@ -33,8 +34,13 @@ export function buildReport(
   config: SecurityConfig,
   gate: SecurityGate,
   createdAt: string = new Date().toISOString(),
+  scan?: {
+    scope: SecurityScanScope;
+    coverage: SecurityScanCoverage;
+    files: SecurityScanFile[];
+  },
 ): SecurityReport {
-  return {
+  const report: SecurityReport = {
     schemaVersion: SCHEMA_VERSION,
     createdAt,
     mode: config.mode,
@@ -43,6 +49,12 @@ export function buildReport(
     summary: summarize(findings),
     findings,
   };
+  if (scan !== undefined) {
+    report.scope = scan.scope;
+    report.coverage = scan.coverage;
+    report.files = scan.files;
+  }
+  return report;
 }
 
 // Strip fields that must never reach a committable artifact (§10a): `hash`
@@ -73,6 +85,8 @@ export function renderReportMarkdown(report: SecurityReport): string {
       : "none";
   };
 
+  const scanMetadata = renderScanMetadata(report);
+
   return `# Metaproject Security Report
 
 Gate: **${report.gate.toUpperCase()}**
@@ -80,6 +94,8 @@ Generated: ${report.createdAt}
 Mode: ${report.mode}
 Raw retention: ${report.rawRetention}
 Schema: ${report.schemaVersion}
+
+${scanMetadata}
 
 ## Summary
 
@@ -95,6 +111,30 @@ ${renderFindings(top)}
 > Committable artifacts contain no secret/PII hashes or raw values — only policy
 > ids, categories, severities, masked previews, locations and actions.
 `;
+}
+
+function renderScanMetadata(report: SecurityReport): string {
+  if (report.scope === undefined && report.coverage === undefined && report.files === undefined) {
+    return "";
+  }
+  const sections: string[] = ["## Scan Scope"];
+  if (report.scope !== undefined) {
+    sections.push(`- path: ${report.scope.path}`);
+    sections.push(`- recursive: ${report.scope.recursive}`);
+    sections.push(`- exclusions: ${report.scope.exclusions.length > 0 ? report.scope.exclusions.join(", ") : "none"}`);
+    sections.push(`- limits: ${JSON.stringify(report.scope.limits)}`);
+  }
+  if (report.coverage !== undefined) {
+    sections.push("", "## Scan Coverage");
+    sections.push(`- status: ${report.coverage.status}`);
+    sections.push(`- required: ${report.coverage.required}`);
+    sections.push(`- reasons: ${report.coverage.reasons.length > 0 ? report.coverage.reasons.join(", ") : "none"}`);
+  }
+  if (report.files !== undefined) {
+    sections.push("", "## Files");
+    sections.push(...report.files.map((file) => `- ${file.path}: ${file.status}${file.reason === undefined ? "" : ` (${file.reason})`}`));
+  }
+  return `${sections.join("\n")}\n`;
 }
 
 function severityRank(finding: SecurityFinding): number {

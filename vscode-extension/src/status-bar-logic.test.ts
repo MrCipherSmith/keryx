@@ -7,7 +7,6 @@ import {
   parseSecurityConfigState,
   statusBarDetailLines,
   statusBarText,
-  type StatusBarInputs,
 } from "./status-bar-logic";
 
 // --- parsing -----------------------------------------------------------
@@ -47,7 +46,7 @@ test("Review fix: parseSecurityConfigState treats an unrecognized-but-matched to
 
 // --- severity rollup -----------------------------------------------------
 
-const healthyInputs: StatusBarInputs = {
+const healthyInputs = {
   metaprojectState: "ready",
   healthGate: "pass",
   securityConfig: "ok",

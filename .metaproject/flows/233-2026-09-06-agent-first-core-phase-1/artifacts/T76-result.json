@@ -1,0 +1,251 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T76-recheck-2026-09-06",
+  "dispatch_id": "flow-233-T76",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of T75's repair of T70 F-001..F-004 on branch codex/agent-first-core at base 0bc6418. Stage 1 rows 2, 3 and 4 PASS under my own execution; row 1 FAILS. T75's own delta is verified accurate in every case: the corrected cli-reference.md/modules.md exit-behaviour paragraph holds against 19 measured cells including check-output (a surface neither T70's nor T75's own probe exercised); the F-002 closed vocabulary (safeValidationError/KNOWN_VALIDATION_ERRORS) resists every escape attempted (case, whitespace, prefix, empty, undefined, long no-substring string) while known-safe strings survive unchanged; the F-003 manifest sentence matches self-protect.ts's real behaviour (exactly one findings.push, the checksum arm); the two new F-004/F-004-F-002 regressions genuinely drive the real runAdapter->computeGate->writeOutputs pipeline, read the persisted artifact back from disk, and re-read the gate through the real service - proven, not assumed, to be load-bearing by a probe that manually constructs a leaking SourceRunInfo and shows the same downstream pipeline propagates it faithfully (i.e. the shipped assertions would fail if the producer's fix regressed). Row 1 fails because a from-scratch re-enumeration, extended to src/lib/templates.ts - a shipped-guidance surface none of T62/T68/T70/T73/T75 ever swept - finds two new defects: the generated git pre-push hook script (written verbatim into every scaffolded project's .git/hooks/pre-push by keryx init/update) still enumerates blocking modes as enforced/ci, omitting gateway, in two shell comments; and docs/docs/modules.md's CLI-surface table mislabels both security scan-mcp and security hooks install|uninstall's Exit column 'mode-gated' when both are measured to be gated by something else entirely (--strict for scan-mcp, pure runtime/settings validation for hooks) - never by config.mode. The scan-mcp mislabel is reachable in the exact 'a check that did not pass looks like a pass' shape this phase exists to close: a CI job that sets mode:ci believing that alone gates scan-mcp on MCP threats never fails unless --strict is also passed. A fourth, lower-severity finding notes four shipped sites narrow the pre-push block condition to 'a secret/critical finding' when resolve.ts's computeGate actually gates on any category's block action, severity>=failOn, or require-approval action - the opposite (understating) direction. Also independently reproduced the mock.module cross-file hazard both T69 and T75 report (byte-for-byte identical provenance.test.ts failure, in the file order that matters), confirmed the shipped mock-free design is clean against it in both orders, and ruled the two test-only exports (runAdapter, writeOutputs) an acceptable price on the same terms T70 already applied to the first one - zero production blast radius for both, a hazard now independently confirmed rather than taken on faith, and full coverage of the specific claim under test. No production, test, or documentation file was modified; file hashes are identical start to end for every file this review or the concurrent exfil.ts/policies.md reviewer touched.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-review.md",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): required-check/incomplete-coverage verdicts are correct and not lost when another check is unavailable; gate verdicts do not move as a side effect of either fix",
+      "status": "met",
+      "evidence": "T76-health-leak.log: gate.status/serviceGateStatus incomplete in memory, on disk, and through createCodeHealthService().gate() at every leak row (A1-A9, C1-C4) and pass at the clean control (C5); gate.ts's brokenRequired filter read in full and confirmed to branch only on status/execution/parse, never on .error's content."
+    },
+    {
+      "criterion": "AC8: no shipped guidance describes behaviour the code does not have, in either direction",
+      "status": "not_met",
+      "evidence": "F-001 (major): src/lib/templates.ts's generated pre-push hook script, shipped into every scaffolded project, omits gateway from its blocking-mode enumeration. F-002 (major): docs/docs/modules.md mislabels scan-mcp's Exit column 'mode-gated' when it is gated only by --strict. F-003 (minor): same table's hooks install|uninstall row has the identical mislabel. F-004 (minor, understating direction): four shipped sites narrow the pre-push block condition to 'a secret/critical finding' when computeGate gates more broadly. T75's own three corrected sentences (the item this recheck was dispatched to verify) are confirmed accurate against 19 measured cells."
+    },
+    {
+      "criterion": "AC8: no durable or published record contains raw error text, a path or source bytes; gate verdicts do not move",
+      "status": "met",
+      "evidence": "T76-health-leak.log rows A1-A9 (closed-vocabulary escape attempts) and C1-C5 (T69's three catch arms) all LEAK_* false; row B (manually-constructed leaking SourceRunInfo, bypassing the producer) shows the downstream pipeline propagates it faithfully with LEAK_* all true, proving the clean rows above are meaningful and not the product of a downstream filter."
+    },
+    {
+      "criterion": "Every write site of SourceRunInfo.error is enumerated by a defensible axis, and the closed vocabulary holds against an adapter returning something unexpected",
+      "status": "met",
+      "evidence": "Three independent axes converge on the same 5 producer sites in run.ts plus 7 constant literals in the two adapters: an 'error:' object-literal grep (raw log read directly after the compacted summary undercounted 15 matches down to 10 rendered), a dot-assignment sweep (zero hits, ruling out a non-literal write), and a SourceRunInfo type-usage grep (confirms run.ts is the only constructor). The vocabulary rejected every escape attempted: case difference, trailing whitespace, prefix-of-attacker-string, empty string, undefined, and a 500-byte no-substring string."
+    },
+    {
+      "criterion": "The strengthened regressions assert on the artifact (not an in-memory value) and would fail if the leak returned",
+      "status": "met",
+      "evidence": "Read health-truthful-gate.test.ts:540-649 in full: both new tests call the real writeOutputs, read the actual latest.json/latest.md bytes from disk, and call the real createCodeHealthService().gate(). Executed directly: 21 pass / 0 fail / 121 expect(). 'Would fail if the leak returned' proven by a probe (T76-health-leak.log, row B) that manually constructs a leaking SourceRunInfo and shows the identical writeOutputs/disk/service.gate() pipeline propagates it, so a producer regression would trip the same not.toContain assertions the shipped tests use."
+    },
+    {
+      "criterion": "Judgement call: two test-only exports (runAdapter, writeOutputs) and the mock.module hazard",
+      "status": "met",
+      "evidence": "Ruled acceptable. ctx rg confirms zero production consumers of either export beyond run.ts's own internal call; both documented at their definition sites. The hazard was independently reproduced (T76-hazard-repro.test.ts run alongside src/health/provenance.test.ts): byte-for-byte the same failure both T69 and T75 report, in the order that matters (a caveat is recorded that my minimal repro is order-sensitive in a way the prior narratives did not surface, which does not change the ruling). The mock-free design was confirmed to cover the specific F-004 claim in full: gate.ts and report.ts read in full show nothing outside SourceRunInfo.error's five producers and gate.ts:78 ever touches the field, so the runHealth internals the mock-free design skips (coverage, complexity, churn, hotspots, baseline) are provably irrelevant to this claim."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full recheck report: scope with start/end file hashes, Stage 1 table, 4 findings, judgement call on the two test-only exports and the mock.module hazard, confirmed clean areas, evidence table, routing audit, keryx:findings block.",
+      "hash": "b9fec0d5ea5fb14067beafdd504db05a5f2a87b12157752acaf2f9d038734441"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-health-leak.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Rows 2 and 4 probe: mock-free (no mock.module anywhere), drives the real runAdapter+computeGate+writeOutputs directly; section A tests 9 closed-vocabulary escape attempts, section C re-confirms the three T69 catch arms, section B manually constructs a leaking SourceRunInfo to prove the downstream pipeline sanitizes nothing on its own.",
+      "hash": "b4dda0840dbf97a91b3dac51cb37dd6f9ee2108b5243e629900a21f0d698e035"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-guidance.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 1 and row 3 probe, written fresh: re-measures every exit-code cell T75's corrected paragraph now claims (including check-output, never measured by any prior probe), tests the new scan-mcp/hooks-install 'mode-gated' hypotheses by execution, sweeps src/lib/templates.ts (never previously swept) for the gateway-omission class, renders renderSecurityPrePushHook() directly, and re-verifies the F-003 manifest sentence with whitespace normalization.",
+      "hash": "14593740ed6f0ac6855ace54d8396b252cb5d80ef09052b868613923a4aff4ed"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-hazard-repro.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Judgement-call probe: independently reproduces the mock.module('./sources', ...) cross-file hazard T69/T75 report, run alongside src/health/provenance.test.ts in both file orders.",
+      "hash": "bf0b7e92845fdf9f6f24baef10c78db4bea8e75aca986f29236c65f926f87935"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-hashes-start.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "File hashes recorded before the review began.",
+      "hash": "76f902331e39cadc4e434bf0c15a5bf771aaaa1b2f9f9038ac2f538eb945d4f9"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-hashes-end.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "File hashes recorded after; byte-identical to the start hashes for every file, including the concurrently-reviewed src/security/detect/exfil.ts and docs/requirements/keryx-agent-first-core/policies.md.",
+      "hash": "76f902331e39cadc4e434bf0c15a5bf771aaaa1b2f9f9038ac2f538eb945d4f9"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-supporting-hashes.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "SHA-256 of the twelve supporting ctx rg raw logs cited in the review's Evidence table.",
+      "hash": "41abe670507ad06d70726947597dd359d109f6c6bfadf6506534a845e4f8b1f7"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-result.json",
+      "change": "added (schema-validated result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-health-leak.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-guidance.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-hazard-repro.test.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/*T76*.log, T76-hashes-*.txt, T76-supporting-hashes.txt",
+      "change": "added (raw evidence; no production, test or documentation file was modified by this review)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T76#F-001",
+      "reviewer": "review-logic+review-security-code (T76 independent recheck)",
+      "severity": "major",
+      "file": "src/lib/templates.ts",
+      "line": 2063,
+      "symbol": "renderSecurityPrePushHook",
+      "problem": "The git pre-push hook script this function generates -- written verbatim into every scaffolded project's .git/hooks/pre-push by keryx init/update -- carries two shell comments enumerating which security.config.json modes block a push ('enforced'/'ci' exit non-zero...; # enforced/ci mode blocked on this file.) that omit `gateway`, even though gateway has blocked identically to enforced/ci since T61/T65. This is the same defect class T62/T68/T70/T73/T75 corrected at eighteen other sites, in a nineteenth site (src/lib/templates.ts) none of those five prior rounds' surface sweeps ever included.",
+      "impact": "AC8's 'no shipped guidance describes behaviour the code does not have' fails on a surface as durable as the manifest/README the module already ships -- a git hook persists on disk and is not re-read the way a markdown doc is. An operator or agent reading their own .git/hooks/pre-push to understand gateway-mode behaviour is told only enforced/ci matter, the exact 'gateway mode is inert' misreading this phase exists to close.",
+      "suggested_fix": "Add gateway to both comments, matching src/security/templates.ts:63's already-corrected wording ('enforced'/'ci'/'gateway' block the push). Add a pinning regression for renderSecurityPrePushHook()'s own output, matching the pattern templates.test.ts already uses for renderSecurityManifest/renderSecurityCoreReadme.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T76-guidance.ts -> .metaproject/data/gdctx/raw/2026-09-06T19-15-08-001Z_T76-guidance.log (sha256 2f5501d6ccb5d721662748d5786fcc4b2bdfd4d2df3089043c2fcb306ae1df78), row 'B pre-push hook script': containsEnforcedCiWithoutGateway:true, omitsGatewayLine present. Corroborated by ctx rg raw .metaproject/data/gdctx/raw/2026-09-06T19-12-52-438Z_rg.log (8 lines, header undercounted to 4 in the compacted summary, read raw directly).",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-pre-push-hook-script/omits-gateway",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/lib/templates.ts:2063-2065 (header comment enumeration) - DEFECT",
+          "src/lib/templates.ts:2165 (per-file loop comment) - DEFECT",
+          "src/security/templates.ts:63,125 - correct (T68)",
+          ".metaproject/modules/security.md:48 - correct (T73)",
+          ".metaproject/core/security/README.md:17 - correct (T73)",
+          "src/commands/init.ts:497 - correct (T73)",
+          "docs/docs/cli-reference.md:330,754,912,993,1058,2095-2099,2137-2148 - correct (T68/T73/T75)",
+          "docs/docs/modules.md:766,784-787,865,874,881 - correct (T73/T75)",
+          "docs/docs/architecture.md:547,563,634 - correct (T73)",
+          "docs/docs/workspace-and-lifecycle.md:339,350 - correct (T73)"
+        ],
+        "enumeration_method": "Fresh regex sweep (not inheriting any prior round's site list) over the same seven shipped surfaces T70's own probe used PLUS src/lib/templates.ts (never previously swept), for lines naming enforced/ci with a blocking-behaviour verb and no gateway on the same line, executed in T76-guidance.ts section B. 4 raw suspects; 2 pre-classified non-defects (cli-reference.md:1226 unrelated containment prose, :2096 T68's own paragraph with gateway on the preceding line); 2 genuine, both in this file. Cross-confirmed by rendering renderSecurityPrePushHook() directly rather than trusting the regex match alone."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T76#F-002",
+      "reviewer": "review-logic+review-security-code (T76 independent recheck)",
+      "severity": "major",
+      "file": "docs/docs/modules.md",
+      "line": 774,
+      "symbol": "CLI-surface table, scan-mcp row",
+      "problem": "modules.md's CLI-surface table marks security scan-mcp's Exit column 'mode-gated', and the paragraph immediately below (:784-787) states that mode-gated commands honor config.mode with the advisory/enforced-ci-gateway fold. handleScanMcp (src/commands/security.ts:384-536) never calls modeOf(cwd) and never reads config.mode; its only exit-affecting line gates on `--strict` and (totalFindings>0 || coverage==='incomplete') alone.",
+      "impact": "Reachable 'a check that did not pass looks like a pass' gap: a CI job that sets mode:'ci' believing that alone makes security scan-mcp gate on MCP threats (as the doc implies for every 'mode-gated' row) never fails on any MCP threat in any mode unless --strict is also passed -- silently passing a poisoned MCP manifest through CI.",
+      "suggested_fix": "Change the scan-mcp row's Exit column to '1 with --strict, on a threat or incomplete coverage (independent of mode)' and scope the :784-787 paragraph explicitly to the rows it actually describes (scan, check-input, check-output, report).",
+      "evidence": "T76-guidance.log claims T3/T3b: scan-mcp|{advisory,enforced,ci,gateway}|no-strict all 0 (threat present, no --strict); scan-mcp|{advisory,enforced,ci,gateway}|strict all 1 (same threat, --strict added) -- driven through the real securityCommand(['scan-mcp', manifestPath, ...], root) against a synthetic MCP manifest confirmed to trip the mcp.poisoning.ignore-instructions detector.",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/modules-cli-table/scan-mcp-mode-gated-mislabel",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "docs/docs/modules.md:774 (scan-mcp Exit cell) - DEFECT",
+          "docs/docs/modules.md:773,775,776 (scan/check-input/check-output rows) - correct, confirmed mode-gated by reading handleScan/handleCheck",
+          "docs/docs/cli-reference.md:2145-2146 - correct, already describes scan-mcp by --strict, not mode"
+        ],
+        "enumeration_method": "Read every handle* function in src/commands/security.ts that a CLI-surface table row maps to and noted whether modeOf(cwd)/exitCodeFor/reportExitCode is on the process.exitCode-setting path. Cross-checked every 'mode-gated' table row against its handler this way, then confirmed both mismatches (this finding and F-003) by execution."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T76#F-003",
+      "reviewer": "review-logic+review-security-code (T76 independent recheck)",
+      "severity": "minor",
+      "file": "docs/docs/modules.md",
+      "line": 782,
+      "symbol": "CLI-surface table, hooks install|uninstall row",
+      "problem": "Same table's Exit column for security hooks <install|uninstall> is also 'mode-gated'. handleHooks (src/commands/security.ts:764-817) sets process.exitCode=1 only for an invalid action, unknown runtime(s), or a post-install validation error; modeOf(cwd) is read once, only to print an advisory note, never to affect the exit code.",
+      "impact": "Lower than F-002: hooks install is a one-time setup command, not typically wired into a repeated CI gate the way scan-mcp/scan/report are, so the 'silently passes' shape does not apply the same way. Still a shipped-guidance/code mismatch under AC8.",
+      "suggested_fix": "Change the Exit column to '1 on an unknown runtime or a post-install validation error (independent of mode)'.",
+      "evidence": "T76-guidance.log claims T4/T4b: hooks-install|{advisory,enforced,ci,gateway}|unknown-runtime all 1; hooks-install|{advisory,enforced,ci,gateway}|valid-runtime all 0 -- driven through the real securityCommand(['hooks','install','--runtime',...], root).",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/modules-cli-table/hooks-install-mode-gated-mislabel",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T76#F-004",
+      "reviewer": "review-logic+review-security-code (T76 independent recheck)",
+      "severity": "minor",
+      "file": "src/lib/templates.ts",
+      "line": 2064,
+      "symbol": "the shared \"secret/critical finding\" phrase",
+      "problem": "Four shipped sites (.metaproject/modules/security.md:49, src/security/templates.ts:64, src/commands/init.ts:497, src/lib/templates.ts:2064) describe the pre-push block condition as 'a secret/critical finding'. resolve.ts:132-161's computeGate returns 'fail' on any category's block action or severity>=failOn (not specifically secret), and 'needs-approval' (which also exits non-zero in a blocking mode) on any category's require-approval action, e.g. escalated prompt-injection.",
+      "impact": "Opposite direction from F-001/F-002: undersells the blocking surface rather than oversells it, so the risk is operator surprise at an unexpected block, not a security bypass. Recorded under AC8's 'either direction' mandate; not blocking.",
+      "suggested_fix": "Drop the category/severity qualifier: 'blocks the push (non-zero exit) on a failing or needs-approval gate', or give a non-exhaustive example ('e.g. a secret, PII or escalated prompt-injection finding').",
+      "evidence": "ctx rg 'secret/critical' src docs/docs .metaproject/modules .metaproject/core -> .metaproject/data/gdctx/raw/2026-09-06T19-21-03-823Z_rg.log (sha256 f1bf4b024fa6d2610be1a2f06114b46efc858c4ab4e0e4e1810fc2b05b084533), 4 matches, header and rendered list agree. resolve.ts:132-161 read in full.",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/secret-critical-narrowing/computeGate-is-broader",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage1_rows_passed": 3,
+    "stage1_rows_failed": 1,
+    "stage2_entered": false,
+    "probes_written": 3,
+    "evidence_logs": 19,
+    "tests_pass_health_templates": 21,
+    "tests_fail_health_templates": 0,
+    "expect_calls_health_templates": 121,
+    "tests_pass_hazard_both_orders": 18,
+    "tests_fail_hazard_both_orders": 0,
+    "hazard_independently_reproduced": true,
+    "findings_blocker": 0,
+    "findings_major": 2,
+    "findings_minor": 2,
+    "findings_info": 0,
+    "concurrent_drift_files": 0,
+    "gdctx_compaction_row_drops_observed": 5,
+    "graph_used": false,
+    "wiki_used": false,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "timestamp_utc": "2026-09-06T19:22:00.000Z"
+}

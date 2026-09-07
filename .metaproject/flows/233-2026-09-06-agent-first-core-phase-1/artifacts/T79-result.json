@@ -1,0 +1,111 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T79-run-1",
+  "dispatch_id": "T79",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T76 F-001..F-004: added `gateway` to both shell comments in renderSecurityPrePushHook (src/lib/templates.ts) -- the git pre-push hook script written verbatim into every scaffolded project's .git/hooks/pre-push, a surface none of the five prior enumeration rounds ever swept; corrected docs/docs/modules.md's scan-mcp and hooks-install Exit cells, which were mislabeled 'mode-gated' when measured to be gated by --strict and by runtime/validation respectively, and rescoped the paragraph below the table to the four rows that are actually mode-gated; corrected four sites (src/security/templates.ts, .metaproject/modules/security.md, src/commands/init.ts, src/lib/templates.ts) that narrowed the pre-push block condition to 'secret/critical finding' when computeGate blocks on any category's block action or severity, and on any category's needs-approval action. Enumerated the shipped-artifact class by emission mechanism (generator functions, interactive prompts, CLI runtime strings, the docs site, this repo's own checked-in Metaproject copies, root README) rather than by known file list, and found a new, previously-unswept site (src/commands/security.ts:801, a CLI runtime string) carrying the same F-001 omission -- disclosed as F-005, not fixed, because security.ts is marked read-only in this dispatch.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no artifact reaching a user or an agent describes behaviour the code does not have, in either direction.",
+      "status": "met",
+      "evidence": "T79-guidance-before.log / T79-guidance-after.log: B pre-push hook script containsEnforcedCiWithoutGateway true->false, omitsGatewayLine present->null, claimsSecretCriticalOnly true->false; B suspects count 4->2 (remaining 2 pre-classified non-defects); B generators manifestClaimsSecretCriticalOnly true->false; Row3 other manifest claims claimsSecretCriticalOnly true->false. docs/docs/modules.md's scan-mcp/hooks-install Exit cells and paragraph re-read directly post-edit and match handleScanMcp/handleHooks measured behaviour (T3b/T4b CLAIM_HOLDS:true, unaffected by the doc edit since they measure code). One new out-of-ownership site (security.ts:801) found and disclosed, not fixed, per the dispatch's read-only marking."
+    },
+    {
+      "criterion": "The enumeration is by what ships rather than by which files were already known, the axis is stated, and every shipped artifact is listed with its disposition.",
+      "status": "met",
+      "evidence": "T79-implementation.md 'Enumeration axis' section: 6 emission mechanisms (generator functions -- 28 render* functions counted from a raw search-header match, not the undercounted compacted summary; interactive prompts; CLI runtime strings; the 21-file docs site; this repo's own checked-in Metaproject copies; root README), each swept by keyword and every hit read in full context. Found F-005 via mechanism 3, never swept by any of the five prior rounds."
+    },
+    {
+      "criterion": "Regressions pin the corrected generated content, so a future edit to a template cannot silently reintroduce a stale claim; state which corrections are pinned and which cannot be.",
+      "status": "met",
+      "evidence": "T79-implementation.md pinning table: both render*-function fixes (src/lib/templates.ts's renderSecurityPrePushHook, src/security/templates.ts's renderSecurityManifest) pinned by new regressions in src/lib/security-pre-push.test.ts and src/security/templates.test.ts, RED confirmed (9 pass/3 fail on a temporary revert) then GREEN (12 pass/0 fail/32 expect()). The three prose/static-file corrections (docs/docs/modules.md, .metaproject/modules/security.md, src/commands/init.ts:497) are explicitly stated as unpinned, with the structural reason (no generator seam), matching every prior round's precedent for the same class of file."
+    },
+    {
+      "criterion": "bun test src/lib/ src/commands/ src/security/ stays green.",
+      "status": "met",
+      "evidence": "bun src/cli.ts ctx run -- bun test src/lib/ src/commands/ src/security/ -> 2027 pass / 6 skip / 0 fail / 7915 expect() across 2033 tests, 145 files (2026-09-06T19-38-51-329Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T79-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-edit spec: enumeration axis, baseline measurement, per-item plan, written before any edit"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T79-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full implementation report: enumeration axis and full shipped-artifact disposition table, per-item measurement/fix/RED-GREEN, pinning table, F-005 disclosure, verification table, routing audit"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T19-29-15-000Z_T79-guidance-before.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T76-guidance.ts output before editing (reproduces F-001..F-004 exactly as T76-review.md reported)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T19-37-42-000Z_T79-guidance-after.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T76-guidance.ts output after editing (F-001..F-004 closed)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T19-38-51-329Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun test src/lib/ src/commands/ src/security/ raw output: 2027 pass / 6 skip / 0 fail"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T19-39-04-948Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck raw output: exit 0"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T19-39-10-118Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bunx eslint on every changed source/doc file: exit 0, 0 errors, 2 informational .md warnings"
+    }
+  ],
+  "changed_files": [
+    { "path": "src/lib/templates.ts", "change": "modified" },
+    { "path": "src/lib/security-pre-push.test.ts", "change": "modified" },
+    { "path": "src/security/templates.ts", "change": "modified" },
+    { "path": "src/security/templates.test.ts", "change": "modified" },
+    { "path": "docs/docs/modules.md", "change": "modified" },
+    { "path": ".metaproject/modules/security.md", "change": "modified" },
+    { "path": "src/commands/init.ts", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-005",
+      "global_id": "T79#F-005",
+      "reviewer": "task-implementer (T79, during the mandated enumeration closing the class)",
+      "severity": "minor",
+      "file": "src/commands/security.ts",
+      "line": 801,
+      "symbol": "handleHooks, advisory-mode note",
+      "problem": "The note printed to the operator's terminal during `keryx security hooks install` when `mode` is `advisory` reads: \"advisory mode: ${runtime.id} will report findings and allow the call. Set `mode` to `enforced` or `ci` in ... to make it refuse.\" This omits `gateway`, which has blocked identically to `enforced`/`ci` since T61/T65 -- the same F-001 shape found in src/lib/templates.ts's pre-push hook, in a fifth site (a CLI runtime string, not a generated file or a docs page) that none of T62/T68/T70/T73/T75/T76 ever swept.",
+      "impact": "An operator reading this note while installing the agent-hook guard is told only enforced/ci will make the guard refuse, which undersells gateway -- the same 'gateway mode is inert' misreading this whole phase exists to close, on a live CLI message rather than a written file.",
+      "suggested_fix": "Add gateway to the enumeration: \"Set `mode` to `enforced`, `ci`, or `gateway` ... to make it refuse.\"",
+      "evidence": "Read src/commands/security.ts:799-802 directly (read-only per this dispatch's Files-to-read list, which marks security.ts read-only for measured behaviour). ctx rg over security.ts for advisory|enforced|gateway|mode-gated|secret/critical|needs-approval -> 12 matches (raw log 2026-09-06T19-32-24-714Z_rg.log), confirming line 801 is the only site in this file naming enforced/ci without gateway.",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-hooks-install-advisory-note/omits-gateway",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T19:41:00Z"
+}

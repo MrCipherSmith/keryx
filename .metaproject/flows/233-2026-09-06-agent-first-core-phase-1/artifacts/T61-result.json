@@ -1,0 +1,89 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T61",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T57 F-002: evaluateSelfProtection's mode-downgrade and disabled-policy arms in src/security/self-protect.ts now skip whenever config.configUnreadable is true (mirroring the guard T58 already put on writeState), so a broken-config window whose real previous mode outranks the forced 'enforced' (only 'gateway' can) no longer writes a durable, false mode-downgrade incident to incidents.jsonl -- while a genuine downgrade after repair, and the four genuine-downgrade shapes T57 probed, still fire unaffected. Also resolved the disagreement T57 flagged between isBlockingMode (guard.ts, treated 'gateway' as report-only) and MODE_RANK (self-protect.ts, ranked 'gateway' strictest): concluded MODE_RANK reflects intended meaning, because must-keep-passing regressions (T58 D2, T57's own four-shape probe) require gateway to outrank enforced/ci, no design document describes gateway differently, and the module's own fail-closed pattern elsewhere argues against a not-yet-finished mode defaulting to the most permissive behavior. isBlockingMode now blocks on 'gateway' too; guard.test.ts's refuted 'blocks: false' row for gateway corrected in writing. Separately closed T57 F-003: hasGateShape in src/health/service.ts validated only the gate field; enumerated all four readLatest() readers (gate, status, explain, updateBaseline) and found metrics/sources/findings dereferenced unguarded by three of them (status and explain, not just status as F-003's own reproduction showed) -- hasGateShape now also requires all three to be arrays, folding a truncated-but-gate-well-formed report into the module's existing 'no report' outcome at every reader instead of throwing.",
+  "summary_markdown": "See T61-implementation.md for the full mode-determination argument and evidence, the field-enumeration table and method, and a window-by-window description of what an operator sees before and after both fixes.",
+  "acceptance": [
+    {
+      "criterion": "No incident is written for a window in which enforcement was not weakened; a genuine downgrade across such a window is still detected, including the four shapes already covered.",
+      "status": "met",
+      "evidence": "New regression 'T61 D1' (security.test.ts): for both broken shapes (unusable payload, unrecognized mode), a real 'gateway' previous state followed by a broken run writes no mode-downgrade incident and prints no 'downgraded' warning, neither during the broken window nor after repair to the same mode -- a gap T58 D2 never checked (D2 only asserts incidents after the FINAL reconfigure). RED (2026-09-06T16-47-58-055Z_run.log, via temporary revert) failed at the intermediate 'broken.warnings' assertion; GREEN after. Reviewer probe T57-state.ts re-run before/after: S6 durableIncidentWrittenByTheBrokenRun flips true->false for both broken shapes; S2's four genuine-downgrade shapes (gateway->ci, enforced->advisory, ci->advisory, gateway->advisory) stay genuineDowngradeDetected:true, byte-for-byte unchanged, for both broken shapes (T61-state-before.log / T61-state-after.log)."
+    },
+    {
+      "criterion": "The two mode notions agree, with the conclusion justified from the code and the policy rather than by preference.",
+      "status": "met",
+      "evidence": "isBlockingMode (guard.ts) now groups 'gateway' with 'enforced'/'ci' (blocking); MODE_RANK (self-protect.ts) unchanged. Justification in T61-implementation.md: (1) T58's committed 'gateway -> ci' downgrade regression and T57's own required four-shape probe both need gateway to outrank enforced/ci, ruling out moving MODE_RANK; (2) no requirements doc, module manifest, or schema comment describes gateway's intended relationship to blocking beyond guard.ts's own placeholder '(Phase 4)' comment; (3) the module's fail-closed pattern elsewhere (isBlockingMode's own default arm, loadSecurityConfig's forced-strictest fallback) argues against a not-yet-finished mode defaulting to the single most permissive recognized behavior. guard.test.ts's 'T54 D1c' gateway row corrected from blocks:false to blocks:true with a comment recording why; RED confirmed by temporary revert (2026-09-06T16-48-11-929Z_run.log): a planted AWS key was allowed through under gateway before the fix."
+    },
+    {
+      "criterion": "An unusable stored health report yields the existing unusable-evidence outcome from every reader, with no thrown exception; regressions fail before and pass after.",
+      "status": "met",
+      "evidence": "hasGateShape extended to require metrics/sources/findings all Array.isArray, in addition to the existing gate shape check. Two new regressions in service-gate-exit.test.ts (ABSENT metrics/sources/findings; metrics as a string), each verified through gate(), status() AND explain() -- explain() found independently while enumerating all four readLatest() callers, not named in F-003's own reproduction. RED confirmed by temporary revert (2026-09-06T16-48-58-249Z_run.log): gate() returned a false clean 'pass' on the truncated fixture before the fix. Reviewer probe T57-health.ts re-run before/after: E18/E19 statusThrew flips non-null->null, gateResult flips a false pass -> the constant 'no report' fail; E01-E17 controls byte-identical (T61-health-before.log / T61-health-after.log). updateBaseline(), the fourth reader, was not given a dedicated regression (heavier integration surface; its fallback branch is unmodified) -- disclosed explicitly in T61-implementation.md rather than left silent."
+    },
+    {
+      "criterion": "AC4 (AFC-05) and AC8: a required check that is missing, skipped, unparsed or unfinished is an incomplete outcome and never a pass; no durable record asserts something that did not happen; reasons and details stay constant and leak-safe.",
+      "status": "met",
+      "evidence": "E18's gate() answer moved from a false 'pass' to the constant 'no report; run keryx health run first' fail -- a truncated report is no longer treated as trustworthy evidence. No new incident, warning, or reason string was introduced by either fix: the mode-downgrade/policy-disabled guard only suppresses an existing call under an existing flag (config.configUnreadable), and the health fix reuses the pre-existing constant reasons/null defaults. No incident record was deleted or rewritten -- the append-only incidents.jsonl trail is untouched; only a class of future write is suppressed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T61-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: the F-002 fix and its two grounds, the isBlockingMode/MODE_RANK evidence and conclusion, the F-003 field-enumeration table and method, regression plan",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T61-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The mode determination and its evidence, the field enumeration and its method, a window-by-window description of operator-visible behavior for both defects, RED evidence (via temporary Edit-based revert, not git), verification counts and raw log paths, routing audit and concerns",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/self-protect.ts",
+      "change": "evaluateSelfProtection's mode-downgrade and disabled-policy arms now both require !config.configUnreadable, so a forced-closed run's live comparison against a real previous never appends an incident; MODE_RANK annotated with a comment recording why gateway stays ranked strictest (the fixed point isBlockingMode was made to agree with)"
+    },
+    {
+      "path": "src/security/guard.ts",
+      "change": "isBlockingMode now returns true for 'gateway' (grouped with 'enforced'/'ci'); only 'advisory' stays non-blocking. Module header comment, the guardOutput mode-list comment, and the securityFlowGate mode-list comment all corrected to match (three comment sites)"
+    },
+    {
+      "path": "src/security/guard.test.ts",
+      "change": "T54 D1c's 'recognized' table corrected: { mode: 'gateway', blocks: false } -> { mode: 'gateway', blocks: true }, with a comment recording why (T57 F-002 / T61-spec.md) -- the refuted expectation was letting a planted AWS key through under gateway"
+    },
+    {
+      "path": "src/security/security.test.ts",
+      "change": "Added 'T61 D1': for both broken-config shapes, a real 'gateway' previous state followed by a broken run and a repair to the same mode writes no mode-downgrade incident at any point, including during the broken window itself (a gap T58 D2 did not check). No existing test modified."
+    },
+    {
+      "path": "src/health/service.ts",
+      "change": "hasGateShape extended to also require metrics/sources/findings to be arrays, in addition to the existing gate shape check; doc comment rewritten to describe the four readLatest() callers and the enumeration method"
+    },
+    {
+      "path": "src/health/service-gate-exit.test.ts",
+      "change": "Added two regressions (metrics/sources/findings absent; metrics as a string), each asserting the module's existing unusable-evidence outcome at gate(), status(), and explain() -- no throw. No existing test modified."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "tests_passed": 336,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T16:52:00Z"
+}

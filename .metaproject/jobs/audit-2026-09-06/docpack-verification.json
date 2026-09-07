@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "markdownFiles": 10,
+  "schemaFiles": 6,
+  "schemaExamplesChecked": 0,
+  "positiveExamples": 7,
+  "negativeSchemaCases": 10,
+  "serviceOnlyCasesSchemaValidated": 6,
+  "planIdentifiersPresent": 49,
+  "checks": [
+    "required files",
+    "Version",
+    "relative file links",
+    "README inventory",
+    "roadmap",
+    "JSON syntax",
+    "schema compilation",
+    "schema examples",
+    "positive and negative fixtures",
+    "plan ID presence"
+  ],
+  "limits": [
+    "Plan identifier presence is not semantic coverage; independent review required",
+    "External URLs and Markdown fragment anchors are not checked by this script",
+    "Service-only outcomes are specified, not executed; only their request shapes are validated"
+  ],
+  "errors": [],
+  "warnings": []
+}

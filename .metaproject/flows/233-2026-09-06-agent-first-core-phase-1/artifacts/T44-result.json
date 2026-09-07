@@ -1,0 +1,88 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T44",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "prepareOutputForPersistence (src/security/guard.ts:57) now carries the deterministic floor's redaction outcome outward instead of discarding it: the allowed branch adds redaction (the OutputRedaction the floor computed) and bytesPreserved (whether the returned bytes equal the caller's original bytes), and the refused branch adds an optional redaction populated only when the floor itself is what refused (format-unsafe) - a refusal from the security engine's own gate has no OutputRedaction to attach and the key stays absent rather than fabricated. All ten production callers were enumerated and read at the call site; every one reads only .allowed/.content/.reason, so the change is additive for all of them. Regressions in src/security/persistence-sinks.test.ts now distinguish all three outcomes named in the dispatch (bytes preserved unchanged, content masked, a duplicate member dropped so the canonical form was emitted) plus the refused branch's own outcome, and one end-to-end regression in src/security/guard.test.ts proves the signal survives the real guardOutput() seam, not just a hand-built GuardResult. One disclosed, unavoidable side effect: src/security/detect/exfil.test.ts:339 has an exact-shape toEqual assertion on the whole result object that now fails, both at runtime and at typecheck, because that file is outside this task's ownership grant and is under active concurrent edit (git status shows a 272-line in-progress diff) by the worker who owns exfil.ts/commands/security.ts. The one-line fix is written out in T44-implementation.md section 5 for that worker to apply.",
+  "acceptance": [
+    {
+      "criterion": "A caller of the persistence materializer can distinguish a byte-preserved result from a re-serialized or masked one, and the refused branch also carries its outcome.",
+      "status": "met",
+      "evidence": "persistence-sinks.test.ts: bytesPreserved:true/redaction.state:none for byte-identical text; bytesPreserved:false/redaction.state:redacted/reasons includes secrets.aws-access-key for a masked secret; bytesPreserved:false/redaction.state:redacted/reasons includes serialized-content-normalized for all five DUPLICATE_MEMBER_SHAPES; the refused numeric-credential case carries redaction:{state:format-unsafe,reasons:[sensitive-numeric-field]}. guard.test.ts's new end-to-end test drives the real guardOutput() -> prepareOutputForPersistence() seam and shows bytesPreserved:false for a masked write vs bytesPreserved:true/redaction.state:none for a clean one, with a documented explanation of why redaction.state reads none on that path (the floor already ran once inside guardOutput)."
+    },
+    {
+      "criterion": "The fields are additive: every existing caller and test still works, and no exact-shape assertion silently drops the new information.",
+      "status": "partial",
+      "evidence": "All ten production callers enumerated via ctx rg and read at the call site (T44-implementation.md section 1) read only .allowed/.content/.reason - none breaks. The two exact-shape assertions this task owns (persistence-sinks.test.ts lines 24 and 39 in the pre-change file) were widened, not silently left to drop information. One assertion this task does NOT own - src/security/detect/exfil.test.ts:339 - was NOT widened because that file is outside the ownership grant (guard.ts, guard.test.ts, persistence-sinks.test.ts, additive types.ts only) and is under active concurrent edit; it now fails at both runtime (1 of 217 in the full src/security suite) and typecheck (the only tsc error in the whole project). This is disclosed, not silently accepted: the exact one-line fix is written out for its owner in T44-implementation.md section 5, mirroring how T41 disclosed the guard.ts/persistence-sinks.test.ts conflict it found in the other direction."
+    },
+    {
+      "criterion": "Regressions cover the three outcomes and fail before the change; the focused security and MCP selection stays green.",
+      "status": "met",
+      "evidence": "RED run (widened/new assertions written, guard.ts unchanged): 46 pass / 9 fail, every failure at exactly the new/widened assertions (raw .metaproject/data/gdctx/raw/2026-09-06T14-58-27-603Z_run.log). GREEN run of the mandated suite (guard.test.ts, persistence-sinks.test.ts, output-validation.test.ts, structural-redaction.test.ts, service.memo.test.ts): 89 pass / 0 fail / 530 assertions (raw 2026-09-06T15-00-19-503Z_run.log), up from an 88/0/498 baseline (raw 2026-09-06T14-57-47-966Z_run.log). bun run typecheck: exactly 1 error, isolated to the disclosed exfil.test.ts:339 (raw 2026-09-06T15-00-43-772Z_run.log). bunx eslint on the three changed files: exit 0 (raw 2026-09-06T15-01-07-706Z_run.log). Wider net: src/mcp 189 pass/3 skip/0 fail (raw 2026-09-06T15-02-29-417Z_run.log); src/security 216 pass/1 fail (the disclosed line, raw 2026-09-06T15-02-20-074Z_run.log); src/memory+wiki+gdctx+metrics+sac+testing+harness 2594 pass/9 skip/2 fail, both pre-existing and unrelated (no reference to prepareOutputForPersistence/GuardResult, underlying file concurrently modified by another worker, raw 2026-09-06T15-01-59-907Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The defect restated, the change with its one deviation from T41's proposal recorded before coding, every caller enumerated with method, the assertions to widen, the regressions planned per outcome, and the exfil.test.ts conflict disclosed in advance."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Caller enumeration, the change and its type-narrowing deviation, the exact assertions widened, the four regressions added with the architectural finding regression 4 surfaced, the disclosed exfil.test.ts conflict with its one-line fix, exact before/RED/GREEN counts with raw log paths, files changed, and the routing audit."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/guard.ts",
+      "change": "Widened prepareOutputForPersistence's return type additively: the allowed branch gains redaction (Extract<OutputRedaction,{state:\"none\"|\"redacted\"}>) and bytesPreserved (boolean, compared against the caller's original argument, not guard.redacted); the refused branch gains an optional redaction (Extract<OutputRedaction,{state:\"format-unsafe\"}>), populated only when validateSerializedOutput itself refused. Added a local type-only import of OutputRedaction (previously only re-exported, not bound locally) and expanded the function's doc comment to explain the two-pass architecture and why the refused branch's redaction is conditional."
+    },
+    {
+      "path": "src/security/guard.test.ts",
+      "change": "Added one end-to-end regression driving the real guardOutput() -> prepareOutputForPersistence() seam in advisory mode, proving bytesPreserved distinguishes a masked write from a byte-preserved one and documenting why redaction.state reads \"none\" on that path (the floor already ran once inside guardOutput). Added the prepareOutputForPersistence import."
+    },
+    {
+      "path": "src/security/persistence-sinks.test.ts",
+      "change": "Widened the two exact-shape toEqual assertions (byte-preserved pass-through; guard-redacted content) to include the new redaction/bytesPreserved fields, and asserted the guard-blocked sub-case still carries no redaction key. Extended the secret-floor test with redaction/bytesPreserved assertions for the masked outcome and with a refused-branch redaction assertion for the numeric-credential case. Extended the five-shape DUPLICATE_MEMBER_SHAPES loop with redaction/bytesPreserved assertions for the dropped-duplicate-member outcome."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written_or_widened": 7,
+    "mandated_suite_tests_before": 88,
+    "mandated_suite_tests_after": 89,
+    "mandated_suite_fail_before": 0,
+    "mandated_suite_fail_after": 0,
+    "red_run_pass": 46,
+    "red_run_fail": 9,
+    "typecheck_errors": 1,
+    "typecheck_errors_outside_exfil_test": 0,
+    "eslint_errors": 0,
+    "security_suite_pass": 216,
+    "security_suite_fail": 1,
+    "security_suite_fail_is_disclosed_out_of_scope": 1,
+    "mcp_suite_pass": 189,
+    "mcp_suite_skip": 3,
+    "mcp_suite_fail": 0,
+    "wider_net_pass": 2594,
+    "wider_net_skip": 9,
+    "wider_net_fail": 2,
+    "wider_net_fail_is_preexisting_unrelated": 2
+  },
+  "timestamp_utc": "2026-09-06T15:05:00Z"
+}

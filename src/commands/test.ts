@@ -84,7 +84,7 @@ async function runSuggest(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  let source = "";
+  let source: string;
   try {
     source = await readFile(contained.path, "utf8");
   } catch {

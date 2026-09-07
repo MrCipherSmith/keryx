@@ -1,0 +1,307 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T24-recheck",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck: T24 F-001 (secret/PII span in a JSON property name) and F-003 ($ref siblings) are genuinely closed at the pure validator AND at the real MCP transport, with every approved-contract control intact. F-002 and F-004 are closed only for the exact fixtures T24 named. F-002: byte accountability uses a strictly weaker recognizer than the structural floor (no JSON escape normalization, no contextual sensitive-field rules), so five duplicate-member shapes still restore credential-bearing original bytes through prepareOutputForPersistence and redactToolOutput with redaction.state none. F-004: zero-padded decimal/hex character references and tab/newline/leading-whitespace in the URL still classify as non-auto-fetch, reaching the MCP client with isError false. The fix also introduced one new false rejection: a serialization whose raw-text detector span straddles the member separator is refused even though the structural walk produces a safe redacted representation, which policies.md requires to be returned. No new bypass was created by the fix; both remaining bypasses are residual members of the original classes. Stage 2 (code quality) was not started, as required when Stage 1 fails.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret is absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe rather than an invalid string.",
+      "status": "partial",
+      "evidence": "Met on the structural path and at the MCP transport (T24-recheck-boundary-probe.json mcp.secretKey/deepSecretKey/passwordKey/throwsSecret, T24-recheck-validator-probe.json f001.passwordKeyNumericValue). Not met on the serialized path: T24-recheck-f002-class-probe.json shapeResults shows five duplicate-member shapes returning the credential-bearing original bytes with state none."
+    },
+    {
+      "criterion": "AC5 (AFC-15): a mixed corpus of safe IDs and real secrets allows no field-name bypass; a URL secret is masked; a public Markdown link is not treated as a network send.",
+      "status": "partial",
+      "evidence": "No field-name bypass survives and the public-link/bare-URL/relative/data-URI controls are unchanged (T24-recheck-validator-probe.json f001, f004). Not met for auto-fetch: T24-recheck-f004-summary.txt shows 8 renderer-equivalent URL forms still unflagged with the attacker host intact, reproduced at the transport."
+    },
+    {
+      "criterion": "Each of T24 F-001, F-002, F-003 and F-004 is closed by executed evidence, at the pure validator and at the public MCP/persistence boundary; the fix introduces no new bypass and no new false rejection of a payload the approved contract requires to pass.",
+      "status": "not_met",
+      "evidence": "F-001 MET and F-003 MET at both layers. F-002 NOT MET (T24R#F-001) and F-004 NOT MET (T24R#F-002). No new bypass was introduced. One new false rejection was introduced (T24R#F-003): {\"docs\":\"https://example.com\",\"note\":\"ping@host.example\"} is refused persistence while the identical parsed value returns allowed-and-redacted."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Stage 1 recheck report with the six verdict rows, four findings and the evidence table",
+      "hash": "ef23bffd97f3cd49a8f55379256df44ad9f22365ef5330666587d641b95bfebf"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This contract result (hash omitted: self-referential)",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-validator.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pure-validator probe: 12 F-001 cases, 10 F-002 cases, 12 F-003 cases, 33 F-004 cases",
+      "hash": "c8bb50c49450f7ed61b94584f8565d5f89a52834d1f5485d21316f1fd68117e5"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "MCP dispatchCallTool, redactToolOutput and prepareOutputForPersistence probe",
+      "hash": "f039f4d3886341bfbb355242ca23cd5fe8a9f6bba47f33ae9ee686fabde03d00"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-f002-class.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-002 class enumeration plus a 401-file sweep of real repository JSON for false rejections",
+      "hash": "97814bb01b321aaa980e846ad161d285acbfcda8a9bff7ac612a984621ee3016"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-validator-probe.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Validator probe output",
+      "hash": "fb41bd9a1aaf26d47d66d06002b951c5446b344968524d5f97989c4e2e3e1c86"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-boundary-probe.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Boundary probe output",
+      "hash": "b0ca41a48b5831e0f72c9027520b4d0fc6f2415bcc50f830ae65a1b41dc78bb2"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f002-class-probe.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-002 class probe output",
+      "hash": "7ddd1c1ee41c092f8088b9dd40e557b1fd86cbe1f2208bdbbc3fa95ecb1e1b1b"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f004-summary.txt",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-004 33-case matrix summary",
+      "hash": "4a57e36193db3a3a70e8f1eb169d522db56f2cd4448be46c4f7ba7eb000e8df0"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-reference-probe-rerun.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Re-run of the previous author T24-stage1-probe.ts as a control",
+      "hash": "3d49953503ef0f749b11317b53ba598262e1d7dae87c573a852940482b7f3684"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-start.txt",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Reviewed-file SHA-256 at review start",
+      "hash": "2b92939900f5833d109b4fc981335c466c2b38beaf1fe65025ecc0fd435119f3"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-end.txt",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Reviewed-file SHA-256 at review end; identical to start",
+      "hash": "25515ad6359471f85d1e43fe246738d0d786fc70ccf0f1b115e7c12fce5bda9f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-31-19-600Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Focused security/MCP suite: 49 pass, 0 fail, 161 assertions",
+      "hash": "51d94b1a4e913bd69d0ca15ecf4a2d630dadf14a0504e997184d12bece36d82b"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck.md",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-result.json",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-validator.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-boundary.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-f002-class.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-validator-probe.json",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-boundary-probe.json",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-f002-class-probe.json",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-f004-summary.txt",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-reference-probe-rerun.json",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-hashes-start.txt",
+      "change": "added (evidence)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T24-recheck-hashes-end.txt",
+      "change": "added (evidence)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T24R#F-001",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/output-validation.ts",
+      "line": 517,
+      "symbol": "parsedValueAccountsForBytes",
+      "problem": "The byte-accountability gate compares the raw serialization to the parsed value with a strictly weaker recognizer than the structural floor: it does not normalize JSON string escapes and does not apply the contextual sensitive-field rules. A duplicate member whose dropped value is JSON-escaped, or is sensitive only by field name with an empty/null/false survivor, produces zero detected spans, so the gate passes and the original bytes are returned with redaction.state none.",
+      "impact": "T24 F-002 is not closed. prepareOutputForPersistence returns allowed:true and writes the credential-bearing bytes to memory, wiki, project-skill, metrics and SAC sinks, and redactToolOutput returns them verbatim to the MCP client, while the sibling metadata reports that no redaction occurred. The escaped form is recovered with one JSON string unescape; the contextual form is cleartext.",
+      "suggested_fix": "Decide byte preservation by structural equivalence rather than span accountability: after the structural walk reports state none, return the original bytes only when JSON.stringify(parsed) equals the original, and emit the canonical redacted serialization otherwise (the alternative policies.md permits). If accountability is kept, run the detectors over an escape-normalized serialization and include the contextual sensitive-field/property-name rules. Add a duplicate-member persistence regression covering the escaped and contextual-key shapes.",
+      "evidence": "T24-recheck-f002-class-probe.json shapeResults: escapedSecretDuplicateValue, fullyEscapedSecretDuplicate, credEmptySurvivor, credNullSurvivor and credBooleanSurvivor each {ok:true,state:\"none\",bytesRestored:true,hidesSecret:true}; T24-recheck-boundary-probe.json persistence.escapedDuplicate {allowed:true,leakedEscapedBytes:true}, persistence.credentialDuplicate {allowed:true,leakedCredential:true}, seam.escapedDuplicate/credentialDuplicate identicalToInput:true. Control: the same credential as a single member is state redacted.",
+      "confidence": "high",
+      "dedupe_key": "afc02:serialized-json:byte-accountability-recognizer-gap",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.ts:517",
+          "src/security/output-validation.ts:539",
+          "src/security/service.ts:45",
+          "src/security/service.ts:308",
+          "src/mcp/redact-seam.ts:25",
+          "src/security/guard.ts:59",
+          "src/memory/write.ts:101",
+          "src/wiki/service.ts:829",
+          "src/wiki/enrich.ts:856",
+          "src/wiki/enrich.ts:1133",
+          "src/sac/wiki-owner-writer.ts:129",
+          "src/sac/session-wrap-up.ts:140",
+          "src/gdskills/project-skills.ts:269",
+          "src/metrics/lifecycle.ts:55"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg \"validateSerializedOutput|validateSerializedContentForTransport|prepareOutputForPersistence\" src enumerated the single adapter, both wrappers and every durable-sink consumer (raw 2026-09-06T13-33-09-564Z_rg.log); the shape set came from a 9-case executed matrix over the two recognizer gaps plus three must-stay-closed controls."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T24R#F-002",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 66,
+      "symbol": "CHARACTER_REFERENCE",
+      "problem": "The character-reference decoder bounds the decimal form to 7 digits and the hex form to 6, so a zero-padded reference such as &#00000058; matches only its prefix, decodes to code point 0 and is left raw; and considerUrl classifies the decoded string without removing the tab, newline and leading whitespace that the URL parser strips, so ht&#9;tps://host, a literal tab or newline in the scheme, and a leading space or &#9; before the URL all yield no host.",
+      "impact": "T24 F-004 is not closed. Rendering attacker-controlled tool, resource or error text still triggers a zero-click request to an attacker host that carries stolen context, and the payload reaches the MCP client inside operation JSON with isError:false and redaction.state none, so the metadata affirmatively reports that nothing was redacted.",
+      "suggested_fix": "Allow an unbounded digit run in the decimal and hex reference forms and clamp the resulting code point instead of the digit count; in considerUrl strip ASCII tab, LF, CR and leading/trailing C0-or-space from the decoded URL before exfilHost, keeping start/end on the raw span so masking is unchanged. Add padded-reference, tab-in-scheme and leading-whitespace regressions to src/security/detect/exfil.test.ts.",
+      "evidence": "T24-recheck-f004-summary.txt: zeroPadded8, hexZeroPadded7, tabInsideSchemeEntity, literalTabInsideScheme, newlineInsideScheme, leadingSpace, leadingNewline and leadingTabEntity are flagged=false changed=false hostStillPresent=true, while the 8 vectors T26 fixed and the 4 benign controls behave correctly. At the transport, T24-recheck-boundary-probe.json mcp.paddedEntityImage and mcp.leadingSpaceImage return isError:false, state:\"none\", leaksHost:true.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:url-canonicalization-residual",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:66",
+          "src/security/detect/exfil.ts:70",
+          "src/security/detect/exfil.ts:96",
+          "src/security/detect/exfil.ts:111",
+          "src/security/detect/exfil.ts:136"
+        ],
+        "enumeration_method": "Complete read of src/security/detect/exfil.ts established that all five auto-fetch surfaces (inline image, inline link, reference definition, img src, every img srcset candidate) classify through the single considerUrl/exfilHost funnel, so the class is the decoder plus that funnel; membership was enumerated by a 33-case executed matrix over the reference forms an HTML tokenizer accepts and the URL-syntax characters the URL parser removes, each with a benign control."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T24R#F-003",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/security/output-validation.ts",
+      "line": 548,
+      "symbol": "validateSerializedContentForTransport",
+      "problem": "The accountability gate runs before the structural walk and rejects any serialization in which a detector span straddles the separator between two members, because such a span is a substring of no scalar. secrets.url-credentials matches across \",\" in {\"docs\":\"https://example.com\",\"note\":\"ping@host.example\"} with value '\"ping', so the payload is refused even though the structural walk produces a safe redacted representation of it.",
+      "impact": "A behaviour regression at a public boundary. policies.md (Redaction) requires the safe part to be returned with redaction.state=redacted when it preserves the operation schema; instead prepareOutputForPersistence refuses the write with format-unsafe, so a record holding a host-only URL followed by an address-shaped field cannot be persisted at all. Availability only; nothing is disclosed.",
+      "suggested_fix": "Fixed by the same change as T24R#F-001: compare the canonical re-serialization to the original after the structural walk and emit the canonical redacted serialization when they differ, instead of gating on span accountability before the walk. If accountability is retained, run it after the walk and only on the state-none branch.",
+      "evidence": "T24-recheck-validator-probe.json f002.urlThenEmailAcrossMembers {ok:false, reasons:[\"serialized-content-mismatch\"]} versus f002.urlThenEmailParsedDirect {ok:true, state:\"redacted\", text:\"{\\\"docs\\\":\\\"https://example.com\\\",\\\"note\\\":\\\"[REDACTED:email]\\\"}\"}; T24-recheck-boundary-probe.json persistence.urlThenEmailFalseRejection allowed:false. Bound: T24-recheck-f002-class-probe.json falseRejections shows three sibling shapes still passing and repoJson reports 0 rejections across 401 real repository JSON files.",
+      "confidence": "high",
+      "dedupe_key": "afc02:serialized-json:cross-member-span-false-rejection",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.ts:548",
+          "src/security/guard.ts:59",
+          "src/mcp/redact-seam.ts:25",
+          "src/memory/write.ts:101",
+          "src/wiki/service.ts:829",
+          "src/wiki/enrich.ts:856",
+          "src/wiki/enrich.ts:1133",
+          "src/sac/wiki-owner-writer.ts:129",
+          "src/sac/session-wrap-up.ts:140",
+          "src/gdskills/project-skills.ts:269",
+          "src/metrics/lifecycle.ts:55"
+        ],
+        "enumeration_method": "Same ctx rg over validateSerializedOutput|validateSerializedContentForTransport|prepareOutputForPersistence as T24R#F-001 for the caller set; the input class was enumerated by replaying the raw-text detector rules that can match across a member separator against a 6-payload matrix and then sweeping 401 real repository JSON files through the adapter to bound the blast radius."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T24R#F-004",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/security/output-validation.test.ts",
+      "line": 195,
+      "symbol": "sensitive-property-name regression",
+      "problem": "The F-001 and F-003 closures are pinned only at the pure validator. src/mcp/structural-redaction.test.ts has no secret-property-name or $ref-sibling case, and src/security/persistence-sinks.test.ts has no duplicate-member case, so the public boundaries that T24 actually exercised are unpinned. Disclosed by the implementer and tracked as T32.",
+      "impact": "No impact today: this reviewer executed those paths and the transport behaviour is correct. The risk is that a later change to src/mcp/dispatch.ts or the redact seam regresses the boundary while the validator suite stays green, which is how T24 F-001 reached review in the first place.",
+      "suggested_fix": "Land T32 with the four transport cases executed in T24-recheck-boundary.ts (secret property name, nested secret property name, $ref sibling, $ref beside $defs) plus the duplicate-member persistence case named in T24R#F-001.",
+      "evidence": "bun src/cli.ts ctx rg \"sensitive-property-name|serialized-content-mismatch|unsupported-reference-siblings|srcset|entity\" over the four test files returns 6 matches, all in src/security/output-validation.test.ts and src/security/detect/exfil.test.ts (raw 2026-09-06T13-33-02-726Z_rg.log). Correct transport behaviour confirmed in T24-recheck-boundary-probe.json mcp.secretKey/deepSecretKey/refSibling/refDefsSibling.",
+      "confidence": "high",
+      "dedupe_key": "afc02:tests:transport-regressions-missing",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage1_rows_met": 4,
+    "stage1_rows_not_met": 2,
+    "blockers": 2,
+    "major": 1,
+    "minor": 0,
+    "info": 1,
+    "probe_cases_executed": 76,
+    "repo_json_files_swept": 401,
+    "focused_tests_pass": 49,
+    "focused_tests_fail": 0,
+    "source_files_changed_by_review": 0
+  },
+  "timestamp_utc": "2026-09-06T13:37:50.518Z"
+}

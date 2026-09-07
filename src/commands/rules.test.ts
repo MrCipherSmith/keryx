@@ -34,6 +34,7 @@ test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => 
     const agents = await readFile(path.join(root, ".metaproject", "rules", "agents-md.md"), "utf8");
     const claude = await readFile(path.join(root, ".metaproject", "rules", "claude-md.md"), "utf8");
     const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
+    const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
     const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
       agentEntrypoints: { root: string[] };
     };
@@ -45,8 +46,10 @@ test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => 
     expect(agents).not.toContain("<!-- keryx:index -->");
     expect(claude).toContain('source: "CLAUDE.md"');
     expect(claude).toContain("Prefer compact context.");
-    expect(index).toContain("| AGENTS.md | high |");
-    expect(index).toContain("| CLAUDE.md | high |");
+    expect(index).toContain("routing.md");
+    expect(index).not.toContain("| AGENTS.md | high |");
+    expect(routing).toContain("| AGENTS.md | high |");
+    expect(routing).toContain("| CLAUDE.md | high |");
     const rootAgents = await readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(rootAgents).toContain("**HARD GATE:**");
     expect(rootAgents).toContain("explicitly read `.metaproject/index.md`");
@@ -89,8 +92,12 @@ test("rules sync creates default AGENTS and CLAUDE entrypoints when none exist",
     expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain(".metaproject/index.md");
     expect(await readFile(path.join(root, ".metaproject", "rules", "agents-md.md"), "utf8")).toContain("priority: high");
     expect(await readFile(path.join(root, ".metaproject", "rules", "claude-md.md"), "utf8")).toContain("priority: high");
-    expect(await readFile(path.join(root, ".metaproject", "index.md"), "utf8")).toContain("| AGENTS.md | high |");
-    expect(await readFile(path.join(root, ".metaproject", "index.md"), "utf8")).toContain("| CLAUDE.md | high |");
+    const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
+    const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
+    expect(index).toContain("routing.md");
+    expect(index).not.toContain("| AGENTS.md | high |");
+    expect(routing).toContain("| AGENTS.md | high |");
+    expect(routing).toContain("| CLAUDE.md | high |");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -231,6 +238,7 @@ When reviewing or implementing pipeline changes, use the review orchestrator wor
 
     const claude = await readFile(path.join(root, "CLAUDE.md"), "utf8");
     const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
+    const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
     const distilledIndex = await readFile(path.join(root, ".metaproject", "rules", "entrypoints", "index.md"), "utf8");
     const projectRule = await readFile(
       path.join(root, ".metaproject", "rules", "entrypoints", "claude-md-pipeline-architecture.md"),
@@ -244,8 +252,10 @@ When reviewing or implementing pipeline changes, use the review orchestrator wor
     expect(claude).toContain("Answer in Russian");
     expect(claude).toContain(".metaproject/index.md");
     expect(claude).not.toContain("src/pipelines modules");
-    expect(index).toContain("distilled-entrypoints");
-    expect(index).toContain("entrypoint-distilled-skills");
+    expect(index).toContain("routing.md");
+    expect(index).not.toContain("distilled-entrypoints");
+    expect(routing).toContain("distilled-entrypoints");
+    expect(routing).toContain("entrypoint-distilled-skills");
     expect(distilledIndex).toContain("Pipeline Architecture");
     expect(distilledIndex).toContain("Review Workflow");
     expect(projectRule).toContain("type: distilled-entrypoint-rule");

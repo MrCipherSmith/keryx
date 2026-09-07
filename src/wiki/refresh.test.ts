@@ -5,7 +5,6 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { appendChangelogLine, bumpPatch, migrateMarkers, refreshPages, verifyPages } from "./refresh";
-import { findManagedBlock } from "./managed-block";
 
 const SHA = "c".repeat(40);
 

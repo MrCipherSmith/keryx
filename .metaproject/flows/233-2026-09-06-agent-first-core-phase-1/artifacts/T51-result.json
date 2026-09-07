@@ -1,0 +1,61 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T51",
+  "status": "DONE",
+  "summary": "Reconciled both metaproject-adapter regressions the integration pass found. readWiki's escape-error test was updated to the deliberate leak-safe constant message T6 introduced (code was the contract). skillsCatalog's catalog.md fallback was fixed: parseCatalogSummaries passed the gdskills directory as readContainedFile's owner root, but catalog.md is a sibling of gdskills/, not a descendant, so every read failed containment and the documented fallback silently returned empty strings (test was the contract; code had the bug).",
+  "summary_markdown": "See T51-implementation.md for the diff evidence, consumer search method, and per-failure determination.",
+  "acceptance": [
+    {
+      "criterion": "Both failures resolved, each with a stated determination of which side was the contract and why.",
+      "status": "met",
+      "evidence": "T51-implementation.md documents both determinations: readWiki wording -> code is the contract (T6 hardening, corroborated by metaproject-adapter-containment.test.ts's leak-safety bar and the prior journal entry); skillsCatalog fallback -> code has the bug (wrong readContainedFile owner root; catalog.md is a sibling of gdskills/, not inside it)."
+    },
+    {
+      "criterion": "bun test src/harness/tool/metaproject-adapter.test.ts passes fully, no other test starts failing.",
+      "status": "met",
+      "evidence": "Target file: 31 pass / 0 fail (was 29 pass / 2 fail). Directory sweep bun test src/harness src/gdskills: 2069 pass / 9 skip / 0 fail across 159 files."
+    },
+    {
+      "criterion": "Nothing this programme deliberately hardened is undone; no path/raw error text reintroduced into an error result.",
+      "status": "met",
+      "evidence": "readContainedFile, confineToWiki, and the constant leak-safe wiki error messages are untouched. Only the owner-root argument passed into one readContainedFile call was corrected; the test's error-message expectation was updated to the existing constant string, not reverted to the old path-interpolating one."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T51-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation determination for both failures, written before any code edit",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T51-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-failure diff evidence, consumer search method, determination, and verification log",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "src/harness/tool/metaproject-adapter.ts", "change": "parseCatalogSummaries: readContainedFile owner root corrected from .metaproject/skills/gdskills to .metaproject/skills, so the catalog.md fallback read is no longer rejected by containment" },
+    { "path": "src/harness/tool/metaproject-adapter.test.ts", "change": "readWiki escape-error assertion updated from the retired interpolated message to the current leak-safe constant, with a justification comment" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 0,
+    "tests_passed": 2069,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T15:40:00Z"
+}

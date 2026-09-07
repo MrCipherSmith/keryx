@@ -1,0 +1,29 @@
+{
+  "task_id": "task-19",
+  "task_name": "Enforce actual model round budgets",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Made maxRounds an inclusive ceiling on every provider.stream request, including optional no-progress summaries, so maxRounds 1 cannot create a second tool round or hidden wrap-up. Preserved the independent actual-invocation maxToolCalls cap, interactive reset behavior, unattended terminal state, and native child status mapping. Replaced obsolete N+1 expectations with strict regressions and explicit compatibility rationale.",
+  "files_modified": [
+    "src/commands/agent.ts",
+    "src/commands/agent.test.ts",
+    "src/commands/agent-tool-call-budget.test.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+  ],
+  "files_created": [
+    ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+    ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+    ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
+    ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "acceptance_criteria_met": "all",
+  "story_result": "not applicable",
+  "skill_drift": "none",
+  "lint_result": "pass: scoped ESLint over the six dispatched source/test/script files exited 0 with no findings",
+  "type_check_result": "pass: bun run typecheck and bun run typecheck:scripts both exited 0",
+  "test_result": "pass: 129 focused tests passed, 0 failed; unchanged independent probe observed one provider request and one tool invocation at max_rounds 1 with BudgetExhausted status",
+  "notes": "auto_commit=false; no git/index/branch, flow state, frozen acceptance criteria, package, lockfile, dependency, model, or network operation. No global test suite was run per dispatch. Independent review remains owned by another worker."
+}

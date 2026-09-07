@@ -1,0 +1,2341 @@
+{
+  "recordedAt": "2026-09-06T12:57:04.926518+00:00",
+  "scope": "Git modified tracked and untracked nonignored files, excludes this manifest; contains preexisting and implementation edits together. Ignored raw evidence is not inventoried.",
+  "files": [
+    {
+      "path": ".metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json",
+      "bytes": 10043,
+      "sha256": "279cff73f746f05a9c1bcb961a8cca25d7ff0fcaabbf82acad45a20ba07f25a6"
+    },
+    {
+      "path": ".metaproject/data/gdgraph/.provenance.json",
+      "bytes": 138,
+      "sha256": "79d26ea7bd123895a38d8f1daca64f81447504084f8405f3c776d43cb42ea2ab"
+    },
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "bytes": 46623,
+      "sha256": "564870761af9013f9b06d465ecc316bb25abfc942212e3fae119d58df5892a89"
+    },
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/repomap.md",
+      "bytes": 5974,
+      "sha256": "636e8ff0a7f6b5def97dcc4d9e12d521a35b6efa9ee52cf51b97daef1782f9ee"
+    },
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "bytes": 1357,
+      "sha256": "08fccbc52ec555f35299c25c2f22604980edb678c94bff88567436818f1ec62c"
+    },
+    {
+      "path": ".metaproject/data/testing/artifacts/runs/origin-main-0bc6418.json",
+      "bytes": 9815,
+      "sha256": "511df3defbd7b8cf04d46aec0b825a47146e3e3e2952191b41d0d15a0b305438"
+    },
+    {
+      "path": ".metaproject/data/testing/artifacts/runs/origin-main-0bc6418.md",
+      "bytes": 6479,
+      "sha256": "ea6dfa9e822ff43302e765d8027a3177db17eed7722c8da7472a5ad360a30c34"
+    },
+    {
+      "path": ".metaproject/data/testing/context.json",
+      "bytes": 101904,
+      "sha256": "c0c98162c1ef01734292deb543bb86f94f2c436c8124121db824b1e680c87dde"
+    },
+    {
+      "path": ".metaproject/data/testing/context.md",
+      "bytes": 13194,
+      "sha256": "e3b6c119651c20e5afd9b4611aac158e368eba7ffabe22e7252de897ef964e6a"
+    },
+    {
+      "path": ".metaproject/data/testing/recommendations.md",
+      "bytes": 73,
+      "sha256": "d5b3b1b6b002ad011538117f2f61f92211816bf4dcf84f1e8cbc454b075c5bb1"
+    },
+    {
+      "path": ".metaproject/data/wiki/freshness/latest.json",
+      "bytes": 5864,
+      "sha256": "10b11d4a8b9b3030cd12264a5ef549c10979f76d8e26aec3a92ae66de0182f26"
+    },
+    {
+      "path": ".metaproject/data/wiki/freshness/latest.md",
+      "bytes": 1774,
+      "sha256": "a930dbad63dc5f7322dcbe15c5967fed4aae831ccef372ec39212c47a8b685c6"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "bytes": 1238,
+      "sha256": "f4d3f1ff99297039341c9113bb874832d474c0d986fe495a06295a91e009b27e"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T12-implementation.md",
+      "bytes": 561,
+      "sha256": "24790962f48b428c80173950ebf4f0ce29961b59f423450878d85ba6914593f6"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T12-spec.md",
+      "bytes": 1135,
+      "sha256": "6d1988347e29c85d3f9aa9ea04ef8539b5d910ae18635673c089fec5186d0211"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-recheck.md",
+      "bytes": 3616,
+      "sha256": "48204d1bc437ac74545462b541761882dce0fe87470d856462b77ea4a4e27dc7"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-result.json",
+      "bytes": 4260,
+      "sha256": "c56f57770f48d0df97a1b529002d98d30207f3d0a73e1942d88235e0fd795483"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-verification.md",
+      "bytes": 6244,
+      "sha256": "e9c42a8839400c9a5ad9fb9310458be345373125997e8bae5e5f1e7de99c159f"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T14-red.md",
+      "bytes": 459,
+      "sha256": "c6bf5c25524e70f63c0e9ced00c7e08972fe8c8f7e865e87c63e0e106a34887c"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-result.json",
+      "bytes": 3770,
+      "sha256": "940799379e4adec7c5c9e6098a00e6fc0425d725484796e8ca93b7be68762044"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-review.md",
+      "bytes": 6327,
+      "sha256": "7c68ead98a6e64e865fe6dfbbc405fb9186b91469c9017f937b3b86f8ff767c7"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts",
+      "bytes": 2506,
+      "sha256": "72eb6d0266360752206f9f893077dee0a53bb7cdf355c969c6f5b8488c220215"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-fix.md",
+      "bytes": 2044,
+      "sha256": "e14c881faafeb57ab6ca05c615abcb778d82e894cb2c1261f8d220d20e2cfd99"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-result.json",
+      "bytes": 7219,
+      "sha256": "4fa2bbcc4cb88258deef567f615aa5e1bf3886adcf5e324776209d08c7206fa4"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "bytes": 2539,
+      "sha256": "9be925af4701a9fe3a3ee44185808c753966d5019a80dfaa175a1c7c112ef009"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md",
+      "bytes": 8741,
+      "sha256": "0016f4856805e3a1b2bdc05e2ecd1c6cc4514eaf2b480b481859319509fd59b2"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-result.json",
+      "bytes": 7411,
+      "sha256": "65b8b7f245a8c747a23af1ba984adf105d4203878129cfad95c648ca992bfa35"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-review.md",
+      "bytes": 8576,
+      "sha256": "791c696059d04fc985d0b14f4bcd136a61f89079613e3ab0fb04753e223b9326"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T17-implementation.md",
+      "bytes": 1595,
+      "sha256": "ea81b8c8f704939a38b7a41660684f049a96f43a4e8574a04f51fb27007258c7"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T17-lint-inventory.json",
+      "bytes": 23032,
+      "sha256": "6b6808b2d2964bb939bd09388fed018fbec05ec7cb0cbce8f9664b3a5cb75c9b"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T17-spec.md",
+      "bytes": 951,
+      "sha256": "090d1c7f4bb05c9cd24f939c5f34357a6599e7bdfab35ef40e41b4e6385755c4"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-implementation-report.json",
+      "bytes": 5258,
+      "sha256": "639f08563d77da1b43505e21a3f00e42f4b8e2e3c4f48f2bbe546aeecc4d5512"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-lint-scope.json",
+      "bytes": 32960,
+      "sha256": "6bf3aefed8d7df3ee9c1d77e405a8558d8873b6de4adbde090276f64308570bf"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-result.json",
+      "bytes": 16243,
+      "sha256": "0af5909d0cd84d73cf0aed6b31cf0c4e083d7e115ad15d13a0ecd0755632b3ca"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-spec.md",
+      "bytes": 1103,
+      "sha256": "9db38e5dafdf99ebfb74c571b26a5d0bd03a67aadb405506c6838bcae97ce2d4"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-verification.md",
+      "bytes": 6626,
+      "sha256": "865463f7f2b30006cf69ec7a7fcad6f07ed3b2fcf14551d243ac245cc2bf89fa"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
+      "bytes": 2018,
+      "sha256": "f531073e8c1c9c430d3aa42a34bc521faa9d58e0596fa96ed3f425794ea6795c"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json",
+      "bytes": 6642,
+      "sha256": "3e467bbe79766a6e1a7ee25e5c48066b6571bcd05829e1a6add022fd32811114"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "bytes": 4008,
+      "sha256": "e3737fa71f0e7821574fefb8dc67d9dfeb98a6dfe9dbedfe39048a74520477d2"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "bytes": 4675,
+      "sha256": "92024d30880851b8c1cd88e1cbaf180e999342440bef959e04e791ad254ce752"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
+      "bytes": 1894,
+      "sha256": "68c27d2d1d625bd255c88c3b396d633177f412e47bcd52ff5318d9859ff2647f"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-result.json",
+      "bytes": 4280,
+      "sha256": "43387766982c2529d02b873742908c33e039a04a4defd61c60a1060a2fb130c0"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-test-case-specs.json",
+      "bytes": 2232,
+      "sha256": "02bcd0b38409903461ad31088e0b698ac17e195a836da9bf83a0ed9082adb667"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+      "bytes": 6771,
+      "sha256": "2d5d5ad9e3e93d3f4ffc129a5c8d78530d59da81b109407fa506067d75fc83c9"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-result.json",
+      "bytes": 6809,
+      "sha256": "a889304927a2eed2808cd4eb94b2329a5777e46cf8bd343f17e7c61424bae797"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
+      "bytes": 4689,
+      "sha256": "bd1c8e90d25b5b55c5c1a8350216ad86182bb6ee8fb8e772e07c8ce101d36591"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-implementation-report.json",
+      "bytes": 1672,
+      "sha256": "a496a541d4a76764b0bcadf275eaa9e395b2ff30a48da9280bf81bf0057ec021"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-result.json",
+      "bytes": 5667,
+      "sha256": "8a7ccab8cec6615b7c68f84f09e77df8ffb6760d0a225d954b7849e9c07f968f"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-verification.md",
+      "bytes": 2875,
+      "sha256": "2e40d061c5a544e3cea2972d8a38b30ad7a957027e5c9c526a21c7fbb66024da"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "bytes": 6712,
+      "sha256": "d20f966e90cf530b68a5c70a10a3b2758901be9bc1e5c8c2450830738aacc02f"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-implementation-spec.md",
+      "bytes": 1811,
+      "sha256": "512ea425f933b8a817f8294efb1f2f517fe0e9c9a5e8cb8b5375f6951e5c6011"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json",
+      "bytes": 10615,
+      "sha256": "29fad9d7eb99778f2ecef54fd792bead7aee2caf2f5f9f09d94ba8adf9c4a9e1"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-result.json",
+      "bytes": 7554,
+      "sha256": "b525e149f5f56867c71722f97d5c6e6cdb7c0eb20b45dfde1e0deb262588db6c"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-verification.md",
+      "bytes": 7219,
+      "sha256": "bad121f6fafa5cc44a0bf42b13c4e0a070ccaec64583ffaa5dc56331a6f49af3"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+      "bytes": 2349,
+      "sha256": "64eed1e39dce158a1a82023586875f188b1312a9721428b2b14e6efe21d82668"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/description.md",
+      "bytes": 874,
+      "sha256": "938fdd34f3070fde6212b64c6f28b09651622bf60a3aca7a8a64c0067e9a13f9"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T12-input.json",
+      "bytes": 615,
+      "sha256": "5a89d3dd1da9ae6bf01e75a002e0733ad35041d863476d8aa7b76c147d6b8189"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T13.json",
+      "bytes": 3304,
+      "sha256": "6e6eaa40313daf6b816c1bcdb42b373e249ac1ad9dca6393ac47453836f3ffdc"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T14.json",
+      "bytes": 3293,
+      "sha256": "61c26d4d38c838f21f6cbf6103b1a8c1c2098ec5cfcdec7c30cdfd66060546b8"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T15.json",
+      "bytes": 2888,
+      "sha256": "0e165aa5c1fcee545d1dd00b672fd26e7fa72a65a381d97a40e24e65227d358a"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T16-final.json",
+      "bytes": 3036,
+      "sha256": "f7bb7d4292068799e9f2edb4b3cdfa14ffdacee71d7a369d8c67da188da655b5"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T16-recheck.json",
+      "bytes": 3833,
+      "sha256": "c486d642284879200f8cad35ab841188e4559fa89dbbb9af4ab4a4c0672b41ea"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T16.json",
+      "bytes": 3429,
+      "sha256": "cdf7ab4a9e495999beb8821245c0a00eafef032ad378f7cf58efb657ce39e808"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T18-input.json",
+      "bytes": 5054,
+      "sha256": "3cbaa474c29c60220c668fa2eebf9f20c33430c229e050f62aa1318cc1298a5f"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T18.json",
+      "bytes": 8145,
+      "sha256": "2c74ee9f87972e6ec2ce1753a08d065b94405e7cb58801d1a07c5e94c1fb29cd"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T19-input.json",
+      "bytes": 2761,
+      "sha256": "d899f6f55936308f00f26562e4f8c113b89f461e32a586e7f1b5f5dcfc074723"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T19.json",
+      "bytes": 3286,
+      "sha256": "70bd9b08cb5c1af7cba6ab893ae9c79d00429482b387afb92feac2a8f97f4dea"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T5.json",
+      "bytes": 3408,
+      "sha256": "f19aebcccc5bcf215d7d0e290761362eb52be121524598f5ef75a34ff99460fe"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T6.json",
+      "bytes": 3448,
+      "sha256": "10e5a57df6a198e5bbb2f212869a2e05a35b40b32bad02497a93f61ab0194400"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T7-input.json",
+      "bytes": 2364,
+      "sha256": "4a2f05cea18a903ad969a3af6a61590c016cf847f4a0909417a4c5e68f986d7e"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T7.json",
+      "bytes": 4487,
+      "sha256": "3a79a473d199e429f083575d407f2939175ce6bbcfa0f5bc2951539a0a57f199"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T8-input.json",
+      "bytes": 2853,
+      "sha256": "4bd2ed39983fee013f2835505e9a6b6b80e6f2a83b9f865a59f240ef702a27f4"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T8.json",
+      "bytes": 4730,
+      "sha256": "6ac9d050573d49bc62d0029d002409ffc555fb314b7d530f14ad59c6b31c48ef"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/dispatches/T9.json",
+      "bytes": 2586,
+      "sha256": "0c5bf23d02f3612f5b8566bb9d92802bebd26bfa1a6d92b21aabbca9c2f0bec9"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/flow.json",
+      "bytes": 26924,
+      "sha256": "83ff9fa23e113ba55d74a3505542452349b290426c2e575cebc864f33fbe6857"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/journal.md",
+      "bytes": 10762,
+      "sha256": "516feef002aeb6c4e539405b6194e72672c5735e89c4117eb8f66eaa79c36ca7"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
+      "bytes": 1490,
+      "sha256": "a22c91f321a277649d01f961c5aa687653f64dca129d4118d865c23b42b5551e"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md",
+      "bytes": 2083,
+      "sha256": "fc255c571b594e18e5517e9105b5b049407b97c5db2d9d58a48f98689f4f21c9"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-red.md",
+      "bytes": 4123,
+      "sha256": "cfaf83f3c8abe7d8ce2381f4f915ab92f90e8bb6aba8e422297d439cd51f41ef"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-result.json",
+      "bytes": 7453,
+      "sha256": "6014a66399ac95959520b067ba981e3568b5d1b103a25f2f88183963fe82f080"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-test-case-specs.json",
+      "bytes": 4912,
+      "sha256": "e047fa4ca781da578cf767b44c9872c27570abd138e62b57e11b558a15bd7d70"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md",
+      "bytes": 5154,
+      "sha256": "0ce8e169d041aba8d566d31840636a935972ab622e96fdfa8e20202198bb7e4f"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-implementation-spec.md",
+      "bytes": 2707,
+      "sha256": "ca5202b300193e7ff46de862a8949d6ef03c6110b3458a250b7d8b30d598b121"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-result.json",
+      "bytes": 9682,
+      "sha256": "3a38e8426931bfc3d08d1d99c12d5f704d1b17812dacd016096bdb3d0b2e93d7"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-recheck.md",
+      "bytes": 1761,
+      "sha256": "f01ec0072581b243a56bcce390adf0b28d182161e135843c629cd82cc07e7a4d"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-result.json",
+      "bytes": 4752,
+      "sha256": "e4dd81c1cf3d418fff1cdf3050e15886753ef26a262d27c561e8bfd274672adb"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-review.md",
+      "bytes": 2273,
+      "sha256": "e09a3a0cfe02ae566851fead4a3c2db5a1005034caaced5da6e4b73ce2d9f2ed"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-recheck-result.json",
+      "bytes": 2615,
+      "sha256": "7ec19df4db3adc1db0c5a873081bd6690db90bfe3febf808c4d5efa05d21afd4"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-recheck.md",
+      "bytes": 3933,
+      "sha256": "c863b32edbe46b3e8dad4f022538cdf8f264213070c3a1165acd513ecb9f98a0"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-result.json",
+      "bytes": 3424,
+      "sha256": "8281e5d3acefb0b00276f2805ae899ec80962e0d25818fc2770e417cdb0cc6b5"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-review.md",
+      "bytes": 3343,
+      "sha256": "da926858564540c97a9095dcc31335385402f8b524aa56cd37f2604123d2828e"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T17-owner-race-probe.ts",
+      "bytes": 940,
+      "sha256": "ed804e5226e7c93b359a7e25a58753dae652e8d1e9c257f636a1e4f2d1724749"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation-spec.md",
+      "bytes": 1665,
+      "sha256": "19afb0e3991fe713f8e95d8c13ab42cfd89e1a8ebbd3457cc01cacb24396d007"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
+      "bytes": 2002,
+      "sha256": "af0d4eb2847343e8dd8f5dba2b09eb8df455d67883ccd56895dc1f48d20d5349"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-result.json",
+      "bytes": 4518,
+      "sha256": "29c645161cceafc93ae77d09ffbbe9946cc5ce3f457539cfbb524c96d4cabd65"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md",
+      "bytes": 5583,
+      "sha256": "4dff0b2483919a101ebdae04b5f606dd5374710864559572254fa513636175de"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md",
+      "bytes": 4153,
+      "sha256": "8bfe8e1ce3530ef5b4ea5b6825d1f417637e5930872a2d44aa3edd2e645a2751"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-result.json",
+      "bytes": 8020,
+      "sha256": "2e4733082b42bff39b80132fa64a1215c0ef1d3aca91091ce34216bcff3fcb4f"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation-spec.md",
+      "bytes": 2207,
+      "sha256": "17823d0b40f1a1e3a6f9846075d4491a828eb5965f84ec4c039577fe97e1f457"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "bytes": 3578,
+      "sha256": "d4526a1591cc47c3e69c5aa6da935a84f749acd244bbc074beef9229e9103d5f"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-result.json",
+      "bytes": 4801,
+      "sha256": "34dc76dc2242098fb0eb8aa0cebab74d1b6fba42d68bef511fa6df24920aad66"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T21-implementation.md",
+      "bytes": 875,
+      "sha256": "724f4e0b8436fb721c6c2cf98470b81493e7a50e691f4cc2651ed09598c8ceba"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T21-spec.md",
+      "bytes": 720,
+      "sha256": "a53599b92c1d1136b4f0d74a9c867cb0c8f6c46dce1f99e49a9b27b726bbbb9a"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T22-implementation.md",
+      "bytes": 1546,
+      "sha256": "2b8e245e8c65c1d3f092841e6345ad50fc5bdb9219bf0d1b0b0cb280f87b7bac"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-recheck-result.json",
+      "bytes": 2603,
+      "sha256": "110dd6898175e13d230bc561d136d84f7449f3294fb856714ec9d3701f909846"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-recheck.md",
+      "bytes": 3385,
+      "sha256": "c5195d5f75a3d7bb5f41fff96fb1646582c48852d0b06e83eda2d034d8db9f7f"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-result.json",
+      "bytes": 3623,
+      "sha256": "d5962259e67b55087be2df423bc724bf14aa925e36cd0389c4f9b216b18cf917"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-review.md",
+      "bytes": 5226,
+      "sha256": "1b954f4dea4779a62a9d59ba3c1112e39ee8f2a8e7cf16f8fa7c21305a1be9bf"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-result.json",
+      "bytes": 11700,
+      "sha256": "af82d0803cadff8b10d9556811e0d84b01b89c35ceeab5da9d99b09e74ed86a5"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
+      "bytes": 18641,
+      "sha256": "205f09370bf9e6ef496d4fc207f70e1bbc8ce5d7c30ffc8ed742c38ba43e0559"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts",
+      "bytes": 4789,
+      "sha256": "dd315537d588e70dd2b38fc791ba9acc3cabe6bae5e0bf2d6c8c541c7bf17adb"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T25-implementation.md",
+      "bytes": 405,
+      "sha256": "a7426b414011c55e910dcc09925613e81b0d34f92ff2afb4b742d94cc9eb7e25"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T25-spec.md",
+      "bytes": 354,
+      "sha256": "279a932836281dbc8056284187c9a593239e9bd838f44563c539860c65e7cd93"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md",
+      "bytes": 511,
+      "sha256": "81d3cba3239aa926dcde6da80929c4ac3bc64fa23329b37ce815e3a03987ac99"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-red-evidence.md",
+      "bytes": 2236,
+      "sha256": "7d016c82eea83fa4a8518f3230396c908ada81d9043fa5ef1496352d0ea29b10"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-result.json",
+      "bytes": 4365,
+      "sha256": "9868f24e1607fffc57fda55f0beddb70b43a6f92292e0c6e54da3c1c5f977686"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-test-case-specs.json",
+      "bytes": 6016,
+      "sha256": "bf010e0015bc5e1333644b69b91da5ecfc323a79722ee77a752404dd25e4c08f"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-implementation.md",
+      "bytes": 2012,
+      "sha256": "d91f551be9802af447dd170ffdbc5af23aa5222dce32f9203c83f4767d990c8e"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-result.json",
+      "bytes": 3696,
+      "sha256": "c84857f7e2e5e7a9938b7b513e56d2ef08bae30af69a50bcbe5a253d74c05fab"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-spec.md",
+      "bytes": 2117,
+      "sha256": "a1dc4c9d9e4f99a5f8eb799102ca9d9cfa586bee42b0227b9213914cee20f323"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-red.md",
+      "bytes": 6068,
+      "sha256": "21080250d8236fcb38d8b270ad8191b824e3608b3904e66fdf8eba29722d2111"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-result.json",
+      "bytes": 5884,
+      "sha256": "6a71bc33db9ef2c76c2dd14de522432b69c6bbaf684bd102221af8f52e694f21"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+      "bytes": 5316,
+      "sha256": "3e0ff405b7448db2d0cf4fb72d956f4344bf60007085aaf94f6b25b8a835a805"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T8-output-integration-spec.md",
+      "bytes": 1505,
+      "sha256": "e38de458d44a6670f6923fa8cb5be844add33523545fee7782463b1562128128"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+      "bytes": 2130,
+      "sha256": "d3aca68e31fbc918286638ef7e2a2dba2571821449ba6dd5eef274160ffae161"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
+      "bytes": 2967,
+      "sha256": "28ae3d12e3dc3561514eccc4ad7f1007e6b159daa08002e25f18ddd8915586fb"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/http-implementation.md",
+      "bytes": 1535,
+      "sha256": "a1da74b845598d9c3aa02c8d53901610f17909b92ebcfad0dfc6a21d5c0080de"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/http-spec.md",
+      "bytes": 1079,
+      "sha256": "bbb36bd195880463be5890ba06b9af924f30d8bc9917390fcf9de533aa985134"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/shell-cli-smoke.json",
+      "bytes": 891,
+      "sha256": "b85a98be93f669b4b5533012a04baf57ec6f7323b39adcb9e79d23053ebc6827"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/shell-parser-implementation.md",
+      "bytes": 1117,
+      "sha256": "2571c8285caeac015d336bd2df81322716c27dc2731b7e0ff12d54130226a004"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/shell-parser-spec.md",
+      "bytes": 926,
+      "sha256": "8e9b201f5f6466502185951c5d1974e57616f38ed2b08e5648e1bad001ccd417"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md",
+      "bytes": 2568,
+      "sha256": "1b16eb900a76c28ea3e271e2091f4ac8b26f3989a8160abb7c11e83249719c3a"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/description.md",
+      "bytes": 776,
+      "sha256": "50236e30c3d93f7603d54d3e16fbd1c15160fdaf2eaf72965bd4f9f7a9bc85c4"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T11.json",
+      "bytes": 3227,
+      "sha256": "280dabd7f3c8790f9dc2d1a0127c345bcd11339ba53c3342ab0d8efb861bbfb9"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T12-input.json",
+      "bytes": 2407,
+      "sha256": "26b566bc5fd4b1138ab197f3dfb8ee96d62414aad42277a4e7d402023e07ccd3"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T12.json",
+      "bytes": 3594,
+      "sha256": "24dedbff65193ffbe29523c46259d22930344e0d062dd9f1ebe499b50195499c"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T15.json",
+      "bytes": 2671,
+      "sha256": "9cdd4243cdedc8df081a915393453732ca22ae4832ba19350af26060a75afc76"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T16-recheck.json",
+      "bytes": 3914,
+      "sha256": "bac0fc2d04c367caac61c02f6afd411ed97d1df0be742c7fe993a98149ca5c29"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T16.json",
+      "bytes": 3432,
+      "sha256": "7ad9fac0d1abc9990776b4d5c5779047f20125dee691df7c8d4c982da803703b"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T18-input.json",
+      "bytes": 2197,
+      "sha256": "99f1e29720b24c4f14a0a38ae6b7ebe914d92de2b6183e56575b05cc2ed0eee1"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T18.json",
+      "bytes": 2897,
+      "sha256": "a83be3821f16a5f9689cbbf124f764497f5d969a94afd9bf666ce29da9388ca0"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T19-input.json",
+      "bytes": 2914,
+      "sha256": "4dd0b6e23cf3ea96176f5a42d4463c4128a29f1618de065a84c2b700a363c64b"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T19.json",
+      "bytes": 3608,
+      "sha256": "de3c4f39c2242977b8934e939e6df4f6f210e36104efc7e7d4205c18bf90aa43"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T20-input.json",
+      "bytes": 3348,
+      "sha256": "3aba52fbd76b594398d76c23a4ae07fccc11b4ebeb2d9197e1ad92671d99aa21"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T20.json",
+      "bytes": 4299,
+      "sha256": "bd5cdf0fe2f78ae19b7d9e6d8cc9160c19a17604b312c72b5fa848ff053f815c"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T23.json",
+      "bytes": 3644,
+      "sha256": "1020fc23679dbe47e57a24c534e7fb8034e2dcb15cd1f0dd77d437e4ab07cc5c"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T24.json",
+      "bytes": 4039,
+      "sha256": "9713aec8a344596c20e31c2f58e08a6982cd069eae36d02afdcaf38ccb621542"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T26.json",
+      "bytes": 3998,
+      "sha256": "7cb2ec0041670b37a1809bf73689ecf8a560824bf481f60cf75691a9dc9ebbf2"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T28.json",
+      "bytes": 2792,
+      "sha256": "5df65fc1076065d93b92915a4b3a31d546e5371095f0372e51f8d5e6b71df6db"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T5.json",
+      "bytes": 3213,
+      "sha256": "941d4ff520ab349e5886e2c0daf38c224dc89f9bb3205edfaad2d8d59b24a131"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T6-input.json",
+      "bytes": 2727,
+      "sha256": "1fa9e7f745de9ebcb5fc090e9bbb8fef0ed2336478911ba278860476c663a20a"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T6.json",
+      "bytes": 3780,
+      "sha256": "a1cf7b15d10298ec86e7504afcddd46c04e1012166207bf4f976d04cbfaee24d"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/dispatches/T7.json",
+      "bytes": 3916,
+      "sha256": "6e42af786729ec011bb7c70ccc61cf25f0d674a137562cdd2abc1940e37a74e7"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/flow.json",
+      "bytes": 43262,
+      "sha256": "7f67d3058a1a97ff3b71dc6cdb20793360ef89f979b96c16cfc0730d2a80e084"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/journal.md",
+      "bytes": 15220,
+      "sha256": "9c45844365a4514150f4c934355f45642335ba5e6c3e1487d4043969bbb2008e"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/plan.md",
+      "bytes": 1542,
+      "sha256": "95fc74599853496657246f21a81f6c60e8c28ffceba7e36dbd4456c94f200d62"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/acceptance-criteria.md",
+      "bytes": 1709,
+      "sha256": "be0eb20bc98de636d9b3394dc37d0b5c0ae5128325e94559fd0fead53e2030a6"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/context.md",
+      "bytes": 1124,
+      "sha256": "644295c4f5930dcdfac0b2420b80192847904139053eecf453ee713869a90880"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/description.md",
+      "bytes": 772,
+      "sha256": "31950cbbbdf945e43aab53ab3b847d5c64e7bf90aeabfbd83c3ab192625bdfd0"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/flow.json",
+      "bytes": 1220,
+      "sha256": "9ddf3e01d136d09c2d2d7a70354aa48013f6172c0fbd5bea25576eda0a81a20c"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/journal.md",
+      "bytes": 293,
+      "sha256": "9b642d5df031e56ac8f16f1c291292b3598248c203ea715a5b886a4157dce9d8"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/plan.md",
+      "bytes": 1542,
+      "sha256": "ba24039b0a9a8b83e2226484713d4e152d8e5adc67a15dbb3a91a1fa01154c28"
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/acceptance-criteria.md",
+      "bytes": 2638,
+      "sha256": "51f8ed482cb8a0e47e4aeb9071849a9709b6fd053afd33fe57ddcf44e64f313e"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/context.md",
+      "bytes": 1124,
+      "sha256": "246085daacdbf4c998d850cda1b5b7577411d285f85ef26ba099a850a80c5af3"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/description.md",
+      "bytes": 790,
+      "sha256": "8b110844a85466cc85272b5983112c4c3f58dab51e7d8041fdc685f17e7917c4"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/flow.json",
+      "bytes": 1218,
+      "sha256": "89d03ce5d11dd3e23ee5cebd370ecce29907beed3cbdc6a9b49ad0e40b1532fc"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/journal.md",
+      "bytes": 293,
+      "sha256": "12a57b76fb3b352a81cdf0c4b54b088c281311bd734d4c0f678b68aca051eaa0"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/plan.md",
+      "bytes": 1542,
+      "sha256": "af47c18381abd25761f0d8267885bf301f94742c7be683c79635e55961e8bdec"
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/acceptance-criteria.md",
+      "bytes": 2089,
+      "sha256": "49d7e856eceed5feaaf7d18b180489f3b280c44cc61c4c7b80d813c3614c2209"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/context.md",
+      "bytes": 2088,
+      "sha256": "03d694ceb4bac1178d1c865e6e96617b8c320c5f49ccf586a3e08890377606d8"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/description.md",
+      "bytes": 776,
+      "sha256": "76c3c56f7b9f485111c663580aa75b95a4b3ce91899380cef0ed97116fc914c0"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/flow.json",
+      "bytes": 2321,
+      "sha256": "81737637dcca48b5355b4dd01410aec0621539b24c4d4e8e2f9d5d7d952988cf"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/journal.md",
+      "bytes": 402,
+      "sha256": "76cc8d6ecbdb83f77d3437ea3daa60ea0ddc3923dda4602d38e2000460b59ff6"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/plan.md",
+      "bytes": 1542,
+      "sha256": "99f840ca3f5881fd05ed9316508e2c9f37811dfcc16a4d99285801ee26faab85"
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/acceptance-criteria.md",
+      "bytes": 1128,
+      "sha256": "077f6dfbeaa28be92dbde96cb3fdd118eeeb1b3075b8e7d084af5156558b1fa5"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/context.md",
+      "bytes": 1130,
+      "sha256": "75d620a9ac8f587bdf91d4fea2fbd353ad6bbce77ca1987e2434b866e7ce454b"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/description.md",
+      "bytes": 776,
+      "sha256": "ea2b09ef1b858b6ec37b9300ff3436043eb8f709b3fcc5bdd87b8c338ce3d916"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/flow.json",
+      "bytes": 1219,
+      "sha256": "2120e407aff54f7f19dfc020e54aa111b2825964b701242705918367a6251985"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/journal.md",
+      "bytes": 293,
+      "sha256": "b38d43426bdc27840bf4334099d4ec19a3fa1cc73f48815b9e44ecd2a48b0db3"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/plan.md",
+      "bytes": 1542,
+      "sha256": "dd8030398e2d57268293527e5e18657a87adbf0b0418e9ffa39fb6156466ce67"
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/acceptance-criteria.md",
+      "bytes": 2826,
+      "sha256": "9589dc519719bb16a536b557f258c9436607a78b98d15ba0a6e637a3043695b9"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/context.md",
+      "bytes": 1127,
+      "sha256": "ffcb53efe38994d79c309d9f68605638a93ab2851a8712bc2f29cdffcc8d07ea"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/description.md",
+      "bytes": 789,
+      "sha256": "68b1adf6a49efa2a99a81edc49d11fee759ce7b504c8f3b9b1e4fd59fde09920"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/flow.json",
+      "bytes": 1216,
+      "sha256": "6e66b947cdf98d8f40c9d8ba561f017b8df033539ea9a4d35c2a8b256ef6062a"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/journal.md",
+      "bytes": 293,
+      "sha256": "8c5f79e46bcd589184a5b3c488b35b92b0c7d944255d873148cc5881b03ed8ee"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/plan.md",
+      "bytes": 1542,
+      "sha256": "1292bad871d6d6d53d9c36e38a12eac660ea2b0147cfce6706eb7611fddcb6c8"
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/acceptance-criteria.md",
+      "bytes": 776,
+      "sha256": "b288b742441f1b563fde0494d06c18bdece4e777085410fa195a1396fe2c817a"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/context.md",
+      "bytes": 1133,
+      "sha256": "f82b4e9b9c4596676b71c6efd784ddc2d1e823a76b7c14a412da8e1b633706cc"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/description.md",
+      "bytes": 741,
+      "sha256": "cdef15f8c5dc27ccbd30f0347fd2ce68617ac4913bba71e5f36cd5964b400d8c"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/flow.json",
+      "bytes": 1184,
+      "sha256": "e06e033f96ab1713c6e54febc9f1332b0a439d6d9aa2b95901c5e218b663e969"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/journal.md",
+      "bytes": 293,
+      "sha256": "c6d9e32254d9c7b7ddb7c84bd65ebf4c7941c71f7217b5c55980d43fb76c8f6e"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/plan.md",
+      "bytes": 1542,
+      "sha256": "f6acda7c4170a88fb3b54a5bd751db80a105ba9ddadb58763932b3fff0c94a07"
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/acceptance-criteria.md",
+      "bytes": 1121,
+      "sha256": "98fe2b442172929cb5765a0aac259b6cc55ca17327c0f19a6509d0ac2c263cb8"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/context.md",
+      "bytes": 1130,
+      "sha256": "55187912a82929bfbe05c35482d81f7963db0e91ac62c746a6e838a8f386f9b7"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/description.md",
+      "bytes": 752,
+      "sha256": "2c2768171ae47af01247e5e79ce84ebcdb741c38f76b135d7bcc66eba762ce73"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/flow.json",
+      "bytes": 1198,
+      "sha256": "b41f5b91c4cc16aa1a7fe8d54511d8d1b39286c399fc6eab0a2bb76c6e9aeb14"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/journal.md",
+      "bytes": 293,
+      "sha256": "237a8cd5bf43e28e5f98faee90592bfa6eb55c08fa267d597ac20832bfcde78d"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/plan.md",
+      "bytes": 1542,
+      "sha256": "bde92409224f02b0cae9ad44c368d7cb932c8d69e189587083252787a4d282a2"
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/tasks.md",
+      "bytes": 587,
+      "sha256": "23e8448bb6d316e81978c0519694e010efd9601122c765871806f2ccf320910c"
+    },
+    {
+      "path": ".metaproject/jobs/agent-first-core-implementation-2026-09-06/HANDOFF.md",
+      "bytes": 24912,
+      "sha256": "1f53625c8eeb27c53147c113b805d669dfacec81745336899db680ed8b5479aa"
+    },
+    {
+      "path": ".metaproject/jobs/agent-first-core-implementation-2026-09-06/handoff-state.json",
+      "bytes": 95713,
+      "sha256": "849ad6f2a78ed0846e33da1c44be29577591cb7907973cf5ed17d19d0fa27f8a"
+    },
+    {
+      "path": ".metaproject/jobs/agent-first-core-implementation-2026-09-06/phase-map.json",
+      "bytes": 2046,
+      "sha256": "0620d535ba1c289554a454a39a98413198454c36ad60a650d10b476698b9cf3f"
+    },
+    {
+      "path": ".metaproject/jobs/agent-first-core-implementation-2026-09-06/program.md",
+      "bytes": 5484,
+      "sha256": "e5e01136b5d5e6b8e3c3440c1c8cda2b3f2c643668a7b17746d356ae8e55add6"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/analysis.md",
+      "bytes": 21872,
+      "sha256": "11c3b37e6842a689c69759a5c6a319f6e61d460683939c87729b7f3faa8b639c"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture-dispatch.json",
+      "bytes": 1917,
+      "sha256": "5ff33e9bd6a8764a42fba5713c041bfe418d03f9bd101f8849e35eeed125ebea"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture-result.json",
+      "bytes": 10530,
+      "sha256": "142a218949f0ecfe71e3edd03f592d42e2af3caa5c9b1b1f5f00f58903c50b88"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/architecture.md",
+      "bytes": 27377,
+      "sha256": "85e8528c11cc13ec048e36d16f52aa86a0898cbd16358a8bcbc326c5f0337af5"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/benchmark-recomputed.json",
+      "bytes": 818,
+      "sha256": "eeaad4113de4e637c2935c92c1e850b3bbe6b72e56f42ecf4913aa4898215ca8"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-author-result.json",
+      "bytes": 5803,
+      "sha256": "28316f60685d141882b43b6b8ad4cf63a79f3b2eb03430e1eced65f1970842fc"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-dispatch.json",
+      "bytes": 5519,
+      "sha256": "8d92431865195604b5019ada5cf6d336618568e7a0ca5c553ba79cc914933e1d"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review-dispatch.json",
+      "bytes": 3545,
+      "sha256": "2c7539cdaa8acd51b08b594b201d48d2c57c78d88f9114daac1a4a8b3f0be202"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review-result.json",
+      "bytes": 2715,
+      "sha256": "6b2618058920f63134b2f676d54d7b8815be032d7a5e3eb63013d59b0e7e19ad"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review.md",
+      "bytes": 7453,
+      "sha256": "8cc680683e45536deb4b598509088547c479662c568652512c80697dfad57fec"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-source-baseline.json",
+      "bytes": 265,
+      "sha256": "d9df8e8224c86c54526a2f9d0d62fc74bb421cc2a7f39a092fe76a36c0c110b5"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-verification.json",
+      "bytes": 791,
+      "sha256": "3364a09aab299999befd517d496b9ebb259ea02104a29bbc267fda77c5adfabd"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-verification.md",
+      "bytes": 3411,
+      "sha256": "7342af13cf21cf393864f0e0a86c522b0849fb8a5f3a67d60b9ce1a5184123db"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional-dispatch.json",
+      "bytes": 1934,
+      "sha256": "48556bb2feed2487113d7135d0e7d9ae974903279c8c8be1b3d7674332f379db"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional-result.json",
+      "bytes": 6566,
+      "sha256": "47bfa76b93c3782729a0607fbd5a377028fa560f3116a647144e917d98642200"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional.md",
+      "bytes": 6209,
+      "sha256": "8fe42c48a6a4839cd713f65c17675f82501b5dc125db79bf4346adc26ef86e91"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/improvement-plan.md",
+      "bytes": 152033,
+      "sha256": "eb254587714eb977c861a6eb38155eed3693ae0fedcc53ff49118dc1c9c0e12d"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/journal.md",
+      "bytes": 1049,
+      "sha256": "370c3594be7d3a79d6c594f0999f74ea4014f8008d54971167675f2d94c6274e"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/market.md",
+      "bytes": 14421,
+      "sha256": "9fa8a4b00285a0db0aa1413dc331ab821316a9b207e967378416107237c4329e"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-analysis.md",
+      "bytes": 18803,
+      "sha256": "a39d22f8b1fafe67f5b575ee3d9f598caa529d39d48c41e07d2acfd674f2d8be"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-methodology-dispatch.json",
+      "bytes": 2537,
+      "sha256": "943d059f87665ff90adcc5791581e8dbf0ff80696ad028b05d54a78df5897189"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/measurement-methodology.md",
+      "bytes": 7921,
+      "sha256": "008cba335be04a26606b767a3a806803b49ce058413200bc7f9aea73e845ebb7"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/memory-wiki-trends-2026-09-06.md",
+      "bytes": 24056,
+      "sha256": "f650a0e842be8c596354835a32ad7f0179aef7bc1b497aaae8ea124a1be95f0e"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/origin-main-analysis.md",
+      "bytes": 12355,
+      "sha256": "0cd281c1c7b6cf2b54f557087437113c6236d29555d306f987a63dc6b4e6bce7"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/origin-main-logic-dispatch.json",
+      "bytes": 2517,
+      "sha256": "a2fab4bddd88955733577c1c105a55d728459ec80e416eed451dba547c468cea"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/origin-main-logic.md",
+      "bytes": 5772,
+      "sha256": "0030344abff5d48f7bb3b8d2337a4f5adf7e335d30d0a13eade000602c8e03b2"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/plan.md",
+      "bytes": 1785,
+      "sha256": "be6f2a3e98c92e96fde54926c4f7b783dd826bbe5539994d55941528901360ad"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/report.md",
+      "bytes": 21872,
+      "sha256": "11c3b37e6842a689c69759a5c6a319f6e61d460683939c87729b7f3faa8b639c"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security-dispatch.json",
+      "bytes": 1900,
+      "sha256": "a6210076113dc5009304c3054929224bacc26118eb65d0245ff2cbcb249c042a"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security-result.json",
+      "bytes": 7021,
+      "sha256": "46511d37e7371699dd869cecb4aeb56848c0ed118f2abe41b9382167f33f47ea"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/security.md",
+      "bytes": 14401,
+      "sha256": "93366280c79b9c6ab56cc1247f1613879f7749215bee1c36cd7f3a27c5978c84"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/shell.md",
+      "bytes": 5113,
+      "sha256": "786fabbfbdd02e92eb368eb5e822ace80ef3b19643fbd839ddfcbaff2b2b771e"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/state.json",
+      "bytes": 1870,
+      "sha256": "eca0bcdeee98afe32550f650906ba8468522478b174e8b7f920a93aa729150c5"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/utility-probe.ts",
+      "bytes": 3184,
+      "sha256": "0ef2ee96edb8479ba287bcba218ee357781dc295b22e465cd52348bc2908c924"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/utility-results.json",
+      "bytes": 16940,
+      "sha256": "9901083a3eda4b9fbe16ee59c105c5c8673f0a7b1fb5ffc8d5ea8e5555720178"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/utility.md",
+      "bytes": 19056,
+      "sha256": "063677bd7d6b472335ef7bee47a9d1908c115436f65a253be33c5f44bdf21997"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/verification-report.md",
+      "bytes": 2046,
+      "sha256": "1c4bb90a18d6696df086ab2508335ca9fcc7a4fdc551a9556b51b195223f472c"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/verification.md",
+      "bytes": 2046,
+      "sha256": "1c4bb90a18d6696df086ab2508335ca9fcc7a4fdc551a9556b51b195223f472c"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/verify-docpack.mjs",
+      "bytes": 7269,
+      "sha256": "b7d1b5739b23d8f2370e1e02f163691de3eea79d35645fefa6edf87d749c3ddb"
+    },
+    {
+      "path": ".metaproject/jobs/dependency-refresh-2026-09-06/journal.md",
+      "bytes": 404,
+      "sha256": "09996a97083c26ede5fd8d352bb76703d1770ccea4011be6c563a5059537155d"
+    },
+    {
+      "path": ".metaproject/jobs/dependency-refresh-2026-09-06/plan.md",
+      "bytes": 3806,
+      "sha256": "3198abc904f6615e77857cea7ca464d5f762bcc5853a6d6b5331521d30657704"
+    },
+    {
+      "path": ".metaproject/jobs/dependency-refresh-2026-09-06/state.json",
+      "bytes": 3596,
+      "sha256": "cf178420b82d2b4973a80ea5ae16018b905410e7cc23e9e5ea4d47f69996f16e"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.codex.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.cursor.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.opencode.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.zed.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+      "bytes": 10043,
+      "sha256": "279cff73f746f05a9c1bcb961a8cca25d7ff0fcaabbf82acad45a20ba07f25a6"
+    },
+    {
+      "path": ".metaproject/skills/gdskills/orchestration/task-implementer/orchestrator-prompt.md",
+      "bytes": 9641,
+      "sha256": "54f0679bc80ab9e6c26fafdf6ed161bfb45d57214269f9a8fe215da7d1a45e1d"
+    },
+    {
+      "path": "bun.lock",
+      "bytes": 59729,
+      "sha256": "8395c9afd11c72c21ecabafc2748f2dc7e994183caf8c37aead6912577548eeb"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/README.md",
+      "bytes": 12064,
+      "sha256": "d5db41d682124d2a4fee9f51f09e4b32af3da44418414cb0757b14e1fde8ef83"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/agent-protocol.md",
+      "bytes": 7275,
+      "sha256": "9e98babaa0e1e21559cbfb8ff1f823e74e153c4283c6e94b0ffcef83e1f0d37f"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/artifact-lifecycle.md",
+      "bytes": 15857,
+      "sha256": "a847f42ba57ef4d19c64d3b5fc792c7bbdca945566f97171c119b2257a5b3322"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/decision-traceability.md",
+      "bytes": 20550,
+      "sha256": "5b8c87a30f7ed686725fb16f420a5ccd7fd4a675d8959142d52654486bcb7e8f"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/batch.json",
+      "bytes": 713,
+      "sha256": "f04615df61d957a2082b46fb6a48ce28aa122597f08d56cbf4e31fca0c129c4a"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/change-set.json",
+      "bytes": 835,
+      "sha256": "64c029aca2724f333bdf53c53bf6e5a009a5a4ad1955003f1acb5f50d6e16df6"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/handoff.json",
+      "bytes": 2418,
+      "sha256": "8b727906b32c733a082ae541186cb7ead4f0ce461b3dcc4e4c83b17a4483e620"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/operation-response.json",
+      "bytes": 4009,
+      "sha256": "e3c45c5bac67bbe42365901a46a8aa686a4075c180960957ae405049a6d96af1"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/validation-cases.json",
+      "bytes": 7219,
+      "sha256": "b4b71ec4a5ce725692d10943e638096148168b85949057395f7aee81989215a8"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/examples/wiki-evidence.json",
+      "bytes": 2414,
+      "sha256": "bf3844d28da6e6f6aa197abf0edd5b274e6991dafaed457f32e40bd48d152c0b"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/implementation-plan.md",
+      "bytes": 12386,
+      "sha256": "3d66ae65cec68e88645300038ec9c2cfe19dbe31cabccb1f93fd04703f66754b"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/metrics-and-validation.md",
+      "bytes": 17339,
+      "sha256": "fc4266def7131bd091c7859bc569afb787907ee0731b82a693c36e3a2296ed28"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/policies.md",
+      "bytes": 9149,
+      "sha256": "916e22f6b4392d33fc0dd0d41ff12ebb60c58ca04e93f82792cf3c59cf5bab75"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/prd.md",
+      "bytes": 17369,
+      "sha256": "1088115bfecf2be700523f05d490503b395f681dbc935fbcff422d87d47e1026"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/batch.schema.json",
+      "bytes": 2248,
+      "sha256": "a1d907d2f813f4948c3bc4b2b62b5e0319b1636b0017d8f14adbc6b422a2ec7e"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/change-set.schema.json",
+      "bytes": 3952,
+      "sha256": "a6bfacc6903e7f8432406463eb3140857cc54c9b76027d008fa8e39420485867"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/common.schema.json",
+      "bytes": 10646,
+      "sha256": "4d57bc9deef07565ff7403bcdb9361a1f8a7321b4389d94c5c154fca263a3d22"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/handoff.schema.json",
+      "bytes": 2520,
+      "sha256": "3a31a0cad4ee933fdd00a36f43a7f40fd700a6ff7c5cf7206f077b486e86fe20"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/operation-response.schema.json",
+      "bytes": 5176,
+      "sha256": "8b1fe92471b35736942e34c896db4a9e5814bfb6d0e60f0c708f5d689f9bc5c8"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/schemas/wiki-evidence.schema.json",
+      "bytes": 2936,
+      "sha256": "9902bf9f0baa1c6903c0adb830b8e78cd385b373cbc2562649642c806ed05f4c"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/specification.md",
+      "bytes": 21075,
+      "sha256": "0fa25ba2acbd2a619c21d27ccafe40fcad17e97cd9825d26b178f1dc28a298de"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/wiki-specification.md",
+      "bytes": 19550,
+      "sha256": "2f3ad8c50211ea504989ee8f1fa3222ecbbbe65d692127cbd6cec0c54035240f"
+    },
+    {
+      "path": "docs/requirements/roadmap.md",
+      "bytes": 67995,
+      "sha256": "3336d280bcf337f540a7678c1aa963486c64a40e0caf63e49e37bdd80e29f963"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "bytes": 1032,
+      "sha256": "fa4d62aa35d5aad3e63f8f355bb64e8a1ff750dcd5f0745159591386333c7640"
+    },
+    {
+      "path": "fixtures/exfil/cases.json",
+      "bytes": 2413,
+      "sha256": "2f131992fa84c7be3fd299641a0c36e48424c4bf678906b86052c338402eeb4f"
+    },
+    {
+      "path": "package.json",
+      "bytes": 2604,
+      "sha256": "326046945553208816c080e3bb60e1e167742e1256a4779e7a49850d9193e0c8"
+    },
+    {
+      "path": "scripts/benchmark/generate-express-deps-gold.ts",
+      "bytes": 7487,
+      "sha256": "c18807045a5b5fcaded77bd51dd7b692e0130faa2059a026535550178a8890d2"
+    },
+    {
+      "path": "scripts/benchmark/run-containment.test.ts",
+      "bytes": 724,
+      "sha256": "ddac6138ae7e4c3cbc8a2ea04ca04c7f96d6b84d18596a6618603159320e244d"
+    },
+    {
+      "path": "scripts/benchmark/run-containment.ts",
+      "bytes": 25138,
+      "sha256": "e8fa5d0d29dc7a01ce69ba2aebed27fa93eb71f96b2213aa5d9dcff1b3e4a772"
+    },
+    {
+      "path": "scripts/benchmark/run-express-oracle.ts",
+      "bytes": 8030,
+      "sha256": "7741b75079f83bf6fb7ebe7bdadfb8116a6ff9bcab945acefc0858f04ff83d16"
+    },
+    {
+      "path": "scripts/benchmark/run-gdctx-oracle.ts",
+      "bytes": 9139,
+      "sha256": "e3e6fdd8240b8ebf94daa60cb0c695e1fc23c948884d2a998d3a13dfdbea72d7"
+    },
+    {
+      "path": "scripts/benchmark/run-memory-oracle.ts",
+      "bytes": 6856,
+      "sha256": "2a98ac3ab6f67edc71fcb0889442d646c8cca5223afeeea4e2d7d5387af30977"
+    },
+    {
+      "path": "scripts/benchmark/run-testing-oracle.ts",
+      "bytes": 9009,
+      "sha256": "650770a227f7cd3d33e0c4527532fac63bc0ba9de243fd7148293c65b866b33d"
+    },
+    {
+      "path": "scripts/stress/concurrent-suite-stress.ts",
+      "bytes": 7650,
+      "sha256": "d19f11ce4badf627ff7854331f6ecfc31e6460ee69efaf4bb82a178d60869132"
+    },
+    {
+      "path": "scripts/stress/keryx-shell-stress.test.ts",
+      "bytes": 1760,
+      "sha256": "8b4d37036e73ae7f1f0030cbbcc05085e0312be8fdeee7e4a16da71636747910"
+    },
+    {
+      "path": "scripts/stress/keryx-shell-stress.ts",
+      "bytes": 38974,
+      "sha256": "c240bbaef6354c04d71d4983257724212cf55f0ed633d7a17c2570b28d5e7b13"
+    },
+    {
+      "path": "scripts/typecheck.test.ts",
+      "bytes": 2960,
+      "sha256": "3d1cf8d3648b4e2c0a2f5c5cccc4cb5dfc0aa190c9a30396be4ede3ff5965b03"
+    },
+    {
+      "path": "src/commands/agent-permission-mode.test.ts",
+      "bytes": 18232,
+      "sha256": "8c190a526805947cb4446d17fefba38bf4bc1b66c668ebadd11cbc35231fccf0"
+    },
+    {
+      "path": "src/commands/agent-tool-call-budget.test.ts",
+      "bytes": 13193,
+      "sha256": "fddc17f29a91ab11d192e3e53d8dc996863d6a509d7e5465fb4b983c381e5ed7"
+    },
+    {
+      "path": "src/commands/agent.test.ts",
+      "bytes": 129006,
+      "sha256": "11f6d11e513bcdc7b032b6669e5f89a02e467836292ec8f81fd71d4a3c721eb6"
+    },
+    {
+      "path": "src/commands/agent.ts",
+      "bytes": 103550,
+      "sha256": "a9f55fa1fc0e377eeded958a1ee6828ef8d425ae05ba884bf93234bf1437f604"
+    },
+    {
+      "path": "src/commands/goal-command.ts",
+      "bytes": 48946,
+      "sha256": "cc2a8b861e6056ce98a32ba24fb8cab91bbce0a0c82a54a98b8c207274c9865c"
+    },
+    {
+      "path": "src/commands/harness.ts",
+      "bytes": 57788,
+      "sha256": "60c316d6fdaea3f8ea1e79f7ccadb1d772a982b7d4ee1437808e8a02ddc048cd"
+    },
+    {
+      "path": "src/commands/health-incomplete.test.ts",
+      "bytes": 3860,
+      "sha256": "4f05983bdffac1a364c3dc3915dbdade6cbc52e543f7181fcfd7575217e996b0"
+    },
+    {
+      "path": "src/commands/health.ts",
+      "bytes": 8965,
+      "sha256": "99a0d95e55043499f1dc0135924d61765afc6aadf5ecc5ebcf240fddc3b418e8"
+    },
+    {
+      "path": "src/commands/init.no-git.test.ts",
+      "bytes": 2749,
+      "sha256": "7ff5113280856bfb0e6a46333157724341d2c0d56451b24391ba9113fdcc2476"
+    },
+    {
+      "path": "src/commands/init.ts",
+      "bytes": 60231,
+      "sha256": "295d6312d4fbec50a4df0e29a276e39b9343edc61c0b7e3da6ee45294d8eca00"
+    },
+    {
+      "path": "src/commands/review.ts",
+      "bytes": 92356,
+      "sha256": "6b3772455fcbf8c913bd2135ca8cbfb5606b1e7b138e4b0dc39e7daf2ddffb1b"
+    },
+    {
+      "path": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "bytes": 7045,
+      "sha256": "f4f5759f0e818def06ac5544f872bdd7a562f3c807b876ff62bca128b1be9145"
+    },
+    {
+      "path": "src/commands/rules.test.ts",
+      "bytes": 10979,
+      "sha256": "55210e14552a31d014c9997b5c37ea2115a8a677ba54091de1e7dbfa2a66b21e"
+    },
+    {
+      "path": "src/commands/rules.ts",
+      "bytes": 5592,
+      "sha256": "2cb165ee5f170830b825624081992478e2174d2b398edc60ca75a6a8a545f459"
+    },
+    {
+      "path": "src/commands/security-hooks-init.test.ts",
+      "bytes": 11795,
+      "sha256": "28317c6350ff5e640575497682fba21aebc4e082244d55edceca9717ce8cb616"
+    },
+    {
+      "path": "src/commands/security-recursive-scan.test.ts",
+      "bytes": 4856,
+      "sha256": "615e5f6bac4d87e1b7f3c3efae38ccfe85ddccb301a109f2e32de16e27a753c6"
+    },
+    {
+      "path": "src/commands/security.ts",
+      "bytes": 37932,
+      "sha256": "f8ac0cf4f4253ae7ad7cd244343f9567dad4a92bbbad9c5d65ab1e660fee656f"
+    },
+    {
+      "path": "src/commands/serve.cli.test.ts",
+      "bytes": 21412,
+      "sha256": "5198446d8adbe14a55101a4c5650ff3df8279ecf31af8c4f0ac3e577cea6f3b2"
+    },
+    {
+      "path": "src/commands/shell-cli-validation.test.ts",
+      "bytes": 3685,
+      "sha256": "e941aba206aed0355dd487be8fb0b09068bdb42f831f9bdd3e433f5973072f4a"
+    },
+    {
+      "path": "src/commands/shell-pty-launch.smoke.test.ts",
+      "bytes": 14987,
+      "sha256": "308fc56312a05b6f828bb79b01b318e05d5e2c9401b719b7b7fef42390276879"
+    },
+    {
+      "path": "src/commands/shell.test.ts",
+      "bytes": 66442,
+      "sha256": "edb70e5c3c55947afeffb98927c1e35e393dc27ecc269cdce65d9d84e3146715"
+    },
+    {
+      "path": "src/commands/shell.ts",
+      "bytes": 90599,
+      "sha256": "662a1ca519df8b26b56645523634382a6c9a786d59ea4e174b60767c8e371b80"
+    },
+    {
+      "path": "src/commands/standard.ts",
+      "bytes": 7625,
+      "sha256": "c02a95351bd0d4bd6e19d7903a27c6833d2235b6daf48bc967a138aec7c9879c"
+    },
+    {
+      "path": "src/commands/test.ts",
+      "bytes": 11478,
+      "sha256": "8ba0446056412ebe81acd9e73e4740c5d56c60e8f3d83d44a499e08d3cadf8e5"
+    },
+    {
+      "path": "src/commands/update.ts",
+      "bytes": 58227,
+      "sha256": "bee8312987b0f37d11d99c0cdd24f9651c1ded924a67814a36ea4eec6545ae18"
+    },
+    {
+      "path": "src/commands/workspace.ts",
+      "bytes": 27324,
+      "sha256": "9413a8afaca864b41822486d735ff84c933d63373274361aa564d4f2ca223883"
+    },
+    {
+      "path": "src/ctx/orient.ts",
+      "bytes": 9275,
+      "sha256": "b67c757c99ac6fe92a3cebcbcc1d618c6786a080447d36bbdb3a664655f58e77"
+    },
+    {
+      "path": "src/ctx/runtimes.ts",
+      "bytes": 27349,
+      "sha256": "6e9d0f866aa34751e5c131104ca2b9f62e0f92f913fe624b7901cc33b3d2db35"
+    },
+    {
+      "path": "src/flow/review-gate.e2e.test.ts",
+      "bytes": 24752,
+      "sha256": "2c5ff9f3e3b7db2d82743c61fc94e98126596dea106aade9a54b0f7eab21a0a0"
+    },
+    {
+      "path": "src/flow/service.ts",
+      "bytes": 42782,
+      "sha256": "f27affa0bc2282d844265653e9f28c3528e23dfdf0726ce84b5c781fb479407f"
+    },
+    {
+      "path": "src/gdgraph/build.ts",
+      "bytes": 30800,
+      "sha256": "b5f8e36706fb8814c86f261697d46e12b83a482fe8acd3264d0b6542a663339b"
+    },
+    {
+      "path": "src/gdgraph/fallback.test.ts",
+      "bytes": 5641,
+      "sha256": "9ab6db701de29180d9c690bd157fb03925e70739ba6522d17b6762073974d2b3"
+    },
+    {
+      "path": "src/gdskills/bundled-eval.ts",
+      "bytes": 37329,
+      "sha256": "4b995058c9e55a78294e0cd4659b284623ac31c7765fefb01250911bf311a957"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.codex.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.cursor.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.opencode.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.zed.md",
+      "bytes": 29033,
+      "sha256": "958279343d0b3abe8f1ebc06056e609aa990af782d84dce4b7bbb6e6bca4a0c6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+      "bytes": 10043,
+      "sha256": "279cff73f746f05a9c1bcb961a8cca25d7ff0fcaabbf82acad45a20ba07f25a6"
+    },
+    {
+      "path": "src/gdskills/bundled/skills/orchestration/task-implementer/orchestrator-prompt.md",
+      "bytes": 9641,
+      "sha256": "54f0679bc80ab9e6c26fafdf6ed161bfb45d57214269f9a8fe215da7d1a45e1d"
+    },
+    {
+      "path": "src/gdskills/catalog.ts",
+      "bytes": 45345,
+      "sha256": "49958fb4844791abe974f5908093ab400ef7afded1e7fb473a3e5e3d54e08d3c"
+    },
+    {
+      "path": "src/gdskills/project-skills.ts",
+      "bytes": 24815,
+      "sha256": "9fa054f5e91e86c681c813a0f922352301f8b24eb6d1074dffd3f13591c3e6fc"
+    },
+    {
+      "path": "src/gdskills/task-implementer-description.test.ts",
+      "bytes": 1993,
+      "sha256": "9e8a29eed4158a5a8104d87e821d2ea36f85047def2a1078e4473230169d2045"
+    },
+    {
+      "path": "src/harness/child/escalation.ts",
+      "bytes": 9116,
+      "sha256": "3a8a82b25940ab20d8152e2f5bd278c1ff5ba83ea911f9c5f8fcb9f06843e26f"
+    },
+    {
+      "path": "src/harness/child/isolation.ts",
+      "bytes": 10964,
+      "sha256": "807d73092eba86a79d00a07456ee894724c959c32f5a740f352696d679fb4c2d"
+    },
+    {
+      "path": "src/harness/extension/execute.test.ts",
+      "bytes": 30580,
+      "sha256": "dfd8f8450e70375c60eedbf6fcb0cd7a2b8f4acccf41f2e57f2500f6c209c793"
+    },
+    {
+      "path": "src/harness/mutation/guard.loopback.test.ts",
+      "bytes": 8024,
+      "sha256": "110a7e406d0c51722a6cee06f99c439a61c625ae0d4723224d4d6e9d955935a3"
+    },
+    {
+      "path": "src/harness/policy/profiles.test.ts",
+      "bytes": 26768,
+      "sha256": "3b938312a2f64f9a71e53bcef43046e7dd84821c83342cf525a44cfee8050bb4"
+    },
+    {
+      "path": "src/harness/process/sandbox/proxy.ts",
+      "bytes": 13577,
+      "sha256": "06f496e919daa450bfaf0d7ff42ef4233ec91a1a8daa10ad3859e8f3d67e317b"
+    },
+    {
+      "path": "src/harness/process/shell-spawn.ts",
+      "bytes": 6247,
+      "sha256": "dac147c8fc1ef1c1562c79e351b8fcc51c1ffcfae6781dd3a12fc367c0e961b6"
+    },
+    {
+      "path": "src/harness/provider/anthropic/anthropic-negatives.hardening.test.ts",
+      "bytes": 20029,
+      "sha256": "c5c34124e5407b6e4584ed59fdf9e7f8ababec557860938822ca0a93cb6ec3f0"
+    },
+    {
+      "path": "src/harness/resume/recovery.hardening.test.ts",
+      "bytes": 18228,
+      "sha256": "a8ddd9f129210db1dd4fb14f83e1339f6140811f74cf0322f78c3ceba2660b13"
+    },
+    {
+      "path": "src/harness/run/run.test.ts",
+      "bytes": 20718,
+      "sha256": "1f29a7d93f8f24a1a4a88242b530b01c9054c2cae30078680bd3789c8e85f32d"
+    },
+    {
+      "path": "src/harness/search/controller.ts",
+      "bytes": 4110,
+      "sha256": "fa849802f0031e324603fd7c72d43ee21d0ce0f49dc840ef74522566130276af"
+    },
+    {
+      "path": "src/harness/search/registry.ts",
+      "bytes": 9165,
+      "sha256": "4f4cc791a7da9ec739073760375f1b57b2e14776655b99a59f47229e43b00232"
+    },
+    {
+      "path": "src/harness/tool/builtin/interactive-tools.ts",
+      "bytes": 6769,
+      "sha256": "f5bdb8a805f96d5d93355725c2ed7333dce803325319f10d55470d9ff864d4ec"
+    },
+    {
+      "path": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "bytes": 23943,
+      "sha256": "0b7d9a3a945cb9c802092d81bf7c1b1dea963b20e0016ef56d919cc6fa111153"
+    },
+    {
+      "path": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "bytes": 63061,
+      "sha256": "bcb86caa2461ffccd35899aefbc1fbdfe5b5434a4213a5fc93d12479fda4d198"
+    },
+    {
+      "path": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "bytes": 5528,
+      "sha256": "189765c1623794258aaa9898744d2e19402291d7f3603f244ee5c1987189df9d"
+    },
+    {
+      "path": "src/harness/tool/metaproject-adapter.ts",
+      "bytes": 27142,
+      "sha256": "fd5b35b619d3285b3a591d644ccb3809f1883bddf77a0e3d2939951ce7772798"
+    },
+    {
+      "path": "src/harness/tool/metaproject-port.ts",
+      "bytes": 17262,
+      "sha256": "03c330a8230a28607dd631d83c808e7082a55b18ca4537ee9105b5724e033e99"
+    },
+    {
+      "path": "src/harness/web/web-worker-runner.ts",
+      "bytes": 7787,
+      "sha256": "32f32d2e2432b181203f3ef19c3d8efbafdebbf8c4aa0d37f5d98fe5abfa2a61"
+    },
+    {
+      "path": "src/health/dependency-audit-format.test.ts",
+      "bytes": 5026,
+      "sha256": "783419c13d494afcba2328d3fc8c7c3c3dc4e085f8ab73ea95c6c6cd58754ed6"
+    },
+    {
+      "path": "src/health/gate.test.ts",
+      "bytes": 3362,
+      "sha256": "016cdd4c480ee56dffcaa411c194bc56f2244409c4c9154b1f7c74744ae795c2"
+    },
+    {
+      "path": "src/health/gate.ts",
+      "bytes": 2704,
+      "sha256": "9c26cc7f36b86d171c0b223132b6acbd47735dc524f2e39a0b103b1d3f08d0c0"
+    },
+    {
+      "path": "src/health/health-truthful-gate.test.ts",
+      "bytes": 9559,
+      "sha256": "910f65bf5e38c2cbdb86ab32e19de25ac534e57ecd11a4cff5f9f052c081a597"
+    },
+    {
+      "path": "src/health/metrics/complexity.ts",
+      "bytes": 7124,
+      "sha256": "7e3e40f46a13de54fed46859c12b57dc1494a8ac72182f56d9c6a1360bc20a2a"
+    },
+    {
+      "path": "src/health/report.ts",
+      "bytes": 5302,
+      "sha256": "a532fbfcf1f9c6570787c69e96c40189411456ebd490e9c392afa90cc0effab1"
+    },
+    {
+      "path": "src/health/run.ts",
+      "bytes": 13832,
+      "sha256": "a6b25cedf12f61ebf4b80479722c11b59d599e0f76fd0fc23deae1b6117c3bc7"
+    },
+    {
+      "path": "src/health/service.ts",
+      "bytes": 6570,
+      "sha256": "0591acaa2a73545eaf54b0efed1e1e3a5f5d9fb3d85302394de18cdaca8b7112"
+    },
+    {
+      "path": "src/health/skills.ts",
+      "bytes": 2447,
+      "sha256": "60d165d7f283ffe354cc7f7b519fd58df4de70a4ce1db78f2e4c005876e7379c"
+    },
+    {
+      "path": "src/health/sources/dependency-audit.ts",
+      "bytes": 6747,
+      "sha256": "9b1f6a72f50e64974a4e2a21170cf0d51a23c0d7482d332cd919030f2ddda0c5"
+    },
+    {
+      "path": "src/health/sources/eslint.ts",
+      "bytes": 3425,
+      "sha256": "08220cfb370b34ba7b365eacf878aa2ef3042c950094de969f5fe715c8868014"
+    },
+    {
+      "path": "src/health/types.ts",
+      "bytes": 7543,
+      "sha256": "be8edca77296ac566bf7407cd6c0cc92d86178cfdec046318e778850e9eafcf1"
+    },
+    {
+      "path": "src/lib/contained-path.ts",
+      "bytes": 5983,
+      "sha256": "c0da6981a4015009530dd3b2413a02ef45e2d29bf982fdeeff00336d8d8c4c58"
+    },
+    {
+      "path": "src/lib/contained-read.test.ts",
+      "bytes": 5308,
+      "sha256": "107984d08110cc78e96954f931829273207292ff86655d3532d4c0f00193ecd9"
+    },
+    {
+      "path": "src/lib/contained-read.ts",
+      "bytes": 4598,
+      "sha256": "8a953f751dc86accf964c047d854fe707fa684045a5cfbfbff9eb3ac9692895e"
+    },
+    {
+      "path": "src/lib/descriptor-read.ts",
+      "bytes": 7104,
+      "sha256": "c106d8732a11f163a41e4833a277ae540eee3b25eade589659393ebe74a4aaf2"
+    },
+    {
+      "path": "src/lib/fs.ts",
+      "bytes": 6327,
+      "sha256": "bbaf5162bc5af26d7494957bbbcc0406bfd407c66ef2f9adb7d864ace519de9e"
+    },
+    {
+      "path": "src/lib/gdgraph-post-commit.test.ts",
+      "bytes": 7238,
+      "sha256": "4bf934be5fef1ed884f963dd8fa7e2608cadc9371b3072423238481d855fc73e"
+    },
+    {
+      "path": "src/lib/git-hooks.ts",
+      "bytes": 909,
+      "sha256": "2f466b8d5ced4982c073e0a46913386a9cd817ba826b768ed087b3de6f689ea6"
+    },
+    {
+      "path": "src/lib/json.ts",
+      "bytes": 675,
+      "sha256": "b9558372a23b6985ea230f6ac5cb95b73ddac417a412fd95b22cd0e3ae25b486"
+    },
+    {
+      "path": "src/lib/md-blocks.ts",
+      "bytes": 17712,
+      "sha256": "f65b727b30af518e3f0b0a1bdb59a025f4ccbb5bd61be91540b3e80c2b34e6ad"
+    },
+    {
+      "path": "src/lib/metaproject-gitignore.ts",
+      "bytes": 4492,
+      "sha256": "997365d7bb16b3ee0f1d17b14de40385f317f9a757ace6757bb4db1555937e06"
+    },
+    {
+      "path": "src/lib/project-registry.test.ts",
+      "bytes": 20983,
+      "sha256": "4741c03fb26b51c704d1deef253e3cd615f2d3cfd248f41fbfe36a50920bcb6c"
+    },
+    {
+      "path": "src/lib/project-registry.ts",
+      "bytes": 25338,
+      "sha256": "d65aafe749f8ac2133cad4734fec6c5fa95fe1c8ff935b8422a647e3961c4d6f"
+    },
+    {
+      "path": "src/lib/routing-entrypoint.ts",
+      "bytes": 1370,
+      "sha256": "03427445eed43e45fe7562971ebd464b0bed48100b2c300fa49b26ebd8706dc8"
+    },
+    {
+      "path": "src/lib/serve-config.ts",
+      "bytes": 19877,
+      "sha256": "9f9de9c4430722c7197b6e12cf3162cb459bb41fdd044e91c24a266f79cae70b"
+    },
+    {
+      "path": "src/lib/serve-credential.ts",
+      "bytes": 16592,
+      "sha256": "b68416e725e470ac4e064847d4d3cf95c2792e402ce93b77cb5ff9b7e65c3a70"
+    },
+    {
+      "path": "src/lib/serve-server.test.ts",
+      "bytes": 56421,
+      "sha256": "b17836573855d7401e6131a0ddcec6d50a56809694ad35f01b362774e93f18db"
+    },
+    {
+      "path": "src/lib/serve-server.ts",
+      "bytes": 43207,
+      "sha256": "ff698d89c67253baa06158d4ab7df38361d531c7ecae457fb91d3f444c7405a0"
+    },
+    {
+      "path": "src/lib/serve-turn.ts",
+      "bytes": 46728,
+      "sha256": "8dd500822618694fc570340f389ce39e64b21f6ecc8d5a469abb91a6d0b76678"
+    },
+    {
+      "path": "src/lib/templates.ts",
+      "bytes": 130504,
+      "sha256": "70f50b5548d1504d1b8d0f57caeaaa7535f4455809d973933ca3bde0376b95d5"
+    },
+    {
+      "path": "src/lib/version-check.test.ts",
+      "bytes": 20379,
+      "sha256": "3f1c50a273d2bb431bad815bfeca1e3d4f15249e1300319b2bea10057cf186a1"
+    },
+    {
+      "path": "src/mcp-client/client.ts",
+      "bytes": 13683,
+      "sha256": "02de6c8278016e58ffcdd4d5690f2ba755957f3373c87330731ea7222a6ff2ed"
+    },
+    {
+      "path": "src/mcp/boundary.test.ts",
+      "bytes": 4736,
+      "sha256": "7ad7f0e1813ba42f70f4e36742345c2268111097249216c70a51fdf3fce504d7"
+    },
+    {
+      "path": "src/mcp/dispatch.ts",
+      "bytes": 4688,
+      "sha256": "f1db21b0872c7bb46b4ac09819f9676ed0fd1609652f8caf978640497b6f6f18"
+    },
+    {
+      "path": "src/mcp/mcp.test.ts",
+      "bytes": 16064,
+      "sha256": "a3f8c2c202a033a208189fc54e8ffa6b7d218a011c1a1fdbd008bb3dc9e53401"
+    },
+    {
+      "path": "src/mcp/redact-seam.ts",
+      "bytes": 1130,
+      "sha256": "de737ee31ed821602e6efe03c942653e3bf205deb7315be73c1414162c57356c"
+    },
+    {
+      "path": "src/mcp/resources-containment.test.ts",
+      "bytes": 3695,
+      "sha256": "e738b4583bccc50be6e9f51d79def25bb82329d9afbcd8ebf219901a2f932f55"
+    },
+    {
+      "path": "src/mcp/resources.ts",
+      "bytes": 7678,
+      "sha256": "a84508b17ba7f9fe2dae9cbe6709410ffb3ae83de9f63d3b3e937ddde07e4ad3"
+    },
+    {
+      "path": "src/mcp/server.ts",
+      "bytes": 5785,
+      "sha256": "7447d00199e073941740d7b2f20ccf951b6295be69d405333b85991db51a986a"
+    },
+    {
+      "path": "src/mcp/structural-redaction.test.ts",
+      "bytes": 5855,
+      "sha256": "0822c8eb292da4f7205b35024668897d3715fc392e2415e7165388c8ac487e2e"
+    },
+    {
+      "path": "src/mcp/transport/http-sse.loopback.test.ts",
+      "bytes": 6245,
+      "sha256": "9dfaac3c73f4a90dc5fc2ce3a0a68e0590c53e956d82a602c98a1b90322ade49"
+    },
+    {
+      "path": "src/mcp/transport/http-sse.ts",
+      "bytes": 3910,
+      "sha256": "ac1a3e9bafe5a56f889836595cfc0175451aa923b47925c39b0a0b2ab2131db9"
+    },
+    {
+      "path": "src/mcp/transport/loopback-host.ts",
+      "bytes": 2687,
+      "sha256": "f8f291916dffdd57cd4e8019430379271ed8de832d64bf475e74cd7971e46b63"
+    },
+    {
+      "path": "src/mcp/types.ts",
+      "bytes": 733,
+      "sha256": "ee54bca71f6b2d010c5c1c2747238e321edadbc317a5523c80be4ac3b295c2ac"
+    },
+    {
+      "path": "src/memory/embedding/embedding.test.ts",
+      "bytes": 13963,
+      "sha256": "2a04811fba216d945623664ee231d6536af43ce23d4820310a2526959b02ec6f"
+    },
+    {
+      "path": "src/memory/p5-temporal-config-catalog.test.ts",
+      "bytes": 6767,
+      "sha256": "dad50a3caa9210c40106f722a7fe35aa16f3f4911ab5319b754027b052d3e3fa"
+    },
+    {
+      "path": "src/memory/supersede.ts",
+      "bytes": 6625,
+      "sha256": "1a665fe4d507fa3e381157907c5e5514c5928e34a8adc6272ae433a766cbfcf7"
+    },
+    {
+      "path": "src/memory/temporal.ts",
+      "bytes": 2303,
+      "sha256": "00b2cc0ce08aea1f4f3810d88251690946d99e905b4ee784d6d5927ff8ddd22f"
+    },
+    {
+      "path": "src/metrics/comparative.ts",
+      "bytes": 10066,
+      "sha256": "195cb4139fc2fc69ab61ecaa1bc4f140088c19721a1a5737fc9a6c8f09dca211"
+    },
+    {
+      "path": "src/metrics/service.test.ts",
+      "bytes": 18411,
+      "sha256": "03281f1f8af6653a45727a290a51822ec430b45ba9f19ba8586e21f343b64faa"
+    },
+    {
+      "path": "src/review/managed.ts",
+      "bytes": 98205,
+      "sha256": "1bb0dd3fe2366490b16e9366a7315c7b152ec9f5f9afb972a46ef084791081de"
+    },
+    {
+      "path": "src/rules/agent-entrypoints.ts",
+      "bytes": 5790,
+      "sha256": "7e30092b2f4c2c515738d32163964ced2421cd6370795154819fe282c5579f53"
+    },
+    {
+      "path": "src/sac/catch-up.test.ts",
+      "bytes": 47981,
+      "sha256": "fe14ba3aa8877996775740a72502282776c91996f22f80c52ab464e45daead4a"
+    },
+    {
+      "path": "src/sac/fwk-service.ts",
+      "bytes": 55303,
+      "sha256": "eae308915c7374161c430b34a5d662852d8b43ee2c7b1d2ebddf93eb205cc20f"
+    },
+    {
+      "path": "src/sac/machine-wrap-up.test.ts",
+      "bytes": 32159,
+      "sha256": "c17ee2a516b078b6c5f13e32ba92338b3a19a318f6ab216ebc7d540aa9f77320"
+    },
+    {
+      "path": "src/sac/policy-experiment.test.ts",
+      "bytes": 37137,
+      "sha256": "509fb31f78956aa974e08709b4c0b1641c32060aada4da88050b61b383360503"
+    },
+    {
+      "path": "src/sac/proposal-lifecycle.test.ts",
+      "bytes": 53096,
+      "sha256": "94b937df163908effa6221fc935d6376748dfc91e71cc229a2464c75aa51a961"
+    },
+    {
+      "path": "src/sac/proposal-lifecycle.ts",
+      "bytes": 58680,
+      "sha256": "b9a1ec995c5f1227aeca7c68a0338a3f796cf617e41fddff3393dbacd7fd1a29"
+    },
+    {
+      "path": "src/sac/secure-resource-read.test.ts",
+      "bytes": 1299,
+      "sha256": "991b0116d4c8769179a8624ca8aba706178ce901b8ba39af4a8362ef7d9618a0"
+    },
+    {
+      "path": "src/sac/secure-resource-read.ts",
+      "bytes": 972,
+      "sha256": "d39888e02dc9936a24c2a28fbc94bea8d19e7b37e347fbb8ccd5db9026529019"
+    },
+    {
+      "path": "src/security/agent-hooks.coexistence.test.ts",
+      "bytes": 15905,
+      "sha256": "c3fcb1ba0ed2c3acfd4837437e29c2a8da8a711414c83b39283c85c7b2a97612"
+    },
+    {
+      "path": "src/security/agent-hooks.ts",
+      "bytes": 4367,
+      "sha256": "8793d460eee7383533488828dff437e414ed00474ee35db1371d04467ac747ca"
+    },
+    {
+      "path": "src/security/agent-hooks/runtimes.test.ts",
+      "bytes": 5590,
+      "sha256": "9a4927684103ff731e8c37f7bc9eb7c637c3e9fe8df16bcadc6e183d90bbde19"
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "bytes": 5862,
+      "sha256": "390e3de75d5e195bdcb7ebf2061fd9980c6cd36b52c74491ef49366a60880385"
+    },
+    {
+      "path": "src/security/detect/exfil.ts",
+      "bytes": 5835,
+      "sha256": "1ae334f533dd04bc299ef6721470dc7945d80626028045e390ed0f4fb943fe52"
+    },
+    {
+      "path": "src/security/detect/secrets.ts",
+      "bytes": 5484,
+      "sha256": "b2ba4128f65e58d262542bcb99316c3de9045018fe629b6bb5f0d997872886ce"
+    },
+    {
+      "path": "src/security/guard.test.ts",
+      "bytes": 8994,
+      "sha256": "314f614bab75b842d3d8383b82e45181a67226a1cde8378b5c46ad8f21b06493"
+    },
+    {
+      "path": "src/security/guard.ts",
+      "bytes": 8952,
+      "sha256": "ab89af6918dfdac1572dd820563fa11e7efb31e8fc17176c569dfdf50c436dd6"
+    },
+    {
+      "path": "src/security/output-validation.test.ts",
+      "bytes": 7407,
+      "sha256": "2a9d6013dfe6ff027de304aed2302b4247b2ee1ec0247e6cfebeed90da22af5d"
+    },
+    {
+      "path": "src/security/output-validation.ts",
+      "bytes": 13155,
+      "sha256": "c6ec113558cb19c3ddef660554630801751febb60139ee370bb95238657c9e50"
+    },
+    {
+      "path": "src/security/path-scan.ts",
+      "bytes": 8135,
+      "sha256": "1247042b5237a2c581c788d0063ab69e25be8cb0e1c803a66a46765ed8b7784d"
+    },
+    {
+      "path": "src/security/persistence-sinks.test.ts",
+      "bytes": 2382,
+      "sha256": "22b2f356b911c0142579592e97b44a279f15bf6732904db22e1c331f35c66f9d"
+    },
+    {
+      "path": "src/security/redact.ts",
+      "bytes": 6501,
+      "sha256": "b8e9d9a5ca35f78127096bd7f1880669859b6d1ebd6e30151070a4d75bd44b86"
+    },
+    {
+      "path": "src/security/report.ts",
+      "bytes": 6127,
+      "sha256": "4bfcecb80107eefd83fc51fb2590538aff7548f7508da522307534eac1bee88b"
+    },
+    {
+      "path": "src/security/schemas.ts",
+      "bytes": 13390,
+      "sha256": "8c1455c2f29105c3134f5f2c3df6c6cf6517933d21e5f259b56a72e86fbd919e"
+    },
+    {
+      "path": "src/security/service.ts",
+      "bytes": 11411,
+      "sha256": "95e7786ec7bec39e8bd85845c010b8631405e4c2640eae1b26dfc754a3ef1a77"
+    },
+    {
+      "path": "src/security/structural-detection.test.ts",
+      "bytes": 2161,
+      "sha256": "381552f5d35d1e0590c74bc174b25020d3c2b322012d650513bb29aef6eb9fec"
+    },
+    {
+      "path": "src/security/types.ts",
+      "bytes": 8036,
+      "sha256": "c46ec47c1f509e4c1bcc57b975f7dd892fa2315d77b92d7e65796444b34d3b2f"
+    },
+    {
+      "path": "src/session/slate-lifecycle.ts",
+      "bytes": 18096,
+      "sha256": "50d1c4bfd6d7c2639bd9d20bccccf667d341691d1d9169e55dab8b68238fb257"
+    },
+    {
+      "path": "src/session/slate-terminal-state.ts",
+      "bytes": 7340,
+      "sha256": "bd8943542523227433c70c59336bd977056a5923c2033780c26efdac6d48571c"
+    },
+    {
+      "path": "src/session/store.ts",
+      "bytes": 32783,
+      "sha256": "0440dd6d1248dd7196ddc7d5f76994b9c434a95130ea22e5adc81ee2595a7fe2"
+    },
+    {
+      "path": "src/standard/emit-llms.ts",
+      "bytes": 4663,
+      "sha256": "9c23adc191de1e1f76a9ed466b44f7825344eeeb7a00047e2ff3327fd788625f"
+    },
+    {
+      "path": "src/standard/service.ts",
+      "bytes": 2146,
+      "sha256": "3885f460e4651c4ad1c3a462a71cf0d4c1bb1177288d8dfc1f29c5fa94effdfb"
+    },
+    {
+      "path": "src/testing/service.ts",
+      "bytes": 32903,
+      "sha256": "6045d99f4ba2df0521ecb341cc787efb9b9da808cf76a45d916f4bbf3551db91"
+    },
+    {
+      "path": "src/tui/background-job-inspector.ts",
+      "bytes": 10662,
+      "sha256": "522a94628fcc587bb761180cafe9645efce77418432238cb1f9175e3a37ce333"
+    },
+    {
+      "path": "src/tui/balance-panel.test.ts",
+      "bytes": 4767,
+      "sha256": "970b4f2c253b9615c727b37e1fe2a2fe2c0368a15b8f757340a191ff4c175047"
+    },
+    {
+      "path": "src/tui/balance-panel.ts",
+      "bytes": 4929,
+      "sha256": "68a4fbd2291bb772add911691d7bd30af1e631874cfd3913f866844afce0af80"
+    },
+    {
+      "path": "src/tui/chat-shell.test.ts",
+      "bytes": 20521,
+      "sha256": "36682480a8dc883d5c891af3bfcc34e4ba4cf3f6b076272f6aa47ccb376d257a"
+    },
+    {
+      "path": "src/tui/external-inspector.ts",
+      "bytes": 8766,
+      "sha256": "25c4a66a5580e7268d2d7e958809d00068abbddaa7b61435ba3857390a57c379"
+    },
+    {
+      "path": "src/tui/game-modal.ts",
+      "bytes": 23493,
+      "sha256": "ff997c0ca92f00cb9a9e8bb95fcd69274ed951eb4f649ae34230415be2778a0b"
+    },
+    {
+      "path": "src/tui/games/modal.test-helpers.ts",
+      "bytes": 5187,
+      "sha256": "331b9e01d29375fe95e107cd5b4fa5dbe6ff2d23e58e670800e157bab76e0329"
+    },
+    {
+      "path": "src/tui/games/modal.test.ts",
+      "bytes": 9300,
+      "sha256": "97fb4f65c1100082cc51c8241a3f4c8e8383ac14214984860e0e6d1bd1a6dfd1"
+    },
+    {
+      "path": "src/tui/games/modal.ts",
+      "bytes": 10775,
+      "sha256": "33df3d61fa849e132a587dc08427ce71b9d8d848d23da82c62eb2f21bff13c3d"
+    },
+    {
+      "path": "src/tui/mcp-inspector.test.ts",
+      "bytes": 14470,
+      "sha256": "b23a63c97f087129d488b413772919c1e0599396ed270594a64c4d34423c2a44"
+    },
+    {
+      "path": "src/tui/mcp-inspector.ts",
+      "bytes": 17678,
+      "sha256": "243121787087e2314690238fd406b8502d4f8340115104705816e9620a0b5e6a"
+    },
+    {
+      "path": "src/tui/review-buttons.test.ts",
+      "bytes": 7021,
+      "sha256": "85b63067223d1818c763f13d76597737355f7f0ed9f875e2d483c66ba50f0d7f"
+    },
+    {
+      "path": "src/tui/shell-chrome.ts",
+      "bytes": 49640,
+      "sha256": "2228d69ab821bc0edfd7a5e17e2caf84e15104b980e2dca09f09be9b1b4c727e"
+    },
+    {
+      "path": "src/tui/shell-fallback.test.ts",
+      "bytes": 13879,
+      "sha256": "e06cc83ff2a7b291d0df10000f77facbdaa285d6898d0037cb4d3f9aa234282d"
+    },
+    {
+      "path": "src/tui/subagent-inspector.ts",
+      "bytes": 7525,
+      "sha256": "d36f60ff52aa4c629fa1f2319c657af550ed38c9feaa6d4e0120a193d342e3b2"
+    },
+    {
+      "path": "src/tui/theme-picker.ts",
+      "bytes": 11535,
+      "sha256": "e38d31b186f500a3e6b962b50a9cd6e9ef883568c440c26c87ea19333d4e263e"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "bytes": 206477,
+      "sha256": "3039eed65e5f3cffb468840fc063742f6f56f76df9c46ba0fc6d061d29a20ded"
+    },
+    {
+      "path": "src/wiki/refresh.test.ts",
+      "bytes": 9360,
+      "sha256": "ca53873ebe5d11a1e3074f0734458f6729714493e4fc620d7a3d747e745d302e"
+    },
+    {
+      "path": "tsconfig.scripts.json",
+      "bytes": 215,
+      "sha256": "84f65c69a4dc0b610e2012508a64a98658fc5a263a994643510b6b52ab0436bb"
+    },
+    {
+      "path": "vscode-extension/src/hover-logic.test.ts",
+      "bytes": 5357,
+      "sha256": "52e27cf21343d072e2edd7c9c40c20f754b1d1d274b4b6f4fcc2040043a61055"
+    },
+    {
+      "path": "vscode-extension/src/status-bar-logic.test.ts",
+      "bytes": 6084,
+      "sha256": "20b02feb5339affcff673154c2e0fd2e3f5fdabcc495083a24fea397a798b384"
+    },
+    {
+      "path": "vscode-extension/src/tree-view-logic.test.ts",
+      "bytes": 6983,
+      "sha256": "74a447e4d420002ff9f284035e5180105fd61c860be6227022b9302f9280c9d3"
+    }
+  ]
+}

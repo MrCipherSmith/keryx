@@ -33,7 +33,7 @@ import { resolveGameBudget } from "./tic-tac-toe/layout";
 
 export const DEFAULT_GAMES: readonly GameDefinition[] = [ticTacToeGame];
 
-import { asOtui, type OtuiLike, type Renderer } from "./otui";
+import { asOtui, type Renderer } from "./otui";
 
 export type OpenGamesModalFn = (
   otui: unknown,
@@ -66,7 +66,7 @@ export function presentGamesModal(
   const core = asOtui(otui);
   const renderer = options.renderer as Renderer | undefined;
   let handle: ModalHandle | undefined;
-  let activeId = first.id;
+  const activeId = first.id;
   const states = new Map<string, GameState>();
   const totals = new Map<string, AgentTurnTotals>();
   const lastTurn = new Map<string, AgentTurnStats | undefined>();
@@ -226,6 +226,7 @@ export function presentGamesModal(
     paint();
   };
 
+  // eslint-disable-next-line prefer-const -- Assigned after modal setup so synchronously invoked callbacks safely observe undefined instead of a const TDZ.
   handle = openModalFn(otui, chrome, {
     title: "/game",
     tabs: games.map((game) => ({ id: game.id, label: game.label })),

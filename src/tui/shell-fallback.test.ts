@@ -339,5 +339,6 @@ test("AC5: the same run WITH colour does emit escapes (the assertion can fail)",
   // The very same shell, the very same input: only the environment differs, so
   // the escape-free assertions above are a property of NO_COLOR and not of this
   // code path being incapable of colour in the first place.
+  // eslint-disable-next-line no-control-regex -- The assertion intentionally strips ANSI SGR bytes.
   expect(coloured.stdout.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")).toContain("keryx");
 });

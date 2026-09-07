@@ -1,0 +1,90 @@
+{
+  "framework": "bun:test",
+  "test_files": [
+    {
+      "path": "src/mcp/structural-redaction.test.ts",
+      "target_module": "src/mcp/dispatch.ts and src/mcp/redact-seam.ts",
+      "test_count": 3,
+      "tests": [
+        {
+          "id": "AFC02-mcp-json-structural-redaction",
+          "description": "tool JSON remains parseable and schema-clean, preserves safe numeric metrics/IDs, masks a secret despite a safe-looking field name, and reports sibling redaction metadata",
+          "criterion": "AC2 and AC5 structural JSON redaction",
+          "type": "happy_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC02-required-numeric-format-unsafe",
+          "description": "a secret represented by a required numeric field returns a leak-safe format-unsafe error instead of invalid JSON",
+          "criterion": "AC2 schema-safe masking or format-unsafe",
+          "type": "error_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC02-errors-and-resources",
+          "description": "thrown tool errors and text resources contain no raw secret and carry sibling redaction state",
+          "criterion": "AC2 secret absence across error and resource surfaces",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "src/security/structural-detection.test.ts",
+      "target_module": "src/security/redact.ts, src/security/detect/pii.ts, src/security/detect/secrets.ts, and src/security/detect/exfil.ts",
+      "test_count": 2,
+      "tests": [
+        {
+          "id": "AFC15-safe-numeric-and-field-bypass",
+          "description": "safe IDs, counts, and decimal metrics survive JSON redaction while real secrets under id/metric field names do not bypass detection",
+          "criterion": "AC5 contextual structured classification",
+          "type": "edge_case",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC15-url-and-public-link",
+          "description": "secret URL path/query values are masked while an ordinary public Markdown link does not create an egress finding",
+          "criterion": "AC5 URL secrecy without classifying content as an operation",
+          "type": "edge_case",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "src/commands/security-recursive-scan.test.ts",
+      "target_module": "src/commands/security.ts and recursive scan service implementation",
+      "test_count": 3,
+      "tests": [
+        {
+          "id": "AFC17-recursive-internal-cycle",
+          "description": "a directory recurses by default, follows an internal symlink once, terminates a symlink cycle, scans the canonical file once, and reports complete coverage",
+          "criterion": "AC6 recursive nested scan and cycle termination",
+          "type": "happy_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC17-external-unreadable-incomplete",
+          "description": "external and unreadable entries make required coverage incomplete without exposing the external filename/content or discarding an in-scope secret finding",
+          "criterion": "AC6 denied/inaccessible coverage and finding retention",
+          "type": "error_path",
+          "status": "written_red"
+        },
+        {
+          "id": "AFC17-limit-incomplete-retains-findings",
+          "description": "max-files exhaustion records incomplete coverage while retaining findings from files scanned before the limit",
+          "criterion": "AC6 bounded traversal and independent findings",
+          "type": "edge_case",
+          "status": "written_red"
+        }
+      ]
+    }
+  ],
+  "run_command": "bun test src/mcp/structural-redaction.test.ts src/security/structural-detection.test.ts src/commands/security-recursive-scan.test.ts",
+  "expected_result_before_implementation": "0 passing, 8 failing (RED phase)",
+  "expected_result_after_implementation": "8 passing, 0 failing",
+  "additional_green_commands": [
+    "./node_modules/.bin/eslint src/mcp/structural-redaction.test.ts src/security/structural-detection.test.ts src/commands/security-recursive-scan.test.ts"
+  ],
+  "red_evidence": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-red.md",
+  "notes": "All fixtures are synthetic, local, bounded, and removed after each test. No network, provider, model, credential, or private dataset is used. Public MCP contracts are exercised directly. Parent-approved additive output contract: MCP tool/resource results carry sibling redaction:{state,reasons}; operation JSON is never injected with metadata. Proposed pure core seam: validateOutputForTransport({value, format:'json'|'text', schema?}) returns a discriminated {ok,value?,text,redaction}; it walks string leaves independent of field names, preserves safe scalars, and returns format-unsafe rather than changing a secret-bearing numeric value under a sensitive key such as password. Any optional schema check must use only supported project validation and must not claim full JSON Schema. Recursive security scan JSON adds coverage:{status,required,reasons} and files:[{path,status,reason?}], accepts --max-files/--max-bytes, and directories recurse by default. commit_test_stubs=false; no git or flow state was mutated."
+}

@@ -124,7 +124,7 @@ test("AC4.3 — capability ENABLED but unavailable: exactly one warn, regex path
       return true;
     }) as typeof process.stderr.write;
 
-    let exitCodeBefore = process.exitCode;
+    const exitCodeBefore = process.exitCode;
     try {
       await buildGraph(root);
     } finally {

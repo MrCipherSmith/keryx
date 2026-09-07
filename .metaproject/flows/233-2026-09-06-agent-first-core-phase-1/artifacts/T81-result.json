@@ -1,0 +1,109 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T81",
+  "dispatch_id": "233-2026-09-06-agent-first-core-phase-1/T81",
+  "status": "DONE",
+  "summary": "Closed T78#F-001 and T78#F-002, the two blockers the scope decision's single exception admits. F-001: the label path's cost no longer depends on any quantity the document writes. The `!` gate moved in front of the work it gates (the inline pass built reference constructs it never read); two necessary conditions were added, one of them structurally guaranteed (REFERENCE_DEF captures [^\\]]+, so no key can ever contain `]`) which makes candidate spans pairwise disjoint and therefore linear in total; and a total-work budget of LABEL_WORK_FACTOR * content.length backstops the one filter a document can raise, flagging every definition rather than releasing anything when it is exhausted. Measured: T78's worst shape 20 802.7 ms -> 49.5 ms at 400 029 bytes, exponents 1.79/2.11/1.78 -> 1.14/0.91/0.84, all four public boundaries 1 948-2 278 ms -> 17.1-20.5 ms. With total bytes held constant at 262 144, sweeping the attacker's dials across five orders of magnitude moves the cost by 16.5 ms and 12.4 ms. F-002: the definition table keeps every definition of a label instead of the last, and every definition an image use resolves is flagged, which is correct under CommonMark's first-wins rule and under the opposite precedence; T78-dup leakingCount 6 -> 0. Sixteen prior matrices byte-identical, benign corpus unchanged at 16 files / 62 findings, suites 112/0/1168 exit 0, typecheck and eslint clean. No change to policies.md: this round makes an already-false sentence true and leaves every other one true.",
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T72-gates bypasses: [] and T72-md rendererConfirmedBypasses: [] byte-identical before and after (e4d04c18..., 15866b62...); T78-md bypasses now [] (the two duplicate rows moved to closed); the AC5 clauses in exfil.test.ts's transport test stay green - a public Markdown link and a link wrapping a local image both report redaction.state none. Suites 112 pass / 0 fail."
+    },
+    {
+      "criterion": "Both findings closed at the detector and at all four public boundaries, each pinned by a regression that fails before the change",
+      "status": "met",
+      "evidence": "F-002: T78-dup leakingAtAnyBoundary [6 ids] -> [], every row host-absent at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput. F-001: T78-boundary boundariesOverOneSecond [all four] -> []. Pins: three new tests in exfil.test.ts that fail on the pre-change tree (58 pass / 3 fail / 816 expect(), file runtime 126.07 s) and pass after (61 / 0 / 870, 462 ms). Raw: T81-before-T78-*.log, T81-after-T78-*.log, T81-after-suites.log."
+    },
+    {
+      "criterion": "No shape costs more than a second at any public boundary; the bound cannot be inflated by document content, shown on the reviewer's adversarial shape and on one constructed here",
+      "status": "met",
+      "evidence": "Worst shape found: balancedNest_withLongDef at 1 048 575 bytes = 564.6 ms at redactToolOutput (T81-after-boundary-sizes.log), the worst single boundary reading anywhere in the round; nothing over a second at any size up to a megabyte. Reviewer's shape: 400 029 bytes 20 802.7 -> 49.5 ms. Mine: wsInflatedBangRun_withLongDef 59 323 ms before (in the RED test run) -> 28.5 ms at 500 030 bytes; bangOpenRun_bracketKeyDef, which defeats the one filter a document can raise, 47.4 ms at 260 031 bytes with exponent 1.02. Non-inflatability: with bytes held constant at 262 144, definition-label length swept 0..100 000 spans 12.6-29.1 ms (spread 16.5) and definition-label `[` count swept 0..60 000 spans 26.4-38.8 ms (spread 12.4). Raw: T81-after-T81-perf.log, T81-after-scale.log, T81-after-boundary-sizes.log."
+    },
+    {
+      "criterion": "Every prior measurement holds; compare by hash against the recorded values",
+      "status": "met",
+      "evidence": "17 matrices byte-identical before and after and equal to T78's recorded hashes (the eleven it names plus T72-md, T72-gates, T72-srcset, T72-doc, T77-doc, T78-corpus), so the agreement is five-way. Two moved and both were diffed line by line: T78-md, whose entire diff is the two duplicate rows moving from bypasses to closed plus their finding counts; and T53-corpus, whose benign numbers are unchanged and whose whole-repository header moved because of logs this task wrote between the runs. Runner: T81-matrices.sh."
+    },
+    {
+      "criterion": "The benign corpus does not grow beyond 16 files and 62 findings, or the change is explained with the correct vector",
+      "status": "met",
+      "evidence": "benignFilesWithFindings 16 -> 16, benignFindings 62 -> 62, Part B 7 -> 7 with the same ids, the 16 file rows byte-identical. The whole-repository Part A header moved (616 -> 619 findings, 96 -> 97 files) because of files this task wrote; the vector was enumerated rather than narrated - every T81-* log was run through detectExfil and the only new one carrying findings is T81-after-T78-dup.log with exactly 3, the duplicate probe's own output."
+    },
+    {
+      "criterion": "Ownership: only exfil.ts, exfil.test.ts, and policies.md only if the change makes its wording untrue",
+      "status": "met",
+      "evidence": "Two source files changed. policies.md untouched: the completeness sentence was FALSE while F-002 was open and is true again now, and the label-length sentence stays true because neither new condition can release a label the table defines and the work budget's exhaustion flags every definition, producing a superset. Version stays 0.1.4 per T78's instruction."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The property the bound must have (P: no quantity the document writes changes the asymptotic cost), how it would be demonstrated, and the measured baseline. Written before any code."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What was changed, why each part of the bound is not inflatable, the full measurement tables before and after, the matrix hashes, the corpus explanation, and six concerns."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-perf.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Ladders with growth exponents over fourteen adversarial shapes, the inflation table (bytes held constant while the attacker's dials are swept), the budget-exhaustion check, and the four boundaries on the worst shape."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-scale.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "One shape per process, so heap pressure from an earlier payload cannot be read as a cliff; used to settle whether the one exponent above 1.5 was real."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The four public boundaries across 128 KB to 1 MB for four shapes including a no-definition control and the budget-exhausting shape, best of three per cell."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T81-matrices.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Runs all nineteen prior matrix probes and hashes each output; invoked once before the change and once after."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "F-001: readBracketConstructs takes wantReference so the `!` gate precedes the work it gates; readLabel replaces labelWithinBudget and adds two necessary conditions (no key can contain `]`, and no key carries more `[` than the longest such run in the table) plus a total-work budget of LABEL_WORK_FACTOR * content.length whose exhaustion flags every definition; indexContent records `[` positions; lowerBound/countInRange added. F-002: the definition table's value is a list, every definition is kept, and every definition of a label an image use resolves is flagged. Header comment rewritten to state the property the bound has rather than the number it used to be."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Three tests added, all failing before the change: T81#F-002 (seven duplicate spellings including the reversed order, at the detector, through applyRedaction, the persistence materializer and the transport validator, with four controls); T81#F-001 perf (nineteen shapes, every one carrying a reference definition, under a 500 ms budget); T81#F-001 budget direction (a document that exhausts the work budget flags its definition and still honours the allowlist)."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "tests_passing": 112,
+    "tests_failing": 0,
+    "expect_calls": 1168,
+    "red_state": "58 pass / 3 fail / 816 expect() on the pre-change tree, file runtime 126.07 s",
+    "green_state": "61 pass / 0 fail / 870 expect() in the same file, runtime 462 ms",
+    "worst_boundary_ms": 564.6,
+    "worst_boundary_shape": "balancedNest_withLongDef at 1 048 575 bytes, redactToolOutput",
+    "matrices_byte_identical": 17,
+    "matrices_changed_and_diffed": 2,
+    "benign_corpus_files": 16,
+    "benign_corpus_findings": 62
+  },
+  "timestamp_utc": "2026-09-07T00:00:00Z"
+}

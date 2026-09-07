@@ -14,7 +14,6 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   renameSync,
   writeFileSync,
 } from "node:fs";

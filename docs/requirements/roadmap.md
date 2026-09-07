@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.27.0
+Version: 0.28.1
 
 ## Status
 
@@ -472,6 +472,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 
 | Package | Status | Summary |
 |---|---|---|
+| [Keryx Agent-first Core](keryx-agent-first-core/README.md) | spec ready — proposed contracts; runtime not implemented | Независимое от модели ядро и отдельный optional Shell; 49 решений, содержательная wiki по секциям, source provenance, atomic expectedVersion, lifecycle/graph/ctx trust, SDK/batch и независимая методика измерений. Короткий gate уже частично реализован; остальные target guarantees не заявлены выполненными. |
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
 | [SAC Workspace Lifecycle Completion](sac-workspace-lifecycle/README.md) | implemented and verified (PR #296) | Archive/resource-removal/rename shipped for `WorkspaceService`, reusing its existing `addResource` write skeleton. Member management and delete remain explicit, reasoned non-goals (RP-06/AC-9), not silent omissions. |

@@ -114,4 +114,14 @@ export const eslintAdapter: SourceAdapter = {
     }
     return findings;
   },
+  validate(raw: RawSourceResult) {
+    try {
+      const data = JSON.parse(raw.content) as unknown;
+      return Array.isArray(data)
+        ? { valid: true, format: "eslint-json" }
+        : { valid: false, error: "ESLint JSON format was not recognized" };
+    } catch {
+      return { valid: false, error: "ESLint JSON parse failed" };
+    }
+  },
 };

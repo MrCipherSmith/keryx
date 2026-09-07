@@ -13,7 +13,7 @@ import path from "node:path";
 // The SHARED stripper and tree walk, not a local copy. A third comment/string
 // stripper is the mistake `config-dir.scan.ts` was extracted to stop, and the
 // guard this file used to hold made it.
-import { code, sourceFiles, treeSources } from "../../lib/config-dir.scan";
+import { sourceFiles, treeSources } from "../../lib/config-dir.scan";
 import { constructsWith, declaresRanking, parse } from "../../lib/config-dir.ast";
 import {
   compareProfiles,

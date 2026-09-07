@@ -1,0 +1,57 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T15",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Independent MCP HTTP loopback security review",
+    "description": "Review root-authored HTTP transport guard against AFC-03/policies. Stage1 verify all normative host/address/port resolution and pre-bind conditions; Stage2 only after Stage1 passes. Inspect loopback classifier semantics, DNS resolution then pinned numeric bind, Host/Origin DNS-rebinding guard, safe errors/listen failure handling. No source edits. No external sockets/models.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Only verified unambiguous loopback binds; wildcard/nonloopback and resolution errors fail before SDK connection/bind.",
+    "Host/Origin cannot bypass local HTTP boundary; failures do not leak unsafe input or report startup success."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/http-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/mcp/transport/http-sse.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/transport/loopback-host.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/transport/http-sse.loopback.test.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/boundary.test.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/serve-config.ts"
+  ],
+  "constraints": [
+    "Project root /Users/Goodea/goodea/keryx; read .metaproject/index.md before any repository actions. Read local review-security-code SKILL fully; testing context.",
+    "Read-only source; write only T15 review/result; no git/flow/AC changes, no external network or model calls. Loopback test allowed.",
+    "Base 0bc6418fa1a038f8ec909cf949fecba077acf9a4, branch codex/agent-first-core. Root authored HTTP; unrelated M01/M10/Shell/bootstrap out of scope.",
+    "Stage1 spec gate before quality. Stats disabled. Structured result schema and security-scan reports."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T15-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T11:21:34.395832+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

@@ -1,6 +1,5 @@
 import path from "node:path";
 import { stat } from "node:fs/promises";
-import { pathExists } from "./fs";
 
 export async function resolveGitHooksRoot(projectRoot: string): Promise<string | null> {
   const dotGit = path.join(projectRoot, ".git");

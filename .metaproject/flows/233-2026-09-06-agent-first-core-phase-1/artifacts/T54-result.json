@@ -1,0 +1,82 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T54",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T39 F-002: loadSecurityConfig now validates the declared mode against the closed SecurityMode union and returns T37's existing forced-closed shape (mode enforced + configUnreadable) for anything outside it, and isBlockingMode became an exhaustive switch whose default arm blocks. Narrowed T39 F-005 after a stated determination: an absent modules block in a readable manifest means the module is disabled, matching every other manifest reader in the repo, with a MANIFEST_UNREADABLE sentinel added so an unparseable/empty manifest still blocks rather than un-blocking by accident of readJsonFileOr's fallback value. T39 F-008 is half closed: the forced posture stays an in-memory returned flag and the config file is never written, but the actual persistence (writeState at src/security/service.ts:95) is outside this task's ownership and the exact one-line guard is named in the report. Also corrected prepareOutputForPersistence's doc comment (T42#F-004), which claimed a three-way redaction signal the two-pass production path does not provide.",
+  "summary_markdown": "See T54-implementation.md for the per-defect evidence, the F-005 determination and its justification, the disclosed verdict moves (A8/A9/A17 permissive by design, {\"mode\":null} strict by design), and the exact out-of-ownership change F-008 still needs.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS; a check that cannot establish its posture blocks rather than disappearing; an unrecognized configured mode never resolves to something more permissive than the strictest recognized mode.",
+      "status": "met",
+      "evidence": "Eleven unrecognized mode bodies (case, whitespace, plausible-but-wrong string, 42, true, null, [], {}) now load as mode 'enforced' with configUnreadable true, block at guardOutput with gate 'incomplete', and return {status:'fail'} at securityFlowGate (T54 D1/D1b; reviewer probe rows B11-B16 moved from guardAllowed true + informational pass to blocked). isBlockingMode's default arm is on the blocking side, so an unrecognized value cannot inherit 'does not block' even if it reached there. The F-005 narrowing relabels nothing as PASS: it separates 'module disabled' (a stated posture) from 'posture unavailable', and unparseable/empty/whitespace manifests still block (T54 D2b; probe A7/A18/A19 byte-identical)."
+    },
+    {
+      "criterion": "Policy (policies.md): strict runs accept only a pass; reasons and details stay constant and leak-safe with no raw error text, path or source bytes.",
+      "status": "met",
+      "evidence": "Every new branch returns the existing POSTURE_UNAVAILABLE_REASON / INCOMPLETE_DECISION constants; no new string literal and no interpolation were added. T54 D1 asserts the reason and detail contain neither the workspace root, nor the planted AKIAIOSFODNN7EXAMPLE, nor the unrecognized mode bytes. The reviewer's probe reports leaky:false on all 38 rows after the change. The one interpolating detail (security ${mode}: informational) is now reachable only for advisory and gateway."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after, covering an unrecognized mode string, a recognized mode in the wrong case, the manifest-without-modules shape, and the persisted-posture case; everything the earlier repair closed stays closed.",
+      "status": "met",
+      "evidence": "RED 33 pass / 5 fail (2026-09-06T15-53-54-576Z_run.log) -> GREEN 38 pass / 0 fail (2026-09-06T15-55-19-720Z_run.log). New tests: T54 D1, D1b, D1c, D2, D2b, D3. The probe diff moves exactly 9 of 38 rows (A8, A9, A17 by the stated F-005 determination; B11-B16 by the fix); every protected verdict is byte-identical: non-object manifest bodies A2-A6, non-object modules A10-A13, non-object and unparseable configs B2-B6 and B17, absent manifest A1, absent config B1, legitimate empty config B7, the no-disk-write row C1 and the prototype-hygiene row D1."
+    },
+    {
+      "criterion": "Documentation defect: the comment on the persistence materializer must state what is true end to end.",
+      "status": "met",
+      "evidence": "prepareOutputForPersistence's doc comment now states the two-pass architecture: redaction describes the second pass (usually 'none' on the guardOutput path because the first pass already cleaned the text), bytesPreserved is the reliable 'did anything change' signal because it compares against the caller's original, what changed and why comes from guard.decision.findings, and the three-way distinction holds only for a hand-built GuardResult with redacted unset. Comment only; no behaviour or test change."
+    },
+    {
+      "criterion": "Defect 3 (info): a forced posture is not recorded as if it were the user's configured mode.",
+      "status": "partial",
+      "evidence": "In scope and done: the forced posture is an in-memory returned flag (configUnreadable) and no code this task owns writes it anywhere; T54 D3 asserts the config file's bytes are unchanged after loadSecurityConfig + guardOutput + securityFlowGate for both the unreadable and the unrecognized-mode payloads, and the reviewer's C1 row is byte-identical. Out of ownership: the persistence itself is writeState(cwd, currentState(config)) at src/security/service.ts:95 with currentState/MODE_RANK at src/security/self-protect.ts:39/:88, all read-only for this dispatch. The exact one-line guard (skip the write when config.configUnreadable) is quoted in T54-implementation.md."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T54-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: measured starting state, the three defects, the F-005 determination, the regression list and the verification plan",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T54-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-defect evidence with before/after probe rows, the manifest-widening determination and its justification, verification counts and raw log paths, routing audit and concerns",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/config.ts",
+      "change": "Added SECURITY_MODES/isSecurityMode and a mode-validation step at the end of loadSecurityConfig: a declared mode outside the closed union returns the merged config with mode forced to enforced and configUnreadable true, reusing T37's forced-closed shape; an absent mode key still resolves to the advisory default"
+    },
+    {
+      "path": "src/security/guard.ts",
+      "change": "isBlockingMode is now an exhaustive switch with the default arm blocking; resolveManifestSecurityState treats an absent modules block as 'module disabled' and uses a MANIFEST_UNREADABLE sentinel so an unparseable manifest still blocks; module header names the unrecognized-mode posture exception; prepareOutputForPersistence's doc comment corrected to the two-pass reality"
+    },
+    {
+      "path": "src/security/guard.test.ts",
+      "change": "Six additive regressions (T54 D1, D1b, D1c, D2, D2b, D3) covering unrecognized/wrong-case/non-string modes, the permissive-side pins, the manifest-without-modules shape, unparseable manifests and prototype hygiene, and the forced posture staying off disk; no existing test deleted, weakened or re-expected"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 6,
+    "tests_passed": 250,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T15:58:00Z"
+}

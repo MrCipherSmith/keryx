@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T65-run-1",
+  "dispatch_id": "T65",
+  "status": "DONE",
+  "summary": "Aligned src/commands/security.ts's two exit-code folds (exitCodeFor, reportExitCode) with T61's corrected isBlockingMode: gateway now joins ci/enforced on the blocking side, so security scan/report/check-input/check-output all refuse a fail/needs-approval/incomplete/unrecognized gate under gateway mode instead of exiting 0 like advisory. Verified at the real CLI entry point (T65-verify-gateway.ts, before/after), not only at the pure functions. Enumerated every mode-branching site in the file; one (an advisory-only operator hint in handleHooks) is not this defect class and was left unchanged, disclosed in T65-implementation.md.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS at any surface including the process exit code; a value that blocks inside a module does not exit zero at its command.",
+      "status": "met",
+      "evidence": "gateway now exits non-zero at security scan, security report and security check-input/check-output for fail/needs-approval/incomplete/an unrecognized gate, matching guardOutput/securityFlowGate's already-corrected in-module behavior. T65-verify-gateway.ts before (.metaproject/data/gdctx/raw/2026-09-06T16-58-04-000Z_T65-verify-gateway-before.log): every gateway case exits 0. After (2026-09-06T17-05-00-000Z_T65-verify-gateway-after.log): every gateway fail/needs-approval/incomplete case exits 1, pass controls stay 0."
+    },
+    {
+      "criterion": "Policy (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict runs accept only PASS; an optional skip warns and is never signed as passed.",
+      "status": "met",
+      "evidence": "isPassGate (unchanged, already exhaustive per T38/T55) still enforces this; gateway is now one of the modes that accepts only pass, alongside ci/enforced. No new message string introduced."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after, measured at the command entry point; everything the earlier fold repairs closed stays closed, and the advisory mode is untouched.",
+      "status": "met",
+      "evidence": "RED: security-gate-exit.test.ts 20 pass/5 fail (2026-09-06T17-00-00-000Z_T65-red-security-gate-exit.log); security.check-input.test.ts 30 pass/2 fail (2026-09-06T17-02-00-000Z_T65-red-security-check-input.log). GREEN: 25 pass/0 fail (2026-09-06T17-03-00-000Z_T65-green-security-gate-exit.log); 32 pass/0 fail (2026-09-06T17-04-00-000Z_T65-green-security-check-input.log). advisory's exit code is 0 in both before and after runs of T65-verify-gateway.ts; every pre-existing ci/enforced/advisory assertion in both owned test files still passes unmodified."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Spec written before coding: background, verification of the disagreement at the real command entry point, enumeration method, the fix, truth table, regression plan."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Site enumeration and its method, truth table of what changed and what did not, RED/GREEN evidence at both the unit-test and real-command-entry-point levels, acceptance mapping, routing audit."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-verify-gateway.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Supplementary probe driving the real securityCommand entry point across security scan/report/check-input under gateway mode, before and after the fix."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T16-58-04-000Z_T65-verify-gateway-before.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "RED at the real command entry point: every gateway case exits 0, identical to the advisory controls."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T17-05-00-000Z_T65-verify-gateway-after.log",
+      "kind": "diff",
+      "exists": true,
+      "summary": "GREEN at the real command entry point: every gateway fail/needs-approval/incomplete case exits 1; pass controls and advisory controls unchanged."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T17-02-15-004Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun src/cli.ts ctx run -- bun test src/commands/ src/security/: 1233 pass / 6 skip / 0 fail, 4978 expect(), 99 files."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T17-02-29-495Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck: clean, exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T17-02-34-702Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "eslint on every file this task changed: clean, no output, exit 0."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/commands/security.ts", "change": "modified" },
+    { "path": "src/commands/security-gate-exit.test.ts", "change": "modified" },
+    { "path": "src/commands/security.check-input.test.ts", "change": "modified" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-spec.md", "change": "created" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-implementation.md", "change": "created" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T65-verify-gateway.ts", "change": "created" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T17:10:00Z"
+}

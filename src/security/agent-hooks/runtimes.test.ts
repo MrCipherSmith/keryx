@@ -13,7 +13,6 @@ import {
   AGENT_CHECK_INPUT_COMMAND,
   checkInputCommand,
   checkOutputCommand,
-  AGENT_CHECK_OUTPUT_COMMAND,
   SECURITY_HOOKS_KEY,
 } from "./runtimes";
 

@@ -15,8 +15,10 @@ import { freshnessReportPath, readWikiFreshnessMetric } from "../../health/metri
 // (a backing error becomes a structured empty/error result).
 
 import type { Dirent } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { isPathInside } from "../../lib/fs";
+import { readContainedFile } from "../../lib/contained-read";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
@@ -185,7 +187,16 @@ async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> 
   const summaries = new Map<string, string>();
   let content: string;
   try {
-    content = await readFile(join(cwd, ".metaproject", "skills", "catalog.md"), "utf8");
+    // catalog.md is a SIBLING of gdskills/ (both live under .metaproject/skills/),
+    // not a descendant of it — the owner root here must be the shared parent, or
+    // readContainedFile's containment check rejects every read as "outside its
+    // owner root" and this fallback silently degrades to "" for every skill.
+    const bytes = await readContainedFile(
+      join(cwd, ".metaproject", "skills"),
+      join(cwd, ".metaproject", "skills", "catalog.md"),
+      { maxBytes: 512 * 1024, requireRegularFile: true },
+    );
+    content = bytes.toString("utf8");
   } catch {
     return summaries;
   }
@@ -214,6 +225,10 @@ async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> 
 async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   const root = join(cwd, ".metaproject", "skills", "gdskills");
   const entries: SkillsCatalogEntry[] = [];
+  const rootInfo = await lstat(root).catch(() => null);
+  if (!rootInfo || !rootInfo.isDirectory() || rootInfo.isSymbolicLink()) return entries;
+  const rootReal = await realpath(root).catch(() => null);
+  if (!rootReal) return entries;
   let categoryDirs: Dirent[];
   try {
     categoryDirs = await readdir(root, { withFileTypes: true });
@@ -222,10 +237,11 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   }
   const catalogSummaries = await parseCatalogSummaries(cwd);
   for (const categoryDir of categoryDirs) {
-    if (!categoryDir.isDirectory()) {
-      continue;
-    }
+    if (!categoryDir.isDirectory() && !categoryDir.isSymbolicLink()) continue;
     const categoryPath = join(root, categoryDir.name);
+    const categoryReal = await realpath(categoryPath).catch(() => null);
+    const categoryInfo = await stat(categoryPath).catch(() => null);
+    if (!categoryReal || !categoryInfo?.isDirectory() || !isPathInside(rootReal, categoryReal)) continue;
     let skillDirs: Dirent[];
     try {
       skillDirs = await readdir(categoryPath, { withFileTypes: true });
@@ -233,13 +249,15 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
       continue;
     }
     for (const skillDir of skillDirs) {
-      if (!skillDir.isDirectory()) {
-        continue;
-      }
-      const skillMdPath = join(categoryPath, skillDir.name, "SKILL.md");
+      const skillPath = join(categoryPath, skillDir.name);
+      const skillReal = await realpath(skillPath).catch(() => null);
+      const skillInfo = await stat(skillPath).catch(() => null);
+      if (!skillReal || !skillInfo?.isDirectory() || !isPathInside(rootReal, skillReal)) continue;
+      const skillMdPath = join(skillPath, "SKILL.md");
       let content: string;
       try {
-        content = await readFile(skillMdPath, "utf8");
+        const bytes = await readContainedFile(root, skillMdPath, { maxBytes: 512 * 1024, requireRegularFile: true });
+        content = bytes.toString("utf8");
       } catch {
         continue; // no SKILL.md in this directory
       }
@@ -421,14 +439,17 @@ export function createMetaprojectAdapter(
           path: input.path,
           content: "",
           isError: true,
-          error: `wiki path escapes the wiki root: ${input.path}`,
+          error: "wiki path is outside its root",
         };
       }
       try {
-        const content = await readFile(target, "utf8");
+        const content = (await readContainedFile(join(cwd, ".metaproject", "wiki"), target, {
+          maxBytes: 8 * 1024 * 1024,
+          requireRegularFile: true,
+        })).toString("utf8");
         return { path: input.path, content, isError: false };
-      } catch (cause) {
-        return { path: input.path, content: "", isError: true, error: errorMessage(cause) };
+      } catch {
+        return { path: input.path, content: "", isError: true, error: "wiki page is unavailable" };
       }
     },
 
@@ -443,7 +464,7 @@ export function createMetaprojectAdapter(
       } catch (cause) {
         graphError = errorMessage(cause);
       }
-      let hasWikiIndex = false;
+      let hasWikiIndex: boolean;
       try {
         await readFile(join(cwd, ".metaproject", "wiki", "index.md"), "utf8");
         hasWikiIndex = true;
@@ -629,7 +650,10 @@ export function createMetaprojectAdapter(
       const byName = catalog.find((entry) => entry.name === input.name);
       if (byName !== undefined) {
         try {
-          const content = await readFile(join(cwd, byName.path), "utf8");
+          const content = (await readContainedFile(join(cwd, ".metaproject", "skills", "gdskills"), join(cwd, byName.path), {
+            maxBytes: 512 * 1024,
+            requireRegularFile: true,
+          })).toString("utf8");
           return { name: input.name, path: byName.path, content, found: true };
         } catch {
           return { name: input.name, path: "", content: "", found: false };
@@ -647,7 +671,10 @@ export function createMetaprojectAdapter(
         return { name: input.name, path: "", content: "", found: false };
       }
       try {
-        const content = await readFile(confined, "utf8");
+        const content = (await readContainedFile(join(cwd, ".metaproject", "skills", "gdskills"), confined, {
+          maxBytes: 512 * 1024,
+          requireRegularFile: true,
+        })).toString("utf8");
         return { name: input.name, path: byPath.path, content, found: true };
       } catch {
         return { name: input.name, path: "", content: "", found: false };

@@ -1,0 +1,48 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T21",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent recheck of the terminal reason and budget documentation corrections",
+    "description": "Independently verify that the four findings of the final M10 budget review are genuinely closed and that closing them changed nothing else. You wrote neither the reviewed fix nor the review it answers. For the major, confirm with your own probe that an unattended no-progress stop now reports a reason distinct from budget exhaustion while both budgets still have capacity, and that the two genuine budget stops and the ask-user stop still report their own reasons: enumerate every emitTerminalState call site yourself rather than trusting the count. The fix widened the TerminalStateReason union in src/session/slate-terminal-state.ts, which was outside the dispatched ownership and is disclosed; verify that widening the union breaks no consumer, that no exhaustive switch or persisted-value comparison depends on the old set, and that a value written by an older build still reads correctly. Confirm the new regression genuinely fails without the production change, by reverting the production line in a scratch copy rather than in the working tree. For the three minor findings, confirm each documentation statement now matches the behavior tests assert, and that deleting the trailing round guard changed no behavior: satisfy yourself that the loop re-enters the entry guard on every path, including the reset, cancel and no-progress paths, rather than accepting the reasoning as stated. Stage 2 (code quality) only after Stage 1 passes. Write T21-review.md and T21-result.json.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds; a stop no budget caused is not reported as a budget stop.",
+    "AC6: no unresolved blocker, major or minor finding remains from the final independent review; each of its four findings is closed by evidence you executed yourself.",
+    "The correction is behavior-preserving everywhere else: the reviewer's fifteen probe cases, the focused agent, budget and child suites, both TypeScript targets and targeted lint all pass, and the union widening breaks no consumer."
+  ],
+  "context_refs": [
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
+    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "/Users/Goodea/goodea/keryx/src/session/slate-terminal-state.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Read-only on all production and test code, including when checking that a regression fails without the fix: copy the sources into a scratch directory instead of editing the working tree, and never leave the tree modified.",
+    "Write only T21-review.md, T21-result.json and probe scripts named T21-*.ts under the flow 232 artifacts dir. Do not modify the earlier review or probe artifacts.",
+    "No git state changes, no flow state, no dependency changes, no bun test without file arguments, no network, no model or provider API calls. Deterministic in-memory providers only.",
+    "Two other workers are concurrently editing src/security/* and src/commands/security.ts; exclude those from the review and note any hash drift you observe.",
+    "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-result.json"
+  },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-09-06T13:44:00+00:00", "created_by": "flow-orchestrator" }
+}

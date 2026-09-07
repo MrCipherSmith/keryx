@@ -30,7 +30,7 @@ import { validateAgainstSchema } from "../../contracts/validator";
 import { AppendOnlySession, resumeSession } from "../session/session";
 import type { SessionEntry, SessionManifest, SessionSeed } from "../session/types";
 import { type ExecutionReceipt, recoverFrom, type RecoveryDecision } from "./recovery";
-import { type Checkpoint, InMemorySessionStore, type SessionSnapshot } from "./store";
+import { type Checkpoint, InMemorySessionStore } from "./store";
 
 const SCHEMA_DIR = path.join(
   import.meta.dir,

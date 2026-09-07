@@ -1,0 +1,38 @@
+{
+  "framework": "bun:test",
+  "test_files": [
+    {
+      "path": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "target_module": "shared index.md/routing.md render-and-write lifecycle used by init, update, rules sync, rules distill, orient, and gdskills catalogue routing",
+      "test_count": 3,
+      "tests": [
+        {
+          "id": "M01-routing-sync-repeat",
+          "description": "init and repeated rules sync preserve the short gate, full router, flags, and user content",
+          "criterion": "AC1: init/rules sync/repeat preserve a short index plus full routing document, enabled gdctx/security flags, and user-owned entrypoint content",
+          "type": "happy_path",
+          "status": "written_red"
+        },
+        {
+          "id": "M01-routing-distill-update-consumers",
+          "description": "distill and update repeats keep routing ownership and point orient and the router skill at the full document",
+          "criterion": "AC1 + AC2: distill/update/repeat preserve both document roles and consumers resolve the full router at routing.md",
+          "type": "edge_case",
+          "status": "written_red"
+        },
+        {
+          "id": "M01-routing-pair-recovery",
+          "description": "a failed routing pair publication is observable and succeeds on a clean rerun",
+          "criterion": "AC2: pair publication failure is reported and a clean rerun safely recovers without false success",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    }
+  ],
+  "run_command": "bun test src/commands/routing-entrypoint-lifecycle.test.ts",
+  "expected_result_before_implementation": "3 failing, 0 passing (RED phase)",
+  "expected_result_after_implementation": "3 passing, 0 failing",
+  "red_evidence": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
+  "notes": "Black-box lifecycle tests call the shipped init/update/rules/orient/catalog surfaces. They do not import a speculative future writer API. The fault case makes routing.md a directory, using the existing filesystem seam to require an observable write rejection and a successful rerun. commit_test_stubs=false; no git mutation was performed."
+}

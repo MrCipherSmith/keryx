@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T16-recheck",
+  "status": "DONE",
+  "summary": "Stage 1 and Stage 2 recheck passed for AFC05 health completeness/parser behavior and AFC18 Shell CLI validation. T21 resolves the original F-001 malformed nested audit finding; no new logic or code-level security findings were reproduced.",
+  "summary_markdown": "See T16-recheck.md for stage gates, prior-finding disposition, exact evidence, limitations, and routing audit.",
+  "acceptance": [
+    {
+      "criterion": "Health findings and coverage remain separate; required incomplete never PASS; supported Bun/npm formats recognized and unknown rejected.",
+      "status": "met",
+      "evidence": "Current focused health suite passes 15/15; T21 all-health evidence passes 86/86. Malformed nested audit output preserves valid findings while producing incomplete coverage."
+    },
+    {
+      "criterion": "Shell help/argument errors precede credentials/session/UI mutation; actionable examples and nonzero invalid exits.",
+      "status": "met",
+      "evidence": "Shell validation passes 16/16 with startup spies and real source CLI subprocess checks for help and missing provider values."
+    },
+    {
+      "criterion": "Independent Stage1 then Stage2 with concrete findings and immutable evidence; no false integrated PASS.",
+      "status": "met",
+      "evidence": "Stage 1 was completed before Stage 2. Original F-001 is explicitly rechecked as resolved by T21; Stage 2 reports no reproducible findings."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-recheck.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent Stage 1 and Stage 2 health/Shell recheck.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T21-implementation.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T21 parser repair and all-health evidence retained as prior-finding evidence.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_passed": 31,
+    "tests_failed": 0,
+    "health_tests_passed": 15,
+    "shell_tests_passed": 16,
+    "prior_all_health_tests_passed": 86,
+    "stage1": "passed",
+    "stage2": "passed",
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:30:00Z"
+}

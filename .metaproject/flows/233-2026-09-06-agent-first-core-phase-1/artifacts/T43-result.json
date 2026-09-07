@@ -1,0 +1,117 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T43",
+  "dispatch_id": "T43-shape-aware-json-reader",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Added readJsonObjectFile/JsonObjectRead to src/lib/json.ts (three states: parsed object, parsed non-object, unreadable; no type parameter, so the signature promises nothing it did not check). readJsonFileOr is unchanged. Migrated the five gate-relevant readJsonFileOr sites plus health/service.ts's two bare JSON.parse casts, deleting both hand-rolled Symbol sentinels (CONFIG_UNREADABLE, MANIFEST_UNREADABLE) with no verdict change, pinned by the 38 existing guard.test.ts rows. The three security scan-mcp readers were migrated with a disclosed behaviour change: an unreadable manifest or pinned baseline now makes the scan incomplete and --strict exit non-zero, and --pin refuses to record a baseline from a manifest it could not read. 25 remaining call sites enumerated and left, each with its reason.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T43-implementation.md",
+  "acceptance": [
+    {
+      "criterion": "A shape-aware reader exists whose result distinguishes a parsed object, a parsed non-object and an unparseable payload, with a signature that does not promise a type it may not return.",
+      "status": "met",
+      "evidence": "src/lib/json.ts: JsonObjectRead = {state:'object',value:Record<string,unknown>} | {state:'non-object',value:unknown} | {state:'unreadable'}; readJsonObjectFile is non-generic and returns only what it verified. src/lib/json.test.ts covers all three states over 15 payloads including __proto__ (7 tests, raw 2026-09-06T16-18-33-402Z_run.log)."
+    },
+    {
+      "criterion": "Every migrated call site behaves identically for a well-formed object payload, and its non-object and unparseable cases are handled explicitly rather than by accident of member access.",
+      "status": "met",
+      "evidence": "security/config.ts, security/guard.ts and health/service.ts: no verdict changed on any payload (guard.test.ts 38/38 unchanged, raw 2026-09-06T16-25-41-726Z_run.log; new service-gate-exit row over 7 non-object/unparseable payloads). health/service.ts no longer relies on a TypeError from `null.record` being swallowed. commands/security.ts scan-mcp: well-formed manifests unchanged (fixtures/mcp-threat: 14 scanned, 0 unreadable, 17 findings, exit 1 — raw 2026-09-06T16-21-23-791Z_run.log); the non-object and unparseable cases now report coverage:incomplete instead of scanning `null` and reporting clean."
+    },
+    {
+      "criterion": "readJsonFileOr itself is unchanged, and every non-migrated caller is untouched and still passing.",
+      "status": "met",
+      "evidence": "readJsonFileOr and readJsonFile are byte-identical; src/lib/json.test.ts pins that an array, a number and null still come back verbatim and only a parse failure falls back. 25 non-migrated sites in 20 files enumerated in T43-implementation.md §3b, none edited. bun test src/lib src/security src/health src/commands: 2076 pass / 6 skip / 0 fail (raw 2026-09-06T16-22-35-940Z_run.log)."
+    },
+    {
+      "criterion": "The two existing hand-rolled sentinels are replaced by the shared mechanism with no behaviour change, pinned by the tests that already cover them.",
+      "status": "met",
+      "evidence": "CONFIG_UNREADABLE (with isMergeableConfigPayload) and MANIFEST_UNREADABLE deleted. Pinned unchanged by guard.test.ts T37 D1/D1b/D2/D2b/D2c and T54 D1/D1b/D1c/D2/D2b/D3 — 38 pass / 0 fail, no expectation edited."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; the full repository suite stays green.",
+      "status": "partial",
+      "evidence": "BEFORE: 8 pass / 6 fail / 1 load error across 14 tests (raw 2026-09-06T16-15-47-976Z_run.log). AFTER: 58 pass / 0 fail (raw 2026-09-06T16-18-33-402Z_run.log). Module scope 2076 pass / 6 skip / 0 fail; typecheck and typecheck:scripts exit 0; eslint on all 8 changed files exit 0. The repository-wide suite was NOT run — the dispatch reserves it for the orchestrator."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T43-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The API, the migration criterion, the site table and the RED test plan, written before any code."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T43-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full 30-site enumeration with classification, the two sentinel replacements, the disclosed scan-mcp behaviour change, and the verification table with raw log paths."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/lib/json.ts", "change": "added JsonObjectRead + readJsonObjectFile; readJsonFile/readJsonFileOr untouched" },
+    { "path": "src/lib/json.test.ts", "change": "new: 7 tests over the three states and readJsonFileOr's unchanged behaviour" },
+    { "path": "src/security/config.ts", "change": "CONFIG_UNREADABLE Symbol and isMergeableConfigPayload deleted; reads via readJsonObjectFile; no verdict change" },
+    { "path": "src/security/guard.ts", "change": "MANIFEST_UNREADABLE Symbol deleted; reads via readJsonObjectFile; no verdict change" },
+    { "path": "src/health/service.ts", "change": "both bare JSON.parse-as-HealthReport casts in readLatest replaced; unused readFile import dropped; no verdict change" },
+    { "path": "src/health/service-gate-exit.test.ts", "change": "one added test pinning 7 non-object/unparseable stored-report payloads" },
+    { "path": "src/commands/security.ts", "change": "three scan-mcp readers migrated; readMcpBaseline helper; coverage fold and --strict exit code now also refuse an incomplete scan" },
+    { "path": "src/commands/security-scan-mcp.test.ts", "change": "new: 6 tests, 4 of which failed before the change" }
+  ],
+  "findings": [
+    {
+      "id": "F-T43-001",
+      "global_id": "T43#F-T43-001",
+      "reviewer": "task-implementer:T43",
+      "severity": "major",
+      "file": "src/health/config.ts",
+      "line": 71,
+      "symbol": "loadHealthConfig",
+      "problem": "Four config loaders read their file with readJsonFileOr<Partial<T>>(file, {}) and then dereference the result without a shape check, so a file whose whole content is the four bytes `null` throws instead of falling back. loadHealthConfig throws \"null is not an object (evaluating 'parsed.schemaVersion')\".",
+      "impact": "For health this is gate-relevant by this task's own criterion: the payload carries the gate thresholds (failOnPriorities, failOnRegressionDrop, failOnMissingRequiredSource) and every source's `required` flag, and the crash propagates out of `keryx health run` and `keryx health sources`. The non-null non-object payloads ([], 42, \"x\") do not throw — they silently revert an operator's tightened thresholds to the defaults, which is the same class the security config already fails closed on.",
+      "suggested_fix": "Migrate these four readers to readJsonObjectFile (src/lib/json.ts) and decide each non-object case explicitly. For health, the security module's precedent applies: a health.config.json that exists but is not readable as a config is a policy that cannot be established, not the defaults.",
+      "evidence": "Probe over null/[]/42/\"x\"/unparseable for six loaders: raw .metaproject/data/gdctx/raw/2026-09-06T16-23-57-189Z_run.log. health.config.json, wiki.config.json, memory.config.json and gdgraph.config.json all THREW on `null`; mcp.config.json and assets.lock.json did not (both guard their payload).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "src/health/config.ts:71",
+          "src/wiki/config.ts:106",
+          "src/memory/config.ts:54",
+          "src/gdgraph/config.ts:103"
+        ],
+        "enumeration_method": "Every readJsonFileOr call site in src (keryx ctx rg, raw 2026-09-06T16-09-46-846Z_rg.log, 30 sites) was classified; each of the 6 config-loader sites was then executed against null/[]/42/\"x\"/unparseable through its real public loader (probe log 2026-09-06T16-23-57-189Z_run.log). The 4 listed are those that threw; the other 2 guard their payload and are correct."
+      }
+    },
+    {
+      "id": "F-T43-002",
+      "global_id": "T43#F-T43-002",
+      "reviewer": "task-implementer:T43",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 2139,
+      "problem": "The CLI reference states that `scan-mcp` exits 1 \"only with --strict when a threat is found\" (line 2139, and the same claim in the subcommand table at line 2116). After this task it also exits 1 under --strict when the scan could not read a manifest or the pinned baseline.",
+      "impact": "The documented exit contract no longer matches the implemented one, which is the surface a CI author reads before wiring the command into a pipeline.",
+      "suggested_fix": "Amend both lines to \"...when a threat is found, or when the scan could not read a manifest or the pinned baseline (coverage: incomplete)\". Not done here: docs/ is outside this task's declared ownership set.",
+      "evidence": "docs/docs/cli-reference.md:2116 and :2139 read at HEAD of this working tree; the new behaviour is pinned by src/commands/security-scan-mcp.test.ts.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "retries": 0,
+    "call_sites_enumerated": 30,
+    "call_sites_migrated": 5,
+    "bare_parses_migrated": 2,
+    "call_sites_deferred": 25,
+    "sentinels_removed": 2,
+    "tests_added": 14,
+    "tests_before_pass": 8,
+    "tests_before_fail": 6,
+    "module_scope_pass": 2076,
+    "module_scope_skip": 6,
+    "module_scope_fail": 0
+  },
+  "timestamp_utc": "2026-09-06T16:30:00Z"
+}

@@ -533,7 +533,7 @@ test("runAgentTurn reports an unknown tool without throwing", async () => {
 
 test("runAgentTurn respects an already-aborted signal before issuing requests", async () => {
   const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "ignored" }]]);
-  const { io, text } = collectingIo();
+  const { io } = collectingIo();
   const system: string[] = [];
   const abortedIo = { ...io, onSystem: (line: string) => system.push(line) };
   const deps: AgentDeps = {
@@ -843,7 +843,7 @@ test("reserveToolAttempt: an UNRELATED repeated tool call is still capped at MAX
   expect(!last.ok && last.reason).toContain("already tried");
 });
 
-test("runAgentTurn: reaching the exact budget still allows a normal final model answer", async () => {
+test("runAgentTurn: using the final allowed round for tools stops before another model answer", async () => {
   const r1: Partial<NormalizedEvent>[] = [
     { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
     { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
@@ -865,16 +865,17 @@ test("runAgentTurn: reaching the exact budget still allows a normal final model 
     write: (s) => text.push(s),
     onSystem: (t) => systemMsgs.push(t),
   };
-  await runAgentTurn(io, baseDeps(provider, 2), [], "loop");
+  const result = await runAgentTurn(io, baseDeps(provider, 2), [], "loop");
 
-  expect(systemMsgs.join("")).not.toMatch(/\[budget\]|wrap-up/i);
-  expect(text.join("")).toContain("I have enough information.");
-  expect(requests).toHaveLength(3);
+  expect(systemMsgs.join("")).toMatch(/Model-round limit reached: 2\/2/);
+  expect(text.join("")).not.toContain("I have enough information.");
+  expect(requests).toHaveLength(2);
   const last = requests[requests.length - 1];
   expect((last?.tools?.length ?? 0) > 0).toBe(true);
+  expect(result.finishReason).toBe("budget");
 });
 
-test("runAgentTurn: needing a round BEYOND the round budget triggers a tool-free wrap-up (each individual call still ran)", async () => {
+test("runAgentTurn: the inclusive round budget prevents excess tools and an unbudgeted wrap-up", async () => {
   const wrap: Partial<NormalizedEvent>[] = [
     { kind: "text_delta", text: "Round budget done." },
     { kind: "model_end" },
@@ -887,7 +888,7 @@ test("runAgentTurn: needing a round BEYOND the round budget triggers a tool-free
   ]);
   const systemMsgs: string[] = [];
   const results: string[] = [];
-  await runAgentTurn(
+  const result = await runAgentTurn(
     {
       write: () => {},
       onSystem: (text) => systemMsgs.push(text),
@@ -898,13 +899,15 @@ test("runAgentTurn: needing a round BEYOND the round budget triggers a tool-free
     "read",
   );
 
-  // All three reads are DIFFERENT signatures and all ran — the round budget
-  // never refuses an individual call, only a round beyond the limit.
+  // Both allowed rounds run normally. The third scripted read and the
+  // tool-free wrap-up are never requested because either would exceed 2.
+  expect(results).toHaveLength(2);
   expect(results.every((result) => !/budget exhausted/.test(result))).toBe(true);
-  expect(systemMsgs.join("")).toMatch(/round limit 3\/2/);
+  expect(systemMsgs.join("")).toMatch(/Model-round limit reached: 2\/2/);
   const last = requests[requests.length - 1];
-  expect(last?.tools === undefined || last?.tools?.length === 0).toBe(true);
-  expect(requests).toHaveLength(4);
+  expect((last?.tools?.length ?? 0) > 0).toBe(true);
+  expect(requests).toHaveLength(2);
+  expect(result.finishReason).toBe("budget");
 });
 
 test("runAgentTurn: the default round budget permits many more than eight distinct reads", async () => {
@@ -937,9 +940,8 @@ test("runAgentTurn: askUser answering 'reset' on an exceeded round budget raises
       { kind: "model_end" },
     ],
     [
-      // This round (round 2) is the one BEYOND the 1-round budget — its own
-      // call still runs (the round budget never refuses an individual call),
-      // and the excess is only noticed once this round is done.
+      // This second request is admitted only after the host-side reset raises
+      // the strict one-round ceiling; without that reset it never runs.
       { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
       { kind: "model_end" },
@@ -980,7 +982,7 @@ test("runAgentTurn: askUser answering 'reset' on an exceeded round budget raises
   expect(text.join("")).toContain("Done after reset.");
 });
 
-test("runAgentTurn: askUser answering 'cancel' on an exceeded round budget falls through to the existing wrap-up", async () => {
+test("runAgentTurn: askUser answering 'cancel' at the round budget stops without a wrap-up request", async () => {
   const { provider, requests } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
@@ -1011,8 +1013,8 @@ test("runAgentTurn: askUser answering 'cancel' on an exceeded round budget falls
   };
   await runAgentTurn({ write: () => {}, onSystem: (t) => systemMsgs.push(t) }, deps, [], "probe twice");
 
-  expect(requests.length).toBe(3);
-  expect(systemMsgs.join("")).toMatch(/\[budget\] Stopping tools/);
+  expect(requests.length).toBe(1);
+  expect(systemMsgs.join("")).toMatch(/Model-round limit reached: 1\/1/);
 });
 
 test("runAgentTurn: identical failing calls only burn one unique slot; after 3 attempts further same hash is skipped", async () => {
@@ -1132,7 +1134,8 @@ test("KERYX_AGENT_MAX_ATTEMPTS_PER_HASH changes the per-signature cap end to end
     };
     const results: string[] = [];
     const io: AgentIO = { write: () => {}, onToolResult: (_n, r) => results.push(r.output) };
-    await runAgentTurn(io, baseDeps(provider, 8), [], "x");
+    await runAgentTurn(io, { ...baseDeps(provider, 8), tools: [alwaysFails] }, [], "x");
+    expect(results.filter((result) => result === "boom")).toHaveLength(2);
     expect(results.some((r) => /already tried 2×/.test(r))).toBe(true);
     expect(results.some((r) => /already tried 3×/.test(r))).toBe(false);
   } finally {
@@ -2030,9 +2033,8 @@ test("SLATE-2a: ensureSlateOpened's fresh-open Anchors-block is pushed BEFORE th
 //     field — every existing call site omits it and is unaffected.
 //   - `AgentIO.onTerminalState?: (state: TerminalState) => void` — new
 //     optional, additive callback.
-//   - Budget exhaustion: when `deps.unattended === true`, in place of
-//     `finishWithBudgetSummary`'s free-text "Do NOT call tools." push AND its
-//     text-only wrap-up model round, build a `TerminalState` (`reason:
+//   - Budget exhaustion: when `deps.unattended === true`, build a
+//     `TerminalState` (`reason:
 //     "budget_exhausted"`), emit it via `io.onTerminalState?.(state)` AND a
 //     rendered `renderTerminalStateBlock(state)` text block via
 //     `io.onSystem`/`io.write`, and return WITHOUT any further
@@ -2078,13 +2080,10 @@ function fixedNow(iso: string): () => string {
   return () => iso;
 }
 
-test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budget_exhausted) and adds NO history beyond what the tool-execution loop itself already wrote", async () => {
+test("SLATE-11: unattended zero-round budget emits a TerminalState before provider or tool activity", async () => {
   const OCCURRED_AT = "2026-08-16T00:00:00.000Z";
   const { provider, requests } = scriptedProvider([
-    // Round 1: two DISTINCT "probe" calls. `maxRounds: 0` means round 1 is
-    // already beyond the round budget — both calls still execute normally
-    // (the round budget never refuses an individual call, only a round
-    // beyond the limit), and the excess is noticed right after this round.
+    // Unreachable fixture: a strict `maxRounds: 0` stops before this request.
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
@@ -2109,22 +2108,12 @@ test("SLATE-11: unattended budget exhaustion emits a TerminalState (reason budge
 
   await runAgentTurn(io, deps, history, "run the tests");
 
-  // Exactly ONE provider.stream call — no second (wrap-up) round happened.
-  expect(requests.length).toBe(1);
+  // No provider request, tool execution, or model-based wrap-up is allowed.
+  expect(requests.length).toBe(0);
 
-  // History: the initial user push + the assistant turn carrying the calls
-  // (flow 177) + the two tool-loop entries the calls loop itself wrote
-  // (both real results — the round budget never refuses an individual call)
-  // — and NOTHING beyond that (no "[system] Tool loop stopped..." message,
-  // no wrap-up assistant text).
-  expect(history.length).toBe(4);
+  // History contains only the initial user push and no synthetic instruction.
+  expect(history.length).toBe(1);
   expect(history[0]?.role).toBe("user");
-  expect(history[1]?.role).toBe("assistant");
-  expect(history[1]?.toolCalls).toHaveLength(2);
-  expect(history[2]?.role).toBe("tool");
-  expect(history[2]?.content).toBe("probed");
-  expect(history[3]?.role).toBe("tool");
-  expect(history[3]?.content).toBe("probed");
   expect(history.some((m) => m.content.includes("Do NOT call tools"))).toBe(false);
   expect(history.some((m) => m.content.includes("Tool loop stopped"))).toBe(false);
 
@@ -2176,22 +2165,9 @@ test("SLATE-11: unattended budget exhaustion with an OPEN slateSession snapshots
 
   await runAgentTurn(io, deps, history, "run the tests", { slateSession });
 
-  // T11 fix (documented deviation — see subagent-result): the ORIGINAL
-  // assertion here compared against `openedSlate`, read immediately after
-  // `openSlate` but BEFORE `runAgentTurn` ran. That is a genuine test bug,
-  // not a behavior this test is actually trying to pin: with `maxRounds:
-  // 0`, both "probe" calls genuinely execute, and the
-  // already-shipped SLATE-2a per-tool-call wiring in `runAgentTurnCore`
-  // (`recordSlateTouch`, unrelated to this flow) unconditionally updates the
-  // on-disk slate's `anchors.touched`/`anchors.runtime` for every executed
-  // call BEFORE the budget-exhausted branch is ever reached — regardless of
-  // `unattended`. So the on-disk slate legitimately DIFFERS from
-  // `openedSlate` by the time `emitTerminalState` reads it. Comparing
-  // against a pre-turn snapshot would only pass if the terminal-state
-  // snapshot were WRONG (stale/frozen), which contradicts this test's own
-  // title ("snapshots the REAL course/anchors, not the empty default") — the
-  // "real" value to compare against is the slate's state AT THE MOMENT the
-  // turn actually stopped, i.e. read fresh right here, not a pre-turn read.
+  // The snapshot is read at the actual stop point. With a strict zero-round
+  // budget no model/tool activity occurs, but the live slate still supplies
+  // the authoritative course and anchors rather than the empty default.
   const realSlateAtStop = await readSlate(dir);
   expect(realSlateAtStop).toBeDefined();
   expect(terminalStates.length).toBe(1);
@@ -2199,7 +2175,7 @@ test("SLATE-11: unattended budget exhaustion with an OPEN slateSession snapshots
   expect(terminalStates[0]?.courseSnapshot).toEqual(realSlateAtStop!.course);
 });
 
-test("SLATE-11 regression: unattended undefined/false — budget exhaustion behaves BYTE-FOR-BYTE as before (free-text push + wrap-up round, no TerminalState)", async () => {
+test("SLATE-11: interactive zero-round budget stops locally without a TerminalState or model wrap-up", async () => {
   const { provider, requests } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
@@ -2208,7 +2184,8 @@ test("SLATE-11 regression: unattended undefined/false — budget exhaustion beha
       { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
       { kind: "model_end" },
     ],
-    // Round 2: the existing tools-less wrap-up round.
+    // Unreachable wrap-up fixture: the strict zero-round ceiling permits no
+    // provider request.
     [
       { kind: "text_delta", text: "Here is what happened." },
       { kind: "model_end" },
@@ -2229,9 +2206,10 @@ test("SLATE-11 regression: unattended undefined/false — budget exhaustion beha
 
   await runAgentTurn(io, deps, history, "run the tests");
 
-  expect(requests.length).toBe(2); // main round + wrap-up round, unchanged.
-  expect(history.some((m) => m.content.includes("Do NOT call tools."))).toBe(true);
-  expect(history.some((m) => m.content === "Here is what happened.")).toBe(true);
+  expect(requests.length).toBe(0);
+  expect(history).toEqual([{ role: "user", content: "run the tests", provenance: "project" }]);
+  expect(history.some((m) => m.content.includes("Do NOT call tools."))).toBe(false);
+  expect(history.some((m) => m.content === "Here is what happened.")).toBe(false);
   expect(terminalStates.length).toBe(0);
 });
 

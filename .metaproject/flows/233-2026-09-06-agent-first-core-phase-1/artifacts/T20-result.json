@@ -1,0 +1,95 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T20",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Implemented bounded recursive security scanning with canonical internal-link traversal, explicit scope/coverage/file metadata, incomplete gate propagation, and safe CLI limits. Owned typecheck, lint, bundle, and focused security suites pass; one pre-existing memo test remains outside T20 ownership.",
+  "summary_markdown": "See T20-implementation.md for acceptance evidence, verification paths, limitation, and routing audit.",
+  "acceptance": [
+    {
+      "criterion": "Nested directory default recursion, internal symlink canonical duplicate once, cycle termination.",
+      "status": "met",
+      "evidence": "src/commands/security-recursive-scan.test.ts: 3/3 passed, including internal aliases and a symlink cycle."
+    },
+    {
+      "criterion": "Denied/unreadable/limit yields incomplete required coverage without dropping established findings or exposing unauthorized target names.",
+      "status": "met",
+      "evidence": "Focused recursive suite passes external/unreadable and max-files cases; report paths are owner-relative and external target names are replaced with constant reasons."
+    },
+    {
+      "criterion": "File and directory CLI/runtime reports include declared scope/exclusions/limits and per-file scanned/skipped/failed outcomes; matching gate/exit statuses truthful.",
+      "status": "met",
+      "evidence": "SecurityReport/schema/report renderer and CLI carry scope, coverage, files, and incomplete; typecheck, lint, bundle, and 53-test focused security selection pass."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-code traversal, coverage, redaction, and status contract.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Implementation, acceptance, verification, limitation, and routing report.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Bounded canonical contained traversal with coverage and per-file outcomes.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Recursive, external-boundary, and file-limit acceptance tests.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "src/security/path-scan.ts", "change": "add bounded canonical recursive traversal and coverage" },
+    { "path": "src/security/service.ts", "change": "aggregate path scans and propagate incomplete status" },
+    { "path": "src/security/types.ts", "change": "add incomplete gate and scan report metadata" },
+    { "path": "src/security/schemas.ts", "change": "validate incomplete gate and scan metadata" },
+    { "path": "src/security/report.ts", "change": "render scan scope, coverage, and file outcomes" },
+    { "path": "src/commands/security.ts", "change": "add bounded recursive scan flags and incomplete exit handling" },
+    { "path": "src/commands/security-recursive-scan.test.ts", "change": "cover recursive traversal, refusals, and limits" }
+  ],
+  "findings": [
+    {
+      "id": "T20-FOCUSED-001",
+      "severity": "minor",
+      "problem": "src/security/service.memo.test.ts:162 fails in the broader selected security run even when run in isolation.",
+      "impact": "The selected 59-test command is 58/59; the T20-owned recursive and security selections are green.",
+      "suggested_fix": "Owner of service.memo.test.ts should investigate the assertion/runtime mismatch; T20 made no change to that test.",
+      "evidence": "raw .metaproject/data/gdctx/raw/2026-09-06T12-41-02-112Z_run.log",
+      "confidence": "high",
+      "reviewer": "task-implementer",
+      "class_scope": {
+        "sites": ["src/security/service.memo.test.ts:162"],
+        "enumeration_method": "Observed in the focused security selection and reproduced by the prior owner run in isolation; outside T20 target ownership."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 1,
+    "tests_written": 0,
+    "tests_passed": 53,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "source_build_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:46:57Z"
+}

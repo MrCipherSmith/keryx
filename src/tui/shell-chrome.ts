@@ -758,7 +758,7 @@ export async function createShellChrome(
 
   const syncComposerHeight = (): void => {
     const cap = composerMaxRowsForViewport(viewportRows());
-    let lines = 1;
+    let lines: number;
     try {
       const wrapWidth = typeof textarea.width === "number" && textarea.width > 0 ? textarea.width : 0;
       lines = Math.max(

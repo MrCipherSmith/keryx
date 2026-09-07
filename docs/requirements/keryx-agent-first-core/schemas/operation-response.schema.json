@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "operation-response.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "operation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "error"
+      ]
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/source"
+      }
+    },
+    "freshness": {
+      "$ref": "common.schema.json#/$defs/freshness"
+    },
+    "completeness": {
+      "$ref": "common.schema.json#/$defs/completeness"
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "unchanged",
+            "redacted"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "state",
+        "reasons"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "redacted"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "budget": {
+      "$ref": "common.schema.json#/$defs/budget"
+    },
+    "lossManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "included": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/source"
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "$ref": "common.schema.json#/$defs/source"
+              },
+              "reason": {
+                "enum": [
+                  "budget",
+                  "filter",
+                  "unavailable"
+                ]
+              },
+              "continuation": {
+                "$ref": "common.schema.json#/$defs/continuation"
+              }
+            },
+            "required": [
+              "source",
+              "reason"
+            ]
+          }
+        },
+        "accessPolicyApplied": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "included",
+        "omitted",
+        "accessPolicyApplied",
+        "truncated"
+      ]
+    },
+    "continuations": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/continuation"
+      }
+    },
+    "result": {},
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nextActions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "currentVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "diffRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "nextActions"
+      ]
+    }
+  },
+  "required": [
+    "contractVersion",
+    "operation",
+    "status",
+    "scope",
+    "sources",
+    "completeness",
+    "redaction"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "not": {
+          "required": [
+            "result"
+          ],
+          "properties": {
+            "result": {}
+          },
+          "type": "object"
+        },
+        "properties": {
+          "error": {}
+        },
+        "type": "object"
+      },
+      "else": {
+        "required": [
+          "result"
+        ],
+        "not": {
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {}
+          },
+          "type": "object"
+        },
+        "properties": {
+          "result": {}
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "partial"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "completeness": {
+            "properties": {
+              "state": {
+                "const": "partial"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    }
+  ]
+}

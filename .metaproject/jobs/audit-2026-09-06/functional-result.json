@@ -1,0 +1,142 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "audit-2026-09-06",
+  "dispatch_id": "functional",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Функциональный аудит завершён. Onboarding и детерминированный локальный цикл подтверждены; typecheck и полный тестовый набор зелёные. Найдены P1: security scan каталога документирован, но падает с EISDIR; strict health скрывает текущие Bun audit advisory из-за несовместимого JSON parser. Wiki ask не учитывает freshness и может цитировать устаревший контекст.",
+  "summary_markdown": "См. functional.md: матрица implemented/partial, доказательства, дефекты и ограничения.",
+  "acceptance": [
+    {
+      "criterion": "Evidence-based report with exact file:line references and concrete scenarios",
+      "status": "met",
+      "evidence": "F-001 содержит docs/docs/complete-setup-and-agent-workflows.md:676, src/commands/security.ts:210 и воспроизведение EISDIR."
+    },
+    {
+      "criterion": "Distinguish verified defects, risks, intentional limitations and strengths",
+      "status": "met",
+      "evidence": "functional.md разделяет проверенный дефект, functional risk, сильные стороны и ограничения верификации."
+    },
+    {
+      "criterion": "No source modifications or commits; save report and list validation limitations",
+      "status": "met",
+      "evidence": "Изменены только два audit-артефакта; source typecheck/tests выполнены без правок."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Русский функциональный аудит",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Subagent result contract",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Current normalized health, audit, typecheck and test evidence",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/plan.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Audit plan",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional.md",
+      "change": "created"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/functional-result.json",
+      "change": "created"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/verification.md",
+      "change": "created"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "functional",
+      "severity": "major",
+      "problem": "security scan advertises file-or-directory input but reads a directory with readFile and exits EISDIR.",
+      "impact": "A documented onboarding/security workflow fails for the common command `security scan .`.",
+      "suggested_fix": "Recurse directory inputs, or change usage and documentation to file-only consistently.",
+      "evidence": "docs/docs/complete-setup-and-agent-workflows.md:676; src/commands/security.ts:210; temp repro `bun src/cli.ts security scan . --json` -> EISDIR, rc 1.",
+      "confidence": "high",
+      "file": "src/commands/security.ts",
+      "line": 210,
+      "symbol": "handleScan",
+      "class_scope": {
+        "sites": ["src/commands/security.ts:210"],
+        "enumeration_method": "Direct source read and temp-project CLI reproduction."
+      },
+      "blocking_merge": false,
+      "related_skill": "gdskills/quality/security-audit",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-002",
+      "reviewer": "functional",
+      "severity": "minor",
+      "problem": "wiki ask includes all wiki pages without consulting freshness state.",
+      "impact": "Queries can cite accepted pages that the freshness report marks affected/stale without warning.",
+      "suggested_fix": "Attach freshness status to citations and/or exclude stale pages by an explicit policy; preserve an override for deliberate historical queries.",
+      "evidence": "src/wiki/ask.ts:325-333 collects pages directly; current freshness report lists 12 affected/stale pages; a repository query surfaced an obsolete accepted PATH-binary constraint.",
+      "confidence": "medium",
+      "file": "src/wiki/ask.ts",
+      "line": 325,
+      "symbol": "wikiCandidates",
+      "blocking_merge": false,
+      "related_skill": "gdskills/review/review-logic",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-003",
+      "reviewer": "functional",
+      "severity": "major",
+      "problem": "Strict health reports dependencyAudit with zero findings while current Bun audit reports 28 advisories, including critical/high severities.",
+      "impact": "The normalized health gate can report PASS while dependency vulnerabilities are present.",
+      "suggested_fix": "Parse Bun's package-keyed array JSON shape and fail or warn on non-zero audit exit; add a regression fixture for Bun audit output.",
+      "evidence": "Current health latest.md generated 2026-09-05 reports dependencyAudit available/0 and gate PASS; `bun audit --json` exits 1 with 28 advisories. src/health/sources/dependency-audit.ts:54-69 only parses vulnerabilities/advisories maps.",
+      "confidence": "high",
+      "file": "src/health/sources/dependency-audit.ts",
+      "line": 54,
+      "symbol": "dependencyAuditAdapter.parse",
+      "class_scope": {
+        "sites": ["src/health/sources/dependency-audit.ts:54-69"],
+        "enumeration_method": "Source read plus current Bun audit JSON and current strict health artifact comparison."
+      },
+      "blocking_merge": false,
+      "related_skill": "gdskills/quality/security-audit",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_pass": 6897,
+    "tests_skip": 18,
+    "tests_fail": 0,
+    "focused_tests_pass": 309,
+    "typecheck": "pass",
+    "smoke": "pass_with_security_directory_defect"
+  },
+  "timestamp_utc": "2026-09-05T20:59:51Z"
+}

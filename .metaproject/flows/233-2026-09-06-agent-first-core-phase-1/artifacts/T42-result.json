@@ -1,0 +1,268 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T42-2026-09-06-review",
+  "dispatch_id": "T42",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Stage 1 FAIL. T41 (byte-faithful canonicalization) and T44 (persistence signal) hold under attack; T40 (auto-fetch resolution) does not. The two-base resolution rule is a genuine improvement and closes the whole authority-spelling class - the reviewer's 48-case matrix is 0 bypasses / 0 false positives, reproduced here - but the repair was made inside the classifier, and 14 renderer-equivalent vectors still reach the MCP client with isError:false and redaction.state:none and reach durable sinks byte-identical. Eight are unconditional and need no character reference or exotic URL spelling: HTML_IMG's [^>]*? attribute scan cannot cross a `>` inside a quoted attribute value (which does not end a tag) and its unanchored \\bsrc matches a decoy src= inside an earlier attribute value, so the element is never extracted at all. Six more are conditional on the renderer's document scheme: both synthetic bases are https:, and WHATWG resolution of a scheme-with-no-slashes destination depends on the base scheme, so https:attacker.invalid/p is judged relative under an https base but resolves to the attacker host in a file:, vscode-webview: or Electron app: document. T41's scanner resisted 14 duplicate-member shapes the earlier rounds did not use, preserves an out-of-double-range integer and -0 byte-exactly, and my own re-measured corpus sweep (2058 files) shows 0 rejected and 0 mislabelled. T44's signal distinguishes all three outcomes at the materializer; the disclosed two-pass limit is real and acceptable because guard.decision.findings carries the masking reason, but the guard.ts doc comment claims more than the real path delivers. Both judgement calls ruled: the character-reference membership rule is accepted (240 named + 240 numeric cases, 0 bypasses, no absent name is URL syntax) with its exactness sentence corrected; the uncovered auto-fetch surfaces are accepted for this phase with a documented limitation, on condition the follow-up is split into a repair task (F-001/F-002/F-003) and a policy-then-implement task (F-006 plus the 19 surfaces, <base href> ranked first) so the covered surface is not left leaking while the uncovered list shortens.",
+  "acceptance": [
+    {
+      "criterion": "Row 1 - auto-fetch resolution (T40) closes the class, not the cases; nothing truncated before classification",
+      "status": "not_met",
+      "evidence": "T24-recheck2-exfil.ts re-run unmodified: cases=48 bypasses=0 falsePositives=0. T42-exfil-attack.ts (42 cases, WHATWG URL oracle over five renderer document bases): 14 bypasses, 0 false positives - 8 unconditional extraction bypasses and 6 conditional on a non-https renderer base. T42-boundary.ts reproduces six of them at dispatchCallTool with isError=false, state=none, reasons=[], attacker host present, and byte-identical through prepareOutputForPersistence and redactToolOutput with redactToolOutput:false."
+    },
+    {
+      "criterion": "Row 2 - byte-faithful canonicalization (T41) regains no hiding channel; out-of-range integer and -0 survive byte-exactly; nothing-removed claims no redaction",
+      "status": "met",
+      "evidence": "T42-boundary.ts ROW 2, 42 shapes. 14 duplicate shapes the earlier rounds did not use (escaped duplicate key in both orders, __proto__ duplicate, empty-key duplicate, depth-6 duplicate through five array wrappers, a 0/-0 pair that defeats value comparison alone, three-way, last-member, newline-padded) all canonicalized with no secret or credential leaked; structurally unsafe duplicates still fail closed. bigInteger and negativeZero bytesPreserved:true state:none. 27 value-faithful spellings byte-exact. My own corpus sweep: filesScanned 2058, rejected 0, normalizedOnly 0, bytePreserved 2007."
+    },
+    {
+      "criterion": "Row 3 - persistence signal (T44) lets a caller distinguish bytes preserved, content masked, duplicate dropped",
+      "status": "met",
+      "evidence": "T42-boundary.ts ROW 3: at the materializer the three outcomes are none/[]/bp=true, redacted/[secrets.aws-access-key]/bp=false, redacted/[serialized-content-normalized]/bp=false, and the refused branch carries {state:format-unsafe, reasons:[sensitive-numeric-field]}. The disclosed limit reproduces end to end (masked and duplicate-dropped both read none/[]/bp=false through guardOutput), and is acceptable because guard.decision.findings carries [{category:secret, policyId:secrets.aws-access-key}] on the same result. The guard.ts doc comment overclaims - finding T42#F-004."
+    },
+    {
+      "criterion": "Row 4 - no new bypass introduced by the three repairs",
+      "status": "met",
+      "evidence": "T24-recheck2-exfil.ts 0/48; T24-recheck2-boundary.ts shows all eight previously-open transport cases now state:redacted with the host gone and the three persistence cases identical=false leakHost=false; T24-recheck2-validator.ts reproduces every ROW1, ROW3 and T19 contract verdict. The 14 bypasses found are pre-existing shapes T40 never claimed, not regressions T40 introduced."
+    },
+    {
+      "criterion": "Row 5 - no new false rejection",
+      "status": "met",
+      "evidence": "0 rejections in every probe and across 2058 repository JSON files. Deliberate false-rejection attacks on the new scanner all pass (2000-deep nesting, leading/trailing whitespace, tab and 2-space pretty-print, top-level scalar and out-of-range number, {} and [], non-JSON prose, 1E+2, lone surrogate, surrogate pair, empty key, __proto__ key). Exfil side: 15 benign controls, 0 false positives, including a backslash inside a relative path and a relative multi-candidate srcset."
+    },
+    {
+      "criterion": "AC2 (AFC-02): synthetic secret absent from JSON, text resource and error; safe JSON passes its schema; a numeric required field carrying a secret returns format-unsafe",
+      "status": "met",
+      "evidence": "T24-recheck2-boundary.ts re-run: p.secret-key / p.deep-secret-key / p.email-key isError=true state=format-unsafe sensitive-property-name with constant text and the secret absent from JSON.stringify(result); p.throws-secret isError=true state=redacted secret absent; p.safe-scalars / p.ref-defs-sibling / p.ref-annotations state=none; p.password-numeric and the materializer's numericUnderCredentialKey both format-unsafe / sensitive-numeric-field."
+    },
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not a network send",
+      "status": "not_met",
+      "evidence": "The field-name, spelling and URL-secret halves hold (no property-name bypass at either boundary; secrets.url-credentials fires across the corpus; p.public-link byte-identical and not a finding, alone and beside a redacted sibling). The auto-fetch half fails: 8 unconditional and 6 conditional renderer-equivalent URLs reach the client unflagged - T42#F-001, T42#F-002."
+    },
+    {
+      "criterion": "All three repairs hold at the pure detector or validator AND at the public boundaries (MCP dispatch, persistence materializer)",
+      "status": "partial",
+      "evidence": "Repairs 2 and 3 hold at both. Repair 1 holds for the classes it enumerated and fails at both the detector and every public boundary for two further classes."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full review: scope with start/end file hashes, Stage 1 table, six findings, both judgement-call rulings, confirmed clean areas, evidence hashes, routing audit, keryx:findings block.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-exfil-attack.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "42-case auto-fetch attack matrix; each destination adjudicated by a WHATWG URL oracle against five renderer document bases (https, http, file, vscode-webview, custom app scheme), 15 benign controls included.",
+      "hash": "382d22a0674bab0b9a80a345c7afe5fbe34d79099ad4e5213020d19923f7d935"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "All three rows at the real boundaries: dispatchCallTool with advisory redaction off, prepareOutputForPersistence, redactToolOutput and the genuine guardOutput seam; 42 serialized shapes and a three-outcome signal matrix on both paths.",
+      "hash": "0b9bc18c0f72ad25e4150001b5739ed8a6a066522cc4a7e2ea3eb6f9d04f368d"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-charrefs.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Tests the named-character-reference membership rule: 48 ASCII-denoting HTML5 names x 5 authority-rebuilding positions, named and numeric spellings, plus the absent-name analysis.",
+      "hash": "a12d600a0801020be70e326566610d603b79eefe3cffe76abc6454ed90c058b1"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-review.md",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-result.json",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-exfil-attack.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-boundary.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-charrefs.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T42#F-001",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 280,
+      "symbol": "HTML_IMG",
+      "problem": "HTML_IMG and HTML_IMG_SRCSET scan the tag with [^>]*? before an unanchored \\bsrc. An HTML tokenizer does not end a tag at a > inside a quoted attribute value, so <img alt=\"a>b\" src=\"https://attacker.invalid/p\"> is never matched at all; and \\bsrc matches inside an attribute VALUE, so a decoy such as <img alt=\"src=/safe\" src=\"...\"> captures the decoy and moves lastIndex past the real destination. Both shapes apply to srcset and to the <image> alias, and to a tag spread over lines. The destination never reaches considerUrl, so no classifier improvement can close them.",
+      "impact": "The mandatory no-auto-fetch floor is bypassed by plain https:// URLs with no character references and no exotic authority spelling. Measured with advisory redaction off: the payload reaches the MCP client inside operation JSON with isError:false and redaction.state:none, and reaches durable sinks byte-identical through prepareOutputForPersistence and redactToolOutput, so rendering it is a zero-click request to the attacker host carrying attacker-encoded context.",
+      "suggested_fix": "Scan the tag the way the tokenizer does: match the open tag <im(?:g|age)\\b, then walk attributes as name(\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+))? repeatedly until an unquoted >, taking src/srcset from the attribute NAME position only. Add one regression per shape in src/security/detect/exfil.test.ts and one at the transport in src/mcp/structural-redaction.test.ts, keeping every benign control.",
+      "evidence": "T42-exfil-attack.ts (42 cases, WHATWG URL oracle over five renderer document bases) reports 8 unconditional bypasses and 0 false positives; T42-boundary.ts reproduces five of them at dispatchCallTool as isError=false, state=none, reasons=[], attacker host present, and as allowed:true byte-identical through prepareOutputForPersistence and redactToolOutput, against ctlBackslash/ctlImageTag controls that are correctly state=redacted with the host gone.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:html-img-attribute-scan-extraction",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:280",
+          "src/security/detect/exfil.ts:286",
+          "src/security/detect/exfil.ts:354",
+          "src/security/detect/exfil.ts:367"
+        ],
+        "enumeration_method": "Complete read of src/security/detect/exfil.ts, then every extraction constant crossed against the two tokenizer facts the regex ignores (a quoted > does not end a tag; an attribute value is not an attribute name position), producing a 10-shape matrix (> in an earlier value x double/single quote x <img>/<image> x src/srcset, decoy src=/srcset= in an earlier value, decoy embedded in prose, multi-line tag), each paired with a benign control and adjudicated by a WHATWG URL oracle rather than by inspection, then re-driven through dispatchCallTool, prepareOutputForPersistence and redactToolOutput. The markdown surfaces INLINE and REFERENCE_DEF were checked for the same shape and do not carry it."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T42#F-002",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/security/detect/exfil.ts",
+      "line": 201,
+      "symbol": "SYNTHETIC_BASES",
+      "problem": "The two-base discriminator varies the base HOST and holds the base SCHEME fixed at https, but WHATWG resolution of a scheme-with-no-slashes destination depends on both: a special-scheme URL whose scheme equals the base's is relative, one whose scheme differs takes the special-authority-slashes path and makes the next token the host. So https:attacker.invalid/p makes the two https bases disagree and is judged relative, while a renderer whose document is file:, vscode-webview: or a custom app: scheme resolves the same bytes to attacker.invalid. The code exhibits the asymmetry itself: http:attacker.invalid/p IS flagged, https:attacker.invalid/p is not.",
+      "impact": "A zero-click fetch to the attacker host under a common MCP client class (Electron and webview documents), from a payload the floor releases with isError:false, redaction.state:none and byte-identical persistence. Six spellings including the markdown image surface and an entity-written colon. Narrower reach than F-001 because it needs a non-https renderer document, but the same floor and the same outcome when it fires.",
+      "suggested_fix": "Vary the base scheme as well as the host: resolve against a second pair of bases with a non-special scheme (e.g. keryx-detector://base-a.invalid/keryx/page) and flag when either pair agrees. A genuinely relative destination inherits the base host in both pairs and still disagrees within each, so no new false positive is introduced on /assets/a.png, ../a, #frag or ?q=1 - verified against the 15 benign controls.",
+      "evidence": "T42-exfil-attack.ts reports conditionalOnRendererScheme = [a.schemeNoSlashes, a.schemeOneSlash, a.schemeNoSlashesUpper, a.schemeNoSlashesMixed, a.schemeNoSlashesEntity, a.schemeNoSlashesMarkdown]; each row's rendererHosts shows client.example.org under the https base beside attacker.invalid under the file:, vscode-webview: and app: bases, with flagged:false. T42-boundary.ts reproduces schemeNoSlashes at dispatchCallTool as isError=false state=none leaksHost=true and byte-identical through the materializer and the seam.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:two-base-rule-fixed-scheme",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:201",
+          "src/security/detect/exfil.ts:208",
+          "src/security/detect/exfil.ts:221",
+          "src/security/detect/exfil.ts:232"
+        ],
+        "enumeration_method": "Complete read of exfilHost/resolvedHost against the WHATWG URL scheme and relative state machine to identify every base property the resolution depends on (host - varied; scheme - not varied; path - irrelevant to hostname), then a 5-renderer-base x 21-URL-form oracle covering scheme-with-no-slashes in five spellings, userinfo, port, IPv6, hex IPv4, IDN homoglyph, trailing-dot host, backslash plus userinfo, percent-encoded delimiters, and the non-network schemes ftp/ws/blob/data, each with a stated expected verdict."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T42#F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "line": 270,
+      "symbol": "INLINE",
+      "problem": "T40 added the angle-bracket alternative but left the bare alternative as [^)\\s>]+. A CommonMark bare link destination may legally contain >, so ![x](https://attacker.invalid/a>b) is extracted as https://attacker.invalid/a and the span ends before the destination does.",
+      "impact": "None on host disclosure - the host precedes the cut, the finding fires, and the output masks to ![x]([REDACTED:url]>b) with the host gone. The residue is a fragment of the attacker's path left in the output and a narrower start/end span. Recorded so the next round does not rediscover it as a bypass.",
+      "suggested_fix": "Drop > from the bare alternative's negated class now that the angle form is tried first, and assert the full-span mask in a regression.",
+      "evidence": "T42-exfil-attack.ts row b.mdBareGtTruncation: flagged:true, hostStillPresentAfterRedaction:false, redacted:\"![x]([REDACTED:url]>b)\".",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:bare-destination-gt-truncation",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T42#F-004",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/security/guard.ts",
+      "line": 53,
+      "symbol": "prepareOutputForPersistence",
+      "problem": "The doc comment states the return distinguishes the three shapes an allowed result can take (bytes untouched, content masked, bytes replaced by the canonical form). That holds only for a hand-built GuardResult with redacted unset. On the path all ten production callers use, guardOutput runs the same floor first and sets guard.redacted to already-clean text, so the materializer's second pass reports state:none, reasons:[] for masked content and for a dropped duplicate alike.",
+      "impact": "No disclosure, no rejection, no data change. A caller branching on redaction.state to answer 'was anything removed' is told none when a credential was masked - the mirror of T24R2#F-003 in the under-reporting direction. Bounded, because bytesPreserved is truthful on every path and the same guard result carries decision.findings (measured: [{category:secret, policyId:secrets.aws-access-key}]), so the information exists; the documentation points at the wrong field.",
+      "suggested_fix": "Amend the comment to state the two-pass architecture: on the guardOutput path redaction describes the second pass (usually none, because the first already cleaned the text), bytesPreserved is the reliable did-anything-change signal, and what changed and why comes from guard.decision.findings. Threading the guard's first-pass outcome through so redaction means the same thing on both paths is a behaviour change and is not required for this phase.",
+      "evidence": "T42-boundary.ts signalMatrix.handBuilt = {bytesPreserved:none/[]/bp=true, contentMasked:redacted/[secrets.aws-access-key]/bp=false, duplicateDropped:redacted/[serialized-content-normalized]/bp=false} versus signalMatrix.endToEnd = {bytesPreserved:none/[]/bp=true, contentMasked:none/[]/bp=false, duplicateDropped:none/[]/bp=false, exfilHostMasked:none/[]/bp=false}.",
+      "confidence": "high",
+      "dedupe_key": "afc02:persistence:redaction-state-two-pass-doc-claim",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-005",
+      "global_id": "T42#F-005",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 57,
+      "symbol": "NAMED_CHARACTER_REFERENCES",
+      "problem": "The stated membership rule ends 'over the ASCII punctuation that HTML5 names, that is exactly this set'. It is not: 14 ASCII-denoting HTML5 names are absent, three of which (midast for *, UnderBar for _, DiacriticalGrave for backtick) are alias spellings of characters the table already carries, so the set is neither exactly the ASCII punctuation names nor closed under aliasing.",
+      "impact": "None on security, measured rather than argued: 240 named-reference cases and 240 numeric controls across five authority-rebuilding positions produce zero bypasses, and none of the 14 absent names denotes a character the URL parser treats as syntax or removes. The risk is only that a future maintainer deriving membership from the sentence derives the wrong set.",
+      "suggested_fix": "Replace 'that is exactly this set' with the sound half of the rule: every ASCII-denoting HTML5 name whose character the URL parser treats as syntax or removes; other characters are present incidentally and other names for them are not required.",
+      "evidence": "T42-charrefs.ts: {namesTested:48, casesTested:240, namedSpellingBypasses:[], numericSpellingBypasses:[], absentFromDetectorTable:[midast, comma, Hat, UnderBar, DiacriticalGrave, lcub, lbrace, verbar, vert, VerticalLine, rcub, rbrace, nbsp, NonBreakingSpace], absentButUrlSyntax:[]}.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:named-reference-membership-claim",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "T42#F-006",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/security/detect/exfil.ts",
+      "line": 290,
+      "symbol": "detectExfil",
+      "problem": "T40's enumeration of the residual auto-fetch gap is careful but omits <base href> and <meta http-equiv=refresh>. <base> is materially different from the other uncovered surfaces: it fetches nothing itself and silently re-points every relative URL in the document, which converts the detector's 'relative implies same-origin, no channel' conclusion - the load-bearing half of the two-base rule - into a false one for any renderer that honours a raw <base>.",
+      "impact": "Changes no verdict (both are unclosed like the other 17), but changes the scope the follow-up must cover, and <base> should be ranked first there because it invalidates a rule rather than adding one more fetching element.",
+      "suggested_fix": "Add <base href> and <meta http-equiv=refresh> to the follow-up's surface list and record that <base> must be treated as a document-level invalidation of relative-destination safety, not as one more fetching element.",
+      "evidence": "Measured directly against detectExfil with an empty allowlist across 19 surfaces (iframe, video poster, video src, audio src, source srcset, input type=image, object data, embed src, track src, link rel=preload, link rel=stylesheet, script src, td background, SVG image href, SVG use href, CSS url() in a style attribute, style block, base href, meta refresh): matches=0 for all 19. The SVG surfaces would not be caught even by T40's <image> alias, because SVG spells the destination href rather than src.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:uncovered-render-surfaces-scope",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should the auto-fetch follow-up be split into two tasks - a repair task for T42#F-001/F-002/F-003 and a separate policy-then-implement task for the 19 uncovered render surfaces - rather than one combined task?",
+      "why": "This review accepts the uncovered-surface gap for the phase only on that condition. Folding the blocker and the major into a surface-coverage task would repeat the pattern of the last three rounds: the covered surface keeps leaking while the uncovered list gets shorter. The two have different natures - one is a defect in a covered surface needing no policy decision, the other is a false-positive policy decision about benign documents.",
+      "options": [
+        { "id": "split", "label": "Two tasks: repair (F-001, F-002, F-003) now; policy-then-implement for the surfaces after", "recommended": true },
+        { "id": "combined", "label": "One combined auto-fetch task covering both" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "probe_cases_executed": 372,
+    "stage1_rows_met": 4,
+    "stage1_rows_not_met": 1,
+    "focused_tests_pass": 103,
+    "focused_tests_fail": 0,
+    "typecheck_exit": 0,
+    "repository_json_files_swept": 2058,
+    "repository_json_rejected": 0,
+    "repository_json_mislabelled": 0,
+    "reviewer_matrix_bypasses": 0,
+    "new_bypasses_found": 14,
+    "new_false_positives_found": 0
+  },
+  "timestamp_utc": "2026-09-06T15:45:00Z"
+}

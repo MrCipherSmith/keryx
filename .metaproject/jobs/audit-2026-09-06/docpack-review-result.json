@@ -1,0 +1,68 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "keryx-agent-first-core-docpack",
+  "dispatch_id": "docpack-review",
+  "status": "DONE",
+  "summary": "Полный независимый semantic review 22 файлов завершён: 49 решений трассируются к требованиям, acceptance и волнам; atomic CAS, authority/freshness, scoped handles, redaction, wiki lifecycle и measurement contracts согласованы. Ранние gaps исправлены; verdict PASS, blockers 0, warnings 0.",
+  "acceptance": [
+    {
+      "criterion": "Read every file in package and roadmap entry",
+      "status": "met",
+      "evidence": "docpack-review.md: Audit — 10 Markdown, 6 schemas, 6 example files; roadmap_checked yes"
+    },
+    {
+      "criterion": "All 49 decision IDs map to substantive specification and acceptance",
+      "status": "met",
+      "evidence": "decision-traceability.md: 49 unique decision rows; docpack-review.md: Traceability"
+    },
+    {
+      "criterion": "Schema/prose/example alignment, atomic CAS and batch, authority vs freshness, redaction, wiki section lifecycle, model-independent core",
+      "status": "met",
+      "evidence": "docpack-review.md: Проверенные контракты; structural verifier PASS"
+    },
+    {
+      "criterion": "No private dataset contents or untracked audit links in distributable package",
+      "status": "met",
+      "evidence": "README.md states self-contained/public boundary; report security check PASS"
+    },
+    {
+      "criterion": "Report concrete blockers/warnings with exact files and proposed resolution; no editing package",
+      "status": "met",
+      "evidence": "docpack-review.md: blockers 0, warnings 0; resolved review findings documented"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "report",
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review.md",
+      "exists": true,
+      "summary": "Независимый semantic review requirements package"
+    },
+    {
+      "kind": "custom",
+      "path": "docs/requirements/keryx-agent-first-core/README.md",
+      "exists": true,
+      "summary": "Reviewed package entrypoint"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review.md",
+      "change": "created independent review report"
+    },
+    {
+      "path": ".metaproject/jobs/audit-2026-09-06/docpack-review-result.json",
+      "change": "created machine-readable subagent result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null
+  },
+  "timestamp_utc": "2026-09-06T00:00:00Z"
+}

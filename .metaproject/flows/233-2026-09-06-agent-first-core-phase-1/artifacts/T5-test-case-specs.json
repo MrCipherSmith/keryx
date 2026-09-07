@@ -1,0 +1,52 @@
+{
+  "framework": "bun:test",
+  "test_files": [
+    {
+      "path": "src/mcp/resources-containment.test.ts",
+      "target_module": "src/mcp/resources.ts",
+      "test_count": 4,
+      "tests": [
+        {"id":"T5-MCP-01","description":"ordinary file and internal file/directory link chains return identical bytes","criterion":"Ordinary file and internal link chain return same bytes inside the authorized owner root.","type":"happy_path","status":"written_red","current_outcome":"pass"},
+        {"id":"T5-MCP-02","description":"external resource symlink fails without content or target-name disclosure","criterion":"External links cannot disclose synthetic sentinel or unsafe target names.","type":"error_path","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-MCP-03","description":"replaced wiki owner root is rejected","criterion":"Root replacement cannot silently authorize a new outside tree.","type":"edge_case","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-MCP-04","description":"resource listing follows internal links once, bounds cycles, and omits external links","criterion":"MCP resources/list observes the same containment rules and bounds cycles.","type":"edge_case","status":"written_red","current_outcome":"fail"}
+      ]
+    },
+    {
+      "path": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "target_module": "src/harness/tool/metaproject-adapter.ts",
+      "test_count": 6,
+      "tests": [
+        {"id":"T5-HARNESS-01","description":"readWiki preserves bytes through an internal link","criterion":"Harness wiki direct reads allow internal links within the wiki root.","type":"happy_path","status":"written_red","current_outcome":"pass"},
+        {"id":"T5-HARNESS-02","description":"readWiki rejects external links without disclosure","criterion":"Harness wiki direct reads reject external targets and leak-safe errors.","type":"error_path","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-HARNESS-03","description":"readWiki rejects a replaced owner root","criterion":"Harness wiki ownership remains pinned across root replacement.","type":"edge_case","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-HARNESS-04","description":"skills discovery follows internal linked category","criterion":"Harness skills discovery allows internal links while retaining owned paths.","type":"happy_path","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-HARNESS-05","description":"replaced skills root is refused without outside entry","criterion":"External skill roots cannot disclose entries or content.","type":"error_path","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-HARNESS-06","description":"loadSkill accepts an internal catalog path and rejects external/unknown path","criterion":"Harness direct skill reads match discovery containment rules.","type":"edge_case","status":"written_red","current_outcome":"fail"}
+      ]
+    },
+    {
+      "path": "src/lib/contained-read.test.ts",
+      "target_module": "src/lib/contained-read.ts (proposed)",
+      "test_count": 5,
+      "tests": [
+        {"id":"T5-SHARED-01","description":"existing lexical containment rejects owner-root replacement","criterion":"Shared containment never re-roots after owner replacement.","type":"edge_case","status":"written_red","current_outcome":"fail"},
+        {"id":"T5-SHARED-02","description":"readContainedFile allows internal links and rejects external targets","criterion":"Shared reader authorizes internal links and refuses escapes without fallback.","type":"happy_path","status":"written_red","current_outcome":"fail_module_missing"},
+        {"id":"T5-SHARED-03","description":"readContainedFile enforces regular-file and max-byte policy","criterion":"Shared reader rejects nonfiles and bounded-read violations.","type":"edge_case","status":"written_red","current_outcome":"fail_module_missing"},
+        {"id":"T5-SHARED-04","description":"readContainedFile returns typed capability refusal when descriptor backend is unavailable","criterion":"Unsupported secure read capability fails closed with an actionable capability error.","type":"error_path","status":"written_red","current_outcome":"fail_module_missing"},
+        {"id":"T5-SHARED-05","description":"injected before-open owner replacement is rejected","criterion":"Race fixture verifies descriptor/identity protection without claiming pathname TOCTOU safety.","type":"edge_case","status":"written_red","current_outcome":"fail_module_missing"}
+      ]
+    }
+  ],
+  "shared_reader_api": {
+    "path": "src/lib/contained-read.ts",
+    "function": "readContainedFile(ownerRoot, candidatePath, options?) => Promise<Buffer>",
+    "options": ["maxBytes?", "requireRegularFile?", "backend?: descriptor|unsupported", "hooks?: { beforeOpen?: () => Promise<void> }"],
+    "contract": "Resolve internal links against a pinned owner root, use descriptor/identity checks for the open/read boundary, reject escapes/nonfiles/oversize reads, and throw an exported typed error with code CONTAINED_READ_UNAVAILABLE when the secure capability is unavailable. hooks is an injectable deterministic test boundary only; production callers use the default descriptor backend."
+  },
+  "run_command": "bun test src/mcp/resources-containment.test.ts src/harness/tool/metaproject-adapter-containment.test.ts src/lib/contained-read.test.ts",
+  "expected_result_before_implementation": "RED: at least the containment/error-path tests fail; current evidence is 2 pass / 13 fail.",
+  "expected_result_after_implementation": "15 pass / 0 fail",
+  "red_evidence": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-red-evidence.md",
+  "notes": "No production edits. Tests use temporary roots and synthetic sentinels only. The shared reader test names the proposed seam so the implementer can wire MCP and harness through one primitive without importing src/sac/secure-resource-read.ts internals. commit_test_stubs=false."
+}

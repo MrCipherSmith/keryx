@@ -1,0 +1,78 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T6",
+  "status": "DONE",
+  "summary": "Implemented descriptor-backed contained reads and integrated MCP resources plus harness wiki/skills discovery and reads. Combined focused suites pass 87/87, targeted source build passes, and full typecheck passes.",
+  "summary_markdown": "See T6-implementation.md for implementation scope, exact verification paths, limitations, and routing audit.",
+  "acceptance": [
+    {
+      "criterion": "Ordinary file and internal link chain return same bytes inside narrow owner root.",
+      "status": "met",
+      "evidence": "Focused containment suite passes 15/15, including direct reads and internal file/directory links for MCP, harness, and shared reader."
+    },
+    {
+      "criterion": "External/sibling/root-replacement links and nonfiles/unreadable paths cannot disclose synthetic sentinel or unsafe target names.",
+      "status": "met",
+      "evidence": "Focused containment suite passes external symlink, replaced root, regular-file, byte-bound, and injected replacement-race scenarios."
+    },
+    {
+      "criterion": "MCP resource listing and harness wiki/skills discovery/direct reads observe the same containment rules; cycles are bounded.",
+      "status": "met",
+      "evidence": "MCP listing/read and harness wiki/skills tests pass, including internal aliases, linked categories, external omission, and cycle bounding."
+    },
+    {
+      "criterion": "Race test verifies descriptor/identity protection or explicit capability refusal; no unsupported full TOCTOU claim.",
+      "status": "met",
+      "evidence": "Shared descriptor chain uses O_NOFOLLOW and root/final identity checks; unsupported backend returns typed capability refusal; focused race test passes."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Reusable owner-root contained reader with typed errors and bounded reads",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shared POSIX descriptor-chain primitive",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-implementation.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "T6 implementation and verification report",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "src/lib/contained-read.ts", "change": "added shared owner-root contained reader" },
+    { "path": "src/lib/descriptor-read.ts", "change": "added reusable descriptor-chain primitive" },
+    { "path": "src/sac/secure-resource-read.ts", "change": "preserved SAC entrypoint through shared primitive" },
+    { "path": "src/lib/contained-path.ts", "change": "refused replaced or symlinked owner roots" },
+    { "path": "src/mcp/resources.ts", "change": "integrated contained reads and bounded canonical listing" },
+    { "path": "src/harness/tool/metaproject-adapter.ts", "change": "integrated contained wiki and skill reads/discovery" },
+    { "path": "src/harness/tool/metaproject-port.ts", "change": "propagated incomplete health gate" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 0,
+    "tests_passed": 87,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "source_build_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:03:00Z"
+}

@@ -5,7 +5,6 @@ import {
   isCacheEntryFresh,
   parseWikiAskMarkdown,
   renderHoverMarkdown,
-  type WikiHoverResult,
 } from "./hover-logic";
 
 // AC7: "Hover provider renders a wiki snippet with a staleness indicator
@@ -13,7 +12,7 @@ import {
 // confidence when it does not — verified by test." Both branches below.
 
 test("AC7 (staleness-present): renderHoverMarkdown appends a muted 'may be outdated' line when a citation is flagged stale", () => {
-  const result: WikiHoverResult = {
+  const result = {
     question: "what is the audit log",
     citations: [
       { path: "wiki/components/audit-log.md", title: "Audit Log", excerpt: "Formats audit lines.", source: "wiki", stale: true },
@@ -26,7 +25,7 @@ test("AC7 (staleness-present): renderHoverMarkdown appends a muted 'may be outda
 });
 
 test("AC7 (staleness-absent): renderHoverMarkdown does NOT fabricate a staleness claim when no citation carries the field", () => {
-  const result: WikiHoverResult = {
+  const result = {
     question: "what is the audit log",
     citations: [
       { path: "wiki/components/audit-log.md", title: "Audit Log", excerpt: "Formats audit lines.", source: "wiki" },
@@ -61,17 +60,17 @@ Based on the project's own wiki and memory:
 });
 
 test("renderHoverMarkdown renders a legible empty state with no citations", () => {
-  const result: WikiHoverResult = { question: "q", citations: [], answerMarkdown: "" };
+  const result = { question: "q", citations: [], answerMarkdown: "" };
   expect(renderHoverMarkdown(result)).toContain("No wiki knowledge found");
 });
 
 test("hasStalenessSignal is true only when at least one citation is stale:true", () => {
-  const noneStale: WikiHoverResult = {
+  const noneStale = {
     question: "q",
     citations: [{ path: "a", title: "A", excerpt: "e", source: "wiki", stale: false }],
     answerMarkdown: "",
   };
-  const oneStale: WikiHoverResult = {
+  const oneStale = {
     question: "q",
     citations: [
       { path: "a", title: "A", excerpt: "e", source: "wiki", stale: false },

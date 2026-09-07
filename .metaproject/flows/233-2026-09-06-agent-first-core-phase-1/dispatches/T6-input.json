@@ -1,0 +1,51 @@
+{
+  "task": {
+    "task_id": "task-6",
+    "task_name": "AFC-01 secure contained resource readers",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Implement containment-spec.md and T5 tests through reusable lib/contained-read seam; permit internal links, refuse external/owner-root replacement and descriptor identity races. Reuse/extract SAC descriptor primitives without forbidden cross-module dependency or weakening SAC no-follow semantics. Integrate MCP resource listing/read and harness wiki/skills discovery/read; bounded cycles, file types and byte limits. Preserve safe typed errors and explicit unsupported platform refusal. Read typed T6-input.json.",
+    "target_files": [
+      "src/lib/contained-read.ts",
+      "src/mcp/resources.ts",
+      "src/harness/tool/metaproject-adapter.ts",
+      "src/sac/secure-resource-read.ts"
+    ],
+    "acceptance_criteria": [
+      "Ordinary file and internal link chain return same bytes inside narrow owner root.",
+      "External/sibling/root-replacement links and nonfiles/unreadable paths cannot disclose synthetic sentinel or unsafe target names.",
+      "MCP resource listing and harness wiki/skills discovery/direct reads observe the same containment rules; cycles are bounded.",
+      "Race test verifies descriptor/identity protection or explicit capability refusal; no unsupported full TOCTOU claim."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+    "existing_tests": [
+      "src/mcp/resources-containment.test.ts",
+      "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "src/lib/contained-read.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Narrow owner-root descriptor-chain containment with typed safe failures; preserve SAC nofollow policy; supported symlinks internal only.",
+    "test_case_specs": {
+      "test_files": [
+        "src/mcp/resources-containment.test.ts",
+        "src/harness/tool/metaproject-adapter-containment.test.ts",
+        "src/lib/contained-read.test.ts"
+      ],
+      "run_command": "bun test src/mcp/resources-containment.test.ts src/harness/tool/metaproject-adapter-containment.test.ts src/lib/contained-read.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

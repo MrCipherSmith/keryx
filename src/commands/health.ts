@@ -1,7 +1,7 @@
 import { createCodeHealthService } from "../health/service";
 import { computeTrend, loadHistory } from "../health/history";
 import { optionValue } from "../lib/args";
-import type { ScopeSelector } from "../health/types";
+import type { GateStatus, ScopeSelector } from "../health/types";
 
 let service: ReturnType<typeof createCodeHealthService> | null = null;
 
@@ -66,7 +66,7 @@ async function runRun(args: string[]): Promise<void> {
 
   if (args.includes("--json")) {
     console.log(JSON.stringify(result.report, null, 2));
-    process.exitCode = result.report.gate.status === "fail" ? 1 : 0;
+    process.exitCode = runExitCode(result.report.gate.status, result.report.strict);
     return;
   }
 
@@ -84,7 +84,51 @@ async function runRun(args: string[]): Promise<void> {
   console.log(`report: ${result.markdownPath}`);
   console.log(`json: ${result.jsonPath}`);
 
-  process.exitCode = result.report.gate.status === "fail" ? 1 : 0;
+  process.exitCode = runExitCode(result.report.gate.status, result.report.strict);
+}
+
+/**
+ * Fold a health `GateStatus` into a process exit code for `keryx health run`.
+ *
+ * Exhaustive over `GateStatus` (`"pass" | "warn" | "incomplete" | "fail"`,
+ * `src/health/types.ts`), with the default arm on the blocking side: a
+ * status this fold has not been taught — a future `GateStatus` member, or a
+ * runtime value the type checker would never let a caller construct
+ * directly — refuses rather than falling through to a clean `0`. Mirrors
+ * `isPassGate` (`src/commands/security.ts`), `runGate`
+ * (`src/security/service.ts`) and `securityFlowGate`
+ * (`src/security/guard.ts`) in *shape* only: health keeps its own
+ * `GateStatus` vocabulary, not `SecurityGate` — no cross-module import.
+ *
+ * `fail` (an established threshold violation) and `incomplete` (a required
+ * check that is missing, skipped, unparsed or unfinished) block
+ * unconditionally, independent of `--strict` — policies.md never makes
+ * either of those two contingent on strict mode, only "strict CI accepts
+ * only PASS" is. `warn` blocks only under `--strict`, matching the sibling
+ * fold in `src/health/service.ts`'s `gate()` (`strictWarn`). `pass` never
+ * blocks. The previously-unreachable-by-type default arm blocks in both
+ * strict and non-strict runs, the same as `fail`/`incomplete` already do,
+ * because "an unrecognized or newly added value fails closed" carries no
+ * strict-only qualifier.
+ *
+ * Exported so `health-gate-exit.test.ts` can drive every `GateStatus` value
+ * directly, including one TypeScript's own union would refuse (cast through
+ * `as unknown as GateStatus`) — the only way to exercise the default arm,
+ * since `computeGate` (`src/health/gate.ts`) only ever produces one of the
+ * four recognized values by the time either call site in `runRun` sees one.
+ */
+export function runExitCode(status: GateStatus, strict: boolean): number {
+  switch (status) {
+    case "pass":
+      return 0;
+    case "warn":
+      return strict ? 1 : 0;
+    case "fail":
+    case "incomplete":
+      return 1;
+    default:
+      return 1;
+  }
 }
 
 async function runStatus(): Promise<void> {

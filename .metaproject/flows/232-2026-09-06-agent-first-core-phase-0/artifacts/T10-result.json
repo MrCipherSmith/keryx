@@ -1,0 +1,170 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232-T10-aggregate-acceptance-review-2026-09-06T20-30Z",
+  "dispatch_id": "232-T10",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Phase 0 aggregate acceptance review over the frozen six criteria. AC1-AC5 are MET on evidence executed against the current tree, including two probes written from scratch for this review: a 10-case budget probe (inclusive round ceiling, independent tool-call cap, four truthful terminal reasons, zero-valued and invalid budgets) and a scripts-typecheck probe that injects a TS2322 into two real covered scripts through an in-memory compiler-host overlay. AC6 is NOT MET: two unresolved minor evidence-quality findings (the T9 journal attributes all 27 blocking health advisories to fast-uri when they span seven packages; the full-suite 7100/18/0 result has no immutable log, only journal prose) and the AFC-16/21 remaining-scope record is task T11, which has not run. No code finding was raised: the M01 shared routing writer and the M10 budget work are correct on the tree. The health gate's fail was verified rather than accepted - all 14 P0 and 13 P1 findings are bun audit advisories on package.json, zero product-code findings at a blocking priority. Nothing under src/, scripts/ or fixtures/ has changed since the 20:11:46Z integration snapshot, so that evidence still describes the tree.",
+  "summary_markdown": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-review.md",
+  "acceptance": [
+    {
+      "criterion": "AC1: M01 init/rules sync/rules distill/update and repeated sequences preserve a short index plus full routing document through a shared writer; module/security flags and user-owned entrypoint blocks preserved",
+      "status": "met",
+      "evidence": "src/lib/routing-entrypoint.ts:18 writeRoutingEntrypointPair is the only writer of .metaproject/index.md (enumerated over src/**/*.ts excluding tests: 7 matching files, 6 read-only); all three consumers call it (init.ts:730, update.ts:299, rules.ts:150). routing-entrypoint-lifecycle.test.ts + rules.test.ts + update.test.ts + templates.test.ts: 29 pass / 0 fail, and green again inside the 246-test set. Fixtures assert idempotence across all four writers and repeats, exactly one user-owned block, the user sentence surviving, and flag fidelity driven by metaproject.json. Raw: .metaproject/data/gdctx/raw/2026-09-06T20-26-19-109Z_run.log"
+    },
+    {
+      "criterion": "AC2: M01 orient/catalog and related consumers resolve the split entrypoint; regression fixtures assert ownership of both documents; failed pair publication observable and recoverable on rerun without a false success",
+      "status": "met",
+      "evidence": "routing-entrypoint-lifecycle.test.ts:114 asserts metaprojectIndexContext contains routing.md; :115 asserts the bundled metaproject-router skill points at it; src/ctx/orient.ts:41 gates on it. assertRoutingOwnership (:188) requires index < 2000 bytes with the pointer and without the module table or intent router, and requires both in routing.md. The recovery case (:127) makes routing.md a directory, asserts rulesCommand throws (no false success), then reruns cleanly and re-asserts ownership. withFileLock (src/lib/fs.ts:49) has stale-lock removal plus a heartbeat, so a crash does not wedge the rerun."
+    },
+    {
+      "criterion": "AC3: M10 offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls never silently ignored or represented by maxRounds",
+      "status": "met",
+      "evidence": "T10-budget-probe.ts (written from scratch for this review, not a rerun of T16/T21 probes): 10/10 pass. maxRounds:3 -> exactly 3 provider requests and budget_exhausted; maxRounds:0 -> 0 requests; the no-progress wrap-up stays inside the ceiling (5 requests under maxRounds:6); maxToolCalls:1 with two calls in ONE round and maxRounds:10 -> 1 invocation, 1 request, 9 rounds unspent, tool_call_budget_exhausted; cap 3 across rounds -> 3 invocations, 17 rounds unspent; maxToolCalls:0 -> 0 invocations, cap not dropped; no cap -> budget never fires; a stop with 16 rounds and 47 calls left reports no_progress; maxToolCalls:-1 throws RangeError. Child side: spawn-subagent-tool.ts:841 passes maxToolCalls separately, :485 clamps max_rounds to MAX_SUBAGENT_MAX_ROUNDS=24, :1216-1218 reports both caps truthfully. Raw: .metaproject/data/gdctx/raw/2026-09-06T20-25-40-617Z_run.log"
+    },
+    {
+      "criterion": "AC4: M10 stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port handled with no unsafe default",
+      "status": "met",
+      "evidence": "Ran the harness directly and offline: KERYX_AGENT_MAX_ROUNDS=9 bun scripts/stress/keryx-shell-stress.ts --only M4 --out <scratch> -> exit 0, one stress-*.json written with maxRounds 9 (the resolver value), no maxToolCalls key, allowEgress false. resolveAgentMaxToolCalls does not exist in the repo; resolveAgentMaxRounds is exported at agent.ts:388 and used at keryx-shell-stress.ts:33,998,1030. run-containment.ts:114 resolveContainmentPort throws RangeError on undefined/non-integer/out-of-range with no fallback, single call site at :375. Script tests: 5 pass / 0 fail. Raws: .metaproject/data/gdctx/raw/2026-09-06T20-19-04-837Z_read.log, .metaproject/data/gdctx/raw/2026-09-06T20-27-03-699Z_run.log"
+    },
+    {
+      "criterion": "AC5: M10 a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls",
+      "status": "met",
+      "evidence": "The committed scripts/typecheck.test.ts proves coverage and the injected error separately, so T10-scripts-typecheck-probe.ts closes the gap: it resolves tsconfig.scripts.json through the TypeScript API (26 files), confirms all four entrypoints are included, compiles clean (0 diagnostics), then injects a TS2322 into the real scripts/stress/keryx-shell-stress.ts and scripts/benchmark/run-containment.ts via an in-memory compiler-host overlay (working tree untouched) and gets exactly one TS2322 attributed to each. 4/4 pass. bun run typecheck exit 0, bun run typecheck:scripts exit 0, both executed here. Raws: .metaproject/data/gdctx/raw/2026-09-06T20-26-02-750Z_run.log, .../2026-09-06T20-27-39-076Z_run.log, .../2026-09-06T20-27-44-483Z_run.log"
+    },
+    {
+      "criterion": "AC6: focused regressions and integration checks have current immutable evidence; independent code-verifier/review report no unresolved blocker/major/minor findings; phase delivery accurately records remaining AFC-16/21 scope",
+      "status": "not_met",
+      "evidence": "Three reasons, all documentation-only. (a) F-001: the T9 integration record misattributes the blocking health advisories to one package when they span seven. (b) F-002: the full-suite 7100/18/0 result has no immutable log - no gdctx raw in the 20:00-20:14Z window belongs to it, the testing artifact predates it at 15:13Z, and the health artifact's tests source is missing/not-run; the lint and typecheck halves of the same table do have immutable raws and were re-executed to exit 0. (c) T11, which owns the AFC-16/21 remaining-scope record, is pending and depends on this review. The findings half is otherwise clean: T15 0/0/0, T21 0 findings, T16-final's 1 major + 3 minor verified closed on the tree, and both T9 blockers verified fixed (http-sse.ts:67 no longer trusts the configured DNS host; health/gate.ts:68-81 escalates a skipped required source to incomplete, pinned by health-truthful-gate.test.ts:117)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Aggregate acceptance review: per-criterion verdicts with executed evidence, 3 findings, acceptance recommendation, stale-evidence section, routing audit."
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-budget-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC3 probe written from scratch: 10 hard-asserted cases over the inclusive round ceiling, the independent tool-call cap and the four terminal reasons. Deterministic in-memory provider, no network, no working-tree writes."
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-scripts-typecheck-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC5 probe: injects a TS2322 into two real covered scripts through an in-memory TypeScript compiler-host overlay and asserts the diagnostic is attributed to those files. Read-only on the repository."
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-review.md",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-result.json",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-budget-probe.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T10-scripts-typecheck-probe.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "232-T10#F-001",
+      "reviewer": "T10-aggregate-acceptance-review",
+      "severity": "minor",
+      "file": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/journal.md",
+      "line": null,
+      "symbol": null,
+      "problem": "The 2026-09-06T20:12:54Z integration record states that all 14 P0 health findings are dependency advisories on the transitive package fast-uri, with 13 P1 and 1 P2 from the same source. The counts match the artifact but the attribution does not: the 27 blocking-priority findings span seven packages (fast-uri 6xP0, protobufjs 6xP0+5xP1, sharp 1xP0, ip-address 1xP0+2xP1, hono 3xP1, @hono/node-server 1xP1, qs 2xP1), and the single P2 dependency advisory is hono, not fast-uri.",
+      "impact": "The record builds a phase-8 prioritisation argument on the fast-uri attribution, so a reader scoping the dependency refresh from it would plan for one package and meet seven, with six of the fourteen P0 advisories in a package the record never names. The material claim the acceptance rests on is unaffected: every blocking finding is source dependencyAudit on package.json and the count of blocking-priority product-code findings is 0, independently verified.",
+      "suggested_fix": "Append a journal correction naming the seven packages and their per-priority counts, and carry the corrected inventory into the T11 delivery record and the phase-8 hand-off. No code change.",
+      "evidence": "Grouped .metaproject/data/health/artifacts/latest.json (generated_at 2026-09-06T20:11:46.622Z, the run the record cites) by priority, source, file and symbol: p0 14, p1 13, p2 244; blocking_sources [dependencyAudit]; blocking_files [package.json]; blocking_by_symbol {P0:fast-uri 6, P0:protobufjs 6, P0:sharp 1, P0:ip-address 1, P1:protobufjs 5, P1:hono 3, P1:ip-address 2, P1:qs 2, P1:@hono/node-server 1}; product_code_blocking 0. Raw: .metaproject/data/gdctx/raw/2026-09-06T20-28-19-864Z_run.log",
+      "confidence": "high",
+      "dedupe_key": "phase0-health-attribution-single-package",
+      "blocking_merge": false,
+      "related_skill": "health",
+      "learning_candidate": true,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "bun -e grouping of the cited health artifact, run through keryx ctx run; output recorded at .metaproject/data/gdctx/raw/2026-09-06T20-28-19-864Z_run.log and contradicts the journal's single-package attribution while confirming its per-priority counts.",
+        "verifier": "T10-aggregate-acceptance-review"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "232-T10#F-002",
+      "reviewer": "T10-aggregate-acceptance-review",
+      "severity": "minor",
+      "file": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/journal.md",
+      "line": null,
+      "symbol": null,
+      "problem": "AC6 requires current immutable evidence for the integration checks, and this flow's context.md:13 required immutable per-worker report paths, but the full-suite result (7100 pass / 18 skip / 0 fail, 54038 assertions, 7118 tests in 579 files, 199s) exists only as prose in the journal. No gdctx raw log in the 20:00-20:14Z window belongs to it (all five are flow 233 T76 output), .metaproject/data/testing/artifacts/latest.json predates the run at 15:13Z, the health artifact's own tests source is status missing / execution not-run, and T9 attempt 3 wrote no result artifact (T9-result.json is attempt 1/2 from 15:33Z).",
+      "impact": "The most load-bearing claim in the phase is the one an auditor cannot check, in a phase whose own history records three cases of an implementer's artifact claim being false while the returned value was right. The lint and typecheck halves of the same table do have immutable raws (.metaproject/data/health/raw/{eslint,typescript}/2026-09-06T20-11-30-148Z.log) and were re-executed to exit 0 during this review, so the gap is specific to the suite figure.",
+      "suggested_fix": "Rerun the full suite once through keryx ctx run (or keryx test) so an immutable raw log exists, and cite that path beside the numbers in the journal and in T11; or, if no rerun is wanted before delivery, have T11 state plainly that the suite figure rests on an unlogged run. No code change.",
+      "evidence": "ls of .metaproject/data/gdctx/raw/ filtered to 2026-09-06T20-00 through T20-12 returns exactly five run logs, each read and identified as flow 233 T76 output. find over .metaproject between 00:05 and 00:14 local lists only the two flow journals/flow.json, the health artifacts/history/raws and flow 233 artifacts - no test report. The health artifact's sources array contains {source tests, required false, status missing, execution not-run, parse not-run}.",
+      "confidence": "high",
+      "dedupe_key": "phase0-full-suite-no-immutable-log",
+      "blocking_merge": false,
+      "related_skill": "testing",
+      "learning_candidate": true,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Enumerated every artifact written under .metaproject in the integration window and every gdctx raw log in the 20:00-20:12Z range; none corresponds to a full-suite bun test run, and the health artifact records its tests source as not-run.",
+        "verifier": "T10-aggregate-acceptance-review"
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "232-T10#F-003",
+      "reviewer": "T10-aggregate-acceptance-review",
+      "severity": "info",
+      "file": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
+      "line": null,
+      "symbol": null,
+      "problem": "The frozen criteria describe M01 and M10 only, but the phase shipped four further strands: T12/T13 (description-based worker dispatch: the task-implementer input contract plus ten worker prose builds, mirrored across .metaproject/core/, .metaproject/skills/ and src/gdskills/bundled/), T17 (introducing ESLint - eslint.config.mjs, package.json scripts and devDependencies, check now gating on lint and both typecheck targets), T18 (legacy lint remediation), and T19/T20 (M10 corrections that arrived after the criteria were frozen).",
+      "impact": "None at runtime. A delivery record written to the criteria alone would under-describe what landed on this branch, leaving the next phase with an incomplete picture of the inherited surface.",
+      "suggested_fix": "Have T11 enumerate these strands alongside the M01/M10 outcomes.",
+      "evidence": "git status --porcelain over the branch; the three task-implementer input-contract.schema.json mirrors verified byte-identical via shasum -a 256 (279cff73f746f05a9c1bcb961a8cca25d7ff0fcaabbf82acad45a20ba07f25a6), which also closes the unsynchronized-installed-schema defect recorded in the journal at 11:20Z.",
+      "confidence": "high",
+      "dedupe_key": "phase0-out-of-criteria-scope-unrecorded",
+      "blocking_merge": false,
+      "related_skill": null,
+      "learning_candidate": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "criteria_met": 5,
+    "criteria_not_met": 1,
+    "tests_executed_by_reviewer": 320,
+    "test_files_executed_by_reviewer": 26,
+    "test_failures_observed": 0,
+    "probe_cases_written": 14,
+    "probe_cases_passed": 14,
+    "blocking_priority_health_findings": 27,
+    "blocking_priority_product_code_findings": 0
+  },
+  "timestamp_utc": "2026-09-06T20:31:00Z"
+}

@@ -1,0 +1,517 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checkoutId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "projectId",
+        "checkoutId"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fragment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "ref",
+        "version",
+        "fragment"
+      ]
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceStatus": {
+          "enum": [
+            "known",
+            "unknown"
+          ]
+        },
+        "unknownReason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "text",
+        "sourceStatus",
+        "source"
+      ],
+      "allOf": [
+        {
+          "type": "object",
+          "if": {
+            "type": "object",
+            "properties": {
+              "sourceStatus": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "$ref": "common.schema.json#/$defs/source"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "if": {
+            "type": "object",
+            "properties": {
+              "sourceStatus": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "null"
+              },
+              "unknownReason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "unknownReason"
+            ]
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claimType": {
+          "enum": [
+            "observation",
+            "hypothesis",
+            "decision",
+            "instruction"
+          ]
+        },
+        "sourceStatus": {
+          "enum": [
+            "known",
+            "unknown"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "acceptanceBasisRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/constraint"
+          }
+        },
+        "unknownReason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claimType",
+        "sourceStatus",
+        "source",
+        "authorRef",
+        "confirmedBy",
+        "acceptanceBasisRef",
+        "constraints"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sourceStatus": {
+                "const": "known"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "$ref": "common.schema.json#/$defs/source"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "sourceStatus": {
+                "const": "unknown"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "required": [
+              "unknownReason"
+            ],
+            "properties": {
+              "source": {
+                "type": "null"
+              },
+              "unknownReason": {}
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "fresh",
+            "stale",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshotVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "snapshotVersion"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "stale",
+                  "unknown"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "required": [
+              "reason"
+            ],
+            "properties": {
+              "reason": {}
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "handleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "$ref": "common.schema.json#/$defs/scope"
+        },
+        "expiresAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "operation",
+        "handleId",
+        "sourceVersion",
+        "scope",
+        "expiresAt"
+      ]
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "accepted",
+            "draft",
+            "conflict",
+            "deprecated",
+            "superseded",
+            "archived",
+            "unknown"
+          ]
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "validFrom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "validTo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "supersededBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "current",
+        "validFrom",
+        "validTo",
+        "supersededBy"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "current": {
+                "const": true
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "accepted"
+              },
+              "supersededBy": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "usedBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxItems": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "usedItems": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimatedTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimator": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "maxBytes",
+        "usedBytes",
+        "maxItems",
+        "usedItems"
+      ],
+      "dependentRequired": {
+        "estimatedTokens": [
+          "estimator"
+        ],
+        "estimator": [
+          "estimatedTokens"
+        ]
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dirtyFingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configFingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producerVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "revision",
+        "dirtyFingerprint",
+        "configFingerprint",
+        "producerVersion"
+      ]
+    },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "state",
+        "reasons"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "partial",
+                  "unknown"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T39-recheck-posture-exitcodes",
+  "dispatch_id": "233-T39",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent recheck of the T37 posture repair and the T38/T48/T50 exit-code folds. All six named repairs reproduce as closed and every consumer-facing claim holds under execution. Stage 1 does NOT pass: three defects of the same class are open — a fifth gate fold with a pass fallthrough on the shared flow-completion path (blocker: health `incomplete` is recorded PASS and completion succeeds), a config `mode` outside the declared four-member union silently resolving to report-only (major), and `security report`'s strict-CI decision taken from the artifact's own unvalidated `mode` field plus an `enforced` arm that exits 0 on `fail` (major). Stage 2 not started. Rulings: the disclosed manifest widening is safe but has an undisclosed second half that should be narrowed; the asymmetric `reportExitCode` fold should be closed; all three changed test expectations restore intent without weakening coverage; the shared JSON reader should gain a shape-aware sibling rather than change its own contract, because the defect class is larger than that function.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome; violations are not lost when another check is unavailable.",
+      "status": "not_met",
+      "evidence": "A corrupted health payload now blocks at the health service (T39-exit.ts H3, confirming T50 independently), but the skipped-required-check case does NOT produce the expected outcome at flow completion: health `incomplete` — computeGate's output for an unavailable/unparsed required source — is recorded as a PASS gate row and completion succeeds (T39-exit.ts F1, raw 2026-09-06T15-33-04-241Z_run.log). Finding F-001."
+    },
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS at any surface, including the process exit code; a check that cannot establish its posture blocks rather than disappearing; partial acceptance is not full phase completion.",
+      "status": "not_met",
+      "evidence": "Three surfaces still relabel or fall through. (1) flow complete records health `incomplete` as PASS (F-001, T39-exit.ts F1). (2) A config whose `mode` is not one of the four declared values cannot establish a posture and does not block: guardOutput allows a planted AWS key and securityFlowGate returns status `pass` with detail 'security ENFORCED: informational (advisory does not block)' (F-002, T39-posture.ts B11-B16; CLI exit 0 in T39-scan.ts C3). (3) `keryx security report` exits 0 on a stored `fail` gate when the artifact's own `mode` field says advisory, and in `enforced` mode for every non-pass gate (F-003, T39-exit.ts S2/S3). The repairs themselves are closed: an unreadable manifest and an unreadable config both block at every surface and never disappear (T39-posture.ts A2-A19, B2-B6, B17)."
+    },
+    {
+      "criterion": "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; an optional skip warns and is never signed as passed; reasons and details stay constant and leak-safe.",
+      "status": "partial",
+      "evidence": "Leak-safety and constancy: met — across 36 posture cases and 4 CLI check cases no reason or detail carried the workspace root, the planted AKIAIOSFODNN7EXAMPLE, the string JSON or an ENOENT (leaky:false on every row of T39-posture.ts), and the forced-closed posture is a returned flag with no disk write (C1: bytes, mtime and directory listing unchanged). 'Strict CI accepts only PASS': met at exitCodeFor (T39-exit.ts S1) and unmet at reportExitCode through the unvalidated mode argument and the enforced arm (F-003). 'INCOMPLETE when a required check is missing/skipped/unparsed/unfinished': met at both health exit-code folds (H1/H2) and unmet at flow completion (F-001). Optional-skip warnings are untouched by any of the four folds (traced in src/health/gate.ts:64-67; the folds change exit codes only)."
+    },
+    {
+      "criterion": "Row 1: the manifest and config non-object cases are blocking; absent manifest and absent config keep their previous non-blocking behaviour; the forced-closed mode is observable through a returned flag rather than a disk write.",
+      "status": "met",
+      "evidence": "T39-posture.ts A2-A19 (all non-object manifest bodies and non-object `modules` blocks, no throw, prototype untouched), A1/A14/A15 (absent manifest and the adjacent readable cases stay non-blocking), B2-B6/B17 (unreadable config -> mode enforced + configUnreadable + blocking), B1/B7 (absent config and a legitimate {} still advisory), C1 (config bytes, mtime and .metaproject listing unchanged after the forced-closed path). Raw 2026-09-06T15-30-49-266Z_run.log."
+    },
+    {
+      "criterion": "Row 2: for each of the four rewritten folds, recognized values behave exactly as before, only the unenumerated case changed, and the default arm is genuinely reachable rather than type-theoretical; no fifth site of the same shape remains.",
+      "status": "partial",
+      "evidence": "Recognized values: confirmed byte-identical for all four folds (T39-exit.ts S1, S2, H1, H2) — the only recognized-value change anywhere is ci+needs-approval at exitCodeFor, as T38 reported. Reachability: 1 of 4 default arms is runtime-reachable, exactly as T50 claimed and only there — a latest.json with gate.status 'banana' reaches gateExitCode through the real readLatest cast (H3); runExitCode folds a freshly computed report, exitCodeFor folds a live decision, and reportExitCode's gate is pre-filtered by hasRecognizedGate, so those three are defensive only. Fifth site: FOUND — src/flow/service.ts:641 (F-001). Enumeration method recorded in the review and in F-001's class_scope."
+    },
+    {
+      "criterion": "Row 3: the five or six implementations do not disagree — a value that blocks in the service does not exit zero at its command, and the health and security vocabularies are not mixed.",
+      "status": "not_met",
+      "evidence": "Vocabularies are NOT mixed (ctx rg finds no GateStatus under src/security/ or in src/commands/security.ts, and no SecurityGate under src/health/ or in src/commands/health.ts — raw 2026-09-06T15-33-54-433Z_rg.log and -559Z_rg.log). But the implementations disagree twice: health `incomplete` exits 1 at both health commands and is recorded PASS at flow complete (F-001); security `fail` blocks at guardOutput, maps to fail at securityFlowGate and exits 1 at `security scan` in enforced, while exiting 0 at `security report` in enforced (F-003)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T39-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full recheck report: Stage 1 table, 8 findings, judgement calls, evidence, routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T39-posture.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe A — 36 manifest/config boundary cases plus the no-disk-write check.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T39-exit.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe B — the four exit-code folds, health-gate reachability from disk, and the real flow complete() pipeline.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T39-scan.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe C — the CLI check path and the §14 self-protection state under an unreadable and a mistyped config.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-30-49-266Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Raw output of T39-posture.ts.",
+      "hash": "64faf88e70d0adb589b2c1ffc93221e145dd4c09aa3dcc9d4cdd08eb56019298"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-33-04-241Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Raw output of T39-exit.ts.",
+      "hash": "003b0d72071135b7347741eaccaaf2256acaf1a5cb482892af019ec827cdb01e"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-37-56-202Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Raw output of T39-scan.ts.",
+      "hash": "ecb697b83da28e6ef2faf03c6d33e82128b98ea07d760f6299524d69906207e7"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-34-37-397Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused regression selection: 63 pass / 0 fail / 298 expect().",
+      "hash": "9d8ff2006fcccfd4447ea0e8eaa70d60022552a962e99be7e88db4129553604d"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-35-00-547Z_rg.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Class enumeration: every gate/status fold across src (F-001 class).",
+      "hash": "d8e37d7a0043df823893b70ec6e71a1b27d81c12e9451e91370bb0ccd71a3d3a"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-35-49-953Z_rg.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Class enumeration: every exitCode assignment in the health and security modules (F-003 class).",
+      "hash": "adb220b16f451dba671b73f0758120c04e354bc5fabc13f5af074312eed701e5"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-33-52-765Z_rg.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "readJsonFileOr call-site census: 24 non-test files.",
+      "hash": "abb8d1e97ca464a9d575441971ec6123002dd590bc3032b5e2d9baa3b1e3b8ea"
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T39#F-001",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "blocker",
+      "file": "src/flow/service.ts",
+      "line": 641,
+      "symbol": "complete (Gate 5: code health)",
+      "problem": "The flow-completion health gate folds a four-member GateStatus with a one-value denylist: `health.status === \"fail\" ? {status:\"fail\"} : {status:\"pass\", detail: `health gate: ${health.status}`}`. `deps.healthGate` is `createCodeHealthService().gate()` at both real wirings (src/commands/flow.ts:117-119, src/harness/tool/metaproject-adapter.ts:111-114), whose status is `pass | warn | incomplete | fail`. `incomplete` -- which computeGate (src/health/gate.ts:58-63) emits whenever a REQUIRED source is unavailable, failed to execute, or failed to parse, i.e. verbatim policies.md's INCOMPLETE and AC4/AFC-05's skipped-required-check -- is recorded as a gate row with status \"pass\" and completion succeeds. So does `warn`, and so does any unrecognized value. This is the fifth site of the exact shape T33/T38/T48/T50 were dispatched to remove, on the one path none of them owned, and it needs no corruption or tampering to reach.",
+      "impact": "AC8's own sentence -- 'no required failed or incomplete check is relabeled PASS at any surface' -- fails on the shared completion path, the surface a machine reads to decide a phase is done. The false pass is durable and published: the gate row is written into flow.json history and buildIssueComment posts it to the issue tracker. It is also the sharpest Row-3 consistency violation: the identical value exits 1 at `keryx health gate` (src/health/service.ts gateExitCode) and at `keryx health run` (src/commands/health.ts runExitCode) and passes here. The harness wiring means an agent-driven `flow complete` accepts it too.",
+      "suggested_fix": "Replace the ternary with the exhaustive switch the four sibling folds use, over health's own vocabulary, default arm blocking. `warn` is the one value needing a decision rather than a mechanical fold (it exits 0 at both health commands unless --strict/--strict-warn), so the minimal correct fix is pass->pass, warn->pass (matching the non-strict command default, reason string still visible in detail), fail/incomplete/default->fail. While the file is open, note that the security arm at :656 passes security.status through verbatim, so a future `skipped` from securityFlowGate would be non-blocking under :663.",
+      "evidence": "T39-exit.ts section F1, raw .metaproject/data/gdctx/raw/2026-09-06T15-33-04-241Z_run.log: the real createFlowService().complete() pipeline, one run per health status. incomplete -> recordedGateStatus \"pass\", detail \"health gate: incomplete\", completionPassed true; warn -> same; an unrecognized value -> same; fail -> recordedGateStatus \"fail\", completionPassed false. No committed test covers it: `ctx rg -n \"incomplete\" src/flow/service.test.ts src/flow/security-gate.test.ts` returns zero matches.",
+      "confidence": "high",
+      "dedupe_key": "flow-complete-health-gate-incomplete-relabeled-pass",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/flow/service.ts:641",
+          "src/flow/service.ts:656",
+          "src/flow/service.ts:663"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg -n 'status === \"fail\"|status !== \"fail\"|status === \"pass\"|status !== \"pass\"|gate === \"pass\"|gate !== \"pass\"|gate === \"fail\"|gate !== \"fail\"' src --glob '!*.test.ts' (raw 2026-09-06T15-35-00-547Z_rg.log), then every hit read. Allowlist-shaped hits are correct and out of class: src/sac/index.ts:383,399,429; src/sac/proposal-lifecycle.ts:713; src/lib/serve-turn.ts:789; src/harness/completion/gate.ts:131; src/harness/flow/managed-flow-port.ts:53,61; src/harness/flow/parity.ts:44,66. src/commands/security.ts:760 folds the detector-eval gate whose status is computed in-process as a two-member set (src/security/eval/harness.ts:209), so it is total and out of class -- confirming T35's classification. src/commands/workspace.ts:157 is reported separately as F-006."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T39#F-002",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "major",
+      "file": "src/security/config.ts",
+      "line": 150,
+      "symbol": "mergeSecurityConfig / loadSecurityConfig / isBlockingMode",
+      "problem": "SecurityMode is a closed four-member union (src/security/types.ts:93) with a schema enum (src/security/schemas.ts:139,261), but mergeSecurityConfig takes `parsed.mode ?? base.mode` unvalidated and loadSecurityConfig never calls validateSecurityConfig -- the codebase states this itself at src/commands/security.ts:976. The mode is then consumed by isBlockingMode (src/security/guard.ts:181), a two-value allowlist for BLOCKING whose fallthrough is the permissive side, and by exitCodeFor/reportExitCode, whose ci/enforced guards are equality tests. A readable, well-formed config declaring `{\"mode\":\"ENFORCED\"}` (or \"enforcd\", \"enforced \", 42, true) silently resolves to report-only: guardOutput ALLOWS a planted AWS key, securityFlowGate returns {status:\"pass\", detail:\"security ENFORCED: informational (advisory does not block)\"}, and both CLI folds return 0. Section 14 self-protection does not compensate: MODE_RANK[unrecognized] is undefined, so the downgrade comparison at src/security/self-protect.ts:88 is false and no warning or incident is raised. T37 established that a posture which cannot be established must block and applied it to the config FILE's shape; a config whose declared MODE is not one this build knows is equally an unestablished posture and takes the permissive path.",
+      "impact": "An enforced/CI workspace becomes report-only with the enforcement it declared silently absent -- the identical outcome T30 F-001 and T35 F-003 describe and T37 was accepted for closing, surviving on the mode axis. The flow-completion gate reports a required check with an unestablished posture as PASS (AC8). `keryx security check-input` returns exit 0 on a live AWS key with one `fail` finding. The trigger is an operator typo or a one-byte write, with no operator-visible signal at any decision point.",
+      "suggested_fix": "Validate the mode where T37 already made the function total: after the mergeable-payload check in loadSecurityConfig, `const merged = mergeSecurityConfig(parsed); if (!MODES.has(merged.mode)) return { ...merged, mode: \"enforced\", configUnreadable: true };` with MODES = new Set([\"advisory\",\"enforced\",\"ci\",\"gateway\"]). One Set and one if; it reaches the existing POSTURE_UNAVAILABLE_REASON branches unchanged, keeps loadSecurityConfig total, and changes nothing for a config whose mode is one of the four. Independently, make isBlockingMode an exhaustive switch over SecurityMode with the default arm on the blocking side, so a fifth mode cannot inherit 'does not block' by omission.",
+      "evidence": "T39-posture.ts B11-B16, raw .metaproject/data/gdctx/raw/2026-09-06T15-30-49-266Z_run.log: for {\"mode\":\"ENFORCED\"} with the module enabled and a planted AKIAIOSFODNN7EXAMPLE -- guardAllowed true, guardGate \"fail\", gate {\"status\":\"pass\",\"detail\":\"security ENFORCED: informational (advisory does not block)\"}. T39-scan.ts C3, raw 2026-09-06T15-37-56-202Z_run.log: loadedMode \"ENFORCED\", gate \"fail\", findings 1, cliExitCode 0, persistedStateMode \"ENFORCED\"; controls C2 (advisory -> 0), C4 (ci -> 1), C1 (unreadable config -> enforced -> 1). T39-exit.ts S1/S2: both CLI folds return 0 for every gate under \"BANANAS\", \"CI\" and \"ci \".",
+      "confidence": "high",
+      "dedupe_key": "security-config-unrecognized-mode-silent-advisory-downgrade",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/config.ts:150",
+          "src/security/config.ts:218",
+          "src/security/guard.ts:181",
+          "src/security/guard.ts:280",
+          "src/security/guard.ts:387",
+          "src/commands/security.ts:854",
+          "src/commands/security.ts:576",
+          "src/security/self-protect.ts:88"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg -n -A 4 '\"advisory\"' src/security/schemas.ts src/security/types.ts (raw 2026-09-06T15-32-02-348Z_rg.log) established the closed union and its schema enum; then ctx rg -n \"loadSecurityConfig|isBlockingMode\" src --glob '!*.test.ts' and ctx rg -n \"mode\" src/commands/security.ts enumerated every consumer that branches on a mode value. All eight are listed. modeOf (src/commands/security.ts:793) is a one-line delegate to loadSecurityConfig and carries no branch of its own."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T39#F-003",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "major",
+      "file": "src/commands/security.ts",
+      "line": 558,
+      "symbol": "handleReport / reportExitCode",
+      "problem": "T38 made reportExitCode's GATE argument an allowlist over `pass`, but its MODE argument is `report.mode` -- a field of the stored artifact being judged. runReport returns latest.report verbatim (src/security/service.ts:286) and hasRecognizedGate (:216) validates only that `gate` is one of the four values; every other field, mode included, is whatever is on disk. So the question 'is this workspace in strict CI?' is answered by the file under judgement. A workspace configured `ci` whose last scan was recorded under `advisory` -- scan, switch the project to CI, run `security report` in the pipeline -- exits 0 on a `fail` gate. Every other exit-code site in the module asks loadSecurityConfig instead (exitCodeFor is called as exitCodeFor(..., await modeOf(cwd)) at :250 and :515). Separately, the disclosed ci-only scope is broader in effect than disclosed: reportExitCode(gate, \"enforced\") returns 0 for fail and incomplete as well as needs-approval.",
+      "impact": "The CLI surface T38 exists to make truthful still exits 0 on an established threshold violation, through a field a stale or tampered artifact controls, and through the sibling strict mode. runGate is not exposed as a CLI command, so these two exit codes are the CLI gate, and policies.md's 'strict CI accepts only PASS' is unmet for `enforced` on all three non-pass values.",
+      "suggested_fix": "Two one-liners in the same function. (a) Source the mode from the workspace, not the artifact: `process.exitCode = reportExitCode(report.gate, await modeOf(cwd));`, matching the two exitCodeFor call sites in the same file; keep printing report.mode so the artifact's provenance stays visible. (b) Close the asymmetry: `return (mode === \"ci\" || mode === \"enforced\") && !isPassGate(gate) ? 1 : 0;`, so the two strict modes agree here as they already do at exitCodeFor, isBlockingMode and securityFlowGate. Either fix alone leaves the surface untruthful.",
+      "evidence": "T39-exit.ts S3, raw .metaproject/data/gdctx/raw/2026-09-06T15-33-04-241Z_run.log: workspace config {\"mode\":\"ci\"}, stored latest.json {\"gate\":\"fail\",\"mode\":\"advisory\",...} -> runGate \"fail\", runReport gate \"fail\", cliExitCode 0, exitCodeIfWorkspaceModeWereUsed 1. S2 rows: reportExitCode(gate, \"enforced\") is 0 for fail, needs-approval, incomplete and an unrecognized value.",
+      "confidence": "high",
+      "dedupe_key": "security-report-exit-code-uses-artifact-mode-and-skips-enforced",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/commands/security.ts:558",
+          "src/commands/security.ts:575",
+          "src/security/service.ts:286",
+          "src/security/service.ts:216",
+          "src/commands/security.ts:250",
+          "src/commands/security.ts:515"
+        ],
+        "enumeration_method": "ctx rg -n \"isPassGate|exitCodeFor|reportExitCode\" src/commands/security.ts for the folds, then ctx rg -n 'exitCode' src/commands/health.ts src/commands/security.ts src/commands/flow.ts src/health src/security --glob '!*.test.ts' (raw 2026-09-06T15-35-49-953Z_rg.log) for every exit-code assignment in the two modules, each hit read. Exactly four sites fold a gate/status vocabulary into an exit code in these modules (security.ts:250, :515, :558; health.ts:69/:87/:170), and only :558 sources its mode from the payload; the last two entries are the correct-by-contrast sites."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T39#F-004",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "minor",
+      "file": "src/health/service.ts",
+      "line": 196,
+      "symbol": "gate / readLatest",
+      "problem": "T50's reachability argument -- that readLatest (:36) is an unchecked `as HealthReport` assertion over a file on disk -- is correct and reproduces. But the repair guarded only the VALUE that assertion produces (gateExitCode's default arm). The same assertion also admits a wrong SHAPE: `latest.gate` may be absent or not an object, and `latest.gate.status` at :196 then throws a TypeError outside readLatest's try; `latest.gate.reasons` can come back undefined, which src/commands/health.ts:167's `for (const reason of result.reasons)` throws on.",
+      "impact": "Not a false pass. flow complete catches it into unevaluableGate(\"health\") -> status \"fail\" since T45, so that path fails closed; `keryx health gate` and the health.gate MCP tool (src/mcp/tools.ts:641, which returns the result directly) raise an unhandled TypeError at an agent-visible seam instead of the module's own 'no report; run `keryx health run` first' refusal. Recorded because the sentence T50 used to justify its own fix is still true of every other field of the same payload.",
+      "suggested_fix": "Validate the shape where the value is already validated: in readLatest, treat a parsed payload that is not an object, or whose `gate` is not an object carrying a string `status` and an array `reasons`, as null -- the existing `if (!latest)` branch already turns that into the constant fail + exitCode 1 + 'no report' reason. Same narrow-predicate shape as hasRecognizedGate in src/security/service.ts:216.",
+      "evidence": "T39-exit.ts H6/H7/H8, raw .metaproject/data/gdctx/raw/2026-09-06T15-33-04-241Z_run.log: a latest.json with no `gate` key and a bare [] both threw \"undefined is not an object (evaluating 'latest.gate.status')\"; {\"gate\":\"incomplete\"} (a string) returned {exitCode: 1} with status and reasons undefined. Controls H3 (banana -> exitCode 1, confirming T50's reachability claim independently), H4 (incomplete -> 1), H5 (warn -> 0 with status still \"warn\").",
+      "confidence": "high",
+      "dedupe_key": "health-readlatest-shape-unvalidated-gate-dereference",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-005",
+      "global_id": "T39#F-005",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "minor",
+      "file": "src/security/guard.ts",
+      "line": 158,
+      "symbol": "resolveManifestSecurityState",
+      "problem": "T37-implementation.md's Concerns 3 discloses widening the blocking treatment from the `null` literal to all non-object manifest BODIES. The code goes further: after the body check it requires `.modules` to be a non-null non-array object and returns manifestUnreadable:true when it is merely ABSENT. A well-formed manifest object -- `{}` or `{\"name\":\"demo\"}` -- is therefore classified 'present but not readable as the object it must be' and blocks. Every other manifest reader in the repository reads an absent `modules` as 'module disabled' (src/capability/seam.ts:70, src/commands/ctx.ts:131, src/testing/capability.ts:26, src/gdskills/project-skills.ts:664,681, src/gdskills/export.ts:199), so guard.ts is now alone in reading it as a fault. It also conflates a genuine I/O fault with this case only by accident: readJsonFileOr's {} fallback happens to have no `modules` key.",
+      "impact": "Fail-closed, so no security is lost and the failure is loud -- but it converts a readable manifest into 'security posture unavailable', refusing every guarded write (memory, wiki, testing, gdskills, metrics, sac, workspace, harness) and failing flow complete, with a message saying the manifest could not be read when it read fine. Reachability is low: keryx init's manifest type makes `modules` required (src/commands/init.ts:228), so a keryx-written manifest always has it. Reported because it is an undisclosed behaviour change in the file this recheck audits.",
+      "suggested_fix": "Separate 'absent' from 'present and unusable' one level down, the same distinction loadSecurityConfig draws for the config file: modules === undefined -> {enabled:false, manifestUnreadable:false} (module never configured, unchanged from before the repair); modules present but not a plain object -> manifestUnreadable:true. One extra if.",
+      "evidence": "T39-posture.ts A8 ({}) and A9 ({\"name\":\"demo\"}), raw .metaproject/data/gdctx/raw/2026-09-06T15-30-49-266Z_run.log: guardAllowed false, gate {\"status\":\"fail\",\"detail\":\"security posture unavailable: check could not complete\"}. Contrast A14 ({\"modules\":{}}) -> allowed, gate null; A1 (absent manifest) -> allowed, gate null.",
+      "confidence": "high",
+      "dedupe_key": "guard-manifest-missing-modules-key-treated-as-unreadable",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "T39#F-006",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "info",
+      "file": "src/commands/workspace.ts",
+      "line": 157,
+      "symbol": "workspace confirm-review",
+      "problem": "The same permissive-fallthrough reasoning on a security-relevant branch: `if (security.gate === \"needs-approval\" && !acknowledgeSecurity) throw`. A proposal whose gate is `fail` (an established violation) or `incomplete` (no evidence) mints a confirm token with securityAcknowledged:false and no message, while the weaker needs-approval is stopped. Line :155 correctly refuses an unreadable gate, so the right principle is held one line earlier.",
+      "impact": "None reachable today: src/sac/index.ts:383,399,429 and src/sac/proposal-lifecycle.ts:713 are allowlists (gate !== \"pass\" -> error), so an accepted write intent still refuses a non-pass proposal downstream. Recorded so the next round does not rediscover it, and because the compensating control lives in another module and could move.",
+      "suggested_fix": "Require acknowledgement (or refuse outright) for any gate that is not `pass`, and name which of the three outcomes it was.",
+      "evidence": "Read of src/commands/workspace.ts:138-169 and the compensating allowlists at src/sac/index.ts:383,399,429 found via ctx rg (raw 2026-09-06T15-35-00-547Z_rg.log). Not executed; classified info on that basis.",
+      "confidence": "medium",
+      "dedupe_key": "workspace-confirm-review-only-halts-on-needs-approval",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "T39#F-007",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "info",
+      "file": "src/security/guard.test.ts",
+      "line": 484,
+      "symbol": "T33 root trigger test / coverage gaps",
+      "problem": "(a) The committed test title still reads 'a non-object security.config.json falls back instead of throwing' while the behaviour it now asserts is 'blocks'; the body comment explains the change, the title contradicts it. (b) No committed test covers an unrecognized config mode (F-002) or the flow health fold (F-001), so both fallthroughs are untested rather than deliberately pinned. (c) The guard.ts header amendment claims every mode blocks when the posture cannot be established -- true for an unreadable manifest/config, false for an unrecognized mode, which is the same unestablished posture.",
+      "impact": "Documentation and coverage drift only. Recorded because a title that describes the pre-fix behaviour is what let the two corrected expectations in security.check-input.test.ts encode a defect as intentional in the first place.",
+      "suggested_fix": "Retitle the test; add the two regressions alongside the fixes for F-001 and F-002; amend the guard.ts header once F-002 is closed.",
+      "evidence": "Read of src/security/guard.test.ts:484-519 and src/security/guard.ts:5-18; `ctx rg -n \"incomplete\" src/flow/service.test.ts src/flow/security-gate.test.ts` returned zero matches (raw 2026-09-06T15-34-38-962Z_rg.log).",
+      "confidence": "high",
+      "dedupe_key": "t33-root-trigger-test-title-stale-and-uncovered-fallthroughs",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-008",
+      "global_id": "T39#F-008",
+      "reviewer": "review-security-code+review-logic (T39 independent recheck)",
+      "severity": "info",
+      "file": "src/security/service.ts",
+      "line": 95,
+      "symbol": "check / writeState",
+      "problem": "loadSecurityConfig forces mode \"enforced\" for an unusable config (correct, T37's repair), and every `check` persists currentState(config).mode. A `keryx security check-input` run while the config is corrupt therefore records mode \"enforced\" in .metaproject/data/security/raw/state.json; after the operator repairs the file back to a legitimate `advisory`, evaluateSelfProtection compares ranks and raises 'security mode downgraded: enforced -> advisory (enforcement weakened)' plus a mode-downgrade incident for a downgrade that never happened.",
+      "impact": "Fail-loud noise, not a bypass. Recorded because it is a measured second-order effect of a repair under audit, and because a false downgrade incident erodes the signal a real one carries.",
+      "suggested_fix": "Do not persist a synthesized posture: skip writeState when config.configUnreadable, or record the forced mode distinctly so the rank comparison does not treat it as an operator choice.",
+      "evidence": "T39-scan.ts C1, raw .metaproject/data/gdctx/raw/2026-09-06T15-37-56-202Z_run.log: configUnreadable true, loadedMode \"enforced\", persistedStateMode \"enforced\". Rank comparison read at src/security/self-protect.ts:88.",
+      "confidence": "high",
+      "dedupe_key": "forced-enforced-posture-persisted-into-selfprotect-state",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "For the F-001 fix, should a health gate status of `warn` block flow completion, or pass with the reason string visible?",
+      "why": "`warn` exits 0 at `keryx health run` and `keryx health gate` unless --strict/--strict-warn, so mapping it to `fail` at flow completion would be a behaviour change for existing flows rather than a fallthrough repair. `incomplete` and the default arm must block either way; only `warn` is a policy choice.",
+      "options": [
+        {
+          "id": "warn-passes",
+          "label": "warn -> pass, matching the non-strict command default; incomplete/default -> fail",
+          "recommended": true
+        },
+        {
+          "id": "warn-blocks",
+          "label": "warn -> fail, treating flow completion as a strict surface"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "findings_by_severity": {
+      "blocker": 1,
+      "major": 2,
+      "minor": 2,
+      "info": 3
+    },
+    "probes_written": 3,
+    "probe_cases_executed": 61,
+    "tests_run": "63 pass / 0 fail / 298 expect() across 5 committed test files",
+    "file_hash_drift": "none (16 files, start == end, including the 3 owned by concurrent workers)",
+    "stage_1_passed": false,
+    "stage_2_performed": false
+  },
+  "timestamp_utc": "2026-09-06T15:45:11.297Z"
+}

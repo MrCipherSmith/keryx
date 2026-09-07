@@ -1,0 +1,102 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T21",
+  "status": "DONE",
+  "summary": "Independently re-verified all four T16-final-review findings are genuinely closed by T20 and that closing them changed nothing else. Self-enumerated all four emitTerminalState call sites (agent.ts:1235/1517/1668/1684) and wrote a new assertion-bearing probe (T21-terminal-reason-probe.ts) proving the no-progress stop now reports \"no_progress\" (not \"budget_exhausted\") while the round-budget, tool-call-budget, and ask_user stops still report their own distinct reasons -- the preserved T16-final C11 case only recorded this without asserting it. Verified the TerminalStateReason union widening breaks no consumer: exactly 3 files reference the type, no exhaustive switch or persisted-value comparison exists anywhere in src/, and sac/catch-up.ts's readTerminalState does a blind unvalidated JSON.parse cast, so an older-build value still reads correctly. Proved the new regression genuinely depends on the production change by copying src/ into a scratch directory outside the working tree, reverting only the one production line there, and running the exact unmodified committed test against that copy -- it fails with Expected \"no_progress\" / Received \"budget_exhausted\", while the three untouched genuine-reason paths still pass. Independently traced every return/continue exit from the runAgentTurnCore for(;;) loop body (abort/cancel, reset, no-progress, entry-guard stop) to confirm the deleted trailing round-ceiling guard was genuinely dead, rather than accepting the stated reasoning. Reran both preserved probe files unchanged (15/15 pass), the focused 3-file suite (111 pass/0 fail), both TypeScript targets (exit 0), and targeted ESLint (clean). No new blocker, major, or minor finding.",
+  "summary_markdown": "All four `T16-final-review.md` findings are confirmed genuinely closed, with independent, self-executed evidence rather than the implementer's word. **F-001 (major)**: wrote a new hard-assertion probe (`T21-terminal-reason-probe.ts`) proving the unattended no-progress stop now emits `TerminalState.reason=\"no_progress\"` (not `\"budget_exhausted\"`) while 16/20 rounds and 47/50 calls remain unspent -- the preserved `C11` case only *recorded* this, it never asserted it. All four `emitTerminalState` call sites were re-enumerated directly (not trusted from T20's count) and the other three (round-budget, tool-call-budget, `ask_user`) confirmed still correct by dedicated probe cases. **Union widening**: `TerminalStateReason` has exactly 3 references in `src/`, no exhaustive switch/persisted comparison exists anywhere, and the one real disk-persistence consumer (`sac/catch-up.ts`) does a blind unvalidated `JSON.parse` cast -- an older-build value reads through untouched. **Regression genuinely depends on the fix**: copied `src/` into a scratch directory OUTSIDE the working tree, reverted ONLY the one production line there, and ran the *exact, byte-for-byte unmodified* committed regression against that copy -- it fails (`Expected: \"no_progress\" / Received: \"budget_exhausted\"`), while the three untouched paths (F-002/F-003 doc fixes don't affect behavior; the other three terminal reasons) stay green. **F-004**: traced every `return`/`continue` exit from the loop body myself (abort, cancel, reset, no-progress) rather than accepting the dead-code claim -- confirmed the deleted trailing guard's only reachable position (a successful round falling through) is re-caught by the entry guard on the very next iteration. Verification: both preserved probe files 15/15 pass unchanged, focused suite 111 pass/0 fail, both TypeScript targets exit 0, targeted ESLint clean on all 4 T20-changed files. Stage 2 (code quality): no findings.",
+  "acceptance": [
+    {
+      "criterion": "AC3 (M10): offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds; a stop no budget caused is not reported as a budget stop.",
+      "status": "met",
+      "evidence": "T21-terminal-reason-probe.ts, case T21A: unattended no-progress stop with maxRounds=20/maxToolCalls=50 both far from exhausted (4 requests, 3 invocations) reports finishReason=\"no-progress\" and terminalStateReasons=[\"no_progress\"], hard-asserted pass:true. Cases T21B/T21C/T21D independently confirm the genuine round-budget, tool-call-budget, and ask_user stops still report budget_exhausted / tool_call_budget_exhausted / ask_user_unanswerable respectively. Raw .metaproject/data/gdctx/raw/2026-09-06T13-49-15-484Z_run.log, sha256 c9136d5de451ee769388cbda8b21210499056b9564ed43378eca21abc5cfb8ec."
+    },
+    {
+      "criterion": "AC6: no unresolved blocker, major or minor finding remains from the final independent review; each of its four findings is closed by evidence executed by this review itself.",
+      "status": "met",
+      "evidence": "T21-review.md's Stage 1 table: 7/7 rows MET (F-001..F-004, the union widening, the scratch-copy revert proof, and behavior preservation), each backed by a self-executed probe, source read, or test run with a cited raw log and SHA-256. Zero new findings produced (findings: [])."
+    },
+    {
+      "criterion": "The correction is behavior-preserving everywhere else: the reviewer's fifteen probe cases, the focused agent, budget and child suites, both TypeScript targets and targeted lint all pass, and the union widening breaks no consumer.",
+      "status": "met",
+      "evidence": "T16-final-core-budget-probe.ts (unchanged): 11/11 pass, raw .../2026-09-06T13-47-37-517Z_run.log. T16-final-child-budget-probe.ts (unchanged): 4/4 pass, raw .../2026-09-06T13-47-39-134Z_run.log. bun test on agent.test.ts + agent-tool-call-budget.test.ts + spawn-subagent-tool.test.ts: 111 pass/0 fail/452 assertions, raw .../2026-09-06T13-50-05-811Z_run.log. bun run typecheck and typecheck:scripts: exit 0 each, raw .../2026-09-06T13-50-26-652Z_run.log and .../2026-09-06T13-50-31-986Z_run.log. bunx eslint on all 4 T20-changed files: clean, raw .../2026-09-06T13-50-42-431Z_run.log. TerminalStateReason consumer check: exactly 3 referencing files, no exhaustive switch, blind-cast persistence path confirmed safe for an older-build value, raw .../2026-09-06T13-46-24-613Z_rg.log and .../2026-09-06T13-46-45-076Z_rg.log."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent Stage 1/Stage 2 review of T20's closure of T16-final-review's four findings, with a scratch-copy revert experiment proving the regression's dependency on the production change.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-terminal-reason-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New assertion-bearing probe (4 cases) covering all four emitTerminalState reasons; dual-mode via T21_AGENT_MODULE_URL to run against either the real working tree or a scratch revert copy.",
+      "hash": null
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-57-791Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The exact unmodified committed F-001 regression run against a scratch copy with only the production line reverted: fails as required, proving genuine dependency on the fix.",
+      "hash": "7935b55c832c3b235da58253be69c65ede7a6985a4ae3659864653df97daee83"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-15-484Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T21-terminal-reason-probe.ts against the real working tree: all 4 cases pass.",
+      "hash": "c9136d5de451ee769388cbda8b21210499056b9564ed43378eca21abc5cfb8ec"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-50-05-811Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Focused 3-file suite against the real working tree: 111 pass / 0 fail, 452 assertions.",
+      "hash": "1643a42ccde257eb7a83b84c38764c3ec2217d9f91230f24336dba29fbfb8b9b"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-review.md",
+      "change": "created independent review"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-result.json",
+      "change": "created subagent result"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-terminal-reason-probe.ts",
+      "change": "created new assertion-bearing probe script"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "findings_closed_verified": 4,
+    "new_findings": 0,
+    "core_probe_cases_passing": 11,
+    "core_probe_cases_total": 11,
+    "child_probe_cases_passing": 4,
+    "child_probe_cases_total": 4,
+    "own_probe_cases_passing_real_tree": 4,
+    "own_probe_cases_total": 4,
+    "own_probe_cases_passing_reverted_scratch": 3,
+    "focused_tests_passing": 111,
+    "focused_tests_failing": 0,
+    "focused_assertions": 452,
+    "typecheck_exit_code": 0,
+    "scripts_typecheck_exit_code": 0,
+    "eslint_exit_code": 0,
+    "committed_regression_fails_on_scratch_revert": true
+  },
+  "timestamp_utc": "2026-09-06T13:53:00Z"
+}

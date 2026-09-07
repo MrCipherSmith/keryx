@@ -1,0 +1,2493 @@
+{
+  "recordedAt": "2026-09-06T12:56:32.547491+00:00",
+  "reason": "User requested stop and handoff",
+  "branch": "codex/agent-first-core",
+  "head": "0bc6418fa1a038f8ec909cf949fecba077acf9a4",
+  "agentsRunning": false,
+  "flows": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/flow.json",
+      "state": {
+        "schemaVersion": 2,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "232",
+        "slug": "agent-first-core-phase-0",
+        "title": "Agent-first core phase 0: routing lifecycle and benchmark correctness",
+        "status": "in-progress",
+        "createdAt": "2026-09-06T10:39:45.467Z",
+        "updatedAt": "2026-09-06T12:53:19.705Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": "sha256:670a296698d1a00c29c0de538a55b27a05f14838bdcfdbcabef1ce80a3009ee7",
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Current source baseline, graph/wiki/memory/testing and spec mapped in context.md; lane-specific context validated by test workers"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "skipped",
+            "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "skipped",
+            "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "skipped",
+            "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+          },
+          {
+            "id": "T5",
+            "title": "M01 routing lifecycle RED regressions",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:43:02.089Z",
+                  "outcome": "started",
+                  "detail": "232-T5 tests-creator RED"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "3 black-box RED cases reproduced; source typecheck passes; T5 immutable evidence and valid worker result accepted"
+          },
+          {
+            "id": "T6",
+            "title": "M10 budget stress and scripts RED regressions",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:43:02.257Z",
+                  "outcome": "started",
+                  "detail": "232-T6 tests-creator RED"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "7 offline RED cases reproduce ignored call cap, missing stress resolver, port validation and scripts target; 13 baseline script diagnostics classified"
+          },
+          {
+            "id": "T7",
+            "title": "M01 shared routing writer implementation",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T5"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:52:35.111Z",
+                  "outcome": "started",
+                  "detail": "232-T7 task-implementer after T5 RED"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "M01 lane GREEN: 57 focused cases and typecheck pass; shared M10 RED plus unavailable required ESLint remain explicit integration concerns"
+          },
+          {
+            "id": "T8",
+            "title": "M10 effective budgets and script fixes",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T6"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:56:47.721Z",
+                  "outcome": "started",
+                  "detail": "232-T8 task-implementer after T6 RED"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Parent accepts bounded M10 implementation: focused 11/0 and type targets pass. Integration remains open for two reproduced unowned defects; reported health PASS is not global evidence because required ESLint is skipped."
+          },
+          {
+            "id": "T9",
+            "title": "Phase 0 integration and code-verifier gates",
+            "kind": "verify",
+            "status": "todo",
+            "dependsOn": [
+              "T7",
+              "T8",
+              "T13",
+              "T17",
+              "T18",
+              "T19"
+            ],
+            "attempts": {
+              "count": 2,
+              "log": [
+                {
+                  "at": "2026-09-06T11:18:44.669Z",
+                  "outcome": "started",
+                  "detail": "Integrated verifier after both M01/M10 implementations and bounded bootstrap review. Required ESLint unavailable remains explicit; no false global PASS."
+                },
+                {
+                  "at": "2026-09-06T11:34:18.055Z",
+                  "outcome": "blocked",
+                  "detail": "Integrated check completed: TS pass, 6843 pass/18skip/1 resolved schema mirror failure. Required ESLint unavailable => INCOMPLETE; HTTP snapshot defect under separate corrected review. Recheck quality after prerequisites, no repeated full run now."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T10",
+            "title": "Phase 0 independent review and fixes",
+            "kind": "review",
+            "status": "todo",
+            "dependsOn": [
+              "T9",
+              "T15",
+              "T16"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T11",
+            "title": "Phase 0 delivery evidence and remaining scope",
+            "kind": "docs",
+            "status": "todo",
+            "dependsOn": [
+              "T10"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T12",
+            "title": "Allow description-based flow workers without a fabricated GitHub issue number",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T14"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:50:13.192Z",
+                  "outcome": "started",
+                  "detail": "Minimal bootstrap schema/prose repair after verified T14 RED; no fabricated issue"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Optional issue contract repair implemented; 27 regressions pass and source CLI accepts genuine description input; independent gate remains T13"
+          },
+          {
+            "id": "T13",
+            "title": "Verify issue-free worker contract and existing issue compatibility",
+            "kind": "verify",
+            "status": "done",
+            "dependsOn": [
+              "T12"
+            ],
+            "attempts": {
+              "count": 3,
+              "log": [
+                {
+                  "at": "2026-09-06T11:06:47.707Z",
+                  "outcome": "started",
+                  "detail": "232-T13 independent code-verifier for bootstrap compatibility"
+                },
+                {
+                  "at": "2026-09-06T11:14:07.938Z",
+                  "outcome": "failed",
+                  "detail": "Independent verifier found unconditional issue references in all task-implementer prose builds; runtime contract tests passed. Repair prose and rerun bounded verification."
+                },
+                {
+                  "at": "2026-09-06T11:14:08.241Z",
+                  "outcome": "started",
+                  "detail": "Attempt 2: repaired all ten worker builds at the four reported issue-reference sites; request independent prose and contract recheck."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Independent second execution PASS: 33/0; four prose sites across ten builds corrected. Initial failure retained; installed core contract additionally synchronized after integration finding."
+          },
+          {
+            "id": "T14",
+            "title": "RED contract fixtures for description-based implementation dispatch",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:47:35.362Z",
+                  "outcome": "started",
+                  "detail": "232-T14 tests-creator bootstrap contract regression"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Parent executed tests-creator fallback after agent thread limit; RED 2 failures for missing issue_number and 6 controls pass; ctx evidence 2026-09-06T10-49-16-554Z_run"
+          },
+          {
+            "id": "T15",
+            "title": "Independent M01 routing spec and logic review",
+            "kind": "review",
+            "status": "done",
+            "dependsOn": [
+              "T7"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:20:02.713Z",
+                  "outcome": "started",
+                  "detail": "M10 author independently reviews M01; no self-review. Stage 1 spec gate before code quality."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Independent M01 Stage1/2 PASS, 57 tests and concurrency/second-write recovery probes; zero blocker/major/minor findings. T15-result.json."
+          },
+          {
+            "id": "T16",
+            "title": "Independent M10 budget and scripts spec and logic review",
+            "kind": "review",
+            "status": "todo",
+            "dependsOn": [
+              "T8",
+              "T19"
+            ],
+            "attempts": {
+              "count": 6,
+              "log": [
+                {
+                  "at": "2026-09-06T11:34:17.910Z",
+                  "outcome": "started",
+                  "detail": "Independent M10 review by M01 author; own M01 excluded, stage1 AC3-5 before quality."
+                },
+                {
+                  "at": "2026-09-06T11:50:27.645Z",
+                  "outcome": "failed",
+                  "detail": "Stage1 AC3 blocker: child max_tool_calls still mapped to maxRounds; reproduction invokes 2 tools for cap1. Root adds runtime regression and fixes child mapping before independent recheck."
+                },
+                {
+                  "at": "2026-09-06T12:08:10.157Z",
+                  "outcome": "started",
+                  "detail": "Recheck after root corrected max_tool_calls child wiring, independent max_rounds and stress status claims; 36 focused tests and strict scripts typecheck pass."
+                },
+                {
+                  "at": "2026-09-06T12:18:18.385Z",
+                  "outcome": "failed",
+                  "detail": "Independent recheck: max_rounds1 produces2 tool-bearing rounds plus3rd wrap-up provider request; original call cap blocker fixed, new strict round bound violation remains."
+                },
+                {
+                  "at": "2026-09-06T12:52:11.525Z",
+                  "outcome": "started",
+                  "detail": "Final review reassigned to independent architecture worker; prior reviewer authored T19 fix."
+                },
+                {
+                  "at": "2026-09-06T12:53:19.704Z",
+                  "outcome": "blocked",
+                  "detail": "User pause for handoff. Final dispatch JSON validated and start logged, but architecture worker was NOT actually invoked. Independent final review remains pending."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T17",
+            "title": "Install and configure the required ESLint quality prerequisite",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T8"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:42:33.269Z",
+                  "outcome": "started",
+                  "detail": "Root owns package/lock/config only; introduce required ESLint with TypeScript recommended baseline and inspect real findings before accepting quality."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Required ESLint installed/configured; full lint and both TypeScript projects now pass. Scoped128 tests pass; integrated verification/review remain T9/T10."
+          },
+          {
+            "id": "T18",
+            "title": "Resolve legacy lint findings without changing behavior",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:49:40.613Z",
+                  "outcome": "started",
+                  "detail": "Lint worker owns explicit manifest excluding active health/containment/budget/security lanes; no broad fix or suppression."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "146 lint findings resolved across bounded 90-file manifest; targeted lint clean and 350 focused tests pass. Remaining root-lane lint and aggregate verification are separate tasks."
+          },
+          {
+            "id": "T19",
+            "title": "Enforce actual model round caps including child and wrap-up requests",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T8"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:18:19.125Z",
+                  "outcome": "started",
+                  "detail": "Assign original round-cap reviewer as implementer; independent reviewer will change after fix."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Strict inclusive model round cap implemented; original probe1request1call;129 focused tests, both TypeScript projects and scoped lint pass. Independent reviewer must change after authoring fix."
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:39:45.467Z",
+            "event": "created"
+          },
+          {
+            "at": "2026-09-06T10:42:09.143Z",
+            "event": "task-done",
+            "detail": "T2: Implement per plan"
+          },
+          {
+            "at": "2026-09-06T10:42:09.232Z",
+            "event": "task-done",
+            "detail": "T3: Add/adjust tests and make them pass"
+          },
+          {
+            "at": "2026-09-06T10:42:09.317Z",
+            "event": "task-done",
+            "detail": "T4: Self-review and prepare draft PR"
+          },
+          {
+            "at": "2026-09-06T10:42:09.405Z",
+            "event": "task-added",
+            "detail": "T5: M01 routing lifecycle RED regressions"
+          },
+          {
+            "at": "2026-09-06T10:42:09.491Z",
+            "event": "task-added",
+            "detail": "T6: M10 budget stress and scripts RED regressions"
+          },
+          {
+            "at": "2026-09-06T10:42:09.583Z",
+            "event": "task-added",
+            "detail": "T7: M01 shared routing writer implementation"
+          },
+          {
+            "at": "2026-09-06T10:42:09.674Z",
+            "event": "task-added",
+            "detail": "T8: M10 effective budgets and script fixes"
+          },
+          {
+            "at": "2026-09-06T10:42:09.760Z",
+            "event": "task-added",
+            "detail": "T9: Phase 0 integration and code-verifier gates"
+          },
+          {
+            "at": "2026-09-06T10:42:09.846Z",
+            "event": "task-added",
+            "detail": "T10: Phase 0 independent review and fixes"
+          },
+          {
+            "at": "2026-09-06T10:42:09.933Z",
+            "event": "task-added",
+            "detail": "T11: Phase 0 delivery evidence and remaining scope"
+          },
+          {
+            "at": "2026-09-06T10:42:10.026Z",
+            "event": "task-done",
+            "detail": "T1: Collect remaining context"
+          },
+          {
+            "at": "2026-09-06T10:43:01.605Z",
+            "event": "frozen",
+            "detail": "6 criteria; checksum recorded"
+          },
+          {
+            "at": "2026-09-06T10:43:01.755Z",
+            "event": "started"
+          },
+          {
+            "at": "2026-09-06T10:43:02.089Z",
+            "event": "task-attempt",
+            "detail": "T5: started (attempt 1) — 232-T5 tests-creator RED"
+          },
+          {
+            "at": "2026-09-06T10:43:02.257Z",
+            "event": "task-attempt",
+            "detail": "T6: started (attempt 1) — 232-T6 tests-creator RED"
+          },
+          {
+            "at": "2026-09-06T10:46:04.429Z",
+            "event": "task-added",
+            "detail": "T12: Allow description-based flow workers without a fabricated GitHub issue number"
+          },
+          {
+            "at": "2026-09-06T10:46:04.626Z",
+            "event": "task-added",
+            "detail": "T13: Verify issue-free worker contract and existing issue compatibility"
+          },
+          {
+            "at": "2026-09-06T10:46:04.808Z",
+            "event": "task-depends-set",
+            "detail": "T9: dependsOn T7, T8, T13 (was T7, T8) — Include orchestrator contract compatibility gate before integration acceptance"
+          },
+          {
+            "at": "2026-09-06T10:47:34.837Z",
+            "event": "task-added",
+            "detail": "T14: RED contract fixtures for description-based implementation dispatch"
+          },
+          {
+            "at": "2026-09-06T10:47:35.000Z",
+            "event": "task-depends-set",
+            "detail": "T12: dependsOn T14 (was empty) — TDD regression must fail before issue-free contract fix"
+          },
+          {
+            "at": "2026-09-06T10:47:35.363Z",
+            "event": "task-attempt",
+            "detail": "T14: started (attempt 1) — 232-T14 tests-creator bootstrap contract regression"
+          },
+          {
+            "at": "2026-09-06T10:50:12.814Z",
+            "event": "task-done",
+            "detail": "T14: RED contract fixtures for description-based implementation dispatch"
+          },
+          {
+            "at": "2026-09-06T10:50:13.192Z",
+            "event": "task-attempt",
+            "detail": "T12: started (attempt 1) — Minimal bootstrap schema/prose repair after verified T14 RED; no fabricated issue"
+          },
+          {
+            "at": "2026-09-06T10:52:34.499Z",
+            "event": "task-done",
+            "detail": "T5: M01 routing lifecycle RED regressions"
+          },
+          {
+            "at": "2026-09-06T10:52:34.681Z",
+            "event": "task-done",
+            "detail": "T12: Allow description-based flow workers without a fabricated GitHub issue number"
+          },
+          {
+            "at": "2026-09-06T10:52:35.111Z",
+            "event": "task-attempt",
+            "detail": "T7: started (attempt 1) — 232-T7 task-implementer after T5 RED"
+          },
+          {
+            "at": "2026-09-06T10:56:47.213Z",
+            "event": "task-done",
+            "detail": "T6: M10 budget stress and scripts RED regressions"
+          },
+          {
+            "at": "2026-09-06T10:56:47.721Z",
+            "event": "task-attempt",
+            "detail": "T8: started (attempt 1) — 232-T8 task-implementer after T6 RED"
+          },
+          {
+            "at": "2026-09-06T11:06:47.358Z",
+            "event": "task-done",
+            "detail": "T7: M01 shared routing writer implementation"
+          },
+          {
+            "at": "2026-09-06T11:06:47.707Z",
+            "event": "task-attempt",
+            "detail": "T13: started (attempt 1) — 232-T13 independent code-verifier for bootstrap compatibility"
+          },
+          {
+            "at": "2026-09-06T11:14:07.938Z",
+            "event": "task-attempt",
+            "detail": "T13: failed (attempt 2) — Independent verifier found unconditional issue references in all task-implementer prose builds; runtime contract tests passed. Repair prose and rerun bounded verification."
+          },
+          {
+            "at": "2026-09-06T11:14:08.241Z",
+            "event": "task-attempt",
+            "detail": "T13: started (attempt 3) — Attempt 2: repaired all ten worker builds at the four reported issue-reference sites; request independent prose and contract recheck."
+          },
+          {
+            "at": "2026-09-06T11:18:44.362Z",
+            "event": "task-done",
+            "detail": "T8: M10 effective budgets and script fixes"
+          },
+          {
+            "at": "2026-09-06T11:18:44.506Z",
+            "event": "task-done",
+            "detail": "T13: Verify issue-free worker contract and existing issue compatibility"
+          },
+          {
+            "at": "2026-09-06T11:18:44.669Z",
+            "event": "task-attempt",
+            "detail": "T9: started (attempt 1) — Integrated verifier after both M01/M10 implementations and bounded bootstrap review. Required ESLint unavailable remains explicit; no false global PASS."
+          },
+          {
+            "at": "2026-09-06T11:20:02.220Z",
+            "event": "task-added",
+            "detail": "T15: Independent M01 routing spec and logic review"
+          },
+          {
+            "at": "2026-09-06T11:20:02.393Z",
+            "event": "task-added",
+            "detail": "T16: Independent M10 budget and scripts spec and logic review"
+          },
+          {
+            "at": "2026-09-06T11:20:02.553Z",
+            "event": "task-depends-set",
+            "detail": "T10: dependsOn T9, T15, T16 (was T9) — Parallel independent reviews per disjoint implementation lane; aggregate acceptance waits for verifier and both reviews."
+          },
+          {
+            "at": "2026-09-06T11:20:02.714Z",
+            "event": "task-attempt",
+            "detail": "T15: started (attempt 1) — M10 author independently reviews M01; no self-review. Stage 1 spec gate before code quality."
+          },
+          {
+            "at": "2026-09-06T11:29:44.774Z",
+            "event": "task-done",
+            "detail": "T15: Independent M01 routing spec and logic review"
+          },
+          {
+            "at": "2026-09-06T11:34:17.910Z",
+            "event": "task-attempt",
+            "detail": "T16: started (attempt 1) — Independent M10 review by M01 author; own M01 excluded, stage1 AC3-5 before quality."
+          },
+          {
+            "at": "2026-09-06T11:34:18.055Z",
+            "event": "task-attempt",
+            "detail": "T9: blocked (attempt 2) — Integrated check completed: TS pass, 6843 pass/18skip/1 resolved schema mirror failure. Required ESLint unavailable => INCOMPLETE; HTTP snapshot defect under separate corrected review. Recheck quality after prerequisites, no repeated full run now."
+          },
+          {
+            "at": "2026-09-06T11:42:32.936Z",
+            "event": "task-added",
+            "detail": "T17: Install and configure the required ESLint quality prerequisite"
+          },
+          {
+            "at": "2026-09-06T11:42:33.113Z",
+            "event": "task-depends-set",
+            "detail": "T9: dependsOn T7, T8, T13, T17 (was T7, T8, T13) — Required ESLint cannot run until a real linter/configuration is installed; retain required policy, make missing prerequisite explicit."
+          },
+          {
+            "at": "2026-09-06T11:42:33.269Z",
+            "event": "task-attempt",
+            "detail": "T17: started (attempt 1) — Root owns package/lock/config only; introduce required ESLint with TypeScript recommended baseline and inspect real findings before accepting quality."
+          },
+          {
+            "at": "2026-09-06T11:49:39.909Z",
+            "event": "task-added",
+            "detail": "T18: Resolve legacy lint findings without changing behavior"
+          },
+          {
+            "at": "2026-09-06T11:49:40.058Z",
+            "event": "task-depends-set",
+            "detail": "T9: dependsOn T7, T8, T13, T17, T18 (was T7, T8, T13, T17) — New required linter exposes existing findings; explicit remediation task prevents skipped/failed lint being treated as PASS."
+          },
+          {
+            "at": "2026-09-06T11:49:40.613Z",
+            "event": "task-attempt",
+            "detail": "T18: started (attempt 1) — Lint worker owns explicit manifest excluding active health/containment/budget/security lanes; no broad fix or suppression."
+          },
+          {
+            "at": "2026-09-06T11:50:27.646Z",
+            "event": "task-attempt",
+            "detail": "T16: failed (attempt 2) — Stage1 AC3 blocker: child max_tool_calls still mapped to maxRounds; reproduction invokes 2 tools for cap1. Root adds runtime regression and fixes child mapping before independent recheck."
+          },
+          {
+            "at": "2026-09-06T12:08:09.978Z",
+            "event": "task-done",
+            "detail": "T18: Resolve legacy lint findings without changing behavior"
+          },
+          {
+            "at": "2026-09-06T12:08:10.157Z",
+            "event": "task-attempt",
+            "detail": "T16: started (attempt 3) — Recheck after root corrected max_tool_calls child wiring, independent max_rounds and stress status claims; 36 focused tests and strict scripts typecheck pass."
+          },
+          {
+            "at": "2026-09-06T12:11:27.538Z",
+            "event": "task-done",
+            "detail": "T17: Install and configure the required ESLint quality prerequisite"
+          },
+          {
+            "at": "2026-09-06T12:18:18.053Z",
+            "event": "task-added",
+            "detail": "T19: Enforce actual model round caps including child and wrap-up requests"
+          },
+          {
+            "at": "2026-09-06T12:18:18.208Z",
+            "event": "task-depends-set",
+            "detail": "T16: dependsOn T8, T19 (was T8) — Original tool invocation cap fixed; independent recheck found N+1 rounds and unbudgeted wrap-up under max_rounds."
+          },
+          {
+            "at": "2026-09-06T12:18:18.385Z",
+            "event": "task-attempt",
+            "detail": "T16: failed (attempt 4) — Independent recheck: max_rounds1 produces2 tool-bearing rounds plus3rd wrap-up provider request; original call cap blocker fixed, new strict round bound violation remains."
+          },
+          {
+            "at": "2026-09-06T12:18:19.125Z",
+            "event": "task-attempt",
+            "detail": "T19: started (attempt 1) — Assign original round-cap reviewer as implementer; independent reviewer will change after fix."
+          },
+          {
+            "at": "2026-09-06T12:34:48.018Z",
+            "event": "task-done",
+            "detail": "T19: Enforce actual model round caps including child and wrap-up requests"
+          },
+          {
+            "at": "2026-09-06T12:38:42.218Z",
+            "event": "task-depends-set",
+            "detail": "T9: dependsOn T7, T8, T13, T17, T18, T19 (was T7, T8, T13, T17, T18) — Current integration gate must include the strict model-round correction."
+          },
+          {
+            "at": "2026-09-06T12:52:11.526Z",
+            "event": "task-attempt",
+            "detail": "T16: started (attempt 5) — Final review reassigned to independent architecture worker; prior reviewer authored T19 fix."
+          },
+          {
+            "at": "2026-09-06T12:53:19.705Z",
+            "event": "task-attempt",
+            "detail": "T16: blocked (attempt 6) — User pause for handoff. Final dispatch JSON validated and start logged, but architecture worker was NOT actually invoked. Independent final review remains pending."
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/flow.json",
+      "state": {
+        "schemaVersion": 2,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "233",
+        "slug": "agent-first-core-phase-1",
+        "title": "Agent-first core phase 1: Interface trust: containment redaction HTTP health scan and Shell parser",
+        "status": "in-progress",
+        "createdAt": "2026-09-06T10:44:07.081Z",
+        "updatedAt": "2026-09-06T12:53:19.401Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": "sha256:e5e8b0cae543191f727b19d1924494ae1367748813de9a6580ba02c6ac2ba3dc",
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Parent mapped policy/AC and current MCP/resources/HTTP/health/Shell source inventory; lane workers refine before RED"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "skipped",
+            "dispositionReason": "Replaced by five bounded per-owner RED and implementation lanes"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [
+              "T6",
+              "T8",
+              "T10",
+              "T12",
+              "T14"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [
+              "T3",
+              "T15",
+              "T16",
+              "T17",
+              "T23",
+              "T24"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T5",
+            "title": "Containment across MCP and harness readers RED",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:36:09.417Z",
+                  "outcome": "started",
+                  "detail": "Containment tests-creator worker starts independent temp fixtures for MCP/wiki/skills owner roots; no production mutation until RED."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Containment RED: 2 pass/13 fail across MCP resource, harness wiki/skills and shared secure-reader fixtures; tests/artifacts only, schema/security validation passed."
+          },
+          {
+            "id": "T6",
+            "title": "Containment across MCP and harness readers implementation",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T5"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:48:01.345Z",
+                  "outcome": "started",
+                  "detail": "Containment implementation starts after RED, shared descriptor-read seam consumed by MCP/wiki/skills; SAC policy must remain intact."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Descriptor-backed containment implementation delivered; 87 focused tests and typecheck/build pass. Independent review remains required."
+          },
+          {
+            "id": "T7",
+            "title": "Structural redaction and recursive scan coverage RED",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:01:34.292Z",
+                  "outcome": "started",
+                  "detail": "Dispatch tests-creator for structural redaction and recursive scan; disjoint new test files, synthetic local fixtures only."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "8 new runtime tests reproduce structural redaction/public-link/recursive-scan gaps; all8 intentional RED, lint and result contract checks pass."
+          },
+          {
+            "id": "T8",
+            "title": "Structural redaction and recursive scan coverage implementation",
+            "kind": "implement",
+            "status": "todo",
+            "dependsOn": [
+              "T19",
+              "T20",
+              "T22"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T9",
+            "title": "Loopback-only MCP HTTP transport RED",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T10:58:40.329Z",
+                  "outcome": "started",
+                  "detail": "Parent tests-creator lane for independent HTTP boundary while phase0 workers implement"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "13 offline RED cases reproduce host/port validation and verified hostname resolution gaps; evidence 2026-09-06T11-00-26-702Z_run"
+          },
+          {
+            "id": "T10",
+            "title": "Loopback-only MCP HTTP transport implementation",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T9"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:01:27.076Z",
+                  "outcome": "started",
+                  "detail": "Parent independent MCP HTTP lane GREEN; verified against frozen AC-03 and HTTP spec"
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "HTTP loopback/hostname and Host-Origin boundary implemented; 34 targeted MCP cases pass including real local bind/request and occupied-port failure; independent review remains required"
+          },
+          {
+            "id": "T11",
+            "title": "Health parser and FAIL INCOMPLETE PASS fold RED",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:30:52.114Z",
+                  "outcome": "started",
+                  "detail": "Health tests-creator worker write-go after full snapshot finished; synthetic health/Bun/npm fixtures, scoped RED only."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "RED 0 pass/8 fail against real health runAdapter/CLI/service using synthetic local executables; root typecheck still passes. T11 result validated."
+          },
+          {
+            "id": "T12",
+            "title": "Health parser and FAIL INCOMPLETE PASS fold implementation",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T11"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:40:29.737Z",
+                  "outcome": "started",
+                  "detail": "Health implementer dispatched after RED 8 failures; retain required-source policy and vulnerability thresholds, no dependency changes."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Health implementation delivered: 12 focused and 83 health tests pass; targeted lint passes. Independent review and shared port type integration remain required by phase gate."
+          },
+          {
+            "id": "T13",
+            "title": "Pure Shell help and argument validation RED",
+            "kind": "test",
+            "status": "done",
+            "dependsOn": [],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:16:31.139Z",
+                  "outcome": "started",
+                  "detail": "Root bounded tests-creator fallback while both reusable workers are occupied; AFC-18 parser/help regression, exact shell scope, no model calls."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "RED captured: 1 pass, 14 fail; help starts version/UI and parser silently accepts invalid arguments. Evidence gdctx 2026-09-06T11-16-31-546Z_run."
+          },
+          {
+            "id": "T14",
+            "title": "Pure Shell help and argument validation implementation",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T13"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T11:17:27.814Z",
+                  "outcome": "started",
+                  "detail": "Root bounded task-implementer lane for AFC-18; preserve compatible aliases, validate before all startup, independent review pending."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Shell CLI validation implemented; 94 focused tests and real subprocess help/error smoke pass; latest integrated typecheck passes. Independent review pending."
+          },
+          {
+            "id": "T15",
+            "title": "Independent HTTP transport security review",
+            "kind": "review",
+            "status": "done",
+            "dependsOn": [
+              "T10"
+            ],
+            "attempts": {
+              "count": 3,
+              "log": [
+                {
+                  "at": "2026-09-06T11:21:56.572Z",
+                  "outcome": "started",
+                  "detail": "Reused functional worker for independent root HTTP security review; no source ownership conflict."
+                },
+                {
+                  "at": "2026-09-06T11:30:52.295Z",
+                  "outcome": "failed",
+                  "detail": "Independent security review F-001 major: configured arbitrary hostname appears in Host/Origin allowlist, enabling same-origin DNS rebinding. Root fixes guard and adds regression."
+                },
+                {
+                  "at": "2026-09-06T11:31:10.816Z",
+                  "outcome": "started",
+                  "detail": "Second independent security review execution requested after RED reproduction and pinned numeric/localhost-only Host allowlist correction."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Independent security recheck DONE: configured DNS authority bypass fixed, pinned numeric/localhost accepted, 26 focused tests pass; original finding retained."
+          },
+          {
+            "id": "T16",
+            "title": "Independent health completeness and Shell CLI review",
+            "kind": "review",
+            "status": "done",
+            "dependsOn": [
+              "T12",
+              "T14",
+              "T21"
+            ],
+            "attempts": {
+              "count": 3,
+              "log": [
+                {
+                  "at": "2026-09-06T12:06:15.843Z",
+                  "outcome": "started",
+                  "detail": "Independent review of other-author health and Shell CLI implementations."
+                },
+                {
+                  "at": "2026-09-06T12:13:41.795Z",
+                  "outcome": "failed",
+                  "detail": "Independent Stage1 health review F001: malformed nested npm audit values silently skipped, can report clean coverage at rc0; Shell Stage1 passes, Stage2 held."
+                },
+                {
+                  "at": "2026-09-06T12:24:22.584Z",
+                  "outcome": "started",
+                  "detail": "Independent recheck health parser F001 afterT21 and complete Stage2 health/Shell review."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Independent Stage1+Stage2 health/Shell review PASS afterT21;15 health+16Shell focused, prior86allhealth evidence. Original F001 preserved/resolved."
+          },
+          {
+            "id": "T17",
+            "title": "Containment integration race verification",
+            "kind": "verify",
+            "status": "done",
+            "dependsOn": [
+              "T6",
+              "T18"
+            ],
+            "attempts": {
+              "count": 3,
+              "log": [
+                {
+                  "at": "2026-09-06T12:12:37.642Z",
+                  "outcome": "started",
+                  "detail": "Verify owner directory identity survives canonical resolution to descriptor open, including replacement by another real directory."
+                },
+                {
+                  "at": "2026-09-06T12:13:41.548Z",
+                  "outcome": "failed",
+                  "detail": "Owner race probe returned replacement directory data: expected identity lost between canonical resolution and descriptor open. Raw12:12:38-209Z. Must pin pre-resolution/open identity."
+                },
+                {
+                  "at": "2026-09-06T12:24:21.866Z",
+                  "outcome": "started",
+                  "detail": "Root reruns original real-directory replacement probe against identity-pinning fix."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Root original race probe now refuses with CONTAINED_READ_RACE; before/after immutable evidence12:12:38 and12:24:22. Broader independent containment review still pending phase gate."
+          },
+          {
+            "id": "T18",
+            "title": "Fix owner directory replacement race",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T6"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:14:41.114Z",
+                  "outcome": "started",
+                  "detail": "Worker fixes reproduced owner-directory identity loss; regression before fix and focused containment/SAC checks."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Pre-open root/target identity pinning implemented;89 focused tests pass; original race probe now refuses. Independent root verification and review remain required."
+          },
+          {
+            "id": "T19",
+            "title": "Core structural output validation and detector corrections",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T7"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:14:41.269Z",
+                  "outcome": "started",
+                  "detail": "Worker implements pure structural validator/contextual detectors from T7 RED; root owns shared adapters/service."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Core structural validator/detectors implemented;22core tests and14MCP worker checks pass;lint/TS pass. Independent security review pending."
+          },
+          {
+            "id": "T20",
+            "title": "Recursive security scan with explicit file coverage",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T7",
+              "T18"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:30:40.225Z",
+                  "outcome": "started",
+                  "detail": "Recursive scan worker starts after containment identity fix; explicit scope/limits and incomplete coverage with retained findings."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Recursive scanner implemented; 53 focused tests, typecheck, scoped lint and source bundle pass. Independent review and aggregate integration remain open; service.memo expectation tracked separately."
+          },
+          {
+            "id": "T21",
+            "title": "Reject malformed nested audit parser entries",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T12"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:17:16.671Z",
+                  "outcome": "started",
+                  "detail": "Root adds RED cases for nested audit corruption and partial findings before parser repair."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Nested malformed audit repair: 12 focused,86 health tests pass; lint clean; partial P0 finding retained with incomplete coverage. Independent review recheck pending."
+          },
+          {
+            "id": "T22",
+            "title": "Integrate mandatory output validation into MCP and SDK boundaries",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T7"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:23:31.038Z",
+                  "outcome": "started",
+                  "detail": "Root integrates approved T19 pure seam into MCP/guard/service; RED adapter tests12pass5fail before integration; final acceptance waits core implementation."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Root MCP/SDK/guard/persistence integration delivered;56 scoped tests,lint andtypecheck pass. Independent security review and scanner integration pending."
+          },
+          {
+            "id": "T23",
+            "title": "Independent containment and SAC boundary security review",
+            "kind": "review",
+            "status": "done",
+            "dependsOn": [
+              "T6",
+              "T18",
+              "T17",
+              "T25"
+            ],
+            "attempts": {
+              "count": 4,
+              "log": [
+                {
+                  "at": "2026-09-06T12:34:01.242Z",
+                  "outcome": "started",
+                  "detail": "Independent containment/SAC security review by worker who authored neither implementation nor race fix."
+                },
+                {
+                  "at": "2026-09-06T12:41:55.510Z",
+                  "outcome": "blocked",
+                  "detail": "Reviewer turn stopped by automatic content risk filter during authorized local filesystem review; no verdict returned. Narrowing to read-only correctness and existing local fixtures, no new probes."
+                },
+                {
+                  "at": "2026-09-06T12:41:55.661Z",
+                  "outcome": "started",
+                  "detail": "Retry bounded source/existing-test correctness review after automatic reviewer interruption; same authorized local repository, no external actions."
+                },
+                {
+                  "at": "2026-09-06T12:44:27.810Z",
+                  "outcome": "failed",
+                  "detail": "Stage1 finding: SAC wrapper omitted byte bound and regular-file enforcement when using shared descriptor reader; existing bounded fixture accepted8MiB+1."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Original finding preserved; T23-recheck Stage1 and Stage2 PASS after T25, 19 tests and owner race probe."
+          },
+          {
+            "id": "T24",
+            "title": "Independent structural validator and public output security review",
+            "kind": "review",
+            "status": "todo",
+            "dependsOn": [
+              "T19",
+              "T22"
+            ],
+            "attempts": {
+              "count": 2,
+              "log": [
+                {
+                  "at": "2026-09-06T12:34:48.929Z",
+                  "outcome": "started",
+                  "detail": "Independent review of other-author structural validator, root public output and persistence boundaries; scanner review remains separate."
+                },
+                {
+                  "at": "2026-09-06T12:53:18.448Z",
+                  "outcome": "failed",
+                  "detail": "T24 final independent report: four blockers (JSON property names, duplicate serialized members, ref siblings, encoded src/srcset). Stage2 stopped; fixes and recheck required."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T25",
+            "title": "Apply regular-file and byte limits to SAC shared reader",
+            "kind": "implement",
+            "status": "done",
+            "dependsOn": [
+              "T6"
+            ],
+            "attempts": {
+              "count": 1,
+              "log": [
+                {
+                  "at": "2026-09-06T12:44:28.369Z",
+                  "outcome": "started",
+                  "detail": "Root adds local byte-limit and directory-kind regression before tightening SAC wrapper options."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {},
+            "disposition": "completed",
+            "dispositionReason": "Shared byte and regular-file bounds applied; RED/GREEN regression and independent T23 recheck PASS."
+          },
+          {
+            "id": "T26",
+            "title": "Fix independently reproduced structural output boundary defects",
+            "kind": "implement",
+            "status": "todo",
+            "dependsOn": [
+              "T19",
+              "T22"
+            ],
+            "attempts": {
+              "count": 2,
+              "log": [
+                {
+                  "at": "2026-09-06T12:49:19.928Z",
+                  "outcome": "started",
+                  "detail": "Independent T24 Stage1 found three concrete defects; regression-first fix assigned separately from reviewer."
+                },
+                {
+                  "at": "2026-09-06T12:53:18.746Z",
+                  "outcome": "blocked",
+                  "detail": "User explicitly paused all implementation for handoff; worker interrupted. No completion claim; inspect partial artifacts and all four T24 findings before resume."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T27",
+            "title": "Propagate incomplete security checks through strict guards and completion gate",
+            "kind": "implement",
+            "status": "todo",
+            "dependsOn": [
+              "T20"
+            ],
+            "attempts": {
+              "count": 2,
+              "log": [
+                {
+                  "at": "2026-09-06T12:50:47.376Z",
+                  "outcome": "started",
+                  "detail": "Regression-first strict guard handling of new incomplete status."
+                },
+                {
+                  "at": "2026-09-06T12:53:19.123Z",
+                  "outcome": "blocked",
+                  "detail": "User pause for handoff. RED only: guard tests 13 pass/4 fail at12:51:35; production incomplete propagation not yet fixed."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T28",
+            "title": "Independent recursive scan coverage and bounded traversal review",
+            "kind": "review",
+            "status": "todo",
+            "dependsOn": [
+              "T20"
+            ],
+            "attempts": {
+              "count": 2,
+              "log": [
+                {
+                  "at": "2026-09-06T12:50:47.189Z",
+                  "outcome": "started",
+                  "detail": "Independent scanner review after T20 stable; includes missing report and coverage truthfulness."
+                },
+                {
+                  "at": "2026-09-06T12:53:19.401Z",
+                  "outcome": "blocked",
+                  "detail": "User pause for handoff; reviewer interrupted, no scanner acceptance verdict available."
+                }
+              ]
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T29",
+            "title": "Retain config memoization regression under mandatory redaction floor",
+            "kind": "test",
+            "status": "todo",
+            "dependsOn": [
+              "T22"
+            ],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:07.081Z",
+            "event": "created"
+          },
+          {
+            "at": "2026-09-06T10:55:05.238Z",
+            "event": "task-added",
+            "detail": "T5: Containment across MCP and harness readers RED"
+          },
+          {
+            "at": "2026-09-06T10:55:05.338Z",
+            "event": "task-added",
+            "detail": "T6: Containment across MCP and harness readers implementation"
+          },
+          {
+            "at": "2026-09-06T10:55:05.426Z",
+            "event": "task-added",
+            "detail": "T7: Structural redaction and recursive scan coverage RED"
+          },
+          {
+            "at": "2026-09-06T10:55:05.513Z",
+            "event": "task-added",
+            "detail": "T8: Structural redaction and recursive scan coverage implementation"
+          },
+          {
+            "at": "2026-09-06T10:55:05.603Z",
+            "event": "task-added",
+            "detail": "T9: Loopback-only MCP HTTP transport RED"
+          },
+          {
+            "at": "2026-09-06T10:55:05.708Z",
+            "event": "task-added",
+            "detail": "T10: Loopback-only MCP HTTP transport implementation"
+          },
+          {
+            "at": "2026-09-06T10:55:05.800Z",
+            "event": "task-added",
+            "detail": "T11: Health parser and FAIL INCOMPLETE PASS fold RED"
+          },
+          {
+            "at": "2026-09-06T10:55:05.903Z",
+            "event": "task-added",
+            "detail": "T12: Health parser and FAIL INCOMPLETE PASS fold implementation"
+          },
+          {
+            "at": "2026-09-06T10:55:06.010Z",
+            "event": "task-added",
+            "detail": "T13: Pure Shell help and argument validation RED"
+          },
+          {
+            "at": "2026-09-06T10:55:06.100Z",
+            "event": "task-added",
+            "detail": "T14: Pure Shell help and argument validation implementation"
+          },
+          {
+            "at": "2026-09-06T10:55:06.188Z",
+            "event": "task-done",
+            "detail": "T2: Implement per plan"
+          },
+          {
+            "at": "2026-09-06T10:55:06.278Z",
+            "event": "task-depends-set",
+            "detail": "T3: dependsOn T6, T8, T10, T12, T14 (was empty) — Integration gates follow all phase1 implementation lanes"
+          },
+          {
+            "at": "2026-09-06T10:55:06.367Z",
+            "event": "task-depends-set",
+            "detail": "T4: dependsOn T3 (was empty) — Independent review follows current integration evidence"
+          },
+          {
+            "at": "2026-09-06T10:57:31.875Z",
+            "event": "task-done",
+            "detail": "T1: Collect remaining context"
+          },
+          {
+            "at": "2026-09-06T10:57:32.052Z",
+            "event": "frozen",
+            "detail": "8 criteria; checksum recorded"
+          },
+          {
+            "at": "2026-09-06T10:57:32.212Z",
+            "event": "started"
+          },
+          {
+            "at": "2026-09-06T10:58:40.329Z",
+            "event": "task-attempt",
+            "detail": "T9: started (attempt 1) — Parent tests-creator lane for independent HTTP boundary while phase0 workers implement"
+          },
+          {
+            "at": "2026-09-06T11:01:26.914Z",
+            "event": "task-done",
+            "detail": "T9: Loopback-only MCP HTTP transport RED"
+          },
+          {
+            "at": "2026-09-06T11:01:27.076Z",
+            "event": "task-attempt",
+            "detail": "T10: started (attempt 1) — Parent independent MCP HTTP lane GREEN; verified against frozen AC-03 and HTTP spec"
+          },
+          {
+            "at": "2026-09-06T11:08:31.605Z",
+            "event": "task-done",
+            "detail": "T10: Loopback-only MCP HTTP transport implementation"
+          },
+          {
+            "at": "2026-09-06T11:16:31.139Z",
+            "event": "task-attempt",
+            "detail": "T13: started (attempt 1) — Root bounded tests-creator fallback while both reusable workers are occupied; AFC-18 parser/help regression, exact shell scope, no model calls."
+          },
+          {
+            "at": "2026-09-06T11:17:26.968Z",
+            "event": "task-done",
+            "detail": "T13: Pure Shell help and argument validation RED"
+          },
+          {
+            "at": "2026-09-06T11:17:27.814Z",
+            "event": "task-attempt",
+            "detail": "T14: started (attempt 1) — Root bounded task-implementer lane for AFC-18; preserve compatible aliases, validate before all startup, independent review pending."
+          },
+          {
+            "at": "2026-09-06T11:21:34.240Z",
+            "event": "task-added",
+            "detail": "T15: Independent HTTP transport security review"
+          },
+          {
+            "at": "2026-09-06T11:21:56.572Z",
+            "event": "task-attempt",
+            "detail": "T15: started (attempt 1) — Reused functional worker for independent root HTTP security review; no source ownership conflict."
+          },
+          {
+            "at": "2026-09-06T11:30:52.114Z",
+            "event": "task-attempt",
+            "detail": "T11: started (attempt 1) — Health tests-creator worker write-go after full snapshot finished; synthetic health/Bun/npm fixtures, scoped RED only."
+          },
+          {
+            "at": "2026-09-06T11:30:52.296Z",
+            "event": "task-attempt",
+            "detail": "T15: failed (attempt 2) — Independent security review F-001 major: configured arbitrary hostname appears in Host/Origin allowlist, enabling same-origin DNS rebinding. Root fixes guard and adds regression."
+          },
+          {
+            "at": "2026-09-06T11:31:10.816Z",
+            "event": "task-attempt",
+            "detail": "T15: started (attempt 3) — Second independent security review execution requested after RED reproduction and pinned numeric/localhost-only Host allowlist correction."
+          },
+          {
+            "at": "2026-09-06T11:36:08.969Z",
+            "event": "task-done",
+            "detail": "T15: Independent HTTP transport security review"
+          },
+          {
+            "at": "2026-09-06T11:36:09.417Z",
+            "event": "task-attempt",
+            "detail": "T5: started (attempt 1) — Containment tests-creator worker starts independent temp fixtures for MCP/wiki/skills owner roots; no production mutation until RED."
+          },
+          {
+            "at": "2026-09-06T11:40:29.067Z",
+            "event": "task-done",
+            "detail": "T11: Health parser and FAIL INCOMPLETE PASS fold RED"
+          },
+          {
+            "at": "2026-09-06T11:40:29.737Z",
+            "event": "task-attempt",
+            "detail": "T12: started (attempt 1) — Health implementer dispatched after RED 8 failures; retain required-source policy and vulnerability thresholds, no dependency changes."
+          },
+          {
+            "at": "2026-09-06T11:48:00.662Z",
+            "event": "task-done",
+            "detail": "T5: Containment across MCP and harness readers RED"
+          },
+          {
+            "at": "2026-09-06T11:48:01.345Z",
+            "event": "task-attempt",
+            "detail": "T6: started (attempt 1) — Containment implementation starts after RED, shared descriptor-read seam consumed by MCP/wiki/skills; SAC policy must remain intact."
+          },
+          {
+            "at": "2026-09-06T12:00:45.855Z",
+            "event": "task-done",
+            "detail": "T12: Health parser and FAIL INCOMPLETE PASS fold implementation"
+          },
+          {
+            "at": "2026-09-06T12:01:34.292Z",
+            "event": "task-attempt",
+            "detail": "T7: started (attempt 1) — Dispatch tests-creator for structural redaction and recursive scan; disjoint new test files, synthetic local fixtures only."
+          },
+          {
+            "at": "2026-09-06T12:06:14.687Z",
+            "event": "task-done",
+            "detail": "T6: Containment across MCP and harness readers implementation"
+          },
+          {
+            "at": "2026-09-06T12:06:14.884Z",
+            "event": "task-done",
+            "detail": "T14: Pure Shell help and argument validation implementation"
+          },
+          {
+            "at": "2026-09-06T12:06:15.086Z",
+            "event": "task-added",
+            "detail": "T16: Independent health completeness and Shell CLI review"
+          },
+          {
+            "at": "2026-09-06T12:06:15.234Z",
+            "event": "task-depends-set",
+            "detail": "T4: dependsOn T3, T15, T16 (was T3) — Require independent health/Shell review alongside integrated verification and HTTP security review."
+          },
+          {
+            "at": "2026-09-06T12:06:15.843Z",
+            "event": "task-attempt",
+            "detail": "T16: started (attempt 1) — Independent review of other-author health and Shell CLI implementations."
+          },
+          {
+            "at": "2026-09-06T12:12:37.467Z",
+            "event": "task-added",
+            "detail": "T17: Containment integration race verification"
+          },
+          {
+            "at": "2026-09-06T12:12:37.642Z",
+            "event": "task-attempt",
+            "detail": "T17: started (attempt 1) — Verify owner directory identity survives canonical resolution to descriptor open, including replacement by another real directory."
+          },
+          {
+            "at": "2026-09-06T12:13:41.548Z",
+            "event": "task-attempt",
+            "detail": "T17: failed (attempt 2) — Owner race probe returned replacement directory data: expected identity lost between canonical resolution and descriptor open. Raw12:12:38-209Z. Must pin pre-resolution/open identity."
+          },
+          {
+            "at": "2026-09-06T12:13:41.795Z",
+            "event": "task-attempt",
+            "detail": "T16: failed (attempt 2) — Independent Stage1 health review F001: malformed nested npm audit values silently skipped, can report clean coverage at rc0; Shell Stage1 passes, Stage2 held."
+          },
+          {
+            "at": "2026-09-06T12:13:41.958Z",
+            "event": "task-added",
+            "detail": "T18: Fix owner directory replacement race"
+          },
+          {
+            "at": "2026-09-06T12:13:42.242Z",
+            "event": "task-depends-set",
+            "detail": "T17: dependsOn T6, T18 (was T6) — Require owner identity fix before successful race verification."
+          },
+          {
+            "at": "2026-09-06T12:13:42.494Z",
+            "event": "task-depends-set",
+            "detail": "T4: dependsOn T3, T15, T16, T17 (was T3, T15, T16) — Require independent containment race verification in phase acceptance."
+          },
+          {
+            "at": "2026-09-06T12:13:42.727Z",
+            "event": "task-done",
+            "detail": "T7: Structural redaction and recursive scan coverage RED"
+          },
+          {
+            "at": "2026-09-06T12:13:43.404Z",
+            "event": "task-added",
+            "detail": "T19: Core structural output validation and detector corrections"
+          },
+          {
+            "at": "2026-09-06T12:13:43.992Z",
+            "event": "task-added",
+            "detail": "T20: Recursive security scan with explicit file coverage"
+          },
+          {
+            "at": "2026-09-06T12:13:44.871Z",
+            "event": "task-depends-set",
+            "detail": "T8: dependsOn T19, T20 (was T7) — Split security implementation into pure validator/detectors, recursive scanning, then root output-boundary integration."
+          },
+          {
+            "at": "2026-09-06T12:13:45.269Z",
+            "event": "task-added",
+            "detail": "T21: Reject malformed nested audit parser entries"
+          },
+          {
+            "at": "2026-09-06T12:13:45.540Z",
+            "event": "task-depends-set",
+            "detail": "T16: dependsOn T12, T14, T21 (was T12, T14) — Independent health review recheck requires nested audit parser repair."
+          },
+          {
+            "at": "2026-09-06T12:14:41.114Z",
+            "event": "task-attempt",
+            "detail": "T18: started (attempt 1) — Worker fixes reproduced owner-directory identity loss; regression before fix and focused containment/SAC checks."
+          },
+          {
+            "at": "2026-09-06T12:14:41.269Z",
+            "event": "task-attempt",
+            "detail": "T19: started (attempt 1) — Worker implements pure structural validator/contextual detectors from T7 RED; root owns shared adapters/service."
+          },
+          {
+            "at": "2026-09-06T12:17:16.671Z",
+            "event": "task-attempt",
+            "detail": "T21: started (attempt 1) — Root adds RED cases for nested audit corruption and partial findings before parser repair."
+          },
+          {
+            "at": "2026-09-06T12:21:14.582Z",
+            "event": "task-done",
+            "detail": "T21: Reject malformed nested audit parser entries"
+          },
+          {
+            "at": "2026-09-06T12:23:30.700Z",
+            "event": "task-added",
+            "detail": "T22: Integrate mandatory output validation into MCP and SDK boundaries"
+          },
+          {
+            "at": "2026-09-06T12:23:30.860Z",
+            "event": "task-depends-set",
+            "detail": "T8: dependsOn T19, T20, T22 (was T19, T20) — Acceptance aggregation requires core validator, recursive scan and public output boundary integration."
+          },
+          {
+            "at": "2026-09-06T12:23:31.038Z",
+            "event": "task-attempt",
+            "detail": "T22: started (attempt 1) — Root integrates approved T19 pure seam into MCP/guard/service; RED adapter tests12pass5fail before integration; final acceptance waits core implementation."
+          },
+          {
+            "at": "2026-09-06T12:24:21.639Z",
+            "event": "task-done",
+            "detail": "T18: Fix owner directory replacement race"
+          },
+          {
+            "at": "2026-09-06T12:24:21.866Z",
+            "event": "task-attempt",
+            "detail": "T17: started (attempt 3) — Root reruns original real-directory replacement probe against identity-pinning fix."
+          },
+          {
+            "at": "2026-09-06T12:24:22.584Z",
+            "event": "task-attempt",
+            "detail": "T16: started (attempt 3) — Independent recheck health parser F001 afterT21 and complete Stage2 health/Shell review."
+          },
+          {
+            "at": "2026-09-06T12:25:03.074Z",
+            "event": "task-done",
+            "detail": "T17: Containment integration race verification"
+          },
+          {
+            "at": "2026-09-06T12:30:39.172Z",
+            "event": "task-done",
+            "detail": "T16: Independent health completeness and Shell CLI review"
+          },
+          {
+            "at": "2026-09-06T12:30:40.225Z",
+            "event": "task-attempt",
+            "detail": "T20: started (attempt 1) — Recursive scan worker starts after containment identity fix; explicit scope/limits and incomplete coverage with retained findings."
+          },
+          {
+            "at": "2026-09-06T12:33:59.687Z",
+            "event": "task-done",
+            "detail": "T19: Core structural output validation and detector corrections"
+          },
+          {
+            "at": "2026-09-06T12:33:59.968Z",
+            "event": "task-done",
+            "detail": "T22: Integrate mandatory output validation into MCP and SDK boundaries"
+          },
+          {
+            "at": "2026-09-06T12:34:00.159Z",
+            "event": "task-added",
+            "detail": "T23: Independent containment and SAC boundary security review"
+          },
+          {
+            "at": "2026-09-06T12:34:00.341Z",
+            "event": "task-depends-set",
+            "detail": "T4: dependsOn T3, T15, T16, T17, T23 (was T3, T15, T16, T17) — Require independent containment/SAC review beyond root race probe."
+          },
+          {
+            "at": "2026-09-06T12:34:01.243Z",
+            "event": "task-attempt",
+            "detail": "T23: started (attempt 1) — Independent containment/SAC security review by worker who authored neither implementation nor race fix."
+          },
+          {
+            "at": "2026-09-06T12:34:48.192Z",
+            "event": "task-added",
+            "detail": "T24: Independent structural validator and public output security review"
+          },
+          {
+            "at": "2026-09-06T12:34:48.360Z",
+            "event": "task-depends-set",
+            "detail": "T4: dependsOn T3, T15, T16, T17, T23, T24 (was T3, T15, T16, T17, T23) — Require independent structural output floor and MCP/SDK/persistence review."
+          },
+          {
+            "at": "2026-09-06T12:34:48.929Z",
+            "event": "task-attempt",
+            "detail": "T24: started (attempt 1) — Independent review of other-author structural validator, root public output and persistence boundaries; scanner review remains separate."
+          },
+          {
+            "at": "2026-09-06T12:41:55.510Z",
+            "event": "task-attempt",
+            "detail": "T23: blocked (attempt 2) — Reviewer turn stopped by automatic content risk filter during authorized local filesystem review; no verdict returned. Narrowing to read-only correctness and existing local fixtures, no new probes."
+          },
+          {
+            "at": "2026-09-06T12:41:55.661Z",
+            "event": "task-attempt",
+            "detail": "T23: started (attempt 3) — Retry bounded source/existing-test correctness review after automatic reviewer interruption; same authorized local repository, no external actions."
+          },
+          {
+            "at": "2026-09-06T12:44:27.810Z",
+            "event": "task-attempt",
+            "detail": "T23: failed (attempt 4) — Stage1 finding: SAC wrapper omitted byte bound and regular-file enforcement when using shared descriptor reader; existing bounded fixture accepted8MiB+1."
+          },
+          {
+            "at": "2026-09-06T12:44:28.020Z",
+            "event": "task-added",
+            "detail": "T25: Apply regular-file and byte limits to SAC shared reader"
+          },
+          {
+            "at": "2026-09-06T12:44:28.186Z",
+            "event": "task-depends-set",
+            "detail": "T23: dependsOn T6, T18, T17, T25 (was T6, T18, T17) — SAC reader must apply shared regular-file/byte bounds before independent review can pass."
+          },
+          {
+            "at": "2026-09-06T12:44:28.369Z",
+            "event": "task-attempt",
+            "detail": "T25: started (attempt 1) — Root adds local byte-limit and directory-kind regression before tightening SAC wrapper options."
+          },
+          {
+            "at": "2026-09-06T12:48:53.819Z",
+            "event": "task-added",
+            "detail": "T26: Fix independently reproduced structural output boundary defects"
+          },
+          {
+            "at": "2026-09-06T12:49:19.928Z",
+            "event": "task-attempt",
+            "detail": "T26: started (attempt 1) — Independent T24 Stage1 found three concrete defects; regression-first fix assigned separately from reviewer."
+          },
+          {
+            "at": "2026-09-06T12:49:56.273Z",
+            "event": "task-done",
+            "detail": "T20: Recursive security scan with explicit file coverage"
+          },
+          {
+            "at": "2026-09-06T12:49:56.532Z",
+            "event": "task-added",
+            "detail": "T27: Propagate incomplete security checks through strict guards and completion gate"
+          },
+          {
+            "at": "2026-09-06T12:49:57.352Z",
+            "event": "task-added",
+            "detail": "T28: Independent recursive scan coverage and bounded traversal review"
+          },
+          {
+            "at": "2026-09-06T12:50:47.190Z",
+            "event": "task-attempt",
+            "detail": "T28: started (attempt 1) — Independent scanner review after T20 stable; includes missing report and coverage truthfulness."
+          },
+          {
+            "at": "2026-09-06T12:50:47.376Z",
+            "event": "task-attempt",
+            "detail": "T27: started (attempt 1) — Regression-first strict guard handling of new incomplete status."
+          },
+          {
+            "at": "2026-09-06T12:51:35.793Z",
+            "event": "task-added",
+            "detail": "T29: Retain config memoization regression under mandatory redaction floor"
+          },
+          {
+            "at": "2026-09-06T12:52:12.228Z",
+            "event": "task-done",
+            "detail": "T25: Apply regular-file and byte limits to SAC shared reader"
+          },
+          {
+            "at": "2026-09-06T12:52:12.526Z",
+            "event": "task-done",
+            "detail": "T23: Independent containment and SAC boundary security review"
+          },
+          {
+            "at": "2026-09-06T12:53:18.448Z",
+            "event": "task-attempt",
+            "detail": "T24: failed (attempt 2) — T24 final independent report: four blockers (JSON property names, duplicate serialized members, ref siblings, encoded src/srcset). Stage2 stopped; fixes and recheck required."
+          },
+          {
+            "at": "2026-09-06T12:53:18.747Z",
+            "event": "task-attempt",
+            "detail": "T26: blocked (attempt 2) — User explicitly paused all implementation for handoff; worker interrupted. No completion claim; inspect partial artifacts and all four T24 findings before resume."
+          },
+          {
+            "at": "2026-09-06T12:53:19.123Z",
+            "event": "task-attempt",
+            "detail": "T27: blocked (attempt 2) — User pause for handoff. RED only: guard tests 13 pass/4 fail at12:51:35; production incomplete propagation not yet fixed."
+          },
+          {
+            "at": "2026-09-06T12:53:19.401Z",
+            "event": "task-attempt",
+            "detail": "T28: blocked (attempt 2) — User pause for handoff; reviewer interrupted, no scanner acceptance verdict available."
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/234-2026-09-06-agent-first-core-phase-2/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "234",
+        "slug": "agent-first-core-phase-2",
+        "title": "Agent-first core phase 2: Trustworthy sources: lifecycle provenance graph and testing snapshots",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:07.706Z",
+        "updatedAt": "2026-09-06T10:44:07.706Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:07.706Z",
+            "event": "created"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/235-2026-09-06-agent-first-core-phase-3/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "235",
+        "slug": "agent-first-core-phase-3",
+        "title": "Agent-first core phase 3: Useful retrieval: wiki sections ranking repomap and bounded context",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:08.483Z",
+        "updatedAt": "2026-09-06T10:44:08.483Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:08.483Z",
+            "event": "created"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/236-2026-09-06-agent-first-core-phase-4/flow.json",
+      "state": {
+        "schemaVersion": 2,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "236",
+        "slug": "agent-first-core-phase-4",
+        "title": "Agent-first core phase 4: Freshness and delivery: bindings managed sync and bootstrap",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:09.088Z",
+        "updatedAt": "2026-09-06T12:36:59.971Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          },
+          {
+            "id": "T5",
+            "title": "Prevent concurrent ctx artifact ID collisions and lost evidence",
+            "kind": "implement",
+            "status": "todo",
+            "dependsOn": [],
+            "attempts": {
+              "count": 0,
+              "log": []
+            },
+            "acRefs": [],
+            "evidenceRefs": [],
+            "budget": {}
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:09.088Z",
+            "event": "created"
+          },
+          {
+            "at": "2026-09-06T12:36:59.971Z",
+            "event": "task-added",
+            "detail": "T5: Prevent concurrent ctx artifact ID collisions and lost evidence"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/237-2026-09-06-agent-first-core-phase-5/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "237",
+        "slug": "agent-first-core-phase-5",
+        "title": "Agent-first core phase 5: Atomic changes and continuation: CAS recovery handoff and forgetting",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:09.765Z",
+        "updatedAt": "2026-09-06T10:44:09.765Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:09.765Z",
+            "event": "created"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/238-2026-09-06-agent-first-core-phase-6/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "238",
+        "slug": "agent-first-core-phase-6",
+        "title": "Agent-first core phase 6: Composition and evidence: SDK batch and neutral evaluation runner",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:10.689Z",
+        "updatedAt": "2026-09-06T10:44:10.689Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:10.689Z",
+            "event": "created"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/239-2026-09-06-agent-first-core-phase-7/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "239",
+        "slug": "agent-first-core-phase-7",
+        "title": "Agent-first core phase 7: Core and optional Shell migration",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:11.329Z",
+        "updatedAt": "2026-09-06T10:44:11.329Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:11.329Z",
+            "event": "created"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".metaproject/flows/240-2026-09-06-agent-first-core-phase-8/flow.json",
+      "state": {
+        "schemaVersion": 1,
+        "gates": {
+          "tasks": true,
+          "review": true
+        },
+        "id": "240",
+        "slug": "agent-first-core-phase-8",
+        "title": "Agent-first core phase 8: Dependencies and evidence-based product rollout",
+        "status": "initializing",
+        "createdAt": "2026-09-06T10:44:11.850Z",
+        "updatedAt": "2026-09-06T10:44:11.850Z",
+        "source": {
+          "type": "description",
+          "ref": null
+        },
+        "acChecksum": null,
+        "acConfirmed": {},
+        "pr": {
+          "url": null
+        },
+        "tasks": [
+          {
+            "id": "T1",
+            "title": "Collect remaining context",
+            "kind": "context",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T2",
+            "title": "Implement per plan",
+            "kind": "implement",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T3",
+            "title": "Add/adjust tests and make them pass",
+            "kind": "test",
+            "origin": "scaffold",
+            "status": "todo"
+          },
+          {
+            "id": "T4",
+            "title": "Self-review and prepare draft PR",
+            "kind": "review",
+            "origin": "scaffold",
+            "status": "todo"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-06T10:44:11.850Z",
+            "event": "created"
+          }
+        ]
+      }
+    }
+  ]
+}

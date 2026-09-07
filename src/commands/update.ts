@@ -87,9 +87,6 @@ import {
   renderGdskillsPostCommitHook,
   renderHealthPostCommitHook,
   renderHooksReadme,
-  renderIndexGateMarkdown,
-  renderIndexMarkdown,
-  ROUTING_FILENAME,
   renderMetaprojectCoreReadme,
   renderMetaprojectDashboardHtml,
   renderMetaprojectDashboardPostCommitHook,
@@ -99,6 +96,7 @@ import {
   renderSecurityPrePushHook,
   type MetaprojectDashboardData,
 } from "../lib/templates";
+import { writeRoutingEntrypointPair } from "../lib/routing-entrypoint";
 import {
   renderTestingPostCommitHook,
   renderTestingPrePushHook,
@@ -216,7 +214,7 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   } else {
     steps.push(`Run ${style.cyan("keryx update --hooks")} to run post-update hooks.`);
   }
-  steps.push(`Read ${style.cyan(".metaproject/index.md")} for the current module map.`);
+  steps.push(`Read ${style.cyan(".metaproject/index.md")} first; open ${style.cyan(".metaproject/routing.md")} for the full module map and intent router.`);
   nextSteps(steps);
 }
 
@@ -298,36 +296,19 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // The gate is read once per agent and then re-sent on every turn, so its size
   // is multiplied by task length — see
   // docs/requirements/keryx-context-measurement/context-loading.md.
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, "index.md"),
-    renderIndexGateMarkdown({
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-    }),
-  );
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, ROUTING_FILENAME),
-    renderIndexMarkdown({
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-      ruleSources,
-      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-    }),
-  );
+  await writeRoutingEntrypointPair(metaprojectRoot, {
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+    ruleSources,
+    hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+  });
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
     renderMetaprojectDashboardHtml({

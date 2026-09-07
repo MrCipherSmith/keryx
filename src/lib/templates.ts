@@ -2,6 +2,28 @@ import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-block
 import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
 import { CONTRACTS } from "../gdskills/contracts";
 
+export type RoutingModuleFlags = {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+};
+
+export type RoutingEntrypointOptions = RoutingModuleFlags & {
+  ruleSources: string[];
+  hasDistilledEntrypoints?: boolean;
+};
+
+export type RoutingEntrypointPair = {
+  index: string;
+  routing: string;
+};
+
 export function renderIndexMarkdown({
   enableGdgraph,
   enableGdctx,
@@ -14,19 +36,7 @@ export function renderIndexMarkdown({
   enableSecurity = false,
   ruleSources,
   hasDistilledEntrypoints = false,
-}: {
-  enableGdgraph: boolean;
-  enableGdctx: boolean;
-  enableGdwiki: boolean;
-  enableGdskills: boolean;
-  enableHealth: boolean;
-  enableTesting: boolean;
-  enableMemory: boolean;
-  enableTasks: boolean;
-  enableSecurity?: boolean;
-  ruleSources: string[];
-  hasDistilledEntrypoints?: boolean;
-}): string {
+}: RoutingEntrypointOptions): string {
   const moduleRows = [
     enableGdgraph
       ? "| gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |"
@@ -371,17 +381,7 @@ export function renderIndexGateMarkdown({
   enableMemory,
   enableTasks,
   enableSecurity = false,
-}: {
-  enableGdgraph: boolean;
-  enableGdctx: boolean;
-  enableGdwiki: boolean;
-  enableGdskills: boolean;
-  enableHealth: boolean;
-  enableTesting: boolean;
-  enableMemory: boolean;
-  enableTasks: boolean;
-  enableSecurity?: boolean;
-}): string {
+}: RoutingModuleFlags): string {
   const rows = [
     enableGdgraph
       ? "| where is X, what depends on it, what breaks | `keryx gdgraph affected <file>` |"
@@ -422,6 +422,16 @@ ${binding}
 
 Treat requests as intents; the user does not need to know these command names.
 `;
+}
+
+/** Render the compact gate and full router from one immutable input. */
+export function renderRoutingEntrypointPair(
+  options: RoutingEntrypointOptions,
+): RoutingEntrypointPair {
+  return {
+    index: renderIndexGateMarkdown(options),
+    routing: renderIndexMarkdown(options),
+  };
 }
 
 export type MetaprojectDashboardData = {
@@ -489,6 +499,7 @@ export type MetaprojectDashboardData = {
   };
 };
 
+/* eslint-disable no-useless-escape -- This raw HTML/JavaScript template preserves regex escapes for the generated script. */
 export function renderMetaprojectDashboardHtml({
   enableGdgraph,
   enableGdctx,
@@ -1389,6 +1400,7 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
 </html>
 `;
 }
+/* eslint-enable no-useless-escape */
 
 type DashboardAttentionItem = {
   tone: "good" | "warn" | "bad";
@@ -2048,9 +2060,10 @@ export function renderSecurityPrePushHook(): string {
   return `keryx_security_pre_push() {
   # Run the Metaproject Security guard over the changed/committable content before
   # a push. Blocking is delegated to the CLI, which honors security.config.json
-  # mode: 'advisory' (default) always exits 0 (warn, never block); 'enforced'/'ci'
-  # exit non-zero on a blocking (secret/critical) finding. This hook never
-  # duplicates the mode->action mapping; it only propagates the CLI exit code.
+  # mode: 'advisory' (default) always exits 0 (warn, never block);
+  # 'enforced'/'ci'/'gateway' exit non-zero on a failing or needs-approval gate
+  # (not only a secret or critical finding). This hook never duplicates the
+  # mode->action mapping; it only propagates the CLI exit code.
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -2150,7 +2163,7 @@ $range_files"
       scan_out="$("$gdm" security scan "$file" --source trusted-project 2>&1)"
       scan_code=$?
       if [ "$scan_code" -ne 0 ]; then
-        # enforced/ci mode blocked on this file.
+        # enforced/ci/gateway mode blocked on this file.
         echo "keryx pre-push: security gate blocked on $file" >&2
         printf '%s\\n' "$scan_out" >&2
         blocked=1
@@ -2177,6 +2190,7 @@ keryx_security_pre_push || exit $?
 `;
 }
 
+/* eslint-disable no-useless-escape -- This shell template preserves escapes that must be emitted literally. */
 export function renderGdwikiPostCommitHook(): string {
   return `keryx_gdwiki_post_commit() {
   # LWG-9 (flow 226): append ONE line to the freshness queue, then stop.
@@ -2270,6 +2284,7 @@ KERYX_ENTRY
 keryx_gdwiki_post_commit
 `;
 }
+/* eslint-enable no-useless-escape */
 
 export function renderMetaprojectDashboardPostCommitHook(): string {
   return `keryx_dashboard_post_commit() {

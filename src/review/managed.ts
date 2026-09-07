@@ -1349,6 +1349,7 @@ function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindi
   try {
     parsed = JSON.parse(embeddedBlockBody(report, fence)) as unknown;
   } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(
       `${reportLabel} carries a keryx:findings block that is not valid JSON: ${
         error instanceof Error ? error.message : String(error)

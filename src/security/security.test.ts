@@ -16,7 +16,7 @@ import {
   renderSecurityConfig,
   configPath,
 } from "./config";
-import { evaluateSelfProtection, writeState } from "./self-protect";
+import { evaluateSelfProtection, readState, writeState } from "./self-protect";
 import { listIncidents } from "./incidents";
 import {
   SECURITY_FINDING_SCHEMA,
@@ -218,6 +218,277 @@ test("advisory scan never throws and returns a decision", async () => {
   });
   expect(decision.findings.length).toBeGreaterThan(0);
   expect(["pass", "needs-approval", "fail"]).toContain(decision.gate);
+});
+
+// ---------------------------------------------------------------------------
+// T58 regressions (T39 F-008): a forced-closed posture (`configUnreadable`)
+// must never become the recorded `previous` mode/policies -- it is a derived,
+// momentary fact about a config this run could not read, not the operator's
+// configured state. See T58-spec.md for the full reasoning; the fix is a
+// one-line skip of `writeState` in `analyze()` (service.ts) when
+// `config.configUnreadable` is true.
+// ---------------------------------------------------------------------------
+
+async function writeConfigBody(body: string): Promise<void> {
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(configPath(root), body, "utf8");
+}
+
+test("T58 D1: a forced-closed posture never becomes the recorded previous mode, so repairing to the SAME real mode raises no incident", async () => {
+  // Establish a REAL recorded previous state: advisory.
+  await writeConfig(mergeSecurityConfig({ mode: "advisory" }));
+  const first = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(first.warnings).toHaveLength(0);
+  expect((await readState(root))?.mode).toBe("advisory");
+
+  // Break the config -- forces mode to "enforced" (a higher rank than the
+  // real "advisory" that is recorded).
+  await writeConfigBody("null");
+  const broken = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(broken.config.configUnreadable).toBe(true);
+  expect(broken.config.mode).toBe("enforced");
+
+  // The recorded previous state must still be the real "advisory" -- the
+  // forced "enforced" from the broken run must not have overwritten it.
+  expect((await readState(root))?.mode).toBe("advisory");
+
+  // Repair the config back to the SAME real mode it was before. Nothing was
+  // ever downgraded -- the forced "enforced" never became "advisory"'s
+  // recorded predecessor -- so no incident should fire.
+  await writeConfig(mergeSecurityConfig({ mode: "advisory" }));
+  const repaired = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(repaired.warnings.some((w) => w.includes("downgraded"))).toBe(false);
+
+  const incidents = await listIncidents(root);
+  expect(incidents.some((i) => i.type === "mode-downgrade")).toBe(false);
+});
+
+test("T58 D2: a genuine mode downgrade across a broken-config window is still detected, not masked", async () => {
+  // Real state: gateway (T68: ranked with enforced/ci, not above them --
+  // see MODE_RANK's comment in self-protect.ts / T62 F-002). "ci" is no
+  // longer usable as the "genuine downgrade" target below because it is
+  // now the SAME rank as gateway; "advisory" is the one mode that is a
+  // real, strict rank drop from all three.
+  await writeConfig(mergeSecurityConfig({ mode: "gateway" }));
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect((await readState(root))?.mode).toBe("gateway");
+
+  // Break the config -- forces "enforced", the SAME rank as the real
+  // "gateway" that is recorded (post-T68; pre-T68 it was a lower rank).
+  // Must not overwrite the recorded state either way.
+  await writeConfigBody("null");
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect((await readState(root))?.mode).toBe("gateway");
+
+  // Genuinely reconfigure to "advisory" -- a real downgrade from "gateway".
+  // (Post-T68, "advisory" is now the only mode a genuine downgrade FROM
+  // gateway/enforced/ci can land on -- the three are tied. Whether the
+  // broken run's forced "enforced" wrongly leaked as `previous` instead of
+  // the real "gateway" is no longer distinguishable via THIS step's outcome
+  // -- forced-"enforced" and real-"gateway" are the same rank, so a repair
+  // to "advisory" reads as a downgrade either way. That discrimination is
+  // T58 D1's job, not this test's: D1 uses advisory/enforced, a pair the
+  // rank change did not tie, and pins that repairing back to the SAME real
+  // mode after a break stays silent -- which only holds if the forced value
+  // never overwrote the real one. This test's remaining job is simpler and
+  // still real: a genuine downgrade across a broken window is detected, not
+  // masked by the window itself.)
+  await writeConfig(mergeSecurityConfig({ mode: "advisory" }));
+  const { warnings } = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(warnings.some((w) => w.includes("downgraded"))).toBe(true);
+
+  const incidents = await listIncidents(root);
+  expect(incidents.some((i) => i.type === "mode-downgrade")).toBe(true);
+});
+
+test("T58 D3: a first run whose config is already broken records no state and raises no incident; state is established once the config is readable", async () => {
+  // No prior analyze() call at all -- config is broken from the very first run.
+  await writeConfigBody("{not json");
+  const broken = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(broken.config.configUnreadable).toBe(true);
+  expect(broken.warnings).toHaveLength(0);
+  expect(await readState(root)).toBeNull();
+
+  // A second broken run changes nothing about that.
+  const brokenAgain = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(brokenAgain.config.configUnreadable).toBe(true);
+  expect(brokenAgain.warnings).toHaveLength(0);
+  expect(await readState(root)).toBeNull();
+
+  // Repair: the state is established for the first time from real values,
+  // with no spurious downgrade -- there was never a real previous to compare
+  // against.
+  await writeConfig(mergeSecurityConfig({ mode: "advisory" }));
+  const repaired = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(repaired.warnings.some((w) => w.includes("downgraded"))).toBe(false);
+  expect((await readState(root))?.mode).toBe("advisory");
+});
+
+test("T61 D1: a broken-config window's LIVE comparison writes no durable incident during the window, whatever the real previous mode, because nothing was actually weakened", async () => {
+  // T58 D2 pins that state.json is preserved through the broken window and
+  // that a LATER genuine downgrade is still detected -- it never asserts
+  // what happens to the incident trail DURING the broken run itself, which
+  // is exactly the gap T57 F-002 found: `appendIncidents` runs unconditionally
+  // in `analyze()`, before the state-write guard, so the live comparison
+  // (forced `config.mode` vs the real previous) could append a
+  // `mode-downgrade` incident on the broken run alone.
+  //
+  // T68 note: at the time this test was written, "gateway" was the one real
+  // mode `MODE_RANK` ranked ABOVE the forced "enforced" fallback (rank 3 vs
+  // 2), so it was the one shape that could expose a live-comparison bug on
+  // the mode arm if the `!config.configUnreadable` guard were removed. T68
+  // (T62 F-002) re-ranked `gateway` to tie `enforced`/`ci` at 2, because that
+  // is what every OTHER site that branches on mode already treats it as
+  // (`isBlockingMode`, `exitCodeFor`, `reportExitCode`) -- so as of this
+  // rank table, no real recognized mode ranks above the forced "enforced"
+  // fallback at all, and the guard below is defensive (correct to keep, not
+  // currently reachable via any live rank inequality) rather than the one
+  // thing standing between this scenario and a false incident. "gateway" is
+  // kept as the real state here because it is still the mode this defect was
+  // found through and the assertions below remain true regardless of rank.
+  for (const brokenBody of ["null", '{"mode":"ENFORCED"}']) {
+    // Real state: gateway.
+    await writeConfig(mergeSecurityConfig({ mode: "gateway" }));
+    await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+    expect((await readState(root))?.mode).toBe("gateway");
+    expect((await listIncidents(root)).some((i) => i.type === "mode-downgrade")).toBe(false);
+
+    // Break the config. Under the pre-T61 code, an unguarded live comparison
+    // during this window could fire a `mode-downgrade` incident before any
+    // repair -- guarded against below regardless of what forced/real ranks
+    // happen to be today.
+    await writeConfigBody(brokenBody);
+    const broken = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+    expect(broken.config.configUnreadable).toBe(true);
+    expect(broken.warnings.some((w) => w.includes("downgraded"))).toBe(false);
+    expect((await listIncidents(root)).some((i) => i.type === "mode-downgrade")).toBe(false);
+
+    // Repair back to the SAME real "gateway". Still no incident -- the
+    // broken run never wrote one, and comparing the real repaired mode
+    // against the (unchanged, per T58) real `previous` finds no change.
+    await writeConfig(mergeSecurityConfig({ mode: "gateway" }));
+    const repaired = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+    expect(repaired.warnings.some((w) => w.includes("downgraded"))).toBe(false);
+    expect((await listIncidents(root)).some((i) => i.type === "mode-downgrade")).toBe(false);
+    expect((await readState(root))?.mode).toBe("gateway");
+
+    // Clean the incidents/state trail between the two broken-body iterations
+    // so the second pass starts from the same real baseline as the first.
+    await rm(path.join(root, ".metaproject", "data", "security"), { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T68 regressions (T62 F-003): the disabled-policy arm must not inherit the
+// mode arm's `!config.configUnreadable` guard. `configUnreadable` covers two
+// different shapes (`config.ts:238-267`): an UNUSABLE payload yields derived
+// defaults (every policy `enabled: true`, so the loop can never fire for it,
+// guarded or not); an UNRECOGNIZED-MODE payload yields the operator's REAL,
+// parsed `policies`, so a policy genuinely disabled in that same file is real
+// news and must still be surfaced. See self-protect.ts's comment above the
+// loop for the full argument.
+// ---------------------------------------------------------------------------
+
+// Writes `config` with its `mode` replaced by a string outside the
+// `SecurityMode` union, so `loadSecurityConfig` forces `configUnreadable:
+// true` while keeping every other field -- including `policies` -- exactly
+// as `config` declared them (`config.ts:257-267`, the "unrecognized mode"
+// shape).
+function withUnrecognizedMode(config: SecurityConfig): string {
+  const rendered = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+  rendered.mode = "ENFORCED";
+  return JSON.stringify(rendered, null, 2);
+}
+
+test("T68 B0 control: a policy disabled under a READABLE config is still detected, unaffected by this fix", async () => {
+  await writeConfig(mergeSecurityConfig({ mode: "enforced" }));
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+
+  await writeConfig(
+    mergeSecurityConfig({
+      mode: "enforced",
+      policies: { promptInjection: { enabled: false, action: "require-approval" } },
+    } as Partial<SecurityConfig>),
+  );
+  const { warnings } = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(warnings.some((w) => w.includes('policy "promptInjection" was disabled'))).toBe(true);
+
+  const incidents = await listIncidents(root);
+  expect(incidents.some((i) => i.type === "policy-disabled")).toBe(true);
+});
+
+test("T68 D1: a policy genuinely disabled in the SAME file as an unrecognized mode is now detected DURING the window, not only after repair", async () => {
+  await writeConfig(mergeSecurityConfig({ mode: "enforced" }));
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect((await listIncidents(root)).some((i) => i.type === "policy-disabled")).toBe(false);
+
+  // The file PARSES (mode "ENFORCED" is a typo, not garbage), so
+  // `loadSecurityConfig` keeps the operator's real, parsed `policies` --
+  // promptInjection really is disabled in this file -- while still forcing
+  // `configUnreadable: true` because the mode string is unrecognized.
+  const broken = mergeSecurityConfig({
+    mode: "enforced",
+    policies: { promptInjection: { enabled: false, action: "require-approval" } },
+  } as Partial<SecurityConfig>);
+  await writeConfigBody(withUnrecognizedMode(broken));
+
+  const duringWindow = await analyze(root, {
+    content: "nothing sensitive here",
+    source: "trusted-project",
+  });
+  expect(duringWindow.config.configUnreadable).toBe(true);
+  expect(
+    duringWindow.warnings.some((w) => w.includes('policy "promptInjection" was disabled')),
+  ).toBe(true);
+
+  const incidentsDuringWindow = await listIncidents(root);
+  expect(incidentsDuringWindow.some((i) => i.type === "policy-disabled")).toBe(true);
+});
+
+test("T68 D2: the disable keeps being reported on every run while the mode stays unrecognized, not only once", async () => {
+  await writeConfig(mergeSecurityConfig({ mode: "enforced" }));
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+
+  const broken = mergeSecurityConfig({
+    mode: "enforced",
+    policies: {
+      promptInjection: { enabled: false, action: "require-approval" },
+      egress: { enabled: false, action: "block" },
+    },
+  } as Partial<SecurityConfig>);
+  await writeConfigBody(withUnrecognizedMode(broken));
+
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  const third = await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect(third.warnings.some((w) => w.includes('policy "promptInjection" was disabled'))).toBe(true);
+
+  const incidents = await listIncidents(root);
+  expect(incidents.filter((i) => i.type === "policy-disabled").length).toBeGreaterThan(0);
+});
+
+test("T68 D3: an UNUSABLE payload after a real disable stays silent -- this fix's guard removal changes nothing for that shape", async () => {
+  await writeConfig(
+    mergeSecurityConfig({
+      mode: "enforced",
+      policies: { egress: { enabled: false, action: "block" } },
+    } as Partial<SecurityConfig>),
+  );
+  await analyze(root, { content: "nothing sensitive here", source: "trusted-project" });
+  expect((await readState(root))?.policies.egress).toBe(false);
+
+  // Unusable payload: parses to `null`, not an object -- `loadSecurityConfig`
+  // falls back to `mergeSecurityConfig({})`, every policy `enabled: true`.
+  await writeConfigBody("null");
+  const duringWindow = await analyze(root, {
+    content: "nothing sensitive here",
+    source: "trusted-project",
+  });
+  expect(duringWindow.config.configUnreadable).toBe(true);
+  expect(duringWindow.warnings.some((w) => w.includes("disabled"))).toBe(false);
+
+  const incidents = await listIncidents(root);
+  expect(incidents.some((i) => i.type === "policy-disabled")).toBe(false);
 });
 
 // Regression (leak review): redaction must not emit raw bytes when a PII span is
