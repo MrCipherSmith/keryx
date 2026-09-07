@@ -103,6 +103,32 @@ test("graphContext emits stats + top modules and stops at the next section", asy
   );
 });
 
+// Flow 235 / T7: the last silent elision left in this layer. The module table
+// stopped at MAX_MODULE_ROWS and said nothing, so an orientation block listing
+// twelve modules read as the project's whole module list.
+test("graphContext says when it cut the module table short", async () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `| module-${i} | ${30 - i} |`).join("\n");
+  const summary = `# gdgraph Summary\n\n## Stats\n\n- Source files indexed: 260\n\n## Top Modules\n\n| Module | Source Files |\n|---|---:|\n${rows}\n`;
+  await withProject(
+    { ".metaproject/data/gdgraph/artifacts/summary.md": summary },
+    async (root) => {
+      const out = await graphContext(root);
+      expect(out).toContain("module-0");
+      expect(out).toContain("omitted");
+      expect(out).toContain("18"); // 30 rows, 12 shown
+    },
+  );
+});
+
+test("graphContext leaves a table it shows in full unremarked", async () => {
+  await withProject(
+    { ".metaproject/data/gdgraph/artifacts/summary.md": SUMMARY },
+    async (root) => {
+      expect(await graphContext(root)).not.toContain("omitted");
+    },
+  );
+});
+
 test("graphContext handles a missing graph gracefully", async () => {
   await withProject({}, async (root) => {
     const out = await graphContext(root);

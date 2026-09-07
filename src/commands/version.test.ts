@@ -44,14 +44,27 @@ function stubRegistry(version: string): VersionFetch {
 }
 
 describe("keryx version check command", () => {
-  test("is registered as a root CLI route and has a machine-readable descriptor", () => {
+  // This assertion used to pin `read: true` with no declared side effects, and
+  // that declaration was wrong: the command makes a live request to the npm
+  // registry and writes a cache file outside the project. The registry is the
+  // surface an agent reads to decide what may run without asking, so the
+  // mislabel meant this command was auto-allowed on the strength of a claim
+  // nothing checked. The test agreed with it, which is how it survived.
+  //
+  // It now pins the corrected declaration, including the side effects, so a
+  // future change that quietly re-declares this command safe goes red.
+  test("is registered as a root CLI route and declares what it actually does", () => {
     expect(CLI_ROUTES.version).toBe(versionCommand);
     const descriptor = COMMAND_DESCRIPTORS.find((entry) => entry.command === "version check");
     expect(descriptor).toMatchObject({
       command: "version check",
       json: true,
-      read: true,
+      read: false,
     });
+    expect(descriptor?.sideEffects ?? []).not.toEqual([]);
+    const effects = (descriptor?.sideEffects ?? []).join(" ");
+    expect(effects).toContain("npm registry");
+    expect(effects).toContain("outside this project");
   });
 
   test("prints human output from the shared service without installing", async () => {

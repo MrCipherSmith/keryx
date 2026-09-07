@@ -7,7 +7,10 @@ import {
   buildRgCommand,
   isWorkingTreeDiff,
   rgListMode,
+  summarizeCommandOutput,
+  summarizeCompact,
   summarizeDiff,
+  summarizeRg,
   summarizeRgFileList,
 } from "./ctx";
 
@@ -248,6 +251,127 @@ test("summarizeDiff still reports a genuinely clean tree as zero", () => {
   const out = summarizeDiff("git diff HEAD", result(""), CONFIG, []);
   expect(out).toContain("Changed files: `0`");
   expect(out).toContain("- none");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 235 / T7 — the three measured defects in the compaction layer.
+//
+// Defect 1. A truncated summary printed the FULL count in its header and showed
+// a short body with nothing marking the gap. Measured: `keryx ctx rg "function"
+// src/commands/ctx.ts` printed `Matches: 50` above four matches; `keryx ctx rg
+// "export" src/ctx` printed `Matches: 60` above 28. A reader takes the header
+// as a fact about what they are looking at.
+
+test("summarizeRg marks the gap between the count it reports and the matches it shows", () => {
+  // One file, 50 hits — the exact shape measured. Only four are rendered.
+  const raw = Array.from({ length: 50 }, (_, i) => `src/a.ts:${i + 1}:1:hit ${i + 1}`).join("\n");
+  const out = summarizeRg("rg -- x src/a.ts", result(raw), CONFIG);
+
+  expect(out).toContain("Matches: `50`");
+  // The header must no longer stand alone as a claim about the body.
+  expect(out).toMatch(/Matches: `50`.*shown/);
+  // And the body must say what it dropped, in matches, where it dropped them.
+  expect(out).toContain("omitted 46");
+});
+
+test("summarizeRg marks files dropped from Top Files and Matches", () => {
+  // 20 files × 2 hits: maxGroupItems is 12, so eight files vanished unremarked
+  // from both sections while `Files: 20` sat in the header.
+  const raw = Array.from({ length: 20 }, (_, f) =>
+    [`src/f${f}.ts:1:1:hit a`, `src/f${f}.ts:2:1:hit b`].join("\n"),
+  ).join("\n");
+  const out = summarizeRg("rg -- x src", result(raw), CONFIG);
+
+  expect(out).toContain("Files: `20`");
+  expect(out).toContain("omitted 8");
+});
+
+test("summarizeRg says nothing about omissions when it shows everything", () => {
+  // The opposite defect a sibling lane fixed: a tiny result must not grow a
+  // truncation apparatus it does not need.
+  const out = summarizeRg("rg -- x src/a.ts", result("src/a.ts:1:1:only hit"), CONFIG);
+  expect(out).toContain("Matches: `1`");
+  expect(out).not.toContain("omitted");
+  expect(out).not.toContain("shown");
+});
+
+// Defect 2. A `FAIL` line in the middle of a long log vanished under compaction
+// while the footer reported 98% saved. Measured on a 5,000-line log with one
+// `FAIL src/thing/broken.test.ts` at line 2,500: zero occurrences of `FAIL` in
+// the summary. `failed|failure` does not match the bare token `FAIL`, and the
+// whole programme this tool served exists to stop exactly this.
+
+function logWithVerdict(verdict: string, at: number, total = 5_000): string {
+  return Array.from({ length: total }, (_, i) =>
+    i + 1 === at ? verdict : `pass line ${i + 1} ok some padding text for a realistic log line`,
+  ).join("\n");
+}
+
+test("summarizeCommandOutput keeps a failure verdict buried in the middle of a long log", () => {
+  const out = summarizeCommandOutput(
+    "bun test",
+    result(logWithVerdict("FAIL src/thing/broken.test.ts > it keeps the receipt", 2_500)),
+    CONFIG,
+  );
+  expect(out).toContain("FAIL src/thing/broken.test.ts");
+});
+
+test("summarizeCommandOutput keeps the verdict vocabulary this repository already uses", () => {
+  // Not a special case for one word: these are the failure markers the
+  // repository's own summarisers key on — `(fail)` in src/health/sources/tests.ts
+  // and `✗` in src/lib/ui.ts — plus the tokens the tools it runs actually emit.
+  for (const verdict of [
+    "(fail) keeps the receipt",
+    "✗ 3 checks did not pass",
+    "npm ERR! code ELIFECYCLE",
+    "src/a.ts(4,1): error TS2345: Argument of type X",
+    "AssertionError: expected 1 to be 2",
+    "Segmentation fault",
+    "2 fail, 8 pass",
+  ]) {
+    const out = summarizeCommandOutput("run", result(logWithVerdict(verdict, 2_500)), CONFIG);
+    expect(out).toContain(verdict);
+  }
+});
+
+test("summarizeCommandOutput does not treat a clean verdict as a failure", () => {
+  // The predicate has to stay useful: promoting "0 failed" would push real
+  // failures out of a bounded budget.
+  const out = summarizeCommandOutput(
+    "bun test",
+    result(logWithVerdict("0 failed, 812 passed", 2_500)),
+    CONFIG,
+  );
+  expect(out).not.toContain("## Errors / Warnings");
+});
+
+// Defect 3. Compacted structured output still looked like a whole document and
+// no longer parsed. Measured: `keryx ctx read
+// .metaproject/data/gdgraph/artifacts/module-map.json` produced a body starting
+// `{` and ending `}` that JSON.parse rejected at the elision marker.
+
+test("summarizeCompact labels an elided JSON document as an excerpt that does not parse", () => {
+  const document = JSON.stringify(
+    { files: Array.from({ length: 400 }, (_, i) => `src/file-${i}.ts`) },
+    null,
+    2,
+  ).split("\n");
+  const out = summarizeCompact("module-map.json", document, CONFIG);
+
+  expect(out).toContain("omitted");
+  // The tell of the defect: a body that opens `{` and closes `}` with nothing
+  // saying it is a fragment.
+  expect(out.toLowerCase()).toContain("excerpt");
+  expect(out.toLowerCase()).toContain("json");
+  expect(out).toContain("does not parse");
+});
+
+test("summarizeCompact leaves a JSON document that fits entirely alone, and it parses", () => {
+  const document = JSON.stringify({ a: 1, b: [1, 2, 3] }, null, 2).split("\n");
+  const out = summarizeCompact("small.json", document, CONFIG);
+  expect(out).not.toContain("excerpt");
+  const body = out.split("```text\n")[1]?.split("\n```")[0] ?? "";
+  expect(() => JSON.parse(body) as unknown).not.toThrow();
 });
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");

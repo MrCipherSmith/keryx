@@ -1,0 +1,147 @@
+{
+  "note": "Measured this run: evaluatePageFreshness cost & per-page oracle agreement at 50/500/2000 pages, cold/repeated/git-broken, against the versioned calibration profile. Regenerate with `bun scripts/benchmark/run-wiki-freshness-scale.ts`.",
+  "generatedAt": "2026-09-07T17:23:42.275Z",
+  "calibrationProfileVersion": "1.0.0",
+  "manifestSeed": 236100,
+  "scales": [
+    {
+      "size": 50,
+      "categoryCounts": {
+        "git-log-unreachable": 12,
+        "scope-hash": 3,
+        "git-log": 33,
+        "undecidable": 2
+      },
+      "cold": {
+        "mode": "healthy",
+        "wallClockMs": 1272.386833,
+        "gitOperations": 103,
+        "gitOperationsSumMs": 1281.2432150000002,
+        "agreementCount": 50,
+        "total": 50,
+        "mismatches": []
+      },
+      "repeated": {
+        "mode": "healthy",
+        "wallClockMs": 1403.911667,
+        "gitOperations": 103,
+        "gitOperationsSumMs": 1412.345954,
+        "agreementCount": 50,
+        "total": 50,
+        "mismatches": []
+      },
+      "brokenGit": {
+        "mode": "broken-git",
+        "wallClockMs": 0.39762500000006185,
+        "gitOperations": 0,
+        "gitOperationsSumMs": 0,
+        "agreementCount": 50,
+        "total": 50,
+        "mismatches": []
+      },
+      "budget": {
+        "coldTargetMs": 1500,
+        "repeatedTargetMs": 200,
+        "coldWithinBudget": true,
+        "repeatedWithinBudget": false,
+        "measuredSpawnsPerPage": 2.06,
+        "worstCaseCeilingPerPage": 2.14,
+        "withinWorstCaseCeiling": true
+      }
+    },
+    {
+      "size": 500,
+      "categoryCounts": {
+        "git-log-unreachable": 74,
+        "scope-hash": 27,
+        "git-log": 371,
+        "undecidable": 28
+      },
+      "cold": {
+        "mode": "healthy",
+        "wallClockMs": 13708.074999999999,
+        "gitOperations": 1071,
+        "gitOperationsSumMs": 13675.885289999951,
+        "agreementCount": 500,
+        "total": 500,
+        "mismatches": []
+      },
+      "repeated": {
+        "mode": "healthy",
+        "wallClockMs": 13100.225917,
+        "gitOperations": 1071,
+        "gitOperationsSumMs": 13050.138682999957,
+        "agreementCount": 500,
+        "total": 500,
+        "mismatches": []
+      },
+      "brokenGit": {
+        "mode": "broken-git",
+        "wallClockMs": 5.737249999998312,
+        "gitOperations": 0,
+        "gitOperationsSumMs": 0,
+        "agreementCount": 500,
+        "total": 500,
+        "mismatches": []
+      },
+      "budget": {
+        "coldTargetMs": 6000,
+        "repeatedTargetMs": 500,
+        "coldWithinBudget": false,
+        "repeatedWithinBudget": false,
+        "measuredSpawnsPerPage": 2.142,
+        "worstCaseCeilingPerPage": 2.14,
+        "withinWorstCaseCeiling": true
+      }
+    },
+    {
+      "size": 2000,
+      "categoryCounts": {
+        "git-log-unreachable": 306,
+        "scope-hash": 125,
+        "git-log": 1432,
+        "undecidable": 137
+      },
+      "cold": {
+        "mode": "healthy",
+        "wallClockMs": 54142.064958999996,
+        "gitOperations": 4154,
+        "gitOperationsSumMs": 53876.1314880001,
+        "agreementCount": 2000,
+        "total": 2000,
+        "mismatches": []
+      },
+      "repeated": {
+        "mode": "healthy",
+        "wallClockMs": 53927.648499999996,
+        "gitOperations": 4154,
+        "gitOperationsSumMs": 53632.01881000033,
+        "agreementCount": 2000,
+        "total": 2000,
+        "mismatches": []
+      },
+      "brokenGit": {
+        "mode": "broken-git",
+        "wallClockMs": 39.65374999999767,
+        "gitOperations": 0,
+        "gitOperationsSumMs": 0,
+        "agreementCount": 2000,
+        "total": 2000,
+        "mismatches": []
+      },
+      "budget": {
+        "coldTargetMs": 20000,
+        "repeatedTargetMs": 1500,
+        "coldWithinBudget": false,
+        "repeatedWithinBudget": false,
+        "hardCeilingMs": 12000,
+        "withinHardCeiling": false,
+        "measuredSpawnsPerPage": 2.077,
+        "worstCaseCeilingPerPage": 2.14,
+        "withinWorstCaseCeiling": true
+      }
+    }
+  ],
+  "allAgree": true,
+  "totalMismatches": 0
+}

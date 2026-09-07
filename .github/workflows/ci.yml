@@ -38,8 +38,23 @@ jobs:
       - name: Confirm ripgrep is present
         run: rg --version
 
-      - name: Typecheck and tests
-        run: bun run check
+      # `check:core`, not `check`. AFC-19 asks for the client to be gated by a
+      # SEPARATE matrix ("TUI/readline, streaming/cancel/resume проверяются
+      # отдельной матрицей") and for the core gate to be "полностью
+      # offline/model-free" (implementation-plan.md, "Выделение Shell"). One job
+      # running everything cannot report those two things separately, so this
+      # job now runs lint + both typechecks + `test:core`, and the
+      # `client-matrix` job below runs the client zone.
+      #
+      # The two together still run every test file in `src/`: that is asserted
+      # statically by `src/core-package.test.ts` ("the core gate and the client
+      # matrix between them run every test in src/"), which fails if a test file
+      # is matched by neither — the silent-coverage-loss this split would
+      # otherwise be free to introduce. It caught two real gaps the first time
+      # it ran. `bun run check` (everything, one command) is unchanged and is
+      # still what `release.yml` runs before publishing.
+      - name: Typecheck and core gate (offline, model-free)
+        run: bun run check:core
 
       # `wiki check-links` covers the wiki; nothing covered `docs/` or the root
       # Markdown until now — which is how a documentation pass could green-light
@@ -50,6 +65,55 @@ jobs:
 
       - name: Security red-team FN-rate gate (Block E / E6)
         run: bun ./src/cli.ts security eval --corpus all
+
+  client-matrix:
+    # AFC-19's "отдельная матрица": the client surfaces the criterion names —
+    # terminal interface and line editing, streaming, cancellation, resumption —
+    # gated SEPARATELY from core, one leg each, so each behaviour reports its own
+    # status instead of disappearing into a single green tick. Before this job
+    # they were tested (every one of them, offline, with no credentials) but only
+    # ever reported as part of one `bun run check`.
+    #
+    # Every leg is offline and key-free, like the core gate: no test in these
+    # paths is gated on an API key, and the only skips are the repository's
+    # opt-in real-subprocess and PTY flags, which are not set here. Those live
+    # legs have their own jobs below (`macOS real-host legs`, `linux-sandbox`).
+    #
+    # `runtime` is deliberately a SUPERSET of the three behaviour legs' harness
+    # paths. The behaviour legs exist to report those behaviours; `runtime`
+    # exists so the client zone as a whole cannot develop a gap when a new
+    # `src/harness/` subdirectory appears. The overlap costs parallel CI time,
+    # not honesty, and `src/core-package.test.ts` asserts the union of the core
+    # gate and these legs covers every test file in `src/`.
+    name: client matrix (${{ matrix.leg }})
+    runs-on: ubuntu-latest
+    strategy:
+      # One behaviour's failure must not hide the others' status.
+      fail-fast: false
+      matrix:
+        leg: [terminal, streaming, cancel-resume, runtime]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      # `src/harness/search/` shells out to the real ripgrep binary, for the same
+      # reason `typecheck-and-tests` installs it: an assertion about an external
+      # tool's output shape is not worth having if the tool can be absent and the
+      # job still go green.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      # `bun test` exits non-zero when a filter matches no test file, so a leg
+      # whose paths were renamed away fails here rather than passing vacuously.
+      - name: Client gate — ${{ matrix.leg }}
+        run: bun run test:client:${{ matrix.leg }}
 
   standard-baseline:
     # Independently measure `main` so `standard-pr` can classify against it.

@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 4: Freshness and delivery: bindings managed sync and bootstrap",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:09.088Z",
-  "updatedAt": "2026-09-07T16:21:19.284Z",
+  "updatedAt": "2026-09-07T17:26:01.445Z",
   "source": {
     "type": "description",
     "ref": null
@@ -152,6 +152,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "L8: профиль бюджета до оптимизации, фикстуры 50/500/2000 страниц и постраничный оракул для свежести",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -207,6 +222,16 @@
       "at": "2026-09-07T16:21:19.284Z",
       "event": "task-done",
       "detail": "T9: Завершение L2: реестр команд несёт ту же ложную пометку read-only на поверхности, по которой агент решает об автодопуске, и sync --apply обходит охрану, проставляя провенанс безусловно"
+    },
+    {
+      "at": "2026-09-07T16:39:54.857Z",
+      "event": "task-added",
+      "detail": "T10: L8: профиль бюджета до оптимизации, фикстуры 50/500/2000 страниц и постраничный оракул для свежести"
+    },
+    {
+      "at": "2026-09-07T17:26:01.445Z",
+      "event": "task-done",
+      "detail": "T10: L8: профиль бюджета до оптимизации, фикстуры 50/500/2000 страниц и постраничный оракул для свежести"
     }
   ]
 }

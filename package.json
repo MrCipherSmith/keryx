@@ -33,14 +33,26 @@
   "bin": {
     "keryx": "./dist/cli.js"
   },
+  "main": "./dist/core.js",
+  "exports": {
+    ".": "./dist/core.js",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "keryx": "bun ./src/cli.ts",
-    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --project tsconfig.scripts.json --noEmit",
     "test": "bun test",
+    "test:core": "bun test src/cli src/core src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/",
+    "test:client:terminal": "bun test src/tui/ src/commands/shell",
+    "test:client:streaming": "bun test src/harness/provider/",
+    "test:client:cancel-resume": "bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/commands/sessions",
+    "test:client:runtime": "bun test src/harness/ src/mcp-client/ src/agents/ src/commands/agent src/commands/harness src/commands/providers",
+    "test:client": "bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime",
     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
+    "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",
     "check:doc-links": "bun scripts/check-doc-links.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts",
@@ -52,6 +64,7 @@
     "src/gdgraph",
     "src/gdskills/bundled",
     "src/gdskills/contracts",
+    "!src/**/*.test.ts",
     "LICENSE",
     "README.md",
     "package.json"

@@ -36,6 +36,7 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
+import { retentionCommand } from "./commands/retention";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -93,6 +94,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   session: sessionsCommand,
   version: versionCommand,
   workspace: workspaceCommand,
+  retention: retentionCommand,
 };
 
 export async function main(): Promise<void> {
@@ -244,6 +246,10 @@ Usage:
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
   keryx mcp install|uninstall --runtime <cursor|claude|opencode|generic|all> [--dry-run]
+  keryx retention status [--json]
+  keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+                                               Bound gdctx raw/artifacts logs and owner write-conflict
+                                               sidecars; dry run by default, --apply removes
   keryx --version
 
 Commands:
@@ -282,6 +288,7 @@ Commands:
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
+  retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
 `);
 }
 

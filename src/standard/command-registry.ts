@@ -747,6 +747,59 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- retention ----------------------------------------------------------
+  {
+    module: "retention",
+    command: "retention status",
+    summary: "Read-only inventory of gdctx raw/artifacts logs and owner write-conflict sidecars against their retention caps.",
+    intent: [
+      "статус хранения",
+      "retention status",
+      "сколько логов накопилось",
+      "how big are the ctx logs",
+      "retention inventory",
+    ],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured per-target counts/bytes" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "retention",
+    command: "retention sweep",
+    summary:
+      "Apply the retention policy (age cutoff, then a total-byte cap evicting oldest-first) to gdctx raw/artifacts logs " +
+      "and owner write-conflict sidecars. DRY RUN BY DEFAULT — nothing is removed unless --apply is passed.",
+    intent: [
+      "почисти логи ctx",
+      "retention sweep",
+      "clean up gdctx logs",
+      "prune raw logs",
+      "sweep old context logs",
+    ],
+    args: [
+      { name: "apply", type: "bool", required: false, desc: "actually remove eligible entries; without it, nothing is deleted" },
+      { name: "target", type: "string", required: false, desc: "restrict to one target id from `retention status` (repeatable)" },
+      { name: "max-age-days", type: "number", required: false, desc: "override every target's age cutoff for this run only" },
+      { name: "max-bytes", type: "number", required: false, desc: "override every target's byte cap for this run only" },
+      { name: "json", type: "bool", required: false, desc: "structured per-target sweep report" },
+    ],
+    json: true,
+    // `read: false` unconditionally, even though the default invocation (no
+    // `--apply`) deletes nothing — the same reasoning `wiki freshness` above
+    // documents: a descriptor cannot promise a caller which path a given
+    // invocation takes, and `read` feeds `isAutoAllowable`. A consumer that
+    // auto-allows this because "it's usually just a dry run" would auto-allow
+    // exactly the invocation that deletes files under .metaproject/. An
+    // unreachable store or a failed removal also makes this exit 1 with
+    // `status: "incomplete"` — never a silent partial success.
+    read: false,
+    sideEffects: [
+      "dry run by default: reports what would be removed under .metaproject/data/gdctx/raw, " +
+        ".metaproject/data/gdctx/artifacts, and .metaproject/workspaces/**/*-write-conflicts/**, without touching disk",
+      "--apply PERMANENTLY REMOVES eligible files/directories under those same paths",
+      "does not touch content already relayed to an agent, exported copies, or git history",
+    ],
+  },
   {
     module: "providers",
     command: "providers cross-family",

@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 3: Useful retrieval: wiki sections ranking repomap and bounded context",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:08.483Z",
-  "updatedAt": "2026-09-07T15:13:06.344Z",
+  "updatedAt": "2026-09-07T16:59:35.635Z",
   "source": {
     "type": "description",
     "ref": null
@@ -114,7 +114,7 @@
       "id": "T7",
       "title": "Найдено инвентаризацией: ctx read --mode compact теряет строку FAIL и ломает JSON, сообщая об экономии; wiki ask пишет запрос пользователя на диск из неизменяющей команды; запрос из стоп-слов даёт уверенный ответ",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -122,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -188,6 +189,11 @@
       "at": "2026-09-07T15:13:06.344Z",
       "event": "task-done",
       "detail": "T8: Лейн D: граница инструментов для агента слепа — карта репозитория не принимает seed и теряет обязательность и потерю, инструмент графа не сообщает свежесть, поиск кода в протоколе мёртв"
+    },
+    {
+      "at": "2026-09-07T16:59:35.635Z",
+      "event": "task-done",
+      "detail": "T7: Найдено инвентаризацией: ctx read --mode compact теряет строку FAIL и ломает JSON, сообщая об экономии; wiki ask пишет запрос пользователя на диск из неизменяющей команды; запрос из стоп-слов даёт уверенный ответ"
     }
   ]
 }

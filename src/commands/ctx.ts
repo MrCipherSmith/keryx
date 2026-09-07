@@ -8,6 +8,14 @@ import { redactRaw } from "../security/guard";
 import { runCtxHook } from "../ctx/hook";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
 import { resolveRuntimes, runtimeIds, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";
+import {
+  compactLines,
+  detectStructuredFormat,
+  excerptNotice,
+  importantLines,
+  omissionNote,
+  shownSuffix,
+} from "../ctx/lines";
 
 type CtxArtifact = {
   id: string;
@@ -533,8 +541,10 @@ export function summarizeDiff(
   const risky = shape.files.filter((file) =>
     /(^|\/)(package\.json|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
   );
-  const hunks = lines.filter((line) => line.startsWith("@@")).slice(0, config.maxOutputLines);
-  const errors = importantLines(lines, config);
+  const allHunks = lines.filter((line) => line.startsWith("@@"));
+  const shownHunks = allHunks.slice(0, config.maxOutputLines);
+  const hunkNote = omissionNote(shownHunks.length, allHunks.length, "hunk headers");
+  const hunks = hunkNote ? [...shownHunks, hunkNote] : shownHunks;
 
   return `# gdctx diff summary
 
@@ -557,7 +567,7 @@ ${renderRiskHints(risky, shape, shape.files)}
 ${hunks.length > 0 ? hunks.join("\n") : "(no hunk headers)"}
 \`\`\`
 
-${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
+${importantSection(lines, config)}
 `;
 }
 
@@ -752,22 +762,29 @@ export function summarizeRgFileList(
 ): string {
   const lines = nonEmptyLines(result.raw);
   const shown = lines.slice(0, config.maxOutputLines);
-  const omitted = lines.length - shown.length;
+  const note = omissionNote(shown.length, lines.length, "files");
 
   return `# gdctx rg (file list)
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`
+${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`${shownSuffix(shown.length, lines.length)}
 
 ## Files
 
 ${shown.length > 0 ? shown.map((line) => `- ${line}`).join("\n") : "- none"}
-${omitted > 0 ? `\n… omitted ${omitted} more` : ""}
-${result.stderr.trim() ? `\n${renderTextSection("stderr", result.stderr.split("\n").slice(0, config.maxImportantLines))}` : ""}`;
+${note ? `\n${note}` : ""}
+${result.stderr.trim() ? `\n${renderStderr(result.stderr, config)}` : ""}`;
 }
 
-function summarizeRg(
+// Defect (flow 235 / T7, #1): the header counted the whole search and the body
+// showed a fraction of it, with nothing between them saying so. Measured:
+// `Matches: 50` printed above four matches, `Matches: 60` above 28, `Files: 20`
+// above 12. The header count is true — it is the only number in the output that
+// is — so a reader takes it as a description of what they are looking at and
+// builds an enumeration on a twelfth of the result. The counts stay; what they
+// gain is the size of the body beside them, and a marker at every cut.
+export function summarizeRg(
   command: string,
   result: CommandResult,
   config: CtxConfig,
@@ -779,34 +796,43 @@ function summarizeRg(
     .map(([file, fileMatches]) => ({ file, matches: fileMatches }))
     .sort((a, b) => b.matches.length - a.matches.length);
 
+  const shownFiles = files.slice(0, config.maxGroupItems);
+  const shownMatches = shownFiles.reduce(
+    (total, item) => total + Math.min(item.matches.length, RG_EXAMPLES_PER_FILE),
+    0,
+  );
+  const topFilesNote = omissionNote(shownFiles.length, files.length, "files");
+
   return `# gdctx rg summary
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-Matches: \`${matches.length}\`
-Files: \`${files.length}\`
+Matches: \`${matches.length}\`${shownSuffix(shownMatches, matches.length)}
+Files: \`${files.length}\`${shownSuffix(shownFiles.length, files.length)}
 Raw lines: \`${lines.length}\`
 
 ## Top Files
 
-${files.length > 0 ? files.slice(0, config.maxGroupItems).map((item) => `- ${item.file}: ${item.matches.length}`).join("\n") : "- none"}
+${files.length > 0 ? [...shownFiles.map((item) => `- ${item.file}: ${item.matches.length}`), ...(topFilesNote ? [topFilesNote] : [])].join("\n") : "- none"}
 
 ## Matches
 
 ${renderRgMatches(files, config)}
 
-${result.stderr.trim() ? renderTextSection("stderr", result.stderr.split("\n").slice(0, config.maxImportantLines)) : ""}
+${result.stderr.trim() ? renderStderr(result.stderr, config) : ""}
 `;
 }
 
-function summarizeCommandOutput(
+export function summarizeCommandOutput(
   command: string,
   result: CommandResult,
   config: CtxConfig,
 ): string {
   const lines = nonEmptyLines(result.raw);
-  const important = importantLines(lines, config);
-  const selected = compactLines(lines, config.maxOutputLines);
+  const compaction = compactLines(lines, config.maxOutputLines, config.maxImportantLines);
+  // A command whose output IS a document (`--reporter=json`, a `cat` of a
+  // manifest) must not hand back a compacted body that still looks like one.
+  const format = compaction.omitted > 0 ? detectStructuredFormat(result.raw) : null;
 
   return `# gdctx command summary
 
@@ -815,12 +841,12 @@ Exit code: \`${result.exitCode}\`
 Raw lines: \`${lines.length}\`
 stdout bytes: \`${Buffer.byteLength(result.stdout)}\`
 stderr bytes: \`${Buffer.byteLength(result.stderr)}\`
-
-${important.length > 0 ? renderTextSection("Errors / Warnings", important) : ""}
+${format ? `${excerptNotice(format, compaction.lines.length - 1, lines.length)}\n` : ""}
+${importantSection(lines, config)}
 ## Output
 
 \`\`\`text
-${selected.join("\n") || "(no output)"}
+${compaction.lines.join("\n") || "(no output)"}
 \`\`\`
 `;
 }
@@ -872,21 +898,31 @@ ${todos.join("\n") || "(none)"}
 `;
 }
 
-function summarizeCompact(file: string, lines: string[], config: CtxConfig): string {
+// Defect (flow 235 / T7, #3): a compacted JSON file still opened `{` and closed
+// `}` and no longer parsed. Measured on
+// `.metaproject/data/gdgraph/artifacts/module-map.json` (1,304 lines): the body
+// looked whole and JSON.parse rejected it at the elision marker. A document that
+// looks whole and is not is worse than an obvious fragment, so an elided
+// structured file is now labelled as an excerpt that does not parse. A file that
+// fits entirely is untouched — it still parses, and says nothing about excerpts.
+export function summarizeCompact(file: string, lines: string[], config: CtxConfig): string {
+  const budget = config.compactHeadLines + config.compactTailLines;
+  const omitted = Math.max(0, lines.length - budget);
   const selected =
-    lines.length > config.compactHeadLines + config.compactTailLines
+    omitted > 0
       ? [
           ...lines.slice(0, config.compactHeadLines),
-          `... omitted ${lines.length - config.compactHeadLines - config.compactTailLines} lines ...`,
+          `... omitted ${omitted} of ${lines.length} lines — full file in raw ...`,
           ...lines.slice(-config.compactTailLines),
         ]
       : lines;
+  const format = omitted > 0 ? detectStructuredFormat(lines.join("\n")) : null;
 
   return `# gdctx compact file
 
 File: \`${file}\`
 Lines: \`${lines.length}\`
-
+${format ? `${excerptNotice(format, budget, lines.length)}\n` : ""}
 \`\`\`text
 ${selected.join("\n")}
 \`\`\`
@@ -1039,10 +1075,10 @@ function renderDiffFiles(shape: DiffOutputShape, config: CtxConfig): string {
   }
 
   const shown = shape.files.slice(0, config.maxGroupItems);
-  const omitted = shape.files.length - shown.length;
+  const note = omissionNote(shown.length, shape.files.length, "files");
   return [
     ...shown.map((file) => `- ${file.path}${renderDiffCounts(file)}`),
-    ...(omitted > 0 ? [`… omitted ${omitted} more`] : []),
+    ...(note ? [note] : []),
   ].join("\n");
 }
 
@@ -1097,11 +1133,8 @@ function renderUntrackedFiles(untracked: string[], config: CtxConfig): string {
   }
 
   const shown = untracked.slice(0, config.maxGroupItems);
-  const omitted = untracked.length - shown.length;
-  return [
-    ...shown.map((file) => `- ${file}`),
-    ...(omitted > 0 ? [`… omitted ${omitted} more`] : []),
-  ].join("\n");
+  const note = omissionNote(shown.length, untracked.length, "untracked files");
+  return [...shown.map((file) => `- ${file}`), ...(note ? [note] : [])].join("\n");
 }
 
 function parseRgMatches(lines: string[]): Array<{ file: string; line: string; column: string; text: string }> {
@@ -1115,6 +1148,9 @@ function parseRgMatches(lines: string[]): Array<{ file: string; line: string; co
   });
 }
 
+/** How many hits are rendered per file before the rest are named as omitted. */
+const RG_EXAMPLES_PER_FILE = 4;
+
 function renderRgMatches(
   files: Array<{ file: string; matches: Array<{ line: string; column: string; text: string }> }>,
   config: CtxConfig,
@@ -1123,24 +1159,35 @@ function renderRgMatches(
     return "- none";
   }
 
-  return files
-    .slice(0, config.maxGroupItems)
-    .map((item) => {
-      const examples = item.matches
-        .slice(0, 4)
-        .map((match) => `  - ${match.line}:${match.column} ${truncate(match.text, 180)}`)
-        .join("\n");
-      return `- ${item.file}\n${examples}`;
-    })
-    .join("\n");
+  const rendered = files.slice(0, config.maxGroupItems).map((item) => {
+    const shown = item.matches.slice(0, RG_EXAMPLES_PER_FILE);
+    const note = omissionNote(shown.length, item.matches.length, "matches in this file");
+    return [
+      `- ${item.file}`,
+      ...shown.map((match) => `  - ${match.line}:${match.column} ${truncate(match.text, 180)}`),
+      ...(note ? [`  ${note}`] : []),
+    ].join("\n");
+  });
+  const note = omissionNote(rendered.length, files.length, "files");
+  return [...rendered, ...(note ? [note] : [])].join("\n");
+}
+
+/** stderr, bounded, with the marker that says the bound was reached. */
+function renderStderr(stderr: string, config: CtxConfig): string {
+  const lines = stderr.split("\n");
+  const shown = lines.slice(0, config.maxImportantLines);
+  const note = omissionNote(shown.length, lines.length, "stderr lines");
+  return renderTextSection("stderr", note ? [...shown, note] : shown);
 }
 
 function outlineEntries(lines: string[], pattern: RegExp, config: CtxConfig): string[] {
-  return lines
+  const matched = lines
     .map((line, index) => ({ line, number: index + 1 }))
     .filter(({ line }) => pattern.test(line))
-    .slice(0, config.outlineMaxEntries)
     .map(({ line, number }) => `${number}: ${line.trimEnd()}`);
+  const shown = matched.slice(0, config.outlineMaxEntries);
+  const note = omissionNote(shown.length, matched.length, "entries");
+  return note ? [...shown, note] : shown;
 }
 
 async function loadConfig(): Promise<CtxConfig> {
@@ -1164,31 +1211,16 @@ async function loadConfig(): Promise<CtxConfig> {
   };
 }
 
-function importantLines(lines: string[], config: CtxConfig): string[] {
-  return dedupe(
-    lines.filter((line) =>
-      /error|failed|failure|exception|traceback|warning|warn|fatal|cannot|not found|permission denied/i.test(line),
-    ),
-  ).slice(0, config.maxImportantLines);
-}
-
-function compactLines(lines: string[], limit: number): string[] {
-  if (lines.length <= limit) {
-    return lines;
+// Verdict lines for the `Errors / Warnings` section, with the marker that says
+// how many the budget cut. Which lines count is `classifyLine` in ctx/lines.ts —
+// shared with compaction, which used to carry a second, different regex.
+function importantSection(lines: string[], config: CtxConfig): string {
+  const { kept, total } = importantLines(lines, config.maxImportantLines);
+  if (kept.length === 0) {
+    return "";
   }
-
-  const head = Math.ceil(limit * 0.45);
-  const tail = Math.floor(limit * 0.45);
-  const important = lines.filter((line) =>
-    /error|failed|failure|exception|traceback|warning|warn|fatal/i.test(line),
-  );
-
-  return dedupe([
-    ...lines.slice(0, head),
-    ...important.slice(0, limit - head - tail),
-    `... omitted ${Math.max(0, lines.length - limit)} lines ...`,
-    ...lines.slice(-tail),
-  ]).slice(0, limit + 1);
+  const note = omissionNote(kept.length, total, "failure/warning lines");
+  return renderTextSection("Errors / Warnings", note ? [...kept, note] : kept);
 }
 
 function nonEmptyLines(value: string): string[] {

@@ -1,0 +1,66 @@
+{
+  "profileVersion": "1.0.0",
+  "derivedFrom": [
+    "docs/requirements/keryx-agent-first-core/decision-traceability.md:35 AC-22 — 50/500/2000 pages, cold/repeated agree in meaning with a per-page oracle, a git failure yields unknown, the budget is agreed before optimisation",
+    "docs/requirements/keryx-agent-first-core/prd.md:45 AFC-22 — batched Git queries, an in-run cache and bounded concurrency accounting for a dirty checkout; a persistent cache only by separate measurement",
+    "docs/requirements/keryx-agent-first-core/metrics-and-validation.md:64 — before performance changes, collect a cold/repeated baseline at 50/500/2000 pages against a per-page oracle and Git operation counts; latency budget, concurrency bound and ranking weights are fixed in a versioned calibration profile",
+    "docs/requirements/keryx-agent-first-core/wiki-specification.md:88 — refresh checks groups of equal base revisions in batches and caches Git results within a run, accounting for a dirty/untracked checkout; a persistent cache needs a separately measured basis",
+    "src/harness/tool/builtin/shell-exec-tool.ts:46 DEFAULT_SHELL_TIMEOUT_MS = 120000 — this repository's own existing ceiling for a single interactive tool call, used here only as the outer-bound anchor",
+    "scripts/stress/keryx-shell-stress.ts T2 — 10 concurrent `keryx ctx rg` subprocesses measured with zero errors on this codebase's tooling, used here only as a concurrency-safety data point"
+  ],
+  "agreedBeforeOptimisation": true,
+  "scales": [50, 500, 2000],
+  "concurrencyBound": {
+    "maxParallelGitSubprocesses": 8,
+    "rationale": "AFC-22 names 'bounded concurrency' explicitly but gives no number. 8 is chosen with margin below the 10-concurrent-subprocess point already measured safe on this codebase's own tooling (keryx-shell-stress.ts T2), leaving headroom for the rest of an agent turn's own concurrent work rather than saturating it."
+  },
+  "gitSubprocessBudget": {
+    "perDistinctBaseRevision": 3,
+    "fixedPerRun": 1,
+    "worstCaseCeiling": {
+      "perPage": 2.14,
+      "note": "2.14 spawns/page is TODAY's measured per-page linear cost (T10 inventory + this task's own re-measurement), used here only as a non-regression floor: a degenerate, no-shared-base-revision corpus must not spawn MORE than the unbatched baseline already does. It is not the target — it is the worst case the target must never exceed."
+    },
+    "rationale": "AFC-22's named mechanism is 'checks groups of equal base revisions in batches' (wiki-specification.md:88). Once implemented, cost should scale with the number of DISTINCT VerifiedAt revisions a run touches, not the page count: one existence probe, one batched `git log`, one batched `git diff` per shared base revision, each pathspec-scoped to every page sharing that base. Real corpora cluster (a `wiki refresh` run stamps a whole batch of pages at one HEAD), so distinct-revision count is expected to stay far below page count in practice; this profile does not assume a specific cluster size, only the batching principle plus a floor that guarantees the pathological case is never worse than the status quo."
+  },
+  "latencyBudgetMs": {
+    "perScale": {
+      "50": { "cold": 1500, "repeated": 200 },
+      "500": { "cold": 6000, "repeated": 500 },
+      "2000": { "cold": 20000, "repeated": 1500 }
+    },
+    "hardCeiling": {
+      "scale": 2000,
+      "ms": 12000,
+      "anchoredOn": "10% of DEFAULT_SHELL_TIMEOUT_MS (120000ms), this codebase's own existing ceiling for a single interactive tool call (src/harness/tool/builtin/shell-exec-tool.ts:46) — wiki_freshness is one call among several an agent turn may make, so it must not itself consume more than a modest slice of the budget any single tool call is already allowed."
+    },
+    "unitCostAssumptionMs": 26,
+    "rationale": "`perScale` assumes typical base-revision clustering (a run touching at most a few dozen distinct base revisions, not one per page) and converts the git-subprocess budget above into wall-clock using this repo's own measured per-subprocess overhead (~26ms, from this task's real-git measurement: see the benchmark's own logged run) purely as a unit-conversion constant. `repeated` is far cheaper than `cold` because AFC-22 requires an in-run cache: a second read of a decision already produced in this run must reuse it rather than re-spawning git. `hardCeiling` is the single number this profile is willing to call a hard requirement independent of any assumption about corpus shape; `perScale` is a target, not yet a gate."
+  },
+  "cachePolicy": {
+    "inRunCache": "Authorized and expected by AFC-22 ('caches Git results within a run'): a process-lifetime memo keyed by (base revision, pathspec-set or individual path) so a 'repeated' call inside one run/process pays for each (revision, path) git fact at most once. Not implemented by this task — this is the target the code half of a later lane (L8's batching/caching change, sequenced after L1) is checked against.",
+    "persistentCache": "NOT authorized by this profile. wiki-specification.md:88 requires a separately measured basis before a cache surviving process exit is introduced, and no such measurement exists yet. A future profile version may authorize one, but only after it exists as its own measured proposal, not as a side effect of this task.",
+    "dirtyCheckoutHandling": "AFC-22 requires batching/caching to account for a dirty or untracked working tree. Not implemented by this task. `fixtures/wiki-freshness-scale/manifest.json` reserves a `dirtyCheckout` corpus variant so a later implementation has something to test against; this profile does not yet set a separate budget number for it."
+  },
+  "rankingWeights": {
+    "formula": "two-key stable sort, no weighted scoring formula",
+    "keys": [
+      { "field": "commitsBehind", "direction": "desc", "role": "primary" },
+      { "field": "path", "direction": "asc", "role": "tie-break" }
+    ],
+    "note": "This is a RECORD of `src/wiki/freshness/report.ts`'s existing `entries.sort` (AC13), not a new design — read here, not written. M09 asks for ranking weights to live in the versioned calibration profile alongside the latency budget; today's ranking has no weighted formula to record beyond this fixed ordering. If a future task introduces weighted ranking (e.g. blending confidence, category severity or recency), it must bump `profileVersion` and record the new weights here BEFORE the ranking code changes, mirroring AC-22's own 'budget agreed before optimisation' ordering."
+  },
+  "gitFailureContract": {
+    "status": "closed",
+    "requirement": "AC-22 clause 2 / AC-W05 clause 3: a git failure yields unknown, distinguishable from the ordinary 'never verified' unknown.",
+    "closedBy": "flow 236 T7 — src/sync/provenance.ts's `gitCmdResult`, src/wiki/freshness/page-freshness.ts's `gitFailure` field and src/wiki/freshness/report.ts's `not-a-git-repository` / `git-command-failed` limitation codes. This profile's benchmark re-verifies the contract holds at 50/500/2000 pages; it does not re-implement or re-derive it."
+  },
+  "outOfScope": [
+    "The batching-by-base-revision code change itself (src/wiki/freshness/page-freshness.ts) — this profile is the precondition for that change, not the change.",
+    "The in-run git-result cache implementation.",
+    "A persistent (cross-process) cache — not authorized at all by this profile.",
+    "A dirty/untracked-checkout cost budget number — the fixture variant is reserved but not measured or budgeted here.",
+    "A weighted ranking formula — only today's unweighted two-key sort is recorded.",
+    "Any change to src/wiki/freshness/**, src/sync/provenance.ts, src/ctx/**, src/commands/ctx.ts, package.json or a retention module — all sibling-owned in this flow."
+  ]
+}

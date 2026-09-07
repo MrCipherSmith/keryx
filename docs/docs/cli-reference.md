@@ -2224,6 +2224,63 @@ only. See [Slate for external agents](./guides/slate.md).
 
 ---
 
+## retention
+
+Bounds stores that grow with every routed command or refused write and that
+nothing else prunes: `.metaproject/data/gdctx/raw` and `artifacts` (one file
+per `keryx ctx rg`/`ctx read`/`ctx run` invocation — see [`ctx`](#ctx)), and
+the per-refused-write conflict sidecars each SAC owner writer leaves under
+`.metaproject/workspaces/<id>/<owner>-write-conflicts/` when a proposal's base
+version no longer matches the target (see [`workspace`](#workspace) `review`).
+Neither store had any retention logic before this command shipped, and gdctx's
+was measured at over 300 MiB and growing across two flow reports taken hours
+apart.
+
+```
+keryx retention status [--json]
+keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | `--json` | Read-only inventory: for each target, its directory, entry count, bytes on disk, and what the policy would remove right now. Touches nothing. |
+| `sweep` | `--apply`, `--target <id>` (repeatable), `--max-age-days <n>`, `--max-bytes <n>`, `--json` | Applies the retention policy. **Dry run by default** — without `--apply`, nothing is removed and the report shows exactly what would go. `--target` restricts the run to one or more target ids from `status`. `--max-age-days`/`--max-bytes` override every target's own cap uniformly for this run only. |
+
+**Policy.** Two axes, oldest-first, the same shape the [wiki freshness
+queue](#wiki) already caps a single growing file by (lines + bytes) — adapted
+here for a directory of many small immutable files instead of one log:
+
+- **Age** is primary. gdctx raw logs and artifacts are the evidence behind
+  routed-search summaries an agent may still want to open, so retention
+  trades recoverability against size deliberately: 14 days by default for
+  gdctx, 30 days for owner write-conflict sidecars (an actual refused write an
+  operator may want to reconcile, not routine search chatter).
+- **Total bytes** is the backstop, applied only after the age cutoff, evicting
+  the oldest remaining entries until the target is back under its cap. Age
+  alone does not bound a burst — a single day of heavy `ctx rg` use can add
+  gigabytes inside the age window regardless of how old anything else is.
+  Defaults: 200 MiB for `gdctx-raw`, 50 MiB for `gdctx-artifacts`, 20 MiB per
+  discovered `owner-write-conflicts` directory.
+
+Entry count is deliberately not its own axis — for these stores it never fires
+before the byte cap already would.
+
+**Unreachable stores.** A target directory that cannot be listed, an entry
+that cannot be sized, or an entry that cannot be removed marks that target
+`incomplete` with the specific reason — never folded into a clean success. A
+problem discovering targets at all (e.g. `.metaproject/workspaces/` itself
+unreadable) is reported separately as a discovery issue and also folds the
+whole report to `incomplete`, since a target that was never found is not the
+same thing as a target with nothing in it. Either way the command then exits
+`1`.
+
+**Scope.** This sweeps the local stores named above only. Content already
+relayed to an agent, copies exported elsewhere, and git history are out of
+scope and are never touched or promised erased by it — this command bounds
+size, it does not implement AC-29's tombstone/forget semantics.
+
+---
+
 ## workspace
 
 Shared Agent Context operator surface. Thin argv adapter over `src/sac/`

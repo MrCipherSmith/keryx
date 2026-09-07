@@ -2,6 +2,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathExists } from "../lib/fs";
 import { readFile } from "node:fs/promises";
+import { omissionNote } from "./lines";
 
 // Orientation context for the Metaproject bootstrap + graph/wiki enforcement
 // layer. Where the gdctx
@@ -152,15 +153,19 @@ export async function graphContext(cwd: string): Promise<string> {
   const indexed = lines.find((l) => /Source files indexed:/i.test(l))?.trim();
 
   const start = lines.findIndex((l) => /^##\s+Top Modules/i.test(l));
-  const table: string[] = [];
+  const section: string[] = [];
   if (start >= 0) {
     for (let i = start + 1; i < lines.length; i += 1) {
       const line = lines[i] ?? "";
       if (/^##\s+/.test(line)) break;
-      if (line.trim()) table.push(line);
-      if (table.length >= MAX_MODULE_ROWS + 2) break; // header + separator + rows
+      if (line.trim()) section.push(line);
     }
   }
+  // The cut used to be a bare `break` inside the loop above, so an orientation
+  // block showing twelve modules read as the project's complete module list —
+  // the same unmarked elision fixed across the gdctx summarisers in flow 235.
+  const table = section.slice(0, MAX_MODULE_ROWS + 2); // header + separator + rows
+  const tableNote = omissionNote(table.length, section.length, "module rows");
 
   const count = await uncommittedCodeCount(cwd);
   return [
@@ -170,6 +175,7 @@ export async function graphContext(cwd: string): Promise<string> {
     "",
     "### Top modules",
     ...(table.length > 0 ? table : ["(no module stats)"]),
+    ...(tableNote ? [tableNote] : []),
     "",
     freshnessNote(count),
     "Use `keryx gdgraph affected <file>` / `keryx gdgraph query` for impact & relationships before broad search.",

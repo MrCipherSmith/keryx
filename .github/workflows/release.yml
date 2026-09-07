@@ -135,6 +135,60 @@ jobs:
           ./.release/prefix/bin/keryx --help > /dev/null
           echo "the installed binary runs"
 
+          # CORE-ONLY, the install AFC-19 actually names: "установка/работа core
+          # не тянут model runtime/credentials". The smoke above installs WITH
+          # optionalDependencies, one of which (`@opentui/core`) is a terminal-UI
+          # renderer — a client runtime — so it could never have shown that a
+          # core-only install works. `--omit=optional` is the install a consumer
+          # who wants the core gets, and until now it was exercised nowhere.
+          #
+          # No API key is set in this step's environment, and none is inherited:
+          # the assertion is "runs with no client and no keys", so a credential
+          # reaching it would make the result unreadable.
+          npm install -g --omit=optional --prefix ./.release/prefix-core "$TARBALL"
+          env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u GEMINI_API_KEY \
+            ./.release/prefix-core/bin/keryx --help > /dev/null
+          # …and one real core command, not just `--help`: a binary that prints
+          # usage and dies on the first operation would pass a help-only check.
+          env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u GEMINI_API_KEY \
+            ./.release/prefix-core/bin/keryx status > /dev/null
+          echo "the core-only install runs with no client and no keys"
+
+          # The package's LIBRARY door, exercised the way a consumer reaches it:
+          # resolve `exports["."]` from outside the package and import it. This
+          # is the half `--help` cannot reach — the CLI has a `bin`, so it would
+          # keep working with a broken or absent `exports` map, which is exactly
+          # the state this package shipped in until flow 239.
+          #
+          # `bun`, not `node`, and that is a real property of this package rather
+          # than a convenience: `dist/*.js` are `--target bun` bundles that
+          # import `bun:` builtins, so Node's ESM loader rejects them with
+          # ERR_UNSUPPORTED_ESM_URL_SCHEME (measured, not assumed). `bin/keryx`
+          # has always needed bun for the same reason, and `engines` says so.
+          mkdir -p ./.release/importer
+          cd ./.release/importer
+          npm init -y > /dev/null
+          npm install --omit=optional "../../$TARBALL" > /dev/null
+          env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u GEMINI_API_KEY bun -e "
+            const core = await import('@mrciphersmith/keryx');
+            const doors = Object.keys(core).sort();
+            console.log('core entry exports: ' + doors.join(', '));
+            if (doors.length === 0) {
+              throw new Error('the core entry resolved but exported nothing');
+            }
+            // A private core path must NOT resolve — and the file it names IS in
+            // the tarball, so a failure here is the exports map doing its job
+            // rather than a missing file.
+            try {
+              await import('@mrciphersmith/keryx/src/gdgraph/query.ts');
+              throw new Error('a private core path is still importable');
+            } catch (error) {
+              if (String(error).includes('still importable')) { throw error; }
+              console.log('private core paths are not importable');
+            }
+          "
+          cd ../..
+
       # Standalone binaries, cross-compiled on this SAME runner — no OS matrix.
       # Bun's `--compile --target=<val>` cross-compiles macOS/Linux binaries from
       # one machine (confirmed against `bun build --help` and current upstream
