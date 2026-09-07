@@ -130,7 +130,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: normaliseLabel strips repeated container markers after every line terminator, reusing skipBlockContainerPrefix. Verified by the orchestrator against a renderer oracle: the reported spellings flag. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: normaliseLabel strips repeated container markers after every line terminator, reusing skipBlockContainerPrefix. Verified by the orchestrator against a renderer oracle: the reported spellings flag."
     }
   },
   {
@@ -164,7 +164,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the adapter carries version, provenance, author, confirmedBy and caveat into the hit with the unknown sentinel, and the memory formatter renders them. The MCP tool shares the adapter and is fixed with it. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the adapter carries version, provenance, author, confirmedBy and caveat into the hit with the unknown sentinel, and the memory formatter renders them. The MCP tool shares the adapter and is fixed with it."
     }
   },
   {
@@ -199,7 +199,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: TestRelatedResult carries the context status, the adapter computes it instead of discarding it, and the formatter branches on incomplete before the empty branch. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: TestRelatedResult carries the context status, the adapter computes it instead of discarding it, and the formatter branches on incomplete before the empty branch."
     }
   },
   {
@@ -229,7 +229,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: wiki historical mode gates inclusion on the same validity-interval test memory applies, and the parity test was extended to historical mode, which it did not cover. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: wiki historical mode gates inclusion on the same validity-interval test memory applies, and the parity test was extended to historical mode, which it did not cover."
     }
   },
   {
@@ -257,7 +257,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the JSON payload is built from the report projection, so the machine form carries the same provenance fields and the same unknown sentinel as the text form. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the JSON payload is built from the report projection, so the machine form carries the same provenance fields and the same unknown sentinel as the text form."
     }
   },
   {
@@ -285,7 +285,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commits 60848c77 and f593cc84, plus flow state: T12 was closed with its actual outcome, the placeholder tasks were dispositioned as superseded, DELIVERY.md was written, the acceptance task T13 was closed, the stale evidence batch including two zero-byte logs was deleted, and all seven criteria were revoked and re-issued citing the batch that exists on disk with its own numbers. The post-fix verifier re-checked all five sub-claims and refuted the finding. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commits 60848c77 and f593cc84, plus flow state: T12 was closed with its actual outcome, the placeholder tasks were dispositioned as superseded, DELIVERY.md was written, the acceptance task T13 was closed, the stale evidence batch including two zero-byte logs was deleted, and all seven criteria were revoked and re-issued citing the batch that exists on disk with its own numbers. The post-fix verifier re-checked all five sub-claims and refuted the finding."
     }
   },
   {
@@ -319,7 +319,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the exact-shape assertion became a match assertion plus explicit sentinel checks, and the previously untested formatter gained tests. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the exact-shape assertion became a match assertion plus explicit sentinel checks, and the previously untested formatter gained tests."
     }
   },
   {
@@ -351,7 +351,7 @@ not hold on sites the repairs did not reach.
     "confidence": "medium",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: an incomplete testing context now produces a blocking finding carrying its reasons. The finding's own note about a second instance in the same file was checked and refuted; the live second instance was F-018 on a sibling adapter. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: an incomplete testing context now produces a blocking finding carrying its reasons. The finding's own note about a second instance in the same file was checked and refuted; the live second instance was F-018 on a sibling adapter."
     }
   },
   {
@@ -366,7 +366,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commits 60848c77 and f593cc84: evidence capture writes the command, the working directory and the exit code into each log, so an empty output stays checkable. The two zero-byte logs were deleted rather than left beside the new batch; they had returned once because a squash merge restored files the branch had deleted, so the deletion is committed. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commits 60848c77 and f593cc84: evidence capture writes the command, the working directory and the exit code into each log, so an empty output stays checkable. The two zero-byte logs were deleted rather than left beside the new batch; they had returned once because a squash merge restored files the branch had deleted, so the deletion is committed."
     }
   },
   {
@@ -382,7 +382,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: keryx review attach wrote a managed review package under all three flow directories, which is what the completion gate reads. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: keryx review attach wrote a managed review package under all three flow directories, which is what the completion gate reads."
     }
   },
   {
@@ -399,7 +399,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the comment claiming the collector recognises one spelling was corrected; the collector accepts both, and an existing test proves it end to end. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the comment claiming the collector recognises one spelling was corrected; the collector accepts both, and an existing test proves it end to end."
     }
   },
   {
@@ -414,7 +414,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Recorded in commit f593cc84, in the phase 2 residuals. A first attempt cited 60848c77 and had rewritten two other rows while reporting this one fixed; the verifier showed by diff that the override row was untouched. The row now carries the verifier's measurement that both overrides load here, and says plainly that a module load is not the code path and the combination is still untested by the parent. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Recorded in commit f593cc84, in the phase 2 residuals. A first attempt cited 60848c77 and had rewritten two other rows while reporting this one fixed; the verifier showed by diff that the override row was untouched. The row now carries the verifier's measurement that both overrides load here, and says plainly that a module load is not the code path and the combination is still untested by the parent."
     }
   },
   {
@@ -430,7 +430,7 @@ not hold on sites the repairs did not reach.
     "confidence": "medium",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Recorded in commit f593cc84, in the phase 2 residuals. The row that read 'не измерено' now records three measurements that disagreed, that the ten-call comparison inverted in one of them, and that the conclusion survived while the numbers should not be quoted. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Recorded in commit f593cc84, in the phase 2 residuals. The row that read 'не измерено' now records three measurements that disagreed, that the ten-call comparison inverted in one of them, and that the conclusion survived while the numbers should not be quoted."
     }
   },
   {
@@ -474,7 +474,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77, which fixed the class rather than this member: five readers carried the shape, the inline-destination reader now calls the existing helper, and the four HTML readers are covered by re-running the pass over the renderer's own view. Two guards were added, both proved by mutation. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77, which fixed the class rather than this member: five readers carried the shape, the inline-destination reader now calls the existing helper, and the four HTML readers are covered by re-running the pass over the renderer's own view. Two guards were added, both proved by mutation."
     }
   },
   {
@@ -508,7 +508,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77 for test explain and test suggest, and by the orchestrator for test context and coverage-map build, which T27's own enumeration named and left. Both orchestrator fixes are pinned by tests proved red by mutating the exact inserted lines. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77 for test explain and test suggest, and by the orchestrator for test context and coverage-map build, which T27's own enumeration named and left. Both orchestrator fixes are pinned by tests proved red by mutating the exact inserted lines."
     }
   },
   {
@@ -535,7 +535,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the status surface renders the same report's context status that the report surface already rendered. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the status surface renders the same report's context status that the report surface already rendered."
     }
   },
   {
@@ -562,7 +562,7 @@ not hold on sites the repairs did not reach.
     "confidence": "high",
     "disposition": {
       "state": "acted-on",
-      "evidence": "Closed in commit 60848c77: the sonarqube adapter declares validation following the two sibling adapters that already did, so a corrupt report records as failed rather than parsed with zero findings. Present at f593cc84de6831106d366cb5fe9265603c1d1b97, the head that merges."
+      "evidence": "Closed in commit 60848c77: the sonarqube adapter declares validation following the two sibling adapters that already did, so a corrupt report records as failed rather than parsed with zero findings."
     }
   }
 ]
