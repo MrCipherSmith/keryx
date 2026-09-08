@@ -8,19 +8,48 @@ import type { StrictSacGuard } from "./index";
 
 export type CollaborationActivity = Readonly<{ schemaVersion: "1.0"; id: string; kind: "reference-added" | "handoff-recorded"; workspaceId: string; actorSubject: string; occurredAt: string; reference?: { kind: "worktree" | "session"; uri: string; revision?: string }; handoff?: { from: string; to: string; artifactRef: string } }>;
 /**
- * What a caller supplies. `handoff.from` is optional here and required on the
- * stored row: the service fills it from the authenticated actor rather than
- * trusting a caller-supplied one, so "who handed this over" is the subject the
- * authorization server resolved and not a string anyone can type.
+ * What a caller supplies. `handoff.from` is absent here and required on the
+ * stored row: the service fills it from the authenticated actor, and REFUSES a
+ * caller-supplied one (`invalid_activity`) rather than letting it win — so
+ * "who handed this over" is the subject the authorization server resolved and
+ * not a string anyone can type.
+ *
+ * The refusal is the load-bearing half. Until flow 237 T10 this type said
+ * `from?: string` and `record()` did `supplied.handoff.from ?? actor.subject`,
+ * so a caller-supplied value took precedence and `keryx workspace handoff
+ * --from "user:the-cto"` wrote `handoff.from: "user:the-cto"` under
+ * `actorSubject: "user:local-502"`. The comment here claimed the opposite of
+ * what the code did. There is no "record on behalf of" path: nothing in this
+ * repository needed one, and a field that mixes a resolved subject with an
+ * asserted one is unreadable — if that need appears, it belongs in a
+ * separately named field whose name states that the caller asserted it.
  */
-export type CollaborationActivityInput = Omit<CollaborationActivity, "schemaVersion" | "id" | "workspaceId" | "actorSubject" | "occurredAt" | "handoff"> & { handoff?: { from?: string; to: string; artifactRef: string } };
+export type CollaborationActivityInput = Omit<CollaborationActivity, "schemaVersion" | "id" | "workspaceId" | "actorSubject" | "occurredAt" | "handoff"> & { handoff?: { to: string; artifactRef: string } };
 export class CollaborationServiceError extends Error { constructor(readonly code: "access_denied" | "invalid_activity", message: string) { super(message); } }
 export class CollaborationService {
   constructor(private readonly input: { workspaceRoot: string; workspaces: WorkspaceService; authorizationServer: SacAuthorizationServer; now?: () => Date }) {}
   private file(id: string) { return path.join(this.input.workspaceRoot, ".metaproject", "workspaces", id, "activity.jsonl"); }
   async overview(input: { request: unknown; requestCorrelationId: string; workspaceId: string }) { const manifest = await this.input.workspaces.show(input); return normalizeCollaborationResult({ workspaceId: manifest.id, references: manifest.resources.filter((r) => r.kind === "worktree" || r.kind === "session"), activity: await this.activity(input) }); }
   async activity(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<CollaborationActivity[]> { await this.input.workspaces.show(input); try { return (await readFile(this.file(input.workspaceId), "utf8")).trim().split("\n").filter(Boolean).map((line) => this.validate(JSON.parse(line))); } catch (error) { if (typeof error === "object" && error && "code" in error && error.code === "ENOENT") return []; throw error; } }
-  async record(input: { request: unknown; requestCorrelationId: string; workspaceId: string; activity: CollaborationActivityInput }) { const actor = await this.input.authorizationServer.actorContextFor(input.request, input.requestCorrelationId); if (!actor) throw new CollaborationServiceError("access_denied", "trusted ActorContext is required"); return this.input.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId: input.workspaceId, action: "write", execute: async (manifest) => { if (!isWorkspaceOwner(manifest.members, actor.subject)) throw new CollaborationServiceError("access_denied", "owner authority is required"); const supplied = input.activity as CollaborationActivityInput & Record<string, unknown>; const activity = this.validate({ schemaVersion: "1.0", id: `activity-${randomUUID()}`, workspaceId: manifest.id, actorSubject: actor.subject, occurredAt: (this.input.now ?? (() => new Date()))().toISOString(), ...supplied, ...(supplied.handoff && typeof supplied.handoff === "object" && !Array.isArray(supplied.handoff) ? { handoff: { ...supplied.handoff, from: supplied.handoff.from ?? actor.subject } } : {}) }); await mkdir(path.dirname(this.file(manifest.id)), { recursive: true, mode: 0o700 }); await appendFile(this.file(manifest.id), `${JSON.stringify(activity)}\n`, { mode: 0o600 }); return normalizeCollaborationResult(activity); } }); }
+  async record(input: { request: unknown; requestCorrelationId: string; workspaceId: string; activity: CollaborationActivityInput }) {
+    const actor = await this.input.authorizationServer.actorContextFor(input.request, input.requestCorrelationId);
+    if (!actor) throw new CollaborationServiceError("access_denied", "trusted ActorContext is required");
+    return this.input.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId: input.workspaceId, action: "write", execute: async (manifest) => {
+      if (!isWorkspaceOwner(manifest.members, actor.subject)) throw new CollaborationServiceError("access_denied", "owner authority is required");
+      const supplied = input.activity as CollaborationActivityInput & Record<string, unknown>;
+      const suppliedHandoff = supplied.handoff && typeof supplied.handoff === "object" && !Array.isArray(supplied.handoff) ? (supplied.handoff as Record<string, unknown>) : undefined;
+      // Refused, not silently overwritten. A caller that states a `from` has
+      // asked for something this row cannot express — the stored subject is
+      // always the one the authorization server resolved — and telling it so
+      // is the difference between "your attribution was ignored" and "your
+      // attribution was recorded", which a silent overwrite leaves ambiguous.
+      if (suppliedHandoff && "from" in suppliedHandoff) throw new CollaborationServiceError("invalid_activity", "handoff.from is filled from the authenticated actor and cannot be supplied by a caller");
+      const activity = this.validate({ schemaVersion: "1.0", id: `activity-${randomUUID()}`, workspaceId: manifest.id, actorSubject: actor.subject, occurredAt: (this.input.now ?? (() => new Date()))().toISOString(), ...supplied, ...(suppliedHandoff ? { handoff: { ...suppliedHandoff, from: actor.subject } } : {}) });
+      await mkdir(path.dirname(this.file(manifest.id)), { recursive: true, mode: 0o700 });
+      await appendFile(this.file(manifest.id), `${JSON.stringify(activity)}\n`, { mode: 0o600 });
+      return normalizeCollaborationResult(activity);
+    } });
+  }
   private validate(value: unknown): CollaborationActivity { if (!value || typeof value !== "object" || Array.isArray(value)) throw new CollaborationServiceError("invalid_activity", "activity must be an object"); const r = value as Record<string, unknown>; const allowed = new Set(["schemaVersion", "id", "kind", "workspaceId", "actorSubject", "occurredAt", "reference", "handoff"]); if (Object.keys(r).some((key) => !allowed.has(key) || /prompt|transcript|secret|reasoning|content/i.test(key))) throw new CollaborationServiceError("invalid_activity", "activity contains forbidden metadata"); if (r.schemaVersion !== "1.0" || (r.kind !== "reference-added" && r.kind !== "handoff-recorded") || typeof r.id !== "string" || typeof r.workspaceId !== "string" || typeof r.actorSubject !== "string" || typeof r.occurredAt !== "string") throw new CollaborationServiceError("invalid_activity", "activity is malformed"); if (r.kind === "handoff-recorded") this.validateHandoff(r.handoff); return r as unknown as CollaborationActivity; }
   /**
    * A `handoff-recorded` row that names nobody is worse than no row: it says a

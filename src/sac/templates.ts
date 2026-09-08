@@ -108,8 +108,11 @@ agent proposes becomes readable context until it is accepted.
    The proposal is inert until a reviewer runs \`keryx workspace review
    <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed>\`.
 4. \`keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>\`
-   records that work moved from one participant to another. \`--from\` defaults
-   to the authenticated actor, so a handoff is always attributed.
+   records that work moved from one participant to another. The recorded
+   \`from\` is always the authenticated actor the authorization server
+   resolved — there is no flag that sets it, so a handoff is always attributed
+   and the attribution is never a string the caller typed. Recording a handoff
+   on someone else's behalf is not supported: run the command as that subject.
 5. \`keryx workspace collaboration <workspace-id>\` shows cross-session
    collaboration state for the workspace — the references, and the handoffs
    step 4 recorded. An empty \`activity\` now means none were recorded; until

@@ -12,6 +12,7 @@
 // delete) is the safer contract.
 
 import { optionValue } from "../lib/args";
+import { AUTO_SWEEP_ENV, lastAutoSweepAt } from "../retention/auto-sweep";
 import { defaultFsDeps, type RetentionFsDeps } from "../retention/fs-deps";
 import { sweepProject, type SweepReport, type TargetSweepResult } from "../retention/sweep";
 
@@ -45,6 +46,12 @@ reported "incomplete" with the reason, never folded into a clean success —
 and the whole command then exits 1. This sweep only touches the local stores
 named above: content already relayed to an agent, exported copies, and git
 history are out of scope and are never promised erased by it.
+
+Neither command is the only thing that applies the policy: \`keryx ctx\` also
+sweeps the two gdctx stores automatically after it writes an artifact, at most
+once a day per project (see \`src/retention/auto-sweep.ts\`). \`status\` prints
+when that last ran. Set ${AUTO_SWEEP_ENV}=0 to turn the automatic sweep off and
+bound these stores only by hand.
 `);
 }
 
@@ -98,11 +105,22 @@ async function runStatus(cwd: string, fsDeps: RetentionFsDeps, now: number | und
   // `sweep` uses, since "what is here and how old/big is it" is exactly what
   // a dry run already computes, and never let it apply.
   const report = await sweepProject(cwd, fsDeps, { dryRun: true, ...(now !== undefined ? { now } : {}) });
+  // The automatic gdctx sweep on the `keryx ctx` write path (flow 237 T12) is
+  // silent by design, so this read-only surface is where it becomes visible:
+  // "eligible: 0" means something different when a sweep ran an hour ago than
+  // when none has ever run.
+  const autoSweptAt = await lastAutoSweepAt(cwd);
   if (json) {
-    console.log(JSON.stringify(report, null, 2));
+    console.log(JSON.stringify({ ...report, lastAutomaticSweepAt: autoSweptAt === null ? null : new Date(autoSweptAt).toISOString() }, null, 2));
     return;
   }
   console.log(renderReport(report, { statusOnly: true }));
+  console.log("");
+  console.log(
+    autoSweptAt === null
+      ? `Last automatic sweep: never (keryx ctx sweeps these gdctx stores at most once a day after writing an artifact; ${AUTO_SWEEP_ENV}=0 disables it)`
+      : `Last automatic sweep: ${new Date(autoSweptAt).toISOString()}`,
+  );
   if (report.status === "incomplete") process.exitCode = 1;
 }
 

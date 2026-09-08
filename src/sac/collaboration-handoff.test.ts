@@ -87,7 +87,56 @@ test("a handoff recorded through the CLI is visible to the CLI that reads collab
   // recorded `from` is the actor the authorization server resolved.
   expect(entry?.handoff.from).toBe(entry?.actorSubject);
   expect(entry?.handoff.from).toBeTruthy();
-});
+}, 30_000);
+
+// Flow 237 T10 (F1). Measured before this fix, at a real terminal:
+//
+//     $ keryx workspace handoff <id> --to agent:bob --artifact docs/x.md \
+//         --from "user:the-cto"
+//     { "actorSubject": "user:local-502",
+//       "handoff": { "from": "user:the-cto", ... } }
+//
+// `handoff.from` — the field a reader uses to answer "who handed this over" —
+// was whatever the caller typed, on a row whose resolved subject was somebody
+// else, and `keryx workspace collaboration` read it back verbatim.
+test("the CLI refuses to let a caller state who handed the work over", async () => {
+  const { root, id } = await workspace();
+
+  const forged = await keryx(root, [
+    "workspace", "handoff", id,
+    "--to", "agent:bob",
+    "--artifact", "docs/x.md",
+    "--from", "user:the-cto",
+  ]);
+  expect(forged.code).not.toBe(0);
+  expect(forged.stderr).toContain("--from is not accepted");
+  // `--from=value` is the same claim in a different spelling, and an option
+  // parser that only matched the space-separated form would let it through.
+  const forgedInline = await keryx(root, [
+    "workspace", "handoff", id,
+    "--to", "agent:bob",
+    "--artifact", "docs/x.md",
+    "--from=user:the-cto",
+  ]);
+  expect(forgedInline.code).not.toBe(0);
+  expect(forgedInline.stderr).toContain("--from is not accepted");
+
+  // Neither refusal wrote a row, forged or otherwise.
+  const overview = JSON.parse((await keryx(root, ["workspace", "collaboration", id])).stdout) as {
+    activity: unknown[];
+  };
+  expect(overview.activity).toEqual([]);
+
+  // And the real path still records — the refusal above is refusing the
+  // forged attribution, not the verb.
+  expect((await keryx(root, ["workspace", "handoff", id, "--to", "agent:bob", "--artifact", "docs/x.md"])).code).toBe(0);
+  const after = JSON.parse((await keryx(root, ["workspace", "collaboration", id])).stdout) as {
+    activity: Array<{ actorSubject: string; handoff: { from: string } }>;
+  };
+  expect(after.activity).toHaveLength(1);
+  expect(after.activity[0]?.handoff.from).toBe(after.activity[0]?.actorSubject);
+  expect(after.activity[0]?.handoff.from).not.toBe("user:the-cto");
+}, 30_000);
 
 test("the CLI refuses a handoff that names nobody, rather than writing an empty one", async () => {
   const { root, id } = await workspace();
@@ -105,7 +154,7 @@ test("the CLI refuses a handoff that names nobody, rather than writing an empty 
     activity: unknown[];
   };
   expect(overview.activity).toEqual([]);
-});
+}, 30_000);
 
 // The payload rules, at the service, where the error codes are observable.
 async function localService(): Promise<{ service: CollaborationService; id: string }> {
@@ -148,6 +197,13 @@ test("a handoff payload must actually say who, to whom, and about what", async (
   await expect(record({ to: `agent${String.fromCharCode(7)}b`, artifactRef: "./x" })).rejects.toThrow("control characters");
   await expect(record({ to: "agent:b", artifactRef: "./x", note: "extra" })).rejects.toThrow(
     "handoff accepts only",
+  );
+
+  // A caller-supplied `from` is refused at the SERVICE, not only at the CLI:
+  // the CLI is one caller, and the guarantee ("`from` is the subject the
+  // authorization server resolved") belongs to whoever writes the row.
+  await expect(record({ from: "user:the-cto", to: "agent:b", artifactRef: "./x" })).rejects.toThrow(
+    "handoff.from is filled from the authenticated actor",
   );
 
   // The control: a well-formed one is accepted, so the rules above are refusing

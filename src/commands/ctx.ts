@@ -18,6 +18,7 @@ import {
 } from "../ctx/lines";
 import type { OmittedRange } from "../ctx/lines";
 import { buildLossManifest, renderLossManifest } from "../ctx/manifest";
+import { maybeAutoSweepGdctx } from "../retention/auto-sweep";
 import { latestRawTarget, reserveArtifact } from "../ctx/artifact-id";
 import type { ArtifactReservation } from "../ctx/artifact-id";
 import {
@@ -756,6 +757,17 @@ ${JSON.stringify(artifact, null, 2)}
   //     `latest.log`. The pair a reader gets back is therefore always one run's.
   await writeFileAtomic(latestRawPath, raw);
   await writeFileAtomic(latestSummaryPath, summaryWithMeta);
+
+  // Flow 237 T12 (F5): the retention policy for these two directories existed
+  // and ran nowhere — `sweepProject`'s only caller was `keryx retention sweep
+  // --apply`, typed by a human, so the store this function appends to had 2,570
+  // entries and ~137 MiB sitting past its own policy. This is the write that
+  // grows it, so this is where it gets bounded. Throttled to at most one sweep
+  // per day per project (see `maybeAutoSweepGdctx` for the cost argument),
+  // best-effort, and silent: a ctx run's output is its summary, not
+  // housekeeping. `keryx retention status`/`sweep` remain the surfaces that
+  // report and force it.
+  await maybeAutoSweepGdctx(projectRoot).catch(() => undefined);
 
   return artifact;
 }

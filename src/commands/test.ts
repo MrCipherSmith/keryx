@@ -235,21 +235,41 @@ async function runStatus(): Promise<void> {
 async function describeReportFreshness(cwd: string, reportGitRef: string | null): Promise<string> {
   const currentRef = await gitRefOf(cwd);
   const dirty = await isWorkingTreeDirty(cwd);
-  const reasons: string[] = [];
+  // Two kinds of reason, kept apart: `moved` is a CONFIRMED change since the
+  // report, `undetermined` is a check that could not run. Collapsing them
+  // would either overclaim ("stale" for something never established) or —
+  // the defect this replaces — underclaim.
+  const moved: string[] = [];
+  const undetermined: string[] = [];
   if (!reportGitRef) {
-    reasons.push("report gitRef is unknown (recorded without git)");
+    undetermined.push("report gitRef is unknown (recorded without git)");
   } else if (!currentRef) {
-    reasons.push("current gitRef is unknown (not a git repository, or git is unavailable)");
+    undetermined.push("current gitRef is unknown (not a git repository, or git is unavailable)");
   } else if (reportGitRef !== currentRef) {
-    reasons.push(`gitRef changed since this report (report ${reportGitRef}, now ${currentRef})`);
+    moved.push(`gitRef changed since this report (report ${reportGitRef}, now ${currentRef})`);
   }
-  if (dirty) {
-    reasons.push("working tree has uncommitted changes since this report was generated");
+  // Flow 237 T11 (F3). `isWorkingTreeDirty` deliberately answers `null` for
+  // "the check could not run" — and the test for it was `if (dirty)`, so
+  // `null` was falsy, contributed no reason at all, and this function returned
+  // "current (gitRef matches, working tree clean)". Reproduced with a
+  // genuinely corrupt `.git/index`: `git rev-parse HEAD` still succeeds (so
+  // the ref matches) while `git status` exits 128, and the surface asserted a
+  // clean working tree it had just failed to look at. `null` is now its own
+  // branch, which is the whole point of returning a tri-state.
+  if (dirty === null) {
+    undetermined.push(
+      "working tree state could not be determined (`git status` failed: git unavailable, not a git repository, or a broken repository) — this is NOT evidence the tree is clean",
+    );
+  } else if (dirty) {
+    moved.push("working tree has uncommitted changes since this report was generated");
   }
-  if (reasons.length === 0) {
-    return "current (gitRef matches, working tree clean)";
+  if (moved.length > 0) {
+    return `stale — ${[...moved, ...undetermined].join("; ")}`;
   }
-  return `stale — ${reasons.join("; ")}`;
+  if (undetermined.length > 0) {
+    return `unknown — could not confirm this report still matches the tree: ${undetermined.join("; ")}`;
+  }
+  return "current (gitRef matches, working tree clean)";
 }
 
 async function isWorkingTreeDirty(cwd: string): Promise<boolean | null> {

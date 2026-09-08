@@ -219,16 +219,26 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     // "no handoffs happened" when what was true was "no handoff can be
     // recorded", which is the same absence-as-result the resume path had.
     if (subcommand === "handoff") {
-      rejectUnknownOptions(args.slice(2), new Set(["--to", "--artifact", "--from"]));
+      // Flow 237 T10 (F1): `--from` used to be forwarded and used to WIN over
+      // the authenticated actor, so `--from "user:the-cto"` wrote
+      // `handoff.from: "user:the-cto"` on a row whose `actorSubject` was
+      // `user:local-502`. `from` is now always the resolved actor and the
+      // service refuses a supplied one; this branch refuses the flag by name
+      // rather than as a generic "Unknown option", so anyone who scripted it
+      // learns why it is gone instead of reading it as a typo.
+      if (args.slice(2).some((argument) => argument === "--from" || argument.startsWith("--from="))) {
+        throw new Error("--from is not accepted: a handoff's `from` is the subject the authorization server resolved for this caller, not a value a caller can state. Run the command as the subject handing over.");
+      }
+      rejectUnknownOptions(args.slice(2), new Set(["--to", "--artifact"]));
       const workspaceId = args[1];
       const to = optionValue(args, "--to");
       const artifactRef = optionValue(args, "--artifact");
-      const from = optionValue(args, "--from");
-      if (!workspaceId || !to || !artifactRef) throw new Error("Usage: keryx workspace handoff <workspace-id> --to <subject> --artifact <ref> [--from <subject>]");
-      // `--from` is optional: omitted, the service fills it from the
-      // authenticated actor. An unattributed handoff is the shape this record
-      // exists to prevent, so there is no path that writes one.
-      const activity = await createLocalCollaborationService(process.cwd()).record({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, activity: { kind: "handoff-recorded", handoff: { ...(from ? { from } : {}), to, artifactRef } } });
+      if (!workspaceId || !to || !artifactRef) throw new Error("Usage: keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>");
+      // `from` is filled by the service from the authenticated actor. An
+      // unattributed handoff is the shape this record exists to prevent, so
+      // there is no path that writes one — and no path that writes a
+      // caller-chosen one either.
+      const activity = await createLocalCollaborationService(process.cwd()).record({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, activity: { kind: "handoff-recorded", handoff: { to, artifactRef } } });
       console.log(JSON.stringify(activity, null, 2));
       return;
     }
@@ -337,7 +347,7 @@ function booleanFlagDefaultTrue(args: string[], name: string): boolean {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace handoff <workspace-id> --to <subject> --artifact <ref> [--from <subject>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace handoff <workspace-id> --to <subject> --artifact <ref>   (from = the authenticated actor; not settable)\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
 }
 
 /**

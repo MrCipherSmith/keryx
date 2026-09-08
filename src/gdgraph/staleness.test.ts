@@ -2,7 +2,8 @@
 // the five triggers the frozen AC3 names — new commit, untracked, delete,
 // rename, config change — and a git failure must never collapse into "fresh".
 //
-// Before this task, `graphMaybeStale` compared `.git/HEAD`'s own mtime to
+// Before this task, the boolean `graphMaybeStale` (removed in flow 237 T11,
+// F4, once it had no production caller left) compared `.git/HEAD`'s own mtime to
 // `nodes.jsonl`'s. That misses every trigger here: `.git/HEAD` is a symbolic
 // ref ("ref: refs/heads/<branch>") whose CONTENT (and often mtime) does not
 // change on an ordinary commit to the current branch, and it never reflects
@@ -15,7 +16,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { checkGraphStaleness, graphMaybeStale } from "./staleness";
+import { checkGraphStaleness } from "./staleness";
 import { recordProvenance } from "../sync/provenance";
 
 let root: string;
@@ -71,7 +72,7 @@ afterEach(async () => {
 test("AFC-10 control — a clean tree right after build reports fresh", async () => {
   const result = await checkGraphStaleness(root);
   expect(result.status).toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(false);
+  expect(result.reasons).toEqual([]);
 });
 
 test("AFC-10 trigger 1/5 — a new commit since the build invalidates the snapshot", async () => {
@@ -81,7 +82,6 @@ test("AFC-10 trigger 1/5 — a new commit since the build invalidates the snapsh
 
   const result = await checkGraphStaleness(root);
   expect(result.status).not.toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 test("AFC-10 trigger 2/5 — an untracked file invalidates the snapshot", async () => {
@@ -89,7 +89,6 @@ test("AFC-10 trigger 2/5 — an untracked file invalidates the snapshot", async 
 
   const result = await checkGraphStaleness(root);
   expect(result.status).not.toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 test("AFC-10 trigger 3/5 — a deleted tracked file invalidates the snapshot", async () => {
@@ -97,7 +96,6 @@ test("AFC-10 trigger 3/5 — a deleted tracked file invalidates the snapshot", a
 
   const result = await checkGraphStaleness(root);
   expect(result.status).not.toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 test("AFC-10 trigger 4/5 — a rename invalidates the snapshot even though file count and content are unchanged", async () => {
@@ -107,7 +105,6 @@ test("AFC-10 trigger 4/5 — a rename invalidates the snapshot even though file 
 
   const result = await checkGraphStaleness(root);
   expect(result.status).not.toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 test("AFC-10 trigger 5/5 — a gdgraph.config.json change invalidates the snapshot", async () => {
@@ -118,7 +115,6 @@ test("AFC-10 trigger 5/5 — a gdgraph.config.json change invalidates the snapsh
 
   const result = await checkGraphStaleness(root);
   expect(result.status).not.toBe("fresh");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 test("AFC-10 group 3 — a git failure is reported as unknown, never as fresh", async () => {
@@ -129,10 +125,11 @@ test("AFC-10 group 3 — a git failure is reported as unknown, never as fresh", 
   const result = await checkGraphStaleness(root);
   expect(result.status).toBe("unknown");
   expect(result.reasons.length).toBeGreaterThan(0);
-  // The boolean back-compat wrapper must still never read as "fresh" (false)
-  // on a git failure — "unknown" collapses to "treat as maybe-stale", not to
-  // the safe-looking "false" the old mtime-diff check silently returned.
-  expect(await graphMaybeStale(root)).toBe(true);
+  // "unknown" is its OWN status, not a synonym for either neighbour: a git
+  // failure must not read as the safe-looking "fresh" the old mtime-diff
+  // check returned, and must not read as the confident "stale" either.
+  expect(result.status).not.toBe("fresh");
+  expect(result.status).not.toBe("stale");
 });
 
 test("AFC-10 — graph never built at all is reported as stale (not fresh), not a git failure", async () => {
@@ -140,7 +137,6 @@ test("AFC-10 — graph never built at all is reported as stale (not fresh), not 
 
   const result = await checkGraphStaleness(root);
   expect(result.status).toBe("stale");
-  expect(await graphMaybeStale(root)).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -201,7 +197,6 @@ test("T19 finding 3 — a project root below the git root still excludes its own
     // was "stale" on a repo with nothing but the graph's own residue dirty.
     expect(result.status).toBe("fresh");
     expect(result.reasons).toEqual([]);
-    expect(await graphMaybeStale(projectDir)).toBe(false);
   } finally {
     await rm(gitRoot, { recursive: true, force: true });
   }

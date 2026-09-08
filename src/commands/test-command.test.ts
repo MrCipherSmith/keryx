@@ -312,3 +312,56 @@ test("keryx test status reports the report as current when gitRef matches and th
   expect(output).toContain("latest status: pass");
   expect(output.toLowerCase()).not.toContain("stale");
 });
+
+// Flow 237 T11 (F3): the same defect class, inside the function T6 added to
+// fix it. `isWorkingTreeDirty` returns `boolean | null` and `null` means "the
+// check could not run" — but the caller tested `if (dirty)`, so `null` was
+// falsy, added no reason, and `keryx test status` printed
+// "current (gitRef matches, working tree clean)" about a working tree it had
+// just failed to read.
+//
+// The breakage here is real, not mocked: a corrupt `.git/index` leaves
+// `git rev-parse HEAD` working (so the gitRef half still MATCHES and cannot
+// carry the finding) while `git status` exits 128 — the exact shape that made
+// the old code assert a clean tree.
+test("keryx test status says unknown — not current — when git status cannot run (corrupt .git/index)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  writeFileSync(path.join(cwd, ".git", "index"), "GARBAGE-NOT-AN-INDEX");
+  // Precondition of the case: HEAD still resolves, so the gitRef comparison
+  // still succeeds and only the working-tree check is broken.
+  expect(
+    execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd, encoding: "utf8" }).trim().length,
+  ).toBeGreaterThan(0);
+  let statusExit = 0;
+  try {
+    execFileSync("git", ["status", "--porcelain=v1"], { cwd, stdio: "ignore" });
+  } catch (error) {
+    statusExit = (error as { status?: number }).status ?? -1;
+  }
+  expect(statusExit).not.toBe(0);
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("report freshness:");
+  // The defect, verbatim: this line used to read
+  // "current (gitRef matches, working tree clean)".
+  expect(output).not.toContain("working tree clean");
+  expect(output).not.toContain("report freshness: current");
+  expect(output).toContain("report freshness: unknown");
+  expect(output).toContain("could not be determined");
+}, 30_000);

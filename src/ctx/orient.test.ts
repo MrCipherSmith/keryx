@@ -1,8 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { buildOrientation, graphContext, metaprojectIndexContext, wikiContext } from "./orient";
+import {
+  buildOrientation,
+  graphContext,
+  metaprojectIndexContext,
+  uncommittedCodeCount,
+  wikiContext,
+} from "./orient";
 
 async function withProject(
   files: Record<string, string>,
@@ -136,6 +142,80 @@ test("graphContext handles a missing graph gracefully", async () => {
     expect(out).toContain("keryx gdgraph build");
   });
 });
+
+// --- freshness (flow 237 T11, F2) -------------------------------------------
+//
+// Real git, real breakage: the failure case is induced by moving `.git` away
+// (and by never creating one), not by stubbing a spawn. The defect being
+// pinned is that BOTH "a new untracked .ts file" and "no git at all" printed
+// `freshness: working tree clean`.
+
+async function git(cwd: string, args: string[]): Promise<number> {
+  const child = Bun.spawn(["git", ...args], { cwd, stdout: "ignore", stderr: "ignore" });
+  return child.exited;
+}
+
+async function gitProject(run: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-orient-git-"));
+  try {
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "artifacts"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "artifacts", "summary.md"), SUMMARY, "utf8");
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n", "utf8");
+    expect(await git(root, ["init", "-q", "."])).toBe(0);
+    expect(await git(root, ["add", "-A"])).toBe(0);
+    expect(await git(root, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"])).toBe(0);
+    await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("graphContext calls a clean tree clean", async () => {
+  await gitProject(async (root) => {
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 0 });
+    expect(await graphContext(root)).toContain("freshness: working tree clean");
+  });
+}, 30_000);
+
+// The exact case the project's routing gate names first ("rebuild when you
+// added, renamed, deleted or moved files"), and the one `git diff --name-only
+// HEAD` structurally cannot see.
+test("graphContext counts a NEW untracked code file instead of calling the tree clean", async () => {
+  await gitProject(async (root) => {
+    await writeFile(path.join(root, "src", "b.ts"), "export const b = 2;\n", "utf8");
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 1 });
+    const out = await graphContext(root);
+    expect(out).toContain("1 uncommitted code file(s) may not be reflected");
+    expect(out).not.toContain("working tree clean");
+  });
+}, 30_000);
+
+test("graphContext counts a deleted tracked code file", async () => {
+  await gitProject(async (root) => {
+    await rm(path.join(root, "src", "a.ts"));
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 1 });
+    expect(await graphContext(root)).not.toContain("working tree clean");
+  });
+}, 30_000);
+
+test("graphContext reports unknown — never clean — when git could not be asked", async () => {
+  await gitProject(async (root) => {
+    // Break git for real: the repository this project sits in is moved away,
+    // so `git status` exits 128 exactly as it does outside a repository.
+    await rename(path.join(root, ".git"), path.join(root, ".git-off"));
+    const changes = await uncommittedCodeCount(root);
+    expect(changes.status).toBe("unknown");
+    const out = await graphContext(root);
+    expect(out).toContain("freshness: unknown");
+    expect(out).toContain("do not read this as clean");
+    expect(out).not.toContain("working tree clean");
+    // And it recovers rather than latching: the note is about this check, not
+    // a sticky state.
+    await rename(path.join(root, ".git-off"), path.join(root, ".git"));
+    expect(await graphContext(root)).toContain("freshness: working tree clean");
+  });
+}, 30_000);
 
 test("wikiContext keeps populated sections and drops empty ones", async () => {
   await withProject({ ".metaproject/wiki/index.md": WIKI_INDEX }, async (root) => {

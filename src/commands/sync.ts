@@ -1,6 +1,6 @@
 import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedModule } from "../sync/provenance";
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
-import { describeSourceGate, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
+import { describeSourceGate, HEAD_NOT_REQUESTED, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
 
 // `keryx sync` — reconcile the derived artifacts (graph, wiki, memory) with the
 // current code. Each artifact records the commit it was built from (provenance);
@@ -182,7 +182,9 @@ async function applyModule(
     const { wikiCollect, wikiGenerateIndex } = await import("../wiki/service");
     await wikiCollect({ cwd, changed: base !== null, ...(base ? { since: base } : {}) });
     await wikiGenerateIndex(cwd);
-    const gate = await resolveWikiSourceGate(cwd, undefined);
+    // No revision at stake on this path — it gates gdwiki's own provenance
+    // record, never a page's `VerifiedAt` (AFC-22, T13).
+    const gate = await resolveWikiSourceGate(cwd, HEAD_NOT_REQUESTED);
     if (gate.status !== "fresh") {
       return { recorded: false, gate };
     }

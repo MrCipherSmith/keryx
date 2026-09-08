@@ -2304,7 +2304,7 @@ keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejecte
 keryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]
 keryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]
 keryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]
-keryx workspace handoff <workspace-id> --to <subject> --artifact <ref> [--from <subject>]
+keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>
 keryx workspace collaboration <workspace-id>
 keryx workspace policy-readiness
 ```
@@ -2326,7 +2326,7 @@ keryx workspace policy-readiness
 | `confirm-review` | `<workspace-id>`, `<proposal-id>`, `--acknowledge-security` | Mint the `--confirm-token` a `review --decision accepted` call needs. Run this yourself in a real, approval-gated shell — no tool call (MCP or `keryx-shell`) can mint one. **When the proposal's security gate is `needs-approval`, it prints what the scan found and in which evidence, and then refuses unless `--acknowledge-security` is passed** — the flag is the record that a human read the findings, and the token carries that fact to `review`. A clean proposal claims no acknowledgement; a proposal whose gate cannot be read is refused rather than assumed to have passed. Before 0.2.75 the flag did not exist and a `needs-approval` proposal could not be accepted by any route; 0.2.74 briefly passed the acknowledgement unconditionally, which made the gate unfirable. |
 | `dismiss-candidate` | `<evidence-path\|session-id>`, `--reason`, `--evidence` | Dismiss an `unbound-candidate` that `catch-up` surfaced — a wrap-up whose session never bound to a workspace. Takes either the evidence path directly or a session id, which resolves to that session's newest slate archive. |
 | `catch-up` | `--workspace`, `--json`, `--include-lifecycle-flags` (default on) | Pull-based `cwd`-scoped digest: pending proposals, blocked runs, unbound-candidate wrap-ups, sessions of unknown fate, and a lifecycle-flags section for any workspace/memory-entry/wiki-decision whose recorded module no longer resolves in the code graph. Report-only — never writes. |
-| `handoff` | `<workspace-id>`, `--to`, `--artifact`, `--from` | Record that work moved to another participant. `--from` defaults to the authenticated actor, so a handoff is always attributed; a payload missing `to` or `artifact` is refused rather than written empty. |
+| `handoff` | `<workspace-id>`, `--to`, `--artifact` | Record that work moved to another participant. The recorded `from` is always the subject the authorization server resolved for the caller — there is no flag that sets it (`--from` is refused by name), so `handoff.from` can never be a string a caller typed; a payload missing `to` or `artifact` is refused rather than written empty. |
 | `collaboration` | `<workspace-id>` | Read-only collaboration overview: references, plus the handoffs `handoff` recorded. An empty `activity` means none were recorded — before `handoff` existed it meant none could be. |
 | `policy-readiness` | — | Diagnose the opt-in policy-experiment chain. Exit `1` when `!integrityReady`. |
 
