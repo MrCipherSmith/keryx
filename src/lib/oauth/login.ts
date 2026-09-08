@@ -112,7 +112,12 @@ export async function loginDeviceCode(input: DeviceLoginInput): Promise<DeviceLo
     saveOAuthGrant(input.provider, grantFromTokens("device-code", tokens, input.now), input.dir);
     return { ok: true, provider: input.provider };
   } catch (err) {
-    const message = err instanceof DeviceCodeError ? err.message : "device authorization failed";
+    const message =
+      err instanceof DeviceCodeError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "device authorization failed";
     return { ok: false, error: message };
   }
 }

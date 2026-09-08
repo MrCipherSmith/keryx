@@ -409,7 +409,7 @@ keryx auth status <provider> [--json]
 | Subcommand | Flags | Description |
 |---|---|---|
 | `list` | `--json` | Authorized providers (method and expiry, never a token) and which subscription logins are offered. |
-| `login` | `<provider>` | Run the provider's device authorization grant. Opens a verification URL; keryx polls for the token. |
+| `login` | `<provider>` | Run the provider's device authorization grant. Prints a verification URL and code (opens a browser only when a graphical session is present); keryx polls for the token. |
 | `logout` | `<provider>` | Discard the stored grant. |
 | `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
 

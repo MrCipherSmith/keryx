@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import { catalogAllows, catalogRefusal, deviceCodeMethodLabel, PROVIDER_AUTH_CATALOG } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, listOAuthGrantProviders, oauthGrantStatus } from "../lib/oauth/grants";
 import { loginDeviceCode, logoutProvider } from "../lib/oauth/login";
+import { openVerificationUrl } from "../lib/oauth/open-url";
 
 function printAuthHelp(): void {
   console.log(`Usage:
@@ -13,16 +13,6 @@ function printAuthHelp(): void {
 Providers with a sanctioned subscription login: grok (SuperGrok), openai (ChatGPT Plus/Pro), github-copilot.
 Claude Pro/Max, Gemini Google-account login, and DeepSeek OAuth are not offered.
 `);
-}
-
-function openVerificationUrl(url: string): void {
-  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  try {
-    spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
-  } catch {
-    // Printing the URL is enough; opening a browser is best-effort.
-  }
 }
 
 export async function authCommand(args: string[]): Promise<void> {

@@ -3,6 +3,22 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.82] — 2026-09-08
+
+One commit. SuperGrok login in the TUI spawned `xdg-open` without an
+`error` listener. On a Linux box with no display that binary is often
+missing; Node emits ENOENT later, that is an uncaught exception, and
+the shell dies.
+
+### Fixed
+
+- **Device-code login no longer crashes the TUI on headless Linux.**
+  Opening a browser is best-effort and only attempted when `DISPLAY` or
+  `WAYLAND_DISPLAY` is set. A missing opener is ignored rather than
+  becoming an uncaught exception. The overlay keeps the URL and user
+  code so the operator can finish on another device, and a failed login
+  stays on screen instead of vanishing.
+
 ## [0.2.81] — 2026-09-08
 
 Six commits since 0.2.80. The agent-first core programme closed phases 0–2

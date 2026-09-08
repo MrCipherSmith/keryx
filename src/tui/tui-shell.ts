@@ -50,7 +50,7 @@ import {
 } from "../session/slate-lifecycle";
 import { renderAnchorsBlock } from "../session/slate";
 import { runGoalCommand } from "../commands/goal-command";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
@@ -117,6 +117,7 @@ import { collapseHome } from "../lib/statusbar";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
+import { openVerificationUrl } from "../lib/oauth/open-url";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
@@ -1606,28 +1607,26 @@ function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Prom
       fetch: (input, init) => globalThis.fetch(input, init),
       signal: controller.signal,
       onChallenge: (challenge) => {
-        status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Waiting for authorization…")}`;
-        const url = challenge.verificationUriComplete ?? challenge.verificationUri;
-        const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? undefined : "xdg-open";
-        if (cmd !== undefined) {
-          try {
-            spawn(cmd, [url], { stdio: "ignore", detached: true }).unref();
-          } catch {
-            // overlay already shows the URL
-          }
-        }
+        status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Open that URL on any device and enter the code. Waiting for authorization…")}`;
+        openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
       },
     }).then((result) => {
       if (controller.signal.aborted) {
         return;
       }
-      cleanup();
       if (result.ok) {
+        cleanup();
         applyOAuthAccessToEnv();
         resolve(true);
         return;
       }
-      resolve(false);
+      status.content = otui.t`${otui.red("✗")} ${otui.bold(result.error)} ${otui.dim("(Esc to go back)")}`;
+    }).catch((err) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const message = err instanceof Error ? err.message : "device authorization failed";
+      status.content = otui.t`${otui.red("✗")} ${otui.bold(message)} ${otui.dim("(Esc to go back)")}`;
     });
   });
 }
