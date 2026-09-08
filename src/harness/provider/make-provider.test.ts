@@ -156,8 +156,18 @@ test("deepseek with DEEPSEEK_API_KEY constructs the OpenAI-compatible network pr
   expect(provider.describe().descriptor.providerId).toBe("ollama");
 });
 
+test("grok with XAI_API_KEY constructs the OpenAI-compatible network provider", () => {
+  const provider = makeProvider("grok", "grok-2", makeOpts({ env: { XAI_API_KEY: "xai-test" } }));
+  expect(provider.describe().descriptor.providerId).toBe("ollama");
+});
+
+test("github-copilot with GITHUB_COPILOT_TOKEN constructs the OpenAI-compatible network provider", () => {
+  const provider = makeProvider("github-copilot", "gpt-4o", makeOpts({ env: { GITHUB_COPILOT_TOKEN: "copilot-test" } }));
+  expect(provider.describe().descriptor.providerId).toBe("ollama");
+});
+
 test("deepseek / zai / cerebras / groq / moonshot WITHOUT their key fail closed to FakeProvider", () => {
-  for (const name of ["deepseek", "zai", "cerebras", "groq", "moonshot"]) {
+  for (const name of ["deepseek", "zai", "cerebras", "groq", "moonshot", "grok", "github-copilot"]) {
     const provider = makeProvider(name, "m", makeOpts({ env: {} }));
     expect(provider.describe().descriptor.providerId).toBe("fake-provider");
   }

@@ -50,7 +50,7 @@ import {
 } from "../session/slate-lifecycle";
 import { renderAnchorsBlock } from "../session/slate";
 import { runGoalCommand } from "../commands/goal-command";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
@@ -114,6 +114,9 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
+import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
+import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
+import { loginDeviceCode } from "../lib/oauth/login";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
@@ -1527,6 +1530,108 @@ function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; env
   });
 }
 
+type AuthMethodChoice = "device-code" | "api-key";
+
+function pickAuthMethodStep(
+  otui: OpenTui,
+  r: Renderer,
+  providerLabel: string,
+  methods: readonly AuthMethodChoice[],
+): Promise<AuthMethodChoice | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "auth-method-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "amp-title", content: otui.t`${otui.bold(`How to connect ${providerLabel}`)} ${otui.dim("(↑/↓, Enter · Esc to go back)")}` }));
+    const descriptions: Record<AuthMethodChoice, string> = {
+      "device-code": deviceCodeMethodLabel(providerLabel === "GitHub Copilot" ? "github-copilot" : providerLabel === "OpenAI" ? "openai" : "grok"),
+      "api-key": "Manually enter API Key",
+    };
+    const select = new otui.SelectRenderable(r, {
+      id: "amp-select",
+      width: 60,
+      height: selectBoxHeight(methods.length, true),
+      showScrollIndicator: true,
+      options: methods.map((m) => ({ name: m, description: descriptions[m] })),
+      selectedTextColor: "#ffd166",
+    });
+    box.add(select);
+    select.focus();
+    const cleanup = (): void => {
+      unsub();
+      select.blur();
+      r.root.remove(box);
+    };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve(undefined);
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = select.getSelectedOption();
+      cleanup();
+      resolve(chosen === null ? undefined : (chosen.name as AuthMethodChoice));
+    });
+  });
+}
+
+function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "device-login");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, {
+      id: "dl-title",
+      content: otui.t`${otui.bold(deviceCodeMethodLabel(provider))} ${otui.dim("(Esc to cancel)")}`,
+    }));
+    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${otui.dim("Requesting a device code…")}`, marginTop: 1 });
+    box.add(status);
+    const controller = new AbortController();
+    const cleanup = (): void => {
+      unsub();
+      r.root.remove(box);
+    };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        controller.abort();
+        cleanup();
+        resolve(false);
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    void loginDeviceCode({
+      provider,
+      fetch: (input, init) => globalThis.fetch(input, init),
+      signal: controller.signal,
+      onChallenge: (challenge) => {
+        status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Waiting for authorization…")}`;
+        const url = challenge.verificationUriComplete ?? challenge.verificationUri;
+        const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? undefined : "xdg-open";
+        if (cmd !== undefined) {
+          try {
+            spawn(cmd, [url], { stdio: "ignore", detached: true }).unref();
+          } catch {
+            // overlay already shows the URL
+          }
+        }
+      },
+    }).then((result) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      cleanup();
+      if (result.ok) {
+        applyOAuthAccessToEnv();
+        resolve(true);
+        return;
+      }
+      resolve(false);
+    });
+  });
+}
+
 /**
  * Resolve models for the picker: always probe the live `/models` endpoint when
  * the provider is OpenAI-compat (network available + optional Bearer key);
@@ -1671,16 +1776,34 @@ export function selectProviderModelInTui(
         const envKey = prov.envKey;
         if (!options.onlyConnected && envKey !== undefined) {
           const existingKey = process.env[envKey];
-          if (existingKey === undefined || existingKey.length === 0) {
-            const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
-            if (kr.kind === "back") {
-              continue; // Esc at the key step → re-pick the provider
+          const hasOauth = oauthAccessToken(prov.name) !== undefined;
+          if ((existingKey === undefined || existingKey.length === 0) && !hasOauth) {
+            const offered: AuthMethodChoice[] = [];
+            if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
+            if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
+            let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
+            if (offered.length > 1) {
+              method = await pickAuthMethodStep(otui, r, prov.label ?? prov.name, offered);
+              if (method === undefined) {
+                continue;
+              }
             }
-            if (kr.kind === "key") {
-              process.env[envKey] = kr.value;
-              saveApiKey(envKey, kr.value); // persist (0600), opencode-style
+            if (method === "device-code") {
+              const ok = await runDeviceLoginInTui(otui, r, prov.name);
+              if (!ok) {
+                continue;
+              }
+            } else {
+              const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
+              if (kr.kind === "back") {
+                continue; // Esc at the key step → re-pick the provider
+              }
+              if (kr.kind === "key") {
+                process.env[envKey] = kr.value;
+                saveApiKey(envKey, kr.value); // persist (0600), opencode-style
+              }
+              // kind === "skip" → proceed without a key (curated fallback models)
             }
-            // kind === "skip" → proceed without a key (curated fallback models)
           }
         }
 

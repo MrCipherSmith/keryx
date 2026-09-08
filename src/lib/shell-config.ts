@@ -25,6 +25,19 @@ export interface ShellConfig {
    */
   apiKeys?: Record<string, string>;
   /**
+   * OAuth grants from device-code / PKCE login, keyed by provider name
+   * (`grok`, `openai`, `github-copilot`). Owner-only plaintext, same file as
+   * `apiKeys`. Never logged.
+   */
+  oauthGrants?: Record<string, {
+    method: "device-code" | "oauth-pkce-loopback";
+    access: string;
+    refresh?: string;
+    expires?: number;
+    obtainedAt: string;
+    lastRefreshedAt?: string;
+  }>;
+  /**
    * External agent runtime settings (flow 176;
    * docs/requirements/keryx-external-agent-runtime §3).
    *
@@ -123,6 +136,19 @@ export function envWithSavedApiKeys(
       if (current === undefined || current.length === 0) {
         merged[envKey] = value;
       }
+    }
+    const grants = cfg.oauthGrants ?? {};
+    const grokAccess = grants.grok?.access;
+    if (typeof grokAccess === "string" && grokAccess.length > 0 && (merged.XAI_API_KEY === undefined || merged.XAI_API_KEY.length === 0)) {
+      merged.XAI_API_KEY = grokAccess;
+    }
+    const copilotAccess = grants["github-copilot"]?.access;
+    if (
+      typeof copilotAccess === "string" &&
+      copilotAccess.length > 0 &&
+      (merged.GITHUB_COPILOT_TOKEN === undefined || merged.GITHUB_COPILOT_TOKEN.length === 0)
+    ) {
+      merged.GITHUB_COPILOT_TOKEN = copilotAccess;
     }
   } catch {
     // best-effort

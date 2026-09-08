@@ -1,5 +1,5 @@
 # Decisions: Keryx Provider Auth
-Version: 1.0.0
+Version: 1.1.0
 
 ## Status
 
@@ -9,51 +9,53 @@ an unexplained gap in the provider list.
 
 ## D-01: Subscription OAuth only where the vendor sanctions third-party clients
 
-**Question.** Codex, Claude Code and opencode let a user authorize by opening a
-link and confirming a subscription. Should keryx offer the same for Anthropic
-Claude Pro/Max and for ChatGPT Plus/Pro?
+**Question.** Codex, Claude Code, Gemini CLI and OpenCode let a user authorize
+by opening a link and confirming a subscription. Which of those logins may
+keryx offer?
 
-**Decision: no, not for those two.** The mechanism is adopted; those particular
-providers are not.
+**Decision.** The mechanism is adopted. The providers are not interchangeable.
+A subscription login ships only when the vendor has invited third-party
+clients. "It works in another CLI" is not enough.
 
-**Reasoning.** Anthropic's Consumer Terms state that OAuth tokens obtained
-through Claude Free, Pro or Max accounts may not be used in any other product,
-tool or service, and that third-party developers may not offer Claude.ai login
-or route requests through consumer-plan credentials on behalf of their users.
-Third-party products are directed to API-key authentication through the Console
-or a supported cloud provider. Enforcement began in January 2026; the policy
-took effect in April 2026, with reports of OAuth failures and account
-disruption for third-party tools.
+### Sanctioned (ship)
 
-keryx is a third-party tool. The consequence of ignoring this does not land on
-the project — it lands on the operator, whose own subscription is the thing that
-gets disrupted. Shipping a feature whose predictable outcome is the user's
-account being restricted is not a trade-off worth making, and no amount of
-"it currently works" changes what the terms say.
+| Provider | Method in keryx | Why it is permitted |
+|---|---|---|
+| **xAI SuperGrok / X Premium** | `device-code` (RFC 8628), plus `api-key` | xAI published [Use Grok in OpenCode](https://x.ai/news/grok-opencode) and exposes `device_authorization_endpoint` on `auth.x.ai`. Same public Grok-CLI client OpenCode and Grok Build use. |
+| **GitHub Copilot** | `device-code` | GitHub documents the device flow for CLI clients and shipped third-party agent support (OpenCode, Crush). |
+| **OpenAI ChatGPT Plus/Pro (Codex)** | `oauth-pkce-loopback` locally, device-style headless remotely, plus `api-key` | OpenAI publicly worked with OpenCode in January 2026 so Codex/ChatGPT subscriptions can be used in third-party agents. Platform API keys remain the non-subscription path. |
+| **GitLab Duo** | `oauth-pkce-loopback` or Personal Access Token | OpenCode ships it as a built-in sanctioned subscription. Second wave: keryx has no GitLab adapter yet. |
 
-OpenAI draws the same line by a different route: ChatGPT sign-in exists to serve
-Codex, OpenAI's own client, while developers building tools and automations are
-directed to platform API keys. Treat it as the same class until OpenAI states
-otherwise.
+### Forbidden (never ship as subscription login)
 
-**Where it *is* sanctioned.** GitHub Copilot: GitHub documents the OAuth device
-flow for its CLI and shipped support for a third-party agent authenticating with
-Copilot subscriptions in January 2026. That is an explicit invitation, and it is
-implemented here.
+| Provider | Why | What keryx offers instead |
+|---|---|---|
+| **Anthropic Claude Free/Pro/Max** | Consumer Terms forbid using those OAuth tokens in any other product. Anthropic blocked third-party tools in January 2026, removed the path from OpenCode after legal requests, and the cost of ignoring it is the operator's account. Community plugins still exist; keryx will not. | Native Anthropic adapter, `api-key` only. |
+| **Google Gemini "Sign in with Google"** | That OAuth is for Gemini CLI / Code Assist. Third-party reuse of the consumer Google login is the same class as Claude: not a published invitation, and account disruption is reported. | Gemini adapter, `api-key` (`GEMINI_API_KEY`). Vertex stays `cloud-credentials` (deferred). |
+| **DeepSeek** | No consumer OAuth / device grant. The product is a Bearer key at `api.deepseek.com`. | Already in the registry as `api-key`. |
 
-**Consequence for the provider list.** Anthropic stays API-key-only. OpenAI is
-added API-key-only. GitHub Copilot is added with the device flow. If a vendor
-later publishes terms permitting third-party subscription clients, adding it is
-a registry entry and a method — no re-architecture — which is precisely why the
-method is a declared property rather than a hard-coded branch.
+### Other API-key-only inference hosts
+
+OpenRouter, Z.AI (including GLM Coding Plan), Cerebras, Groq, Moonshot, Mistral,
+Together, Fireworks, DeepInfra, Perplexity, Nebius: they sell keys, not a
+third-party-sanctioned subscription OAuth. Coding-plan keys (Z.AI) are still
+`api-key`.
+
+**Consequence for the registry.** A provider may declare every *permitted*
+method (SuperGrok and an xAI API key on the same `grok` entry). It may never
+declare a method the vendor prohibits. Adding or removing a subscription login
+is a registry edit plus a recorded source, not a TUI special case.
 
 **Sources.**
-- [Anthropic bans subscription OAuth in third-party apps](https://winbuzzer.com/2026/02/19/anthropic-bans-claude-subscription-oauth-in-third-party-apps-xcxwbn/)
-- [The Register: Anthropic clarifies ban on third-party tool access to Claude](https://www.theregister.com/software/2026/02/20/anthropic-clarifies-ban-on-third-party-tool-access-to-claude/5014546)
-- [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+- [xAI: Use Grok in OpenCode](https://x.ai/news/grok-opencode)
+- [OpenAI Codex authentication](https://developers.openai.com/codex/auth/) — ChatGPT sign-in is the subscription path for Codex; OpenCode ships the same ChatGPT Plus/Pro OAuth as a built-in provider
+- OpenAI Codex (Tibo, Jan 2026): public statement that Codex subscriptions would be usable in OpenCode directly
 - [GitHub: authenticating Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)
 - [GitHub Changelog: Copilot now supports opencode](https://github.blog/changelog/2026-01-16-github-copilot-now-supports-opencode/)
-- [opencode providers](https://opencode.ai/docs/providers/)
+- [OpenCode providers](https://opencode.ai/docs/providers/) — ChatGPT Plus, GitHub Copilot, GitLab Duo listed as zero-setup subscriptions; Claude Pro/Max explicitly prohibited
+- [The Register: Anthropic clarifies ban on third-party tool access to Claude](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access/)
+- [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+- [Gemini CLI authentication](https://geminicli.com/docs/get-started/authentication/) — Google-account sign-in is the official CLI path, not a third-party grant
 
 ## D-02: The device authorization grant is the primary remote method
 
@@ -90,8 +92,8 @@ Comparison of the alternatives considered:
 
 ## D-03: The authentication method is registry data, not a code branch
 
-**Decision.** Each provider entry declares its method. Adding a provider, or
-changing how an existing one authenticates, is a registry edit.
+**Decision.** Each provider entry declares its permitted methods. Adding a
+provider, or changing how an existing one authenticates, is a registry edit.
 
 **Reasoning.** `src/commands/providers.ts` is already the single source of truth
 for base URLs, model lists, endpoint paths and env vars, and its header says so.

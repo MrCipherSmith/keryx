@@ -393,6 +393,30 @@ refused; there is no fallback to "some other project".
 
 ---
 
+## auth
+
+Authorize a **vendor-sanctioned subscription** (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) or inspect that state. Credentials are written to the user-global `auth.json` at mode 0600. Secrets are never printed.
+
+Claude Pro/Max, Gemini Google-account login, and DeepSeek subscription OAuth are refused at the point of choice.
+
+```
+keryx auth list [--json]
+keryx auth login <provider>
+keryx auth logout <provider>
+keryx auth status <provider> [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Authorized providers (method and expiry, never a token) and which subscription logins are offered. |
+| `login` | `<provider>` | Run the provider's device authorization grant. Opens a verification URL; keryx polls for the token. |
+| `logout` | `<provider>` | Discard the stored grant. |
+| `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
+
+`/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
+
+---
+
 ## providers
 
 Report over the **provider configuration** — the built-in OpenAI-compatible

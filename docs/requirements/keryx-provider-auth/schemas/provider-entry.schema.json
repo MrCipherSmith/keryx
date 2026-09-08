@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.dev/schemas/provider-entry/1.0.0",
   "title": "Provider Entry",
-  "description": "One entry in the provider registry (src/commands/providers.ts), extended with its declared authentication method. The registry stays the single source of truth: adding a provider or changing how it authenticates is a registry edit, not a code branch. No entry ever carries a credential value.",
+  "description": "One entry in the provider registry (src/commands/providers.ts), extended with its declared authentication methods. A provider may declare more than one permitted method (e.g. grok: device-code + api-key). The registry stays the single source of truth: adding a provider or changing how it authenticates is a registry edit, not a code branch. No entry ever carries a credential value.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "name", "label", "auth"],
@@ -26,11 +26,19 @@
     "auth": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["method"],
+      "required": ["methods"],
       "properties": {
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["none", "api-key", "device-code", "oauth-pkce-loopback", "cloud-credentials"]
+          },
+          "description": "Every permitted method for this provider. SuperGrok + API key on grok is two items; Claude Pro OAuth is never an item."
+        },
         "method": {
           "enum": ["none", "api-key", "device-code", "oauth-pkce-loopback", "cloud-credentials"],
-          "description": "Exactly one method per entry."
+          "description": "Deprecated 1.1.0 alias for a single-method entry. Prefer methods."
         },
         "remoteCapable": {
           "type": "boolean",
