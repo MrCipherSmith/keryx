@@ -58,6 +58,20 @@ test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)",
   }
 });
 
+test("envWithSavedApiKeys copies a grok OAuth access token onto XAI_API_KEY without exposing it in other fields", () => {
+  const dir = tempDir();
+  saveShellConfig(
+    {
+      oauthGrants: {
+        grok: { method: "device-code", access: "oauth-access-token", obtainedAt: "2026-01-01T00:00:00.000Z" },
+      },
+    },
+    dir,
+  );
+  const merged = envWithSavedApiKeys({}, dir);
+  expect(merged.XAI_API_KEY).toBe("oauth-access-token");
+});
+
 test("saveApiKey merges per-provider keys under apiKeys (flow 085)", () => {
   const dir = tempDir();
   saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
